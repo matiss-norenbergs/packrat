@@ -1,0 +1,370 @@
+package queue
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/fsutil"
+	"packrat/backend/internal/models"
+	"packrat/backend/internal/pathsafe"
+	"packrat/backend/internal/repository"
+	"packrat/backend/internal/ws"
+)
+
+// progressBroadcastInterval throttles per-download progress events to at
+// most once per this interval, per the WebSocket Throttling requirement —
+// raw yt-dlp progress ticks (dozens/sec for small chunks) are never
+// forwarded 1:1 to clients.
+const progressBroadcastInterval = time.Second
+
+type DownloadManager struct {
+	mediaRoot     string
+	ytdlp         *downloader.YtDlpService
+	downloadsRepo *repository.DownloadsRepo
+	libraryRepo   *repository.LibraryRepo
+	progress      *ProgressStore
+	broadcaster   ws.Broadcaster
+
+	jobs chan int64
+
+	mu      sync.Mutex
+	cancels map[int64]context.CancelFunc
+
+	lastBroadcastMu sync.Mutex
+	lastBroadcastAt map[int64]time.Time
+
+	activeCount int32
+	queuedCount int32
+}
+
+func NewDownloadManager(
+	mediaRoot string,
+	ytdlp *downloader.YtDlpService,
+	downloadsRepo *repository.DownloadsRepo,
+	libraryRepo *repository.LibraryRepo,
+	progress *ProgressStore,
+	broadcaster ws.Broadcaster,
+) *DownloadManager {
+	return &DownloadManager{
+		mediaRoot:       mediaRoot,
+		ytdlp:           ytdlp,
+		downloadsRepo:   downloadsRepo,
+		libraryRepo:     libraryRepo,
+		progress:        progress,
+		broadcaster:     broadcaster,
+		jobs:            make(chan int64, 100),
+		cancels:         make(map[int64]context.CancelFunc),
+		lastBroadcastAt: make(map[int64]time.Time),
+	}
+}
+
+// Start spawns workerCount goroutines consuming the job queue. The number
+// of workers *is* the concurrency limit ("configurable max concurrent
+// downloads") — no separate semaphore is needed.
+func (m *DownloadManager) Start(ctx context.Context, workerCount int) {
+	for i := 0; i < workerCount; i++ {
+		go m.worker(ctx)
+	}
+}
+
+func (m *DownloadManager) worker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case id := <-m.jobs:
+			atomic.AddInt32(&m.queuedCount, -1)
+			m.runOne(ctx, id)
+		}
+	}
+}
+
+// Enqueue creates a queued download row and schedules it for a worker.
+func (m *DownloadManager) Enqueue(ctx context.Context, d models.Download) (int64, error) {
+	d.Status = models.StatusQueued
+	id, err := m.downloadsRepo.Create(ctx, &d)
+	if err != nil {
+		return 0, err
+	}
+	atomic.AddInt32(&m.queuedCount, 1)
+	m.jobs <- id
+	m.broadcastQueueUpdate()
+	return id, nil
+}
+
+// Cancel stops an in-flight download, or marks a not-yet-started one as
+// cancelled so its worker skips it when dequeued.
+func (m *DownloadManager) Cancel(ctx context.Context, id int64) error {
+	m.mu.Lock()
+	cancel, running := m.cancels[id]
+	m.mu.Unlock()
+
+	if running {
+		cancel()
+		return nil
+	}
+
+	d, err := m.downloadsRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if d.Status != models.StatusQueued && d.Status != models.StatusFetchingMetadata {
+		return fmt.Errorf("download %d is not cancellable in status %q", id, d.Status)
+	}
+	if err := m.downloadsRepo.MarkCancelled(ctx, id); err != nil {
+		return err
+	}
+	m.broadcastQueueUpdate()
+	return nil
+}
+
+func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
+	d, err := m.downloadsRepo.Get(parentCtx, id)
+	if err != nil {
+		log.Printf("queue: failed to load download %d: %v", id, err)
+		return
+	}
+	if d.Status == models.StatusCancelled {
+		return // cancelled while still queued, nothing to do
+	}
+
+	runCtx, cancel := context.WithCancel(parentCtx)
+	m.mu.Lock()
+	m.cancels[id] = cancel
+	m.mu.Unlock()
+
+	atomic.AddInt32(&m.activeCount, 1)
+	defer func() {
+		atomic.AddInt32(&m.activeCount, -1)
+		m.mu.Lock()
+		delete(m.cancels, id)
+		m.mu.Unlock()
+		cancel()
+		m.progress.Delete(id)
+		m.lastBroadcastMu.Lock()
+		delete(m.lastBroadcastAt, id)
+		m.lastBroadcastMu.Unlock()
+		m.broadcastQueueUpdate()
+	}()
+
+	if err := m.downloadsRepo.UpdateStatus(runCtx, id, models.StatusFetchingMetadata, nil); err != nil {
+		log.Printf("queue: update status failed for %d: %v", id, err)
+	}
+
+	meta, err := m.ytdlp.FetchMetadata(runCtx, d.URL)
+	if err != nil {
+		m.finishError(parentCtx, runCtx, id, err.Error(), "", "")
+		return
+	}
+	duration := int(meta.Duration)
+	if err := m.downloadsRepo.UpdateMetadata(runCtx, id, strPtr(meta.ID), strPtr(meta.Title), strPtr(meta.Uploader), &duration, strPtr(meta.Thumbnail)); err != nil {
+		log.Printf("queue: update metadata failed for %d: %v", id, err)
+	}
+
+	destDir, err := pathsafe.ResolveUnderRoot(m.mediaRoot, d.Folder)
+	if err != nil {
+		m.finishError(parentCtx, runCtx, id, "invalid folder: "+err.Error(), "", "")
+		return
+	}
+	if err := fsutil.EnsureDir(destDir); err != nil {
+		m.finishError(parentCtx, runCtx, id, "creating destination directory: "+err.Error(), "", "")
+		return
+	}
+
+	audioFormat := ""
+	if d.AudioFormat != nil {
+		audioFormat = *d.AudioFormat
+	}
+	job := downloader.DownloadJob{
+		URL:          d.URL,
+		DestDir:      destDir,
+		Filename:     fsutil.SanitizeFilename(d.Filename),
+		DownloadType: d.DownloadType,
+		Quality:      d.Quality,
+		AudioFormat:  audioFormat,
+	}
+
+	if err := m.downloadsRepo.UpdateStatus(runCtx, id, models.StatusDownloading, nil); err != nil {
+		log.Printf("queue: update status failed for %d: %v", id, err)
+	}
+	m.broadcastQueueUpdate()
+
+	result, runErr := m.ytdlp.Run(runCtx, job, func(ev downloader.ProgressEvent) {
+		m.onProgress(id, ev)
+	})
+
+	if runErr != nil {
+		m.finishError(parentCtx, runCtx, id, runErr.Error(), "", "")
+		return
+	}
+	if result.ExitCode != 0 {
+		m.finishError(parentCtx, runCtx, id, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
+		return
+	}
+
+	if err := m.downloadsRepo.SetCommand(parentCtx, id, result.Command); err != nil {
+		log.Printf("queue: set command failed for %d: %v", id, err)
+	}
+	var resolution *string
+	if meta.Width > 0 && meta.Height > 0 {
+		r := fmt.Sprintf("%dx%d", meta.Width, meta.Height)
+		resolution = &r
+	}
+	if err := m.downloadsRepo.MarkCompleted(parentCtx, id, 0, resolution); err != nil {
+		log.Printf("queue: mark completed failed for %d: %v", id, err)
+	}
+
+	libItem := m.buildLibraryItem(id, d, meta, result.FinalPath, resolution)
+	libID, err := m.libraryRepo.Create(parentCtx, libItem)
+	if err != nil {
+		log.Printf("queue: creating library item failed for %d: %v", id, err)
+		return
+	}
+
+	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: id, LibraryID: libID, Title: libItem.Title}})
+}
+
+func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download, meta *downloader.Metadata, finalPath string, resolution *string) *models.LibraryItem {
+	title := meta.Title
+	if title == "" {
+		title = d.URL
+	}
+
+	relPath := finalPath
+	if rel, err := filepath.Rel(m.mediaRoot, finalPath); err == nil {
+		relPath = rel
+	}
+
+	var thumbRelPtr *string
+	thumbAbs := thumbnailPathFor(finalPath)
+	if thumbAbs != "" {
+		if rel, err := filepath.Rel(m.mediaRoot, thumbAbs); err == nil {
+			thumbRelPtr = &rel
+		}
+	}
+
+	duration := int(meta.Duration)
+	uploader := meta.Uploader
+	videoID := meta.ID
+	description := meta.Description
+
+	return &models.LibraryItem{
+		DownloadID:   &downloadID,
+		Title:        title,
+		Filename:     filepath.Base(finalPath),
+		Path:         relPath,
+		CollectionID: d.CollectionID,
+		Folder:       d.Folder,
+		OriginalURL:  d.URL,
+		VideoID:      &videoID,
+		Uploader:     &uploader,
+		Duration:     &duration,
+		Resolution:   resolution,
+		Thumbnail:    thumbRelPtr,
+		Description:  &description,
+		Status:       "completed",
+	}
+}
+
+// thumbnailPathFor guesses the thumbnail path written alongside finalPath.
+// --convert-thumbnails jpg (see downloader.BuildArgs) means it always has a
+// .jpg extension and the same base name as the media file.
+func thumbnailPathFor(finalPath string) string {
+	if finalPath == "" {
+		return ""
+	}
+	ext := filepath.Ext(finalPath)
+	base := strings.TrimSuffix(finalPath, ext)
+	return base + ".jpg"
+}
+
+// finishError handles any error that ends a download's run, distinguishing
+// user-initiated cancellation (runCtx was cancelled) from a genuine failure
+// so the stored status/broadcast reflects the real cause rather than always
+// reporting "failed" — MarkCancelled uses parentCtx since runCtx is already
+// done by the time this runs.
+func (m *DownloadManager) finishError(parentCtx, runCtx context.Context, id int64, errMsg, stdoutTail, stderrTail string) {
+	if runCtx.Err() != nil {
+		if err := m.downloadsRepo.MarkCancelled(parentCtx, id); err != nil {
+			log.Printf("queue: mark cancelled failed for %d: %v", id, err)
+		}
+		m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "cancelled", Error: "cancelled by user"}})
+		return
+	}
+
+	if err := m.downloadsRepo.MarkFailed(parentCtx, id, -1, errMsg, stdoutTail, stderrTail); err != nil {
+		log.Printf("queue: mark failed failed for %d: %v", id, err)
+	}
+	m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "failed", Error: errMsg}})
+}
+
+func (m *DownloadManager) onProgress(id int64, ev downloader.ProgressEvent) {
+	status := models.StatusDownloading
+	if ev.Status == "finished" {
+		status = models.StatusProcessing
+	}
+
+	m.progress.Set(id, &LiveProgress{
+		DownloadID:       id,
+		Status:           status,
+		Percent:          ev.Percent,
+		SpeedBytesPerSec: ev.SpeedBytesPerSec,
+		ETASeconds:       ev.ETASeconds,
+		DownloadedBytes:  ev.DownloadedBytes,
+		TotalBytes:       ev.TotalBytes,
+		UpdatedAt:        time.Now(),
+	})
+
+	m.lastBroadcastMu.Lock()
+	last, seen := m.lastBroadcastAt[id]
+	shouldSend := !seen || time.Since(last) >= progressBroadcastInterval
+	if shouldSend {
+		m.lastBroadcastAt[id] = time.Now()
+	}
+	m.lastBroadcastMu.Unlock()
+
+	if !shouldSend {
+		return
+	}
+
+	m.broadcaster.Broadcast(ws.Event{Type: ws.EventProgress, Payload: ws.ProgressPayload{
+		DownloadID: id,
+		Status:     string(status),
+		Percent:    ev.Percent,
+		Speed:      ev.SpeedBytesPerSec,
+		ETA:        ev.ETASeconds,
+		Downloaded: ev.DownloadedBytes,
+		Total:      ev.TotalBytes,
+	}})
+}
+
+func (m *DownloadManager) broadcastQueueUpdate() {
+	m.broadcaster.Broadcast(ws.Event{Type: ws.EventQueueUpdate, Payload: ws.QueueUpdatePayload{
+		Active: int(atomic.LoadInt32(&m.activeCount)),
+		Queued: int(atomic.LoadInt32(&m.queuedCount)),
+	}})
+}
+
+// ProgressSnapshot exposes live progress for the API layer to merge with DB
+// rows in GET /downloads.
+func (m *DownloadManager) ProgressSnapshot() map[int64]*LiveProgress {
+	return m.progress.Snapshot()
+}
+
+func (m *DownloadManager) MediaRoot() string {
+	return m.mediaRoot
+}
+
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}

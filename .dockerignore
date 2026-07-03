@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+backend/data
+frontend/.env.local
+**/.git
+**/*.db
+**/*.db-shm
+**/*.db-wal

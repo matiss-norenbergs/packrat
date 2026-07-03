@@ -1,0 +1,135 @@
+package repository
+
+import (
+	"context"
+	"path/filepath"
+	"testing"
+
+	"packrat/backend/internal/db"
+	"packrat/backend/internal/models"
+)
+
+func openTestDB(t *testing.T) *DownloadsRepo {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "packrat_test.db")
+	conn, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("opening test db: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+
+	migrationsDir, err := filepath.Abs("../../../database/migrations")
+	if err != nil {
+		t.Fatalf("resolving migrations dir: %v", err)
+	}
+	if err := db.Migrate(conn, migrationsDir); err != nil {
+		t.Fatalf("migrating test db: %v", err)
+	}
+	return NewDownloadsRepo(conn)
+}
+
+func TestDownloadsRepo_CreateGetList(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestDB(t)
+
+	d := &models.Download{
+		URL:          "https://example.com/watch?v=abc123",
+		Folder:       "",
+		Filename:     "",
+		DownloadType: "video",
+		Quality:      "1080p",
+		Status:       models.StatusQueued,
+	}
+	id, err := repo.Create(ctx, d)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if id == 0 {
+		t.Fatalf("expected nonzero id")
+	}
+
+	got, err := repo.Get(ctx, id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.URL != d.URL || got.Status != models.StatusQueued || got.Quality != "1080p" {
+		t.Fatalf("unexpected row: %+v", got)
+	}
+
+	title := "Test Video"
+	uploader := "Test Channel"
+	duration := 120
+	videoID := "abc123"
+	if err := repo.UpdateMetadata(ctx, id, &videoID, &title, &uploader, &duration, nil); err != nil {
+		t.Fatalf("UpdateMetadata: %v", err)
+	}
+
+	if err := repo.UpdateStatus(ctx, id, models.StatusDownloading, nil); err != nil {
+		t.Fatalf("UpdateStatus: %v", err)
+	}
+
+	resolution := "1920x1080"
+	if err := repo.MarkCompleted(ctx, id, 0, &resolution); err != nil {
+		t.Fatalf("MarkCompleted: %v", err)
+	}
+
+	got, err = repo.Get(ctx, id)
+	if err != nil {
+		t.Fatalf("Get after complete: %v", err)
+	}
+	if got.Status != models.StatusCompleted {
+		t.Fatalf("expected status completed, got %s", got.Status)
+	}
+	if got.Title == nil || *got.Title != title {
+		t.Fatalf("expected title %q, got %+v", title, got.Title)
+	}
+	if got.CompletedAt == nil {
+		t.Fatalf("expected CompletedAt to be set")
+	}
+
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(list))
+	}
+}
+
+func TestDownloadsRepo_MarkInterruptedIfActive(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestDB(t)
+
+	activeID, err := repo.Create(ctx, &models.Download{URL: "https://example.com/a", DownloadType: "video", Quality: "best", Status: models.StatusDownloading})
+	if err != nil {
+		t.Fatalf("Create active: %v", err)
+	}
+	doneID, err := repo.Create(ctx, &models.Download{URL: "https://example.com/b", DownloadType: "video", Quality: "best", Status: models.StatusCompleted})
+	if err != nil {
+		t.Fatalf("Create completed: %v", err)
+	}
+
+	n, err := repo.MarkInterruptedIfActive(ctx)
+	if err != nil {
+		t.Fatalf("MarkInterruptedIfActive: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 row marked interrupted, got %d", n)
+	}
+
+	active, err := repo.Get(ctx, activeID)
+	if err != nil {
+		t.Fatalf("Get active: %v", err)
+	}
+	if active.Status != models.StatusInterrupted {
+		t.Fatalf("expected interrupted, got %s", active.Status)
+	}
+
+	done, err := repo.Get(ctx, doneID)
+	if err != nil {
+		t.Fatalf("Get completed: %v", err)
+	}
+	if done.Status != models.StatusCompleted {
+		t.Fatalf("expected completed status untouched, got %s", done.Status)
+	}
+}

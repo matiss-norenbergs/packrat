@@ -1,0 +1,24 @@
+# Go
+backend/packrat
+backend/*.exe
+backend/*.test
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Runtime data (media, database, logs)
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Env
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
