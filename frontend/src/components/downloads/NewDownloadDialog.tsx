@@ -20,27 +20,41 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useCreateDownload } from "@/hooks/useDownloads"
+import { useCollections } from "@/hooks/useCollections"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
 const AUDIO_FORMATS: AudioFormat[] = ["mp3", "flac", "m4a", "aac", "wav"]
+const NO_COLLECTION = "none"
 
 export function NewDownloadDialog() {
   const [open, setOpen] = useState(false)
   const [url, setUrl] = useState("")
+  const [collectionId, setCollectionId] = useState(NO_COLLECTION)
   const [downloadType, setDownloadType] = useState<DownloadType>("video")
   const [quality, setQuality] = useState<VideoQuality>("best")
   const [audioFormat, setAudioFormat] = useState<AudioFormat>("mp3")
   const [filename, setFilename] = useState("")
 
+  const { data: collections } = useCollections()
   const createDownload = useCreateDownload()
 
   const reset = () => {
     setUrl("")
+    setCollectionId(NO_COLLECTION)
     setDownloadType("video")
     setQuality("best")
     setAudioFormat("mp3")
     setFilename("")
+  }
+
+  const handleCollectionChange = (value: string) => {
+    setCollectionId(value)
+    const collection = collections?.find((c) => String(c.id) === value)
+    if (collection) {
+      setDownloadType(collection.defaultDownloadType)
+      setQuality(collection.defaultQuality as VideoQuality)
+    }
   }
 
   const handleSubmit = () => {
@@ -48,6 +62,7 @@ export function NewDownloadDialog() {
     createDownload.mutate(
       {
         url: url.trim(),
+        collectionId: collectionId === NO_COLLECTION ? undefined : Number(collectionId),
         downloadType,
         quality: downloadType === "video" ? quality : undefined,
         audioFormat: downloadType === "audio" ? audioFormat : undefined,
@@ -86,6 +101,23 @@ export function NewDownloadDialog() {
               onChange={(e) => setUrl(e.target.value)}
               autoFocus
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Collection</Label>
+            <Select value={collectionId} onValueChange={handleCollectionChange}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_COLLECTION}>None</SelectItem>
+                {collections?.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

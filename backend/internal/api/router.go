@@ -13,25 +13,39 @@ import (
 // Deps holds everything the router needs to wire up routes. Fields are added
 // incrementally as the corresponding subsystems (queue, library, ws) land.
 type Deps struct {
-	DB            *sql.DB
-	Manager       *queue.DownloadManager
-	DownloadsRepo *repository.DownloadsRepo
-	LibraryRepo   *repository.LibraryRepo
-	MediaRoot     string
-	WSHandler     gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
-	StaticDir     string          // built frontend assets; empty in dev (Vite serves it)
+	DB              *sql.DB
+	Manager         *queue.DownloadManager
+	DownloadsRepo   *repository.DownloadsRepo
+	LibraryRepo     *repository.LibraryRepo
+	CollectionsRepo *repository.CollectionsRepo
+	MediaRoot       string
+	WSHandler       gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
+	StaticDir       string          // built frontend assets; empty in dev (Vite serves it)
 }
 
 func SetupRouter(deps Deps) *gin.Engine {
 	r := gin.Default()
 
-	r.GET("/health", Health(deps.DB))
+	// All JSON API routes live under /api so they can never collide with a
+	// frontend client-side route of the same name (e.g. both the SPA and the
+	// API previously used "/downloads" — a hard refresh on the Downloads
+	// page returned raw JSON instead of the app shell). /media-files and /ws
+	// stay unprefixed since no SPA route shares those names.
+	api := r.Group("/api")
+	{
+		api.GET("/health", Health(deps.DB))
 
-	r.POST("/downloads", CreateDownload(deps.Manager))
-	r.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo))
-	r.DELETE("/downloads/:id", CancelDownload(deps.Manager))
+		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo))
+		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo))
+		api.DELETE("/downloads/:id", CancelDownload(deps.Manager))
 
-	r.GET("/library", ListLibrary(deps.LibraryRepo))
+		api.GET("/library", ListLibrary(deps.LibraryRepo))
+
+		api.GET("/collections", ListCollections(deps.CollectionsRepo))
+		api.POST("/collections", CreateCollection(deps.CollectionsRepo, deps.Manager))
+		api.PATCH("/collections/:id", UpdateCollection(deps.CollectionsRepo, deps.Manager))
+		api.DELETE("/collections/:id", DeleteCollection(deps.CollectionsRepo))
+	}
 
 	if deps.MediaRoot != "" {
 		r.StaticFS("/media-files", http.Dir(deps.MediaRoot))

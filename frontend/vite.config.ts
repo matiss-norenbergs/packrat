@@ -20,9 +20,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       proxy: {
-        "/downloads": `http://localhost:${backendPort}`,
-        "/library": `http://localhost:${backendPort}`,
-        "/health": `http://localhost:${backendPort}`,
+        "/api": `http://localhost:${backendPort}`,
         "/media-files": `http://localhost:${backendPort}`,
         "/ws": {
           target: `ws://localhost:${backendPort}`,

@@ -13,7 +13,7 @@ import (
 	"packrat/backend/internal/repository"
 )
 
-func CreateDownload(mgr *queue.DownloadManager) gin.HandlerFunc {
+func CreateDownload(mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req CreateDownloadRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -21,6 +21,20 @@ func CreateDownload(mgr *queue.DownloadManager) gin.HandlerFunc {
 			return
 		}
 
+		if req.CollectionID != nil {
+			collection, err := collectionsRepo.Get(c.Request.Context(), *req.CollectionID)
+			if err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "collection not found"})
+					return
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			if req.Quality == "" {
+				req.Quality = collection.DefaultQuality
+			}
+		}
 		if req.Quality == "" {
 			req.Quality = "best"
 		}
@@ -28,11 +42,20 @@ func CreateDownload(mgr *queue.DownloadManager) gin.HandlerFunc {
 			req.AudioFormat = "mp3"
 		}
 
-		// Reject path traversal attempts up front, before ever queuing the
-		// job — the queue worker re-validates this too, but failing fast
-		// here gives the caller an immediate 400 instead of a later
-		// asynchronous "failed" status.
-		if _, err := pathsafe.ResolveUnderRoot(mgr.MediaRoot(), req.Folder); err != nil {
+		// Reject path traversal (and unknown collections) up front, before
+		// ever queuing the job — the queue worker re-validates this too,
+		// but failing fast here gives the caller an immediate 400 instead
+		// of a later asynchronous "failed" status.
+		effectiveRoot, err := mgr.ResolveEffectiveRoot(c.Request.Context(), req.CollectionID)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "collection not found"})
+				return
+			}
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid collection root: " + err.Error()})
+			return
+		}
+		if _, err := pathsafe.ResolveUnderRoot(effectiveRoot, req.Folder); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid folder: " + err.Error()})
 			return
 		}

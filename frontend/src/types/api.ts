@@ -16,6 +16,7 @@ export interface Download {
   id: number
   url: string
   collectionId: number | null
+  collectionName: string | null
   folder: string
   filename: string
   downloadType: DownloadType
@@ -47,6 +48,25 @@ export interface CreateDownloadRequest {
   audioFormat?: string
 }
 
+export interface Collection {
+  id: number
+  name: string
+  rootPath: string
+  defaultQuality: string
+  defaultDownloadType: DownloadType
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateCollectionRequest {
+  name: string
+  rootPath: string
+  defaultQuality?: string
+  defaultDownloadType?: DownloadType
+}
+
+export type UpdateCollectionRequest = CreateCollectionRequest
+
 export interface LibraryItem {
   id: number
   downloadId: number | null
@@ -54,6 +74,7 @@ export interface LibraryItem {
   filename: string
   path: string
   collectionId: number | null
+  collectionName: string | null
   folder: string
   originalUrl: string
   uploader: string | null

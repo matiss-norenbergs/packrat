@@ -25,28 +25,29 @@ func ActiveStatuses() []DownloadStatus {
 }
 
 type Download struct {
-	ID           int64
-	URL          string
-	VideoID      *string
-	CollectionID *int64
-	Folder       string
-	Filename     string
-	DownloadType string // "video" | "audio"
-	Quality      string
-	AudioFormat  *string
-	Status       DownloadStatus
-	Title        *string
-	Uploader     *string
-	Duration     *int
-	Resolution   *string
-	Thumbnail    *string
-	ErrorMessage *string
-	YtDlpCommand *string
-	ExitCode     *int
-	StdoutTail   *string
-	StderrTail   *string
-	RetryCount   int
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	CompletedAt  *time.Time
+	ID             int64
+	URL            string
+	VideoID        *string
+	CollectionID   *int64
+	CollectionName *string
+	Folder         string
+	Filename       string
+	DownloadType   string // "video" | "audio"
+	Quality        string
+	AudioFormat    *string
+	Status         DownloadStatus
+	Title          *string
+	Uploader       *string
+	Duration       *int
+	Resolution     *string
+	Thumbnail      *string
+	ErrorMessage   *string
+	YtDlpCommand   *string
+	ExitCode       *int
+	StdoutTail     *string
+	StderrTail     *string
+	RetryCount     int
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	CompletedAt    *time.Time
 }

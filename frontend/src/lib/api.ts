@@ -1,7 +1,17 @@
-import type { CreateDownloadRequest, Download, LibraryItem } from "@/types/api"
+import type {
+  Collection,
+  CreateCollectionRequest,
+  CreateDownloadRequest,
+  Download,
+  LibraryItem,
+  UpdateCollectionRequest,
+} from "@/types/api"
 
+// All JSON API routes live under /api (kept distinct from the frontend's
+// client-side routes of the same name, e.g. /downloads and /library — see
+// backend/internal/api/router.go).
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(`/api${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
   })
@@ -34,4 +44,26 @@ export function fetchLibrary(): Promise<LibraryItem[]> {
 
 export function mediaFileUrl(relativePath: string): string {
   return `/media-files/${relativePath.split("/").map(encodeURIComponent).join("/")}`
+}
+
+export function fetchCollections(): Promise<Collection[]> {
+  return request<Collection[]>("/collections")
+}
+
+export function createCollection(payload: CreateCollectionRequest): Promise<{ id: number }> {
+  return request<{ id: number }>("/collections", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateCollection(id: number, payload: UpdateCollectionRequest): Promise<void> {
+  return request<void>(`/collections/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteCollection(id: number): Promise<void> {
+  return request<void>(`/collections/${id}`, { method: "DELETE" })
 }

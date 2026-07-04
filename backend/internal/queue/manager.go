@@ -25,12 +25,13 @@ import (
 const progressBroadcastInterval = time.Second
 
 type DownloadManager struct {
-	mediaRoot     string
-	ytdlp         *downloader.YtDlpService
-	downloadsRepo *repository.DownloadsRepo
-	libraryRepo   *repository.LibraryRepo
-	progress      *ProgressStore
-	broadcaster   ws.Broadcaster
+	mediaRoot       string
+	ytdlp           *downloader.YtDlpService
+	downloadsRepo   *repository.DownloadsRepo
+	libraryRepo     *repository.LibraryRepo
+	collectionsRepo *repository.CollectionsRepo
+	progress        *ProgressStore
+	broadcaster     ws.Broadcaster
 
 	jobs chan int64
 
@@ -49,6 +50,7 @@ func NewDownloadManager(
 	ytdlp *downloader.YtDlpService,
 	downloadsRepo *repository.DownloadsRepo,
 	libraryRepo *repository.LibraryRepo,
+	collectionsRepo *repository.CollectionsRepo,
 	progress *ProgressStore,
 	broadcaster ws.Broadcaster,
 ) *DownloadManager {
@@ -57,12 +59,29 @@ func NewDownloadManager(
 		ytdlp:           ytdlp,
 		downloadsRepo:   downloadsRepo,
 		libraryRepo:     libraryRepo,
+		collectionsRepo: collectionsRepo,
 		progress:        progress,
 		broadcaster:     broadcaster,
 		jobs:            make(chan int64, 100),
 		cancels:         make(map[int64]context.CancelFunc),
 		lastBroadcastAt: make(map[int64]time.Time),
 	}
+}
+
+// ResolveEffectiveRoot returns the directory downloads should be written
+// under: a collection's root (itself resolved safely under MediaRoot) when
+// collectionID is set, otherwise MediaRoot directly. Both the API layer
+// (pre-validating the request's folder) and runOne (actually resolving the
+// destination) call this so the two never drift apart.
+func (m *DownloadManager) ResolveEffectiveRoot(ctx context.Context, collectionID *int64) (string, error) {
+	if collectionID == nil {
+		return m.mediaRoot, nil
+	}
+	col, err := m.collectionsRepo.Get(ctx, *collectionID)
+	if err != nil {
+		return "", err
+	}
+	return pathsafe.ResolveUnderRoot(m.mediaRoot, col.RootPath)
 }
 
 // Start spawns workerCount goroutines consuming the job queue. The number
@@ -168,7 +187,12 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		log.Printf("queue: update metadata failed for %d: %v", id, err)
 	}
 
-	destDir, err := pathsafe.ResolveUnderRoot(m.mediaRoot, d.Folder)
+	effectiveRoot, err := m.ResolveEffectiveRoot(runCtx, d.CollectionID)
+	if err != nil {
+		m.finishError(parentCtx, runCtx, id, "resolving collection root: "+err.Error(), "", "")
+		return
+	}
+	destDir, err := pathsafe.ResolveUnderRoot(effectiveRoot, d.Folder)
 	if err != nil {
 		m.finishError(parentCtx, runCtx, id, "invalid folder: "+err.Error(), "", "")
 		return
@@ -237,16 +261,21 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 		title = d.URL
 	}
 
-	relPath := finalPath
+	// Stored as forward-slash paths regardless of host OS, since these are
+	// read back purely to build URLs for the /media-files static route (the
+	// frontend splits on "/") — filepath.Rel on Windows returns
+	// backslash-separated paths, which would silently 404 as a URL.
+	relPath := filepath.ToSlash(finalPath)
 	if rel, err := filepath.Rel(m.mediaRoot, finalPath); err == nil {
-		relPath = rel
+		relPath = filepath.ToSlash(rel)
 	}
 
 	var thumbRelPtr *string
 	thumbAbs := thumbnailPathFor(finalPath)
 	if thumbAbs != "" {
 		if rel, err := filepath.Rel(m.mediaRoot, thumbAbs); err == nil {
-			thumbRelPtr = &rel
+			relSlash := filepath.ToSlash(rel)
+			thumbRelPtr = &relSlash
 		}
 	}
 

@@ -31,7 +31,7 @@ func (r *DownloadsRepo) Create(ctx context.Context, d *models.Download) (int64, 
 }
 
 func (r *DownloadsRepo) Get(ctx context.Context, id int64) (*models.Download, error) {
-	row := r.db.QueryRowContext(ctx, downloadSelectColumns+` WHERE id = ?`, id)
+	row := r.db.QueryRowContext(ctx, downloadSelectColumns+` WHERE d.id = ?`, id)
 	d, err := scanDownload(row)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
@@ -40,7 +40,7 @@ func (r *DownloadsRepo) Get(ctx context.Context, id int64) (*models.Download, er
 }
 
 func (r *DownloadsRepo) List(ctx context.Context) ([]models.Download, error) {
-	rows, err := r.db.QueryContext(ctx, downloadSelectColumns+` ORDER BY created_at DESC`)
+	rows, err := r.db.QueryContext(ctx, downloadSelectColumns+` ORDER BY d.created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("listing downloads: %w", err)
 	}
@@ -132,10 +132,11 @@ func (r *DownloadsRepo) MarkInterruptedIfActive(ctx context.Context) (int64, err
 }
 
 const downloadSelectColumns = `
-	SELECT id, url, video_id, collection_id, folder, filename, download_type, quality, audio_format,
-	       status, title, uploader, duration, resolution, thumbnail, error_message, ytdlp_command,
-	       exit_code, stdout_tail, stderr_tail, retry_count, created_at, updated_at, completed_at
-	FROM downloads`
+	SELECT d.id, d.url, d.video_id, d.collection_id, c.name, d.folder, d.filename, d.download_type, d.quality, d.audio_format,
+	       d.status, d.title, d.uploader, d.duration, d.resolution, d.thumbnail, d.error_message, d.ytdlp_command,
+	       d.exit_code, d.stdout_tail, d.stderr_tail, d.retry_count, d.created_at, d.updated_at, d.completed_at
+	FROM downloads d
+	LEFT JOIN collections c ON c.id = d.collection_id`
 
 type rowScanner interface {
 	Scan(dest ...any) error
@@ -147,7 +148,7 @@ func scanDownload(row rowScanner) (*models.Download, error) {
 	var completedAt sql.NullString
 
 	err := row.Scan(
-		&d.ID, &d.URL, &d.VideoID, &d.CollectionID, &d.Folder, &d.Filename, &d.DownloadType, &d.Quality, &d.AudioFormat,
+		&d.ID, &d.URL, &d.VideoID, &d.CollectionID, &d.CollectionName, &d.Folder, &d.Filename, &d.DownloadType, &d.Quality, &d.AudioFormat,
 		&d.Status, &d.Title, &d.Uploader, &d.Duration, &d.Resolution, &d.Thumbnail, &d.ErrorMessage, &d.YtDlpCommand,
 		&d.ExitCode, &d.StdoutTail, &d.StderrTail, &d.RetryCount, &createdAt, &updatedAt, &completedAt,
 	)

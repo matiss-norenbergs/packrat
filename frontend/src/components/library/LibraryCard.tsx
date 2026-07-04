@@ -22,7 +22,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
           <span className="truncate">{item.uploader ?? "Uncategorized"}</span>
           {item.duration != null && <span>{formatDuration(item.duration)}</span>}
         </div>
-        <Badge variant="outline">{item.collectionId ? `Collection #${item.collectionId}` : "Uncategorized"}</Badge>
+        <Badge variant="outline">{item.collectionName ?? "Uncategorized"}</Badge>
       </CardContent>
     </Card>
   )

@@ -50,6 +50,7 @@ func run() error {
 
 	downloadsRepo := repository.NewDownloadsRepo(conn)
 	libraryRepo := repository.NewLibraryRepo(conn)
+	collectionsRepo := repository.NewCollectionsRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath)
 	progressStore := queue.NewProgressStore()
 
@@ -59,7 +60,7 @@ func run() error {
 	hub := ws.NewHub()
 	go hub.Run(ctx)
 
-	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, progressStore, hub)
+	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, progressStore, hub)
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)
 	if err != nil {
@@ -72,13 +73,14 @@ func run() error {
 	mgr.Start(ctx, cfg.MaxConcurrentDownloads)
 
 	router := api.SetupRouter(api.Deps{
-		DB:            conn,
-		Manager:       mgr,
-		DownloadsRepo: downloadsRepo,
-		LibraryRepo:   libraryRepo,
-		MediaRoot:     cfg.MediaRoot,
-		WSHandler:     hub.GinHandler(),
-		StaticDir:     os.Getenv("STATIC_DIR"),
+		DB:              conn,
+		Manager:         mgr,
+		DownloadsRepo:   downloadsRepo,
+		LibraryRepo:     libraryRepo,
+		CollectionsRepo: collectionsRepo,
+		MediaRoot:       cfg.MediaRoot,
+		WSHandler:       hub.GinHandler(),
+		StaticDir:       os.Getenv("STATIC_DIR"),
 	})
 
 	srv := &http.Server{
