@@ -43,6 +43,15 @@ via `pathsafe.ResolveUnderRoot(MediaRoot, rootPath)`: it's a named folder preset
 `MEDIA_ROOT`, not an arbitrary path. When a download specifies both a collection and a `folder`,
 the folder resolves as a subfolder within that collection's root (nested `ResolveUnderRoot` calls).
 
+## Concurrency limit is runtime-editable
+
+`DownloadManager.SetWorkerCount` resizes the worker pool live — each worker has its own `stop`
+channel that only gates whether it picks up its *next* job, while every in-flight download derives
+its context from a single stable `rootCtx` set once in `Start`. Shrinking the pool (e.g. via
+`PATCH /api/settings`) never cancels a download that's already running; it just stops that many
+workers from claiming new jobs. The setting is persisted via `SettingsRepo` and re-read at startup,
+so a saved value survives a restart instead of reverting to the `MAX_CONCURRENT_DOWNLOADS` env var.
+
 ## Data flow (the one implemented end-to-end flow)
 
 1. `POST /downloads` validates the request, resolves the destination folder against
@@ -68,8 +77,6 @@ they belong:
   literally (sanitized).
 - **No FTS5 search table yet.** The Library page has no search UI this pass, so the `library`
   table has plain indexes only. Add the FTS5 virtual table in a migration when search is built.
-- **Concurrency limit is fixed at process startup.** `MAX_CONCURRENT_DOWNLOADS` sets the worker
-  pool size once; changing it requires a restart.
 - **No auth, CSRF, or rate limiting.** The app is intended for a trusted local network only in
   this pass. WebSocket has no origin restriction (`CheckOrigin` always returns true).
 - **`history`, `tags`, `library_tags` tables exist but are inert.** They're in the schema

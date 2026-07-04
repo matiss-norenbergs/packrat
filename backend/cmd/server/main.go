@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"packrat/backend/internal/config"
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/ws"
@@ -51,6 +53,7 @@ func run() error {
 	downloadsRepo := repository.NewDownloadsRepo(conn)
 	libraryRepo := repository.NewLibraryRepo(conn)
 	collectionsRepo := repository.NewCollectionsRepo(conn)
+	settingsRepo := repository.NewSettingsRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath)
 	progressStore := queue.NewProgressStore()
 
@@ -70,7 +73,15 @@ func run() error {
 		log.Printf("crash recovery: marked %d in-progress download(s) as interrupted", interrupted)
 	}
 
-	mgr.Start(ctx, cfg.MaxConcurrentDownloads)
+	// A previously-saved concurrency setting survives a restart — the env
+	// var is only the fallback for a fresh database.
+	workerCount := cfg.MaxConcurrentDownloads
+	if saved, err := settingsRepo.Get(ctx, models.SettingMaxConcurrentDownloads); err == nil {
+		if n, err := strconv.Atoi(saved); err == nil && n > 0 {
+			workerCount = n
+		}
+	}
+	mgr.Start(ctx, workerCount)
 
 	router := api.SetupRouter(api.Deps{
 		DB:              conn,
@@ -78,6 +89,8 @@ func run() error {
 		DownloadsRepo:   downloadsRepo,
 		LibraryRepo:     libraryRepo,
 		CollectionsRepo: collectionsRepo,
+		SettingsRepo:    settingsRepo,
+		YtDlp:           ytdlpSvc,
 		MediaRoot:       cfg.MediaRoot,
 		WSHandler:       hub.GinHandler(),
 		StaticDir:       os.Getenv("STATIC_DIR"),

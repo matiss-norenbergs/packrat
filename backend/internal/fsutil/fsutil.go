@@ -1,6 +1,7 @@
 package fsutil
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -23,4 +24,31 @@ func SanitizeFilename(name string) string {
 
 func EnsureDir(path string) error {
 	return os.MkdirAll(path, 0o755)
+}
+
+// RenamePair renames a media file and its companion thumbnail together —
+// used for both Rename (same directory, new base name) and Move (new
+// directory, same base name), which are the same filesystem operation
+// either way. oldThumb/newThumb may be "" if there is no thumbnail. If the
+// thumbnail rename fails after the media rename succeeded, the media file
+// is renamed back so the two never end up split across old and new
+// locations (there's no real filesystem transaction to fall back on).
+func RenamePair(oldMedia, newMedia, oldThumb, newThumb string) error {
+	if err := os.Rename(oldMedia, newMedia); err != nil {
+		return fmt.Errorf("renaming media file: %w", err)
+	}
+
+	if oldThumb == "" {
+		return nil
+	}
+	if _, err := os.Stat(oldThumb); err != nil {
+		return nil // thumbnail already missing; nothing to rename
+	}
+	if err := os.Rename(oldThumb, newThumb); err != nil {
+		if rollbackErr := os.Rename(newMedia, oldMedia); rollbackErr != nil {
+			return fmt.Errorf("renaming thumbnail: %w (rollback of media rename also failed: %v)", err, rollbackErr)
+		}
+		return fmt.Errorf("renaming thumbnail: %w", err)
+	}
+	return nil
 }

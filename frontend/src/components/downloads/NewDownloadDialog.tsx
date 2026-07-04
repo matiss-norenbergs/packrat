@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import { useCreateDownload } from "@/hooks/useDownloads"
 import { useCollections } from "@/hooks/useCollections"
+import { useSettings } from "@/hooks/useSettings"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -37,15 +38,21 @@ export function NewDownloadDialog() {
   const [filename, setFilename] = useState("")
 
   const { data: collections } = useCollections()
+  const { data: settings } = useSettings()
   const createDownload = useCreateDownload()
 
   const reset = () => {
     setUrl("")
     setCollectionId(NO_COLLECTION)
-    setDownloadType("video")
-    setQuality("best")
+    setDownloadType(settings?.defaultDownloadType ?? "video")
+    setQuality((settings?.defaultQuality as VideoQuality) ?? "best")
     setAudioFormat("mp3")
     setFilename("")
+  }
+
+  const handleOpenChange = (next: boolean) => {
+    if (next) reset()
+    setOpen(next)
   }
 
   const handleCollectionChange = (value: string) => {
@@ -78,7 +85,7 @@ export function NewDownloadDialog() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="h-4 w-4" />

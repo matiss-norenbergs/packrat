@@ -119,6 +119,20 @@ func toLibraryItemResponse(item models.LibraryItem) LibraryItemResponse {
 	}
 }
 
+type UpdateLibraryItemRequest struct {
+	Title       *string `json:"title"`
+	Filename    *string `json:"filename"`
+	Uploader    *string `json:"uploader"`
+	Description *string `json:"description"`
+	Duration    *int    `json:"duration"`
+	Resolution  *string `json:"resolution"`
+}
+
+type MoveLibraryItemRequest struct {
+	CollectionID *int64 `json:"collectionId"`
+	Folder       string `json:"folder"`
+}
+
 type CreateCollectionRequest struct {
 	Name                string `json:"name" binding:"required"`
 	RootPath            string `json:"rootPath" binding:"required"`
@@ -141,6 +155,19 @@ type CollectionResponse struct {
 	DefaultDownloadType string `json:"defaultDownloadType"`
 	CreatedAt           string `json:"createdAt"`
 	UpdatedAt           string `json:"updatedAt"`
+}
+
+type SettingsResponse struct {
+	DownloadDirectory      string `json:"downloadDirectory"`
+	MaxConcurrentDownloads int    `json:"maxConcurrentDownloads"`
+	DefaultQuality         string `json:"defaultQuality"`
+	DefaultDownloadType    string `json:"defaultDownloadType"`
+}
+
+type UpdateSettingsRequest struct {
+	MaxConcurrentDownloads *int    `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
+	DefaultQuality         *string `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
+	DefaultDownloadType    *string `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
 }
 
 func toCollectionResponse(c models.Collection) CollectionResponse {

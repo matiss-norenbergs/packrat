@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 )
@@ -18,6 +19,8 @@ type Deps struct {
 	DownloadsRepo   *repository.DownloadsRepo
 	LibraryRepo     *repository.LibraryRepo
 	CollectionsRepo *repository.CollectionsRepo
+	SettingsRepo    *repository.SettingsRepo
+	YtDlp           *downloader.YtDlpService
 	MediaRoot       string
 	WSHandler       gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
 	StaticDir       string          // built frontend assets; empty in dev (Vite serves it)
@@ -35,16 +38,24 @@ func SetupRouter(deps Deps) *gin.Engine {
 	{
 		api.GET("/health", Health(deps.DB))
 
-		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo))
+		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo))
 		api.DELETE("/downloads/:id", CancelDownload(deps.Manager))
 
 		api.GET("/library", ListLibrary(deps.LibraryRepo))
+		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
+		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot))
+		api.POST("/library/:id/move", MoveLibraryItem(deps.LibraryRepo, deps.Manager, deps.MediaRoot))
+		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp))
+		api.POST("/library/:id/redownload", RedownloadLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 
 		api.GET("/collections", ListCollections(deps.CollectionsRepo))
 		api.POST("/collections", CreateCollection(deps.CollectionsRepo, deps.Manager))
 		api.PATCH("/collections/:id", UpdateCollection(deps.CollectionsRepo, deps.Manager))
 		api.DELETE("/collections/:id", DeleteCollection(deps.CollectionsRepo))
+
+		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.MediaRoot))
+		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager))
 	}
 
 	if deps.MediaRoot != "" {

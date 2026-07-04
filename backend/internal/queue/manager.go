@@ -35,6 +35,16 @@ type DownloadManager struct {
 
 	jobs chan int64
 
+	// rootCtx is the single stable context every runOne call derives its
+	// per-download runCtx from. It is set once in Start and never touched by
+	// worker pool resizing — a worker's own stop signal only gates whether it
+	// picks up its *next* job, so shrinking the pool can never cancel a
+	// download that's already in flight.
+	rootCtx context.Context
+
+	workerMu    sync.Mutex
+	workerStops []chan struct{}
+
 	mu      sync.Mutex
 	cancels map[int64]context.CancelFunc
 
@@ -84,25 +94,60 @@ func (m *DownloadManager) ResolveEffectiveRoot(ctx context.Context, collectionID
 	return pathsafe.ResolveUnderRoot(m.mediaRoot, col.RootPath)
 }
 
-// Start spawns workerCount goroutines consuming the job queue. The number
-// of workers *is* the concurrency limit ("configurable max concurrent
-// downloads") — no separate semaphore is needed.
+// Start records the process-lifetime context every download runs under,
+// then brings the worker pool up to workerCount. The number of workers *is*
+// the concurrency limit ("configurable max concurrent downloads") — no
+// separate semaphore is needed.
 func (m *DownloadManager) Start(ctx context.Context, workerCount int) {
-	for i := 0; i < workerCount; i++ {
-		go m.worker(ctx)
-	}
+	m.rootCtx = ctx
+	m.SetWorkerCount(workerCount)
 }
 
-func (m *DownloadManager) worker(ctx context.Context) {
+func (m *DownloadManager) worker(stop <-chan struct{}) {
 	for {
 		select {
-		case <-ctx.Done():
+		case <-stop:
+			return
+		case <-m.rootCtx.Done():
 			return
 		case id := <-m.jobs:
 			atomic.AddInt32(&m.queuedCount, -1)
-			m.runOne(ctx, id)
+			m.runOne(m.rootCtx, id)
 		}
 	}
+}
+
+// SetWorkerCount resizes the pool to n workers, spawning or stopping as
+// needed. Stopping a worker only prevents it from picking up its *next*
+// job — any download it's currently running keeps going via rootCtx, which
+// is never touched here.
+func (m *DownloadManager) SetWorkerCount(n int) {
+	m.workerMu.Lock()
+	defer m.workerMu.Unlock()
+
+	current := len(m.workerStops)
+	switch {
+	case n > current:
+		for i := 0; i < n-current; i++ {
+			stop := make(chan struct{})
+			m.workerStops = append(m.workerStops, stop)
+			go m.worker(stop)
+		}
+	case n < current:
+		for i := 0; i < current-n; i++ {
+			last := len(m.workerStops) - 1
+			close(m.workerStops[last])
+			m.workerStops = m.workerStops[:last]
+		}
+	}
+}
+
+// WorkerCount returns the current pool size — the live source of truth for
+// GET /api/settings, since it reflects SetWorkerCount calls immediately.
+func (m *DownloadManager) WorkerCount() int {
+	m.workerMu.Lock()
+	defer m.workerMu.Unlock()
+	return len(m.workerStops)
 }
 
 // Enqueue creates a queued download row and schedules it for a worker.

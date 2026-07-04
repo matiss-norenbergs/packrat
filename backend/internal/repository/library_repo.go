@@ -32,7 +32,11 @@ func (r *LibraryRepo) Create(ctx context.Context, item *models.LibraryItem) (int
 
 func (r *LibraryRepo) Get(ctx context.Context, id int64) (*models.LibraryItem, error) {
 	row := r.db.QueryRowContext(ctx, librarySelectColumns+` WHERE l.id = ?`, id)
-	return scanLibraryItem(row)
+	item, err := scanLibraryItem(row)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	return item, err
 }
 
 func (r *LibraryRepo) List(ctx context.Context) ([]models.LibraryItem, error) {
@@ -51,6 +55,84 @@ func (r *LibraryRepo) List(ctx context.Context) ([]models.LibraryItem, error) {
 		out = append(out, *item)
 	}
 	return out, rows.Err()
+}
+
+func (r *LibraryRepo) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM library WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting library item: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *LibraryRepo) UpdateTitle(ctx context.Context, id int64, title string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE library SET title = ? WHERE id = ?`, title, id)
+	if err != nil {
+		return fmt.Errorf("updating library title: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// UpdateFilename is used by Rename when the physical filename changes —
+// the file itself has already been renamed on disk by the caller via
+// fsutil.RenamePair before this is called.
+func (r *LibraryRepo) UpdateFilename(ctx context.Context, id int64, filename, path string, thumbnail *string) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE library SET filename = ?, path = ?, thumbnail = ? WHERE id = ?`,
+		filename, path, thumbnail, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating library filename: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// UpdateLocation is used by Move — the file has already been relocated on
+// disk by the caller via fsutil.RenamePair before this is called.
+func (r *LibraryRepo) UpdateLocation(ctx context.Context, id int64, collectionID *int64, folder, filename, path string, thumbnail *string) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE library SET collection_id = ?, folder = ?, filename = ?, path = ?, thumbnail = ? WHERE id = ?`,
+		collectionID, folder, filename, path, thumbnail, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating library location: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// UpdateMetadata is used by Refresh Metadata. resolution uses COALESCE
+// since a re-fetch might not include width/height — nil leaves the
+// existing value untouched rather than clobbering it with an unknown one.
+func (r *LibraryRepo) UpdateMetadata(ctx context.Context, id int64, title, uploader *string, duration *int, resolution *string, description *string) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE library
+		SET title = COALESCE(?, title), uploader = ?, duration = ?,
+		    resolution = COALESCE(?, resolution), description = ?
+		WHERE id = ?`,
+		title, uploader, duration, resolution, description, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating library metadata: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+func checkRowsAffected(res sql.Result) error {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 const librarySelectColumns = `

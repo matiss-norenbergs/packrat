@@ -85,3 +85,30 @@ export interface LibraryItem {
   downloadedAt: string
   status: string
 }
+
+export interface UpdateLibraryItemRequest {
+  title?: string
+  filename?: string
+  uploader?: string
+  description?: string
+  duration?: number
+  resolution?: string
+}
+
+export interface MoveLibraryItemRequest {
+  collectionId?: number | null
+  folder: string
+}
+
+export interface Settings {
+  downloadDirectory: string
+  maxConcurrentDownloads: number
+  defaultQuality: string
+  defaultDownloadType: DownloadType
+}
+
+export interface UpdateSettingsRequest {
+  maxConcurrentDownloads?: number
+  defaultQuality?: string
+  defaultDownloadType?: DownloadType
+}

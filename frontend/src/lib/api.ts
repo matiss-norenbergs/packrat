@@ -4,7 +4,11 @@ import type {
   CreateDownloadRequest,
   Download,
   LibraryItem,
+  MoveLibraryItemRequest,
+  Settings,
   UpdateCollectionRequest,
+  UpdateLibraryItemRequest,
+  UpdateSettingsRequest,
 } from "@/types/api"
 
 // All JSON API routes live under /api (kept distinct from the frontend's
@@ -46,6 +50,32 @@ export function mediaFileUrl(relativePath: string): string {
   return `/media-files/${relativePath.split("/").map(encodeURIComponent).join("/")}`
 }
 
+export function deleteLibraryItem(id: number, deleteFiles: boolean): Promise<void> {
+  return request<void>(`/library/${id}?deleteFiles=${deleteFiles}`, { method: "DELETE" })
+}
+
+export function updateLibraryItem(id: number, payload: UpdateLibraryItemRequest): Promise<void> {
+  return request<void>(`/library/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function moveLibraryItem(id: number, payload: MoveLibraryItemRequest): Promise<void> {
+  return request<void>(`/library/${id}/move`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function refreshLibraryItemMetadata(id: number): Promise<LibraryItem> {
+  return request<LibraryItem>(`/library/${id}/refresh-metadata`, { method: "POST" })
+}
+
+export function redownloadLibraryItem(id: number): Promise<{ id: number }> {
+  return request<{ id: number }>(`/library/${id}/redownload`, { method: "POST" })
+}
+
 export function fetchCollections(): Promise<Collection[]> {
   return request<Collection[]>("/collections")
 }
@@ -66,4 +96,15 @@ export function updateCollection(id: number, payload: UpdateCollectionRequest): 
 
 export function deleteCollection(id: number): Promise<void> {
   return request<void>(`/collections/${id}`, { method: "DELETE" })
+}
+
+export function fetchSettings(): Promise<Settings> {
+  return request<Settings>("/settings")
+}
+
+export function updateSettings(payload: UpdateSettingsRequest): Promise<void> {
+  return request<void>("/settings", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
 }
