@@ -4,6 +4,7 @@ import { DashboardPage } from "@/pages/DashboardPage"
 import { DownloadsPage } from "@/pages/DownloadsPage"
 import { LibraryPage } from "@/pages/LibraryPage"
 import { CollectionsPage } from "@/pages/CollectionsPage"
+import { ImportPage } from "@/pages/ImportPage"
 import { HistoryPage } from "@/pages/HistoryPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { LogsPage } from "@/pages/LogsPage"
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
       { path: "/downloads", element: <DownloadsPage /> },
       { path: "/library", element: <LibraryPage /> },
       { path: "/collections", element: <CollectionsPage /> },
+      { path: "/import", element: <ImportPage /> },
       { path: "/history", element: <HistoryPage /> },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/logs", element: <LogsPage /> },

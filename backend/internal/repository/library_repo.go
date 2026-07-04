@@ -124,6 +124,37 @@ func (r *LibraryRepo) UpdateMetadata(ctx context.Context, id int64, title, uploa
 	return checkRowsAffected(res)
 }
 
+// UpdateOriginalURL sets or clears (when url is nil) the item's source URL —
+// used both to fill in a URL for a previously URL-less imported item, and by
+// the Edit dialog's normal field-editing flow.
+func (r *LibraryRepo) UpdateOriginalURL(ctx context.Context, id int64, url *string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE library SET original_url = ? WHERE id = ?`, url, id)
+	if err != nil {
+		return fmt.Errorf("updating library original_url: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// ListPaths returns the set of relative media paths already tracked in the
+// library table, for the import scanner to skip on disk.
+func (r *LibraryRepo) ListPaths(ctx context.Context) (map[string]bool, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT path FROM library`)
+	if err != nil {
+		return nil, fmt.Errorf("listing library paths: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]bool)
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, fmt.Errorf("scanning library path: %w", err)
+		}
+		out[p] = true
+	}
+	return out, rows.Err()
+}
+
 func checkRowsAffected(res sql.Result) error {
 	n, err := res.RowsAffected()
 	if err != nil {

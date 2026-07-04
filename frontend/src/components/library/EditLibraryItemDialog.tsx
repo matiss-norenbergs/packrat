@@ -33,6 +33,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
   const [duration, setDuration] = useState(item.duration != null ? String(item.duration) : "")
   const [resolution, setResolution] = useState(item.resolution ?? "")
   const [description, setDescription] = useState(item.description ?? "")
+  const [originalUrl, setOriginalUrl] = useState(item.originalUrl ?? "")
 
   const updateLibraryItem = useUpdateLibraryItem()
 
@@ -43,6 +44,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     setDuration(item.duration != null ? String(item.duration) : "")
     setResolution(item.resolution ?? "")
     setDescription(item.description ?? "")
+    setOriginalUrl(item.originalUrl ?? "")
   }
 
   const handleOpenChange = (next: boolean) => {
@@ -68,6 +70,9 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     const trimmedDescription = description.trim()
     if (trimmedDescription !== (item.description ?? "")) payload.description = trimmedDescription
 
+    const trimmedOriginalUrl = originalUrl.trim()
+    if (trimmedOriginalUrl !== (item.originalUrl ?? "")) payload.originalUrl = trimmedOriginalUrl
+
     const parsedDuration = duration.trim() === "" ? null : Number(duration)
     if (parsedDuration !== item.duration && parsedDuration != null && !Number.isNaN(parsedDuration)) {
       payload.duration = parsedDuration
@@ -82,7 +87,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit</DialogTitle>
           <DialogDescription>
@@ -137,19 +142,30 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
             <Textarea
               id="edit-description"
               rows={5}
+              className="max-h-48 overflow-y-auto"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
-          <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span>Original URL</span>
-            <a href={item.originalUrl} target="_blank" rel="noreferrer" className="truncate underline">
-              {item.originalUrl}
-            </a>
-            <span>Downloaded</span>
-            <span>{new Date(item.downloadedAt).toLocaleString()}</span>
+          <div className="space-y-2">
+            <Label htmlFor="edit-original-url">Original URL</Label>
+            <Input
+              id="edit-original-url"
+              placeholder="https://... (unset for files imported without a known source)"
+              value={originalUrl}
+              onChange={(e) => setOriginalUrl(e.target.value)}
+            />
+            {!item.originalUrl && (
+              <p className="text-xs text-muted-foreground">
+                Setting a URL unlocks Refresh Metadata and Redownload for this item.
+              </p>
+            )}
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            Downloaded {new Date(item.downloadedAt).toLocaleString()}
+          </p>
         </div>
 
         <DialogFooter>

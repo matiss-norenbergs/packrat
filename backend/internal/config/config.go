@@ -14,6 +14,7 @@ type Config struct {
 	MaxConcurrentDownloads int
 	YtDlpPath              string
 	FFmpegPath             string
+	FFProbePath            string
 }
 
 func Load() (Config, error) {
@@ -24,6 +25,7 @@ func Load() (Config, error) {
 		MaxConcurrentDownloads: 2,
 		YtDlpPath:              getEnv("YTDLP_PATH", "yt-dlp"),
 		FFmpegPath:             getEnv("FFMPEG_PATH", "ffmpeg"),
+		FFProbePath:            getEnv("FFPROBE_PATH", "ffprobe"),
 	}
 
 	if raw := os.Getenv("MAX_CONCURRENT_DOWNLOADS"); raw != "" {

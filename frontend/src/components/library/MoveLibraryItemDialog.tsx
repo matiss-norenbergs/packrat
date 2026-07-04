@@ -76,7 +76,7 @@ export function MoveLibraryItemDialog({ item, open, onOpenChange }: MoveLibraryI
                 <SelectItem value={NO_COLLECTION}>None</SelectItem>
                 {collections?.map((c) => (
                   <SelectItem key={c.id} value={String(c.id)}>
-                    {c.name}
+                    {c.path}
                   </SelectItem>
                 ))}
               </SelectContent>

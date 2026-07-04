@@ -34,7 +34,10 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const refreshMetadata = useRefreshLibraryItemMetadata()
   const redownload = useRedownloadLibraryItem()
 
+  const hasUrl = !!item.originalUrl
+
   const handleCopyUrl = () => {
+    if (!item.originalUrl) return
     navigator.clipboard.writeText(item.originalUrl).then(
       () => toast.success("URL copied"),
       () => toast.error("Couldn't copy URL — clipboard access was denied"),
@@ -51,10 +54,16 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => setEditOpen(true)}>Edit</DropdownMenuItem>
-          <DropdownMenuItem onClick={handleCopyUrl}>Copy URL</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleCopyUrl} disabled={!hasUrl}>
+            Copy URL
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMoveOpen(true)}>Move</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setRefreshWarningOpen(true)}>Refresh Metadata</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => redownload.mutate(item.id)}>Redownload</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setRefreshWarningOpen(true)} disabled={!hasUrl}>
+            Refresh Metadata
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => redownload.mutate(item.id)} disabled={!hasUrl}>
+            Redownload
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
             Delete

@@ -87,11 +87,11 @@ func (m *DownloadManager) ResolveEffectiveRoot(ctx context.Context, collectionID
 	if collectionID == nil {
 		return m.mediaRoot, nil
 	}
-	col, err := m.collectionsRepo.Get(ctx, *collectionID)
+	relPath, err := m.collectionsRepo.ResolvePath(ctx, *collectionID)
 	if err != nil {
 		return "", err
 	}
-	return pathsafe.ResolveUnderRoot(m.mediaRoot, col.RootPath)
+	return pathsafe.ResolveUnderRoot(m.mediaRoot, relPath)
 }
 
 // Start records the process-lifetime context every download runs under,
@@ -336,7 +336,7 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 		Path:         relPath,
 		CollectionID: d.CollectionID,
 		Folder:       d.Folder,
-		OriginalURL:  d.URL,
+		OriginalURL:  &d.URL,
 		VideoID:      &videoID,
 		Uploader:     &uploader,
 		Duration:     &duration,

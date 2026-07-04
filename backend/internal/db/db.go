@@ -28,8 +28,19 @@ func Open(path string) (*sql.DB, error) {
 }
 
 // Migrate applies all pending migrations from migrationsDir against conn.
+//
+// NoTxWrap is required, not just a preference: golang-migrate otherwise runs
+// each migration file inside its own transaction, and SQLite's PRAGMA
+// foreign_keys is a documented no-op inside a transaction. Table-rebuild
+// migrations (the only way to change a column constraint in SQLite) rely on
+// disabling foreign_keys around the rebuild — SQLite's DROP TABLE performs
+// an implicit "DELETE FROM" first when foreign_keys is on, which fires any
+// ON DELETE actions (SET NULL / CASCADE / RESTRICT) declared on *other*
+// tables that reference the one being dropped. Without NoTxWrap, that
+// implicit delete cannot be suppressed and silently corrupts sibling tables
+// (e.g. nulling out every downloads/library row's collection_id).
 func Migrate(conn *sql.DB, migrationsDir string) error {
-	driver, err := sqlite.WithInstance(conn, &sqlite.Config{})
+	driver, err := sqlite.WithInstance(conn, &sqlite.Config{NoTxWrap: true})
 	if err != nil {
 		return fmt.Errorf("creating migrate driver: %w", err)
 	}

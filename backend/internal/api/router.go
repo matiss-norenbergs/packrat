@@ -22,6 +22,7 @@ type Deps struct {
 	SettingsRepo    *repository.SettingsRepo
 	YtDlp           *downloader.YtDlpService
 	MediaRoot       string
+	FFProbePath     string
 	WSHandler       gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
 	StaticDir       string          // built frontend assets; empty in dev (Vite serves it)
 }
@@ -56,6 +57,9 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.MediaRoot))
 		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager))
+
+		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.FFProbePath))
+		api.POST("/import", CreateImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))
 	}
 
 	if deps.MediaRoot != "" {

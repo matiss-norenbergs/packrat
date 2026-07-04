@@ -11,7 +11,7 @@ type LibraryItem struct {
 	CollectionID   *int64
 	CollectionName *string
 	Folder         string
-	OriginalURL    string
+	OriginalURL    *string
 	VideoID        *string
 	Uploader       *string
 	Duration       *int

@@ -3,8 +3,10 @@ import type {
   CreateCollectionRequest,
   CreateDownloadRequest,
   Download,
+  ImportRequest,
   LibraryItem,
   MoveLibraryItemRequest,
+  ScannedFile,
   Settings,
   UpdateCollectionRequest,
   UpdateLibraryItemRequest,
@@ -105,6 +107,17 @@ export function fetchSettings(): Promise<Settings> {
 export function updateSettings(payload: UpdateSettingsRequest): Promise<void> {
   return request<void>("/settings", {
     method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function fetchImportScan(): Promise<ScannedFile[]> {
+  return request<ScannedFile[]>("/import/scan")
+}
+
+export function createImport(payload: ImportRequest): Promise<LibraryItem> {
+  return request<LibraryItem>("/import", {
+    method: "POST",
     body: JSON.stringify(payload),
   })
 }

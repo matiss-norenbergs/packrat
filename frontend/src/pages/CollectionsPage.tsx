@@ -1,7 +1,8 @@
 import { useCollections } from "@/hooks/useCollections"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CollectionDialog } from "@/components/collections/CollectionDialog"
-import { CollectionCard } from "@/components/collections/CollectionCard"
+import { CollectionTree } from "@/components/collections/CollectionTree"
+import { buildCollectionTree } from "@/lib/collectionTree"
 
 export function CollectionsPage() {
   const { data, isLoading, isError, error } = useCollections()
@@ -14,9 +15,9 @@ export function CollectionsPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-32 w-full" />
+        <div className="space-y-2">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
         </div>
       ) : isError ? (
         <p className="text-sm text-destructive">Failed to load collections: {(error as Error).message}</p>
@@ -26,11 +27,7 @@ export function CollectionsPage() {
           downloads.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {data.map((collection) => (
-            <CollectionCard key={collection.id} collection={collection} />
-          ))}
-        </div>
+        <CollectionTree nodes={buildCollectionTree(data)} />
       )}
     </div>
   )

@@ -26,10 +26,13 @@ const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720
 
 interface CollectionDialogProps {
   collection?: Collection
+  /** Parent to create the new collection under. Ignored in edit mode — a
+   * collection's parent is fixed at creation time and cannot be changed. */
+  parentId?: number
   trigger?: ReactNode
 }
 
-export function CollectionDialog({ collection, trigger }: CollectionDialogProps) {
+export function CollectionDialog({ collection, parentId, trigger }: CollectionDialogProps) {
   const isEdit = collection != null
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(collection?.name ?? "")
@@ -55,7 +58,13 @@ export function CollectionDialog({ collection, trigger }: CollectionDialogProps)
 
   const handleSubmit = () => {
     if (!name.trim() || !rootPath.trim()) return
-    const payload = { name: name.trim(), rootPath: rootPath.trim(), defaultQuality, defaultDownloadType }
+    const payload = {
+      name: name.trim(),
+      rootPath: rootPath.trim(),
+      defaultQuality,
+      defaultDownloadType,
+      ...(isEdit ? {} : { parentId }),
+    }
 
     if (isEdit) {
       updateCollection.mutate(
@@ -87,6 +96,13 @@ export function CollectionDialog({ collection, trigger }: CollectionDialogProps)
         </DialogHeader>
 
         <div className="space-y-4">
+          {isEdit && (
+            <p className="text-sm text-muted-foreground">
+              Location: <span className="font-mono">{collection.path}</span> (a collection's
+              position in the tree can't be changed after creation)
+            </p>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="collection-name">Name</Label>
             <Input id="collection-name" placeholder="Music" value={name} onChange={(e) => setName(e.target.value)} autoFocus />

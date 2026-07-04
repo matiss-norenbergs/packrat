@@ -92,6 +92,7 @@ func run() error {
 		SettingsRepo:    settingsRepo,
 		YtDlp:           ytdlpSvc,
 		MediaRoot:       cfg.MediaRoot,
+		FFProbePath:     cfg.FFProbePath,
 		WSHandler:       hub.GinHandler(),
 		StaticDir:       os.Getenv("STATIC_DIR"),
 	})

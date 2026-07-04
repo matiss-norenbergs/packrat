@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -41,6 +43,36 @@ func (s *YtDlpService) FetchMetadata(ctx context.Context, url string) (*Metadata
 		return nil, fmt.Errorf("parsing yt-dlp metadata JSON: %w", err)
 	}
 	return &meta, nil
+}
+
+// FetchThumbnail downloads just the thumbnail image for url (no video/audio)
+// into destDir as baseFilename.jpg, converting to jpg the same way real
+// downloads do (see BuildArgs' --convert-thumbnails jpg), so imported
+// thumbnails look identical to downloaded ones. Returns the written file's
+// absolute path.
+func (s *YtDlpService) FetchThumbnail(ctx context.Context, url, destDir, baseFilename string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, metadataFetchTimeout)
+	defer cancel()
+
+	outputTemplate := filepath.Join(destDir, baseFilename+".%(ext)s")
+	args := []string{
+		"--skip-download", "--write-thumbnail", "--convert-thumbnails", "jpg",
+		"--no-playlist", "--no-warnings",
+		"--ffmpeg-location", resolveFFmpegLocation(s.FFmpegPath),
+		"-o", outputTemplate,
+		url,
+	}
+
+	cmd := exec.CommandContext(ctx, s.BinPath, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("yt-dlp thumbnail fetch failed: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	thumbPath := filepath.Join(destDir, baseFilename+".jpg")
+	if _, err := os.Stat(thumbPath); err != nil {
+		return "", fmt.Errorf("thumbnail not written: %w", err)
+	}
+	return thumbPath, nil
 }
 
 // RunResult carries the outcome of a completed (successful or failed)

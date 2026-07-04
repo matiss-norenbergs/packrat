@@ -51,7 +51,9 @@ export interface CreateDownloadRequest {
 export interface Collection {
   id: number
   name: string
+  parentId: number | null
   rootPath: string
+  path: string
   defaultQuality: string
   defaultDownloadType: DownloadType
   createdAt: string
@@ -60,6 +62,7 @@ export interface Collection {
 
 export interface CreateCollectionRequest {
   name: string
+  parentId?: number | null
   rootPath: string
   defaultQuality?: string
   defaultDownloadType?: DownloadType
@@ -76,7 +79,7 @@ export interface LibraryItem {
   collectionId: number | null
   collectionName: string | null
   folder: string
-  originalUrl: string
+  originalUrl: string | null
   uploader: string | null
   duration: number | null
   resolution: string | null
@@ -93,6 +96,7 @@ export interface UpdateLibraryItemRequest {
   description?: string
   duration?: number
   resolution?: string
+  originalUrl?: string
 }
 
 export interface MoveLibraryItemRequest {
@@ -111,4 +115,19 @@ export interface UpdateSettingsRequest {
   maxConcurrentDownloads?: number
   defaultQuality?: string
   defaultDownloadType?: DownloadType
+}
+
+export interface ScannedFile {
+  path: string
+  filename: string
+  sizeBytes: number
+  durationSeconds: number | null
+  resolution: string | null
+  collectionPath: string
+  newCollectionPath: string
+}
+
+export interface ImportRequest {
+  path: string
+  originalUrl?: string
 }

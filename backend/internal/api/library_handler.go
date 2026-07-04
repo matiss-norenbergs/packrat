@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -176,6 +177,18 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 			}
 		}
 
+		if req.OriginalURL != nil {
+			trimmed := strings.TrimSpace(*req.OriginalURL)
+			var urlPtr *string
+			if trimmed != "" {
+				urlPtr = &trimmed
+			}
+			if err := repo.UpdateOriginalURL(c.Request.Context(), id, urlPtr); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
 		c.Status(http.StatusNoContent)
 	}
 }
@@ -274,7 +287,12 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 			return
 		}
 
-		meta, err := ytdlp.FetchMetadata(c.Request.Context(), item.OriginalURL)
+		if item.OriginalURL == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "no source URL set for this item"})
+			return
+		}
+
+		meta, err := ytdlp.FetchMetadata(c.Request.Context(), *item.OriginalURL)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "fetching metadata: " + err.Error()})
 			return
@@ -323,12 +341,17 @@ func RedownloadLibraryItem(libraryRepo *repository.LibraryRepo, downloadsRepo *r
 			return
 		}
 
+		if item.OriginalURL == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "no source URL set for this item"})
+			return
+		}
+
 		downloadType := "video"
 		if def, err := settingsRepo.Get(c.Request.Context(), models.SettingDefaultDownloadType); err == nil && def != "" {
 			downloadType = def
 		}
 		req := CreateDownloadRequest{
-			URL:          item.OriginalURL,
+			URL:          *item.OriginalURL,
 			CollectionID: item.CollectionID,
 			Folder:       item.Folder,
 			DownloadType: downloadType,

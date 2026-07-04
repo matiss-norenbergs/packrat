@@ -1,6 +1,8 @@
 package api
 
 import (
+	"path"
+
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 )
@@ -88,7 +90,7 @@ type LibraryItemResponse struct {
 	CollectionID   *int64  `json:"collectionId"`
 	CollectionName *string `json:"collectionName"`
 	Folder         string  `json:"folder"`
-	OriginalURL    string  `json:"originalUrl"`
+	OriginalURL    *string `json:"originalUrl"`
 	Uploader       *string `json:"uploader"`
 	Duration       *int    `json:"duration"`
 	Resolution     *string `json:"resolution"`
@@ -126,6 +128,7 @@ type UpdateLibraryItemRequest struct {
 	Description *string `json:"description"`
 	Duration    *int    `json:"duration"`
 	Resolution  *string `json:"resolution"`
+	OriginalURL *string `json:"originalUrl"`
 }
 
 type MoveLibraryItemRequest struct {
@@ -135,6 +138,7 @@ type MoveLibraryItemRequest struct {
 
 type CreateCollectionRequest struct {
 	Name                string `json:"name" binding:"required"`
+	ParentID            *int64 `json:"parentId"`
 	RootPath            string `json:"rootPath" binding:"required"`
 	DefaultQuality      string `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
 	DefaultDownloadType string `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
@@ -150,7 +154,9 @@ type UpdateCollectionRequest struct {
 type CollectionResponse struct {
 	ID                  int64  `json:"id"`
 	Name                string `json:"name"`
+	ParentID            *int64 `json:"parentId"`
 	RootPath            string `json:"rootPath"`
+	Path                string `json:"path"`
 	DefaultQuality      string `json:"defaultQuality"`
 	DefaultDownloadType string `json:"defaultDownloadType"`
 	CreatedAt           string `json:"createdAt"`
@@ -170,14 +176,60 @@ type UpdateSettingsRequest struct {
 	DefaultDownloadType    *string `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
 }
 
-func toCollectionResponse(c models.Collection) CollectionResponse {
+func toCollectionResponse(c models.Collection, path string) CollectionResponse {
 	return CollectionResponse{
 		ID:                  c.ID,
 		Name:                c.Name,
+		ParentID:            c.ParentID,
 		RootPath:            c.RootPath,
+		Path:                path,
 		DefaultQuality:      c.DefaultQuality,
 		DefaultDownloadType: c.DefaultDownloadType,
 		CreatedAt:           c.CreatedAt.Format(timeFormat),
 		UpdatedAt:           c.UpdatedAt.Format(timeFormat),
 	}
+}
+
+// collectionPaths builds a full path (e.g. "Shows/Anime") for every
+// collection in cols by walking each one's parent_id chain using an
+// in-memory id->Collection map built once, so this costs O(N) total instead
+// of O(N * depth) database round trips.
+func collectionPaths(cols []models.Collection) map[int64]string {
+	byID := make(map[int64]models.Collection, len(cols))
+	for _, c := range cols {
+		byID[c.ID] = c
+	}
+	paths := make(map[int64]string, len(cols))
+	var resolve func(id int64) string
+	resolve = func(id int64) string {
+		if p, ok := paths[id]; ok {
+			return p
+		}
+		c := byID[id]
+		if c.ParentID == nil {
+			paths[id] = c.RootPath
+		} else {
+			paths[id] = path.Join(resolve(*c.ParentID), c.RootPath)
+		}
+		return paths[id]
+	}
+	for _, c := range cols {
+		resolve(c.ID)
+	}
+	return paths
+}
+
+type ScannedFileResponse struct {
+	Path              string  `json:"path"`
+	Filename          string  `json:"filename"`
+	SizeBytes         int64   `json:"sizeBytes"`
+	DurationSeconds   *int    `json:"durationSeconds"`
+	Resolution        *string `json:"resolution"`
+	CollectionPath    string  `json:"collectionPath"`    // "" means it belongs at the media root
+	NewCollectionPath string  `json:"newCollectionPath"` // the prefix of CollectionPath that doesn't exist yet, "" if all segments already exist
+}
+
+type ImportRequest struct {
+	Path        string  `json:"path" binding:"required"`
+	OriginalURL *string `json:"originalUrl"`
 }

@@ -14,9 +14,10 @@ func TestLibraryRepo_CRUDAndActions(t *testing.T) {
 	repo := NewLibraryRepo(downloadsRepo.db)
 	collectionsRepo := NewCollectionsRepo(downloadsRepo.db)
 
+	originalURL := "https://example.com/x"
 	id, err := repo.Create(ctx, &models.LibraryItem{
 		Title: "Original Title", Filename: "video.mp4", Path: "video.mp4",
-		OriginalURL: "https://example.com/x", Status: "completed",
+		OriginalURL: &originalURL, Status: "completed",
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)

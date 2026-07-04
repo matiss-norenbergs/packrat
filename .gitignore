@@ -2,6 +2,7 @@
 backend/packrat
 backend/*.exe
 backend/*.test
+backend/bin/
 
 # Node
 frontend/node_modules/
