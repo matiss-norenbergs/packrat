@@ -105,7 +105,7 @@ func writeEnqueueError(c *gin.Context, err error) {
 	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 }
 
-func ListDownloads(mgr *queue.DownloadManager, repo *repository.DownloadsRepo) gin.HandlerFunc {
+func ListDownloads(mgr *queue.DownloadManager, repo *repository.DownloadsRepo, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
@@ -113,10 +113,18 @@ func ListDownloads(mgr *queue.DownloadManager, repo *repository.DownloadsRepo) g
 			return
 		}
 
+		cols, err := collectionsRepo.List(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		privacy := effectivePrivacyMap(cols)
+
 		live := mgr.ProgressSnapshot()
 		out := make([]DownloadResponse, 0, len(rows))
 		for _, d := range rows {
-			out = append(out, toDownloadResponse(d, live[d.ID]))
+			blurred := d.CollectionID != nil && privacy[*d.CollectionID]
+			out = append(out, toDownloadResponse(d, live[d.ID], blurred))
 		}
 		c.JSON(http.StatusOK, out)
 	}

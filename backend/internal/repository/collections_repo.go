@@ -65,9 +65,9 @@ func (r *CollectionsRepo) Create(ctx context.Context, c *models.Collection) (int
 	}
 
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO collections (name, parent_id, root_path, default_quality, default_download_type)
-		VALUES (?, ?, ?, ?, ?)`,
-		c.Name, c.ParentID, c.RootPath, c.DefaultQuality, c.DefaultDownloadType,
+		INSERT INTO collections (name, parent_id, root_path, default_quality, default_download_type, is_private)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		c.Name, c.ParentID, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.IsPrivate,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting collection: %w", err)
@@ -102,9 +102,9 @@ func (r *CollectionsRepo) List(ctx context.Context) ([]models.Collection, error)
 	return out, rows.Err()
 }
 
-// Update overwrites name/root_path/default_quality/default_download_type for
-// id. Callers apply partial-update semantics before calling this (fetch,
-// merge, write) — this method always writes all four columns.
+// Update overwrites name/root_path/default_quality/default_download_type/
+// is_private for id. Callers apply partial-update semantics before calling
+// this (fetch, merge, write) — this method always writes all five columns.
 func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collection) error {
 	existing, err := r.Get(ctx, id)
 	if err != nil {
@@ -121,9 +121,9 @@ func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collec
 
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE collections
-		SET name = ?, root_path = ?, default_quality = ?, default_download_type = ?, updated_at = datetime('now')
+		SET name = ?, root_path = ?, default_quality = ?, default_download_type = ?, is_private = ?, updated_at = datetime('now')
 		WHERE id = ?`,
-		c.Name, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, id,
+		c.Name, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.IsPrivate, id,
 	)
 	if err != nil {
 		return fmt.Errorf("updating collection: %w", err)
@@ -178,6 +178,26 @@ func (r *CollectionsRepo) ResolvePath(ctx context.Context, id int64) (string, er
 	return path.Join(segments...), nil
 }
 
+// IsPrivate reports whether the collection identified by id, or any of its
+// ancestors, is marked private — privacy inherits down the tree, so marking
+// a top-level collection private covers every collection nested under it
+// too. Used for single-item responses where fetching the whole collections
+// list (see effectivePrivacyMap in the api package) would be overkill.
+func (r *CollectionsRepo) IsPrivate(ctx context.Context, id int64) (bool, error) {
+	currentID := &id
+	for currentID != nil {
+		c, err := r.Get(ctx, *currentID)
+		if err != nil {
+			return false, err
+		}
+		if c.IsPrivate {
+			return true, nil
+		}
+		currentID = c.ParentID
+	}
+	return false, nil
+}
+
 // FindChildByRootPath returns the collection among cols whose parent is
 // parentID and whose own root_path segment matches segment, or nil if none
 // exists. Used to walk a scanned file's on-disk folder chain against an
@@ -202,7 +222,7 @@ func FindChildByRootPath(cols []models.Collection, parentID *int64, segment stri
 
 const collectionSelectColumns = `
 	SELECT id, name, parent_id, root_path, default_quality, default_download_type, filename_template,
-	       jellyfin_library, created_at, updated_at
+	       jellyfin_library, is_private, created_at, updated_at
 	FROM collections`
 
 func scanCollection(row rowScanner) (*models.Collection, error) {
@@ -211,7 +231,7 @@ func scanCollection(row rowScanner) (*models.Collection, error) {
 
 	err := row.Scan(
 		&c.ID, &c.Name, &c.ParentID, &c.RootPath, &c.DefaultQuality, &c.DefaultDownloadType, &c.FilenameTemplate,
-		&c.JellyfinLibrary, &createdAt, &updatedAt,
+		&c.JellyfinLibrary, &c.IsPrivate, &createdAt, &updatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

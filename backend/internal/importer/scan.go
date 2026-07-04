@@ -75,3 +75,34 @@ func Scan(mediaRoot string, known map[string]bool) ([]ScannedFile, error) {
 	}
 	return out, nil
 }
+
+// FilterIgnored drops any file whose containing folder — or any ancestor of
+// it — exactly matches one of the ignored (forward-slash, relative to the
+// media root) folder paths. Ignoring "Raw" also excludes "Raw/Subfolder",
+// since every prefix of the file's folder chain is checked.
+func FilterIgnored(files []ScannedFile, ignored []string) []ScannedFile {
+	if len(ignored) == 0 {
+		return files
+	}
+	ignoredSet := make(map[string]bool, len(ignored))
+	for _, p := range ignored {
+		ignoredSet[p] = true
+	}
+
+	out := make([]ScannedFile, 0, len(files))
+	for _, f := range files {
+		if !anyPrefixIgnored(f.FolderSegments, ignoredSet) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func anyPrefixIgnored(segments []string, ignoredSet map[string]bool) bool {
+	for i := range segments {
+		if ignoredSet[strings.Join(segments[:i+1], "/")] {
+			return true
+		}
+	}
+	return false
+}

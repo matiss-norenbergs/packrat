@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -39,6 +40,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
   const [rootPath, setRootPath] = useState(collection?.rootPath ?? "")
   const [defaultQuality, setDefaultQuality] = useState<VideoQuality>((collection?.defaultQuality as VideoQuality) ?? "best")
   const [defaultDownloadType, setDefaultDownloadType] = useState<DownloadType>(collection?.defaultDownloadType ?? "video")
+  const [isPrivate, setIsPrivate] = useState(collection?.isPrivate ?? false)
 
   const createCollection = useCreateCollection()
   const updateCollection = useUpdateCollection()
@@ -52,6 +54,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       setRootPath(collection?.rootPath ?? "")
       setDefaultQuality((collection?.defaultQuality as VideoQuality) ?? "best")
       setDefaultDownloadType(collection?.defaultDownloadType ?? "video")
+      setIsPrivate(collection?.isPrivate ?? false)
     }
     setOpen(next)
   }
@@ -63,6 +66,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       rootPath: rootPath.trim(),
       defaultQuality,
       defaultDownloadType,
+      isPrivate,
       ...(isEdit ? {} : { parentId }),
     }
 
@@ -145,6 +149,22 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="collection-private"
+              checked={isPrivate}
+              onCheckedChange={(v) => setIsPrivate(v === true)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="collection-private" className="font-normal">
+                Private
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Blurs thumbnails for everything in this collection, including sub-collections.
+              </p>
             </div>
           </div>
         </div>

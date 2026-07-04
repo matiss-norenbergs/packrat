@@ -80,6 +80,7 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			RootPath:            req.RootPath,
 			DefaultQuality:      req.DefaultQuality,
 			DefaultDownloadType: req.DefaultDownloadType,
+			IsPrivate:           req.IsPrivate,
 		}
 		id, err := repo.Create(c.Request.Context(), &col)
 		if err != nil {
@@ -147,6 +148,7 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			RootPath:            req.RootPath,
 			DefaultQuality:      req.DefaultQuality,
 			DefaultDownloadType: req.DefaultDownloadType,
+			IsPrivate:           req.IsPrivate,
 		}
 		if err := repo.Update(c.Request.Context(), id, &col); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {

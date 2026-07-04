@@ -11,6 +11,7 @@ type Collection struct {
 	DefaultDownloadType string
 	FilenameTemplate    string
 	JellyfinLibrary     *string
+	IsPrivate           bool
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }

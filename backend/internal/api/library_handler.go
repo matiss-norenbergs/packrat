@@ -20,16 +20,25 @@ import (
 	"packrat/backend/internal/repository"
 )
 
-func ListLibrary(repo *repository.LibraryRepo) gin.HandlerFunc {
+func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		cols, err := collectionsRepo.List(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		privacy := effectivePrivacyMap(cols)
+
 		out := make([]LibraryItemResponse, 0, len(rows))
 		for _, item := range rows {
-			out = append(out, toLibraryItemResponse(item))
+			blurred := item.CollectionID != nil && privacy[*item.CollectionID]
+			out = append(out, toLibraryItemResponse(item, blurred))
 		}
 		c.JSON(http.StatusOK, out)
 	}
@@ -269,7 +278,7 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 // RefreshLibraryItemMetadata re-fetches yt-dlp metadata for the item's
 // original URL and updates the display fields — it never touches the
 // media file or thumbnail already on disk.
-func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -316,7 +325,16 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, toLibraryItemResponse(*updated))
+
+		var blurred bool
+		if updated.CollectionID != nil {
+			blurred, err = collectionsRepo.IsPrivate(c.Request.Context(), *updated.CollectionID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred))
 	}
 }
 

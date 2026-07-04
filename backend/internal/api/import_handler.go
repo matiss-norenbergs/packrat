@@ -27,7 +27,7 @@ var sidecarImageExts = []string{".jpg", ".jpeg", ".png", ".webp"}
 // library table, along with best-effort probed metadata and the collection
 // path they'd be imported into. Purely read-only — nothing is created until
 // a file is actually imported, so re-running a scan is always safe.
-func ScanImport(mediaRoot string, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, ffprobePath string) gin.HandlerFunc {
+func ScanImport(mediaRoot string, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, ffprobePath string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
@@ -42,6 +42,13 @@ func ScanImport(mediaRoot string, libraryRepo *repository.LibraryRepo, collectio
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		ignoredFolders, err := ImportIgnoredFolders(ctx, settingsRepo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		files = importer.FilterIgnored(files, ignoredFolders)
 
 		cols, err := collectionsRepo.List(ctx)
 		if err != nil {
@@ -208,7 +215,16 @@ func CreateImport(mediaRoot string, libraryRepo *repository.LibraryRepo, collect
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusCreated, toLibraryItemResponse(*created))
+
+		var blurred bool
+		if created.CollectionID != nil {
+			blurred, err = collectionsRepo.IsPrivate(ctx, *created.CollectionID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		c.JSON(http.StatusCreated, toLibraryItemResponse(*created, blurred))
 	}
 }
 

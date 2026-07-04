@@ -2,6 +2,7 @@ import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
+import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { useCancelDownload } from "@/hooks/useDownloads"
 import { formatEta, formatSpeed } from "@/lib/utils"
 import type { Download } from "@/types/api"
@@ -27,7 +28,11 @@ export function DownloadQueueItem({ download }: { download: Download }) {
     <div className="flex items-center gap-4 rounded-lg border border-border p-3">
       <div className="h-14 w-24 flex-shrink-0 overflow-hidden rounded bg-muted">
         {download.thumbnail ? (
-          <img src={download.thumbnail} alt="" className="h-full w-full object-cover" />
+          <BlurredThumbnail
+            src={download.thumbnail}
+            className="h-full w-full object-cover"
+            blurred={download.blurred}
+          />
         ) : null}
       </div>
 

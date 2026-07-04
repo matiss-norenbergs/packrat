@@ -40,14 +40,14 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/health", Health(deps.DB))
 
 		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
-		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo))
+		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo))
 		api.DELETE("/downloads/:id", CancelDownload(deps.Manager))
 
-		api.GET("/library", ListLibrary(deps.LibraryRepo))
+		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
 		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot))
 		api.POST("/library/:id/move", MoveLibraryItem(deps.LibraryRepo, deps.Manager, deps.MediaRoot))
-		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp))
+		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo))
 		api.POST("/library/:id/redownload", RedownloadLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 
 		api.GET("/collections", ListCollections(deps.CollectionsRepo))
@@ -58,7 +58,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.MediaRoot))
 		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager))
 
-		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.FFProbePath))
+		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
 		api.POST("/import", CreateImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))
 	}
 

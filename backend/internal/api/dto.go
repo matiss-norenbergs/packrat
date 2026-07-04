@@ -41,9 +41,10 @@ type DownloadResponse struct {
 	ETASeconds       int     `json:"etaSeconds"`
 	DownloadedBytes  int64   `json:"downloadedBytes"`
 	TotalBytes       int64   `json:"totalBytes"`
+	Blurred          bool    `json:"blurred"`
 }
 
-func toDownloadResponse(d models.Download, live *queue.LiveProgress) DownloadResponse {
+func toDownloadResponse(d models.Download, live *queue.LiveProgress, blurred bool) DownloadResponse {
 	resp := DownloadResponse{
 		ID:             d.ID,
 		URL:            d.URL,
@@ -62,6 +63,7 @@ func toDownloadResponse(d models.Download, live *queue.LiveProgress) DownloadRes
 		ErrorMessage:   d.ErrorMessage,
 		CreatedAt:      d.CreatedAt.Format(timeFormat),
 		UpdatedAt:      d.UpdatedAt.Format(timeFormat),
+		Blurred:        blurred,
 	}
 	if d.CompletedAt != nil {
 		s := d.CompletedAt.Format(timeFormat)
@@ -98,9 +100,10 @@ type LibraryItemResponse struct {
 	Description    *string `json:"description"`
 	DownloadedAt   string  `json:"downloadedAt"`
 	Status         string  `json:"status"`
+	Blurred        bool    `json:"blurred"`
 }
 
-func toLibraryItemResponse(item models.LibraryItem) LibraryItemResponse {
+func toLibraryItemResponse(item models.LibraryItem, blurred bool) LibraryItemResponse {
 	return LibraryItemResponse{
 		ID:             item.ID,
 		DownloadID:     item.DownloadID,
@@ -118,6 +121,7 @@ func toLibraryItemResponse(item models.LibraryItem) LibraryItemResponse {
 		Description:    item.Description,
 		DownloadedAt:   item.DownloadedAt.Format(timeFormat),
 		Status:         item.Status,
+		Blurred:        blurred,
 	}
 }
 
@@ -142,6 +146,7 @@ type CreateCollectionRequest struct {
 	RootPath            string `json:"rootPath" binding:"required"`
 	DefaultQuality      string `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
 	DefaultDownloadType string `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	IsPrivate           bool   `json:"isPrivate"`
 }
 
 type UpdateCollectionRequest struct {
@@ -149,6 +154,7 @@ type UpdateCollectionRequest struct {
 	RootPath            string `json:"rootPath" binding:"required"`
 	DefaultQuality      string `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
 	DefaultDownloadType string `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	IsPrivate           bool   `json:"isPrivate"`
 }
 
 type CollectionResponse struct {
@@ -159,21 +165,24 @@ type CollectionResponse struct {
 	Path                string `json:"path"`
 	DefaultQuality      string `json:"defaultQuality"`
 	DefaultDownloadType string `json:"defaultDownloadType"`
+	IsPrivate           bool   `json:"isPrivate"`
 	CreatedAt           string `json:"createdAt"`
 	UpdatedAt           string `json:"updatedAt"`
 }
 
 type SettingsResponse struct {
-	DownloadDirectory      string `json:"downloadDirectory"`
-	MaxConcurrentDownloads int    `json:"maxConcurrentDownloads"`
-	DefaultQuality         string `json:"defaultQuality"`
-	DefaultDownloadType    string `json:"defaultDownloadType"`
+	DownloadDirectory      string   `json:"downloadDirectory"`
+	MaxConcurrentDownloads int      `json:"maxConcurrentDownloads"`
+	DefaultQuality         string   `json:"defaultQuality"`
+	DefaultDownloadType    string   `json:"defaultDownloadType"`
+	ImportIgnoredFolders   []string `json:"importIgnoredFolders"`
 }
 
 type UpdateSettingsRequest struct {
-	MaxConcurrentDownloads *int    `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
-	DefaultQuality         *string `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType    *string `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	MaxConcurrentDownloads *int      `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
+	DefaultQuality         *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
+	DefaultDownloadType    *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	ImportIgnoredFolders   *[]string `json:"importIgnoredFolders"`
 }
 
 func toCollectionResponse(c models.Collection, path string) CollectionResponse {
@@ -185,9 +194,39 @@ func toCollectionResponse(c models.Collection, path string) CollectionResponse {
 		Path:                path,
 		DefaultQuality:      c.DefaultQuality,
 		DefaultDownloadType: c.DefaultDownloadType,
+		IsPrivate:           c.IsPrivate,
 		CreatedAt:           c.CreatedAt.Format(timeFormat),
 		UpdatedAt:           c.UpdatedAt.Format(timeFormat),
 	}
+}
+
+// effectivePrivacyMap builds, for every collection in cols, whether it or
+// any ancestor is marked private — using the same in-memory memoized-
+// recursion shape as collectionPaths, so it costs O(N) total for list
+// responses that have already fetched the full collections list.
+func effectivePrivacyMap(cols []models.Collection) map[int64]bool {
+	byID := make(map[int64]models.Collection, len(cols))
+	for _, c := range cols {
+		byID[c.ID] = c
+	}
+	private := make(map[int64]bool, len(cols))
+	var resolve func(id int64) bool
+	resolve = func(id int64) bool {
+		if v, ok := private[id]; ok {
+			return v
+		}
+		c := byID[id]
+		v := c.IsPrivate
+		if !v && c.ParentID != nil {
+			v = resolve(*c.ParentID)
+		}
+		private[id] = v
+		return v
+	}
+	for _, c := range cols {
+		resolve(c.ID)
+	}
+	return private
 }
 
 // collectionPaths builds a full path (e.g. "Shows/Anime") for every

@@ -8,4 +8,5 @@ const (
 	SettingMaxConcurrentDownloads = "max_concurrent_downloads"
 	SettingDefaultQuality         = "default_quality"
 	SettingDefaultDownloadType    = "default_download_type"
+	SettingImportIgnoredFolders   = "import_ignored_folders"
 )

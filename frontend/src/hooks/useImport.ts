@@ -14,13 +14,15 @@ export function useImportScan() {
   })
 }
 
+// Deliberately does not invalidate importScanQueryKey — re-scanning the
+// filesystem after every single import felt unnecessary; the scan list only
+// refreshes on initial page load or an explicit Rescan click.
 export function useCreateImport() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: ImportRequest) => createImport(payload),
     onSuccess: () => {
       toast.success("File imported")
-      queryClient.invalidateQueries({ queryKey: importScanQueryKey })
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
       queryClient.invalidateQueries({ queryKey: collectionsQueryKey })
     },

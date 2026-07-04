@@ -1,6 +1,10 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -10,6 +14,24 @@ import (
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 )
+
+// ImportIgnoredFolders reads and JSON-decodes the import_ignored_folders
+// setting, defaulting to an empty list if it's never been set (no migration
+// seeds this key). Shared by GetSettings and ScanImport.
+func ImportIgnoredFolders(ctx context.Context, repo *repository.SettingsRepo) ([]string, error) {
+	raw, err := repo.Get(ctx, models.SettingImportIgnoredFolders)
+	if errors.Is(err, repository.ErrNotFound) {
+		return []string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var folders []string
+	if err := json.Unmarshal([]byte(raw), &folders); err != nil {
+		return nil, fmt.Errorf("corrupt import_ignored_folders setting: %w", err)
+	}
+	return folders, nil
+}
 
 // GetSettings reports live state where it exists rather than a possibly
 // stale DB copy: downloadDirectory comes from the actual MEDIA_ROOT config
@@ -29,11 +51,18 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			return
 		}
 
+		ignoredFolders, err := ImportIgnoredFolders(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
 		c.JSON(http.StatusOK, SettingsResponse{
 			DownloadDirectory:      mediaRoot,
 			MaxConcurrentDownloads: mgr.WorkerCount(),
 			DefaultQuality:         defaultQuality,
 			DefaultDownloadType:    defaultDownloadType,
+			ImportIgnoredFolders:   ignoredFolders,
 		})
 	}
 }
@@ -64,6 +93,17 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 		}
 		if req.DefaultDownloadType != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingDefaultDownloadType, *req.DefaultDownloadType); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ImportIgnoredFolders != nil {
+			encoded, err := json.Marshal(*req.ImportIgnoredFolders)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			if err := repo.Set(c.Request.Context(), models.SettingImportIgnoredFolders, string(encoded)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

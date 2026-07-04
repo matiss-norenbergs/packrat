@@ -36,6 +36,7 @@ export interface Download {
   etaSeconds: number
   downloadedBytes: number
   totalBytes: number
+  blurred: boolean
 }
 
 export interface CreateDownloadRequest {
@@ -56,6 +57,7 @@ export interface Collection {
   path: string
   defaultQuality: string
   defaultDownloadType: DownloadType
+  isPrivate: boolean
   createdAt: string
   updatedAt: string
 }
@@ -66,6 +68,7 @@ export interface CreateCollectionRequest {
   rootPath: string
   defaultQuality?: string
   defaultDownloadType?: DownloadType
+  isPrivate?: boolean
 }
 
 export type UpdateCollectionRequest = CreateCollectionRequest
@@ -87,6 +90,7 @@ export interface LibraryItem {
   description: string | null
   downloadedAt: string
   status: string
+  blurred: boolean
 }
 
 export interface UpdateLibraryItemRequest {
@@ -109,12 +113,14 @@ export interface Settings {
   maxConcurrentDownloads: number
   defaultQuality: string
   defaultDownloadType: DownloadType
+  importIgnoredFolders: string[]
 }
 
 export interface UpdateSettingsRequest {
   maxConcurrentDownloads?: number
   defaultQuality?: string
   defaultDownloadType?: DownloadType
+  importIgnoredFolders?: string[]
 }
 
 export interface ScannedFile {

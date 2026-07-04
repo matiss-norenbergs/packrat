@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronDown, ChevronRight, FolderPlus, Pencil, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, FolderPlus, Lock, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -51,6 +51,11 @@ function CollectionNode({ node }: { node: CollectionTreeNode }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{node.name}</span>
+            {node.isPrivate && (
+              <span title="Private">
+                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+              </span>
+            )}
             <Badge variant="outline">{node.defaultDownloadType}</Badge>
             <Badge variant="outline">{node.defaultQuality}</Badge>
           </div>
