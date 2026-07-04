@@ -8,6 +8,7 @@ import type {
   MoveLibraryItemRequest,
   ScannedFile,
   Settings,
+  ThumbnailCandidate,
   UpdateCollectionRequest,
   UpdateLibraryItemRequest,
   UpdateSettingsRequest,
@@ -76,6 +77,25 @@ export function refreshLibraryItemMetadata(id: number): Promise<LibraryItem> {
 
 export function redownloadLibraryItem(id: number): Promise<{ id: number }> {
   return request<{ id: number }>(`/library/${id}/redownload`, { method: "POST" })
+}
+
+export function redownloadLibraryThumbnail(id: number): Promise<LibraryItem> {
+  return request<LibraryItem>(`/library/${id}/thumbnail/redownload`, { method: "POST" })
+}
+
+export function quickGrabLibraryThumbnail(id: number): Promise<LibraryItem> {
+  return request<LibraryItem>(`/library/${id}/thumbnail/quick-grab`, { method: "POST" })
+}
+
+export function fetchLibraryThumbnailCandidates(id: number): Promise<{ candidates: ThumbnailCandidate[] }> {
+  return request<{ candidates: ThumbnailCandidate[] }>(`/library/${id}/thumbnail/candidates`)
+}
+
+export function setLibraryThumbnail(id: number, imageBase64: string): Promise<LibraryItem> {
+  return request<LibraryItem>(`/library/${id}/thumbnail`, {
+    method: "POST",
+    body: JSON.stringify({ imageBase64 }),
+  })
 }
 
 export function fetchCollections(): Promise<Collection[]> {

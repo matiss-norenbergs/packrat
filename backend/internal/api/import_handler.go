@@ -148,31 +148,14 @@ func CreateImport(mediaRoot string, libraryRepo *repository.LibraryRepo, collect
 			segments = strings.Split(dir, "/")
 		}
 
-		cols, err := collectionsRepo.List(ctx)
+		// EnsureChain serializes against concurrent imports (e.g. "Import
+		// Selected"/"Import All" firing several requests at once) so two
+		// files landing under the same not-yet-existing folder can't each
+		// create their own duplicate collection — see its doc comment.
+		parentID, err := collectionsRepo.EnsureChain(ctx, segments)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
-		}
-
-		var parentID *int64
-		for _, seg := range segments {
-			child := repository.FindChildByRootPath(cols, parentID, seg)
-			if child == nil {
-				newCol := models.Collection{
-					Name: seg, ParentID: parentID, RootPath: seg,
-					DefaultQuality: "best", DefaultDownloadType: "video",
-				}
-				newID, err := collectionsRepo.Create(ctx, &newCol)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "creating collection for " + seg + ": " + err.Error()})
-					return
-				}
-				newCol.ID = newID
-				cols = append(cols, newCol)
-				child = &cols[len(cols)-1]
-			}
-			id := child.ID
-			parentID = &id
 		}
 
 		probe := importer.Probe(ctx, ffprobePath, absPath)

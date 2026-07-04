@@ -90,7 +90,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Collection" : "New Collection"}</DialogTitle>
           <DialogDescription>

@@ -59,7 +59,7 @@ export function MoveLibraryItemDialog({ item, open, onOpenChange }: MoveLibraryI
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Move</DialogTitle>
           <DialogDescription>Physically relocates the media file and thumbnail.</DialogDescription>

@@ -78,7 +78,7 @@ func TestLibraryRepo_CRUDAndActions(t *testing.T) {
 		t.Fatal(err)
 	}
 	newTitle, newUploader, duration := "Refreshed Title", "Refreshed Uploader", 999
-	if err := repo.UpdateMetadata(ctx, id, &newTitle, &newUploader, &duration, nil, nil); err != nil {
+	if err := repo.UpdateMetadata(ctx, id, &newTitle, &newUploader, &duration, nil, nil, nil, nil); err != nil {
 		t.Fatalf("UpdateMetadata: %v", err)
 	}
 	got, err = repo.Get(ctx, id)

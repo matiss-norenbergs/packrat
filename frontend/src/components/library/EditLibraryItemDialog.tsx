@@ -32,6 +32,8 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
   const [uploader, setUploader] = useState(item.uploader ?? "")
   const [duration, setDuration] = useState(item.duration != null ? String(item.duration) : "")
   const [resolution, setResolution] = useState(item.resolution ?? "")
+  const [artist, setArtist] = useState(item.artist ?? "")
+  const [year, setYear] = useState(item.year != null ? String(item.year) : "")
   const [description, setDescription] = useState(item.description ?? "")
   const [originalUrl, setOriginalUrl] = useState(item.originalUrl ?? "")
 
@@ -43,6 +45,8 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     setUploader(item.uploader ?? "")
     setDuration(item.duration != null ? String(item.duration) : "")
     setResolution(item.resolution ?? "")
+    setArtist(item.artist ?? "")
+    setYear(item.year != null ? String(item.year) : "")
     setDescription(item.description ?? "")
     setOriginalUrl(item.originalUrl ?? "")
   }
@@ -67,6 +71,14 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     const trimmedResolution = resolution.trim()
     if (trimmedResolution !== (item.resolution ?? "")) payload.resolution = trimmedResolution
 
+    const trimmedArtist = artist.trim()
+    if (trimmedArtist !== (item.artist ?? "")) payload.artist = trimmedArtist
+
+    const parsedYear = year.trim() === "" ? null : Number(year)
+    if (parsedYear !== item.year && parsedYear != null && !Number.isNaN(parsedYear)) {
+      payload.year = parsedYear
+    }
+
     const trimmedDescription = description.trim()
     if (trimmedDescription !== (item.description ?? "")) payload.description = trimmedDescription
 
@@ -87,7 +99,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit</DialogTitle>
           <DialogDescription>
@@ -121,7 +133,18 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
                 onChange={(e) => setResolution(e.target.value)}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-artist">Artist</Label>
+              <Input id="edit-artist" value={artist} onChange={(e) => setArtist(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-year">Year</Label>
+              <Input id="edit-year" type="number" placeholder="2024" value={year} onChange={(e) => setYear(e.target.value)} />
+            </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Title, Artist, and Year are also written into the file's own metadata tags on save.
+          </p>
 
           <div className="space-y-2">
             <Label htmlFor="edit-duration">Duration (seconds)</Label>

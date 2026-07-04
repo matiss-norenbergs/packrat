@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"sync"
 
 	"packrat/backend/internal/models"
 )
@@ -20,6 +21,17 @@ var ErrHasChildren = errors.New("collection has child collections")
 
 type CollectionsRepo struct {
 	db *sql.DB
+
+	// mu serializes every check-then-write sequence (Create, Update,
+	// EnsureChain) against races between concurrent requests. Collection
+	// name uniqueness is enforced at the app layer, not a DB constraint (see
+	// nameInUse), so without this, two concurrent requests can both see a
+	// name as free and both create it — this is exactly what happened when
+	// importing several files at once under a not-yet-existing folder:
+	// concurrent requests each saw the parent collection missing and each
+	// created their own copy. Collection creation is low-frequency, so
+	// serializing it has no meaningful performance cost.
+	mu sync.Mutex
 }
 
 func NewCollectionsRepo(db *sql.DB) *CollectionsRepo {
@@ -51,6 +63,14 @@ func (r *CollectionsRepo) nameInUse(ctx context.Context, name string, parentID *
 }
 
 func (r *CollectionsRepo) Create(ctx context.Context, c *models.Collection) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.createLocked(ctx, c)
+}
+
+// createLocked performs the actual check-then-insert; callers must already
+// hold r.mu.
+func (r *CollectionsRepo) createLocked(ctx context.Context, c *models.Collection) (int64, error) {
 	if c.ParentID != nil {
 		if _, err := r.Get(ctx, *c.ParentID); err != nil {
 			return 0, err
@@ -106,6 +126,9 @@ func (r *CollectionsRepo) List(ctx context.Context) ([]models.Collection, error)
 // is_private for id. Callers apply partial-update semantics before calling
 // this (fetch, merge, write) — this method always writes all five columns.
 func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collection) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	existing, err := r.Get(ctx, id)
 	if err != nil {
 		return err
@@ -196,6 +219,52 @@ func (r *CollectionsRepo) IsPrivate(ctx context.Context, id int64) (bool, error)
 		currentID = c.ParentID
 	}
 	return false, nil
+}
+
+// EnsureChain walks segments (folder names from the media root down,
+// e.g. from a scanned file's on-disk location) and returns the id of the
+// leaf collection, creating any collections along the way that don't
+// already exist. Returns nil for an empty segment list (the media root
+// itself, no collection). Holds the same mutex as Create/Update for its
+// entire duration — including the initial List() — so concurrent calls
+// (e.g. importing several files under the same not-yet-existing folder at
+// once) fully serialize: each call sees every collection created by a
+// previous call before deciding what, if anything, still needs creating.
+// Without this, two concurrent calls can both see a folder as missing and
+// both create it, producing duplicate collections with the same parent.
+func (r *CollectionsRepo) EnsureChain(ctx context.Context, segments []string) (*int64, error) {
+	if len(segments) == 0 {
+		return nil, nil
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	cols, err := r.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var parentID *int64
+	for _, seg := range segments {
+		child := FindChildByRootPath(cols, parentID, seg)
+		if child == nil {
+			newCol := models.Collection{
+				Name: seg, ParentID: parentID, RootPath: seg,
+				DefaultQuality: "best", DefaultDownloadType: "video",
+			}
+			newID, err := r.createLocked(ctx, &newCol)
+			if err != nil {
+				return nil, fmt.Errorf("creating collection for %q: %w", seg, err)
+			}
+			newCol.ID = newID
+			cols = append(cols, newCol)
+			child = &cols[len(cols)-1]
+		}
+		id := child.ID
+		parentID = &id
+	}
+	return parentID, nil
 }
 
 // FindChildByRootPath returns the collection among cols whose parent is

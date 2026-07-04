@@ -7,6 +7,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -19,10 +22,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { useRedownloadLibraryItem, useRefreshLibraryItemMetadata } from "@/hooks/useLibrary"
+import {
+  useQuickGrabLibraryThumbnail,
+  useRedownloadLibraryItem,
+  useRedownloadLibraryThumbnail,
+  useRefreshLibraryItemMetadata,
+} from "@/hooks/useLibrary"
 import { EditLibraryItemDialog } from "./EditLibraryItemDialog"
 import { MoveLibraryItemDialog } from "./MoveLibraryItemDialog"
 import { DeleteLibraryItemDialog } from "./DeleteLibraryItemDialog"
+import { ThumbnailPickerDialog } from "./ThumbnailPickerDialog"
 import type { LibraryItem } from "@/types/api"
 
 export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
@@ -30,9 +39,14 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [moveOpen, setMoveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [refreshWarningOpen, setRefreshWarningOpen] = useState(false)
+  const [redownloadThumbWarningOpen, setRedownloadThumbWarningOpen] = useState(false)
+  const [quickGrabWarningOpen, setQuickGrabWarningOpen] = useState(false)
+  const [thumbnailPickerOpen, setThumbnailPickerOpen] = useState(false)
 
   const refreshMetadata = useRefreshLibraryItemMetadata()
   const redownload = useRedownloadLibraryItem()
+  const redownloadThumbnail = useRedownloadLibraryThumbnail()
+  const quickGrabThumbnail = useQuickGrabLibraryThumbnail()
 
   const hasUrl = !!item.originalUrl
 
@@ -52,7 +66,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
             <MoreVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => setEditOpen(true)}>Edit</DropdownMenuItem>
           <DropdownMenuItem onClick={handleCopyUrl} disabled={!hasUrl}>
             Copy URL
@@ -64,6 +78,16 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <DropdownMenuItem onClick={() => redownload.mutate(item.id)} disabled={!hasUrl}>
             Redownload
           </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Thumbnail</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onClick={() => setRedownloadThumbWarningOpen(true)} disabled={!hasUrl}>
+                Redownload from URL
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setQuickGrabWarningOpen(true)}>Quick Grab</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setThumbnailPickerOpen(true)}>Choose from Video…</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
             Delete
@@ -74,6 +98,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
       <EditLibraryItemDialog item={item} open={editOpen} onOpenChange={setEditOpen} />
       <MoveLibraryItemDialog item={item} open={moveOpen} onOpenChange={setMoveOpen} />
       <DeleteLibraryItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
+      <ThumbnailPickerDialog item={item} open={thumbnailPickerOpen} onOpenChange={setThumbnailPickerOpen} />
 
       <AlertDialog open={refreshWarningOpen} onOpenChange={setRefreshWarningOpen}>
         <AlertDialogContent>
@@ -88,6 +113,37 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => refreshMetadata.mutate(item.id)}>Refresh</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={redownloadThumbWarningOpen} onOpenChange={setRedownloadThumbWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Redownload thumbnail?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This re-fetches the thumbnail image from the original URL, replacing the current one.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => redownloadThumbnail.mutate(item.id)}>Redownload</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={quickGrabWarningOpen} onOpenChange={setQuickGrabWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Grab a random frame as thumbnail?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This grabs a random frame from the video file itself, replacing the current
+              thumbnail. If you'd rather pick from a few options, use "Choose from Video" instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => quickGrabThumbnail.mutate(item.id)}>Grab</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

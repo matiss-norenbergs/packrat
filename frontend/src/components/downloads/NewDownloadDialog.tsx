@@ -92,7 +92,7 @@ export function NewDownloadDialog() {
           New Download
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New Download</DialogTitle>
           <DialogDescription>Paste any URL supported by yt-dlp.</DialogDescription>

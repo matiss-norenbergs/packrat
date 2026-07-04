@@ -3,9 +3,13 @@ import { toast } from "sonner"
 import {
   deleteLibraryItem,
   fetchLibrary,
+  fetchLibraryThumbnailCandidates,
   moveLibraryItem,
+  quickGrabLibraryThumbnail,
   redownloadLibraryItem,
+  redownloadLibraryThumbnail,
   refreshLibraryItemMetadata,
+  setLibraryThumbnail,
   updateLibraryItem,
 } from "@/lib/api"
 import type { MoveLibraryItemRequest, UpdateLibraryItemRequest } from "@/types/api"
@@ -77,5 +81,51 @@ export function useRedownloadLibraryItem() {
       queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to redownload: ${err.message}`),
+  })
+}
+
+export function useRedownloadLibraryThumbnail() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => redownloadLibraryThumbnail(id),
+    onSuccess: () => {
+      toast.success("Thumbnail redownloaded")
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to redownload thumbnail: ${err.message}`),
+  })
+}
+
+export function useQuickGrabLibraryThumbnail() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => quickGrabLibraryThumbnail(id),
+    onSuccess: () => {
+      toast.success("Thumbnail grabbed")
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to grab thumbnail: ${err.message}`),
+  })
+}
+
+export function useLibraryThumbnailCandidates(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["library", id, "thumbnail-candidates"],
+    queryFn: () => fetchLibraryThumbnailCandidates(id),
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+  })
+}
+
+export function useSetLibraryThumbnail() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, imageBase64 }: { id: number; imageBase64: string }) => setLibraryThumbnail(id, imageBase64),
+    onSuccess: () => {
+      toast.success("Thumbnail updated")
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to set thumbnail: ${err.message}`),
   })
 }

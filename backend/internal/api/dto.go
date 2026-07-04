@@ -98,6 +98,8 @@ type LibraryItemResponse struct {
 	Resolution     *string `json:"resolution"`
 	Thumbnail      *string `json:"thumbnail"`
 	Description    *string `json:"description"`
+	Artist         *string `json:"artist"`
+	Year           *int    `json:"year"`
 	DownloadedAt   string  `json:"downloadedAt"`
 	Status         string  `json:"status"`
 	Blurred        bool    `json:"blurred"`
@@ -119,6 +121,8 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool) LibraryItemRes
 		Resolution:     item.Resolution,
 		Thumbnail:      item.Thumbnail,
 		Description:    item.Description,
+		Artist:         item.Artist,
+		Year:           item.ReleaseYear,
 		DownloadedAt:   item.DownloadedAt.Format(timeFormat),
 		Status:         item.Status,
 		Blurred:        blurred,
@@ -132,7 +136,22 @@ type UpdateLibraryItemRequest struct {
 	Description *string `json:"description"`
 	Duration    *int    `json:"duration"`
 	Resolution  *string `json:"resolution"`
+	Artist      *string `json:"artist"`
+	Year        *int    `json:"year"`
 	OriginalURL *string `json:"originalUrl"`
+}
+
+// ThumbnailCandidateResponse is one of the 4 candidate frames returned by
+// GET /api/library/:id/thumbnail/candidates for the "choose from video"
+// flow — the frontend shows all 4 and POSTs back whichever imageBase64 the
+// user picked, unchanged.
+type ThumbnailCandidateResponse struct {
+	TimestampSeconds float64 `json:"timestampSeconds"`
+	ImageBase64      string  `json:"imageBase64"`
+}
+
+type SetLibraryThumbnailRequest struct {
+	ImageBase64 string `json:"imageBase64" binding:"required"`
 }
 
 type MoveLibraryItemRequest struct {

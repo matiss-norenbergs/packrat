@@ -18,6 +18,8 @@ type LibraryItem struct {
 	Resolution     *string
 	Thumbnail      *string
 	Description    *string
+	Artist         *string
+	ReleaseYear    *int
 	DownloadedAt   time.Time
 	Status         string
 	FileSizeBytes  *int64

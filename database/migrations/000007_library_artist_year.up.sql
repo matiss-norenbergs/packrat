@@ -1,0 +1,2 @@
+ALTER TABLE library ADD COLUMN artist TEXT;
+ALTER TABLE library ADD COLUMN release_year INTEGER;

@@ -96,10 +96,14 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 // filename (renames the media file and its thumbnail on disk, then updates
 // the DB — see fsutil.RenamePair for the best-effort atomicity) and/or the
 // display-only metadata fields (uploader, description, duration,
-// resolution). Fields omitted from the request are left untouched — the
-// current value is merged in before writing, so a form that only sends the
-// fields it changed can never accidentally blank out the others.
-func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.HandlerFunc {
+// resolution, artist, year). Fields omitted from the request are left
+// untouched — the current value is merged in before writing, so a form
+// that only sends the fields it changed can never accidentally blank out
+// the others. If title/artist/year changed, the actual file's own
+// container metadata is best-effort updated to match (see EmbedMetadata) —
+// a failure there is logged but never fails the request, since the app's
+// own DB state is the source of truth for what Packrat displays.
+func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -121,6 +125,8 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 
 		if req.Title != nil {
 			if err := repo.UpdateTitle(c.Request.Context(), id, *req.Title); err != nil {
@@ -162,10 +168,11 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			mediaAbs = newMediaAbs
 		}
 
-		if req.Uploader != nil || req.Description != nil || req.Duration != nil || req.Resolution != nil {
-			uploader, description, duration, resolution := req.Uploader, req.Description, req.Duration, req.Resolution
+		if req.Uploader != nil || req.Description != nil || req.Duration != nil || req.Resolution != nil || req.Artist != nil || req.Year != nil {
+			uploader, description, duration, resolution, artist, year := req.Uploader, req.Description, req.Duration, req.Resolution, req.Artist, req.Year
 			if uploader == nil {
 				uploader = item.Uploader
 			}
@@ -178,11 +185,35 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 			if resolution == nil {
 				resolution = item.Resolution
 			}
+			if artist == nil {
+				artist = item.Artist
+			}
+			if year == nil {
+				year = item.ReleaseYear
+			}
 			// title=nil relies on UpdateMetadata's COALESCE(?, title) so this
 			// call never touches title — that's handled by UpdateTitle above.
-			if err := repo.UpdateMetadata(c.Request.Context(), id, nil, uploader, duration, resolution, description); err != nil {
+			if err := repo.UpdateMetadata(c.Request.Context(), id, nil, uploader, duration, resolution, description, artist, year); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
+			}
+		}
+
+		if req.Title != nil || req.Artist != nil || req.Year != nil {
+			title := item.Title
+			if req.Title != nil {
+				title = *req.Title
+			}
+			artist := item.Artist
+			if req.Artist != nil {
+				artist = req.Artist
+			}
+			year := item.ReleaseYear
+			if req.Year != nil {
+				year = req.Year
+			}
+			if err := ytdlp.EmbedMetadata(c.Request.Context(), mediaAbs, title, artist, year); err != nil {
+				log.Printf("library: embedding metadata into %s failed: %v", mediaAbs, err)
 			}
 		}
 
@@ -315,7 +346,10 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 		}
 		title, uploader, description := meta.Title, meta.Uploader, meta.Description
 
-		if err := repo.UpdateMetadata(c.Request.Context(), id, &title, &uploader, &duration, resolution, &description); err != nil {
+		// artist/year are manual-only fields (yt-dlp doesn't reliably expose
+		// them) — pass the item's existing values through so this refresh
+		// never clobbers them.
+		if err := repo.UpdateMetadata(c.Request.Context(), id, &title, &uploader, &duration, resolution, &description, item.Artist, item.ReleaseYear); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

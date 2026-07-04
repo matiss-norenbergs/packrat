@@ -272,7 +272,7 @@ function IgnoredFoldersDialog() {
           Ignored Folders
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Ignored Folders</DialogTitle>
           <DialogDescription>

@@ -2,12 +2,14 @@ package downloader
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -73,6 +75,73 @@ func (s *YtDlpService) FetchThumbnail(ctx context.Context, url, destDir, baseFil
 		return "", fmt.Errorf("thumbnail not written: %w", err)
 	}
 	return thumbPath, nil
+}
+
+const metadataEmbedTimeout = 5 * time.Minute
+
+// EmbedMetadata rewrites mediaPath in place — via a temp file in the same
+// directory plus a rename over the original, so a failed remux never
+// leaves the original file touched — with title/artist/year written into
+// the container's own metadata tags. Uses -c copy so the audio/video
+// stream itself is never re-encoded (fast, lossless); only the
+// container-level tags change. artist/year may be nil to simply not pass
+// that tag — ffmpeg's default metadata passthrough (-map_metadata 0,
+// implicit with -c copy) leaves any existing tag as-is when not
+// overridden.
+func (s *YtDlpService) EmbedMetadata(ctx context.Context, mediaPath, title string, artist *string, year *int) error {
+	ctx, cancel := context.WithTimeout(ctx, metadataEmbedTimeout)
+	defer cancel()
+
+	ext := filepath.Ext(mediaPath)
+	tmpPath := strings.TrimSuffix(mediaPath, ext) + ".packrat-tmp" + ext
+
+	args := []string{"-y", "-i", mediaPath, "-map", "0", "-c", "copy", "-metadata", "title=" + title}
+	if artist != nil {
+		args = append(args, "-metadata", "artist="+*artist)
+	}
+	if year != nil {
+		args = append(args, "-metadata", "date="+strconv.Itoa(*year))
+	}
+	args = append(args, tmpPath)
+
+	cmd := exec.CommandContext(ctx, s.FFmpegPath, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("ffmpeg metadata embed failed: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	if err := os.Rename(tmpPath, mediaPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("replacing original file with re-tagged copy: %w", err)
+	}
+	return nil
+}
+
+const frameExtractTimeout = 30 * time.Second
+
+// ExtractFrame grabs a single JPEG frame from mediaPath at atSeconds and
+// returns the encoded image bytes directly — piped through ffmpeg's
+// stdout, no temp file involved. Fails if mediaPath has no video stream.
+func (s *YtDlpService) ExtractFrame(ctx context.Context, mediaPath string, atSeconds float64) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, frameExtractTimeout)
+	defer cancel()
+
+	args := []string{
+		"-y", "-ss", strconv.FormatFloat(atSeconds, 'f', 3, 64), "-i", mediaPath,
+		"-frames:v", "1", "-q:v", "2", "-f", "image2", "-vcodec", "mjpeg", "-",
+	}
+	cmd := exec.CommandContext(ctx, s.FFmpegPath, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("ffmpeg frame extract failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	if stdout.Len() == 0 {
+		return nil, fmt.Errorf("ffmpeg produced no frame data (no video stream?)")
+	}
+	return stdout.Bytes(), nil
 }
 
 // RunResult carries the outcome of a completed (successful or failed)

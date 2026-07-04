@@ -88,6 +88,8 @@ export interface LibraryItem {
   resolution: string | null
   thumbnail: string | null
   description: string | null
+  artist: string | null
+  year: number | null
   downloadedAt: string
   status: string
   blurred: boolean
@@ -100,7 +102,14 @@ export interface UpdateLibraryItemRequest {
   description?: string
   duration?: number
   resolution?: string
+  artist?: string
+  year?: number
   originalUrl?: string
+}
+
+export interface ThumbnailCandidate {
+  timestampSeconds: number
+  imageBase64: string
 }
 
 export interface MoveLibraryItemRequest {

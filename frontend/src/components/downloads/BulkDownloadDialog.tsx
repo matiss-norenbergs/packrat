@@ -162,7 +162,7 @@ export function BulkDownloadDialog() {
           Bulk Download
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Bulk Download</DialogTitle>
           <DialogDescription>
