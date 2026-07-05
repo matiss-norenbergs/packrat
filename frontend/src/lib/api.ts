@@ -3,6 +3,7 @@ import type {
   CreateCollectionRequest,
   CreateDownloadRequest,
   Download,
+  HistoryItem,
   ImportRequest,
   LibraryItem,
   MoveLibraryItemRequest,
@@ -144,4 +145,12 @@ export function createImport(payload: ImportRequest): Promise<LibraryItem> {
     method: "POST",
     body: JSON.stringify(payload),
   })
+}
+
+export function fetchHistory(): Promise<HistoryItem[]> {
+  return request<HistoryItem[]>("/history")
+}
+
+export function retryHistoryItem(id: number): Promise<{ id: number }> {
+  return request<{ id: number }>(`/history/${id}/retry`, { method: "POST" })
 }

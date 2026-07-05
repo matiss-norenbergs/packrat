@@ -123,6 +123,7 @@ export interface Settings {
   defaultQuality: string
   defaultDownloadType: DownloadType
   importIgnoredFolders: string[]
+  historyAnonymizeUrls: boolean
 }
 
 export interface UpdateSettingsRequest {
@@ -130,6 +131,7 @@ export interface UpdateSettingsRequest {
   defaultQuality?: string
   defaultDownloadType?: DownloadType
   importIgnoredFolders?: string[]
+  historyAnonymizeUrls?: boolean
 }
 
 export interface ScannedFile {
@@ -145,4 +147,15 @@ export interface ScannedFile {
 export interface ImportRequest {
   path: string
   originalUrl?: string
+}
+
+export interface HistoryItem {
+  id: number
+  downloadId: number | null
+  url: string
+  title: string | null
+  thumbnail: string | null
+  status: DownloadStatus
+  errorMessage: string | null
+  createdAt: string
 }

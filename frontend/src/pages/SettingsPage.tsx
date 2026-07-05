@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -115,8 +116,45 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
+      <PrivacyCard />
       <AppearanceCard />
     </div>
+  )
+}
+
+function PrivacyCard() {
+  const { data: settings, isLoading } = useSettings()
+  const updateSettings = useUpdateSettings()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Privacy</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading || !settings ? (
+          <Skeleton className="h-10 w-full" />
+        ) : (
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="history-anonymize"
+              checked={settings.historyAnonymizeUrls}
+              disabled={updateSettings.isPending}
+              onCheckedChange={(v) => updateSettings.mutate({ historyAnonymizeUrls: v === true })}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="history-anonymize" className="font-normal">
+                Anonymize History Links
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Replaces links on the History page with a hash — the actual file/download is
+                unaffected, and Retry still works.
+              </p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

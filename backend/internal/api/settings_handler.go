@@ -33,6 +33,20 @@ func ImportIgnoredFolders(ctx context.Context, repo *repository.SettingsRepo) ([
 	return folders, nil
 }
 
+// HistoryAnonymizeURLs reads the history_anonymize_urls setting, defaulting
+// to false if it's never been set (no migration seeds this key). Shared by
+// GetSettings and ListHistory.
+func HistoryAnonymizeURLs(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingHistoryAnonymizeURLs)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
+}
+
 // GetSettings reports live state where it exists rather than a possibly
 // stale DB copy: downloadDirectory comes from the actual MEDIA_ROOT config
 // value (the DB row is legacy/display only), and maxConcurrentDownloads
@@ -56,6 +70,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		anonymizeHistory, err := HistoryAnonymizeURLs(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 
 		c.JSON(http.StatusOK, SettingsResponse{
 			DownloadDirectory:      mediaRoot,
@@ -63,6 +82,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			DefaultQuality:         defaultQuality,
 			DefaultDownloadType:    defaultDownloadType,
 			ImportIgnoredFolders:   ignoredFolders,
+			HistoryAnonymizeURLs:   anonymizeHistory,
 		})
 	}
 }
@@ -104,6 +124,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 				return
 			}
 			if err := repo.Set(c.Request.Context(), models.SettingImportIgnoredFolders, string(encoded)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.HistoryAnonymizeURLs != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingHistoryAnonymizeURLs, strconv.FormatBool(*req.HistoryAnonymizeURLs)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

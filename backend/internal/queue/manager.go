@@ -30,6 +30,7 @@ type DownloadManager struct {
 	downloadsRepo   *repository.DownloadsRepo
 	libraryRepo     *repository.LibraryRepo
 	collectionsRepo *repository.CollectionsRepo
+	historyRepo     *repository.HistoryRepo
 	progress        *ProgressStore
 	broadcaster     ws.Broadcaster
 
@@ -61,6 +62,7 @@ func NewDownloadManager(
 	downloadsRepo *repository.DownloadsRepo,
 	libraryRepo *repository.LibraryRepo,
 	collectionsRepo *repository.CollectionsRepo,
+	historyRepo *repository.HistoryRepo,
 	progress *ProgressStore,
 	broadcaster ws.Broadcaster,
 ) *DownloadManager {
@@ -70,6 +72,7 @@ func NewDownloadManager(
 		downloadsRepo:   downloadsRepo,
 		libraryRepo:     libraryRepo,
 		collectionsRepo: collectionsRepo,
+		historyRepo:     historyRepo,
 		progress:        progress,
 		broadcaster:     broadcaster,
 		jobs:            make(chan int64, 100),
@@ -224,7 +227,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 
 	meta, err := m.ytdlp.FetchMetadata(runCtx, d.URL)
 	if err != nil {
-		m.finishError(parentCtx, runCtx, id, err.Error(), "", "")
+		m.finishError(parentCtx, runCtx, id, d.URL, err.Error(), "", "")
 		return
 	}
 	duration := int(meta.Duration)
@@ -234,16 +237,16 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 
 	effectiveRoot, err := m.ResolveEffectiveRoot(runCtx, d.CollectionID)
 	if err != nil {
-		m.finishError(parentCtx, runCtx, id, "resolving collection root: "+err.Error(), "", "")
+		m.finishError(parentCtx, runCtx, id, d.URL, "resolving collection root: "+err.Error(), "", "")
 		return
 	}
 	destDir, err := pathsafe.ResolveUnderRoot(effectiveRoot, d.Folder)
 	if err != nil {
-		m.finishError(parentCtx, runCtx, id, "invalid folder: "+err.Error(), "", "")
+		m.finishError(parentCtx, runCtx, id, d.URL, "invalid folder: "+err.Error(), "", "")
 		return
 	}
 	if err := fsutil.EnsureDir(destDir); err != nil {
-		m.finishError(parentCtx, runCtx, id, "creating destination directory: "+err.Error(), "", "")
+		m.finishError(parentCtx, runCtx, id, d.URL, "creating destination directory: "+err.Error(), "", "")
 		return
 	}
 
@@ -270,11 +273,11 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	})
 
 	if runErr != nil {
-		m.finishError(parentCtx, runCtx, id, runErr.Error(), "", "")
+		m.finishError(parentCtx, runCtx, id, d.URL, runErr.Error(), "", "")
 		return
 	}
 	if result.ExitCode != 0 {
-		m.finishError(parentCtx, runCtx, id, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
+		m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
 		return
 	}
 
@@ -288,6 +291,9 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	}
 	if err := m.downloadsRepo.MarkCompleted(parentCtx, id, 0, resolution); err != nil {
 		log.Printf("queue: mark completed failed for %d: %v", id, err)
+	}
+	if _, err := m.historyRepo.Create(parentCtx, &id, d.URL, "completed", nil); err != nil {
+		log.Printf("queue: recording history for %d failed: %v", id, err)
 	}
 
 	libItem := m.buildLibraryItem(id, d, meta, result.FinalPath, resolution)
@@ -364,10 +370,13 @@ func thumbnailPathFor(finalPath string) string {
 // so the stored status/broadcast reflects the real cause rather than always
 // reporting "failed" — MarkCancelled uses parentCtx since runCtx is already
 // done by the time this runs.
-func (m *DownloadManager) finishError(parentCtx, runCtx context.Context, id int64, errMsg, stdoutTail, stderrTail string) {
+func (m *DownloadManager) finishError(parentCtx, runCtx context.Context, id int64, url, errMsg, stdoutTail, stderrTail string) {
 	if runCtx.Err() != nil {
 		if err := m.downloadsRepo.MarkCancelled(parentCtx, id); err != nil {
 			log.Printf("queue: mark cancelled failed for %d: %v", id, err)
+		}
+		if _, err := m.historyRepo.Create(parentCtx, &id, url, "cancelled", nil); err != nil {
+			log.Printf("queue: recording history for %d failed: %v", id, err)
 		}
 		m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "cancelled", Error: "cancelled by user"}})
 		return
@@ -375,6 +384,9 @@ func (m *DownloadManager) finishError(parentCtx, runCtx context.Context, id int6
 
 	if err := m.downloadsRepo.MarkFailed(parentCtx, id, -1, errMsg, stdoutTail, stderrTail); err != nil {
 		log.Printf("queue: mark failed failed for %d: %v", id, err)
+	}
+	if _, err := m.historyRepo.Create(parentCtx, &id, url, "failed", &errMsg); err != nil {
+		log.Printf("queue: recording history for %d failed: %v", id, err)
 	}
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "failed", Error: errMsg}})
 }

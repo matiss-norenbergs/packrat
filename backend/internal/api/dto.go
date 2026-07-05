@@ -195,6 +195,7 @@ type SettingsResponse struct {
 	DefaultQuality         string   `json:"defaultQuality"`
 	DefaultDownloadType    string   `json:"defaultDownloadType"`
 	ImportIgnoredFolders   []string `json:"importIgnoredFolders"`
+	HistoryAnonymizeURLs   bool     `json:"historyAnonymizeUrls"`
 }
 
 type UpdateSettingsRequest struct {
@@ -202,6 +203,7 @@ type UpdateSettingsRequest struct {
 	DefaultQuality         *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
 	DefaultDownloadType    *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
 	ImportIgnoredFolders   *[]string `json:"importIgnoredFolders"`
+	HistoryAnonymizeURLs   *bool     `json:"historyAnonymizeUrls"`
 }
 
 func toCollectionResponse(c models.Collection, path string) CollectionResponse {
@@ -275,6 +277,41 @@ func collectionPaths(cols []models.Collection) map[int64]string {
 		resolve(c.ID)
 	}
 	return paths
+}
+
+type HistoryResponse struct {
+	ID           int64   `json:"id"`
+	DownloadID   *int64  `json:"downloadId"`
+	URL          string  `json:"url"`
+	Title        *string `json:"title"`
+	Thumbnail    *string `json:"thumbnail"`
+	Status       string  `json:"status"`
+	ErrorMessage *string `json:"errorMessage"`
+	CreatedAt    string  `json:"createdAt"`
+}
+
+// toHistoryResponse builds the API response for a history row. When
+// anonymize is true, url is replaced with a hash placeholder (see
+// anonymizeURL) and title/thumbnail are nulled out too — otherwise a
+// completed download's title (e.g. "Me at the zoo") would still give away
+// exactly what was downloaded even with the URL hidden.
+func toHistoryResponse(h models.History, anonymize bool) HistoryResponse {
+	resp := HistoryResponse{
+		ID:           h.ID,
+		DownloadID:   h.DownloadID,
+		URL:          h.URL,
+		Title:        h.Title,
+		Thumbnail:    h.Thumbnail,
+		Status:       h.Status,
+		ErrorMessage: h.ErrorMessage,
+		CreatedAt:    h.CreatedAt.Format(timeFormat),
+	}
+	if anonymize {
+		resp.URL = anonymizeURL(h.URL)
+		resp.Title = nil
+		resp.Thumbnail = nil
+	}
+	return resp
 }
 
 type ScannedFileResponse struct {

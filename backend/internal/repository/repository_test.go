@@ -136,6 +136,70 @@ func TestDownloadsRepo_DeleteNullsLibraryBackref(t *testing.T) {
 	}
 }
 
+func TestHistoryRepo_CreateAndList(t *testing.T) {
+	ctx := context.Background()
+	downloadsRepo := openTestDB(t)
+	historyRepo := NewHistoryRepo(downloadsRepo.db)
+
+	dID, err := downloadsRepo.Create(ctx, &models.Download{
+		URL: "https://example.com/x", DownloadType: "video", Quality: "best", Status: models.StatusCompleted,
+	})
+	if err != nil {
+		t.Fatalf("Create download: %v", err)
+	}
+	title := "Some Video"
+	thumb := "x.jpg"
+	if err := downloadsRepo.UpdateMetadata(ctx, dID, nil, &title, nil, nil, &thumb); err != nil {
+		t.Fatalf("UpdateMetadata: %v", err)
+	}
+
+	completedID, err := historyRepo.Create(ctx, &dID, "https://example.com/x", "completed", nil)
+	if err != nil {
+		t.Fatalf("Create completed history entry: %v", err)
+	}
+	errMsg := "yt-dlp exited with code 1"
+	if _, err := historyRepo.Create(ctx, nil, "https://example.com/y", "failed", &errMsg); err != nil {
+		t.Fatalf("Create failed history entry: %v", err)
+	}
+
+	got, err := historyRepo.Get(ctx, completedID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Title == nil || *got.Title != title || got.Thumbnail == nil || *got.Thumbnail != thumb {
+		t.Fatalf("expected joined title/thumbnail from downloads row, got %+v", got)
+	}
+
+	list, err := historyRepo.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("expected 2 history entries, got %d", len(list))
+	}
+
+	// Deleting the originating download must not delete the history entry —
+	// download_id is ON DELETE SET NULL, and title/thumbnail simply stop
+	// being joinable afterward.
+	if err := downloadsRepo.Delete(ctx, dID); err != nil {
+		t.Fatalf("deleting download: %v", err)
+	}
+	survived, err := historyRepo.Get(ctx, completedID)
+	if err != nil {
+		t.Fatalf("history entry should survive download deletion: %v", err)
+	}
+	if survived.DownloadID != nil {
+		t.Fatalf("expected download_id nulled out via ON DELETE SET NULL, got %+v", survived.DownloadID)
+	}
+	if survived.Title != nil {
+		t.Fatalf("expected title to no longer be joinable after download deletion, got %+v", survived.Title)
+	}
+
+	if _, err := historyRepo.Get(ctx, 99999); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for unknown id, got %v", err)
+	}
+}
+
 func TestDownloadsRepo_MarkInterruptedIfActive(t *testing.T) {
 	ctx := context.Background()
 	repo := openTestDB(t)
@@ -149,12 +213,12 @@ func TestDownloadsRepo_MarkInterruptedIfActive(t *testing.T) {
 		t.Fatalf("Create completed: %v", err)
 	}
 
-	n, err := repo.MarkInterruptedIfActive(ctx)
+	affected, err := repo.MarkInterruptedIfActive(ctx)
 	if err != nil {
 		t.Fatalf("MarkInterruptedIfActive: %v", err)
 	}
-	if n != 1 {
-		t.Fatalf("expected 1 row marked interrupted, got %d", n)
+	if len(affected) != 1 || affected[0].ID != activeID {
+		t.Fatalf("expected exactly the active row returned, got %+v", affected)
 	}
 
 	active, err := repo.Get(ctx, activeID)

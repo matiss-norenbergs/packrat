@@ -124,23 +124,52 @@ func (r *DownloadsRepo) Delete(ctx context.Context, id int64) error {
 // "active" status (queued/fetching_metadata/downloading/processing) when the
 // process starts was orphaned by a crash or restart, since no worker is
 // running yet to own it. It is marked interrupted rather than silently
-// resumed, per the Crash/Restart Recovery requirement.
-func (r *DownloadsRepo) MarkInterruptedIfActive(ctx context.Context) (int64, error) {
+// resumed, per the Crash/Restart Recovery requirement. Returns the affected
+// rows (not just a count) so the caller can also record a History entry for
+// each one.
+func (r *DownloadsRepo) MarkInterruptedIfActive(ctx context.Context) ([]models.Download, error) {
 	statuses := models.ActiveStatuses()
 	placeholders := make([]string, len(statuses))
-	args := make([]any, 0, len(statuses)+1)
-	args = append(args, models.StatusInterrupted)
+	args := make([]any, len(statuses))
 	for i, s := range statuses {
 		placeholders[i] = "?"
-		args = append(args, s)
+		args[i] = s
 	}
-	query := fmt.Sprintf(`UPDATE downloads SET status = ?, updated_at = datetime('now') WHERE status IN (%s)`,
-		strings.Join(placeholders, ","))
-	res, err := r.db.ExecContext(ctx, query, args...)
+
+	rows, err := r.db.QueryContext(ctx, downloadSelectColumns+fmt.Sprintf(` WHERE d.status IN (%s)`, strings.Join(placeholders, ",")), args...)
 	if err != nil {
-		return 0, fmt.Errorf("marking interrupted downloads: %w", err)
+		return nil, fmt.Errorf("finding active downloads: %w", err)
 	}
-	return res.RowsAffected()
+	var affected []models.Download
+	for rows.Next() {
+		d, err := scanDownload(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		affected = append(affected, *d)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(affected) == 0 {
+		return nil, nil
+	}
+
+	idPlaceholders := make([]string, len(affected))
+	updateArgs := make([]any, 0, len(affected)+1)
+	updateArgs = append(updateArgs, models.StatusInterrupted)
+	for i, d := range affected {
+		idPlaceholders[i] = "?"
+		updateArgs = append(updateArgs, d.ID)
+	}
+	query := fmt.Sprintf(`UPDATE downloads SET status = ?, updated_at = datetime('now') WHERE id IN (%s)`,
+		strings.Join(idPlaceholders, ","))
+	if _, err := r.db.ExecContext(ctx, query, updateArgs...); err != nil {
+		return nil, fmt.Errorf("marking interrupted downloads: %w", err)
+	}
+	return affected, nil
 }
 
 const downloadSelectColumns = `

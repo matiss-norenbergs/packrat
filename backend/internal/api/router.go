@@ -20,6 +20,7 @@ type Deps struct {
 	LibraryRepo     *repository.LibraryRepo
 	CollectionsRepo *repository.CollectionsRepo
 	SettingsRepo    *repository.SettingsRepo
+	HistoryRepo     *repository.HistoryRepo
 	YtDlp           *downloader.YtDlpService
 	MediaRoot       string
 	FFProbePath     string
@@ -65,6 +66,9 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
 		api.POST("/import", CreateImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))
+
+		api.GET("/history", ListHistory(deps.HistoryRepo, deps.SettingsRepo))
+		api.POST("/history/:id/retry", RetryHistoryItem(deps.HistoryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 	}
 
 	if deps.MediaRoot != "" {

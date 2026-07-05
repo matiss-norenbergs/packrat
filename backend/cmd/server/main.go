@@ -54,6 +54,7 @@ func run() error {
 	libraryRepo := repository.NewLibraryRepo(conn)
 	collectionsRepo := repository.NewCollectionsRepo(conn)
 	settingsRepo := repository.NewSettingsRepo(conn)
+	historyRepo := repository.NewHistoryRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath)
 	progressStore := queue.NewProgressStore()
 
@@ -63,14 +64,19 @@ func run() error {
 	hub := ws.NewHub()
 	go hub.Run(ctx)
 
-	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, progressStore, hub)
+	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, progressStore, hub)
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)
 	if err != nil {
 		return err
 	}
-	if interrupted > 0 {
-		log.Printf("crash recovery: marked %d in-progress download(s) as interrupted", interrupted)
+	if len(interrupted) > 0 {
+		log.Printf("crash recovery: marked %d in-progress download(s) as interrupted", len(interrupted))
+		for _, d := range interrupted {
+			if _, err := historyRepo.Create(ctx, &d.ID, d.URL, "interrupted", nil); err != nil {
+				log.Printf("crash recovery: recording history for %d failed: %v", d.ID, err)
+			}
+		}
 	}
 
 	// A previously-saved concurrency setting survives a restart — the env
@@ -90,6 +96,7 @@ func run() error {
 		LibraryRepo:     libraryRepo,
 		CollectionsRepo: collectionsRepo,
 		SettingsRepo:    settingsRepo,
+		HistoryRepo:     historyRepo,
 		YtDlp:           ytdlpSvc,
 		MediaRoot:       cfg.MediaRoot,
 		FFProbePath:     cfg.FFProbePath,

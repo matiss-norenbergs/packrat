@@ -9,4 +9,5 @@ const (
 	SettingDefaultQuality         = "default_quality"
 	SettingDefaultDownloadType    = "default_download_type"
 	SettingImportIgnoredFolders   = "import_ignored_folders"
+	SettingHistoryAnonymizeURLs   = "history_anonymize_urls"
 )
