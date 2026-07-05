@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -101,6 +102,8 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 // that only sends the fields it changed can never accidentally blank out
 // the others. If title/artist/year changed, the actual file's own
 // container metadata is best-effort updated to match (see EmbedMetadata) —
+// this runs in the background after the response is sent, since it remuxes
+// the whole file via ffmpeg and can take several seconds for a real video;
 // a failure there is logged but never fails the request, since the app's
 // own DB state is the source of truth for what Packrat displays.
 func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
@@ -212,9 +215,14 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			if req.Year != nil {
 				year = req.Year
 			}
-			if err := ytdlp.EmbedMetadata(c.Request.Context(), mediaAbs, title, artist, year); err != nil {
-				log.Printf("library: embedding metadata into %s failed: %v", mediaAbs, err)
-			}
+			// Backgrounded: c.Request.Context() would be cancelled as soon as
+			// the handler returns, so this uses context.Background() instead —
+			// EmbedMetadata applies its own internal timeout regardless.
+			go func(path, title string, artist *string, year *int) {
+				if err := ytdlp.EmbedMetadata(context.Background(), path, title, artist, year); err != nil {
+					log.Printf("library: embedding metadata into %s failed: %v", path, err)
+				}
+			}(mediaAbs, title, artist, year)
 		}
 
 		if req.OriginalURL != nil {

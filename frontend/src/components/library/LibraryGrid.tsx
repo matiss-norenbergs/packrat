@@ -1,14 +1,16 @@
 import { useSearchParams } from "react-router-dom"
 import { useLibrary } from "@/hooks/useLibrary"
+import { useSettings } from "@/hooks/useSettings"
 import { Skeleton } from "@/components/ui/skeleton"
 import { searchLibraryItems, sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
 import { LibraryCard } from "./LibraryCard"
 
 export function LibraryGrid() {
   const { data, isLoading, isError, error } = useLibrary()
+  const { data: settings, isLoading: settingsLoading } = useSettings()
   const [searchParams] = useSearchParams()
 
-  if (isLoading) {
+  if (isLoading || settingsLoading) {
     return (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <Skeleton className="aspect-video w-full" />
@@ -27,8 +29,8 @@ export function LibraryGrid() {
   }
 
   const search = searchParams.get("q") ?? ""
-  const sortKey = (searchParams.get("sort") as LibrarySortKey) || "downloadedAt"
-  const sortDir: LibrarySortDir = searchParams.get("dir") === "asc" ? "asc" : "desc"
+  const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
+  const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
   const collectionId = searchParams.get("collection")
   const year = searchParams.get("year")
 

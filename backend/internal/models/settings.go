@@ -10,4 +10,7 @@ const (
 	SettingDefaultDownloadType    = "default_download_type"
 	SettingImportIgnoredFolders   = "import_ignored_folders"
 	SettingHistoryAnonymizeURLs   = "history_anonymize_urls"
+	SettingLibraryView            = "library_view"
+	SettingLibrarySort            = "library_sort" // stored as "<sortKey>:<sortDir>", e.g. "title:asc"
+	SettingThumbnailFrameCount    = "thumbnail_frame_count"
 )

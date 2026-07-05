@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -47,6 +48,54 @@ func HistoryAnonymizeURLs(ctx context.Context, repo *repository.SettingsRepo) (b
 	return strconv.ParseBool(raw)
 }
 
+// LibraryView reads the library_view setting, defaulting to "grid" if it's
+// never been set. Shared by GetSettings.
+func LibraryView(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingLibraryView)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "grid", nil
+	}
+	return raw, err
+}
+
+// LibrarySort reads the library_sort setting — stored as "<sortKey>:<sortDir>"
+// (one key rather than two, since the two values are always read/written
+// together) — defaulting to downloadedAt/desc if unset or malformed. Shared
+// by GetSettings and UpdateSettings (which needs the current value to merge
+// in a change to just one half of the pair).
+func LibrarySort(ctx context.Context, repo *repository.SettingsRepo) (sortKey, sortDir string, err error) {
+	raw, err := repo.Get(ctx, models.SettingLibrarySort)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "downloadedAt", "desc", nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	parts := strings.SplitN(raw, ":", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "downloadedAt", "desc", nil
+	}
+	return parts[0], parts[1], nil
+}
+
+// ThumbnailFrameCount reads the thumbnail_frame_count setting, defaulting to
+// 4 if it's never been set (or is somehow corrupt). Shared by GetSettings
+// and GetLibraryThumbnailCandidates.
+func ThumbnailFrameCount(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailFrameCount)
+	if errors.Is(err, repository.ErrNotFound) {
+		return 4, nil
+	}
+	if err != nil {
+		return 4, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 4, nil
+	}
+	return n, nil
+}
+
 // GetSettings reports live state where it exists rather than a possibly
 // stale DB copy: downloadDirectory comes from the actual MEDIA_ROOT config
 // value (the DB row is legacy/display only), and maxConcurrentDownloads
@@ -75,6 +124,21 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		libraryView, err := LibraryView(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		librarySortKey, librarySortDir, err := LibrarySort(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailFrameCount, err := ThumbnailFrameCount(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 
 		c.JSON(http.StatusOK, SettingsResponse{
 			DownloadDirectory:      mediaRoot,
@@ -83,6 +147,10 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			DefaultDownloadType:    defaultDownloadType,
 			ImportIgnoredFolders:   ignoredFolders,
 			HistoryAnonymizeURLs:   anonymizeHistory,
+			LibraryView:            libraryView,
+			LibrarySortKey:         librarySortKey,
+			LibrarySortDir:         librarySortDir,
+			ThumbnailFrameCount:    thumbnailFrameCount,
 		})
 	}
 }
@@ -130,6 +198,38 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 		}
 		if req.HistoryAnonymizeURLs != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingHistoryAnonymizeURLs, strconv.FormatBool(*req.HistoryAnonymizeURLs)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.LibraryView != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingLibraryView, *req.LibraryView); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.LibrarySortKey != nil || req.LibrarySortDir != nil {
+			// Stored together as one "<key>:<dir>" value — a request that only
+			// changes one half still needs the other half's current value to
+			// avoid clobbering it.
+			sortKey, sortDir, err := LibrarySort(c.Request.Context(), repo)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			if req.LibrarySortKey != nil {
+				sortKey = *req.LibrarySortKey
+			}
+			if req.LibrarySortDir != nil {
+				sortDir = *req.LibrarySortDir
+			}
+			if err := repo.Set(c.Request.Context(), models.SettingLibrarySort, sortKey+":"+sortDir); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailFrameCount != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameCount, strconv.Itoa(*req.ThumbnailFrameCount)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

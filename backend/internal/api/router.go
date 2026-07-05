@@ -53,7 +53,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/:id/redownload", RedownloadLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.POST("/library/:id/thumbnail/redownload", RedownloadLibraryThumbnail(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo))
 		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.CollectionsRepo))
-		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath))
+		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo))
 		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo))
 
 		api.GET("/collections", ListCollections(deps.CollectionsRepo))
@@ -69,6 +69,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.GET("/history", ListHistory(deps.HistoryRepo, deps.SettingsRepo))
 		api.POST("/history/:id/retry", RetryHistoryItem(deps.HistoryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
+
+		api.GET("/stats", GetStats(deps.DownloadsRepo, deps.LibraryRepo))
 	}
 
 	if deps.MediaRoot != "" {

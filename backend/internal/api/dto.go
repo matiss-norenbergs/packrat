@@ -103,6 +103,7 @@ type LibraryItemResponse struct {
 	DownloadedAt   string  `json:"downloadedAt"`
 	Status         string  `json:"status"`
 	Blurred        bool    `json:"blurred"`
+	FileSizeBytes  *int64  `json:"fileSizeBytes"`
 }
 
 func toLibraryItemResponse(item models.LibraryItem, blurred bool) LibraryItemResponse {
@@ -126,6 +127,7 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool) LibraryItemRes
 		DownloadedAt:   item.DownloadedAt.Format(timeFormat),
 		Status:         item.Status,
 		Blurred:        blurred,
+		FileSizeBytes:  item.FileSizeBytes,
 	}
 }
 
@@ -196,6 +198,10 @@ type SettingsResponse struct {
 	DefaultDownloadType    string   `json:"defaultDownloadType"`
 	ImportIgnoredFolders   []string `json:"importIgnoredFolders"`
 	HistoryAnonymizeURLs   bool     `json:"historyAnonymizeUrls"`
+	LibraryView            string   `json:"libraryView"`
+	LibrarySortKey         string   `json:"librarySortKey"`
+	LibrarySortDir         string   `json:"librarySortDir"`
+	ThumbnailFrameCount    int      `json:"thumbnailFrameCount"`
 }
 
 type UpdateSettingsRequest struct {
@@ -204,6 +210,10 @@ type UpdateSettingsRequest struct {
 	DefaultDownloadType    *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
 	ImportIgnoredFolders   *[]string `json:"importIgnoredFolders"`
 	HistoryAnonymizeURLs   *bool     `json:"historyAnonymizeUrls"`
+	LibraryView            *string   `json:"libraryView" binding:"omitempty,oneof=grid folders"`
+	LibrarySortKey         *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration"`
+	LibrarySortDir         *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
+	ThumbnailFrameCount    *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
 }
 
 func toCollectionResponse(c models.Collection, path string) CollectionResponse {
@@ -327,4 +337,13 @@ type ScannedFileResponse struct {
 type ImportRequest struct {
 	Path        string  `json:"path" binding:"required"`
 	OriginalURL *string `json:"originalUrl"`
+}
+
+type StatsResponse struct {
+	ActiveDownloads   int   `json:"activeDownloads"`
+	QueuedDownloads   int   `json:"queuedDownloads"`
+	CompletedToday    int   `json:"completedToday"`
+	LibraryVideoCount int   `json:"libraryVideoCount"`
+	LibraryAudioCount int   `json:"libraryAudioCount"`
+	TotalStorageBytes int64 `json:"totalStorageBytes"`
 }

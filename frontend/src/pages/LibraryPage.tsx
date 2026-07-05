@@ -1,11 +1,11 @@
-import { useSearchParams } from "react-router-dom"
 import { LibraryFolderView } from "@/components/library/LibraryFolderView"
 import { LibraryGrid } from "@/components/library/LibraryGrid"
 import { LibraryToolbar } from "@/components/library/LibraryToolbar"
+import { useSettings } from "@/hooks/useSettings"
 
 export function LibraryPage() {
-  const [searchParams] = useSearchParams()
-  const view = searchParams.get("view") === "folders" ? "folders" : "grid"
+  const { data: settings } = useSettings()
+  const view = settings?.libraryView === "folders" ? "folders" : "grid"
 
   return (
     <div className="space-y-6">

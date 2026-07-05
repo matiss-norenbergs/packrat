@@ -168,6 +168,26 @@ func (r *LibraryRepo) ListPaths(ctx context.Context) (map[string]bool, error) {
 	return out, rows.Err()
 }
 
+// Stats returns dashboard counts for the library: video/audio split and
+// total storage used. Video/audio is inferred per row: prefer the
+// originating download's download_type when the item came from a real
+// download (LEFT JOIN downloads), falling back to "has a resolution ->
+// video, else audio" for imported files with no linked download.
+func (r *LibraryRepo) Stats(ctx context.Context) (videoCount, audioCount int, totalBytes int64, err error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE(SUM(CASE WHEN COALESCE(d.download_type, CASE WHEN l.resolution IS NOT NULL THEN 'video' ELSE 'audio' END) = 'video' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN COALESCE(d.download_type, CASE WHEN l.resolution IS NOT NULL THEN 'video' ELSE 'audio' END) = 'audio' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(l.file_size_bytes), 0)
+		FROM library l
+		LEFT JOIN downloads d ON d.id = l.download_id`,
+	)
+	if err = row.Scan(&videoCount, &audioCount, &totalBytes); err != nil {
+		return 0, 0, 0, fmt.Errorf("computing library stats: %w", err)
+	}
+	return videoCount, audioCount, totalBytes, nil
+}
+
 func checkRowsAffected(res sql.Result) error {
 	n, err := res.RowsAffected()
 	if err != nil {

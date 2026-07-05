@@ -42,8 +42,16 @@ interface BulkRow {
   filename: string
 }
 
+// Fields worth carrying over when creating a new row from an existing one —
+// deliberately excludes "key" (must always be freshly generated, never
+// leaked from a previous row — a duplicate key across two rows breaks
+// React's reconciliation, causing edits/removals to land on the wrong row)
+// and "url"/"filename" (a new row is for a different URL, so pre-filling
+// either would just create an unwanted duplicate/collision).
+type RowCarryOver = Pick<BulkRow, "collectionId" | "downloadType" | "quality" | "audioFormat">
+
 let rowCounter = 0
-function newRow(base?: Partial<BulkRow>): BulkRow {
+function newRow(carryOver?: Partial<RowCarryOver>): BulkRow {
   rowCounter += 1
   return {
     key: `row-${rowCounter}`,
@@ -53,7 +61,7 @@ function newRow(base?: Partial<BulkRow>): BulkRow {
     quality: "best",
     audioFormat: "mp3",
     filename: "",
-    ...base,
+    ...carryOver,
   }
 }
 
@@ -92,7 +100,18 @@ export function BulkDownloadDialog() {
 
   const addRow = () => {
     if (atCap) return
-    setRows((prev) => [...prev, newRow(prev[prev.length - 1])])
+    setRows((prev) => {
+      const last = prev[prev.length - 1]
+      return [
+        ...prev,
+        newRow({
+          collectionId: last.collectionId,
+          downloadType: last.downloadType,
+          quality: last.quality,
+          audioFormat: last.audioFormat,
+        }),
+      ]
+    })
   }
 
   const handlePasteApply = () => {
@@ -103,10 +122,16 @@ export function BulkDownloadDialog() {
     if (urls.length === 0) return
 
     setRows((prev) => {
-      const lastSettings = prev[prev.length - 1]
+      const last = prev[prev.length - 1]
+      const carryOver: RowCarryOver = {
+        collectionId: last.collectionId,
+        downloadType: last.downloadType,
+        quality: last.quality,
+        audioFormat: last.audioFormat,
+      }
       const room = MAX_ROWS - prev.length
       const toAdd = urls.slice(0, Math.max(room, 0))
-      const appended = toAdd.map((url) => newRow({ ...lastSettings, url }))
+      const appended = toAdd.map((url) => ({ ...newRow(carryOver), url }))
       return [...prev, ...appended]
     })
     setPasteText("")

@@ -9,6 +9,7 @@ import type {
   MoveLibraryItemRequest,
   ScannedFile,
   Settings,
+  Stats,
   ThumbnailCandidate,
   UpdateCollectionRequest,
   UpdateLibraryItemRequest,
@@ -153,4 +154,8 @@ export function fetchHistory(): Promise<HistoryItem[]> {
 
 export function retryHistoryItem(id: number): Promise<{ id: number }> {
   return request<{ id: number }>(`/history/${id}/retry`, { method: "POST" })
+}
+
+export function fetchStats(): Promise<Stats> {
+  return request<Stats>("/stats")
 }

@@ -172,6 +172,28 @@ func (r *DownloadsRepo) MarkInterruptedIfActive(ctx context.Context) ([]models.D
 	return affected, nil
 }
 
+// Stats returns dashboard counts: active is anything a worker is currently
+// handling (fetching_metadata/downloading/processing — status "queued"
+// itself is counted separately since nothing is actively working on it
+// yet); completedToday uses date(completed_at) = date('now'), a UTC-day
+// boundary matching every other timestamp in this app.
+func (r *DownloadsRepo) Stats(ctx context.Context) (active, queued, completedToday int, err error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE(SUM(CASE WHEN status IN (?, ?, ?) THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = ? AND date(completed_at) = date('now') THEN 1 ELSE 0 END), 0)
+		FROM downloads`,
+		models.StatusFetchingMetadata, models.StatusDownloading, models.StatusProcessing,
+		models.StatusQueued,
+		models.StatusCompleted,
+	)
+	if err = row.Scan(&active, &queued, &completedToday); err != nil {
+		return 0, 0, 0, fmt.Errorf("computing download stats: %w", err)
+	}
+	return active, queued, completedToday, nil
+}
+
 const downloadSelectColumns = `
 	SELECT d.id, d.url, d.video_id, d.collection_id, c.name, d.folder, d.filename, d.download_type, d.quality, d.audio_format,
 	       d.status, d.title, d.uploader, d.duration, d.resolution, d.thumbnail, d.error_message, d.ytdlp_command,

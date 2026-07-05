@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCollections } from "@/hooks/useCollections"
 import { useLibrary } from "@/hooks/useLibrary"
+import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
 
 const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
@@ -21,11 +22,18 @@ export function LibraryToolbar() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: collections } = useCollections()
   const { data: items } = useLibrary()
+  // view/sort are DB-backed settings (remembered across reloads and
+  // browsers) rather than URL params — q/collection/year stay URL-only
+  // since they're per-visit filters, not a "remembered preference," and
+  // moving "collection" out of the URL would break the folder view's
+  // breadcrumb/browser-back behavior.
+  const { data: settings } = useSettings()
+  const updateSettings = useUpdateSettings()
 
-  const view = searchParams.get("view") === "folders" ? "folders" : "grid"
+  const view = settings?.libraryView === "folders" ? "folders" : "grid"
   const search = searchParams.get("q") ?? ""
-  const sortKey = (searchParams.get("sort") as LibrarySortKey) || "downloadedAt"
-  const sortDir: LibrarySortDir = searchParams.get("dir") === "asc" ? "asc" : "desc"
+  const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
+  const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
   const collectionId = searchParams.get("collection") ?? NONE
   const year = searchParams.get("year") ?? NONE
 
@@ -39,11 +47,10 @@ export function LibraryToolbar() {
   }
 
   const setView = (next: "grid" | "folders") => {
-    const params = new URLSearchParams(searchParams)
-    if (next === "folders") params.set("view", "folders")
-    else params.delete("view") // grid is the default/absent state
+    updateSettings.mutate({ libraryView: next })
     // Switching modes makes a stale "collection" filter/location ambiguous
     // between the two views' different meanings for that param — clear it.
+    const params = new URLSearchParams(searchParams)
     params.delete("collection")
     setSearchParams(params, { replace: true })
   }
@@ -60,7 +67,7 @@ export function LibraryToolbar() {
         />
       </div>
 
-      <Select value={sortKey} onValueChange={(v) => update("sort", v)}>
+      <Select value={sortKey} onValueChange={(v) => updateSettings.mutate({ librarySortKey: v })}>
         <SelectTrigger className="w-[170px]">
           <SelectValue />
         </SelectTrigger>
@@ -77,7 +84,7 @@ export function LibraryToolbar() {
         variant="outline"
         size="icon"
         title={sortDir === "asc" ? "Ascending" : "Descending"}
-        onClick={() => update("dir", sortDir === "asc" ? "desc" : "asc")}
+        onClick={() => updateSettings.mutate({ librarySortDir: sortDir === "asc" ? "desc" : "asc" })}
       >
         {sortDir === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
       </Button>

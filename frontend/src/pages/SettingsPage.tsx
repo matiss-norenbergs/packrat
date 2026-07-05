@@ -117,8 +117,51 @@ export function SettingsPage() {
       </Card>
 
       <PrivacyCard />
+      <ThumbnailsCard />
       <AppearanceCard />
     </div>
+  )
+}
+
+const FRAME_COUNT_OPTIONS = [2, 4, 6, 8]
+
+function ThumbnailsCard() {
+  const { data: settings, isLoading } = useSettings()
+  const updateSettings = useUpdateSettings()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Thumbnails</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading || !settings ? (
+          <Skeleton className="h-10 w-full" />
+        ) : (
+          <div className="space-y-2">
+            <Label>"Choose from Video" frame count</Label>
+            <Select
+              value={String(settings.thumbnailFrameCount)}
+              onValueChange={(v) => updateSettings.mutate({ thumbnailFrameCount: Number(v) })}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FRAME_COUNT_OPTIONS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              How many frame options to offer when picking a thumbnail from a video.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

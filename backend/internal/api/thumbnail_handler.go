@@ -148,7 +148,7 @@ func QuickGrabLibraryThumbnail(mediaRoot string, libraryRepo *repository.Library
 // the video and returns them as base64 JPEGs — read-only, doesn't touch the
 // DB or the current thumbnail. The frontend shows all 4 and the user's pick
 // is sent to SetLibraryThumbnail unchanged.
-func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, ffprobePath string) gin.HandlerFunc {
+func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, ffprobePath string, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -167,9 +167,15 @@ func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.Lib
 			return
 		}
 
+		frameCount, err := ThumbnailFrameCount(ctx, settingsRepo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		duration := resolveDuration(ctx, item.Duration, mediaAbs, ffprobePath)
-		timestamps := pickFrameTimestamps(duration, 4)
+		timestamps := pickFrameTimestamps(duration, frameCount)
 
 		candidates := make([]ThumbnailCandidateResponse, 0, len(timestamps))
 		for _, ts := range timestamps {

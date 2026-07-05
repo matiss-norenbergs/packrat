@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCollections } from "@/hooks/useCollections"
 import { useLibrary } from "@/hooks/useLibrary"
+import { useSettings } from "@/hooks/useSettings"
 import { buildCollectionTree, type CollectionTreeNode } from "@/lib/collectionTree"
 import { searchLibraryItems, sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
 import type { Collection } from "@/types/api"
@@ -38,8 +39,9 @@ export function LibraryFolderView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: collections, isLoading: collectionsLoading } = useCollections()
   const { data: items, isLoading: itemsLoading, isError, error } = useLibrary()
+  const { data: settings, isLoading: settingsLoading } = useSettings()
 
-  if (collectionsLoading || itemsLoading) {
+  if (collectionsLoading || itemsLoading || settingsLoading) {
     return (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <Skeleton className="aspect-video w-full" />
@@ -69,8 +71,8 @@ export function LibraryFolderView() {
   const breadcrumb = currentId != null ? breadcrumbFor(collections, currentId) : []
 
   const search = searchParams.get("q") ?? ""
-  const sortKey = (searchParams.get("sort") as LibrarySortKey) || "downloadedAt"
-  const sortDir: LibrarySortDir = searchParams.get("dir") === "asc" ? "asc" : "desc"
+  const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
+  const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
 
   const itemsHere = items.filter((item) => item.collectionId === currentId)
   const sortedItems = sortLibraryItems(searchLibraryItems(itemsHere, search), sortKey, sortDir)

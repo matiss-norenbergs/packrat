@@ -124,6 +124,10 @@ export interface Settings {
   defaultDownloadType: DownloadType
   importIgnoredFolders: string[]
   historyAnonymizeUrls: boolean
+  libraryView: string
+  librarySortKey: string
+  librarySortDir: string
+  thumbnailFrameCount: number
 }
 
 export interface UpdateSettingsRequest {
@@ -132,6 +136,10 @@ export interface UpdateSettingsRequest {
   defaultDownloadType?: DownloadType
   importIgnoredFolders?: string[]
   historyAnonymizeUrls?: boolean
+  libraryView?: string
+  librarySortKey?: string
+  librarySortDir?: string
+  thumbnailFrameCount?: number
 }
 
 export interface ScannedFile {
@@ -158,4 +166,13 @@ export interface HistoryItem {
   status: DownloadStatus
   errorMessage: string | null
   createdAt: string
+}
+
+export interface Stats {
+  activeDownloads: number
+  queuedDownloads: number
+  completedToday: number
+  libraryVideoCount: number
+  libraryAudioCount: number
+  totalStorageBytes: number
 }

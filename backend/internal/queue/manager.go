@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -296,7 +297,13 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		log.Printf("queue: recording history for %d failed: %v", id, err)
 	}
 
-	libItem := m.buildLibraryItem(id, d, meta, result.FinalPath, resolution)
+	var sizeBytes *int64
+	if info, err := os.Stat(result.FinalPath); err == nil {
+		s := info.Size()
+		sizeBytes = &s
+	}
+
+	libItem := m.buildLibraryItem(id, d, meta, result.FinalPath, resolution, sizeBytes)
 	libID, err := m.libraryRepo.Create(parentCtx, libItem)
 	if err != nil {
 		log.Printf("queue: creating library item failed for %d: %v", id, err)
@@ -306,7 +313,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: id, LibraryID: libID, Title: libItem.Title}})
 }
 
-func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download, meta *downloader.Metadata, finalPath string, resolution *string) *models.LibraryItem {
+func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download, meta *downloader.Metadata, finalPath string, resolution *string, sizeBytes *int64) *models.LibraryItem {
 	title := meta.Title
 	if title == "" {
 		title = d.URL
@@ -336,20 +343,21 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 	description := meta.Description
 
 	return &models.LibraryItem{
-		DownloadID:   &downloadID,
-		Title:        title,
-		Filename:     filepath.Base(finalPath),
-		Path:         relPath,
-		CollectionID: d.CollectionID,
-		Folder:       d.Folder,
-		OriginalURL:  &d.URL,
-		VideoID:      &videoID,
-		Uploader:     &uploader,
-		Duration:     &duration,
-		Resolution:   resolution,
-		Thumbnail:    thumbRelPtr,
-		Description:  &description,
-		Status:       "completed",
+		DownloadID:    &downloadID,
+		Title:         title,
+		Filename:      filepath.Base(finalPath),
+		Path:          relPath,
+		CollectionID:  d.CollectionID,
+		Folder:        d.Folder,
+		OriginalURL:   &d.URL,
+		VideoID:       &videoID,
+		Uploader:      &uploader,
+		Duration:      &duration,
+		Resolution:    resolution,
+		Thumbnail:     thumbRelPtr,
+		Description:   &description,
+		Status:        "completed",
+		FileSizeBytes: sizeBytes,
 	}
 }
 
