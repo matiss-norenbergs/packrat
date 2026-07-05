@@ -324,6 +324,49 @@ func toHistoryResponse(h models.History, anonymize bool) HistoryResponse {
 	return resp
 }
 
+type LogEntryResponse struct {
+	ID           int64   `json:"id"`
+	Title        *string `json:"title"`
+	URL          string  `json:"url"`
+	Status       string  `json:"status"`
+	YtDlpCommand *string `json:"ytdlpCommand"`
+	ExitCode     *int    `json:"exitCode"`
+	StdoutTail   *string `json:"stdoutTail"`
+	StderrTail   *string `json:"stderrTail"`
+	RetryCount   int     `json:"retryCount"`
+	ErrorMessage *string `json:"errorMessage"`
+	CreatedAt    string  `json:"createdAt"`
+	CompletedAt  *string `json:"completedAt"`
+}
+
+// toLogEntryResponse builds the API response for a logs row. When anonymize
+// is true, url is replaced with a hash placeholder (see anonymizeURL) and
+// title is nulled out too, matching History's anonymization behavior.
+func toLogEntryResponse(d models.Download, anonymize bool) LogEntryResponse {
+	resp := LogEntryResponse{
+		ID:           d.ID,
+		Title:        d.Title,
+		URL:          d.URL,
+		Status:       string(d.Status),
+		YtDlpCommand: d.YtDlpCommand,
+		ExitCode:     d.ExitCode,
+		StdoutTail:   d.StdoutTail,
+		StderrTail:   d.StderrTail,
+		RetryCount:   d.RetryCount,
+		ErrorMessage: d.ErrorMessage,
+		CreatedAt:    d.CreatedAt.Format(timeFormat),
+	}
+	if d.CompletedAt != nil {
+		s := d.CompletedAt.Format(timeFormat)
+		resp.CompletedAt = &s
+	}
+	if anonymize {
+		resp.URL = anonymizeURL(d.URL)
+		resp.Title = nil
+	}
+	return resp
+}
+
 type ScannedFileResponse struct {
 	Path              string  `json:"path"`
 	Filename          string  `json:"filename"`

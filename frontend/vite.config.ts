@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      port: env.PORT ? Number(env.PORT) : 5173,
       proxy: {
         "/api": `http://localhost:${backendPort}`,
         "/media-files": `http://localhost:${backendPort}`,

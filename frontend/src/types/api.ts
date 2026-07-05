@@ -168,6 +168,21 @@ export interface HistoryItem {
   createdAt: string
 }
 
+export interface LogEntry {
+  id: number
+  title: string | null
+  url: string
+  status: DownloadStatus
+  ytdlpCommand: string | null
+  exitCode: number | null
+  stdoutTail: string | null
+  stderrTail: string | null
+  retryCount: number
+  errorMessage: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
 export interface Stats {
   activeDownloads: number
   queuedDownloads: number

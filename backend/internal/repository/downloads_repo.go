@@ -80,12 +80,12 @@ func (r *DownloadsRepo) SetCommand(ctx context.Context, id int64, command string
 	return err
 }
 
-func (r *DownloadsRepo) MarkCompleted(ctx context.Context, id int64, exitCode int, resolution *string) error {
+func (r *DownloadsRepo) MarkCompleted(ctx context.Context, id int64, exitCode int, resolution *string, stdoutTail, stderrTail string) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE downloads
-		SET status = ?, exit_code = ?, resolution = COALESCE(?, resolution), completed_at = datetime('now'), updated_at = datetime('now')
+		SET status = ?, exit_code = ?, resolution = COALESCE(?, resolution), stdout_tail = ?, stderr_tail = ?, completed_at = datetime('now'), updated_at = datetime('now')
 		WHERE id = ?`,
-		models.StatusCompleted, exitCode, resolution, id,
+		models.StatusCompleted, exitCode, resolution, stdoutTail, stderrTail, id,
 	)
 	return err
 }

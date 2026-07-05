@@ -70,6 +70,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/history", ListHistory(deps.HistoryRepo, deps.SettingsRepo))
 		api.POST("/history/:id/retry", RetryHistoryItem(deps.HistoryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 
+		api.GET("/logs", GetLogs(deps.DownloadsRepo, deps.SettingsRepo))
+
 		api.GET("/stats", GetStats(deps.DownloadsRepo, deps.LibraryRepo))
 	}
 

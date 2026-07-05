@@ -290,7 +290,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		r := fmt.Sprintf("%dx%d", meta.Width, meta.Height)
 		resolution = &r
 	}
-	if err := m.downloadsRepo.MarkCompleted(parentCtx, id, 0, resolution); err != nil {
+	if err := m.downloadsRepo.MarkCompleted(parentCtx, id, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
 		log.Printf("queue: mark completed failed for %d: %v", id, err)
 	}
 	if _, err := m.historyRepo.Create(parentCtx, &id, d.URL, "completed", nil); err != nil {

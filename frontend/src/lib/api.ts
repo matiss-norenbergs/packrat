@@ -6,6 +6,7 @@ import type {
   HistoryItem,
   ImportRequest,
   LibraryItem,
+  LogEntry,
   MoveLibraryItemRequest,
   ScannedFile,
   Settings,
@@ -150,6 +151,10 @@ export function createImport(payload: ImportRequest): Promise<LibraryItem> {
 
 export function fetchHistory(): Promise<HistoryItem[]> {
   return request<HistoryItem[]>("/history")
+}
+
+export function fetchLogs(): Promise<LogEntry[]> {
+  return request<LogEntry[]>("/logs")
 }
 
 export function retryHistoryItem(id: number): Promise<{ id: number }> {

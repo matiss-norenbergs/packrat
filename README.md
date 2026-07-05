@@ -12,7 +12,8 @@ This is a **working skeleton**, not the full feature set described in
 [`docker-app-plan.md`](../docker-app-plan.md). One real flow is implemented end to end: submit a
 URL, `yt-dlp` fetches metadata, the download runs as a subprocess with live progress over
 WebSocket, and the completed file lands in the Library. See
-[`docs/architecture.md`](docs/architecture.md) for what is and is not built yet.
+[`docs/FEATURES.md`](docs/FEATURES.md) for a page-by-page guide to everything that's implemented,
+and [`docs/architecture.md`](docs/architecture.md) for what is and is not built yet under the hood.
 
 ## Stack
 

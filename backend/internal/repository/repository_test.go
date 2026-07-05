@@ -70,7 +70,7 @@ func TestDownloadsRepo_CreateGetList(t *testing.T) {
 	}
 
 	resolution := "1920x1080"
-	if err := repo.MarkCompleted(ctx, id, 0, &resolution); err != nil {
+	if err := repo.MarkCompleted(ctx, id, 0, &resolution, "stdout output", "stderr output"); err != nil {
 		t.Fatalf("MarkCompleted: %v", err)
 	}
 
@@ -86,6 +86,12 @@ func TestDownloadsRepo_CreateGetList(t *testing.T) {
 	}
 	if got.CompletedAt == nil {
 		t.Fatalf("expected CompletedAt to be set")
+	}
+	if got.StdoutTail == nil || *got.StdoutTail != "stdout output" {
+		t.Fatalf("expected stdout tail %q, got %+v", "stdout output", got.StdoutTail)
+	}
+	if got.StderrTail == nil || *got.StderrTail != "stderr output" {
+		t.Fatalf("expected stderr tail %q, got %+v", "stderr output", got.StderrTail)
 	}
 
 	list, err := repo.List(ctx)
