@@ -149,3 +149,44 @@ func CancelDownload(mgr *queue.DownloadManager) gin.HandlerFunc {
 		c.Status(http.StatusNoContent)
 	}
 }
+
+// DeleteDownload removes a download's history row — distinct from
+// CancelDownload, which stops an in-flight job. Only terminal-status rows
+// (completed/failed/cancelled/interrupted) can be deleted; an active one
+// must be cancelled first. Safe with respect to the library table: see
+// DownloadsRepo.Delete.
+func DeleteDownload(repo *repository.DownloadsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+
+		d, err := repo.Get(c.Request.Context(), id)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "download not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		for _, active := range models.ActiveStatuses() {
+			if d.Status == active {
+				c.JSON(http.StatusConflict, gin.H{"error": "cancel this download before deleting it"})
+				return
+			}
+		}
+
+		if err := repo.Delete(c.Request.Context(), id); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "download not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}

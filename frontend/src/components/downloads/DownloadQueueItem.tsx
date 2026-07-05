@@ -1,9 +1,20 @@
-import { X } from "lucide-react"
+import { useState } from "react"
+import { Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
-import { useCancelDownload } from "@/hooks/useDownloads"
+import { useCancelDownload, useDeleteDownload } from "@/hooks/useDownloads"
 import { formatEta, formatSpeed } from "@/lib/utils"
 import type { Download } from "@/types/api"
 
@@ -22,6 +33,8 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
 
 export function DownloadQueueItem({ download }: { download: Download }) {
   const cancelDownload = useCancelDownload()
+  const deleteDownload = useDeleteDownload()
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const cancellable = CANCELLABLE_STATUSES.has(download.status)
 
   return (
@@ -57,7 +70,7 @@ export function DownloadQueueItem({ download }: { download: Download }) {
         )}
       </div>
 
-      {cancellable && (
+      {cancellable ? (
         <Button
           variant="ghost"
           size="icon"
@@ -67,7 +80,26 @@ export function DownloadQueueItem({ download }: { download: Download }) {
         >
           <X className="h-4 w-4" />
         </Button>
+      ) : (
+        <Button variant="ghost" size="icon" onClick={() => setDeleteOpen(true)} title="Delete">
+          <Trash2 className="h-4 w-4" />
+        </Button>
       )}
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this from the downloads list?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The downloaded file isn't affected — only this history entry is removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteDownload.mutate(download.id)}>Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { cancelDownload, createDownload, fetchDownloads } from "@/lib/api"
+import { cancelDownload, createDownload, deleteDownload, fetchDownloads } from "@/lib/api"
 import type { CreateDownloadRequest } from "@/types/api"
 
 export const downloadsQueryKey = ["downloads"] as const
@@ -36,6 +36,20 @@ export function useCancelDownload() {
     },
     onError: (err: Error) => {
       toast.error(`Failed to cancel: ${err.message}`)
+    },
+  })
+}
+
+export function useDeleteDownload() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => deleteDownload(id),
+    onSuccess: () => {
+      toast.success("Removed")
+      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to delete: ${err.message}`)
     },
   })
 }

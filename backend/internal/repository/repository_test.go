@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -93,6 +94,45 @@ func TestDownloadsRepo_CreateGetList(t *testing.T) {
 	}
 	if len(list) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(list))
+	}
+}
+
+func TestDownloadsRepo_DeleteNullsLibraryBackref(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestDB(t)
+	libraryRepo := NewLibraryRepo(repo.db)
+
+	id, err := repo.Create(ctx, &models.Download{
+		URL: "https://example.com/x", DownloadType: "video", Quality: "best", Status: models.StatusCompleted,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	libID, err := libraryRepo.Create(ctx, &models.LibraryItem{
+		DownloadID: &id, Title: "X", Filename: "x.mp4", Path: "x.mp4", Status: "completed",
+	})
+	if err != nil {
+		t.Fatalf("Create library item: %v", err)
+	}
+
+	if err := repo.Delete(ctx, id); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, err := repo.Get(ctx, id); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound after delete, got %v", err)
+	}
+
+	libItem, err := libraryRepo.Get(ctx, libID)
+	if err != nil {
+		t.Fatalf("library item should survive download deletion: %v", err)
+	}
+	if libItem.DownloadID != nil {
+		t.Fatalf("expected download_id nulled out via ON DELETE SET NULL, got %+v", libItem.DownloadID)
+	}
+
+	if err := repo.Delete(ctx, 99999); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound deleting unknown id, got %v", err)
 	}
 }
 

@@ -42,6 +42,10 @@ export function createDownload(payload: CreateDownloadRequest): Promise<{ id: nu
 }
 
 export function cancelDownload(id: number): Promise<void> {
+  return request<void>(`/downloads/${id}/cancel`, { method: "POST" })
+}
+
+export function deleteDownload(id: number): Promise<void> {
   return request<void>(`/downloads/${id}`, { method: "DELETE" })
 }
 

@@ -108,6 +108,18 @@ func (r *DownloadsRepo) MarkCancelled(ctx context.Context, id int64) error {
 	return err
 }
 
+// Delete removes a download's history row. Safe to call even for a download
+// that has a completed library item — library.download_id is
+// ON DELETE SET NULL, so the library item just loses its back-link, it is
+// never itself deleted.
+func (r *DownloadsRepo) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM downloads WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting download: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // MarkInterruptedIfActive is run once at startup. Any download still in an
 // "active" status (queued/fetching_metadata/downloading/processing) when the
 // process starts was orphaned by a crash or restart, since no worker is

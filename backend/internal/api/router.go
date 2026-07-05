@@ -41,7 +41,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo))
-		api.DELETE("/downloads/:id", CancelDownload(deps.Manager))
+		api.POST("/downloads/:id/cancel", CancelDownload(deps.Manager))
+		api.DELETE("/downloads/:id", DeleteDownload(deps.DownloadsRepo))
 
 		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
