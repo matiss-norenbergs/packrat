@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
+  useGenerateLibraryItemNFO,
   useQuickGrabLibraryThumbnail,
   useRedownloadLibraryItem,
   useRedownloadLibraryThumbnail,
@@ -47,6 +48,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const redownload = useRedownloadLibraryItem()
   const redownloadThumbnail = useRedownloadLibraryThumbnail()
   const quickGrabThumbnail = useQuickGrabLibraryThumbnail()
+  const generateNfo = useGenerateLibraryItemNFO()
 
   const hasUrl = !!item.originalUrl
 
@@ -77,6 +79,9 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => redownload.mutate(item.id)} disabled={!hasUrl}>
             Redownload
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => generateNfo.mutate(item.id)} disabled={!item.generateNfo}>
+            Generate NFO Now
           </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>Thumbnail</DropdownMenuSubTrigger>

@@ -1,11 +1,13 @@
 import { useSearchParams } from "react-router-dom"
-import { ArrowDownAZ, ArrowUpAZ, FolderTree, LayoutGrid, Search } from "lucide-react"
+import { ArrowDownAZ, ArrowUpAZ, FolderTree, LayoutGrid, Search, Tags } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useCollections } from "@/hooks/useCollections"
 import { useLibrary } from "@/hooks/useLibrary"
 import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
+import { useTags } from "@/hooks/useTags"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
 
 const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
@@ -14,6 +16,7 @@ const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
   { value: "filename", label: "Filename" },
   { value: "year", label: "Year" },
   { value: "duration", label: "Duration" },
+  { value: "sequenceNumber", label: "Sequence #" },
 ]
 
 const NONE = "none"
@@ -22,6 +25,7 @@ export function LibraryToolbar() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: collections } = useCollections()
   const { data: items } = useLibrary()
+  const { data: allTags } = useTags()
   // view/sort are DB-backed settings (remembered across reloads and
   // browsers) rather than URL params — q/collection/year stay URL-only
   // since they're per-visit filters, not a "remembered preference," and
@@ -36,6 +40,7 @@ export function LibraryToolbar() {
   const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
   const collectionId = searchParams.get("collection") ?? NONE
   const year = searchParams.get("year") ?? NONE
+  const selectedTags = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
 
   const years = [...new Set((items ?? []).map((i) => i.year).filter((y): y is number => y != null))].sort((a, b) => b - a)
 
@@ -44,6 +49,11 @@ export function LibraryToolbar() {
     if (value == null || value === NONE || value === "") next.delete(key)
     else next.set(key, value)
     setSearchParams(next, { replace: true })
+  }
+
+  const toggleTag = (name: string) => {
+    const next = selectedTags.includes(name) ? selectedTags.filter((t) => t !== name) : [...selectedTags, name]
+    update("tags", next.length > 0 ? next.join(",") : null)
   }
 
   const setView = (next: "grid" | "folders") => {
@@ -118,6 +128,33 @@ export function LibraryToolbar() {
           ))}
         </SelectContent>
       </Select>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="w-[130px] justify-start">
+            <Tags className="h-4 w-4" />
+            {selectedTags.length > 0 ? `Tags (${selectedTags.length})` : "Tags"}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {(allTags ?? []).length === 0 ? (
+            <p className="px-2 py-1.5 text-sm text-muted-foreground">No tags yet</p>
+          ) : (
+            allTags?.map((tag) => (
+              <DropdownMenuCheckboxItem
+                key={tag.id}
+                checked={selectedTags.includes(tag.name)}
+                onSelect={(e) => {
+                  e.preventDefault()
+                  toggleTag(tag.name)
+                }}
+              >
+                {tag.name}
+              </DropdownMenuCheckboxItem>
+            ))
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <div className="flex gap-1 rounded-md border p-0.5">
         <Button

@@ -4,6 +4,7 @@ import {
   deleteLibraryItem,
   fetchLibrary,
   fetchLibraryThumbnailCandidates,
+  generateLibraryItemNFO,
   moveLibraryItem,
   quickGrabLibraryThumbnail,
   redownloadLibraryItem,
@@ -115,6 +116,14 @@ export function useLibraryThumbnailCandidates(id: number, enabled: boolean) {
     enabled,
     staleTime: 0,
     gcTime: 0,
+  })
+}
+
+export function useGenerateLibraryItemNFO() {
+  return useMutation({
+    mutationFn: (id: number) => generateLibraryItemNFO(id),
+    onSuccess: () => toast.success("NFO file generated"),
+    onError: (err: Error) => toast.error(`Failed to generate NFO: ${err.message}`),
   })
 }
 

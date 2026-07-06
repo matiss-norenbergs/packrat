@@ -34,3 +34,18 @@ export function formatDuration(seconds: number | null): string {
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, "0")}`
 }
+
+// Deterministic, non-cryptographic hash (FNV-1a) used to mask a private
+// item's display name — same input always produces the same placeholder, so
+// a re-render (or another browser) doesn't shuffle it, without needing an
+// async crypto.subtle call just to obscure text that's already sitting in
+// the API response (same trust model as the blurred thumbnail: obscured at
+// a glance, not actually hidden from the payload).
+export function hashText(text: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return "Hidden-" + (hash >>> 0).toString(16).padStart(8, "0")
+}

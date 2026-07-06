@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,9 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useCreateDownload } from "@/hooks/useDownloads"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useCreateDownload, useDownloadPreview } from "@/hooks/useDownloads"
 import { useCollections } from "@/hooks/useCollections"
 import { useSettings } from "@/hooks/useSettings"
+import { formatDuration } from "@/lib/utils"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -36,13 +38,30 @@ export function NewDownloadDialog() {
   const [quality, setQuality] = useState<VideoQuality>("best")
   const [audioFormat, setAudioFormat] = useState<AudioFormat>("mp3")
   const [filename, setFilename] = useState("")
+  const [debouncedUrl, setDebouncedUrl] = useState("")
 
   const { data: collections } = useCollections()
   const { data: settings } = useSettings()
   const createDownload = useCreateDownload()
 
+  const previewEnabled = !settings?.skipDownloadPreview
+  const { data: preview, isLoading: previewLoading, isError: previewError } =
+    useDownloadPreview(debouncedUrl, previewEnabled)
+
+  useEffect(() => {
+    const trimmed = url.trim()
+    const looksLikeUrl = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+    if (!looksLikeUrl) {
+      setDebouncedUrl("")
+      return
+    }
+    const timer = setTimeout(() => setDebouncedUrl(trimmed), 500)
+    return () => clearTimeout(timer)
+  }, [url])
+
   const reset = () => {
     setUrl("")
+    setDebouncedUrl("")
     setCollectionId(NO_COLLECTION)
     setDownloadType(settings?.defaultDownloadType ?? "video")
     setQuality((settings?.defaultQuality as VideoQuality) ?? "best")
@@ -109,6 +128,44 @@ export function NewDownloadDialog() {
               autoFocus
             />
           </div>
+
+          {previewEnabled && debouncedUrl && (
+            <div className="rounded-md border p-3">
+              {previewLoading ? (
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-12 w-20 shrink-0 rounded" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-3/4" />
+                    <Skeleton className="h-3 w-1/3" />
+                  </div>
+                </div>
+              ) : previewError ? (
+                <p className="text-xs text-muted-foreground">
+                  Couldn't fetch a preview for this URL — you can still queue the download.
+                </p>
+              ) : preview ? (
+                <div className="flex items-center gap-3">
+                  {preview.thumbnail ? (
+                    <img
+                      src={preview.thumbnail}
+                      alt=""
+                      className="h-12 w-20 shrink-0 rounded object-cover bg-muted"
+                    />
+                  ) : (
+                    <div className="h-12 w-20 shrink-0 rounded bg-muted" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-1 text-sm font-medium">{preview.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {preview.uploader || "Unknown uploader"}
+                      {preview.duration > 0 && ` · ${formatDuration(preview.duration)}`}
+                      {preview.resolution && ` · ${preview.resolution}`}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Collection</Label>

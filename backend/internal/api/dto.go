@@ -1,11 +1,33 @@
 package api
 
 import (
+	"fmt"
 	"path"
 
+	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 )
+
+type SetupRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required,min=8"`
+}
+
+type LoginRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+type AuthStatusResponse struct {
+	SetupRequired bool `json:"setupRequired"`
+	Authenticated bool `json:"authenticated"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword" binding:"required"`
+	NewPassword     string `json:"newPassword" binding:"required,min=8"`
+}
 
 type CreateDownloadRequest struct {
 	URL          string `json:"url" binding:"required,url"`
@@ -15,6 +37,32 @@ type CreateDownloadRequest struct {
 	DownloadType string `json:"downloadType" binding:"required,oneof=video audio"`
 	Quality      string `json:"quality"`
 	AudioFormat  string `json:"audioFormat"`
+}
+
+type PreviewDownloadRequest struct {
+	URL string `json:"url" binding:"required,url"`
+}
+
+type PreviewDownloadResponse struct {
+	Title      string  `json:"title"`
+	Uploader   string  `json:"uploader"`
+	Duration   int     `json:"duration"` // seconds, rounded from yt-dlp's float
+	Thumbnail  string  `json:"thumbnail"`
+	Resolution *string `json:"resolution"` // nil unless yt-dlp reported both width and height
+}
+
+func toPreviewDownloadResponse(m *downloader.Metadata) PreviewDownloadResponse {
+	resp := PreviewDownloadResponse{
+		Title:     m.Title,
+		Uploader:  m.Uploader,
+		Duration:  int(m.Duration),
+		Thumbnail: m.Thumbnail,
+	}
+	if m.Width > 0 && m.Height > 0 {
+		res := fmt.Sprintf("%dx%d", m.Width, m.Height)
+		resp.Resolution = &res
+	}
+	return resp
 }
 
 type DownloadResponse struct {
@@ -84,29 +132,35 @@ func toDownloadResponse(d models.Download, live *queue.LiveProgress, blurred boo
 const timeFormat = "2006-01-02T15:04:05Z07:00"
 
 type LibraryItemResponse struct {
-	ID             int64   `json:"id"`
-	DownloadID     *int64  `json:"downloadId"`
-	Title          string  `json:"title"`
-	Filename       string  `json:"filename"`
-	Path           string  `json:"path"`
-	CollectionID   *int64  `json:"collectionId"`
-	CollectionName *string `json:"collectionName"`
-	Folder         string  `json:"folder"`
-	OriginalURL    *string `json:"originalUrl"`
-	Uploader       *string `json:"uploader"`
-	Duration       *int    `json:"duration"`
-	Resolution     *string `json:"resolution"`
-	Thumbnail      *string `json:"thumbnail"`
-	Description    *string `json:"description"`
-	Artist         *string `json:"artist"`
-	Year           *int    `json:"year"`
-	DownloadedAt   string  `json:"downloadedAt"`
-	Status         string  `json:"status"`
-	Blurred        bool    `json:"blurred"`
-	FileSizeBytes  *int64  `json:"fileSizeBytes"`
+	ID             int64    `json:"id"`
+	DownloadID     *int64   `json:"downloadId"`
+	Title          string   `json:"title"`
+	Filename       string   `json:"filename"`
+	Path           string   `json:"path"`
+	CollectionID   *int64   `json:"collectionId"`
+	CollectionName *string  `json:"collectionName"`
+	Folder         string   `json:"folder"`
+	OriginalURL    *string  `json:"originalUrl"`
+	Uploader       *string  `json:"uploader"`
+	Duration       *int     `json:"duration"`
+	Resolution     *string  `json:"resolution"`
+	Thumbnail      *string  `json:"thumbnail"`
+	Description    *string  `json:"description"`
+	Artist         *string  `json:"artist"`
+	Year           *int     `json:"year"`
+	SequenceNumber *int     `json:"sequenceNumber"`
+	GenerateNFO    bool     `json:"generateNfo"`
+	DownloadedAt   string   `json:"downloadedAt"`
+	Status         string   `json:"status"`
+	Blurred        bool     `json:"blurred"`
+	FileSizeBytes  *int64   `json:"fileSizeBytes"`
+	Tags           []string `json:"tags"`
 }
 
-func toLibraryItemResponse(item models.LibraryItem, blurred bool) LibraryItemResponse {
+func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string) LibraryItemResponse {
+	if tags == nil {
+		tags = []string{}
+	}
 	return LibraryItemResponse{
 		ID:             item.ID,
 		DownloadID:     item.DownloadID,
@@ -124,23 +178,29 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool) LibraryItemRes
 		Description:    item.Description,
 		Artist:         item.Artist,
 		Year:           item.ReleaseYear,
+		SequenceNumber: item.SequenceNumber,
+		GenerateNFO:    item.GenerateNFO,
 		DownloadedAt:   item.DownloadedAt.Format(timeFormat),
 		Status:         item.Status,
 		Blurred:        blurred,
 		FileSizeBytes:  item.FileSizeBytes,
+		Tags:           tags,
 	}
 }
 
 type UpdateLibraryItemRequest struct {
-	Title       *string `json:"title"`
-	Filename    *string `json:"filename"`
-	Uploader    *string `json:"uploader"`
-	Description *string `json:"description"`
-	Duration    *int    `json:"duration"`
-	Resolution  *string `json:"resolution"`
-	Artist      *string `json:"artist"`
-	Year        *int    `json:"year"`
-	OriginalURL *string `json:"originalUrl"`
+	Title          *string   `json:"title"`
+	Filename       *string   `json:"filename"`
+	Uploader       *string   `json:"uploader"`
+	Description    *string   `json:"description"`
+	Duration       *int      `json:"duration"`
+	Resolution     *string   `json:"resolution"`
+	Artist         *string   `json:"artist"`
+	Year           *int      `json:"year"`
+	SequenceNumber *int      `json:"sequenceNumber"`
+	GenerateNFO    *bool     `json:"generateNfo"`
+	OriginalURL    *string   `json:"originalUrl"`
+	Tags           *[]string `json:"tags"`
 }
 
 // ThumbnailCandidateResponse is one of the 4 candidate frames returned by
@@ -162,33 +222,61 @@ type MoveLibraryItemRequest struct {
 }
 
 type CreateCollectionRequest struct {
-	Name                string `json:"name" binding:"required"`
-	ParentID            *int64 `json:"parentId"`
-	RootPath            string `json:"rootPath" binding:"required"`
-	DefaultQuality      string `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType string `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
-	IsPrivate           bool   `json:"isPrivate"`
+	Name                string  `json:"name" binding:"required"`
+	ParentID            *int64  `json:"parentId"`
+	RootPath            string  `json:"rootPath" binding:"required"`
+	DefaultQuality      string  `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
+	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	IsPrivate           bool    `json:"isPrivate"`
+	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 }
 
 type UpdateCollectionRequest struct {
-	Name                string `json:"name" binding:"required"`
-	RootPath            string `json:"rootPath" binding:"required"`
-	DefaultQuality      string `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType string `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
-	IsPrivate           bool   `json:"isPrivate"`
+	Name                string  `json:"name" binding:"required"`
+	RootPath            string  `json:"rootPath" binding:"required"`
+	DefaultQuality      string  `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
+	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	IsPrivate           bool    `json:"isPrivate"`
+	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 }
 
 type CollectionResponse struct {
-	ID                  int64  `json:"id"`
-	Name                string `json:"name"`
-	ParentID            *int64 `json:"parentId"`
-	RootPath            string `json:"rootPath"`
-	Path                string `json:"path"`
-	DefaultQuality      string `json:"defaultQuality"`
-	DefaultDownloadType string `json:"defaultDownloadType"`
-	IsPrivate           bool   `json:"isPrivate"`
-	CreatedAt           string `json:"createdAt"`
-	UpdatedAt           string `json:"updatedAt"`
+	ID                  int64   `json:"id"`
+	Name                string  `json:"name"`
+	ParentID            *int64  `json:"parentId"`
+	RootPath            string  `json:"rootPath"`
+	Path                string  `json:"path"`
+	DefaultQuality      string  `json:"defaultQuality"`
+	DefaultDownloadType string  `json:"defaultDownloadType"`
+	IsPrivate           bool    `json:"isPrivate"`
+	ItemCount           int     `json:"itemCount"`
+	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
+	CreatedAt           string  `json:"createdAt"`
+	UpdatedAt           string  `json:"updatedAt"`
+}
+
+type TagResponse struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	CreatedAt  string `json:"createdAt"`
+	UsageCount int    `json:"usageCount"`
+}
+
+type CreateTagRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+type UpdateTagRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+func toTagResponse(t models.TagWithCount) TagResponse {
+	return TagResponse{
+		ID:         t.ID,
+		Name:       t.Name,
+		CreatedAt:  t.CreatedAt.Format(timeFormat),
+		UsageCount: t.UsageCount,
+	}
 }
 
 type SettingsResponse struct {
@@ -202,6 +290,11 @@ type SettingsResponse struct {
 	LibrarySortKey         string   `json:"librarySortKey"`
 	LibrarySortDir         string   `json:"librarySortDir"`
 	ThumbnailFrameCount    int      `json:"thumbnailFrameCount"`
+	PrivacyBlurStrength    string   `json:"privacyBlurStrength"`
+	SkipDownloadPreview    bool     `json:"skipDownloadPreview"`
+	JellyfinEnabled        bool     `json:"jellyfinEnabled"`
+	JellyfinURL            string   `json:"jellyfinUrl"`
+	JellyfinAPIKey         string   `json:"jellyfinApiKey"`
 }
 
 type UpdateSettingsRequest struct {
@@ -211,12 +304,17 @@ type UpdateSettingsRequest struct {
 	ImportIgnoredFolders   *[]string `json:"importIgnoredFolders"`
 	HistoryAnonymizeURLs   *bool     `json:"historyAnonymizeUrls"`
 	LibraryView            *string   `json:"libraryView" binding:"omitempty,oneof=grid folders"`
-	LibrarySortKey         *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration"`
+	LibrarySortKey         *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber"`
 	LibrarySortDir         *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
 	ThumbnailFrameCount    *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
+	PrivacyBlurStrength    *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
+	SkipDownloadPreview    *bool     `json:"skipDownloadPreview"`
+	JellyfinEnabled        *bool     `json:"jellyfinEnabled"`
+	JellyfinURL            *string   `json:"jellyfinUrl"`
+	JellyfinAPIKey         *string   `json:"jellyfinApiKey"`
 }
 
-func toCollectionResponse(c models.Collection, path string) CollectionResponse {
+func toCollectionResponse(c models.Collection, path string, itemCount int) CollectionResponse {
 	return CollectionResponse{
 		ID:                  c.ID,
 		Name:                c.Name,
@@ -226,6 +324,8 @@ func toCollectionResponse(c models.Collection, path string) CollectionResponse {
 		DefaultQuality:      c.DefaultQuality,
 		DefaultDownloadType: c.DefaultDownloadType,
 		IsPrivate:           c.IsPrivate,
+		ItemCount:           itemCount,
+		JellyfinLibraryID:   c.JellyfinLibrary,
 		CreatedAt:           c.CreatedAt.Format(timeFormat),
 		UpdatedAt:           c.UpdatedAt.Format(timeFormat),
 	}

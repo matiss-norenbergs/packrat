@@ -85,9 +85,9 @@ func (r *CollectionsRepo) createLocked(ctx context.Context, c *models.Collection
 	}
 
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO collections (name, parent_id, root_path, default_quality, default_download_type, is_private)
-		VALUES (?, ?, ?, ?, ?, ?)`,
-		c.Name, c.ParentID, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.IsPrivate,
+		INSERT INTO collections (name, parent_id, root_path, default_quality, default_download_type, is_private, jellyfin_library)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.ParentID, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.IsPrivate, c.JellyfinLibrary,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting collection: %w", err)
@@ -122,9 +122,33 @@ func (r *CollectionsRepo) List(ctx context.Context) ([]models.Collection, error)
 	return out, rows.Err()
 }
 
+// ItemCounts returns, for every collection that has at least one library
+// item directly in it, how many library rows reference it — sub-collection
+// items aren't rolled up into their parent's count.
+func (r *CollectionsRepo) ItemCounts(ctx context.Context) (map[int64]int, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT collection_id, COUNT(*) FROM library WHERE collection_id IS NOT NULL GROUP BY collection_id`)
+	if err != nil {
+		return nil, fmt.Errorf("counting collection items: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[int64]int)
+	for rows.Next() {
+		var id int64
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, fmt.Errorf("scanning collection item count: %w", err)
+		}
+		counts[id] = n
+	}
+	return counts, rows.Err()
+}
+
 // Update overwrites name/root_path/default_quality/default_download_type/
-// is_private for id. Callers apply partial-update semantics before calling
-// this (fetch, merge, write) — this method always writes all five columns.
+// is_private/jellyfin_library for id. Callers apply partial-update semantics
+// before calling this (fetch, merge, write) — this method always writes all
+// six columns.
 func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collection) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -144,9 +168,9 @@ func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collec
 
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE collections
-		SET name = ?, root_path = ?, default_quality = ?, default_download_type = ?, is_private = ?, updated_at = datetime('now')
+		SET name = ?, root_path = ?, default_quality = ?, default_download_type = ?, is_private = ?, jellyfin_library = ?, updated_at = datetime('now')
 		WHERE id = ?`,
-		c.Name, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.IsPrivate, id,
+		c.Name, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.IsPrivate, c.JellyfinLibrary, id,
 	)
 	if err != nil {
 		return fmt.Errorf("updating collection: %w", err)

@@ -6,7 +6,7 @@ import { useCollections } from "@/hooks/useCollections"
 import { useLibrary } from "@/hooks/useLibrary"
 import { useSettings } from "@/hooks/useSettings"
 import { buildCollectionTree, type CollectionTreeNode } from "@/lib/collectionTree"
-import { searchLibraryItems, sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
+import { filterByTags, searchLibraryItems, sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
 import type { Collection } from "@/types/api"
 import { CollectionFolderTile } from "./CollectionFolderTile"
 import { LibraryCard } from "./LibraryCard"
@@ -73,9 +73,12 @@ export function LibraryFolderView() {
   const search = searchParams.get("q") ?? ""
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
   const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
+  const tagNames = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
 
-  const itemsHere = items.filter((item) => item.collectionId === currentId)
-  const sortedItems = sortLibraryItems(searchLibraryItems(itemsHere, search), sortKey, sortDir)
+  let itemsHere = items.filter((item) => item.collectionId === currentId)
+  itemsHere = searchLibraryItems(itemsHere, search)
+  if (tagNames.length > 0) itemsHere = filterByTags(itemsHere, tagNames)
+  const sortedItems = sortLibraryItems(itemsHere, sortKey, sortDir)
 
   return (
     <div className="space-y-4">

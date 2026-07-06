@@ -15,6 +15,7 @@ import (
 	"packrat/backend/internal/config"
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
@@ -55,8 +56,11 @@ func run() error {
 	collectionsRepo := repository.NewCollectionsRepo(conn)
 	settingsRepo := repository.NewSettingsRepo(conn)
 	historyRepo := repository.NewHistoryRepo(conn)
+	tagsRepo := repository.NewTagsRepo(conn)
+	usersRepo := repository.NewUsersRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath)
 	progressStore := queue.NewProgressStore()
+	jellyfinClient := jellyfin.NewClient()
 
 	ctx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSignals()
@@ -97,7 +101,10 @@ func run() error {
 		CollectionsRepo: collectionsRepo,
 		SettingsRepo:    settingsRepo,
 		HistoryRepo:     historyRepo,
+		TagsRepo:        tagsRepo,
+		UsersRepo:       usersRepo,
 		YtDlp:           ytdlpSvc,
+		JellyfinClient:  jellyfinClient,
 		MediaRoot:       cfg.MediaRoot,
 		FFProbePath:     cfg.FFProbePath,
 		WSHandler:       hub.GinHandler(),

@@ -110,15 +110,16 @@ func (r *LibraryRepo) UpdateLocation(ctx context.Context, id int64, collectionID
 // UpdateMetadata is used by Refresh Metadata and the Edit dialog's field
 // updates. resolution uses COALESCE since a re-fetch might not include
 // width/height — nil leaves the existing value untouched rather than
-// clobbering it with an unknown one. artist/releaseYear are plain
-// overwrites (nil clears them), matching how the Edit dialog sends them.
-func (r *LibraryRepo) UpdateMetadata(ctx context.Context, id int64, title, uploader *string, duration *int, resolution *string, description, artist *string, releaseYear *int) error {
+// clobbering it with an unknown one. artist/releaseYear/sequenceNumber are
+// plain overwrites (nil clears them), matching how the Edit dialog sends
+// them.
+func (r *LibraryRepo) UpdateMetadata(ctx context.Context, id int64, title, uploader *string, duration *int, resolution *string, description, artist *string, releaseYear, sequenceNumber *int) error {
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE library
 		SET title = COALESCE(?, title), uploader = ?, duration = ?,
-		    resolution = COALESCE(?, resolution), description = ?, artist = ?, release_year = ?
+		    resolution = COALESCE(?, resolution), description = ?, artist = ?, release_year = ?, sequence_number = ?
 		WHERE id = ?`,
-		title, uploader, duration, resolution, description, artist, releaseYear, id,
+		title, uploader, duration, resolution, description, artist, releaseYear, sequenceNumber, id,
 	)
 	if err != nil {
 		return fmt.Errorf("updating library metadata: %w", err)
@@ -133,6 +134,18 @@ func (r *LibraryRepo) UpdateThumbnail(ctx context.Context, id int64, thumbnail *
 	res, err := r.db.ExecContext(ctx, `UPDATE library SET thumbnail = ? WHERE id = ?`, thumbnail, id)
 	if err != nil {
 		return fmt.Errorf("updating library thumbnail: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// UpdateGenerateNFO toggles whether a .nfo sidecar file should be kept in
+// sync for this item — kept separate from the metadata bundle (UpdateMetadata)
+// since toggling it needs to trigger NFO generation itself, not just persist
+// a flag.
+func (r *LibraryRepo) UpdateGenerateNFO(ctx context.Context, id int64, generateNFO bool) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE library SET generate_nfo = ? WHERE id = ?`, generateNFO, id)
+	if err != nil {
+		return fmt.Errorf("updating library generate_nfo: %w", err)
 	}
 	return checkRowsAffected(res)
 }
@@ -201,7 +214,7 @@ func checkRowsAffected(res sql.Result) error {
 
 const librarySelectColumns = `
 	SELECT l.id, l.download_id, l.title, l.filename, l.path, l.collection_id, c.name, l.folder, l.original_url, l.video_id,
-	       l.uploader, l.duration, l.resolution, l.thumbnail, l.description, l.artist, l.release_year, l.downloaded_at, l.status, l.file_size_bytes
+	       l.uploader, l.duration, l.resolution, l.thumbnail, l.description, l.artist, l.release_year, l.sequence_number, l.generate_nfo, l.downloaded_at, l.status, l.file_size_bytes
 	FROM library l
 	LEFT JOIN collections c ON c.id = l.collection_id`
 
@@ -212,7 +225,7 @@ func scanLibraryItem(row rowScanner) (*models.LibraryItem, error) {
 	err := row.Scan(
 		&item.ID, &item.DownloadID, &item.Title, &item.Filename, &item.Path, &item.CollectionID, &item.CollectionName, &item.Folder,
 		&item.OriginalURL, &item.VideoID, &item.Uploader, &item.Duration, &item.Resolution, &item.Thumbnail,
-		&item.Description, &item.Artist, &item.ReleaseYear, &downloadedAt, &item.Status, &item.FileSizeBytes,
+		&item.Description, &item.Artist, &item.ReleaseYear, &item.SequenceNumber, &item.GenerateNFO, &downloadedAt, &item.Status, &item.FileSizeBytes,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

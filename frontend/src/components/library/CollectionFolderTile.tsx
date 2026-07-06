@@ -21,6 +21,9 @@ export function CollectionFolderTile({ node, onClick }: { node: CollectionTreeNo
           <p className="text-xs text-muted-foreground">
             {node.children.length} {node.children.length === 1 ? "subcollection" : "subcollections"}
           </p>
+          <p className="text-xs text-muted-foreground">
+            {node.itemCount} {node.itemCount === 1 ? "file" : "files"}
+          </p>
         </div>
       </CardContent>
     </Card>

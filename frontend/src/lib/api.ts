@@ -1,20 +1,28 @@
 import type {
+  AuthStatus,
+  ChangePasswordRequest,
   Collection,
   CreateCollectionRequest,
   CreateDownloadRequest,
   Download,
+  DownloadPreview,
   HistoryItem,
   ImportRequest,
   LibraryItem,
+  LoginRequest,
   LogEntry,
   MoveLibraryItemRequest,
   ScannedFile,
   Settings,
+  SetupRequest,
   Stats,
+  Tag,
   ThumbnailCandidate,
+  CreateTagRequest,
   UpdateCollectionRequest,
   UpdateLibraryItemRequest,
   UpdateSettingsRequest,
+  UpdateTagRequest,
 } from "@/types/api"
 
 // All JSON API routes live under /api (kept distinct from the frontend's
@@ -23,6 +31,7 @@ import type {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...init,
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...init?.headers },
   })
   if (!res.ok) {
@@ -33,6 +42,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+export function fetchAuthStatus(): Promise<AuthStatus> {
+  return request<AuthStatus>("/auth/status")
+}
+
+export function setupAccount(payload: SetupRequest): Promise<void> {
+  return request<void>("/auth/setup", { method: "POST", body: JSON.stringify(payload) })
+}
+
+export function login(payload: LoginRequest): Promise<void> {
+  return request<void>("/auth/login", { method: "POST", body: JSON.stringify(payload) })
+}
+
+export function logout(): Promise<void> {
+  return request<void>("/auth/logout", { method: "POST" })
+}
+
+export function changePassword(payload: ChangePasswordRequest): Promise<void> {
+  return request<void>("/auth/password", { method: "PATCH", body: JSON.stringify(payload) })
+}
+
 export function fetchDownloads(): Promise<Download[]> {
   return request<Download[]>("/downloads")
 }
@@ -41,6 +70,13 @@ export function createDownload(payload: CreateDownloadRequest): Promise<{ id: nu
   return request<{ id: number }>("/downloads", {
     method: "POST",
     body: JSON.stringify(payload),
+  })
+}
+
+export function previewDownload(url: string): Promise<DownloadPreview> {
+  return request<DownloadPreview>("/downloads/preview", {
+    method: "POST",
+    body: JSON.stringify({ url }),
   })
 }
 
@@ -105,6 +141,10 @@ export function setLibraryThumbnail(id: number, imageBase64: string): Promise<Li
   })
 }
 
+export function generateLibraryItemNFO(id: number): Promise<void> {
+  return request<void>(`/library/${id}/nfo`, { method: "POST" })
+}
+
 export function fetchCollections(): Promise<Collection[]> {
   return request<Collection[]>("/collections")
 }
@@ -138,6 +178,10 @@ export function updateSettings(payload: UpdateSettingsRequest): Promise<void> {
   })
 }
 
+export function rescanJellyfinLibrary(): Promise<void> {
+  return request<void>("/jellyfin/rescan", { method: "POST" })
+}
+
 export function fetchImportScan(): Promise<ScannedFile[]> {
   return request<ScannedFile[]>("/import/scan")
 }
@@ -163,4 +207,26 @@ export function retryHistoryItem(id: number): Promise<{ id: number }> {
 
 export function fetchStats(): Promise<Stats> {
   return request<Stats>("/stats")
+}
+
+export function fetchTags(): Promise<Tag[]> {
+  return request<Tag[]>("/tags")
+}
+
+export function createTag(payload: CreateTagRequest): Promise<{ id: number }> {
+  return request<{ id: number }>("/tags", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateTag(id: number, payload: UpdateTagRequest): Promise<void> {
+  return request<void>(`/tags/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteTag(id: number): Promise<void> {
+  return request<void>(`/tags/${id}`, { method: "DELETE" })
 }

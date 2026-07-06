@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -12,7 +13,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useUpdateLibraryItem } from "@/hooks/useLibrary"
+import { useTags } from "@/hooks/useTags"
 import { formatDuration } from "@/lib/utils"
+import { TagInput } from "./TagInput"
 import type { LibraryItem, UpdateLibraryItemRequest } from "@/types/api"
 
 function baseNameWithoutExt(filename: string): string {
@@ -34,10 +37,14 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
   const [resolution, setResolution] = useState(item.resolution ?? "")
   const [artist, setArtist] = useState(item.artist ?? "")
   const [year, setYear] = useState(item.year != null ? String(item.year) : "")
+  const [sequenceNumber, setSequenceNumber] = useState(item.sequenceNumber != null ? String(item.sequenceNumber) : "")
   const [description, setDescription] = useState(item.description ?? "")
   const [originalUrl, setOriginalUrl] = useState(item.originalUrl ?? "")
+  const [tags, setTags] = useState<string[]>(item.tags)
+  const [generateNfo, setGenerateNfo] = useState(item.generateNfo)
 
   const updateLibraryItem = useUpdateLibraryItem()
+  const { data: allTags } = useTags()
 
   const resetFields = () => {
     setTitle(item.title)
@@ -47,8 +54,11 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     setResolution(item.resolution ?? "")
     setArtist(item.artist ?? "")
     setYear(item.year != null ? String(item.year) : "")
+    setSequenceNumber(item.sequenceNumber != null ? String(item.sequenceNumber) : "")
     setDescription(item.description ?? "")
     setOriginalUrl(item.originalUrl ?? "")
+    setTags(item.tags)
+    setGenerateNfo(item.generateNfo)
   }
 
   const handleOpenChange = (next: boolean) => {
@@ -79,6 +89,11 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
       payload.year = parsedYear
     }
 
+    const parsedSequenceNumber = sequenceNumber.trim() === "" ? null : Number(sequenceNumber)
+    if (parsedSequenceNumber !== item.sequenceNumber && parsedSequenceNumber != null && !Number.isNaN(parsedSequenceNumber)) {
+      payload.sequenceNumber = parsedSequenceNumber
+    }
+
     const trimmedDescription = description.trim()
     if (trimmedDescription !== (item.description ?? "")) payload.description = trimmedDescription
 
@@ -89,6 +104,12 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     if (parsedDuration !== item.duration && parsedDuration != null && !Number.isNaN(parsedDuration)) {
       payload.duration = parsedDuration
     }
+
+    // Array identity won't work for the diff — compare contents, not order.
+    const tagsKey = (arr: string[]) => [...arr].sort().join("|")
+    if (tagsKey(tags) !== tagsKey(item.tags)) payload.tags = tags
+
+    if (generateNfo !== item.generateNfo) payload.generateNfo = generateNfo
 
     if (Object.keys(payload).length === 0) {
       onOpenChange(false)
@@ -141,9 +162,21 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
               <Label htmlFor="edit-year">Year</Label>
               <Input id="edit-year" type="number" placeholder="2024" value={year} onChange={(e) => setYear(e.target.value)} />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-sequence-number">Sequence #</Label>
+              <Input
+                id="edit-sequence-number"
+                type="number"
+                min="1"
+                placeholder="e.g. 3"
+                value={sequenceNumber}
+                onChange={(e) => setSequenceNumber(e.target.value)}
+              />
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Title, Artist, and Year are also written into the file's own metadata tags on save.
+            Title, Artist, Year, and Sequence # are also written into the file's own metadata
+            tags on save.
           </p>
 
           <div className="space-y-2">
@@ -172,6 +205,11 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
           </div>
 
           <div className="space-y-2">
+            <Label>Tags</Label>
+            <TagInput value={tags} onChange={setTags} suggestions={allTags?.map((t) => t.name) ?? []} />
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="edit-original-url">Original URL</Label>
             <Input
               id="edit-original-url"
@@ -184,6 +222,24 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
                 Setting a URL unlocks Refresh Metadata and Redownload for this item.
               </p>
             )}
+          </div>
+
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="edit-generate-nfo"
+              checked={generateNfo}
+              onCheckedChange={(v) => setGenerateNfo(v === true)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="edit-generate-nfo" className="font-normal">
+                Generate NFO
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Writes a <code>{baseNameWithoutExt(item.filename)}.nfo</code> file Jellyfin can
+                read for title/plot/year/tags/sequence — kept in sync automatically whenever you
+                save changes here.
+              </p>
+            </div>
           </div>
 
           <p className="text-xs text-muted-foreground">

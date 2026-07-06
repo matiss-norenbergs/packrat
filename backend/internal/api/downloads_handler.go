@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/queue"
@@ -29,6 +30,28 @@ func CreateDownload(mgr *queue.DownloadManager, collectionsRepo *repository.Coll
 		}
 
 		c.JSON(http.StatusCreated, gin.H{"id": id})
+	}
+}
+
+// PreviewDownloadMetadata fetches yt-dlp metadata for a URL without queuing anything, for the
+// New Download dialog's pre-submit preview card. A fetch failure (bad URL, unsupported site,
+// network error) is reported as 422 — the frontend treats this as non-fatal and never blocks
+// submission on it.
+func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req PreviewDownloadRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		meta, err := ytdlp.FetchMetadata(c.Request.Context(), req.URL)
+		if err != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, toPreviewDownloadResponse(meta))
 	}
 }
 

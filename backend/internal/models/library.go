@@ -20,6 +20,8 @@ type LibraryItem struct {
 	Description    *string
 	Artist         *string
 	ReleaseYear    *int
+	SequenceNumber *int
+	GenerateNFO    bool
 	DownloadedAt   time.Time
 	Status         string
 	FileSizeBytes  *int64

@@ -84,11 +84,11 @@ const metadataEmbedTimeout = 5 * time.Minute
 // leaves the original file touched — with title/artist/year written into
 // the container's own metadata tags. Uses -c copy so the audio/video
 // stream itself is never re-encoded (fast, lossless); only the
-// container-level tags change. artist/year may be nil to simply not pass
-// that tag — ffmpeg's default metadata passthrough (-map_metadata 0,
-// implicit with -c copy) leaves any existing tag as-is when not
-// overridden.
-func (s *YtDlpService) EmbedMetadata(ctx context.Context, mediaPath, title string, artist *string, year *int) error {
+// container-level tags change. artist/year/sequenceNumber may be nil to
+// simply not pass that tag — ffmpeg's default metadata passthrough
+// (-map_metadata 0, implicit with -c copy) leaves any existing tag as-is
+// when not overridden.
+func (s *YtDlpService) EmbedMetadata(ctx context.Context, mediaPath, title string, artist *string, year, sequenceNumber *int) error {
 	ctx, cancel := context.WithTimeout(ctx, metadataEmbedTimeout)
 	defer cancel()
 
@@ -101,6 +101,9 @@ func (s *YtDlpService) EmbedMetadata(ctx context.Context, mediaPath, title strin
 	}
 	if year != nil {
 		args = append(args, "-metadata", "date="+strconv.Itoa(*year))
+	}
+	if sequenceNumber != nil {
+		args = append(args, "-metadata", "track="+strconv.Itoa(*sequenceNumber))
 	}
 	args = append(args, tmpPath)
 

@@ -2,7 +2,7 @@ import { useSearchParams } from "react-router-dom"
 import { useLibrary } from "@/hooks/useLibrary"
 import { useSettings } from "@/hooks/useSettings"
 import { Skeleton } from "@/components/ui/skeleton"
-import { searchLibraryItems, sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
+import { filterByTags, searchLibraryItems, sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
 import { LibraryCard } from "./LibraryCard"
 
 export function LibraryGrid() {
@@ -33,10 +33,12 @@ export function LibraryGrid() {
   const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
   const collectionId = searchParams.get("collection")
   const year = searchParams.get("year")
+  const tagNames = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
 
   let filtered = searchLibraryItems(data, search)
   if (collectionId) filtered = filtered.filter((item) => String(item.collectionId) === collectionId)
   if (year) filtered = filtered.filter((item) => String(item.year) === year)
+  if (tagNames.length > 0) filtered = filterByTags(filtered, tagNames)
   const sorted = sortLibraryItems(filtered, sortKey, sortDir)
 
   if (sorted.length === 0) {

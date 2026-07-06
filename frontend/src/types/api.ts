@@ -1,3 +1,23 @@
+export interface AuthStatus {
+  setupRequired: boolean
+  authenticated: boolean
+}
+
+export interface SetupRequest {
+  username: string
+  password: string
+}
+
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
 export type DownloadStatus =
   | "queued"
   | "fetching_metadata"
@@ -58,6 +78,8 @@ export interface Collection {
   defaultQuality: string
   defaultDownloadType: DownloadType
   isPrivate: boolean
+  itemCount: number
+  jellyfinLibraryId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -69,6 +91,7 @@ export interface CreateCollectionRequest {
   defaultQuality?: string
   defaultDownloadType?: DownloadType
   isPrivate?: boolean
+  jellyfinLibraryId?: string | null
 }
 
 export type UpdateCollectionRequest = CreateCollectionRequest
@@ -90,9 +113,12 @@ export interface LibraryItem {
   description: string | null
   artist: string | null
   year: number | null
+  sequenceNumber: number | null
+  generateNfo: boolean
   downloadedAt: string
   status: string
   blurred: boolean
+  tags: string[]
 }
 
 export interface UpdateLibraryItemRequest {
@@ -104,7 +130,25 @@ export interface UpdateLibraryItemRequest {
   resolution?: string
   artist?: string
   year?: number
+  sequenceNumber?: number
+  generateNfo?: boolean
   originalUrl?: string
+  tags?: string[]
+}
+
+export interface Tag {
+  id: number
+  name: string
+  createdAt: string
+  usageCount: number
+}
+
+export interface CreateTagRequest {
+  name: string
+}
+
+export interface UpdateTagRequest {
+  name: string
 }
 
 export interface ThumbnailCandidate {
@@ -128,6 +172,19 @@ export interface Settings {
   librarySortKey: string
   librarySortDir: string
   thumbnailFrameCount: number
+  privacyBlurStrength: string
+  skipDownloadPreview: boolean
+  jellyfinEnabled: boolean
+  jellyfinUrl: string
+  jellyfinApiKey: string
+}
+
+export interface DownloadPreview {
+  title: string
+  uploader: string
+  duration: number
+  thumbnail: string
+  resolution: string | null
 }
 
 export interface UpdateSettingsRequest {
@@ -140,6 +197,11 @@ export interface UpdateSettingsRequest {
   librarySortKey?: string
   librarySortDir?: string
   thumbnailFrameCount?: number
+  privacyBlurStrength?: string
+  skipDownloadPreview?: boolean
+  jellyfinEnabled?: boolean
+  jellyfinUrl?: string
+  jellyfinApiKey?: string
 }
 
 export interface ScannedFile {

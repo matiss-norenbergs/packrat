@@ -96,6 +96,53 @@ func ThumbnailFrameCount(ctx context.Context, repo *repository.SettingsRepo) (in
 	return n, nil
 }
 
+// PrivacyBlurStrength reads the privacy_blur_strength setting, defaulting to
+// "default" if it's never been set (or is somehow corrupt) — this default
+// keeps the pre-existing blur intensity unchanged for anyone who upgrades
+// without touching the new setting. Shared by GetSettings.
+func PrivacyBlurStrength(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingPrivacyBlurStrength)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "default", nil
+	}
+	if err != nil {
+		return "default", err
+	}
+	switch raw {
+	case "weak", "default", "strong":
+		return raw, nil
+	default:
+		return "default", nil
+	}
+}
+
+// SkipDownloadPreview reads the skip_download_preview setting, defaulting to false (previews
+// shown) if it's never been set (no migration seeds this key) — previews are on by default.
+// Shared by GetSettings.
+func SkipDownloadPreview(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingSkipDownloadPreview)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
+}
+
+// JellyfinEnabled reads the jellyfin_enabled setting, defaulting to false
+// (integration off) if it's never been set. Shared by GetSettings.
+func JellyfinEnabled(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingJellyfinEnabled)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
+}
+
 // GetSettings reports live state where it exists rather than a possibly
 // stale DB copy: downloadDirectory comes from the actual MEDIA_ROOT config
 // value (the DB row is legacy/display only), and maxConcurrentDownloads
@@ -139,7 +186,31 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-
+		privacyBlurStrength, err := PrivacyBlurStrength(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		skipDownloadPreview, err := SkipDownloadPreview(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		jellyfinEnabled, err := JellyfinEnabled(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		jellyfinURL, err := repo.Get(c.Request.Context(), models.SettingJellyfinURL)
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		jellyfinAPIKey, err := repo.Get(c.Request.Context(), models.SettingJellyfinAPIKey)
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, SettingsResponse{
 			DownloadDirectory:      mediaRoot,
 			MaxConcurrentDownloads: mgr.WorkerCount(),
@@ -151,6 +222,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			LibrarySortKey:         librarySortKey,
 			LibrarySortDir:         librarySortDir,
 			ThumbnailFrameCount:    thumbnailFrameCount,
+			PrivacyBlurStrength:    privacyBlurStrength,
+			SkipDownloadPreview:    skipDownloadPreview,
+			JellyfinEnabled:        jellyfinEnabled,
+			JellyfinURL:            jellyfinURL,
+			JellyfinAPIKey:         jellyfinAPIKey,
 		})
 	}
 }
@@ -234,7 +310,36 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 				return
 			}
 		}
-
+		if req.PrivacyBlurStrength != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingPrivacyBlurStrength, *req.PrivacyBlurStrength); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.SkipDownloadPreview != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingSkipDownloadPreview, strconv.FormatBool(*req.SkipDownloadPreview)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.JellyfinEnabled != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingJellyfinEnabled, strconv.FormatBool(*req.JellyfinEnabled)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.JellyfinURL != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingJellyfinURL, *req.JellyfinURL); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.JellyfinAPIKey != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingJellyfinAPIKey, *req.JellyfinAPIKey); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
 		c.Status(http.StatusNoContent)
 	}
 }

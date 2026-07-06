@@ -58,6 +58,7 @@ function CollectionNode({ node }: { node: CollectionTreeNode }) {
             )}
             <Badge variant="outline">{node.defaultDownloadType}</Badge>
             <Badge variant="outline">{node.defaultQuality}</Badge>
+            <Badge variant="outline">{node.itemCount} {node.itemCount === 1 ? "file" : "files"}</Badge>
           </div>
           <p className="truncate text-xs text-muted-foreground">Folder: {node.rootPath}</p>
         </div>

@@ -1,0 +1,62 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
+import { createTag, deleteTag, fetchTags, updateTag } from "@/lib/api"
+import type { CreateTagRequest, UpdateTagRequest } from "@/types/api"
+import { libraryQueryKey } from "./useLibrary"
+
+export const tagsQueryKey = ["tags"] as const
+
+export function useTags() {
+  return useQuery({
+    queryKey: tagsQueryKey,
+    queryFn: fetchTags,
+  })
+}
+
+export function useCreateTag() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: CreateTagRequest) => createTag(payload),
+    onSuccess: () => {
+      toast.success("Tag created")
+      // A brand new tag isn't attached to anything yet, so no library item's
+      // rendering changes — no need to invalidate libraryQueryKey here.
+      queryClient.invalidateQueries({ queryKey: tagsQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to create tag: ${err.message}`)
+    },
+  })
+}
+
+export function useUpdateTag() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: UpdateTagRequest }) => updateTag(id, payload),
+    onSuccess: () => {
+      toast.success("Tag renamed")
+      queryClient.invalidateQueries({ queryKey: tagsQueryKey })
+      // Renaming changes the tag name shown on every library item's badges.
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to rename tag: ${err.message}`)
+    },
+  })
+}
+
+export function useDeleteTag() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => deleteTag(id),
+    onSuccess: () => {
+      toast.success("Tag deleted")
+      queryClient.invalidateQueries({ queryKey: tagsQueryKey })
+      // Deleting removes the tag from every library item's badges/filter options.
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to delete tag: ${err.message}`)
+    },
+  })
+}

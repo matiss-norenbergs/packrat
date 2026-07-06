@@ -22,10 +22,15 @@ func ListCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		itemCounts, err := repo.ItemCounts(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		paths := collectionPaths(rows)
 		out := make([]CollectionResponse, 0, len(rows))
 		for _, col := range rows {
-			out = append(out, toCollectionResponse(col, paths[col.ID]))
+			out = append(out, toCollectionResponse(col, paths[col.ID], itemCounts[col.ID]))
 		}
 		c.JSON(http.StatusOK, out)
 	}
@@ -81,6 +86,7 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			DefaultQuality:      req.DefaultQuality,
 			DefaultDownloadType: req.DefaultDownloadType,
 			IsPrivate:           req.IsPrivate,
+			JellyfinLibrary:     req.JellyfinLibraryID,
 		}
 		id, err := repo.Create(c.Request.Context(), &col)
 		if err != nil {
@@ -149,6 +155,7 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			DefaultQuality:      req.DefaultQuality,
 			DefaultDownloadType: req.DefaultDownloadType,
 			IsPrivate:           req.IsPrivate,
+			JellyfinLibrary:     req.JellyfinLibraryID,
 		}
 		if err := repo.Update(c.Request.Context(), id, &col); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {

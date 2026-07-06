@@ -21,7 +21,7 @@ import (
 	"packrat/backend/internal/repository"
 )
 
-func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
+func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
@@ -36,10 +36,20 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 		}
 		privacy := effectivePrivacyMap(cols)
 
+		ids := make([]int64, len(rows))
+		for i, item := range rows {
+			ids[i] = item.ID
+		}
+		tagsByID, err := tagsRepo.TagsByLibraryIDs(c.Request.Context(), ids)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
 		out := make([]LibraryItemResponse, 0, len(rows))
 		for _, item := range rows {
 			blurred := item.CollectionID != nil && privacy[*item.CollectionID]
-			out = append(out, toLibraryItemResponse(item, blurred))
+			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID]))
 		}
 		c.JSON(http.StatusOK, out)
 	}
@@ -106,7 +116,7 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 // the whole file via ffmpeg and can take several seconds for a real video;
 // a failure there is logged but never fails the request, since the app's
 // own DB state is the source of truth for what Packrat displays.
-func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *downloader.YtDlpService, tagsRepo *repository.TagsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -174,8 +184,8 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			mediaAbs = newMediaAbs
 		}
 
-		if req.Uploader != nil || req.Description != nil || req.Duration != nil || req.Resolution != nil || req.Artist != nil || req.Year != nil {
-			uploader, description, duration, resolution, artist, year := req.Uploader, req.Description, req.Duration, req.Resolution, req.Artist, req.Year
+		if req.Uploader != nil || req.Description != nil || req.Duration != nil || req.Resolution != nil || req.Artist != nil || req.Year != nil || req.SequenceNumber != nil {
+			uploader, description, duration, resolution, artist, year, sequenceNumber := req.Uploader, req.Description, req.Duration, req.Resolution, req.Artist, req.Year, req.SequenceNumber
 			if uploader == nil {
 				uploader = item.Uploader
 			}
@@ -194,15 +204,18 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			if year == nil {
 				year = item.ReleaseYear
 			}
+			if sequenceNumber == nil {
+				sequenceNumber = item.SequenceNumber
+			}
 			// title=nil relies on UpdateMetadata's COALESCE(?, title) so this
 			// call never touches title — that's handled by UpdateTitle above.
-			if err := repo.UpdateMetadata(c.Request.Context(), id, nil, uploader, duration, resolution, description, artist, year); err != nil {
+			if err := repo.UpdateMetadata(c.Request.Context(), id, nil, uploader, duration, resolution, description, artist, year, sequenceNumber); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 		}
 
-		if req.Title != nil || req.Artist != nil || req.Year != nil {
+		if req.Title != nil || req.Artist != nil || req.Year != nil || req.SequenceNumber != nil {
 			title := item.Title
 			if req.Title != nil {
 				title = *req.Title
@@ -215,14 +228,18 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			if req.Year != nil {
 				year = req.Year
 			}
+			sequenceNumber := item.SequenceNumber
+			if req.SequenceNumber != nil {
+				sequenceNumber = req.SequenceNumber
+			}
 			// Backgrounded: c.Request.Context() would be cancelled as soon as
 			// the handler returns, so this uses context.Background() instead —
 			// EmbedMetadata applies its own internal timeout regardless.
-			go func(path, title string, artist *string, year *int) {
-				if err := ytdlp.EmbedMetadata(context.Background(), path, title, artist, year); err != nil {
+			go func(path, title string, artist *string, year, sequenceNumber *int) {
+				if err := ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, sequenceNumber); err != nil {
 					log.Printf("library: embedding metadata into %s failed: %v", path, err)
 				}
-			}(mediaAbs, title, artist, year)
+			}(mediaAbs, title, artist, year, sequenceNumber)
 		}
 
 		if req.OriginalURL != nil {
@@ -234,6 +251,40 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			if err := repo.UpdateOriginalURL(c.Request.Context(), id, urlPtr); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
+			}
+		}
+
+		if req.Tags != nil {
+			tagIDs, err := tagsRepo.GetOrCreateByNames(c.Request.Context(), *req.Tags)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			if err := tagsRepo.SetForLibraryItem(c.Request.Context(), id, tagIDs); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
+		if req.GenerateNFO != nil {
+			if err := repo.UpdateGenerateNFO(c.Request.Context(), id, *req.GenerateNFO); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
+		// Keep an opted-in item's .nfo sidecar in sync whenever something it
+		// reflects changes — including the toggle itself just being turned on,
+		// so the file appears immediately rather than waiting for the next
+		// unrelated edit. Failure here doesn't fail the request: the metadata
+		// save itself already succeeded.
+		nfoRelevant := req.Title != nil || req.Description != nil || req.Year != nil || req.SequenceNumber != nil || req.Tags != nil ||
+			(req.GenerateNFO != nil && *req.GenerateNFO)
+		if nfoRelevant {
+			if updated, err := repo.Get(c.Request.Context(), id); err == nil && updated.GenerateNFO {
+				if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, updated); err != nil {
+					log.Printf("library: writing nfo for %d failed: %v", id, err)
+				}
 			}
 		}
 
@@ -317,7 +368,7 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 // RefreshLibraryItemMetadata re-fetches yt-dlp metadata for the item's
 // original URL and updates the display fields — it never touches the
 // media file or thumbnail already on disk.
-func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
+func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -354,10 +405,10 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 		}
 		title, uploader, description := meta.Title, meta.Uploader, meta.Description
 
-		// artist/year are manual-only fields (yt-dlp doesn't reliably expose
-		// them) — pass the item's existing values through so this refresh
-		// never clobbers them.
-		if err := repo.UpdateMetadata(c.Request.Context(), id, &title, &uploader, &duration, resolution, &description, item.Artist, item.ReleaseYear); err != nil {
+		// artist/year/sequenceNumber are manual-only fields (yt-dlp doesn't
+		// reliably expose them) — pass the item's existing values through so
+		// this refresh never clobbers them.
+		if err := repo.UpdateMetadata(c.Request.Context(), id, &title, &uploader, &duration, resolution, &description, item.Artist, item.ReleaseYear, item.SequenceNumber); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -376,7 +427,19 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 				return
 			}
 		}
-		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred))
+		tags, err := tagsRepo.TagsForLibraryItem(c.Request.Context(), id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if updated.GenerateNFO {
+			if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, updated); err != nil {
+				log.Printf("library: writing nfo for %d failed: %v", id, err)
+			}
+		}
+
+		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags))
 	}
 }
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { cancelDownload, createDownload, deleteDownload, fetchDownloads } from "@/lib/api"
+import { cancelDownload, createDownload, deleteDownload, fetchDownloads, previewDownload } from "@/lib/api"
 import type { CreateDownloadRequest } from "@/types/api"
 
 export const downloadsQueryKey = ["downloads"] as const
@@ -10,6 +10,16 @@ export function useDownloads() {
     queryKey: downloadsQueryKey,
     queryFn: fetchDownloads,
     refetchInterval: 10_000, // safety-net poll; WS pushes deltas in between
+  })
+}
+
+export function useDownloadPreview(url: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["downloads", "preview", url] as const,
+    queryFn: () => previewDownload(url),
+    enabled: enabled && url.length > 0,
+    retry: false, // a bad/unsupported URL is expected, not transient
+    staleTime: 30_000,
   })
 }
 

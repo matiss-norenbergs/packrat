@@ -41,6 +41,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
   const [defaultQuality, setDefaultQuality] = useState<VideoQuality>((collection?.defaultQuality as VideoQuality) ?? "best")
   const [defaultDownloadType, setDefaultDownloadType] = useState<DownloadType>(collection?.defaultDownloadType ?? "video")
   const [isPrivate, setIsPrivate] = useState(collection?.isPrivate ?? false)
+  const [jellyfinLibraryId, setJellyfinLibraryId] = useState(collection?.jellyfinLibraryId ?? "")
 
   const createCollection = useCreateCollection()
   const updateCollection = useUpdateCollection()
@@ -55,6 +56,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       setDefaultQuality((collection?.defaultQuality as VideoQuality) ?? "best")
       setDefaultDownloadType(collection?.defaultDownloadType ?? "video")
       setIsPrivate(collection?.isPrivate ?? false)
+      setJellyfinLibraryId(collection?.jellyfinLibraryId ?? "")
     }
     setOpen(next)
   }
@@ -67,6 +69,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       defaultQuality,
       defaultDownloadType,
       isPrivate,
+      jellyfinLibraryId: jellyfinLibraryId.trim() || null,
       ...(isEdit ? {} : { parentId }),
     }
 
@@ -166,6 +169,20 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
                 Blurs thumbnails for everything in this collection, including sub-collections.
               </p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="collection-jellyfin-library">Jellyfin Library ID (optional)</Label>
+            <Input
+              id="collection-jellyfin-library"
+              placeholder="e.g. 3c8f6b1a-..."
+              value={jellyfinLibraryId}
+              onChange={(e) => setJellyfinLibraryId(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Only used when Settings → Jellyfin → Refresh is set to "Specific library" — that
+              library gets refreshed after a download lands in this collection.
+            </p>
           </div>
         </div>
 

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { useCancelDownload, useDeleteDownload } from "@/hooks/useDownloads"
-import { formatEta, formatSpeed } from "@/lib/utils"
+import { cn, formatEta, formatSpeed, hashText } from "@/lib/utils"
 import type { Download } from "@/types/api"
 
 const CANCELLABLE_STATUSES = new Set(["queued", "fetching_metadata", "downloading", "processing"])
@@ -35,7 +35,10 @@ export function DownloadQueueItem({ download }: { download: Download }) {
   const cancelDownload = useCancelDownload()
   const deleteDownload = useDeleteDownload()
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [revealed, setRevealed] = useState(false)
+  const toggleReveal = () => setRevealed((v) => !v)
   const cancellable = CANCELLABLE_STATUSES.has(download.status)
+  const displayName = download.title ?? download.url
 
   return (
     <div className="flex items-center gap-4 rounded-lg border border-border p-3">
@@ -45,13 +48,21 @@ export function DownloadQueueItem({ download }: { download: Download }) {
             src={download.thumbnail}
             className="h-full w-full object-cover"
             blurred={download.blurred}
+            revealed={revealed}
+            onToggleReveal={toggleReveal}
           />
         ) : null}
       </div>
 
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-medium">{download.title ?? download.url}</p>
+          <p
+            className={cn("truncate text-sm font-medium", download.blurred && "cursor-pointer")}
+            onClick={download.blurred ? toggleReveal : undefined}
+            title={download.blurred ? (revealed ? "Click to hide" : "Click to reveal") : undefined}
+          >
+            {download.blurred && !revealed ? hashText(displayName) : displayName}
+          </p>
           <Badge variant={STATUS_VARIANT[download.status] ?? "outline"}>{download.status}</Badge>
         </div>
 

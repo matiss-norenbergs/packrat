@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { fetchSettings, updateSettings } from "@/lib/api"
+import { fetchSettings, rescanJellyfinLibrary, updateSettings } from "@/lib/api"
 import type { UpdateSettingsRequest } from "@/types/api"
 
 export const settingsQueryKey = ["settings"] as const
@@ -21,5 +21,13 @@ export function useUpdateSettings() {
       queryClient.invalidateQueries({ queryKey: settingsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to save settings: ${err.message}`),
+  })
+}
+
+export function useRescanJellyfinLibrary() {
+  return useMutation({
+    mutationFn: () => rescanJellyfinLibrary(),
+    onSuccess: () => toast.success("Jellyfin library rescan triggered"),
+    onError: (err: Error) => toast.error(`Rescan failed: ${err.message}`),
   })
 }

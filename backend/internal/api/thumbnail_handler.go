@@ -66,7 +66,7 @@ func resolveDuration(ctx context.Context, known *int, mediaAbs, ffprobePath stri
 // RedownloadLibraryThumbnail re-fetches just the thumbnail image from the
 // item's original URL, overwriting whatever is there now — reuses the same
 // YtDlpService.FetchThumbnail already used by Import.
-func RedownloadLibraryThumbnail(mediaRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
+func RedownloadLibraryThumbnail(mediaRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -99,13 +99,13 @@ func RedownloadLibraryThumbnail(mediaRoot string, libraryRepo *repository.Librar
 			return
 		}
 
-		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, id, mediaRoot, thumbPath)
+		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, id, mediaRoot, thumbPath)
 	}
 }
 
 // QuickGrabLibraryThumbnail extracts one frame from the video file at a
 // random timestamp and immediately makes it the thumbnail.
-func QuickGrabLibraryThumbnail(mediaRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, ffprobePath string, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
+func QuickGrabLibraryThumbnail(mediaRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, ffprobePath string, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -140,7 +140,7 @@ func QuickGrabLibraryThumbnail(mediaRoot string, libraryRepo *repository.Library
 			return
 		}
 
-		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, id, mediaRoot, thumbAbs)
+		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, id, mediaRoot, thumbAbs)
 	}
 }
 
@@ -200,7 +200,7 @@ func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.Lib
 // thumbnail — the finalize step for the "choose from video" flow (the
 // frontend sends back exactly the bytes it displayed, so no server-side
 // temp state is needed in between).
-func SetLibraryThumbnail(mediaRoot string, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
+func SetLibraryThumbnail(mediaRoot string, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -237,11 +237,11 @@ func SetLibraryThumbnail(mediaRoot string, libraryRepo *repository.LibraryRepo, 
 			return
 		}
 
-		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, id, mediaRoot, thumbAbs)
+		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, id, mediaRoot, thumbAbs)
 	}
 }
 
-func writeThumbnailAndRespond(c *gin.Context, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, id int64, mediaRoot, thumbAbs string) {
+func writeThumbnailAndRespond(c *gin.Context, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, id int64, mediaRoot, thumbAbs string) {
 	ctx := c.Request.Context()
 	thumbRel := toRelSlash(mediaRoot, thumbAbs)
 	if err := libraryRepo.UpdateThumbnail(ctx, id, &thumbRel); err != nil {
@@ -263,5 +263,10 @@ func writeThumbnailAndRespond(c *gin.Context, libraryRepo *repository.LibraryRep
 			return
 		}
 	}
-	c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred))
+	tags, err := tagsRepo.TagsForLibraryItem(ctx, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags))
 }
