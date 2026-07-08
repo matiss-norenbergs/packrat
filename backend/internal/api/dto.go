@@ -149,6 +149,7 @@ type LibraryItemResponse struct {
 	Artist         *string  `json:"artist"`
 	Year           *int     `json:"year"`
 	SequenceNumber *int     `json:"sequenceNumber"`
+	SeasonNumber   *int     `json:"seasonNumber"`
 	GenerateNFO    bool     `json:"generateNfo"`
 	DownloadedAt   string   `json:"downloadedAt"`
 	Status         string   `json:"status"`
@@ -179,6 +180,7 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string)
 		Artist:         item.Artist,
 		Year:           item.ReleaseYear,
 		SequenceNumber: item.SequenceNumber,
+		SeasonNumber:   item.SeasonNumber,
 		GenerateNFO:    item.GenerateNFO,
 		DownloadedAt:   item.DownloadedAt.Format(timeFormat),
 		Status:         item.Status,
@@ -198,6 +200,7 @@ type UpdateLibraryItemRequest struct {
 	Artist         *string   `json:"artist"`
 	Year           *int      `json:"year"`
 	SequenceNumber *int      `json:"sequenceNumber"`
+	SeasonNumber   *int      `json:"seasonNumber"`
 	GenerateNFO    *bool     `json:"generateNfo"`
 	OriginalURL    *string   `json:"originalUrl"`
 	Tags           *[]string `json:"tags"`

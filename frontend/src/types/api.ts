@@ -114,6 +114,7 @@ export interface LibraryItem {
   artist: string | null
   year: number | null
   sequenceNumber: number | null
+  seasonNumber: number | null
   generateNfo: boolean
   downloadedAt: string
   status: string
@@ -131,6 +132,7 @@ export interface UpdateLibraryItemRequest {
   artist?: string
   year?: number
   sequenceNumber?: number
+  seasonNumber?: number
   generateNfo?: boolean
   originalUrl?: string
   tags?: string[]

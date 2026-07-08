@@ -19,6 +19,7 @@ type episodeDetails struct {
 	Title   string   `xml:"title"`
 	Plot    string   `xml:"plot,omitempty"`
 	Year    *int     `xml:"year,omitempty"`
+	Season  *int     `xml:"season,omitempty"`
 	Episode *int     `xml:"episode,omitempty"`
 	Studio  string   `xml:"studio,omitempty"`
 	Tags    []string `xml:"tag,omitempty"`
@@ -30,6 +31,7 @@ func Build(item models.LibraryItem, tags []string) []byte {
 	doc := episodeDetails{
 		Title:   item.Title,
 		Year:    item.ReleaseYear,
+		Season:  item.SeasonNumber,
 		Episode: item.SequenceNumber,
 		Tags:    tags,
 	}

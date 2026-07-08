@@ -32,8 +32,10 @@ export function BlurredThumbnail({ src, alt = "", className, blurred, revealed, 
     <img
       src={src}
       alt={alt}
+      draggable={false}
       className={cn(
         className,
+        "select-none [-webkit-user-drag:none]",
         showBlur && [blurClass, "grayscale transition-[filter] duration-150 hover:grayscale-0"],
         blurred && "cursor-pointer",
       )}

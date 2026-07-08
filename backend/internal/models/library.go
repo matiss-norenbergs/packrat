@@ -21,6 +21,7 @@ type LibraryItem struct {
 	Artist         *string
 	ReleaseYear    *int
 	SequenceNumber *int
+	SeasonNumber   *int
 	GenerateNFO    bool
 	DownloadedAt   time.Time
 	Status         string

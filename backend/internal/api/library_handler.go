@@ -184,8 +184,8 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			mediaAbs = newMediaAbs
 		}
 
-		if req.Uploader != nil || req.Description != nil || req.Duration != nil || req.Resolution != nil || req.Artist != nil || req.Year != nil || req.SequenceNumber != nil {
-			uploader, description, duration, resolution, artist, year, sequenceNumber := req.Uploader, req.Description, req.Duration, req.Resolution, req.Artist, req.Year, req.SequenceNumber
+		if req.Uploader != nil || req.Description != nil || req.Duration != nil || req.Resolution != nil || req.Artist != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil {
+			uploader, description, duration, resolution, artist, year, sequenceNumber, seasonNumber := req.Uploader, req.Description, req.Duration, req.Resolution, req.Artist, req.Year, req.SequenceNumber, req.SeasonNumber
 			if uploader == nil {
 				uploader = item.Uploader
 			}
@@ -207,15 +207,18 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			if sequenceNumber == nil {
 				sequenceNumber = item.SequenceNumber
 			}
+			if seasonNumber == nil {
+				seasonNumber = item.SeasonNumber
+			}
 			// title=nil relies on UpdateMetadata's COALESCE(?, title) so this
 			// call never touches title — that's handled by UpdateTitle above.
-			if err := repo.UpdateMetadata(c.Request.Context(), id, nil, uploader, duration, resolution, description, artist, year, sequenceNumber); err != nil {
+			if err := repo.UpdateMetadata(c.Request.Context(), id, nil, uploader, duration, resolution, description, artist, year, sequenceNumber, seasonNumber); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 		}
 
-		if req.Title != nil || req.Artist != nil || req.Year != nil || req.SequenceNumber != nil {
+		if req.Title != nil || req.Artist != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil {
 			title := item.Title
 			if req.Title != nil {
 				title = *req.Title
@@ -232,14 +235,18 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			if req.SequenceNumber != nil {
 				sequenceNumber = req.SequenceNumber
 			}
+			seasonNumber := item.SeasonNumber
+			if req.SeasonNumber != nil {
+				seasonNumber = req.SeasonNumber
+			}
 			// Backgrounded: c.Request.Context() would be cancelled as soon as
 			// the handler returns, so this uses context.Background() instead —
 			// EmbedMetadata applies its own internal timeout regardless.
-			go func(path, title string, artist *string, year, sequenceNumber *int) {
-				if err := ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, sequenceNumber); err != nil {
+			go func(path, title string, artist *string, year, sequenceNumber, seasonNumber *int) {
+				if err := ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, sequenceNumber, seasonNumber); err != nil {
 					log.Printf("library: embedding metadata into %s failed: %v", path, err)
 				}
-			}(mediaAbs, title, artist, year, sequenceNumber)
+			}(mediaAbs, title, artist, year, sequenceNumber, seasonNumber)
 		}
 
 		if req.OriginalURL != nil {
@@ -278,7 +285,7 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 		// so the file appears immediately rather than waiting for the next
 		// unrelated edit. Failure here doesn't fail the request: the metadata
 		// save itself already succeeded.
-		nfoRelevant := req.Title != nil || req.Description != nil || req.Year != nil || req.SequenceNumber != nil || req.Tags != nil ||
+		nfoRelevant := req.Title != nil || req.Description != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil || req.Tags != nil ||
 			(req.GenerateNFO != nil && *req.GenerateNFO)
 		if nfoRelevant {
 			if updated, err := repo.Get(c.Request.Context(), id); err == nil && updated.GenerateNFO {
@@ -405,10 +412,10 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 		}
 		title, uploader, description := meta.Title, meta.Uploader, meta.Description
 
-		// artist/year/sequenceNumber are manual-only fields (yt-dlp doesn't
-		// reliably expose them) — pass the item's existing values through so
-		// this refresh never clobbers them.
-		if err := repo.UpdateMetadata(c.Request.Context(), id, &title, &uploader, &duration, resolution, &description, item.Artist, item.ReleaseYear, item.SequenceNumber); err != nil {
+		// artist/year/sequenceNumber/seasonNumber are manual-only fields
+		// (yt-dlp doesn't reliably expose them) — pass the item's existing
+		// values through so this refresh never clobbers them.
+		if err := repo.UpdateMetadata(c.Request.Context(), id, &title, &uploader, &duration, resolution, &description, item.Artist, item.ReleaseYear, item.SequenceNumber, item.SeasonNumber); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

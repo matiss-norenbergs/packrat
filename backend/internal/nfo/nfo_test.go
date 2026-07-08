@@ -12,12 +12,14 @@ func TestBuildAllFieldsSet(t *testing.T) {
 	uploader := "Some Channel"
 	year := 2024
 	seq := 3
+	season := 1
 	item := models.LibraryItem{
 		Title:          "My Video",
 		Description:    &desc,
 		Uploader:       &uploader,
 		ReleaseYear:    &year,
 		SequenceNumber: &seq,
+		SeasonNumber:   &season,
 	}
 
 	out := string(Build(item, []string{"funny", "how-to"}))
@@ -26,6 +28,7 @@ func TestBuildAllFieldsSet(t *testing.T) {
 		"<title>My Video</title>",
 		"<plot>A great video</plot>",
 		"<year>2024</year>",
+		"<season>1</season>",
 		"<episode>3</episode>",
 		"<studio>Some Channel</studio>",
 		"<tag>funny</tag>",
@@ -45,7 +48,7 @@ func TestBuildOptionalFieldsNil(t *testing.T) {
 	if !strings.Contains(out, "<title>Bare Video</title>") {
 		t.Errorf("output missing title, got:\n%s", out)
 	}
-	for _, absent := range []string{"<plot>", "<year>", "<episode>", "<studio>", "<tag>"} {
+	for _, absent := range []string{"<plot>", "<year>", "<season>", "<episode>", "<studio>", "<tag>"} {
 		if strings.Contains(out, absent) {
 			t.Errorf("output should omit %q when unset, got:\n%s", absent, out)
 		}
