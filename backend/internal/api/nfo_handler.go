@@ -69,3 +69,64 @@ func GenerateLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRep
 		c.Status(http.StatusNoContent)
 	}
 }
+
+// GetLibraryItemNFO returns the raw XML contents of an item's .nfo sidecar,
+// for the "View Contents" action — 404 if no file has been generated yet
+// (e.g. the toggle was just turned on but nothing's been written, or it was
+// deleted via the "Delete File" action).
+func GetLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+
+		item, err := libraryRepo.Get(c.Request.Context(), id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+			return
+		}
+
+		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
+		content, err := os.ReadFile(nfoAbsPathFor(mediaAbs))
+		if err != nil {
+			if os.IsNotExist(err) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "no .nfo file has been generated for this item"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"content": string(content)})
+	}
+}
+
+// DeleteLibraryItemNFO removes an item's .nfo sidecar from disk, for the
+// "Delete File" action. This is a one-off disk cleanup — it does not touch
+// the GenerateNFO toggle, so the file reappears on the next relevant edit if
+// the toggle is still on (same as any other auto-synced field); turning the
+// file off for good means unchecking "Generate NFO" in Edit instead.
+// Idempotent: a missing file is treated as already-deleted, not an error.
+func DeleteLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+
+		item, err := libraryRepo.Get(c.Request.Context(), id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+			return
+		}
+
+		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
+		if err := os.Remove(nfoAbsPathFor(mediaAbs)); err != nil && !os.IsNotExist(err) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}

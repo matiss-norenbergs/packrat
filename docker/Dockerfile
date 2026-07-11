@@ -34,7 +34,7 @@ RUN mkdir -p /app/data/db /app/data/media && chown -R packrat:packrat /app
 
 USER packrat
 
-ENV PORT=8080 \
+ENV PORT=50505 \
     DB_PATH=/app/data/db/packrat.db \
     MEDIA_ROOT=/app/data/media \
     MAX_CONCURRENT_DOWNLOADS=2 \
@@ -43,9 +43,9 @@ ENV PORT=8080 \
     MIGRATIONS_DIR=/app/database/migrations \
     STATIC_DIR=/app/frontend/dist
 
-EXPOSE 8080
+EXPOSE 50505
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:8080/api/health || exit 1
+    CMD wget -qO- http://localhost:50505/api/health || exit 1
 
 ENTRYPOINT ["/app/packrat"]

@@ -215,7 +215,7 @@ export function BulkDownloadDialog() {
           <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
             {rows.map((row) => (
               <div key={row.key} className="flex flex-wrap items-end gap-2 rounded-md border p-3">
-                <div className="min-w-[220px] flex-1 space-y-1">
+                <div className="min-w-[160px] flex-1 space-y-1 sm:min-w-[220px]">
                   <Label htmlFor={`bulk-url-${row.key}`}>URL</Label>
                   <Input
                     id={`bulk-url-${row.key}`}
@@ -225,7 +225,7 @@ export function BulkDownloadDialog() {
                   />
                 </div>
 
-                <div className="w-40 space-y-1">
+                <div className="w-full space-y-1 sm:w-40">
                   <Label>Collection</Label>
                   <Select
                     value={row.collectionId}
@@ -245,7 +245,7 @@ export function BulkDownloadDialog() {
                   </Select>
                 </div>
 
-                <div className="w-28 space-y-1">
+                <div className="w-[calc(50%-0.25rem)] space-y-1 sm:w-28">
                   <Label>Type</Label>
                   <Select
                     value={row.downloadType}
@@ -262,7 +262,7 @@ export function BulkDownloadDialog() {
                 </div>
 
                 {row.downloadType === "video" ? (
-                  <div className="w-28 space-y-1">
+                  <div className="w-[calc(50%-0.25rem)] space-y-1 sm:w-28">
                     <Label>Quality</Label>
                     <Select
                       value={row.quality}
@@ -281,7 +281,7 @@ export function BulkDownloadDialog() {
                     </Select>
                   </div>
                 ) : (
-                  <div className="w-28 space-y-1">
+                  <div className="w-[calc(50%-0.25rem)] space-y-1 sm:w-28">
                     <Label>Format</Label>
                     <Select
                       value={row.audioFormat}
@@ -301,7 +301,7 @@ export function BulkDownloadDialog() {
                   </div>
                 )}
 
-                <div className="w-36 space-y-1">
+                <div className="w-full space-y-1 sm:w-36">
                   <Label>Filename</Label>
                   <Input
                     placeholder="optional"

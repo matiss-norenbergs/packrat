@@ -207,7 +207,7 @@ func CreateImport(mediaRoot string, libraryRepo *repository.LibraryRepo, collect
 				return
 			}
 		}
-		c.JSON(http.StatusCreated, toLibraryItemResponse(*created, blurred, []string{}))
+		c.JSON(http.StatusCreated, toLibraryItemResponse(*created, blurred, []string{}, mediaRoot))
 	}
 }
 

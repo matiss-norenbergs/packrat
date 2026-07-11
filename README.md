@@ -43,4 +43,4 @@ Or run everything in Docker:
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-The app listens on `http://localhost:8080`.
+The app listens on `http://localhost:50505`.

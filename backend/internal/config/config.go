@@ -19,7 +19,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		Port:                   getEnv("PORT", "8080"),
+		Port:                   getEnv("PORT", "50505"),
 		DBPath:                 getEnv("DB_PATH", "./data/db/packrat.db"),
 		MediaRoot:              getEnv("MEDIA_ROOT", "./data/media"),
 		MaxConcurrentDownloads: 2,

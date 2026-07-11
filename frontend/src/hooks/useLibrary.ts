@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   deleteLibraryItem,
+  deleteLibraryItemNFO,
   fetchLibrary,
+  fetchLibraryItemNFO,
   fetchLibraryThumbnailCandidates,
   generateLibraryItemNFO,
   moveLibraryItem,
@@ -120,10 +122,42 @@ export function useLibraryThumbnailCandidates(id: number, enabled: boolean) {
 }
 
 export function useGenerateLibraryItemNFO() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => generateLibraryItemNFO(id),
-    onSuccess: () => toast.success("NFO file generated"),
+    onSuccess: (_data, id) => {
+      toast.success("NFO file generated")
+      // nfoExists on the library list is now stale, and the content dialog
+      // (if it's ever reopened) shouldn't serve a cached pre-generation
+      // 404/old body.
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      queryClient.invalidateQueries({ queryKey: ["library", id, "nfo"] })
+    },
     onError: (err: Error) => toast.error(`Failed to generate NFO: ${err.message}`),
+  })
+}
+
+export function useLibraryItemNFO(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["library", id, "nfo"],
+    queryFn: () => fetchLibraryItemNFO(id),
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  })
+}
+
+export function useDeleteLibraryItemNFO() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => deleteLibraryItemNFO(id),
+    onSuccess: (_data, id) => {
+      toast.success("NFO file deleted")
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      queryClient.invalidateQueries({ queryKey: ["library", id, "nfo"] })
+    },
+    onError: (err: Error) => toast.error(`Failed to delete NFO file: ${err.message}`),
   })
 }
 

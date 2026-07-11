@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
+  useDeleteLibraryItemNFO,
   useGenerateLibraryItemNFO,
   useQuickGrabLibraryThumbnail,
   useRedownloadLibraryItem,
@@ -32,6 +33,7 @@ import {
 import { EditLibraryItemDialog } from "./EditLibraryItemDialog"
 import { MoveLibraryItemDialog } from "./MoveLibraryItemDialog"
 import { DeleteLibraryItemDialog } from "./DeleteLibraryItemDialog"
+import { NfoContentDialog } from "./NfoContentDialog"
 import { ThumbnailPickerDialog } from "./ThumbnailPickerDialog"
 import type { LibraryItem } from "@/types/api"
 
@@ -43,12 +45,15 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [redownloadThumbWarningOpen, setRedownloadThumbWarningOpen] = useState(false)
   const [quickGrabWarningOpen, setQuickGrabWarningOpen] = useState(false)
   const [thumbnailPickerOpen, setThumbnailPickerOpen] = useState(false)
+  const [nfoContentOpen, setNfoContentOpen] = useState(false)
+  const [deleteNfoWarningOpen, setDeleteNfoWarningOpen] = useState(false)
 
   const refreshMetadata = useRefreshLibraryItemMetadata()
   const redownload = useRedownloadLibraryItem()
   const redownloadThumbnail = useRedownloadLibraryThumbnail()
   const quickGrabThumbnail = useQuickGrabLibraryThumbnail()
   const generateNfo = useGenerateLibraryItemNFO()
+  const deleteNfo = useDeleteLibraryItemNFO()
 
   const hasUrl = !!item.originalUrl
 
@@ -80,9 +85,20 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <DropdownMenuItem onClick={() => redownload.mutate(item.id)} disabled={!hasUrl}>
             Redownload
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => generateNfo.mutate(item.id)} disabled={!item.generateNfo}>
-            Generate NFO Now
-          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>NFO</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onClick={() => generateNfo.mutate(item.id)} disabled={!item.generateNfo}>
+                Generate Now
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setNfoContentOpen(true)} disabled={!item.nfoExists}>
+                View Contents
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={() => setDeleteNfoWarningOpen(true)}>
+                Delete File
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>Thumbnail</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
@@ -104,6 +120,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
       <MoveLibraryItemDialog item={item} open={moveOpen} onOpenChange={setMoveOpen} />
       <DeleteLibraryItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
       <ThumbnailPickerDialog item={item} open={thumbnailPickerOpen} onOpenChange={setThumbnailPickerOpen} />
+      <NfoContentDialog item={item} open={nfoContentOpen} onOpenChange={setNfoContentOpen} />
 
       <AlertDialog open={refreshWarningOpen} onOpenChange={setRefreshWarningOpen}>
         <AlertDialogContent>
@@ -149,6 +166,23 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => quickGrabThumbnail.mutate(item.id)}>Grab</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteNfoWarningOpen} onOpenChange={setDeleteNfoWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete the .nfo file?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the .nfo file from disk. If "Generate NFO" is still enabled for this
+              item, it reappears the next time you save a relevant edit — to stop that too, turn
+              off "Generate NFO" in Edit instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteNfo.mutate(item.id)}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -106,14 +106,14 @@ export function ImportPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold">Import</h1>
           <p className="text-sm text-muted-foreground">
             Files placed directly under your media root, outside the app.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <IgnoredFoldersDialog />
           <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
             <RefreshCw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
@@ -193,7 +193,7 @@ function ScannedFileRow({
         className="mb-2"
       />
 
-      <div className="min-w-[200px] flex-1 space-y-1">
+      <div className="min-w-[140px] flex-1 space-y-1">
         <p className="truncate font-medium">{file.filename}</p>
         <div className="flex items-center gap-1">
           <p className="truncate text-xs text-muted-foreground">
@@ -209,7 +209,7 @@ function ScannedFileRow({
         </p>
       </div>
 
-      <div className="w-64 space-y-1">
+      <div className="w-full space-y-1 sm:w-64">
         <Input
           placeholder="Original URL (optional)"
           value={url}

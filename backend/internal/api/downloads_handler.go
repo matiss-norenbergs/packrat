@@ -92,12 +92,18 @@ func enqueueDownload(ctx context.Context, mgr *queue.DownloadManager, collection
 	}
 
 	d := models.Download{
-		URL:          req.URL,
-		CollectionID: req.CollectionID,
-		Folder:       req.Folder,
-		Filename:     req.Filename,
-		DownloadType: req.DownloadType,
-		Quality:      req.Quality,
+		URL:                    req.URL,
+		CollectionID:           req.CollectionID,
+		Folder:                 req.Folder,
+		Filename:               req.Filename,
+		DownloadType:           req.DownloadType,
+		Quality:                req.Quality,
+		OverrideTitle:          req.Title,
+		OverrideArtist:         req.Artist,
+		OverrideYear:           req.Year,
+		OverrideSeasonNumber:   req.SeasonNumber,
+		OverrideSequenceNumber: req.SequenceNumber,
+		FilenamePrefix:         req.FilenamePrefix,
 	}
 	if req.AudioFormat != "" {
 		d.AudioFormat = &req.AudioFormat

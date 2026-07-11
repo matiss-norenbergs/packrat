@@ -55,7 +55,7 @@ export function LogsPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] flex-1">
+        <div className="relative min-w-[140px] flex-1 sm:min-w-[200px]">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search title, URL, or command…"
@@ -66,7 +66,7 @@ export function LogsPage() {
         </div>
 
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-[170px]">
+          <SelectTrigger className="w-full sm:w-[170px]">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>

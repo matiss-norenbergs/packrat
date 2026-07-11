@@ -50,4 +50,17 @@ type Download struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	CompletedAt    *time.Time
+
+	// OverrideTitle/Artist/Year/SeasonNumber/SequenceNumber let the New
+	// Download dialog set these fields up front instead of waiting for a
+	// post-download Edit — when set, they take priority over whatever
+	// yt-dlp reports. FilenamePrefix is combined with the (possibly
+	// overridden) title at completion time to build the final filename,
+	// unless the literal Filename override above is also set.
+	OverrideTitle          *string
+	OverrideArtist         *string
+	OverrideYear           *int
+	OverrideSeasonNumber   *int
+	OverrideSequenceNumber *int
+	FilenamePrefix         *string
 }

@@ -1,5 +1,5 @@
 import { useSearchParams } from "react-router-dom"
-import { ArrowDownAZ, ArrowUpAZ, FolderTree, LayoutGrid, Search, Tags } from "lucide-react"
+import { ArrowDownAZ, ArrowUpAZ, Eye, EyeOff, FolderTree, Info, LayoutGrid, Pencil, Play, Search, Tags } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -9,6 +9,7 @@ import { useLibrary } from "@/hooks/useLibrary"
 import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
+import { useRevealAll } from "./RevealAllContext"
 
 const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
   { value: "downloadedAt", label: "Date downloaded" },
@@ -33,8 +34,11 @@ export function LibraryToolbar() {
   // breadcrumb/browser-back behavior.
   const { data: settings } = useSettings()
   const updateSettings = useUpdateSettings()
+  const { revealAll, toggleRevealAll } = useRevealAll()
 
   const view = settings?.libraryView === "folders" ? "folders" : "grid"
+  const mode = (settings?.libraryMode as "manage" | "view" | "details") || "manage"
+  const hasBlurred = (items ?? []).some((item) => item.blurred)
   const search = searchParams.get("q") ?? ""
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
   const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
@@ -65,9 +69,11 @@ export function LibraryToolbar() {
     setSearchParams(params, { replace: true })
   }
 
+  const setMode = (next: "manage" | "view" | "details") => updateSettings.mutate({ libraryMode: next })
+
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="relative min-w-[200px] flex-1">
+      <div className="relative min-w-[140px] flex-1 sm:min-w-[200px]">
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search title, uploader, artist, description…"
@@ -78,7 +84,7 @@ export function LibraryToolbar() {
       </div>
 
       <Select value={sortKey} onValueChange={(v) => updateSettings.mutate({ librarySortKey: v })}>
-        <SelectTrigger className="w-[170px]">
+        <SelectTrigger className="w-[130px] sm:w-[170px]">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -101,7 +107,7 @@ export function LibraryToolbar() {
 
       {view === "grid" && (
         <Select value={collectionId} onValueChange={(v) => update("collection", v)}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-[130px] sm:w-[160px]">
             <SelectValue placeholder="Collection" />
           </SelectTrigger>
           <SelectContent>
@@ -116,7 +122,7 @@ export function LibraryToolbar() {
       )}
 
       <Select value={year} onValueChange={(v) => update("year", v)}>
-        <SelectTrigger className="w-[110px]">
+        <SelectTrigger className="w-[100px] sm:w-[110px]">
           <SelectValue placeholder="Year" />
         </SelectTrigger>
         <SelectContent>
@@ -131,7 +137,7 @@ export function LibraryToolbar() {
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="w-[130px] justify-start">
+          <Button variant="outline" className="w-[110px] justify-start sm:w-[130px]">
             <Tags className="h-4 w-4" />
             {selectedTags.length > 0 ? `Tags (${selectedTags.length})` : "Tags"}
           </Button>
@@ -155,6 +161,43 @@ export function LibraryToolbar() {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Button
+        variant={revealAll ? "secondary" : "outline"}
+        size="icon"
+        title={revealAll ? "Hide all private items" : "Reveal all private items"}
+        disabled={!hasBlurred}
+        onClick={toggleRevealAll}
+      >
+        {revealAll ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </Button>
+
+      <div className="flex gap-1 rounded-md border p-0.5">
+        <Button
+          variant={mode === "manage" ? "secondary" : "ghost"}
+          size="icon"
+          title="Manage mode"
+          onClick={() => setMode("manage")}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={mode === "view" ? "secondary" : "ghost"}
+          size="icon"
+          title="View mode"
+          onClick={() => setMode("view")}
+        >
+          <Play className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={mode === "details" ? "secondary" : "ghost"}
+          size="icon"
+          title="Details mode"
+          onClick={() => setMode("details")}
+        >
+          <Info className="h-4 w-4" />
+        </Button>
+      </div>
 
       <div className="flex gap-1 rounded-md border p-0.5">
         <Button

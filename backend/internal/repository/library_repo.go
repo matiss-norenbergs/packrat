@@ -19,10 +19,12 @@ func NewLibraryRepo(db *sql.DB) *LibraryRepo {
 func (r *LibraryRepo) Create(ctx context.Context, item *models.LibraryItem) (int64, error) {
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO library (download_id, title, filename, path, collection_id, folder, original_url,
-		                      video_id, uploader, duration, resolution, thumbnail, description, artist, release_year, status, file_size_bytes)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		                      video_id, uploader, duration, resolution, thumbnail, description, artist, release_year,
+		                      sequence_number, season_number, status, file_size_bytes)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		item.DownloadID, item.Title, item.Filename, item.Path, item.CollectionID, item.Folder, item.OriginalURL,
-		item.VideoID, item.Uploader, item.Duration, item.Resolution, item.Thumbnail, item.Description, item.Artist, item.ReleaseYear, item.Status, item.FileSizeBytes,
+		item.VideoID, item.Uploader, item.Duration, item.Resolution, item.Thumbnail, item.Description, item.Artist, item.ReleaseYear,
+		item.SequenceNumber, item.SeasonNumber, item.Status, item.FileSizeBytes,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting library item: %w", err)

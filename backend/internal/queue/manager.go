@@ -236,6 +236,18 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		log.Printf("queue: update metadata failed for %d: %v", id, err)
 	}
 
+	// effectiveTitle folds in the manual override (if any set at request
+	// time) ahead of the URL fallback — computed once here so both the
+	// filename-prefix combination below and buildLibraryItem use the exact
+	// same value.
+	effectiveTitle := meta.Title
+	if d.OverrideTitle != nil && *d.OverrideTitle != "" {
+		effectiveTitle = *d.OverrideTitle
+	}
+	if effectiveTitle == "" {
+		effectiveTitle = d.URL
+	}
+
 	effectiveRoot, err := m.ResolveEffectiveRoot(runCtx, d.CollectionID)
 	if err != nil {
 		m.finishError(parentCtx, runCtx, id, d.URL, "resolving collection root: "+err.Error(), "", "")
@@ -255,10 +267,22 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	if d.AudioFormat != nil {
 		audioFormat = *d.AudioFormat
 	}
+
+	// The literal Filename override always wins if set (existing,
+	// unchanged behavior). Otherwise, a FilenamePrefix is combined with
+	// effectiveTitle to build the name — e.g. "Matt.Iceberg.S01E01" +
+	// "My big moment" -> "Matt.Iceberg.S01E01 My big moment". With
+	// neither set, filename stays "" and yt-dlp's own default naming
+	// applies, exactly as before this feature existed.
+	filename := d.Filename
+	if filename == "" && d.FilenamePrefix != nil && strings.TrimSpace(*d.FilenamePrefix) != "" {
+		filename = strings.TrimSpace(*d.FilenamePrefix) + " " + effectiveTitle
+	}
+
 	job := downloader.DownloadJob{
 		URL:          d.URL,
 		DestDir:      destDir,
-		Filename:     fsutil.SanitizeFilename(d.Filename),
+		Filename:     fsutil.SanitizeFilename(filename),
 		DownloadType: d.DownloadType,
 		Quality:      d.Quality,
 		AudioFormat:  audioFormat,
@@ -303,22 +327,30 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		sizeBytes = &s
 	}
 
-	libItem := m.buildLibraryItem(id, d, meta, result.FinalPath, resolution, sizeBytes)
+	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, sizeBytes)
 	libID, err := m.libraryRepo.Create(parentCtx, libItem)
 	if err != nil {
 		log.Printf("queue: creating library item failed for %d: %v", id, err)
 		return
 	}
 
+	// Best-effort: keep the file's own tags in sync with whatever overrides
+	// were provided at request time, same call shape library_handler.go's
+	// UpdateLibraryItem already uses on manual edits. Skipped entirely when
+	// no override was set, so a plain download never pays the ffmpeg remux
+	// cost.
+	if d.OverrideTitle != nil || d.OverrideArtist != nil || d.OverrideYear != nil || d.OverrideSequenceNumber != nil || d.OverrideSeasonNumber != nil {
+		go func(path, title string, artist *string, year, seq, season *int) {
+			if err := m.ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, seq, season); err != nil {
+				log.Printf("queue: embedding metadata into %s failed: %v", path, err)
+			}
+		}(result.FinalPath, effectiveTitle, d.OverrideArtist, d.OverrideYear, d.OverrideSequenceNumber, d.OverrideSeasonNumber)
+	}
+
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: id, LibraryID: libID, Title: libItem.Title}})
 }
 
-func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download, meta *downloader.Metadata, finalPath string, resolution *string, sizeBytes *int64) *models.LibraryItem {
-	title := meta.Title
-	if title == "" {
-		title = d.URL
-	}
-
+func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download, title string, meta *downloader.Metadata, finalPath string, resolution *string, sizeBytes *int64) *models.LibraryItem {
 	// Stored as forward-slash paths regardless of host OS, since these are
 	// read back purely to build URLs for the /media-files static route (the
 	// frontend splits on "/") — filepath.Rel on Windows returns
@@ -343,21 +375,25 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 	description := meta.Description
 
 	return &models.LibraryItem{
-		DownloadID:    &downloadID,
-		Title:         title,
-		Filename:      filepath.Base(finalPath),
-		Path:          relPath,
-		CollectionID:  d.CollectionID,
-		Folder:        d.Folder,
-		OriginalURL:   &d.URL,
-		VideoID:       &videoID,
-		Uploader:      &uploader,
-		Duration:      &duration,
-		Resolution:    resolution,
-		Thumbnail:     thumbRelPtr,
-		Description:   &description,
-		Status:        "completed",
-		FileSizeBytes: sizeBytes,
+		DownloadID:     &downloadID,
+		Title:          title,
+		Filename:       filepath.Base(finalPath),
+		Path:           relPath,
+		CollectionID:   d.CollectionID,
+		Folder:         d.Folder,
+		OriginalURL:    &d.URL,
+		VideoID:        &videoID,
+		Uploader:       &uploader,
+		Duration:       &duration,
+		Resolution:     resolution,
+		Thumbnail:      thumbRelPtr,
+		Description:    &description,
+		Artist:         d.OverrideArtist,
+		ReleaseYear:    d.OverrideYear,
+		SequenceNumber: d.OverrideSequenceNumber,
+		SeasonNumber:   d.OverrideSeasonNumber,
+		Status:         "completed",
+		FileSizeBytes:  sizeBytes,
 	}
 }
 

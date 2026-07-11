@@ -145,6 +145,14 @@ export function generateLibraryItemNFO(id: number): Promise<void> {
   return request<void>(`/library/${id}/nfo`, { method: "POST" })
 }
 
+export function fetchLibraryItemNFO(id: number): Promise<{ content: string }> {
+  return request<{ content: string }>(`/library/${id}/nfo`)
+}
+
+export function deleteLibraryItemNFO(id: number): Promise<void> {
+  return request<void>(`/library/${id}/nfo`, { method: "DELETE" })
+}
+
 export function fetchCollections(): Promise<Collection[]> {
   return request<Collection[]>("/collections")
 }

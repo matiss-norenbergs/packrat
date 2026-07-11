@@ -79,11 +79,11 @@ export function SettingsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="flex gap-4">
+                <div className="flex-1 space-y-2">
                   <Label>Default Type</Label>
                   <Select value={defaultDownloadType} onValueChange={(v) => setDefaultDownloadType(v as DownloadType)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -92,10 +92,10 @@ export function SettingsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
+                <div className="flex-1 space-y-2">
                   <Label>Default Quality</Label>
                   <Select value={defaultQuality} onValueChange={(v) => setDefaultQuality(v as VideoQuality)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

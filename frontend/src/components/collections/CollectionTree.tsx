@@ -34,7 +34,7 @@ function CollectionNode({ node }: { node: CollectionTreeNode }) {
 
   return (
     <div>
-      <div className="flex items-center gap-2 rounded-md border p-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-md border p-3">
         {hasChildren ? (
           <Button
             variant="ghost"
@@ -49,7 +49,7 @@ function CollectionNode({ node }: { node: CollectionTreeNode }) {
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="truncate font-medium">{node.name}</span>
             {node.isPrivate && (
               <span title="Private">

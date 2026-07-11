@@ -78,6 +78,24 @@ func LibrarySort(ctx context.Context, repo *repository.SettingsRepo) (sortKey, s
 	return parts[0], parts[1], nil
 }
 
+// LibraryMode reads the library_mode setting, defaulting to "manage" if it's
+// never been set. Shared by GetSettings.
+func LibraryMode(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingLibraryMode)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "manage", nil
+	}
+	if err != nil {
+		return "manage", err
+	}
+	switch raw {
+	case "manage", "view", "details":
+		return raw, nil
+	default:
+		return "manage", nil
+	}
+}
+
 // ThumbnailFrameCount reads the thumbnail_frame_count setting, defaulting to
 // 4 if it's never been set (or is somehow corrupt). Shared by GetSettings
 // and GetLibraryThumbnailCandidates.
@@ -181,6 +199,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		libraryMode, err := LibraryMode(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		thumbnailFrameCount, err := ThumbnailFrameCount(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -221,6 +244,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			LibraryView:            libraryView,
 			LibrarySortKey:         librarySortKey,
 			LibrarySortDir:         librarySortDir,
+			LibraryMode:            libraryMode,
 			ThumbnailFrameCount:    thumbnailFrameCount,
 			PrivacyBlurStrength:    privacyBlurStrength,
 			SkipDownloadPreview:    skipDownloadPreview,
@@ -300,6 +324,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 				sortDir = *req.LibrarySortDir
 			}
 			if err := repo.Set(c.Request.Context(), models.SettingLibrarySort, sortKey+":"+sortDir); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.LibraryMode != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingLibraryMode, *req.LibraryMode); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

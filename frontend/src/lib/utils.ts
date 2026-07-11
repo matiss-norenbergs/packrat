@@ -35,6 +35,17 @@ export function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
+const AUDIO_EXTENSIONS = new Set([".mp3", ".m4a", ".flac", ".wav", ".aac", ".ogg", ".opus"])
+
+// Mirrors the audio half of the importer's recognizedExtensions allowlist
+// (backend/internal/importer/scan.go) — there's no downloadType/isAudio
+// field on LibraryItem, so the player has to infer it from the filename.
+export function isAudioFilename(filename: string): boolean {
+  const dot = filename.lastIndexOf(".")
+  if (dot === -1) return false
+  return AUDIO_EXTENSIONS.has(filename.slice(dot).toLowerCase())
+}
+
 // Deterministic, non-cryptographic hash (FNV-1a) used to mask a private
 // item's display name — same input always produces the same placeholder, so
 // a re-render (or another browser) doesn't shuffle it, without needing an

@@ -21,7 +21,7 @@ import (
 	"packrat/backend/internal/repository"
 )
 
-func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo) gin.HandlerFunc {
+func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
@@ -49,7 +49,7 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 		out := make([]LibraryItemResponse, 0, len(rows))
 		for _, item := range rows {
 			blurred := item.CollectionID != nil && privacy[*item.CollectionID]
-			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID]))
+			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID], mediaRoot))
 		}
 		c.JSON(http.StatusOK, out)
 	}
@@ -446,7 +446,7 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 			}
 		}
 
-		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags))
+		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, mediaRoot))
 	}
 }
 

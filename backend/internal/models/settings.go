@@ -11,6 +11,7 @@ const (
 	SettingHistoryAnonymizeURLs   = "history_anonymize_urls"
 	SettingLibraryView            = "library_view"
 	SettingLibrarySort            = "library_sort" // stored as "<sortKey>:<sortDir>", e.g. "title:asc"
+	SettingLibraryMode            = "library_mode" // "manage" | "view" | "details"
 	SettingThumbnailFrameCount    = "thumbnail_frame_count"
 	SettingPrivacyBlurStrength    = "privacy_blur_strength" // "weak" | "default" | "strong"
 	SettingSkipDownloadPreview    = "skip_download_preview" // bool, true = skip the New Download preview card

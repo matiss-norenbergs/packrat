@@ -2,7 +2,9 @@ package api
 
 import (
 	"fmt"
+	"os"
 	"path"
+	"path/filepath"
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/models"
@@ -37,6 +39,17 @@ type CreateDownloadRequest struct {
 	DownloadType string `json:"downloadType" binding:"required,oneof=video audio"`
 	Quality      string `json:"quality"`
 	AudioFormat  string `json:"audioFormat"`
+
+	// Optional metadata overrides — when set, used instead of whatever
+	// yt-dlp reports for that field once the download completes.
+	Title          *string `json:"title"`
+	Artist         *string `json:"artist"`
+	Year           *int    `json:"year"`
+	SeasonNumber   *int    `json:"seasonNumber"`
+	SequenceNumber *int    `json:"sequenceNumber"`
+	// FilenamePrefix is combined with the effective title at completion
+	// time to build the final filename — ignored if Filename is also set.
+	FilenamePrefix *string `json:"filenamePrefix"`
 }
 
 type PreviewDownloadRequest struct {
@@ -151,6 +164,7 @@ type LibraryItemResponse struct {
 	SequenceNumber *int     `json:"sequenceNumber"`
 	SeasonNumber   *int     `json:"seasonNumber"`
 	GenerateNFO    bool     `json:"generateNfo"`
+	NFOExists      bool     `json:"nfoExists"`
 	DownloadedAt   string   `json:"downloadedAt"`
 	Status         string   `json:"status"`
 	Blurred        bool     `json:"blurred"`
@@ -158,10 +172,18 @@ type LibraryItemResponse struct {
 	Tags           []string `json:"tags"`
 }
 
-func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string) LibraryItemResponse {
+// toLibraryItemResponse builds the API response for a library item. mediaRoot
+// is needed to check whether the item's .nfo sidecar currently exists on
+// disk — GenerateNFO only reflects whether the toggle is on, not whether a
+// file is actually present (it can be turned off after generating, or
+// deleted independently via the "Delete File" action while still on).
+func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string, mediaRoot string) LibraryItemResponse {
 	if tags == nil {
 		tags = []string{}
 	}
+	mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
+	_, err := os.Stat(nfoAbsPathFor(mediaAbs))
+	nfoExists := err == nil
 	return LibraryItemResponse{
 		ID:             item.ID,
 		DownloadID:     item.DownloadID,
@@ -182,6 +204,7 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string)
 		SequenceNumber: item.SequenceNumber,
 		SeasonNumber:   item.SeasonNumber,
 		GenerateNFO:    item.GenerateNFO,
+		NFOExists:      nfoExists,
 		DownloadedAt:   item.DownloadedAt.Format(timeFormat),
 		Status:         item.Status,
 		Blurred:        blurred,
@@ -292,6 +315,7 @@ type SettingsResponse struct {
 	LibraryView            string   `json:"libraryView"`
 	LibrarySortKey         string   `json:"librarySortKey"`
 	LibrarySortDir         string   `json:"librarySortDir"`
+	LibraryMode            string   `json:"libraryMode"`
 	ThumbnailFrameCount    int      `json:"thumbnailFrameCount"`
 	PrivacyBlurStrength    string   `json:"privacyBlurStrength"`
 	SkipDownloadPreview    bool     `json:"skipDownloadPreview"`
@@ -309,6 +333,7 @@ type UpdateSettingsRequest struct {
 	LibraryView            *string   `json:"libraryView" binding:"omitempty,oneof=grid folders"`
 	LibrarySortKey         *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber"`
 	LibrarySortDir         *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
+	LibraryMode            *string   `json:"libraryMode" binding:"omitempty,oneof=manage view details"`
 	ThumbnailFrameCount    *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
 	PrivacyBlurStrength    *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
 	SkipDownloadPreview    *bool     `json:"skipDownloadPreview"`

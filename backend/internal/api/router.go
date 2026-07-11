@@ -71,7 +71,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/downloads/:id/cancel", CancelDownload(deps.Manager))
 		api.DELETE("/downloads/:id", DeleteDownload(deps.DownloadsRepo))
 
-		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo))
+		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.MediaRoot))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
 		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo))
 		api.POST("/library/:id/move", MoveLibraryItem(deps.LibraryRepo, deps.Manager, deps.MediaRoot))
@@ -82,6 +82,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo))
 		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo))
 		api.POST("/library/:id/nfo", GenerateLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo, deps.TagsRepo))
+		api.GET("/library/:id/nfo", GetLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
+		api.DELETE("/library/:id/nfo", DeleteLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
 
 		api.GET("/collections", ListCollections(deps.CollectionsRepo))
 		api.POST("/collections", CreateCollection(deps.CollectionsRepo, deps.Manager))

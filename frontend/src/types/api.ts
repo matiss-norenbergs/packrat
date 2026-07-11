@@ -67,6 +67,12 @@ export interface CreateDownloadRequest {
   downloadType: DownloadType
   quality?: string
   audioFormat?: string
+  title?: string
+  artist?: string
+  year?: number
+  seasonNumber?: number
+  sequenceNumber?: number
+  filenamePrefix?: string
 }
 
 export interface Collection {
@@ -116,9 +122,11 @@ export interface LibraryItem {
   sequenceNumber: number | null
   seasonNumber: number | null
   generateNfo: boolean
+  nfoExists: boolean
   downloadedAt: string
   status: string
   blurred: boolean
+  fileSizeBytes: number | null
   tags: string[]
 }
 
@@ -173,6 +181,7 @@ export interface Settings {
   libraryView: string
   librarySortKey: string
   librarySortDir: string
+  libraryMode: string
   thumbnailFrameCount: number
   privacyBlurStrength: string
   skipDownloadPreview: boolean
@@ -198,6 +207,7 @@ export interface UpdateSettingsRequest {
   libraryView?: string
   librarySortKey?: string
   librarySortDir?: string
+  libraryMode?: string
   thumbnailFrameCount?: number
   privacyBlurStrength?: string
   skipDownloadPreview?: boolean

@@ -6,10 +6,10 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   // Backend port for local dev proxying, read from frontend/.env.local (not
-  // committed) or the shell environment. Override with BACKEND_PORT if 8080
+  // committed) or the shell environment. Override with BACKEND_PORT if 50505
   // (the documented default) is already in use on your machine.
   const env = loadEnv(mode, process.cwd(), "")
-  const backendPort = env.BACKEND_PORT ?? "8080"
+  const backendPort = env.BACKEND_PORT ?? "50505"
 
   return {
     plugins: [react(), tailwindcss()],

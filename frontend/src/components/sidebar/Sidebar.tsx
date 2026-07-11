@@ -27,11 +27,11 @@ const navItems = [
   { to: "/logs", label: "Logs", icon: ScrollText },
 ]
 
-export function Sidebar() {
+export function SidebarContent() {
   const logout = useLogout()
 
   return (
-    <aside className="flex h-screen w-56 flex-col border-r border-sidebar-border bg-sidebar">
+    <>
       <div className="flex items-center gap-2 px-4 py-4">
         <Package className="h-5 w-5 text-sidebar-foreground" />
         <span className="text-base font-semibold text-sidebar-foreground">Packrat</span>
@@ -52,6 +52,14 @@ export function Sidebar() {
           Log out
         </Button>
       </div>
+    </>
+  )
+}
+
+export function Sidebar() {
+  return (
+    <aside className="hidden h-screen w-56 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+      <SidebarContent />
     </aside>
   )
 }
