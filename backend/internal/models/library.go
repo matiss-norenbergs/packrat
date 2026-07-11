@@ -18,7 +18,8 @@ type LibraryItem struct {
 	Resolution     *string
 	Thumbnail      *string
 	Description    *string
-	Artist         *string
+	ArtistID       *int64
+	ArtistName     *string
 	ReleaseYear    *int
 	SequenceNumber *int
 	SeasonNumber   *int

@@ -16,6 +16,10 @@ interface BlurredThumbnailProps {
   blurred: boolean
   revealed: boolean
   onToggleReveal: () => void
+  /** Whether clicking the thumbnail toggles reveal — false renders the same
+   * blur/grayscale visual with no click affordance, for contexts (like the
+   * library's View mode) where reveal happens elsewhere. */
+  interactive?: boolean
 }
 
 // Click-to-reveal: a blurred thumbnail can be temporarily un-blurred by
@@ -23,24 +27,27 @@ interface BlurredThumbnailProps {
 // the parent so it can stay in sync with the item's display name, which
 // reveals alongside the thumbnail on the same click. The underlying image is
 // always fetched either way, this just controls what's visually shown.
-export function BlurredThumbnail({ src, alt = "", className, blurred, revealed, onToggleReveal }: BlurredThumbnailProps) {
+export function BlurredThumbnail({ src, alt = "", className, blurred, revealed, onToggleReveal, interactive = true }: BlurredThumbnailProps) {
   const { data: settings } = useSettings()
   const blurClass = BLUR_CLASS[settings?.privacyBlurStrength ?? "default"] ?? BLUR_CLASS.default
   const showBlur = blurred && !revealed
+  const clickable = blurred && interactive
 
   return (
     <img
       src={src}
       alt={alt}
       draggable={false}
+      loading="lazy"
+      decoding="async"
       className={cn(
         className,
         "select-none [-webkit-user-drag:none]",
         showBlur && [blurClass, "grayscale transition-[filter] duration-150 hover:grayscale-0"],
-        blurred && "cursor-pointer",
+        clickable && "cursor-pointer",
       )}
-      onClick={blurred ? onToggleReveal : undefined}
-      title={blurred ? (revealed ? "Click to hide" : "Click to reveal") : undefined}
+      onClick={clickable ? onToggleReveal : undefined}
+      title={clickable ? (revealed ? "Click to hide" : "Click to reveal") : undefined}
     />
   )
 }

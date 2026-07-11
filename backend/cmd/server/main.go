@@ -57,6 +57,7 @@ func run() error {
 	settingsRepo := repository.NewSettingsRepo(conn)
 	historyRepo := repository.NewHistoryRepo(conn)
 	tagsRepo := repository.NewTagsRepo(conn)
+	artistsRepo := repository.NewArtistsRepo(conn)
 	usersRepo := repository.NewUsersRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath)
 	progressStore := queue.NewProgressStore()
@@ -68,7 +69,7 @@ func run() error {
 	hub := ws.NewHub()
 	go hub.Run(ctx)
 
-	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, progressStore, hub)
+	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, progressStore, hub)
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)
 	if err != nil {
@@ -102,6 +103,7 @@ func run() error {
 		SettingsRepo:    settingsRepo,
 		HistoryRepo:     historyRepo,
 		TagsRepo:        tagsRepo,
+		ArtistsRepo:     artistsRepo,
 		UsersRepo:       usersRepo,
 		YtDlp:           ytdlpSvc,
 		JellyfinClient:  jellyfinClient,

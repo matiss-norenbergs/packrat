@@ -99,7 +99,7 @@ func enqueueDownload(ctx context.Context, mgr *queue.DownloadManager, collection
 		DownloadType:           req.DownloadType,
 		Quality:                req.Quality,
 		OverrideTitle:          req.Title,
-		OverrideArtist:         req.Artist,
+		OverrideArtistID:       req.ArtistID,
 		OverrideYear:           req.Year,
 		OverrideSeasonNumber:   req.SeasonNumber,
 		OverrideSequenceNumber: req.SequenceNumber,

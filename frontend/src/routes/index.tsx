@@ -4,8 +4,10 @@ import { LoginPage } from "@/pages/LoginPage"
 import { DashboardPage } from "@/pages/DashboardPage"
 import { DownloadsPage } from "@/pages/DownloadsPage"
 import { LibraryPage } from "@/pages/LibraryPage"
+import { LibraryItemPage } from "@/pages/LibraryItemPage"
 import { CollectionsPage } from "@/pages/CollectionsPage"
 import { TagsPage } from "@/pages/TagsPage"
+import { ArtistsPage } from "@/pages/ArtistsPage"
 import { ImportPage } from "@/pages/ImportPage"
 import { HistoryPage } from "@/pages/HistoryPage"
 import { SettingsPage } from "@/pages/SettingsPage"
@@ -19,8 +21,10 @@ export const router = createBrowserRouter([
       { path: "/", element: <DashboardPage /> },
       { path: "/downloads", element: <DownloadsPage /> },
       { path: "/library", element: <LibraryPage /> },
+      { path: "/library/:id", element: <LibraryItemPage /> },
       { path: "/collections", element: <CollectionsPage /> },
       { path: "/tags", element: <TagsPage /> },
+      { path: "/artists", element: <ArtistsPage /> },
       { path: "/import", element: <ImportPage /> },
       { path: "/history", element: <HistoryPage /> },
       { path: "/settings", element: <SettingsPage /> },

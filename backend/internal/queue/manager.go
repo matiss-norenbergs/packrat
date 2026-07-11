@@ -32,6 +32,7 @@ type DownloadManager struct {
 	libraryRepo     *repository.LibraryRepo
 	collectionsRepo *repository.CollectionsRepo
 	historyRepo     *repository.HistoryRepo
+	artistsRepo     *repository.ArtistsRepo
 	progress        *ProgressStore
 	broadcaster     ws.Broadcaster
 
@@ -64,6 +65,7 @@ func NewDownloadManager(
 	libraryRepo *repository.LibraryRepo,
 	collectionsRepo *repository.CollectionsRepo,
 	historyRepo *repository.HistoryRepo,
+	artistsRepo *repository.ArtistsRepo,
 	progress *ProgressStore,
 	broadcaster ws.Broadcaster,
 ) *DownloadManager {
@@ -74,6 +76,7 @@ func NewDownloadManager(
 		libraryRepo:     libraryRepo,
 		collectionsRepo: collectionsRepo,
 		historyRepo:     historyRepo,
+		artistsRepo:     artistsRepo,
 		progress:        progress,
 		broadcaster:     broadcaster,
 		jobs:            make(chan int64, 100),
@@ -339,12 +342,18 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	// UpdateLibraryItem already uses on manual edits. Skipped entirely when
 	// no override was set, so a plain download never pays the ffmpeg remux
 	// cost.
-	if d.OverrideTitle != nil || d.OverrideArtist != nil || d.OverrideYear != nil || d.OverrideSequenceNumber != nil || d.OverrideSeasonNumber != nil {
+	if d.OverrideTitle != nil || d.OverrideArtistID != nil || d.OverrideYear != nil || d.OverrideSequenceNumber != nil || d.OverrideSeasonNumber != nil {
+		var overrideArtistName *string
+		if d.OverrideArtistID != nil {
+			if a, err := m.artistsRepo.Get(context.Background(), *d.OverrideArtistID); err == nil {
+				overrideArtistName = &a.Name
+			}
+		}
 		go func(path, title string, artist *string, year, seq, season *int) {
 			if err := m.ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, seq, season); err != nil {
 				log.Printf("queue: embedding metadata into %s failed: %v", path, err)
 			}
-		}(result.FinalPath, effectiveTitle, d.OverrideArtist, d.OverrideYear, d.OverrideSequenceNumber, d.OverrideSeasonNumber)
+		}(result.FinalPath, effectiveTitle, overrideArtistName, d.OverrideYear, d.OverrideSequenceNumber, d.OverrideSeasonNumber)
 	}
 
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: id, LibraryID: libID, Title: libItem.Title}})
@@ -388,7 +397,7 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 		Resolution:     resolution,
 		Thumbnail:      thumbRelPtr,
 		Description:    &description,
-		Artist:         d.OverrideArtist,
+		ArtistID:       d.OverrideArtistID,
 		ReleaseYear:    d.OverrideYear,
 		SequenceNumber: d.OverrideSequenceNumber,
 		SeasonNumber:   d.OverrideSeasonNumber,

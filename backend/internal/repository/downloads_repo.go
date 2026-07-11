@@ -21,10 +21,10 @@ func NewDownloadsRepo(db *sql.DB) *DownloadsRepo {
 func (r *DownloadsRepo) Create(ctx context.Context, d *models.Download) (int64, error) {
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO downloads (url, collection_id, folder, filename, download_type, quality, audio_format, status,
-		                        override_title, override_artist, override_year, override_season_number, override_sequence_number, filename_prefix)
+		                        override_title, override_artist_id, override_year, override_season_number, override_sequence_number, filename_prefix)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		d.URL, d.CollectionID, d.Folder, d.Filename, d.DownloadType, d.Quality, d.AudioFormat, d.Status,
-		d.OverrideTitle, d.OverrideArtist, d.OverrideYear, d.OverrideSeasonNumber, d.OverrideSequenceNumber, d.FilenamePrefix,
+		d.OverrideTitle, d.OverrideArtistID, d.OverrideYear, d.OverrideSeasonNumber, d.OverrideSequenceNumber, d.FilenamePrefix,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting download: %w", err)
@@ -200,7 +200,7 @@ const downloadSelectColumns = `
 	SELECT d.id, d.url, d.video_id, d.collection_id, c.name, d.folder, d.filename, d.download_type, d.quality, d.audio_format,
 	       d.status, d.title, d.uploader, d.duration, d.resolution, d.thumbnail, d.error_message, d.ytdlp_command,
 	       d.exit_code, d.stdout_tail, d.stderr_tail, d.retry_count, d.created_at, d.updated_at, d.completed_at,
-	       d.override_title, d.override_artist, d.override_year, d.override_season_number, d.override_sequence_number, d.filename_prefix
+	       d.override_title, d.override_artist_id, d.override_year, d.override_season_number, d.override_sequence_number, d.filename_prefix
 	FROM downloads d
 	LEFT JOIN collections c ON c.id = d.collection_id`
 
@@ -217,7 +217,7 @@ func scanDownload(row rowScanner) (*models.Download, error) {
 		&d.ID, &d.URL, &d.VideoID, &d.CollectionID, &d.CollectionName, &d.Folder, &d.Filename, &d.DownloadType, &d.Quality, &d.AudioFormat,
 		&d.Status, &d.Title, &d.Uploader, &d.Duration, &d.Resolution, &d.Thumbnail, &d.ErrorMessage, &d.YtDlpCommand,
 		&d.ExitCode, &d.StdoutTail, &d.StderrTail, &d.RetryCount, &createdAt, &updatedAt, &completedAt,
-		&d.OverrideTitle, &d.OverrideArtist, &d.OverrideYear, &d.OverrideSeasonNumber, &d.OverrideSequenceNumber, &d.FilenamePrefix,
+		&d.OverrideTitle, &d.OverrideArtistID, &d.OverrideYear, &d.OverrideSeasonNumber, &d.OverrideSequenceNumber, &d.FilenamePrefix,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

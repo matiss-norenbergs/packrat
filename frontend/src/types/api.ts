@@ -68,7 +68,7 @@ export interface CreateDownloadRequest {
   quality?: string
   audioFormat?: string
   title?: string
-  artist?: string
+  artistId?: number
   year?: number
   seasonNumber?: number
   sequenceNumber?: number
@@ -117,7 +117,8 @@ export interface LibraryItem {
   resolution: string | null
   thumbnail: string | null
   description: string | null
-  artist: string | null
+  artistId: number | null
+  artistName: string | null
   year: number | null
   sequenceNumber: number | null
   seasonNumber: number | null
@@ -137,7 +138,7 @@ export interface UpdateLibraryItemRequest {
   description?: string
   duration?: number
   resolution?: string
-  artist?: string
+  artistId?: number
   year?: number
   sequenceNumber?: number
   seasonNumber?: number
@@ -158,6 +159,21 @@ export interface CreateTagRequest {
 }
 
 export interface UpdateTagRequest {
+  name: string
+}
+
+export interface Artist {
+  id: number
+  name: string
+  createdAt: string
+  usageCount: number
+}
+
+export interface CreateArtistRequest {
+  name: string
+}
+
+export interface UpdateArtistRequest {
   name: string
 }
 

@@ -8,7 +8,7 @@ export function searchLibraryItems(items: LibraryItem[], search: string): Librar
   if (!q) return items
   return items.filter(
     (item) =>
-      [item.title, item.uploader, item.artist, item.description].some((field) => field?.toLowerCase().includes(q)) ||
+      [item.title, item.uploader, item.artistName, item.description].some((field) => field?.toLowerCase().includes(q)) ||
       item.tags.some((tag) => tag.toLowerCase().includes(q)),
   )
 }

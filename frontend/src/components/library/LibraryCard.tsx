@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Play } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -8,18 +8,21 @@ import { mediaFileUrl } from "@/lib/api"
 import { useSettings } from "@/hooks/useSettings"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
-import { MediaPlayerDialog } from "./MediaPlayerDialog"
 import { useRevealAll } from "./RevealAllContext"
 import type { LibraryItem } from "@/types/api"
 
 export function LibraryCard({ item }: { item: LibraryItem }) {
   const { isRevealed, toggleItem } = useRevealAll()
   const { data: settings } = useSettings()
-  const [playerOpen, setPlayerOpen] = useState(false)
+  const navigate = useNavigate()
   const revealed = isRevealed(item.id)
   const toggleReveal = () => toggleItem(item.id)
   const mode = (settings?.libraryMode as "manage" | "view" | "details") || "manage"
   const locked = item.blurred && !revealed
+  // View mode drops the click-to-reveal gesture entirely — a blurred item
+  // just stays a blurred/grey thumbnail there, since revealing now happens
+  // on the full item page (which has its own reveal gate) once Play is hit.
+  const revealInteractive = mode !== "view"
 
   return (
     <Card className="overflow-hidden py-0">
@@ -31,34 +34,36 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             blurred={item.blurred}
             revealed={revealed}
             onToggleReveal={toggleReveal}
+            interactive={revealInteractive}
           />
         ) : null}
-        <div className="absolute top-1 right-1 rounded-md bg-background/80 backdrop-blur-sm">
-          <LibraryItemActionsMenu item={item} />
-        </div>
+        {mode !== "view" && (
+          <div className="absolute top-1 right-1 rounded-md bg-background/80 backdrop-blur-sm">
+            <LibraryItemActionsMenu item={item} />
+          </div>
+        )}
         {mode === "view" && (
-          <div className="absolute bottom-1 right-1 rounded-md bg-background/80 backdrop-blur-sm">
+          <div className="absolute inset-0 flex items-center justify-center">
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
-              disabled={locked}
-              title={locked ? "Reveal to play" : "Play"}
+              className="h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm hover:bg-background/90"
+              title="Play"
               onClick={(e) => {
                 e.stopPropagation()
-                setPlayerOpen(true)
+                navigate(`/library/${item.id}`)
               }}
             >
-              <Play className="h-4 w-4" />
+              <Play className="h-6 w-6" />
             </Button>
           </div>
         )}
       </div>
       <CardContent className="space-y-2 p-3">
         <p
-          className={cn("line-clamp-2 text-sm font-medium", item.blurred && "cursor-pointer")}
-          onClick={item.blurred ? toggleReveal : undefined}
-          title={item.blurred ? (revealed ? "Click to hide" : "Click to reveal") : undefined}
+          className={cn("line-clamp-2 text-sm font-medium", item.blurred && revealInteractive && "cursor-pointer")}
+          onClick={item.blurred && revealInteractive ? toggleReveal : undefined}
+          title={item.blurred && revealInteractive ? (revealed ? "Click to hide" : "Click to reveal") : undefined}
         >
           {item.sequenceNumber != null && `${item.sequenceNumber}. `}
           {item.blurred && !revealed ? hashText(item.title) : item.title}
@@ -85,10 +90,10 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
                 <span className="truncate text-foreground">{item.resolution}</span>
               </div>
             )}
-            {item.artist && (
+            {item.artistName && (
               <div className="flex justify-between gap-2">
                 <span>Artist</span>
-                <span className="truncate text-foreground">{item.artist}</span>
+                <span className="truncate text-foreground">{item.artistName}</span>
               </div>
             )}
             {item.year != null && (
@@ -133,8 +138,6 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
           </div>
         )}
       </CardContent>
-
-      <MediaPlayerDialog item={item} open={playerOpen} onOpenChange={setPlayerOpen} />
     </Card>
   )
 }

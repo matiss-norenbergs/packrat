@@ -58,7 +58,7 @@ type Download struct {
 	// overridden) title at completion time to build the final filename,
 	// unless the literal Filename override above is also set.
 	OverrideTitle          *string
-	OverrideArtist         *string
+	OverrideArtistID       *int64
 	OverrideYear           *int
 	OverrideSeasonNumber   *int
 	OverrideSequenceNumber *int

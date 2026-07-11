@@ -18,8 +18,13 @@ import { useUpdateLibraryItem } from "@/hooks/useLibrary"
 import { useTags } from "@/hooks/useTags"
 import { parseSeasonEpisode } from "@/lib/seasonEpisode"
 import { formatDuration } from "@/lib/utils"
+import { ArtistSelect, NO_ARTIST } from "./ArtistSelect"
 import { TagInput } from "./TagInput"
 import type { LibraryItem, UpdateLibraryItemRequest } from "@/types/api"
+
+function artistIdToSelectValue(artistId: number | null): string {
+  return artistId != null ? String(artistId) : NO_ARTIST
+}
 
 function baseNameWithoutExt(filename: string): string {
   const idx = filename.lastIndexOf(".")
@@ -36,7 +41,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
   const [title, setTitle] = useState(item.title)
   const [filename, setFilename] = useState(baseNameWithoutExt(item.filename))
   const [uploader, setUploader] = useState(item.uploader ?? "")
-  const [artist, setArtist] = useState(item.artist ?? "")
+  const [artistId, setArtistId] = useState(artistIdToSelectValue(item.artistId))
   const [year, setYear] = useState(item.year != null ? String(item.year) : "")
   const [sequenceNumber, setSequenceNumber] = useState(item.sequenceNumber != null ? String(item.sequenceNumber) : "")
   const [seasonNumber, setSeasonNumber] = useState(item.seasonNumber != null ? String(item.seasonNumber) : "")
@@ -52,7 +57,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     setTitle(item.title)
     setFilename(baseNameWithoutExt(item.filename))
     setUploader(item.uploader ?? "")
-    setArtist(item.artist ?? "")
+    setArtistId(artistIdToSelectValue(item.artistId))
     setYear(item.year != null ? String(item.year) : "")
     setSequenceNumber(item.sequenceNumber != null ? String(item.sequenceNumber) : "")
     setSeasonNumber(item.seasonNumber != null ? String(item.seasonNumber) : "")
@@ -90,8 +95,8 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     const trimmedUploader = uploader.trim()
     if (trimmedUploader !== (item.uploader ?? "")) payload.uploader = trimmedUploader
 
-    const trimmedArtist = artist.trim()
-    if (trimmedArtist !== (item.artist ?? "")) payload.artist = trimmedArtist
+    const initialArtistId = artistIdToSelectValue(item.artistId)
+    if (artistId !== initialArtistId) payload.artistId = artistId === NO_ARTIST ? 0 : Number(artistId)
 
     const parsedYear = year.trim() === "" ? null : Number(year)
     if (parsedYear !== item.year && parsedYear != null && !Number.isNaN(parsedYear)) {
@@ -261,7 +266,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-artist">Artist</Label>
-                <Input id="edit-artist" value={artist} onChange={(e) => setArtist(e.target.value)} />
+                <ArtistSelect value={artistId} onValueChange={setArtistId} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-year">Year</Label>

@@ -23,8 +23,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCreateDownload, useDownloadPreview } from "@/hooks/useDownloads"
 import { useCollections } from "@/hooks/useCollections"
+import { useArtists } from "@/hooks/useArtists"
 import { useSettings } from "@/hooks/useSettings"
 import { formatDuration } from "@/lib/utils"
+import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -71,7 +73,7 @@ export function NewDownloadDialog() {
 
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [titleOverride, setTitleOverride] = useState("")
-  const [artist, setArtist] = useState("")
+  const [artistId, setArtistId] = useState(NO_ARTIST)
   const [year, setYear] = useState("")
   const [seasonNumber, setSeasonNumber] = useState("")
   const [sequenceNumber, setSequenceNumber] = useState("")
@@ -81,6 +83,7 @@ export function NewDownloadDialog() {
   const [separator, setSeparator] = useState(".")
 
   const { data: collections } = useCollections()
+  const { data: artists } = useArtists()
   const { data: settings } = useSettings()
   const createDownload = useCreateDownload()
 
@@ -109,7 +112,7 @@ export function NewDownloadDialog() {
     setFilename("")
     setAdvancedOpen(false)
     setTitleOverride("")
-    setArtist("")
+    setArtistId(NO_ARTIST)
     setYear("")
     setSeasonNumber("")
     setSequenceNumber("")
@@ -133,8 +136,10 @@ export function NewDownloadDialog() {
     }
   }
 
+  const artistName = artistId === NO_ARTIST ? "" : (artists?.find((a) => String(a.id) === artistId)?.name ?? "")
+
   const filenamePrefix = buildFilenamePrefix({
-    artist,
+    artist: artistName,
     season: seasonNumber,
     sequence: sequenceNumber,
     year,
@@ -161,7 +166,7 @@ export function NewDownloadDialog() {
         audioFormat: downloadType === "audio" ? audioFormat : undefined,
         filename: filename.trim() || undefined,
         title: titleOverride.trim() || undefined,
-        artist: artist.trim() || undefined,
+        artistId: artistId === NO_ARTIST ? undefined : Number(artistId),
         year: parsedYear != null && !Number.isNaN(parsedYear) ? parsedYear : undefined,
         seasonNumber: parsedSeason != null && !Number.isNaN(parsedSeason) ? parsedSeason : undefined,
         sequenceNumber: parsedSequence != null && !Number.isNaN(parsedSequence) ? parsedSequence : undefined,
@@ -347,7 +352,7 @@ export function NewDownloadDialog() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="dl-artist">Artist</Label>
-                    <Input id="dl-artist" value={artist} onChange={(e) => setArtist(e.target.value)} />
+                    <ArtistSelect value={artistId} onValueChange={setArtistId} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dl-year">Year</Label>

@@ -43,7 +43,7 @@ type CreateDownloadRequest struct {
 	// Optional metadata overrides — when set, used instead of whatever
 	// yt-dlp reports for that field once the download completes.
 	Title          *string `json:"title"`
-	Artist         *string `json:"artist"`
+	ArtistID       *int64  `json:"artistId"`
 	Year           *int    `json:"year"`
 	SeasonNumber   *int    `json:"seasonNumber"`
 	SequenceNumber *int    `json:"sequenceNumber"`
@@ -159,7 +159,8 @@ type LibraryItemResponse struct {
 	Resolution     *string  `json:"resolution"`
 	Thumbnail      *string  `json:"thumbnail"`
 	Description    *string  `json:"description"`
-	Artist         *string  `json:"artist"`
+	ArtistID       *int64   `json:"artistId"`
+	ArtistName     *string  `json:"artistName"`
 	Year           *int     `json:"year"`
 	SequenceNumber *int     `json:"sequenceNumber"`
 	SeasonNumber   *int     `json:"seasonNumber"`
@@ -199,7 +200,8 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 		Resolution:     item.Resolution,
 		Thumbnail:      item.Thumbnail,
 		Description:    item.Description,
-		Artist:         item.Artist,
+		ArtistID:       item.ArtistID,
+		ArtistName:     item.ArtistName,
 		Year:           item.ReleaseYear,
 		SequenceNumber: item.SequenceNumber,
 		SeasonNumber:   item.SeasonNumber,
@@ -220,7 +222,11 @@ type UpdateLibraryItemRequest struct {
 	Description    *string   `json:"description"`
 	Duration       *int      `json:"duration"`
 	Resolution     *string   `json:"resolution"`
-	Artist         *string   `json:"artist"`
+	// ArtistID: nil means "leave unchanged" (field omitted or absent), 0
+	// means "clear the artist" — a real artist id is never 0 since
+	// AUTOINCREMENT starts at 1, so 0 is an unambiguous sentinel for
+	// explicit clearing within this partial-merge PATCH.
+	ArtistID       *int64    `json:"artistId"`
 	Year           *int      `json:"year"`
 	SequenceNumber *int      `json:"sequenceNumber"`
 	SeasonNumber   *int      `json:"seasonNumber"`
@@ -302,6 +308,30 @@ func toTagResponse(t models.TagWithCount) TagResponse {
 		Name:       t.Name,
 		CreatedAt:  t.CreatedAt.Format(timeFormat),
 		UsageCount: t.UsageCount,
+	}
+}
+
+type ArtistResponse struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	CreatedAt  string `json:"createdAt"`
+	UsageCount int    `json:"usageCount"`
+}
+
+type CreateArtistRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+type UpdateArtistRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+func toArtistResponse(a models.ArtistWithCount) ArtistResponse {
+	return ArtistResponse{
+		ID:         a.ID,
+		Name:       a.Name,
+		CreatedAt:  a.CreatedAt.Format(timeFormat),
+		UsageCount: a.UsageCount,
 	}
 }
 

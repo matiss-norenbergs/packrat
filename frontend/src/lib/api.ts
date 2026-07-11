@@ -1,7 +1,9 @@
 import type {
+  Artist,
   AuthStatus,
   ChangePasswordRequest,
   Collection,
+  CreateArtistRequest,
   CreateCollectionRequest,
   CreateDownloadRequest,
   Download,
@@ -19,6 +21,7 @@ import type {
   Tag,
   ThumbnailCandidate,
   CreateTagRequest,
+  UpdateArtistRequest,
   UpdateCollectionRequest,
   UpdateLibraryItemRequest,
   UpdateSettingsRequest,
@@ -237,4 +240,26 @@ export function updateTag(id: number, payload: UpdateTagRequest): Promise<void> 
 
 export function deleteTag(id: number): Promise<void> {
   return request<void>(`/tags/${id}`, { method: "DELETE" })
+}
+
+export function fetchArtists(): Promise<Artist[]> {
+  return request<Artist[]>("/artists")
+}
+
+export function createArtist(payload: CreateArtistRequest): Promise<{ id: number }> {
+  return request<{ id: number }>("/artists", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateArtist(id: number, payload: UpdateArtistRequest): Promise<void> {
+  return request<void>(`/artists/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteArtist(id: number): Promise<void> {
+  return request<void>(`/artists/${id}`, { method: "DELETE" })
 }

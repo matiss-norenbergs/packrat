@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { ArrowDownAZ, ArrowUpAZ, Eye, EyeOff, FolderTree, Info, LayoutGrid, Pencil, Play, Search, Tags } from "lucide-react"
+import { ArrowDownAZ, ArrowUpAZ, Eye, EyeOff, FolderTree, Info, LayoutGrid, Pencil, Play, Search, Tags, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -40,6 +41,7 @@ export function LibraryToolbar() {
   const mode = (settings?.libraryMode as "manage" | "view" | "details") || "manage"
   const hasBlurred = (items ?? []).some((item) => item.blurred)
   const search = searchParams.get("q") ?? ""
+  const [searchInput, setSearchInput] = useState(search)
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
   const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
   const collectionId = searchParams.get("collection") ?? NONE
@@ -54,6 +56,23 @@ export function LibraryToolbar() {
     else next.set(key, value)
     setSearchParams(next, { replace: true })
   }
+
+  // Keep the input in sync when "q" changes from outside this component
+  // (e.g. browser back/forward) without fighting the debounce below.
+  useEffect(() => {
+    setSearchInput(search)
+  }, [search])
+
+  // Debounce pushing keystrokes into the URL param that actually drives
+  // filtering — updating on every keystroke re-filters the whole grid each
+  // time, which feels janky while typing.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== search) update("q", searchInput || null)
+    }, 300)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput])
 
   const toggleTag = (name: string) => {
     const next = selectedTags.includes(name) ? selectedTags.filter((t) => t !== name) : [...selectedTags, name]
@@ -77,10 +96,25 @@ export function LibraryToolbar() {
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search title, uploader, artist, description…"
-          className="pl-8"
-          value={search}
-          onChange={(e) => update("q", e.target.value)}
+          className="pl-8 pr-7"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
         />
+        {searchInput && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            title="Clear search"
+            onClick={() => {
+              setSearchInput("")
+              update("q", null)
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
 
       <Select value={sortKey} onValueChange={(v) => updateSettings.mutate({ librarySortKey: v })}>

@@ -116,7 +116,7 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 // the whole file via ffmpeg and can take several seconds for a real video;
 // a failure there is logged but never fails the request, since the app's
 // own DB state is the source of truth for what Packrat displays.
-func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *downloader.YtDlpService, tagsRepo *repository.TagsRepo) gin.HandlerFunc {
+func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *downloader.YtDlpService, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -184,8 +184,8 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			mediaAbs = newMediaAbs
 		}
 
-		if req.Uploader != nil || req.Description != nil || req.Duration != nil || req.Resolution != nil || req.Artist != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil {
-			uploader, description, duration, resolution, artist, year, sequenceNumber, seasonNumber := req.Uploader, req.Description, req.Duration, req.Resolution, req.Artist, req.Year, req.SequenceNumber, req.SeasonNumber
+		if req.Uploader != nil || req.Description != nil || req.Duration != nil || req.Resolution != nil || req.ArtistID != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil {
+			uploader, description, duration, resolution, year, sequenceNumber, seasonNumber := req.Uploader, req.Description, req.Duration, req.Resolution, req.Year, req.SequenceNumber, req.SeasonNumber
 			if uploader == nil {
 				uploader = item.Uploader
 			}
@@ -198,8 +198,13 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			if resolution == nil {
 				resolution = item.Resolution
 			}
-			if artist == nil {
-				artist = item.Artist
+			artistID := item.ArtistID
+			if req.ArtistID != nil {
+				if *req.ArtistID == 0 {
+					artistID = nil
+				} else {
+					artistID = req.ArtistID
+				}
 			}
 			if year == nil {
 				year = item.ReleaseYear
@@ -212,20 +217,30 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			}
 			// title=nil relies on UpdateMetadata's COALESCE(?, title) so this
 			// call never touches title — that's handled by UpdateTitle above.
-			if err := repo.UpdateMetadata(c.Request.Context(), id, nil, uploader, duration, resolution, description, artist, year, sequenceNumber, seasonNumber); err != nil {
+			if err := repo.UpdateMetadata(c.Request.Context(), id, nil, uploader, duration, resolution, description, artistID, year, sequenceNumber, seasonNumber); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 		}
 
-		if req.Title != nil || req.Artist != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil {
+		if req.Title != nil || req.ArtistID != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil {
 			title := item.Title
 			if req.Title != nil {
 				title = *req.Title
 			}
-			artist := item.Artist
-			if req.Artist != nil {
-				artist = req.Artist
+			artistID := item.ArtistID
+			if req.ArtistID != nil {
+				if *req.ArtistID == 0 {
+					artistID = nil
+				} else {
+					artistID = req.ArtistID
+				}
+			}
+			var artistName *string
+			if artistID != nil {
+				if a, err := artistsRepo.Get(c.Request.Context(), *artistID); err == nil {
+					artistName = &a.Name
+				}
 			}
 			year := item.ReleaseYear
 			if req.Year != nil {
@@ -246,7 +261,7 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 				if err := ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, sequenceNumber, seasonNumber); err != nil {
 					log.Printf("library: embedding metadata into %s failed: %v", path, err)
 				}
-			}(mediaAbs, title, artist, year, sequenceNumber, seasonNumber)
+			}(mediaAbs, title, artistName, year, sequenceNumber, seasonNumber)
 		}
 
 		if req.OriginalURL != nil {
@@ -415,7 +430,7 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 		// artist/year/sequenceNumber/seasonNumber are manual-only fields
 		// (yt-dlp doesn't reliably expose them) — pass the item's existing
 		// values through so this refresh never clobbers them.
-		if err := repo.UpdateMetadata(c.Request.Context(), id, &title, &uploader, &duration, resolution, &description, item.Artist, item.ReleaseYear, item.SequenceNumber, item.SeasonNumber); err != nil {
+		if err := repo.UpdateMetadata(c.Request.Context(), id, &title, &uploader, &duration, resolution, &description, item.ArtistID, item.ReleaseYear, item.SequenceNumber, item.SeasonNumber); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

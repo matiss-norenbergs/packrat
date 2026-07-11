@@ -23,6 +23,7 @@ type Deps struct {
 	SettingsRepo    *repository.SettingsRepo
 	HistoryRepo     *repository.HistoryRepo
 	TagsRepo        *repository.TagsRepo
+	ArtistsRepo     *repository.ArtistsRepo
 	UsersRepo       *repository.UsersRepo
 	YtDlp           *downloader.YtDlpService
 	JellyfinClient  *jellyfin.Client
@@ -73,7 +74,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.MediaRoot))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
-		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo))
+		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo, deps.ArtistsRepo))
 		api.POST("/library/:id/move", MoveLibraryItem(deps.LibraryRepo, deps.Manager, deps.MediaRoot))
 		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.MediaRoot))
 		api.POST("/library/:id/redownload", RedownloadLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
@@ -94,6 +95,11 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/tags", CreateTag(deps.TagsRepo))
 		api.PATCH("/tags/:id", UpdateTag(deps.TagsRepo))
 		api.DELETE("/tags/:id", DeleteTag(deps.TagsRepo))
+
+		api.GET("/artists", ListArtists(deps.ArtistsRepo))
+		api.POST("/artists", CreateArtist(deps.ArtistsRepo))
+		api.PATCH("/artists/:id", UpdateArtist(deps.ArtistsRepo))
+		api.DELETE("/artists/:id", DeleteArtist(deps.ArtistsRepo))
 
 		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.MediaRoot))
 		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager))

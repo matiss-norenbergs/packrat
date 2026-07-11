@@ -9,6 +9,7 @@ import {
   ScrollText,
   Package,
   Tags,
+  Mic2,
   LogOut,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -21,6 +22,7 @@ const navItems = [
   { to: "/library", label: "Library", icon: Library },
   { to: "/collections", label: "Collections", icon: FolderKanban },
   { to: "/tags", label: "Tags", icon: Tags },
+  { to: "/artists", label: "Artists", icon: Mic2 },
   { to: "/import", label: "Import", icon: Import },
   { to: "/history", label: "History", icon: History },
   { to: "/settings", label: "Settings", icon: Settings },
