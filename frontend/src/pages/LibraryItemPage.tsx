@@ -65,6 +65,20 @@ function LibraryItemPageContent({ item, items }: { item: LibraryItem; items: Lib
     sortDir,
   )
 
+  // A prose-style summary line rather than the Edit dialog's label/value
+  // grid — only the parts that actually have a value, joined into one
+  // readable line. Season/episode gets its own line above it (see render)
+  // rather than being folded in here.
+  const episodeParts = []
+  if (item.seasonNumber != null) episodeParts.push(`Season ${item.seasonNumber}`)
+  if (item.sequenceNumber != null) episodeParts.push(`Episode ${item.sequenceNumber}`)
+
+  const summaryParts = [
+    `${item.downloadId == null ? "Imported" : "Downloaded"} ${new Date(item.downloadedAt).toLocaleDateString()}`,
+  ]
+  if (item.fileSizeBytes != null) summaryParts.push(formatBytes(item.fileSizeBytes))
+  if (item.year != null) summaryParts.push(String(item.year))
+
   return (
     <div>
       <div className="-m-4 bg-black md:-m-6">
@@ -111,14 +125,13 @@ function LibraryItemPageContent({ item, items }: { item: LibraryItem; items: Lib
                 {item.sequenceNumber != null && `${item.sequenceNumber}. `}
                 {locked ? hashText(item.title) : item.title}
               </h1>
-              <p className="text-sm text-muted-foreground">{item.uploader ?? "Uncategorized"}</p>
+              <p className="text-sm text-muted-foreground">{item.artistName ?? item.uploader ?? "Uncategorized"}</p>
             </div>
             <LibraryItemActionsMenu item={item} />
           </div>
 
           <div className="flex flex-wrap gap-1">
             <Badge variant="outline">{item.collectionName ?? "Uncategorized"}</Badge>
-            {item.downloadId == null && <Badge variant="secondary">Imported</Badge>}
             {item.tags.map((tag) => (
               <Badge key={tag} variant="secondary">
                 {tag}
@@ -126,51 +139,21 @@ function LibraryItemPageContent({ item, items }: { item: LibraryItem; items: Lib
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3 md:grid-cols-4">
-            <div>
-              <span className="text-muted-foreground">Downloaded </span>
-              <span>{new Date(item.downloadedAt).toLocaleDateString()}</span>
-            </div>
-            {item.fileSizeBytes != null && (
-              <div>
-                <span className="text-muted-foreground">File size </span>
-                <span>{formatBytes(item.fileSizeBytes)}</span>
-              </div>
-            )}
-            {item.artistName && (
-              <div>
-                <span className="text-muted-foreground">Artist </span>
-                <span>{item.artistName}</span>
-              </div>
-            )}
-            {item.year != null && (
-              <div>
-                <span className="text-muted-foreground">Year </span>
-                <span>{item.year}</span>
-              </div>
-            )}
-            {(item.seasonNumber != null || item.sequenceNumber != null) && (
-              <div>
-                <span className="text-muted-foreground">Season/Episode </span>
-                <span>
-                  {item.seasonNumber != null && `S${String(item.seasonNumber).padStart(2, "0")}`}
-                  {item.sequenceNumber != null && `E${String(item.sequenceNumber).padStart(2, "0")}`}
-                </span>
-              </div>
+          <div className="space-y-2 rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">
+            {episodeParts.length > 0 && <p className="font-medium text-foreground">{episodeParts.join(", ")}</p>}
+            <p>{summaryParts.join(" · ")}</p>
+            {!locked && item.description && <p>{item.description}</p>}
+            {!locked && item.originalUrl && (
+              <a
+                href={item.originalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="block truncate underline underline-offset-2"
+              >
+                {item.originalUrl}
+              </a>
             )}
           </div>
-
-          {!locked && item.description && <p className="text-sm text-muted-foreground">{item.description}</p>}
-          {!locked && item.originalUrl && (
-            <a
-              href={item.originalUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="block truncate text-sm text-muted-foreground underline underline-offset-2"
-            >
-              {item.originalUrl}
-            </a>
-          )}
 
           <Button asChild variant="outline" size="sm">
             <Link to="/library">← Back to Library</Link>

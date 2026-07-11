@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { ArrowDownAZ, ArrowUpAZ, Eye, EyeOff, FolderTree, Info, LayoutGrid, Pencil, Play, Search, Tags, X } from "lucide-react"
+import { ArrowDownAZ, ArrowUpAZ, Eye, EyeOff, FolderTree, Info, LayoutGrid, Pencil, Search, Tags, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -38,7 +38,7 @@ export function LibraryToolbar() {
   const { revealAll, toggleRevealAll } = useRevealAll()
 
   const view = settings?.libraryView === "folders" ? "folders" : "grid"
-  const mode = (settings?.libraryMode as "manage" | "view" | "details") || "manage"
+  const mode = (settings?.libraryMode as "manage" | "details") || "manage"
   const hasBlurred = (items ?? []).some((item) => item.blurred)
   const search = searchParams.get("q") ?? ""
   const [searchInput, setSearchInput] = useState(search)
@@ -88,7 +88,7 @@ export function LibraryToolbar() {
     setSearchParams(params, { replace: true })
   }
 
-  const setMode = (next: "manage" | "view" | "details") => updateSettings.mutate({ libraryMode: next })
+  const setMode = (next: "manage" | "details") => updateSettings.mutate({ libraryMode: next })
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -214,14 +214,6 @@ export function LibraryToolbar() {
           onClick={() => setMode("manage")}
         >
           <Pencil className="h-4 w-4" />
-        </Button>
-        <Button
-          variant={mode === "view" ? "secondary" : "ghost"}
-          size="icon"
-          title="View mode"
-          onClick={() => setMode("view")}
-        >
-          <Play className="h-4 w-4" />
         </Button>
         <Button
           variant={mode === "details" ? "secondary" : "ghost"}

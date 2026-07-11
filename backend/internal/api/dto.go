@@ -363,7 +363,7 @@ type UpdateSettingsRequest struct {
 	LibraryView            *string   `json:"libraryView" binding:"omitempty,oneof=grid folders"`
 	LibrarySortKey         *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber"`
 	LibrarySortDir         *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
-	LibraryMode            *string   `json:"libraryMode" binding:"omitempty,oneof=manage view details"`
+	LibraryMode            *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
 	ThumbnailFrameCount    *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
 	PrivacyBlurStrength    *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
 	SkipDownloadPreview    *bool     `json:"skipDownloadPreview"`
