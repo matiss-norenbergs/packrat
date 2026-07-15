@@ -5,7 +5,11 @@ import { formatDuration, hashText } from "@/lib/utils"
 import { useRevealAll } from "./RevealAllContext"
 import type { LibraryItem } from "@/types/api"
 
-export function LibraryItemStripTile({ item }: { item: LibraryItem }) {
+// backTo is forwarded from the current item page's own "from" state (not
+// recomputed here) so that clicking through several siblings still returns
+// to the original library listing, not to whichever sibling was viewed
+// previously.
+export function LibraryItemStripTile({ item, backTo }: { item: LibraryItem; backTo: string }) {
   const { isRevealed, toggleItem } = useRevealAll()
   const revealed = isRevealed(item.id)
   const toggleReveal = () => toggleItem(item.id)
@@ -23,7 +27,7 @@ export function LibraryItemStripTile({ item }: { item: LibraryItem }) {
           />
         ) : null}
         {!item.blurred || revealed ? (
-          <Link to={`/library/${item.id}`} className="absolute inset-0" aria-label={item.title} />
+          <Link to={`/library/${item.id}`} state={{ from: backTo }} className="absolute inset-0" aria-label={item.title} />
         ) : null}
         {item.duration != null && (
           <span className="absolute bottom-1 right-1 rounded bg-background/80 px-1 text-[10px] text-foreground">
@@ -34,7 +38,11 @@ export function LibraryItemStripTile({ item }: { item: LibraryItem }) {
       {item.blurred && !revealed ? (
         <p className="line-clamp-2 text-xs font-medium">{hashText(item.title)}</p>
       ) : (
-        <Link to={`/library/${item.id}`} className="line-clamp-2 block text-xs font-medium hover:underline">
+        <Link
+          to={`/library/${item.id}`}
+          state={{ from: backTo }}
+          className="line-clamp-2 block text-xs font-medium hover:underline"
+        >
           {item.title}
         </Link>
       )}

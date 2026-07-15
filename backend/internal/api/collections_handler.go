@@ -28,9 +28,11 @@ func ListCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
 			return
 		}
 		paths := collectionPaths(rows)
+		privacy := effectivePrivacyMap(rows)
+		totals := totalItemCounts(rows, itemCounts)
 		out := make([]CollectionResponse, 0, len(rows))
 		for _, col := range rows {
-			out = append(out, toCollectionResponse(col, paths[col.ID], itemCounts[col.ID]))
+			out = append(out, toCollectionResponse(col, paths[col.ID], itemCounts[col.ID], privacy[col.ID], totals[col.ID]))
 		}
 		c.JSON(http.StatusOK, out)
 	}

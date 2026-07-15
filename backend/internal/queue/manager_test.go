@@ -15,7 +15,7 @@ import (
 // is covered by a real end-to-end run (see docs/architecture.md); this test
 // is just the deterministic size-tracking part.
 func TestSetWorkerCount(t *testing.T) {
-	mgr := NewDownloadManager("", nil, nil, nil, nil, nil, nil, NewProgressStore(), ws.NoopBroadcaster{})
+	mgr := NewDownloadManager("", nil, nil, nil, nil, nil, nil, nil, nil, NewProgressStore(), ws.NoopBroadcaster{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -43,4 +43,27 @@ func TestSetWorkerCount(t *testing.T) {
 	// Give any exiting goroutines a moment before the context is cancelled,
 	// just so a failure here isn't masked by process teardown.
 	time.Sleep(10 * time.Millisecond)
+}
+
+// TestClassifyRunCtxErr covers the three ways runOne's runCtx can end, since
+// finishError's stored status/history/broadcast all hinge on getting this
+// right — a configured timeout must be recorded as "failed" (per spec), not
+// conflated with an explicit user Cancel() ("cancelled").
+func TestClassifyRunCtxErr(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"deadline exceeded (timeout)", context.DeadlineExceeded, "timeout"},
+		{"context canceled (manual cancel)", context.Canceled, "cancelled"},
+		{"no error (genuine failure)", nil, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := classifyRunCtxErr(tt.err); got != tt.want {
+				t.Fatalf("classifyRunCtxErr(%v) = %q, want %q", tt.err, got, tt.want)
+			}
+		})
+	}
 }

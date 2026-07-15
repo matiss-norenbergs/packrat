@@ -1,24 +1,15 @@
-import { Fragment } from "react"
+import { Fragment, useEffect, useState } from "react"
 import { ChevronRight, Home } from "lucide-react"
 import { useSearchParams } from "react-router-dom"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCollections } from "@/hooks/useCollections"
-import { useLibrary } from "@/hooks/useLibrary"
+import { useLibraryQuery } from "@/hooks/useLibrary"
 import { useSettings } from "@/hooks/useSettings"
-import { buildCollectionTree, type CollectionTreeNode } from "@/lib/collectionTree"
-import { filterByTags, searchLibraryItems, sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
+import { buildCollectionTree, findNodeById } from "@/lib/collectionTree"
 import type { Collection } from "@/types/api"
 import { CollectionFolderTile } from "./CollectionFolderTile"
 import { LibraryCard } from "./LibraryCard"
-
-function findNodeById(nodes: CollectionTreeNode[], id: number): CollectionTreeNode | null {
-  for (const node of nodes) {
-    if (node.id === id) return node
-    const found = findNodeById(node.children, id)
-    if (found) return found
-  }
-  return null
-}
+import { LibraryPagination } from "./LibraryPagination"
 
 // Walks parentId up to the root using a flat id->Collection map, rather than
 // the generated `.path` string — path segments are names, and two
@@ -38,8 +29,39 @@ function breadcrumbFor(collections: Collection[], id: number): Collection[] {
 export function LibraryFolderView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: collections, isLoading: collectionsLoading } = useCollections()
-  const { data: items, isLoading: itemsLoading, isError, error } = useLibrary()
   const { data: settings, isLoading: settingsLoading } = useSettings()
+  const [page, setPage] = useState(1)
+
+  const currentIdParam = searchParams.get("collection")
+  const currentId = currentIdParam ? Number(currentIdParam) : null
+  const search = searchParams.get("q") ?? ""
+  const sortKey = settings?.librarySortKey || "downloadedAt"
+  const sortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
+  const tagNames = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
+  const paginationEnabled = settings?.libraryPaginationEnabled ?? false
+  const pageSize = settings?.libraryPageSize || 48
+
+  // Reset to page 1 whenever the open folder or a filter/search/sort changes
+  // underneath the current page.
+  const tagsKey = tagNames.join(",")
+  useEffect(() => {
+    setPage(1)
+  }, [currentId, search, tagsKey, sortKey, sortDir])
+
+  const {
+    data,
+    isLoading: itemsLoading,
+    isError,
+    error,
+  } = useLibraryQuery({
+    collectionId: currentId, // null = uncategorized-only (root); number = this folder only
+    q: search || undefined,
+    tags: tagNames.length > 0 ? tagNames : undefined,
+    sortKey,
+    sortDir,
+    page: paginationEnabled ? page : undefined,
+    pageSize: paginationEnabled ? pageSize : undefined,
+  })
 
   if (collectionsLoading || itemsLoading || settingsLoading) {
     return (
@@ -53,10 +75,7 @@ export function LibraryFolderView() {
   if (isError) {
     return <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p>
   }
-  if (!collections || !items) return null
-
-  const currentIdParam = searchParams.get("collection")
-  const currentId = currentIdParam ? Number(currentIdParam) : null
+  if (!collections || !data) return null
 
   const goTo = (id: number | null) => {
     const next = new URLSearchParams(searchParams)
@@ -69,16 +88,6 @@ export function LibraryFolderView() {
   const currentNode = currentId != null ? findNodeById(tree, currentId) : null
   const childNodes = currentNode ? currentNode.children : tree
   const breadcrumb = currentId != null ? breadcrumbFor(collections, currentId) : []
-
-  const search = searchParams.get("q") ?? ""
-  const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
-  const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
-  const tagNames = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
-
-  let itemsHere = items.filter((item) => item.collectionId === currentId)
-  itemsHere = searchLibraryItems(itemsHere, search)
-  if (tagNames.length > 0) itemsHere = filterByTags(itemsHere, tagNames)
-  const sortedItems = sortLibraryItems(itemsHere, sortKey, sortDir)
 
   return (
     <div className="space-y-4">
@@ -105,17 +114,22 @@ export function LibraryFolderView() {
         ))}
       </div>
 
-      {childNodes.length === 0 && sortedItems.length === 0 ? (
+      {childNodes.length === 0 && data.total === 0 ? (
         <p className="text-sm text-muted-foreground">This collection is empty.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {childNodes.map((node) => (
-            <CollectionFolderTile key={node.id} node={node} onClick={() => goTo(node.id)} />
-          ))}
-          {sortedItems.map((item) => (
-            <LibraryCard key={item.id} item={item} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {childNodes.map((node) => (
+              <CollectionFolderTile key={node.id} node={node} onClick={() => goTo(node.id)} />
+            ))}
+            {data.items.map((item) => (
+              <LibraryCard key={item.id} item={item} />
+            ))}
+          </div>
+          {paginationEnabled && (
+            <LibraryPagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} />
+          )}
+        </>
       )}
     </div>
   )

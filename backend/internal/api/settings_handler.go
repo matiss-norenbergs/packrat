@@ -48,6 +48,26 @@ func HistoryAnonymizeURLs(ctx context.Context, repo *repository.SettingsRepo) (b
 	return strconv.ParseBool(raw)
 }
 
+// HistoryRetentionDays reads the history_retention_days setting, defaulting to 0 — keep forever —
+// if it's never been set (or is somehow corrupt), matching this codebase's convention that new
+// settings default to the pre-existing (unbounded) behavior. Shared by GetSettings; the cleanup
+// sweep in cmd/server/main.go reads this same key directly via settingsRepo.Get rather than
+// calling this helper, to avoid an import cycle (see triggerJellyfinRefresh for precedent).
+func HistoryRetentionDays(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingHistoryRetentionDays)
+	if errors.Is(err, repository.ErrNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0, nil
+	}
+	return n, nil
+}
+
 // LibraryView reads the library_view setting, defaulting to "grid" if it's
 // never been set. Shared by GetSettings.
 func LibraryView(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
@@ -94,6 +114,57 @@ func LibraryMode(ctx context.Context, repo *repository.SettingsRepo) (string, er
 	default:
 		return "manage", nil
 	}
+}
+
+// LibraryPaginationEnabled reads the library_pagination_enabled setting,
+// defaulting to false (show everything) if it's never been set. Shared by
+// GetSettings.
+func LibraryPaginationEnabled(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingLibraryPaginationEnabled)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
+}
+
+// LibraryPageSize reads the library_page_size setting, defaulting to 48 if
+// it's never been set (or is somehow corrupt). Shared by GetSettings.
+func LibraryPageSize(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingLibraryPageSize)
+	if errors.Is(err, repository.ErrNotFound) {
+		return 48, nil
+	}
+	if err != nil {
+		return 48, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return 48, nil
+	}
+	return n, nil
+}
+
+// DownloadTimeoutMinutes reads the download_timeout_minutes setting, defaulting to 0 — no
+// timeout — if it's never been set (or is somehow corrupt), matching this codebase's convention
+// that new settings default to the pre-existing (unbounded) behavior. Shared by GetSettings; the
+// queue manager reads this same key directly via settingsRepo.Get rather than calling this
+// helper, to avoid an import cycle (see triggerJellyfinRefresh for the established precedent).
+func DownloadTimeoutMinutes(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingDownloadTimeoutMinutes)
+	if errors.Is(err, repository.ErrNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0, nil
+	}
+	return n, nil
 }
 
 // ThumbnailFrameCount reads the thumbnail_frame_count setting, defaulting to
@@ -161,6 +232,36 @@ func JellyfinEnabled(ctx context.Context, repo *repository.SettingsRepo) (bool, 
 	return strconv.ParseBool(raw)
 }
 
+// JellyfinRefreshMode reads the jellyfin_refresh_mode setting, defaulting to
+// "none" if it's never been set — preserves the pre-existing manual-only
+// behavior for deployments upgrading into this setting's existence, rather
+// than surprising them with a new automatic refresh.
+func JellyfinRefreshMode(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingJellyfinRefreshMode)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "none", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return raw, nil
+}
+
+// LibraryAutoplay reads the library_autoplay setting, defaulting to true if
+// it's never been set — the player already always autoplayed before this
+// setting existed, so upgrading shouldn't silently change that. Shared by
+// GetSettings.
+func LibraryAutoplay(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingLibraryAutoplay)
+	if errors.Is(err, repository.ErrNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	return strconv.ParseBool(raw)
+}
+
 // GetSettings reports live state where it exists rather than a possibly
 // stale DB copy: downloadDirectory comes from the actual MEDIA_ROOT config
 // value (the DB row is legacy/display only), and maxConcurrentDownloads
@@ -179,12 +280,22 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			return
 		}
 
+		downloadTimeoutMinutes, err := DownloadTimeoutMinutes(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		ignoredFolders, err := ImportIgnoredFolders(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		anonymizeHistory, err := HistoryAnonymizeURLs(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		historyRetentionDays, err := HistoryRetentionDays(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -200,6 +311,16 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			return
 		}
 		libraryMode, err := LibraryMode(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		libraryPaginationEnabled, err := LibraryPaginationEnabled(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		libraryPageSize, err := LibraryPageSize(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -234,23 +355,39 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		jellyfinRefreshMode, err := JellyfinRefreshMode(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		libraryAutoplay, err := LibraryAutoplay(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, SettingsResponse{
-			DownloadDirectory:      mediaRoot,
-			MaxConcurrentDownloads: mgr.WorkerCount(),
-			DefaultQuality:         defaultQuality,
-			DefaultDownloadType:    defaultDownloadType,
-			ImportIgnoredFolders:   ignoredFolders,
-			HistoryAnonymizeURLs:   anonymizeHistory,
-			LibraryView:            libraryView,
-			LibrarySortKey:         librarySortKey,
-			LibrarySortDir:         librarySortDir,
-			LibraryMode:            libraryMode,
-			ThumbnailFrameCount:    thumbnailFrameCount,
-			PrivacyBlurStrength:    privacyBlurStrength,
-			SkipDownloadPreview:    skipDownloadPreview,
-			JellyfinEnabled:        jellyfinEnabled,
-			JellyfinURL:            jellyfinURL,
-			JellyfinAPIKey:         jellyfinAPIKey,
+			DownloadDirectory:        mediaRoot,
+			MaxConcurrentDownloads:   mgr.WorkerCount(),
+			DownloadTimeoutMinutes:   downloadTimeoutMinutes,
+			DefaultQuality:           defaultQuality,
+			DefaultDownloadType:      defaultDownloadType,
+			ImportIgnoredFolders:     ignoredFolders,
+			HistoryAnonymizeURLs:     anonymizeHistory,
+			HistoryRetentionDays:     historyRetentionDays,
+			LibraryView:              libraryView,
+			LibrarySortKey:           librarySortKey,
+			LibrarySortDir:           librarySortDir,
+			LibraryMode:              libraryMode,
+			LibraryPaginationEnabled: libraryPaginationEnabled,
+			LibraryPageSize:          libraryPageSize,
+			ThumbnailFrameCount:      thumbnailFrameCount,
+			PrivacyBlurStrength:      privacyBlurStrength,
+			SkipDownloadPreview:      skipDownloadPreview,
+			JellyfinEnabled:          jellyfinEnabled,
+			JellyfinURL:              jellyfinURL,
+			JellyfinAPIKey:           jellyfinAPIKey,
+			JellyfinRefreshMode:      jellyfinRefreshMode,
+			LibraryAutoplay:          libraryAutoplay,
 		})
 	}
 }
@@ -272,6 +409,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 				return
 			}
 			mgr.SetWorkerCount(*req.MaxConcurrentDownloads)
+		}
+		if req.DownloadTimeoutMinutes != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingDownloadTimeoutMinutes, strconv.Itoa(*req.DownloadTimeoutMinutes)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
 		}
 		if req.DefaultQuality != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingDefaultQuality, *req.DefaultQuality); err != nil {
@@ -298,6 +441,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 		}
 		if req.HistoryAnonymizeURLs != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingHistoryAnonymizeURLs, strconv.FormatBool(*req.HistoryAnonymizeURLs)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.HistoryRetentionDays != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingHistoryRetentionDays, strconv.Itoa(*req.HistoryRetentionDays)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
@@ -334,6 +483,18 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 				return
 			}
 		}
+		if req.LibraryPaginationEnabled != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingLibraryPaginationEnabled, strconv.FormatBool(*req.LibraryPaginationEnabled)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.LibraryPageSize != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingLibraryPageSize, strconv.Itoa(*req.LibraryPageSize)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
 		if req.ThumbnailFrameCount != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameCount, strconv.Itoa(*req.ThumbnailFrameCount)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -364,8 +525,20 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 				return
 			}
 		}
+		if req.JellyfinRefreshMode != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingJellyfinRefreshMode, *req.JellyfinRefreshMode); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
 		if req.JellyfinAPIKey != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingJellyfinAPIKey, *req.JellyfinAPIKey); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.LibraryAutoplay != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingLibraryAutoplay, strconv.FormatBool(*req.LibraryAutoplay)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

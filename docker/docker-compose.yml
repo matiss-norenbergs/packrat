@@ -14,6 +14,20 @@ services:
     volumes:
       - ./data/media:/app/data/media
       - ./data/db:/app/data/db
+      # yt-dlp lives in a venv here rather than baked into the image, so
+      # clicking "Update yt-dlp" in Settings (or a fresh install on first
+      # run) survives container recreation instead of reverting to whatever
+      # version the image was built with.
+      - ./data/ytdlp-venv:/app/data/ytdlp-venv
+    # Uncomment if your Jellyfin URL uses a bare LAN hostname (e.g. "mnx")
+    # that isn't resolvable from inside the container — Docker's default
+    # bridge network doesn't forward Windows/mDNS hostname resolution the
+    # way the host's own resolver does. Point it at the host's real IP, or
+    # use "host-gateway" to reach whatever the container's host resolves it
+    # as. Alternatively, just use the LAN IP or a real FQDN in Settings →
+    # Jellyfin → URL and skip this entirely.
+    # extra_hosts:
+    #   - "jellyfin-host:host-gateway"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:50505/api/health"]
@@ -21,9 +35,14 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-    # Uncomment to cap resource usage (Engineering Requirements: Resource Limits):
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: '2.0'
-    #       memory: 1G
+    # Caps total resource usage across the Go server plus every yt-dlp/ffmpeg
+    # subprocess it spawns (Engineering Requirements: Resource Limits). 2
+    # CPUs / 2G covers MAX_CONCURRENT_DOWNLOADS=2 comfortably, including
+    # occasional ffmpeg merge/remux spikes, while still keeping Packrat from
+    # crowding out other services on a shared host. Raise this if you bump
+    # MAX_CONCURRENT_DOWNLOADS, or remove the block entirely for no cap.
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G

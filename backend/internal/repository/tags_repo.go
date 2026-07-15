@@ -207,6 +207,71 @@ func (r *TagsRepo) SetForLibraryItem(ctx context.Context, libraryID int64, tagID
 	return tx.Commit()
 }
 
+// SetForLibraryItems replaces every tag association for each id in
+// libraryIDs with exactly tagIDs, in a single transaction — the batched
+// counterpart to SetForLibraryItem, used by bulk tag assignment so a large
+// selection is applied atomically rather than as N separate transactions.
+// Ids that no longer exist (e.g. deleted by another action mid-selection)
+// are silently skipped rather than failing the whole batch — library_tags
+// has an ON DELETE CASCADE FK to library.id, so inserting against a missing
+// id would otherwise abort the transaction.
+func (r *TagsRepo) SetForLibraryItems(ctx context.Context, libraryIDs []int64, tagIDs []int64) error {
+	if len(libraryIDs) == 0 {
+		return nil
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("beginning bulk tag update transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(libraryIDs)), ",")
+	args := make([]any, len(libraryIDs))
+	for i, id := range libraryIDs {
+		args[i] = id
+	}
+
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM library WHERE id IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return fmt.Errorf("resolving existing library ids: %w", err)
+	}
+	var existingIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return fmt.Errorf("scanning library id: %w", err)
+		}
+		existingIDs = append(existingIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+	if len(existingIDs) == 0 {
+		return nil
+	}
+
+	existingPlaceholders := strings.TrimSuffix(strings.Repeat("?,", len(existingIDs)), ",")
+	existingArgs := make([]any, len(existingIDs))
+	for i, id := range existingIDs {
+		existingArgs[i] = id
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM library_tags WHERE library_id IN (`+existingPlaceholders+`)`, existingArgs...); err != nil {
+		return fmt.Errorf("clearing existing tags: %w", err)
+	}
+
+	for _, libraryID := range existingIDs {
+		for _, tagID := range tagIDs {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO library_tags (library_id, tag_id) VALUES (?, ?)`, libraryID, tagID); err != nil {
+				return fmt.Errorf("attaching tag %d to item %d: %w", tagID, libraryID, err)
+			}
+		}
+	}
+	return tx.Commit()
+}
+
 // TagsByLibraryIDs batch-fetches tag names for every id, keyed by library
 // id — used by list responses so building N responses costs one query, not
 // N (mirrors the effectivePrivacyMap lookup-map idiom in the api package).

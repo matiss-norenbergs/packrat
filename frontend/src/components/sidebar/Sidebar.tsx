@@ -12,8 +12,10 @@ import {
   Mic2,
   LogOut,
 } from "lucide-react"
+import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { useLogout } from "@/hooks/useAuth"
+import { useYtDlpVersion } from "@/hooks/useSettings"
 import { NavItem } from "./NavItem"
 
 const navItems = [
@@ -43,6 +45,7 @@ export function SidebarContent() {
           <NavItem key={item.to} {...item} />
         ))}
       </nav>
+      <VersionLine />
       <div className="px-2 py-2">
         <Button
           variant="ghost"
@@ -55,6 +58,23 @@ export function SidebarContent() {
         </Button>
       </div>
     </>
+  )
+}
+
+function VersionLine() {
+  const { data } = useYtDlpVersion()
+  if (!data) return null
+
+  return (
+    <Link
+      to="/settings"
+      className="flex items-center gap-1.5 px-4 py-1 text-xs text-muted-foreground hover:text-sidebar-foreground"
+    >
+      <span>yt-dlp v{data.currentVersion}</span>
+      {data.updateAvailable && (
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" title="Update available" />
+      )}
+    </Link>
   )
 }
 

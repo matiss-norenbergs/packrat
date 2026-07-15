@@ -1,7 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { cancelDownload, createDownload, deleteDownload, fetchDownloads, previewDownload } from "@/lib/api"
-import type { CreateDownloadRequest } from "@/types/api"
+import {
+  cancelDownload,
+  createBatchDownload,
+  createDownload,
+  createPlaylistDownload,
+  deleteDownload,
+  fetchDownloads,
+  previewDownload,
+} from "@/lib/api"
+import { historyQueryKey } from "@/hooks/useHistory"
+import type { CreateBatchDownloadRequest, CreateDownloadRequest, CreatePlaylistDownloadRequest } from "@/types/api"
 
 export const downloadsQueryKey = ["downloads"] as const
 
@@ -33,6 +42,34 @@ export function useCreateDownload() {
     },
     onError: (err: Error) => {
       toast.error(`Failed to queue download: ${err.message}`)
+    },
+  })
+}
+
+export function useCreatePlaylistDownload() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: CreatePlaylistDownloadRequest) => createPlaylistDownload(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+      queryClient.invalidateQueries({ queryKey: historyQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to queue playlist: ${err.message}`)
+    },
+  })
+}
+
+export function useCreateBatchDownload() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: CreateBatchDownloadRequest) => createBatchDownload(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+      queryClient.invalidateQueries({ queryKey: historyQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to queue downloads: ${err.message}`)
     },
   })
 }

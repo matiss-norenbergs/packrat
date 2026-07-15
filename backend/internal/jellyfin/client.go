@@ -6,7 +6,9 @@ package jellyfin
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -44,6 +46,11 @@ func (c *Client) post(ctx context.Context, baseURL, apiKey, path string) error {
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) {
+			return fmt.Errorf("could not resolve Jellyfin hostname %q from inside the container — "+
+				"try the LAN IP instead, or add the host via docker-compose's extra_hosts: %w", dnsErr.Name, err)
+		}
 		return fmt.Errorf("calling jellyfin: %w", err)
 	}
 	defer res.Body.Close()

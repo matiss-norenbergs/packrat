@@ -1,16 +1,24 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { ArrowDownAZ, ArrowUpAZ, Eye, EyeOff, FolderTree, Info, LayoutGrid, Pencil, Search, Tags, X } from "lucide-react"
+import { ArrowDownAZ, ArrowUpAZ, Eye, EyeOff, FolderTree, Info, LayoutGrid, Pencil, Rows3, Search, Tags, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useCollections } from "@/hooks/useCollections"
-import { useLibrary } from "@/hooks/useLibrary"
+import { useLibraryFacets } from "@/hooks/useLibrary"
 import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
+import { BulkAssignTagsDialog } from "./BulkAssignTagsDialog"
 import { useRevealAll } from "./RevealAllContext"
+import { useSelection } from "./SelectionContext"
 
 const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
   { value: "downloadedAt", label: "Date downloaded" },
@@ -21,12 +29,14 @@ const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
   { value: "sequenceNumber", label: "Sequence #" },
 ]
 
+const PAGE_SIZE_OPTIONS = [24, 48, 96, 200]
+
 const NONE = "none"
 
 export function LibraryToolbar() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: collections } = useCollections()
-  const { data: items } = useLibrary()
+  const { data: facets } = useLibraryFacets()
   const { data: allTags } = useTags()
   // view/sort are DB-backed settings (remembered across reloads and
   // browsers) rather than URL params — q/collection/year stay URL-only
@@ -36,10 +46,19 @@ export function LibraryToolbar() {
   const { data: settings } = useSettings()
   const updateSettings = useUpdateSettings()
   const { revealAll, toggleRevealAll } = useRevealAll()
+  const { selectionActive, approxCount, clear } = useSelection()
+  const [bulkTagsOpen, setBulkTagsOpen] = useState(false)
 
   const view = settings?.libraryView === "folders" ? "folders" : "grid"
   const mode = (settings?.libraryMode as "manage" | "details") || "manage"
-  const hasBlurred = (items ?? []).some((item) => item.blurred)
+  // Whether any collection is private (itself or an inherited ancestor) and
+  // has at least one item somewhere under it — uses the inheritance-aware
+  // effectiveIsPrivate/totalItemCount fields, not the raw isPrivate/itemCount
+  // (a private *parent* used purely for organization has itemCount 0 of its
+  // own, and its items live in a child whose own isPrivate is false since it
+  // only inherits — the raw fields alone would always read as "nothing
+  // blurred" in that, very normal, nested-collection setup).
+  const hasBlurred = (collections ?? []).some((c) => c.effectiveIsPrivate && c.totalItemCount > 0)
   const search = searchParams.get("q") ?? ""
   const [searchInput, setSearchInput] = useState(search)
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
@@ -47,8 +66,10 @@ export function LibraryToolbar() {
   const collectionId = searchParams.get("collection") ?? NONE
   const year = searchParams.get("year") ?? NONE
   const selectedTags = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
+  const paginationEnabled = settings?.libraryPaginationEnabled ?? false
+  const pageSize = settings?.libraryPageSize || 48
 
-  const years = [...new Set((items ?? []).map((i) => i.year).filter((y): y is number => y != null))].sort((a, b) => b - a)
+  const years = facets?.years ?? []
 
   const update = (key: string, value: string | null) => {
     const next = new URLSearchParams(searchParams)
@@ -88,9 +109,16 @@ export function LibraryToolbar() {
     setSearchParams(params, { replace: true })
   }
 
-  const setMode = (next: "manage" | "details") => updateSettings.mutate({ libraryMode: next })
+  const setMode = (next: "manage" | "details") => {
+    updateSettings.mutate({ libraryMode: next })
+    // Leaving manage mode hides every checkbox, so a lingering selection
+    // would silently reappear if the user switches back — clear it now
+    // instead.
+    if (next !== "manage") clear()
+  }
 
   return (
+    <div className="space-y-2">
     <div className="flex flex-wrap items-center gap-2">
       <div className="relative min-w-[140px] flex-1 sm:min-w-[200px]">
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -243,6 +271,55 @@ export function LibraryToolbar() {
           <FolderTree className="h-4 w-4" />
         </Button>
       </div>
+
+      <Button
+        variant={paginationEnabled ? "secondary" : "outline"}
+        size="icon"
+        title={paginationEnabled ? "Pagination on — click to show everything" : "Showing everything — click to paginate"}
+        onClick={() => updateSettings.mutate({ libraryPaginationEnabled: !paginationEnabled })}
+      >
+        <Rows3 className="h-4 w-4" />
+      </Button>
+
+      {paginationEnabled && (
+        <Select value={String(pageSize)} onValueChange={(v) => updateSettings.mutate({ libraryPageSize: Number(v) })}>
+          <SelectTrigger className="w-[100px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n}/page
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+
+    {mode === "manage" && (
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground">
+          {selectionActive ? `${approxCount} selected` : "Select files or collections to bulk edit"}
+        </span>
+        {selectionActive && (
+          <Button variant="ghost" size="sm" onClick={clear}>
+            Clear
+          </Button>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" disabled={!selectionActive}>
+              Bulk edit
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={() => setBulkTagsOpen(true)}>Assign tags…</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <BulkAssignTagsDialog open={bulkTagsOpen} onOpenChange={setBulkTagsOpen} />
+      </div>
+    )}
     </div>
   )
 }

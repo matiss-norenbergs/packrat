@@ -28,6 +28,32 @@ func main() {
 	}
 }
 
+// historyCleanupInterval is how often the retention sweep checks in — an
+// implementation detail, not user-facing (the user only configures *how
+// long* to keep history, via SettingHistoryRetentionDays; how often the
+// sweep runs doesn't need its own setting).
+const historyCleanupInterval = time.Hour
+
+// cleanupHistory deletes history entries older than the configured
+// retention window. A zero/unset/corrupt setting means "keep forever," so
+// this is a no-op by default until the user opts in.
+func cleanupHistory(ctx context.Context, historyRepo *repository.HistoryRepo, settingsRepo *repository.SettingsRepo) {
+	raw, err := settingsRepo.Get(ctx, models.SettingHistoryRetentionDays)
+	days, convErr := strconv.Atoi(raw)
+	if err != nil || convErr != nil || days <= 0 {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -days)
+	n, err := historyRepo.DeleteOlderThan(ctx, cutoff)
+	if err != nil {
+		log.Printf("history cleanup failed: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("history cleanup: removed %d entries older than %d days", n, days)
+	}
+}
+
 func run() error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -59,7 +85,7 @@ func run() error {
 	tagsRepo := repository.NewTagsRepo(conn)
 	artistsRepo := repository.NewArtistsRepo(conn)
 	usersRepo := repository.NewUsersRepo(conn)
-	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath)
+	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath)
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
 
@@ -69,7 +95,7 @@ func run() error {
 	hub := ws.NewHub()
 	go hub.Run(ctx)
 
-	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, progressStore, hub)
+	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, settingsRepo, jellyfinClient, progressStore, hub)
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)
 	if err != nil {
@@ -93,6 +119,20 @@ func run() error {
 		}
 	}
 	mgr.Start(ctx, workerCount)
+
+	go func() {
+		cleanupHistory(ctx, historyRepo, settingsRepo) // once immediately, so a just-raised retention takes effect right away
+		ticker := time.NewTicker(historyCleanupInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				cleanupHistory(ctx, historyRepo, settingsRepo)
+			}
+		}
+	}()
 
 	router := api.SetupRouter(api.Deps{
 		DB:              conn,

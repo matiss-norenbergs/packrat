@@ -17,21 +17,32 @@ import (
 type YtDlpService struct {
 	BinPath    string
 	FFmpegPath string
+	PipPath    string
 }
 
-func NewYtDlpService(binPath, ffmpegPath string) *YtDlpService {
-	return &YtDlpService{BinPath: binPath, FFmpegPath: ffmpegPath}
+func NewYtDlpService(binPath, ffmpegPath, pipPath string) *YtDlpService {
+	return &YtDlpService{BinPath: binPath, FFmpegPath: ffmpegPath, PipPath: pipPath}
 }
 
-const metadataFetchTimeout = 30 * time.Second
+// metadataFetchTimeout is a ceiling, not a fixed wait — bumped from the
+// single-video 30s baseline since --flat-playlist listing on very large
+// playlists can take longer (still fast for the common single-video case).
+const metadataFetchTimeout = 60 * time.Second
 
-// FetchMetadata runs `yt-dlp --dump-json` for url and parses the resulting
-// JSON line into a Metadata struct. It does not download anything.
+// FetchMetadata runs yt-dlp in playlist-aware, flat-extraction mode and
+// parses the resulting single JSON object into a Metadata struct. It does
+// not download anything. --dump-single-json always emits exactly one JSON
+// object (a playlist's members nested under "entries") regardless of
+// whether url is a single video or a playlist; --flat-playlist only affects
+// how playlist *members* are extracted (shallow, no extra per-video network
+// hit) — a bare single-video url is still fully extracted, so the
+// single-video fields (title/uploader/duration/thumbnail/resolution) are
+// unaffected. Check the result's IsPlaylist() to see which shape came back.
 func (s *YtDlpService) FetchMetadata(ctx context.Context, url string) (*Metadata, error) {
 	ctx, cancel := context.WithTimeout(ctx, metadataFetchTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, s.BinPath, "--dump-json", "--no-playlist", "--skip-download", "--no-warnings", url)
+	cmd := exec.CommandContext(ctx, s.BinPath, "--dump-single-json", "--flat-playlist", "--skip-download", "--no-warnings", url)
 	out, err := cmd.Output()
 	if err != nil {
 		if stderr, ok := err.(*exec.ExitError); ok {

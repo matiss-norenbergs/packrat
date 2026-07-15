@@ -20,8 +20,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /packrat ./cmd/server
 
 # ---- Stage 3: runtime ----
 FROM python:3.12-alpine AS runtime
-RUN apk add --no-cache ffmpeg ca-certificates tzdata wget \
-    && pip install --no-cache-dir --break-system-packages yt-dlp
+RUN apk add --no-cache ffmpeg ca-certificates tzdata wget
 
 RUN addgroup -S packrat && adduser -S packrat -G packrat
 
@@ -29,8 +28,15 @@ WORKDIR /app
 COPY --from=backend-builder /packrat /app/packrat
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 COPY database/migrations /app/database/migrations
+COPY docker/entrypoint.sh /app/entrypoint.sh
 
-RUN mkdir -p /app/data/db /app/data/media && chown -R packrat:packrat /app
+# yt-dlp itself is deliberately not installed here — entrypoint.sh installs
+# it into a venv under the volume-mounted /app/data on first run, so it
+# survives container recreation instead of reverting to whatever this image
+# was built with (see entrypoint.sh for the full reasoning).
+RUN mkdir -p /app/data/db /app/data/media /app/data/ytdlp-venv \
+    && chmod +x /app/entrypoint.sh \
+    && chown -R packrat:packrat /app
 
 USER packrat
 
@@ -38,7 +44,8 @@ ENV PORT=50505 \
     DB_PATH=/app/data/db/packrat.db \
     MEDIA_ROOT=/app/data/media \
     MAX_CONCURRENT_DOWNLOADS=2 \
-    YTDLP_PATH=yt-dlp \
+    YTDLP_PATH=/app/data/ytdlp-venv/bin/yt-dlp \
+    PIP_PATH=/app/data/ytdlp-venv/bin/pip \
     FFMPEG_PATH=ffmpeg \
     MIGRATIONS_DIR=/app/database/migrations \
     STATIC_DIR=/app/frontend/dist
@@ -48,4 +55,4 @@ EXPOSE 50505
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:50505/api/health || exit 1
 
-ENTRYPOINT ["/app/packrat"]
+ENTRYPOINT ["/app/entrypoint.sh"]

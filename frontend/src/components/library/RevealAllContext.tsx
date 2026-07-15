@@ -4,6 +4,7 @@ interface RevealAllContextValue {
   revealAll: boolean
   isRevealed: (id: number) => boolean
   toggleItem: (id: number) => void
+  revealItems: (ids: number[]) => void
   toggleRevealAll: () => void
 }
 
@@ -11,6 +12,7 @@ const RevealAllContext = createContext<RevealAllContextValue>({
   revealAll: false,
   isRevealed: () => false,
   toggleItem: () => {},
+  revealItems: () => {},
   toggleRevealAll: () => {},
 })
 
@@ -41,10 +43,17 @@ export function RevealAllProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  // Additive only — used to bring a whole collection along when its main
+  // item is revealed, without disturbing anything a user already toggled
+  // individually elsewhere.
+  const revealItems = (ids: number[]) => {
+    setRevealedIds((prev) => new Set([...prev, ...ids]))
+  }
+
   const isRevealed = (id: number) => revealAll || revealedIds.has(id)
 
   return (
-    <RevealAllContext.Provider value={{ revealAll, isRevealed, toggleItem, toggleRevealAll }}>
+    <RevealAllContext.Provider value={{ revealAll, isRevealed, toggleItem, revealItems, toggleRevealAll }}>
       {children}
     </RevealAllContext.Provider>
   )

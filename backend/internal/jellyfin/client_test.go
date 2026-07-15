@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -58,5 +59,16 @@ func TestRefreshFullErrorStatus(t *testing.T) {
 	c := NewClient()
 	if err := c.RefreshFull(context.Background(), srv.URL, "wrong"); err == nil {
 		t.Fatal("expected an error for a 401 response, got nil")
+	}
+}
+
+func TestRefreshFullDNSFailureMessage(t *testing.T) {
+	c := NewClient()
+	err := c.RefreshFull(context.Background(), "http://this-host-does-not-exist.invalid", "secret")
+	if err == nil {
+		t.Fatal("expected an error for an unresolvable hostname, got nil")
+	}
+	if !strings.Contains(err.Error(), "could not resolve") {
+		t.Fatalf("expected a DNS-specific error message, got: %v", err)
 	}
 }

@@ -36,8 +36,9 @@ func CreateDownload(mgr *queue.DownloadManager, collectionsRepo *repository.Coll
 // PreviewDownloadMetadata fetches yt-dlp metadata for a URL without queuing anything, for the
 // New Download dialog's pre-submit preview card. A fetch failure (bad URL, unsupported site,
 // network error) is reported as 422 — the frontend treats this as non-fatal and never blocks
-// submission on it.
-func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+// submission on it. For a non-playlist URL, also looks up whether it's already in the library
+// (by original URL or video ID) so the dialog can offer Skip/Replace/Download Anyway.
+func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req PreviewDownloadRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -51,7 +52,16 @@ func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, toPreviewDownloadResponse(meta))
+		var dup *models.LibraryItem
+		if !meta.IsPlaylist() {
+			dup, err = libraryRepo.FindDuplicate(c.Request.Context(), req.URL, meta.ID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, toPreviewDownloadResponse(meta, dup))
 	}
 }
 

@@ -107,6 +107,7 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 		setSessionCookie(c, token)
+		setCSRFCookie(c, token)
 		c.Status(http.StatusNoContent)
 	}
 }
@@ -146,6 +147,7 @@ func AuthLogin(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 		setSessionCookie(c, token)
+		setCSRFCookie(c, token)
 		c.Status(http.StatusNoContent)
 	}
 }
@@ -197,6 +199,7 @@ func AuthLogout(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			}
 		}
 		clearSessionCookie(c)
+		clearCSRFCookie(c)
 		c.Status(http.StatusNoContent)
 	}
 }

@@ -28,3 +28,23 @@ export function buildCollectionTree(collections: Collection[]): CollectionTreeNo
 
   return roots
 }
+
+export function findNodeById(nodes: CollectionTreeNode[], id: number): CollectionTreeNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node
+    const found = findNodeById(node.children, id)
+    if (found) return found
+  }
+  return null
+}
+
+// Self + every nested descendant id — used to resolve a bulk-selected folder
+// into the full set of collection ids whose files should be included (folder
+// selection is recursive, see the Library bulk-edit plan's edge case #1).
+export function collectDescendantIds(node: CollectionTreeNode): number[] {
+  const ids = [node.id]
+  for (const child of node.children) {
+    ids.push(...collectDescendantIds(child))
+  }
+  return ids
+}

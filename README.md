@@ -6,6 +6,14 @@ media instead of TV/movies.
 
 > Only download content you have the right to download.
 
+## Legal
+
+Packrat is a tool for downloading media you already have the rights to — your own uploads, content
+under a permissive license, or anything else you're legally entitled to download and keep a copy
+of. It does not circumvent DRM and is not intended for downloading copyrighted material without
+permission. You are responsible for how you use it and for complying with the terms of service of
+any site you point it at.
+
 ## Status
 
 This is a **working skeleton**, not the full feature set described in
@@ -44,3 +52,13 @@ docker compose -f docker/docker-compose.yml up --build
 ```
 
 The app listens on `http://localhost:50505`.
+
+## Jellyfin
+
+The Jellyfin URL (Settings → Jellyfin) must be reachable **from inside the container's network**,
+not just from your browser. A bare LAN hostname (e.g. `http://mnx:8096`) that resolves fine on your
+host machine often won't resolve inside the container — Docker's default bridge network doesn't
+forward Windows/mDNS name resolution the way your host's own resolver does. If a rescan fails with
+a `dial tcp: lookup ... no such host` error, either point the URL at your Jellyfin server's LAN IP
+or a real FQDN instead of a bare hostname, or add it via `extra_hosts` in
+[`docker/docker-compose.yml`](docker/docker-compose.yml) (see the commented example there).

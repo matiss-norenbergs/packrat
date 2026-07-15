@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { ChevronDown, ChevronRight, Plus } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -21,17 +22,25 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useCreateDownload, useDownloadPreview } from "@/hooks/useDownloads"
+import { useCreateDownload, useCreatePlaylistDownload, useDownloadPreview } from "@/hooks/useDownloads"
 import { useCollections } from "@/hooks/useCollections"
+import { useDeleteLibraryItem } from "@/hooks/useLibrary"
 import { useArtists } from "@/hooks/useArtists"
 import { useSettings } from "@/hooks/useSettings"
 import { formatDuration } from "@/lib/utils"
 import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
-import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
+import type { AudioFormat, DownloadType, PlaylistMode, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
 const AUDIO_FORMATS: AudioFormat[] = ["mp3", "flac", "m4a", "aac", "wav"]
 const NO_COLLECTION = "none"
+
+const PLAYLIST_MODE_OPTIONS: { value: PlaylistMode; label: string }[] = [
+  { value: "entire", label: "Entire playlist" },
+  { value: "current", label: "Only this video" },
+  { value: "range", label: "Range" },
+  { value: "first_n", label: "First N" },
+]
 
 // Joins the included parts with a plain space, then replaces every space in
 // the result with the chosen separator — so a multi-word field like an
@@ -82,10 +91,18 @@ export function NewDownloadDialog() {
   const [includeYear, setIncludeYear] = useState(false)
   const [separator, setSeparator] = useState(".")
 
+  const [playlistMode, setPlaylistMode] = useState<PlaylistMode>("entire")
+  const [playlistStart, setPlaylistStart] = useState("")
+  const [playlistEnd, setPlaylistEnd] = useState("")
+  const [playlistLimit, setPlaylistLimit] = useState("")
+  const [skipDuplicates, setSkipDuplicates] = useState(true)
+
   const { data: collections } = useCollections()
   const { data: artists } = useArtists()
   const { data: settings } = useSettings()
   const createDownload = useCreateDownload()
+  const createPlaylistDownload = useCreatePlaylistDownload()
+  const deleteLibraryItem = useDeleteLibraryItem()
 
   const previewEnabled = !settings?.skipDownloadPreview
   const { data: preview, isLoading: previewLoading, isError: previewError } =
@@ -120,6 +137,11 @@ export function NewDownloadDialog() {
     setIncludeEpisode(false)
     setIncludeYear(false)
     setSeparator(".")
+    setPlaylistMode("entire")
+    setPlaylistStart("")
+    setPlaylistEnd("")
+    setPlaylistLimit("")
+    setSkipDuplicates(true)
   }
 
   const handleOpenChange = (next: boolean) => {
@@ -181,6 +203,50 @@ export function NewDownloadDialog() {
     )
   }
 
+  const handleQueuePlaylist = () => {
+    if (!url.trim()) return
+
+    const parsedStart = playlistStart.trim() === "" ? undefined : Number(playlistStart)
+    const parsedEnd = playlistEnd.trim() === "" ? undefined : Number(playlistEnd)
+    const parsedLimit = playlistLimit.trim() === "" ? undefined : Number(playlistLimit)
+
+    createPlaylistDownload.mutate(
+      {
+        url: url.trim(),
+        collectionId: collectionId === NO_COLLECTION ? undefined : Number(collectionId),
+        downloadType,
+        quality: downloadType === "video" ? quality : undefined,
+        audioFormat: downloadType === "audio" ? audioFormat : undefined,
+        playlistMode,
+        playlistStart: parsedStart,
+        playlistEnd: parsedEnd,
+        playlistLimit: parsedLimit,
+        skipDuplicates,
+      },
+      {
+        onSuccess: (result) => {
+          const parts = [`${result.queued.length} queued`]
+          if (result.skipped.length > 0) parts.push(`${result.skipped.length} already in library`)
+          if (result.failed.length > 0) parts.push(`${result.failed.length} failed`)
+          if (result.failed.length > 0) toast.error(parts.join(", "))
+          else toast.success(parts.join(", "))
+          setOpen(false)
+          reset()
+        },
+      },
+    )
+  }
+
+  const handleSkipDuplicate = () => setOpen(false)
+
+  const handleReplaceAndDownload = () => {
+    if (!preview?.duplicate) return
+    deleteLibraryItem.mutate(
+      { id: preview.duplicate.libraryItemId, deleteFiles: true },
+      { onSuccess: handleSubmit },
+    )
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
@@ -221,6 +287,11 @@ export function NewDownloadDialog() {
                 <p className="text-xs text-muted-foreground">
                   Couldn't fetch a preview for this URL — you can still queue the download.
                 </p>
+              ) : preview?.isPlaylist ? (
+                <div>
+                  <p className="line-clamp-1 text-sm font-medium">{preview.playlistTitle || "Playlist"}</p>
+                  <p className="text-xs text-muted-foreground">{preview.playlistCount} videos</p>
+                </div>
               ) : preview ? (
                 <div className="flex items-center gap-3">
                   {preview.thumbnail ? (
@@ -242,6 +313,83 @@ export function NewDownloadDialog() {
                   </div>
                 </div>
               ) : null}
+            </div>
+          )}
+
+          {preview?.isPlaylist && (
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex flex-wrap gap-1 rounded-md border p-0.5">
+                {PLAYLIST_MODE_OPTIONS.map((opt) => (
+                  <Button
+                    key={opt.value}
+                    type="button"
+                    variant={playlistMode === opt.value ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setPlaylistMode(opt.value)}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+
+              {playlistMode === "range" && (
+                <div className="flex gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="pl-start">Start</Label>
+                    <Input
+                      id="pl-start"
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={playlistStart}
+                      onChange={(e) => setPlaylistStart(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="pl-end">End</Label>
+                    <Input
+                      id="pl-end"
+                      type="number"
+                      min="1"
+                      placeholder={String(preview.playlistCount)}
+                      value={playlistEnd}
+                      onChange={(e) => setPlaylistEnd(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {playlistMode === "first_n" && (
+                <div className="space-y-1">
+                  <Label htmlFor="pl-limit">Count</Label>
+                  <Input
+                    id="pl-limit"
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 10"
+                    value={playlistLimit}
+                    onChange={(e) => setPlaylistLimit(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="pl-skip-dup"
+                  checked={skipDuplicates}
+                  onCheckedChange={(v) => setSkipDuplicates(v === true)}
+                />
+                <Label htmlFor="pl-skip-dup" className="font-normal">
+                  Skip items already in the library
+                </Label>
+              </div>
+            </div>
+          )}
+
+          {!preview?.isPlaylist && preview?.duplicate && (
+            <div className="rounded-md border border-amber-600/50 bg-amber-500/10 p-3 text-sm">
+              Already in your library: <span className="font-medium">{preview.duplicate.title}</span>, downloaded{" "}
+              {new Date(preview.duplicate.downloadedAt).toLocaleDateString()}.
             </div>
           )}
 
@@ -311,16 +459,19 @@ export function NewDownloadDialog() {
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="filename">Filename (optional)</Label>
-            <Input
-              id="filename"
-              placeholder="Leave blank to use the video title"
-              value={filename}
-              onChange={(e) => setFilename(e.target.value)}
-            />
-          </div>
+          {!preview?.isPlaylist && (
+            <div className="space-y-2">
+              <Label htmlFor="filename">Filename (optional)</Label>
+              <Input
+                id="filename"
+                placeholder="Leave blank to use the video title"
+                value={filename}
+                onChange={(e) => setFilename(e.target.value)}
+              />
+            </div>
+          )}
 
+          {!preview?.isPlaylist && (
           <div className="space-y-3 border-t pt-3">
             <button
               type="button"
@@ -445,12 +596,36 @@ export function NewDownloadDialog() {
               </div>
             )}
           </div>
+          )}
         </div>
 
         <DialogFooter>
-          <Button onClick={handleSubmit} disabled={!url.trim() || createDownload.isPending}>
-            {createDownload.isPending ? "Queuing…" : "Download"}
-          </Button>
+          {preview?.isPlaylist ? (
+            <Button onClick={handleQueuePlaylist} disabled={!url.trim() || createPlaylistDownload.isPending}>
+              {createPlaylistDownload.isPending ? "Queuing…" : "Queue Playlist"}
+            </Button>
+          ) : preview?.duplicate ? (
+            <div className="flex w-full flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" onClick={handleSkipDuplicate}>
+                Skip
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleReplaceAndDownload}
+                disabled={deleteLibraryItem.isPending || createDownload.isPending}
+              >
+                Replace & Download
+              </Button>
+              <Button type="button" onClick={handleSubmit} disabled={createDownload.isPending}>
+                Download Anyway
+              </Button>
+            </div>
+          ) : (
+            <Button onClick={handleSubmit} disabled={!url.trim() || createDownload.isPending}>
+              {createDownload.isPending ? "Queuing…" : "Download"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

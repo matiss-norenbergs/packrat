@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"time"
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/models"
@@ -62,9 +63,38 @@ type PreviewDownloadResponse struct {
 	Duration   int     `json:"duration"` // seconds, rounded from yt-dlp's float
 	Thumbnail  string  `json:"thumbnail"`
 	Resolution *string `json:"resolution"` // nil unless yt-dlp reported both width and height
+
+	// Playlist fields — IsPlaylist is false and the rest are zero-valued for
+	// a normal single-video URL. When true, the single-video fields above
+	// are left zero-valued instead (there is no one "the video" to preview).
+	IsPlaylist    bool   `json:"isPlaylist"`
+	PlaylistTitle string `json:"playlistTitle,omitempty"`
+	PlaylistCount int    `json:"playlistCount,omitempty"`
+
+	// Duplicate is set only for a non-playlist URL that already matches a
+	// library item by original URL or video ID; nil otherwise.
+	Duplicate *DuplicateInfo `json:"duplicate"`
 }
 
-func toPreviewDownloadResponse(m *downloader.Metadata) PreviewDownloadResponse {
+type DuplicateInfo struct {
+	LibraryItemID int64   `json:"libraryItemId"`
+	Title         string  `json:"title"`
+	Thumbnail     *string `json:"thumbnail"`
+	DownloadedAt  string  `json:"downloadedAt"`
+}
+
+// toPreviewDownloadResponse builds the preview response from yt-dlp's
+// metadata and (for a non-playlist URL) an already-performed duplicate
+// lookup — dup is nil when none was found or none was attempted.
+func toPreviewDownloadResponse(m *downloader.Metadata, dup *models.LibraryItem) PreviewDownloadResponse {
+	if m.IsPlaylist() {
+		return PreviewDownloadResponse{
+			IsPlaylist:    true,
+			PlaylistTitle: m.Title,
+			PlaylistCount: len(m.Entries),
+		}
+	}
+
 	resp := PreviewDownloadResponse{
 		Title:     m.Title,
 		Uploader:  m.Uploader,
@@ -74,6 +104,14 @@ func toPreviewDownloadResponse(m *downloader.Metadata) PreviewDownloadResponse {
 	if m.Width > 0 && m.Height > 0 {
 		res := fmt.Sprintf("%dx%d", m.Width, m.Height)
 		resp.Resolution = &res
+	}
+	if dup != nil {
+		resp.Duplicate = &DuplicateInfo{
+			LibraryItemID: dup.ID,
+			Title:         dup.Title,
+			Thumbnail:     dup.Thumbnail,
+			DownloadedAt:  dup.DownloadedAt.Format(time.RFC3339),
+		}
 	}
 	return resp
 }
@@ -173,6 +211,21 @@ type LibraryItemResponse struct {
 	Tags           []string `json:"tags"`
 }
 
+// LibraryListResponse wraps GET /api/library's results — always a wrapper
+// (not a bare array) whether or not pagination is active, so the shape is
+// consistent regardless of query params. Total is the full match count
+// (ignoring page/pageSize), used to build "Page X of Y" controls.
+type LibraryListResponse struct {
+	Items []LibraryItemResponse `json:"items"`
+	Total int                   `json:"total"`
+}
+
+// LibraryFacetsResponse backs filter pickers that need every possible value
+// across the whole library, independent of the current search/filter/page.
+type LibraryFacetsResponse struct {
+	Years []int `json:"years"`
+}
+
 // toLibraryItemResponse builds the API response for a library item. mediaRoot
 // is needed to check whether the item's .nfo sidecar currently exists on
 // disk — GenerateNFO only reflects whether the toggle is on, not whether a
@@ -216,12 +269,12 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 }
 
 type UpdateLibraryItemRequest struct {
-	Title          *string   `json:"title"`
-	Filename       *string   `json:"filename"`
-	Uploader       *string   `json:"uploader"`
-	Description    *string   `json:"description"`
-	Duration       *int      `json:"duration"`
-	Resolution     *string   `json:"resolution"`
+	Title       *string `json:"title"`
+	Filename    *string `json:"filename"`
+	Uploader    *string `json:"uploader"`
+	Description *string `json:"description"`
+	Duration    *int    `json:"duration"`
+	Resolution  *string `json:"resolution"`
 	// ArtistID: nil means "leave unchanged" (field omitted or absent), 0
 	// means "clear the artist" — a real artist id is never 0 since
 	// AUTOINCREMENT starts at 1, so 0 is an unambiguous sentinel for
@@ -233,6 +286,14 @@ type UpdateLibraryItemRequest struct {
 	GenerateNFO    *bool     `json:"generateNfo"`
 	OriginalURL    *string   `json:"originalUrl"`
 	Tags           *[]string `json:"tags"`
+}
+
+// BulkAssignTagsRequest overwrites the tag set on every listed item — not a
+// merge, matching the frontend's "assign tags" bulk-edit dialog, which warns
+// the user about the overwrite up front rather than offering an add mode.
+type BulkAssignTagsRequest struct {
+	ItemIDs []int64  `json:"itemIds" binding:"required,min=1"`
+	Tags    []string `json:"tags"`
 }
 
 // ThumbnailCandidateResponse is one of the 4 candidate frames returned by
@@ -273,18 +334,29 @@ type UpdateCollectionRequest struct {
 }
 
 type CollectionResponse struct {
-	ID                  int64   `json:"id"`
-	Name                string  `json:"name"`
-	ParentID            *int64  `json:"parentId"`
-	RootPath            string  `json:"rootPath"`
-	Path                string  `json:"path"`
-	DefaultQuality      string  `json:"defaultQuality"`
-	DefaultDownloadType string  `json:"defaultDownloadType"`
-	IsPrivate           bool    `json:"isPrivate"`
-	ItemCount           int     `json:"itemCount"`
-	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
-	CreatedAt           string  `json:"createdAt"`
-	UpdatedAt           string  `json:"updatedAt"`
+	ID                  int64  `json:"id"`
+	Name                string `json:"name"`
+	ParentID            *int64 `json:"parentId"`
+	RootPath            string `json:"rootPath"`
+	Path                string `json:"path"`
+	DefaultQuality      string `json:"defaultQuality"`
+	DefaultDownloadType string `json:"defaultDownloadType"`
+	IsPrivate           bool   `json:"isPrivate"`
+	ItemCount           int    `json:"itemCount"`
+	// EffectiveIsPrivate and TotalItemCount account for inheritance down the
+	// collection tree — IsPrivate/ItemCount above are this collection's own,
+	// non-inherited flag and its own direct (non-rolled-up) item count,
+	// which is what the tree UI and folder-view tiles want to show. These
+	// two instead answer "does this collection (or an ancestor) mark it
+	// private, and is there anything actually private under here at all" —
+	// needed by the Library toolbar's reveal-all button, which otherwise
+	// can't tell if there's any blurred content when a private *parent*
+	// holds no items directly and its items live in unmarked children.
+	EffectiveIsPrivate bool    `json:"effectiveIsPrivate"`
+	TotalItemCount     int     `json:"totalItemCount"`
+	JellyfinLibraryID  *string `json:"jellyfinLibraryId"`
+	CreatedAt          string  `json:"createdAt"`
+	UpdatedAt          string  `json:"updatedAt"`
 }
 
 type TagResponse struct {
@@ -336,43 +408,55 @@ func toArtistResponse(a models.ArtistWithCount) ArtistResponse {
 }
 
 type SettingsResponse struct {
-	DownloadDirectory      string   `json:"downloadDirectory"`
-	MaxConcurrentDownloads int      `json:"maxConcurrentDownloads"`
-	DefaultQuality         string   `json:"defaultQuality"`
-	DefaultDownloadType    string   `json:"defaultDownloadType"`
-	ImportIgnoredFolders   []string `json:"importIgnoredFolders"`
-	HistoryAnonymizeURLs   bool     `json:"historyAnonymizeUrls"`
-	LibraryView            string   `json:"libraryView"`
-	LibrarySortKey         string   `json:"librarySortKey"`
-	LibrarySortDir         string   `json:"librarySortDir"`
-	LibraryMode            string   `json:"libraryMode"`
-	ThumbnailFrameCount    int      `json:"thumbnailFrameCount"`
-	PrivacyBlurStrength    string   `json:"privacyBlurStrength"`
-	SkipDownloadPreview    bool     `json:"skipDownloadPreview"`
-	JellyfinEnabled        bool     `json:"jellyfinEnabled"`
-	JellyfinURL            string   `json:"jellyfinUrl"`
-	JellyfinAPIKey         string   `json:"jellyfinApiKey"`
+	DownloadDirectory        string   `json:"downloadDirectory"`
+	MaxConcurrentDownloads   int      `json:"maxConcurrentDownloads"`
+	DownloadTimeoutMinutes   int      `json:"downloadTimeoutMinutes"`
+	DefaultQuality           string   `json:"defaultQuality"`
+	DefaultDownloadType      string   `json:"defaultDownloadType"`
+	ImportIgnoredFolders     []string `json:"importIgnoredFolders"`
+	HistoryAnonymizeURLs     bool     `json:"historyAnonymizeUrls"`
+	HistoryRetentionDays     int      `json:"historyRetentionDays"`
+	LibraryView              string   `json:"libraryView"`
+	LibrarySortKey           string   `json:"librarySortKey"`
+	LibrarySortDir           string   `json:"librarySortDir"`
+	LibraryMode              string   `json:"libraryMode"`
+	LibraryPaginationEnabled bool     `json:"libraryPaginationEnabled"`
+	LibraryPageSize          int      `json:"libraryPageSize"`
+	ThumbnailFrameCount      int      `json:"thumbnailFrameCount"`
+	PrivacyBlurStrength      string   `json:"privacyBlurStrength"`
+	SkipDownloadPreview      bool     `json:"skipDownloadPreview"`
+	JellyfinEnabled          bool     `json:"jellyfinEnabled"`
+	JellyfinURL              string   `json:"jellyfinUrl"`
+	JellyfinAPIKey           string   `json:"jellyfinApiKey"`
+	JellyfinRefreshMode      string   `json:"jellyfinRefreshMode"`
+	LibraryAutoplay          bool     `json:"libraryAutoplay"`
 }
 
 type UpdateSettingsRequest struct {
-	MaxConcurrentDownloads *int      `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
-	DefaultQuality         *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType    *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
-	ImportIgnoredFolders   *[]string `json:"importIgnoredFolders"`
-	HistoryAnonymizeURLs   *bool     `json:"historyAnonymizeUrls"`
-	LibraryView            *string   `json:"libraryView" binding:"omitempty,oneof=grid folders"`
-	LibrarySortKey         *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber"`
-	LibrarySortDir         *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
-	LibraryMode            *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
-	ThumbnailFrameCount    *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
-	PrivacyBlurStrength    *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
-	SkipDownloadPreview    *bool     `json:"skipDownloadPreview"`
-	JellyfinEnabled        *bool     `json:"jellyfinEnabled"`
-	JellyfinURL            *string   `json:"jellyfinUrl"`
-	JellyfinAPIKey         *string   `json:"jellyfinApiKey"`
+	MaxConcurrentDownloads   *int      `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
+	DownloadTimeoutMinutes   *int      `json:"downloadTimeoutMinutes" binding:"omitempty,min=0"`
+	DefaultQuality           *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
+	DefaultDownloadType      *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	ImportIgnoredFolders     *[]string `json:"importIgnoredFolders"`
+	HistoryAnonymizeURLs     *bool     `json:"historyAnonymizeUrls"`
+	HistoryRetentionDays     *int      `json:"historyRetentionDays" binding:"omitempty,min=0"`
+	LibraryView              *string   `json:"libraryView" binding:"omitempty,oneof=grid folders"`
+	LibrarySortKey           *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber"`
+	LibrarySortDir           *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
+	LibraryMode              *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
+	LibraryPaginationEnabled *bool     `json:"libraryPaginationEnabled"`
+	LibraryPageSize          *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
+	ThumbnailFrameCount      *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
+	PrivacyBlurStrength      *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
+	SkipDownloadPreview      *bool     `json:"skipDownloadPreview"`
+	JellyfinEnabled          *bool     `json:"jellyfinEnabled"`
+	JellyfinURL              *string   `json:"jellyfinUrl"`
+	JellyfinAPIKey           *string   `json:"jellyfinApiKey"`
+	JellyfinRefreshMode      *string   `json:"jellyfinRefreshMode" binding:"omitempty,oneof=entire specific none"`
+	LibraryAutoplay          *bool     `json:"libraryAutoplay"`
 }
 
-func toCollectionResponse(c models.Collection, path string, itemCount int) CollectionResponse {
+func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int) CollectionResponse {
 	return CollectionResponse{
 		ID:                  c.ID,
 		Name:                c.Name,
@@ -383,10 +467,42 @@ func toCollectionResponse(c models.Collection, path string, itemCount int) Colle
 		DefaultDownloadType: c.DefaultDownloadType,
 		IsPrivate:           c.IsPrivate,
 		ItemCount:           itemCount,
+		EffectiveIsPrivate:  effectiveIsPrivate,
+		TotalItemCount:      totalItemCount,
 		JellyfinLibraryID:   c.JellyfinLibrary,
 		CreatedAt:           c.CreatedAt.Format(timeFormat),
 		UpdatedAt:           c.UpdatedAt.Format(timeFormat),
 	}
+}
+
+// totalItemCounts sums each collection's own direct item count together
+// with every descendant's, so an organizational parent collection (no items
+// placed directly on it) still reports whether there's anything under it at
+// all. Same memoized-recursion shape as effectivePrivacyMap/collectionPaths.
+func totalItemCounts(cols []models.Collection, direct map[int64]int) map[int64]int {
+	children := make(map[int64][]int64, len(cols))
+	for _, c := range cols {
+		if c.ParentID != nil {
+			children[*c.ParentID] = append(children[*c.ParentID], c.ID)
+		}
+	}
+	totals := make(map[int64]int, len(cols))
+	var sum func(id int64) int
+	sum = func(id int64) int {
+		if v, ok := totals[id]; ok {
+			return v
+		}
+		total := direct[id]
+		for _, childID := range children[id] {
+			total += sum(childID)
+		}
+		totals[id] = total
+		return total
+	}
+	for _, c := range cols {
+		sum(c.ID)
+	}
+	return totals
 }
 
 // effectivePrivacyMap builds, for every collection in cols, whether it or

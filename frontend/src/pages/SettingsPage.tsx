@@ -14,7 +14,13 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useChangePassword } from "@/hooks/useAuth"
-import { useRescanJellyfinLibrary, useSettings, useUpdateSettings } from "@/hooks/useSettings"
+import {
+  useRescanJellyfinLibrary,
+  useSettings,
+  useUpdateSettings,
+  useUpdateYtDlp,
+  useYtDlpVersion,
+} from "@/hooks/useSettings"
 import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -24,105 +30,103 @@ export function SettingsPage() {
   const updateSettings = useUpdateSettings()
 
   const [maxConcurrent, setMaxConcurrent] = useState("")
-  const [defaultQuality, setDefaultQuality] = useState<VideoQuality>("best")
-  const [defaultDownloadType, setDefaultDownloadType] = useState<DownloadType>("video")
+  const [downloadTimeout, setDownloadTimeout] = useState("")
 
   useEffect(() => {
     if (!settings) return
     setMaxConcurrent(String(settings.maxConcurrentDownloads))
-    setDefaultQuality(settings.defaultQuality as VideoQuality)
-    setDefaultDownloadType(settings.defaultDownloadType)
+    setDownloadTimeout(String(settings.downloadTimeoutMinutes))
   }, [settings])
 
   const handleSave = () => {
     if (!settings) return
     const payload: UpdateSettingsRequest = {}
-
     const n = Number(maxConcurrent)
     if (n > 0 && n !== settings.maxConcurrentDownloads) payload.maxConcurrentDownloads = n
-    if (defaultQuality !== settings.defaultQuality) payload.defaultQuality = defaultQuality
-    if (defaultDownloadType !== settings.defaultDownloadType) payload.defaultDownloadType = defaultDownloadType
-
-    if (Object.keys(payload).length === 0) return
-    updateSettings.mutate(payload)
+    const timeout = Number(downloadTimeout)
+    if (timeout >= 0 && timeout !== settings.downloadTimeoutMinutes) payload.downloadTimeoutMinutes = timeout
+    if (Object.keys(payload).length > 0) updateSettings.mutate(payload)
   }
 
   return (
-    <div className="max-w-lg space-y-6">
+    <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Settings</h1>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>General</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoading || !settings ? (
-            <Skeleton className="h-40 w-full" />
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="download-directory">Download Directory</Label>
-                <Input id="download-directory" value={settings.downloadDirectory} disabled />
-                <p className="text-xs text-muted-foreground">
-                  Set via the <code>MEDIA_ROOT</code> environment variable — not editable here.
-                </p>
-              </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
+        <div className="space-y-6">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            App Settings
+          </h2>
 
-              <div className="space-y-2">
-                <Label htmlFor="max-concurrent">Max Concurrent Downloads</Label>
-                <Input
-                  id="max-concurrent"
-                  type="number"
-                  min="1"
-                  value={maxConcurrent}
-                  onChange={(e) => setMaxConcurrent(e.target.value)}
-                />
-              </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>General</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLoading || !settings ? (
+                <Skeleton className="h-24 w-full" />
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="download-directory">Download Directory</Label>
+                    <Input id="download-directory" value={settings.downloadDirectory} disabled />
+                    <p className="text-xs text-muted-foreground">
+                      Set via the <code>MEDIA_ROOT</code> environment variable — not editable here.
+                    </p>
+                  </div>
 
-              <div className="flex gap-4">
-                <div className="flex-1 space-y-2">
-                  <Label>Default Type</Label>
-                  <Select value={defaultDownloadType} onValueChange={(v) => setDefaultDownloadType(v as DownloadType)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="video">Video</SelectItem>
-                      <SelectItem value="audio">Audio</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1 space-y-2">
-                  <Label>Default Quality</Label>
-                  <Select value={defaultQuality} onValueChange={(v) => setDefaultQuality(v as VideoQuality)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {VIDEO_QUALITIES.map((q) => (
-                        <SelectItem key={q} value={q}>
-                          {q}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="max-concurrent">Max Concurrent Downloads</Label>
+                    <Input
+                      id="max-concurrent"
+                      type="number"
+                      min="1"
+                      value={maxConcurrent}
+                      onChange={(e) => setMaxConcurrent(e.target.value)}
+                    />
+                  </div>
 
-              <Button onClick={handleSave} disabled={updateSettings.isPending}>
-                {updateSettings.isPending ? "Saving…" : "Save"}
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+                  <div className="space-y-2">
+                    <Label htmlFor="download-timeout">Download Timeout (minutes)</Label>
+                    <Input
+                      id="download-timeout"
+                      type="number"
+                      min="0"
+                      placeholder="No limit"
+                      value={downloadTimeout}
+                      onChange={(e) => setDownloadTimeout(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Kills and marks failed any download still running past this limit. 0 = no limit.
+                    </p>
+                  </div>
 
-      <AccountCard />
-      <DownloadsCard />
-      <PrivacyCard />
-      <ThumbnailsCard />
-      <JellyfinCard />
-      <AppearanceCard />
+                  <Button onClick={handleSave} disabled={updateSettings.isPending}>
+                    {updateSettings.isPending ? "Saving…" : "Save"}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <AccountCard />
+          <YtDlpCard />
+          <AppearanceCard />
+        </div>
+
+        <div className="space-y-6">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            Content Settings
+          </h2>
+
+          <DownloadsCard />
+          <PrivacyCard />
+          <HistoryCard />
+          <ThumbnailsCard />
+          <PlayerCard />
+          <JellyfinCard />
+        </div>
+      </div>
     </div>
   )
 }
@@ -135,12 +139,14 @@ function JellyfinCard() {
   const [enabled, setEnabled] = useState(false)
   const [url, setUrl] = useState("")
   const [apiKey, setApiKey] = useState("")
+  const [refreshMode, setRefreshMode] = useState("none")
 
   useEffect(() => {
     if (!settings) return
     setEnabled(settings.jellyfinEnabled)
     setUrl(settings.jellyfinUrl)
     setApiKey(settings.jellyfinApiKey)
+    setRefreshMode(settings.jellyfinRefreshMode || "none")
   }, [settings])
 
   const handleSave = () => {
@@ -150,6 +156,7 @@ function JellyfinCard() {
     if (enabled !== settings.jellyfinEnabled) payload.jellyfinEnabled = enabled
     if (url !== settings.jellyfinUrl) payload.jellyfinUrl = url
     if (apiKey !== settings.jellyfinApiKey) payload.jellyfinApiKey = apiKey
+    if (refreshMode !== settings.jellyfinRefreshMode) payload.jellyfinRefreshMode = refreshMode
 
     if (Object.keys(payload).length === 0) return
     updateSettings.mutate(payload)
@@ -172,7 +179,8 @@ function JellyfinCard() {
                   Enable Jellyfin
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Lets you manually trigger a library rescan below — nothing happens automatically.
+                  Lets you manually trigger a library rescan below, and controls the automatic
+                  refresh option underneath.
                 </p>
               </div>
             </div>
@@ -197,6 +205,26 @@ function JellyfinCard() {
                 onChange={(e) => setApiKey(e.target.value)}
                 disabled={!enabled}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Refresh after download</Label>
+              <Select value={refreshMode} onValueChange={setRefreshMode} disabled={!enabled}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nothing</SelectItem>
+                  <SelectItem value="entire">Entire library</SelectItem>
+                  <SelectItem value="specific">Specific library</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                "Specific library" refreshes only the Jellyfin library linked to the download's
+                collection (set per-collection in Collections → Edit) — downloads in a collection
+                with no library linked, or uncategorized downloads, don't trigger anything. A burst
+                of downloads within a short window is coalesced into a single rescan.
+              </p>
             </div>
 
             <div className="flex gap-2">
@@ -284,37 +312,128 @@ function AccountCard() {
   )
 }
 
+function YtDlpCard() {
+  const { data, isLoading } = useYtDlpVersion()
+  const update = useUpdateYtDlp()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>yt-dlp</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading || !data ? (
+          <Skeleton className="h-16 w-full" />
+        ) : (
+          <>
+            <div className="space-y-1 text-sm">
+              <p>
+                Current version: <span className="font-mono">{data.currentVersion}</span>
+              </p>
+              {data.updateAvailable ? (
+                <p className="text-amber-600">
+                  Update available: <span className="font-mono">{data.latestVersion}</span>
+                </p>
+              ) : (
+                <p className="text-muted-foreground">
+                  Up to date{data.latestVersion ? "" : " (couldn't check latest)"}.
+                </p>
+              )}
+            </div>
+            <Button variant="outline" onClick={() => update.mutate()} disabled={update.isPending}>
+              {update.isPending ? "Updating…" : "Update yt-dlp"}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function DownloadsCard() {
   const { data: settings, isLoading } = useSettings()
   const updateSettings = useUpdateSettings()
+
+  const [defaultQuality, setDefaultQuality] = useState<VideoQuality>("best")
+  const [defaultDownloadType, setDefaultDownloadType] = useState<DownloadType>("video")
+
+  useEffect(() => {
+    if (!settings) return
+    setDefaultQuality(settings.defaultQuality as VideoQuality)
+    setDefaultDownloadType(settings.defaultDownloadType)
+  }, [settings])
+
+  const handleSaveDefaults = () => {
+    if (!settings) return
+    const payload: UpdateSettingsRequest = {}
+    if (defaultQuality !== settings.defaultQuality) payload.defaultQuality = defaultQuality
+    if (defaultDownloadType !== settings.defaultDownloadType) payload.defaultDownloadType = defaultDownloadType
+    if (Object.keys(payload).length === 0) return
+    updateSettings.mutate(payload)
+  }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Downloads</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         {isLoading || !settings ? (
-          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-24 w-full" />
         ) : (
-          <div className="flex items-start gap-2">
-            <Checkbox
-              id="skip-download-preview"
-              checked={settings.skipDownloadPreview}
-              disabled={updateSettings.isPending}
-              onCheckedChange={(v) => updateSettings.mutate({ skipDownloadPreview: v === true })}
-            />
-            <div className="space-y-1">
-              <Label htmlFor="skip-download-preview" className="font-normal">
-                I trust this source (skip preview)
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Skips the thumbnail/title preview in the New Download dialog and queues
-                immediately. Shown by default so you can catch a bad URL before it fails in
-                the queue.
-              </p>
+          <>
+            <div className="flex gap-4">
+              <div className="flex-1 space-y-2">
+                <Label>Default Type</Label>
+                <Select value={defaultDownloadType} onValueChange={(v) => setDefaultDownloadType(v as DownloadType)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="video">Video</SelectItem>
+                    <SelectItem value="audio">Audio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label>Default Quality</Label>
+                <Select value={defaultQuality} onValueChange={(v) => setDefaultQuality(v as VideoQuality)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VIDEO_QUALITIES.map((q) => (
+                      <SelectItem key={q} value={q}>
+                        {q}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
+            <Button onClick={handleSaveDefaults} disabled={updateSettings.isPending}>
+              {updateSettings.isPending ? "Saving…" : "Save"}
+            </Button>
+
+            <div className="flex items-start gap-2 border-t pt-4">
+              <Checkbox
+                id="skip-download-preview"
+                checked={settings.skipDownloadPreview}
+                disabled={updateSettings.isPending}
+                onCheckedChange={(v) => updateSettings.mutate({ skipDownloadPreview: v === true })}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="skip-download-preview" className="font-normal">
+                  I trust this source (skip preview)
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Skips the thumbnail/title preview in the New Download dialog and queues
+                  immediately. Shown by default so you can catch a bad URL before it fails in
+                  the queue.
+                </p>
+              </div>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
@@ -363,6 +482,42 @@ function ThumbnailsCard() {
   )
 }
 
+function PlayerCard() {
+  const { data: settings, isLoading } = useSettings()
+  const updateSettings = useUpdateSettings()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Player</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading || !settings ? (
+          <Skeleton className="h-10 w-full" />
+        ) : (
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="library-autoplay"
+              checked={settings.libraryAutoplay}
+              disabled={updateSettings.isPending}
+              onCheckedChange={(v) => updateSettings.mutate({ libraryAutoplay: v === true })}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="library-autoplay" className="font-normal">
+                Autoplay
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Starts playback immediately when opening a library item — including a private one,
+                right after you reveal it. Volume is remembered automatically between plays.
+              </p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 const BLUR_STRENGTH_OPTIONS: { value: string; label: string }[] = [
   { value: "weak", label: "Weak" },
   { value: "default", label: "Default" },
@@ -377,6 +532,54 @@ function PrivacyCard() {
     <Card>
       <CardHeader>
         <CardTitle>Privacy</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading || !settings ? (
+          <Skeleton className="h-20 w-full" />
+        ) : (
+          <div className="space-y-2">
+            <Label>Private Collection Blur Strength</Label>
+            <Select
+              value={settings.privacyBlurStrength}
+              onValueChange={(v) => updateSettings.mutate({ privacyBlurStrength: v })}
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BLUR_STRENGTH_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              How strongly thumbnails in private collections are blurred until clicked to reveal.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+const RETENTION_OPTIONS: { value: string; label: string }[] = [
+  { value: "7", label: "7 days" },
+  { value: "30", label: "30 days" },
+  { value: "90", label: "90 days" },
+  { value: "365", label: "365 days" },
+  { value: "0", label: "Forever" },
+]
+
+function HistoryCard() {
+  const { data: settings, isLoading } = useSettings()
+  const updateSettings = useUpdateSettings()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>History</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading || !settings ? (
@@ -402,16 +605,16 @@ function PrivacyCard() {
             </div>
 
             <div className="space-y-2">
-              <Label>Private Collection Blur Strength</Label>
+              <Label>Keep history for</Label>
               <Select
-                value={settings.privacyBlurStrength}
-                onValueChange={(v) => updateSettings.mutate({ privacyBlurStrength: v })}
+                value={String(settings.historyRetentionDays)}
+                onValueChange={(v) => updateSettings.mutate({ historyRetentionDays: Number(v) })}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {BLUR_STRENGTH_OPTIONS.map((opt) => (
+                  {RETENTION_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
@@ -419,7 +622,8 @@ function PrivacyCard() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                How strongly thumbnails in private collections are blurred until clicked to reveal.
+                History entries older than this are deleted automatically. Doesn't affect your
+                library files or downloads — only the History page's log.
               </p>
             </div>
           </>

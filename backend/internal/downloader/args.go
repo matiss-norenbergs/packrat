@@ -32,6 +32,11 @@ func (s *YtDlpService) BuildArgs(job DownloadJob) []string {
 		"--progress",
 		"--no-playlist",
 		"--restrict-filenames",
+		// A thumbnail-fetch/convert failure is a postprocessing step, not a
+		// real download failure — without -i, yt-dlp exits non-zero anyway
+		// and the whole job gets marked failed even though the video itself
+		// downloaded fine.
+		"--ignore-errors",
 		"--write-thumbnail",
 		"--convert-thumbnails", "jpg",
 		"--embed-metadata",

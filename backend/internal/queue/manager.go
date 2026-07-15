@@ -2,10 +2,12 @@ package queue
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,11 +15,18 @@ import (
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
+	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/ws"
 )
+
+// jellyfinRefreshDebounce is how long the manager waits after the most
+// recent completed download before actually calling Jellyfin — a burst of
+// downloads (e.g. a playlist) finishing within this window collapses into
+// one rescan instead of one per download.
+const jellyfinRefreshDebounce = 20 * time.Second
 
 // progressBroadcastInterval throttles per-download progress events to at
 // most once per this interval, per the WebSocket Throttling requirement —
@@ -26,15 +35,18 @@ import (
 const progressBroadcastInterval = time.Second
 
 type DownloadManager struct {
-	mediaRoot       string
-	ytdlp           *downloader.YtDlpService
-	downloadsRepo   *repository.DownloadsRepo
-	libraryRepo     *repository.LibraryRepo
-	collectionsRepo *repository.CollectionsRepo
-	historyRepo     *repository.HistoryRepo
-	artistsRepo     *repository.ArtistsRepo
-	progress        *ProgressStore
-	broadcaster     ws.Broadcaster
+	mediaRoot        string
+	ytdlp            *downloader.YtDlpService
+	downloadsRepo    *repository.DownloadsRepo
+	libraryRepo      *repository.LibraryRepo
+	collectionsRepo  *repository.CollectionsRepo
+	historyRepo      *repository.HistoryRepo
+	artistsRepo      *repository.ArtistsRepo
+	settingsRepo     *repository.SettingsRepo
+	jellyfinClient   *jellyfin.Client
+	jellyfinDebounce *jellyfin.Debouncer
+	progress         *ProgressStore
+	broadcaster      ws.Broadcaster
 
 	jobs chan int64
 
@@ -66,10 +78,12 @@ func NewDownloadManager(
 	collectionsRepo *repository.CollectionsRepo,
 	historyRepo *repository.HistoryRepo,
 	artistsRepo *repository.ArtistsRepo,
+	settingsRepo *repository.SettingsRepo,
+	jellyfinClient *jellyfin.Client,
 	progress *ProgressStore,
 	broadcaster ws.Broadcaster,
 ) *DownloadManager {
-	return &DownloadManager{
+	m := &DownloadManager{
 		mediaRoot:       mediaRoot,
 		ytdlp:           ytdlp,
 		downloadsRepo:   downloadsRepo,
@@ -77,12 +91,16 @@ func NewDownloadManager(
 		collectionsRepo: collectionsRepo,
 		historyRepo:     historyRepo,
 		artistsRepo:     artistsRepo,
+		settingsRepo:    settingsRepo,
+		jellyfinClient:  jellyfinClient,
 		progress:        progress,
 		broadcaster:     broadcaster,
 		jobs:            make(chan int64, 100),
 		cancels:         make(map[int64]context.CancelFunc),
 		lastBroadcastAt: make(map[int64]time.Time),
 	}
+	m.jellyfinDebounce = jellyfin.NewDebouncer(jellyfinRefreshDebounce, m.doJellyfinRefresh)
+	return m
 }
 
 // ResolveEffectiveRoot returns the directory downloads should be written
@@ -206,7 +224,26 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		return // cancelled while still queued, nothing to do
 	}
 
-	runCtx, cancel := context.WithCancel(parentCtx)
+	// A configured timeout (0 = disabled, the default) wraps the whole run —
+	// metadata fetch through the actual yt-dlp/ffmpeg process — in a deadline
+	// instead of a plain cancel-only context. The returned cancel still goes
+	// into m.cancels[id] either way, so manual Cancel() keeps working
+	// unchanged; exec.CommandContext (already used throughout
+	// downloader.YtDlpService) is what actually kills the subprocess when
+	// the context ends, the same mechanism manual cancel already relies on.
+	timeoutRaw, err := m.settingsRepo.Get(parentCtx, models.SettingDownloadTimeoutMinutes)
+	timeoutMinutes, convErr := strconv.Atoi(timeoutRaw)
+	if err != nil || convErr != nil || timeoutMinutes < 0 {
+		timeoutMinutes = 0
+	}
+
+	var runCtx context.Context
+	var cancel context.CancelFunc
+	if timeoutMinutes > 0 {
+		runCtx, cancel = context.WithTimeout(parentCtx, time.Duration(timeoutMinutes)*time.Minute)
+	} else {
+		runCtx, cancel = context.WithCancel(parentCtx)
+	}
 	m.mu.Lock()
 	m.cancels[id] = cancel
 	m.mu.Unlock()
@@ -337,6 +374,8 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		return
 	}
 
+	m.triggerJellyfinRefresh(parentCtx, d)
+
 	// Best-effort: keep the file's own tags in sync with whatever overrides
 	// were provided at request time, same call shape library_handler.go's
 	// UpdateLibraryItem already uses on manual edits. Skipped entirely when
@@ -406,6 +445,69 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 	}
 }
 
+// triggerJellyfinRefresh schedules a debounced Jellyfin rescan for a just-
+// completed download, per the jellyfin_refresh_mode setting — "entire"
+// debounces a full-library refresh, "specific" debounces a refresh scoped
+// to d's collection's linked Jellyfin library (skipped entirely if the
+// collection has none set, or the download is uncategorized: there's
+// nothing to target, and silently falling back to a full refresh would
+// violate the user's explicit "specific" choice), "none" (or Jellyfin not
+// enabled) does nothing. Reads settings directly rather than via the api
+// package's JellyfinEnabled helper, since api already imports queue and a
+// reverse import would cycle.
+func (m *DownloadManager) triggerJellyfinRefresh(ctx context.Context, d *models.Download) {
+	enabledRaw, err := m.settingsRepo.Get(ctx, models.SettingJellyfinEnabled)
+	if err != nil || enabledRaw != "true" {
+		return
+	}
+	mode, err := m.settingsRepo.Get(ctx, models.SettingJellyfinRefreshMode)
+	if err != nil {
+		mode = "none"
+	}
+
+	switch mode {
+	case "entire":
+		m.jellyfinDebounce.Trigger("")
+	case "specific":
+		if d.CollectionID == nil {
+			return
+		}
+		collection, err := m.collectionsRepo.Get(ctx, *d.CollectionID)
+		if err != nil || collection.JellyfinLibrary == nil || *collection.JellyfinLibrary == "" {
+			return
+		}
+		m.jellyfinDebounce.Trigger(*collection.JellyfinLibrary)
+	}
+}
+
+// doJellyfinRefresh is the Debouncer callback — it fires after the debounce
+// window closes, so it re-reads the URL/API key fresh rather than trusting
+// whatever was current when triggerJellyfinRefresh ran. Errors are only
+// logged: this is a best-effort background trigger, not a user-facing
+// action — the manual "Rescan Library Now" button is the path that surfaces
+// failures directly.
+func (m *DownloadManager) doJellyfinRefresh(target string) {
+	ctx := context.Background()
+	baseURL, err := m.settingsRepo.Get(ctx, models.SettingJellyfinURL)
+	if err != nil || baseURL == "" {
+		return
+	}
+	apiKey, err := m.settingsRepo.Get(ctx, models.SettingJellyfinAPIKey)
+	if err != nil || apiKey == "" {
+		return
+	}
+
+	if target == "" {
+		if err := m.jellyfinClient.RefreshFull(ctx, baseURL, apiKey); err != nil {
+			log.Printf("queue: jellyfin full refresh failed: %v", err)
+		}
+		return
+	}
+	if err := m.jellyfinClient.RefreshItem(ctx, baseURL, apiKey, target); err != nil {
+		log.Printf("queue: jellyfin refresh of library %s failed: %v", target, err)
+	}
+}
+
 // thumbnailPathFor guesses the thumbnail path written alongside finalPath.
 // --convert-thumbnails jpg (see downloader.BuildArgs) means it always has a
 // .jpg extension and the same base name as the media file.
@@ -418,13 +520,37 @@ func thumbnailPathFor(finalPath string) string {
 	return base + ".jpg"
 }
 
-// finishError handles any error that ends a download's run, distinguishing
-// user-initiated cancellation (runCtx was cancelled) from a genuine failure
-// so the stored status/broadcast reflects the real cause rather than always
-// reporting "failed" — MarkCancelled uses parentCtx since runCtx is already
-// done by the time this runs.
+// classifyRunCtxErr distinguishes why runCtx ended, so finishError can record the real cause
+// instead of always reporting a plain failure — a configured timeout firing is a system-triggered
+// stop (not requested by the user), while an explicit Cancel() call is user-initiated.
+func classifyRunCtxErr(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case err != nil:
+		return "cancelled"
+	default:
+		return ""
+	}
+}
+
+// finishError handles any error that ends a download's run, distinguishing a configured timeout
+// and user-initiated cancellation (runCtx was cancelled) from a genuine failure so the stored
+// status/broadcast reflects the real cause rather than always reporting "failed" —
+// MarkCancelled/MarkFailed use parentCtx since runCtx is already done by the time this runs.
 func (m *DownloadManager) finishError(parentCtx, runCtx context.Context, id int64, url, errMsg, stdoutTail, stderrTail string) {
-	if runCtx.Err() != nil {
+	switch classifyRunCtxErr(runCtx.Err()) {
+	case "timeout":
+		timeoutMsg := "download exceeded the configured time limit and was stopped"
+		if err := m.downloadsRepo.MarkFailed(parentCtx, id, -1, timeoutMsg, stdoutTail, stderrTail); err != nil {
+			log.Printf("queue: mark failed failed for %d: %v", id, err)
+		}
+		if _, err := m.historyRepo.Create(parentCtx, &id, url, "failed", &timeoutMsg); err != nil {
+			log.Printf("queue: recording history for %d failed: %v", id, err)
+		}
+		m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "failed", Error: timeoutMsg}})
+		return
+	case "cancelled":
 		if err := m.downloadsRepo.MarkCancelled(parentCtx, id); err != nil {
 			log.Printf("queue: mark cancelled failed for %d: %v", id, err)
 		}

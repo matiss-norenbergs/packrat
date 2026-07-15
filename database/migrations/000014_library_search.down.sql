@@ -1,0 +1,4 @@
+DROP TRIGGER IF EXISTS library_au;
+DROP TRIGGER IF EXISTS library_ad;
+DROP TRIGGER IF EXISTS library_ai;
+DROP TABLE IF EXISTS library_fts;

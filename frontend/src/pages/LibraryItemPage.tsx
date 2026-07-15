@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom"
+import { Link, useLocation, useParams } from "react-router-dom"
 import { Music } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,10 +11,17 @@ import { formatBytes, hashText, isAudioFilename } from "@/lib/utils"
 import { LibraryItemActionsMenu } from "@/components/library/LibraryItemActionsMenu"
 import { LibraryItemStripTile } from "@/components/library/LibraryItemStripTile"
 import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllContext"
+import { usePersistedVolume } from "@/hooks/usePersistedVolume"
 import type { LibraryItem } from "@/types/api"
 
 export function LibraryItemPage() {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  // Only ever set by an in-app Link/navigate (LibraryCard's Play button, or
+  // a sibling tile forwarding its own backTo) — a direct URL load never
+  // carries router state, so this correctly falls back to the plain
+  // library page in that case.
+  const backTo = (location.state as { from?: string } | null)?.from || "/library"
   const { data: items, isLoading } = useLibrary()
   const item = items?.find((i) => i.id === Number(id))
 
@@ -37,7 +44,7 @@ export function LibraryItemPage() {
       <div className="flex flex-col items-center gap-3 py-16 text-center">
         <p className="text-sm text-muted-foreground">This library item doesn't exist (it may have been deleted).</p>
         <Button asChild variant="outline">
-          <Link to="/library">Back to Library</Link>
+          <Link to={backTo}>Back to Library</Link>
         </Button>
       </div>
     )
@@ -45,17 +52,20 @@ export function LibraryItemPage() {
 
   return (
     <RevealAllProvider>
-      <LibraryItemPageContent item={item} items={items} />
+      <LibraryItemPageContent item={item} items={items} backTo={backTo} />
     </RevealAllProvider>
   )
 }
 
-function LibraryItemPageContent({ item, items }: { item: LibraryItem; items: LibraryItem[] }) {
+function LibraryItemPageContent({ item, items, backTo }: { item: LibraryItem; items: LibraryItem[]; backTo: string }) {
   const { data: settings } = useSettings()
-  const { isRevealed, toggleItem } = useRevealAll()
+  const { isRevealed, toggleItem, revealItems } = useRevealAll()
   const revealed = isRevealed(item.id)
-  const toggleReveal = () => toggleItem(item.id)
   const locked = item.blurred && !revealed
+
+  const autoPlay = settings?.libraryAutoplay ?? true
+  const audioRef = usePersistedVolume<HTMLAudioElement>()
+  const videoRef = usePersistedVolume<HTMLVideoElement>()
 
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
   const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
@@ -64,6 +74,14 @@ function LibraryItemPageContent({ item, items }: { item: LibraryItem; items: Lib
     sortKey,
     sortDir,
   )
+
+  // Revealing the main item also reveals the rest of the collection shown
+  // below it — the whole strip was already visually "part of" this private
+  // item, so making the viewer reveal each sibling separately felt redundant.
+  const toggleReveal = () => {
+    toggleItem(item.id)
+    revealItems(siblings.map((s) => s.id))
+  }
 
   // A prose-style summary line rather than the Edit dialog's label/value
   // grid — only the parts that actually have a value, joined into one
@@ -92,8 +110,8 @@ function LibraryItemPageContent({ item, items }: { item: LibraryItem; items: Lib
             <span className="text-xs text-white/70">Click to reveal and play</span>
           </button>
         ) : isAudioFilename(item.filename) ? (
-          <div className="flex flex-col items-center gap-4 p-8">
-            <div className="aspect-square w-full max-w-xs overflow-hidden rounded-lg bg-neutral-800 shadow-lg">
+          <div className="flex aspect-video w-full flex-col items-center justify-center gap-4 p-8">
+            <div className="aspect-square h-full max-h-72 w-auto overflow-hidden rounded-lg bg-neutral-800 shadow-lg">
               {item.thumbnail ? (
                 <img src={mediaFileUrl(item.thumbnail)} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -106,12 +124,18 @@ function LibraryItemPageContent({ item, items }: { item: LibraryItem; items: Lib
               <p className="text-base font-medium text-white">{item.title}</p>
               <p className="text-sm text-white/70">{item.artistName ?? item.uploader ?? "Unknown artist"}</p>
             </div>
-            <audio key={item.path} controls autoPlay className="w-full max-w-md">
+            <audio key={item.path} ref={audioRef} controls autoPlay={autoPlay} className="w-full max-w-md">
               <source src={mediaFileUrl(item.path)} />
             </audio>
           </div>
         ) : (
-          <video key={item.path} controls autoPlay className="mx-auto max-h-[70vh] w-full object-contain">
+          <video
+            key={item.path}
+            ref={videoRef}
+            controls
+            autoPlay={autoPlay}
+            className="mx-auto max-h-[70vh] w-full object-contain"
+          >
             <source src={mediaFileUrl(item.path)} />
           </video>
         )}
@@ -156,7 +180,7 @@ function LibraryItemPageContent({ item, items }: { item: LibraryItem; items: Lib
           </div>
 
           <Button asChild variant="outline" size="sm">
-            <Link to="/library">← Back to Library</Link>
+            <Link to={backTo}>← Back to Library</Link>
           </Button>
         </div>
 
@@ -165,7 +189,7 @@ function LibraryItemPageContent({ item, items }: { item: LibraryItem; items: Lib
             <h2 className="text-sm font-medium text-muted-foreground">More from this collection</h2>
             <div className="flex gap-3 overflow-x-auto pb-2">
               {siblings.map((sibling) => (
-                <LibraryItemStripTile key={sibling.id} item={sibling} />
+                <LibraryItemStripTile key={sibling.id} item={sibling} backTo={backTo} />
               ))}
             </div>
           </div>

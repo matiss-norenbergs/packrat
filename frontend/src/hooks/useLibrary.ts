@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  bulkAssignTags,
   deleteLibraryItem,
   deleteLibraryItemNFO,
   fetchLibrary,
+  fetchLibraryFacets,
   fetchLibraryItemNFO,
+  fetchLibraryQuery,
   fetchLibraryThumbnailCandidates,
   generateLibraryItemNFO,
   moveLibraryItem,
@@ -15,15 +18,41 @@ import {
   setLibraryThumbnail,
   updateLibraryItem,
 } from "@/lib/api"
-import type { MoveLibraryItemRequest, UpdateLibraryItemRequest } from "@/types/api"
+import type { BulkAssignTagsRequest, LibraryQueryParams, MoveLibraryItemRequest, UpdateLibraryItemRequest } from "@/types/api"
 import { downloadsQueryKey } from "./useDownloads"
 
 export const libraryQueryKey = ["library"] as const
 
+// The entire, unfiltered library — only for call sites that genuinely need
+// every item (the item detail page's sibling strip). The grid/folder views
+// use useLibraryQuery instead.
 export function useLibrary() {
   return useQuery({
     queryKey: libraryQueryKey,
     queryFn: fetchLibrary,
+  })
+}
+
+// Server-side search/filter/sort/(optional) pagination for the Library
+// page's grid and folder views — replaces fetching everything and filtering
+// client-side. `enabled` defaults to true; BulkAssignTagsDialog passes false
+// until it actually opens, so resolving a whole-collection selection doesn't
+// fire a query on every checkbox click.
+export function useLibraryQuery(params: LibraryQueryParams, enabled = true) {
+  return useQuery({
+    queryKey: [...libraryQueryKey, "query", params],
+    queryFn: () => fetchLibraryQuery(params),
+    enabled,
+  })
+}
+
+// Distinct filter values (currently just years) computed over the whole
+// library — used by pickers that need every possible value regardless of
+// whatever page/folder/search is currently active.
+export function useLibraryFacets() {
+  return useQuery({
+    queryKey: [...libraryQueryKey, "facets"],
+    queryFn: fetchLibraryFacets,
   })
 }
 
@@ -48,6 +77,18 @@ export function useUpdateLibraryItem() {
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to save: ${err.message}`),
+  })
+}
+
+export function useBulkAssignTags() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: BulkAssignTagsRequest) => bulkAssignTags(payload),
+    onSuccess: (_data, payload) => {
+      toast.success(`Tags updated on ${payload.itemIds.length} ${payload.itemIds.length === 1 ? "file" : "files"}`)
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to update tags: ${err.message}`),
   })
 }
 

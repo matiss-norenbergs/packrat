@@ -62,19 +62,23 @@ func SetupRouter(deps Deps) *gin.Engine {
 	}
 
 	api := r.Group("/api")
-	api.Use(RequireAuth(deps.UsersRepo))
+	api.Use(RequireAuth(deps.UsersRepo), RequireCSRF())
 	{
 		api.PATCH("/auth/password", ChangePassword(deps.UsersRepo))
 
 		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo))
-		api.POST("/downloads/preview", PreviewDownloadMetadata(deps.YtDlp))
+		api.POST("/downloads/preview", PreviewDownloadMetadata(deps.YtDlp, deps.LibraryRepo))
+		api.POST("/downloads/playlist", CreatePlaylistDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo, deps.LibraryRepo, deps.HistoryRepo, deps.YtDlp))
+		api.POST("/downloads/batch", CreateBatchDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo, deps.LibraryRepo, deps.HistoryRepo))
 		api.POST("/downloads/:id/cancel", CancelDownload(deps.Manager))
 		api.DELETE("/downloads/:id", DeleteDownload(deps.DownloadsRepo))
 
 		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.MediaRoot))
+		api.GET("/library/facets", GetLibraryFacets(deps.LibraryRepo))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
 		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo, deps.ArtistsRepo))
+		api.POST("/library/bulk-tags", BulkAssignTags(deps.LibraryRepo, deps.TagsRepo, deps.MediaRoot))
 		api.POST("/library/:id/move", MoveLibraryItem(deps.LibraryRepo, deps.Manager, deps.MediaRoot))
 		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.MediaRoot))
 		api.POST("/library/:id/redownload", RedownloadLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
@@ -109,12 +113,16 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.GET("/history", ListHistory(deps.HistoryRepo, deps.SettingsRepo))
 		api.POST("/history/:id/retry", RetryHistoryItem(deps.HistoryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
+		api.DELETE("/history/:id", DeleteHistoryItem(deps.HistoryRepo))
 
 		api.GET("/logs", GetLogs(deps.DownloadsRepo, deps.SettingsRepo))
 
 		api.GET("/stats", GetStats(deps.DownloadsRepo, deps.LibraryRepo))
 
 		api.POST("/jellyfin/rescan", RescanJellyfinLibrary(deps.SettingsRepo, deps.JellyfinClient))
+
+		api.GET("/ytdlp/version", GetYtDlpVersion(deps.YtDlp))
+		api.POST("/ytdlp/update", UpdateYtDlp(deps.YtDlp))
 	}
 
 	if deps.MediaRoot != "" {

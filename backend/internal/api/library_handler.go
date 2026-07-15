@@ -21,9 +21,67 @@ import (
 	"packrat/backend/internal/repository"
 )
 
+// ListLibrary supports search/filter/sort/pagination via query params —
+// ?q=&collectionId=&collectionIds=1,2&year=&tags=a,b&sortKey=&sortDir=&page=&pageSize= — all
+// optional; with none set it behaves as it always did (every item, sorted by
+// downloadedAt desc). page/pageSize are only honored together with page > 0;
+// omitting page returns every matching row regardless of pageSize, matching
+// the "pagination is opt-in, default off" behavior in Settings. collectionIds
+// is a separate IN-match filter (used to resolve a bulk-selected folder plus
+// its nested subcollections) that takes precedence over collectionId.
 func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		rows, err := repo.List(c.Request.Context())
+		q := repository.LibraryQuery{
+			Search:  c.Query("q"),
+			SortKey: c.DefaultQuery("sortKey", "downloadedAt"),
+			SortDir: c.DefaultQuery("sortDir", "desc"),
+		}
+		if v := c.Query("collectionIds"); v != "" {
+			// Bulk-selection resolution (a folder + its nested subcollections)
+			// — takes precedence over collectionId below when present.
+			for _, part := range strings.Split(v, ",") {
+				id, err := strconv.ParseInt(part, 10, 64)
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid collectionIds"})
+					return
+				}
+				q.CollectionIDs = append(q.CollectionIDs, id)
+			}
+		} else if v := c.Query("collectionId"); v == "none" {
+			// "none" explicitly means "uncategorized only" (collection_id IS
+			// NULL) — folder view's root — distinct from omitting the param
+			// entirely, which means no filter at all.
+			q.CollectionIDIsNull = true
+		} else if v != "" {
+			id, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid collectionId"})
+				return
+			}
+			q.CollectionID = &id
+		}
+		if v := c.Query("year"); v != "" {
+			year, err := strconv.Atoi(v)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid year"})
+				return
+			}
+			q.Year = &year
+		}
+		if v := c.Query("tags"); v != "" {
+			q.Tags = strings.Split(v, ",")
+		}
+		if v := c.Query("page"); v != "" {
+			page, err := strconv.Atoi(v)
+			if err != nil || page < 1 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page"})
+				return
+			}
+			q.Page = page
+			q.PageSize, _ = strconv.Atoi(c.Query("pageSize")) // 0 falls back to Query's default
+		}
+
+		rows, total, err := repo.Query(c.Request.Context(), q)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -51,7 +109,21 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 			blurred := item.CollectionID != nil && privacy[*item.CollectionID]
 			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID], mediaRoot))
 		}
-		c.JSON(http.StatusOK, out)
+		c.JSON(http.StatusOK, LibraryListResponse{Items: out, Total: total})
+	}
+}
+
+// GetLibraryFacets returns distinct filter values computed over the whole
+// library, for UI pickers (the year dropdown) that need every possible
+// value regardless of whatever page/folder/search is currently active.
+func GetLibraryFacets(repo *repository.LibraryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		years, err := repo.DistinctYears(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, LibraryFacetsResponse{Years: years})
 	}
 }
 
@@ -307,6 +379,45 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 				if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, updated); err != nil {
 					log.Printf("library: writing nfo for %d failed: %v", id, err)
 				}
+			}
+		}
+
+		c.Status(http.StatusNoContent)
+	}
+}
+
+// BulkAssignTags overwrites the tag set on every listed item in one
+// transaction (TagsRepo.SetForLibraryItems) — not a merge, matching the
+// frontend bulk-edit dialog's explicit "replaces all tags" warning. Ids that
+// no longer exist are silently skipped by SetForLibraryItems rather than
+// failing the whole batch.
+func BulkAssignTags(repo *repository.LibraryRepo, tagsRepo *repository.TagsRepo, mediaRoot string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkAssignTagsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		tagIDs, err := tagsRepo.GetOrCreateByNames(c.Request.Context(), req.Tags)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if err := tagsRepo.SetForLibraryItems(c.Request.Context(), req.ItemIDs, tagIDs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Keep each opted-in item's .nfo sidecar in sync, same as
+		// UpdateLibraryItem's nfoRelevant block — best effort, log-only.
+		for _, id := range req.ItemIDs {
+			item, err := repo.Get(c.Request.Context(), id)
+			if err != nil || !item.GenerateNFO {
+				continue
+			}
+			if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, item); err != nil {
+				log.Printf("library: writing nfo for %d failed: %v", id, err)
 			}
 		}
 

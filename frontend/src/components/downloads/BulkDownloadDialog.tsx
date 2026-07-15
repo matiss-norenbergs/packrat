@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { ListPlus, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -22,8 +23,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { createDownload } from "@/lib/api"
+import { createBatchDownload } from "@/lib/api"
 import { downloadsQueryKey } from "@/hooks/useDownloads"
+import { historyQueryKey } from "@/hooks/useHistory"
 import { useCollections } from "@/hooks/useCollections"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
 
@@ -74,6 +76,7 @@ export function BulkDownloadDialog() {
   const [rows, setRows] = useState<BulkRow[]>(() => blankRows(3))
   const [pasteText, setPasteText] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [skipDuplicates, setSkipDuplicates] = useState(true)
 
   const { data: collections } = useCollections()
   const queryClient = useQueryClient()
@@ -81,6 +84,7 @@ export function BulkDownloadDialog() {
   const reset = () => {
     setRows(blankRows(3))
     setPasteText("")
+    setSkipDuplicates(true)
   }
 
   const handleOpenChange = (next: boolean) => {
@@ -142,38 +146,42 @@ export function BulkDownloadDialog() {
     if (toSubmit.length === 0) return
 
     setSubmitting(true)
-    const results = await Promise.allSettled(
-      toSubmit.map((r) =>
-        createDownload({
+    let result
+    try {
+      result = await createBatchDownload({
+        items: toSubmit.map((r) => ({
           url: r.url.trim(),
           collectionId: r.collectionId === NO_COLLECTION ? undefined : Number(r.collectionId),
           downloadType: r.downloadType,
           quality: r.downloadType === "video" ? r.quality : undefined,
           audioFormat: r.downloadType === "audio" ? r.audioFormat : undefined,
           filename: r.filename.trim() || undefined,
-        }),
-      ),
-    )
+        })),
+        skipDuplicates,
+      })
+    } catch (err) {
+      setSubmitting(false)
+      toast.error(`Failed to queue downloads: ${(err as Error).message}`)
+      return
+    }
     setSubmitting(false)
 
-    const succeeded = results.filter((r) => r.status === "fulfilled").length
-    const failed = results.length - succeeded
-
     queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+    queryClient.invalidateQueries({ queryKey: historyQueryKey })
 
-    if (failed === 0) {
-      toast.success(`${succeeded} download${succeeded === 1 ? "" : "s"} queued`)
+    const parts = [`${result.queued.length} queued`]
+    if (result.skipped.length > 0) parts.push(`${result.skipped.length} already in library`)
+    if (result.failed.length > 0) {
+      const failedUrls = result.failed.map((f) => f.url).slice(0, 3).join(", ")
+      parts.push(`${result.failed.length} failed${failedUrls ? `: ${failedUrls}${result.failed.length > 3 ? "…" : ""}` : ""}`)
+    }
+
+    if (result.failed.length === 0) {
+      toast.success(parts.join(", "))
       setOpen(false)
       reset()
     } else {
-      const failedUrls = toSubmit
-        .filter((_, i) => results[i].status === "rejected")
-        .map((r) => r.url)
-        .slice(0, 3)
-        .join(", ")
-      toast.error(
-        `${succeeded} queued, ${failed} failed${failedUrls ? `: ${failedUrls}${failed > 3 ? "…" : ""}` : ""}`,
-      )
+      toast.error(parts.join(", "))
     }
   }
 
@@ -329,6 +337,17 @@ export function BulkDownloadDialog() {
               Add row
             </Button>
             {atCap && <p className="text-xs text-muted-foreground">Limit of {MAX_ROWS} rows reached</p>}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="bulk-skip-dup"
+              checked={skipDuplicates}
+              onCheckedChange={(v) => setSkipDuplicates(v === true)}
+            />
+            <Label htmlFor="bulk-skip-dup" className="font-normal">
+              Skip items already in the library
+            </Label>
           </div>
         </div>
 

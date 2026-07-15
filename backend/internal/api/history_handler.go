@@ -94,3 +94,26 @@ func RetryHistoryItem(historyRepo *repository.HistoryRepo, downloadsRepo *reposi
 		c.JSON(http.StatusCreated, gin.H{"id": newID})
 	}
 }
+
+// DeleteHistoryItem permanently removes a single history entry — unlike
+// DeleteOlderThan's automated retention sweep, this is a direct user action
+// with no cutoff involved.
+func DeleteHistoryItem(repo *repository.HistoryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+
+		if err := repo.Delete(c.Request.Context(), id); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "history entry not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}

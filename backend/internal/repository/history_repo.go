@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"packrat/backend/internal/models"
 )
@@ -58,6 +59,28 @@ func (r *HistoryRepo) List(ctx context.Context) ([]models.History, error) {
 		out = append(out, *h)
 	}
 	return out, rows.Err()
+}
+
+// Delete removes a single history entry by id.
+func (r *HistoryRepo) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM history WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting history entry: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// DeleteOlderThan removes every history entry created before cutoff, returning how many rows were
+// deleted — the implementation behind the configurable retention sweep (see cleanupHistory in
+// cmd/server/main.go). created_at is stored as SQLite's datetime('now') text (UTC,
+// "YYYY-MM-DD HH:MM:SS"), which sorts and compares correctly as a plain string, so cutoff is
+// formatted the same way rather than relying on SQLite's own date functions.
+func (r *HistoryRepo) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM history WHERE created_at < ?`, cutoff.UTC().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return 0, fmt.Errorf("deleting old history entries: %w", err)
+	}
+	return res.RowsAffected()
 }
 
 const historySelectColumns = `

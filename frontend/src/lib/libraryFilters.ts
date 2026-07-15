@@ -3,23 +3,6 @@ import type { LibraryItem } from "@/types/api"
 export type LibrarySortKey = "downloadedAt" | "title" | "filename" | "year" | "duration" | "sequenceNumber"
 export type LibrarySortDir = "asc" | "desc"
 
-export function searchLibraryItems(items: LibraryItem[], search: string): LibraryItem[] {
-  const q = search.trim().toLowerCase()
-  if (!q) return items
-  return items.filter(
-    (item) =>
-      [item.title, item.uploader, item.artistName, item.description].some((field) => field?.toLowerCase().includes(q)) ||
-      item.tags.some((tag) => tag.toLowerCase().includes(q)),
-  )
-}
-
-// AND semantics — an item must have every selected tag, not just one of
-// them (matches typical faceted-filter UX, e.g. GitHub issue labels).
-// Flipping to OR/"any of" is a one-line .every -> .some change if preferred.
-export function filterByTags(items: LibraryItem[], tagNames: string[]): LibraryItem[] {
-  return items.filter((item) => tagNames.every((name) => item.tags.includes(name)))
-}
-
 function compareValues(a: string | number | null, b: string | number | null): number {
   if (a == null && b == null) return 0
   if (a == null) return 1 // nulls sort last regardless of direction

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { fetchHistory, retryHistoryItem } from "@/lib/api"
+import { deleteHistoryItem, fetchHistory, retryHistoryItem } from "@/lib/api"
 import { downloadsQueryKey } from "./useDownloads"
 
 export const historyQueryKey = ["history"] as const
@@ -23,6 +23,20 @@ export function useRetryHistoryItem() {
     },
     onError: (err: Error) => {
       toast.error(`Failed to retry: ${err.message}`)
+    },
+  })
+}
+
+export function useDeleteHistoryItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => deleteHistoryItem(id),
+    onSuccess: () => {
+      toast.success("Removed")
+      queryClient.invalidateQueries({ queryKey: historyQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to delete: ${err.message}`)
     },
   })
 }
