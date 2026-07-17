@@ -63,4 +63,18 @@ type Download struct {
 	OverrideSeasonNumber   *int
 	OverrideSequenceNumber *int
 	FilenamePrefix         *string
+	// OverrideTags are applied to the resulting library item once the
+	// download completes (same "apply on completion" shape as the other
+	// overrides above) — currently only set by the backup/library import
+	// flow, which knows the original item's tags but can't attach them to
+	// a library_id that doesn't exist yet. Stored as a JSON array in a
+	// single TEXT column (see downloads_repo.go) rather than a join table,
+	// since it's a one-shot value consumed once at completion, not
+	// queryable relational data like library_tags.
+	OverrideTags []string
+	// GenerateNFO, when true, is applied to the resulting library item at
+	// creation time and triggers writing its .nfo sidecar once the download
+	// completes — the download-time equivalent of turning on "Generate NFO"
+	// in the Edit dialog, but up front rather than as a follow-up action.
+	GenerateNFO bool
 }

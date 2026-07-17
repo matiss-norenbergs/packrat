@@ -96,3 +96,30 @@ func DeleteArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
 		c.Status(http.StatusNoContent)
 	}
 }
+
+// BulkDeleteArtists deletes every listed artist, best-effort — an id that's
+// already gone (ErrNotFound) is skipped rather than failing the batch,
+// since deleting an artist never fails for being "in use" (references are
+// nulled out via ON DELETE SET NULL, not blocked).
+func BulkDeleteArtists(repo *repository.ArtistsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkDeleteRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var resp BulkDeleteResponse
+		for _, id := range req.IDs {
+			if err := repo.Delete(c.Request.Context(), id); err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					continue
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			resp.Deleted++
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}

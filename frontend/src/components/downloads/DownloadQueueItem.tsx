@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { useCancelDownload, useDeleteDownload } from "@/hooks/useDownloads"
-import { cn, formatEta, formatSpeed, hashText } from "@/lib/utils"
+import { cn, formatDownloadStatus, formatEta, formatSpeed, hashText } from "@/lib/utils"
 import type { Download } from "@/types/api"
 
 const CANCELLABLE_STATUSES = new Set(["queued", "fetching_metadata", "downloading", "processing"])
@@ -63,7 +63,7 @@ export function DownloadQueueItem({ download }: { download: Download }) {
           >
             {download.blurred && !revealed ? hashText(displayName) : displayName}
           </p>
-          <Badge variant={STATUS_VARIANT[download.status] ?? "outline"}>{download.status}</Badge>
+          <Badge variant={STATUS_VARIANT[download.status] ?? "outline"}>{formatDownloadStatus(download.status)}</Badge>
         </div>
 
         {download.status === "downloading" || download.status === "processing" ? (
@@ -77,7 +77,7 @@ export function DownloadQueueItem({ download }: { download: Download }) {
         ) : download.status === "failed" || download.status === "interrupted" ? (
           <p className="truncate text-xs text-destructive">{download.errorMessage}</p>
         ) : (
-          <p className="text-xs text-muted-foreground">{download.status}</p>
+          <p className="text-xs text-muted-foreground">{formatDownloadStatus(download.status)}</p>
         )}
       </div>
 

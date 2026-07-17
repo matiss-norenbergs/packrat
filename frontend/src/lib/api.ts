@@ -1,7 +1,13 @@
 import type {
   Artist,
   AuthStatus,
+  BackupEnvelope,
+  BackupImportLibraryResult,
+  BackupImportSettingsResult,
   BulkAssignTagsRequest,
+  BulkDeleteLibraryItemsRequest,
+  BulkDeleteRequest,
+  BulkDeleteResponse,
   ChangePasswordRequest,
   Collection,
   CreateArtistRequest,
@@ -172,6 +178,13 @@ export function bulkAssignTags(payload: BulkAssignTagsRequest): Promise<void> {
   })
 }
 
+export function bulkDeleteLibraryItems(payload: BulkDeleteLibraryItemsRequest): Promise<BulkDeleteResponse> {
+  return request<BulkDeleteResponse>("/library/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
 export function moveLibraryItem(id: number, payload: MoveLibraryItemRequest): Promise<void> {
   return request<void>(`/library/${id}/move`, {
     method: "POST",
@@ -240,6 +253,13 @@ export function deleteCollection(id: number): Promise<void> {
   return request<void>(`/collections/${id}`, { method: "DELETE" })
 }
 
+export function bulkDeleteCollections(payload: BulkDeleteRequest): Promise<BulkDeleteResponse> {
+  return request<BulkDeleteResponse>("/collections/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
 export function fetchSettings(): Promise<Settings> {
   return request<Settings>("/settings")
 }
@@ -290,8 +310,44 @@ export function deleteHistoryItem(id: number): Promise<void> {
   return request<void>(`/history/${id}`, { method: "DELETE" })
 }
 
+export function clearHistory(): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/history/clear", { method: "POST" })
+}
+
+export function clearDownloadLog(): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/downloads/clear-log", { method: "POST" })
+}
+
 export function fetchStats(): Promise<Stats> {
   return request<Stats>("/stats")
+}
+
+export function exportSettingsBackup(password: string): Promise<BackupEnvelope> {
+  return request<BackupEnvelope>("/backup/export/settings", {
+    method: "POST",
+    body: JSON.stringify({ password: password || undefined }),
+  })
+}
+
+export function exportLibraryBackup(password: string): Promise<BackupEnvelope> {
+  return request<BackupEnvelope>("/backup/export/library", {
+    method: "POST",
+    body: JSON.stringify({ password: password || undefined }),
+  })
+}
+
+export function importSettingsBackup(data: string, password: string): Promise<BackupImportSettingsResult> {
+  return request<BackupImportSettingsResult>("/backup/import/settings", {
+    method: "POST",
+    body: JSON.stringify({ data, password: password || undefined }),
+  })
+}
+
+export function importLibraryBackup(data: string, password: string): Promise<BackupImportLibraryResult> {
+  return request<BackupImportLibraryResult>("/backup/import/library", {
+    method: "POST",
+    body: JSON.stringify({ data, password: password || undefined }),
+  })
 }
 
 export function fetchTags(): Promise<Tag[]> {
@@ -316,6 +372,13 @@ export function deleteTag(id: number): Promise<void> {
   return request<void>(`/tags/${id}`, { method: "DELETE" })
 }
 
+export function bulkDeleteTags(payload: BulkDeleteRequest): Promise<BulkDeleteResponse> {
+  return request<BulkDeleteResponse>("/tags/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
 export function fetchArtists(): Promise<Artist[]> {
   return request<Artist[]>("/artists")
 }
@@ -336,4 +399,11 @@ export function updateArtist(id: number, payload: UpdateArtistRequest): Promise<
 
 export function deleteArtist(id: number): Promise<void> {
   return request<void>(`/artists/${id}`, { method: "DELETE" })
+}
+
+export function bulkDeleteArtists(payload: BulkDeleteRequest): Promise<BulkDeleteResponse> {
+  return request<BulkDeleteResponse>("/artists/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
 }

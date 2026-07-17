@@ -21,11 +21,11 @@ func (r *LibraryRepo) Create(ctx context.Context, item *models.LibraryItem) (int
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO library (download_id, title, filename, path, collection_id, folder, original_url,
 		                      video_id, uploader, duration, resolution, thumbnail, description, artist_id, release_year,
-		                      sequence_number, season_number, status, file_size_bytes)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		                      sequence_number, season_number, generate_nfo, status, file_size_bytes)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		item.DownloadID, item.Title, item.Filename, item.Path, item.CollectionID, item.Folder, item.OriginalURL,
 		item.VideoID, item.Uploader, item.Duration, item.Resolution, item.Thumbnail, item.Description, item.ArtistID, item.ReleaseYear,
-		item.SequenceNumber, item.SeasonNumber, item.Status, item.FileSizeBytes,
+		item.SequenceNumber, item.SeasonNumber, item.GenerateNFO, item.Status, item.FileSizeBytes,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting library item: %w", err)

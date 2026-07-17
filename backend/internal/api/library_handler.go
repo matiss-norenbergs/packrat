@@ -151,16 +151,7 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 		}
 
 		if deleteFiles {
-			mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-			if err := os.Remove(mediaAbs); err != nil && !os.IsNotExist(err) {
-				log.Printf("library: failed to delete media file %s: %v", mediaAbs, err)
-			}
-			if item.Thumbnail != nil {
-				thumbAbs := filepath.Join(mediaRoot, filepath.FromSlash(*item.Thumbnail))
-				if err := os.Remove(thumbAbs); err != nil && !os.IsNotExist(err) {
-					log.Printf("library: failed to delete thumbnail %s: %v", thumbAbs, err)
-				}
-			}
+			deleteLibraryItemFiles(mediaRoot, item)
 		}
 
 		if err := repo.Delete(c.Request.Context(), id); err != nil {
@@ -172,6 +163,62 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 			return
 		}
 		c.Status(http.StatusNoContent)
+	}
+}
+
+// deleteLibraryItemFiles best-effort removes item's media file and
+// thumbnail (if any) from mediaRoot — a missing file is logged, not treated
+// as an error, since the end state (file gone) is the same either way.
+// Shared by DeleteLibraryItem and BulkDeleteLibraryItems.
+func deleteLibraryItemFiles(mediaRoot string, item *models.LibraryItem) {
+	mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
+	if err := os.Remove(mediaAbs); err != nil && !os.IsNotExist(err) {
+		log.Printf("library: failed to delete media file %s: %v", mediaAbs, err)
+	}
+	if item.Thumbnail != nil {
+		thumbAbs := filepath.Join(mediaRoot, filepath.FromSlash(*item.Thumbnail))
+		if err := os.Remove(thumbAbs); err != nil && !os.IsNotExist(err) {
+			log.Printf("library: failed to delete thumbnail %s: %v", thumbAbs, err)
+		}
+	}
+}
+
+// BulkDeleteLibraryItems mirrors DeleteLibraryItem applied to a batch — one
+// shared DeleteFiles flag for the whole request, not per item. An id that's
+// already gone (ErrNotFound) is skipped rather than failing the batch.
+func BulkDeleteLibraryItems(repo *repository.LibraryRepo, mediaRoot string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkDeleteLibraryItemsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var resp BulkDeleteResponse
+		for _, id := range req.ItemIDs {
+			item, err := repo.Get(c.Request.Context(), id)
+			if err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					continue
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			if req.DeleteFiles {
+				deleteLibraryItemFiles(mediaRoot, item)
+			}
+
+			if err := repo.Delete(c.Request.Context(), id); err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					continue
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			resp.Deleted++
+		}
+		c.JSON(http.StatusOK, resp)
 	}
 }
 

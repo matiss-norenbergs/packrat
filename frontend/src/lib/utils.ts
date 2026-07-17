@@ -35,6 +35,22 @@ export function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  queued: "Queued",
+  fetching_metadata: "Fetching Metadata",
+  downloading: "Downloading",
+  processing: "Processing",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  interrupted: "Interrupted",
+  duplicate: "Duplicate",
+}
+
+export function formatDownloadStatus(status: string): string {
+  return STATUS_LABELS[status] ?? status.charAt(0).toUpperCase() + status.slice(1)
+}
+
 const AUDIO_EXTENSIONS = new Set([".mp3", ".m4a", ".flac", ".wav", ".aac", ".ogg", ".opus"])
 
 // Mirrors the audio half of the importer's recognizedExtensions allowlist
@@ -59,4 +75,17 @@ export function hashText(text: string): string {
     hash = Math.imul(hash, 0x01000193)
   }
   return "Hidden-" + (hash >>> 0).toString(16).padStart(8, "0")
+}
+
+// Triggers a browser "save file" for an in-memory object — the export
+// endpoints just return normal JSON, so "download" is purely this
+// client-side step rather than anything server-driven.
+export function downloadJson(filename: string, data: unknown): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }

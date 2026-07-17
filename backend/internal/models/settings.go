@@ -10,7 +10,8 @@ const (
 	SettingDefaultDownloadType      = "default_download_type"
 	SettingImportIgnoredFolders     = "import_ignored_folders"
 	SettingHistoryAnonymizeURLs     = "history_anonymize_urls"
-	SettingHistoryRetentionDays     = "history_retention_days" // days; 0 = keep forever (default)
+	SettingHistoryRetentionDays     = "history_retention_days"      // days; 0 = keep forever (default)
+	SettingDownloadLogRetentionDays = "download_log_retention_days" // days; 0 = keep forever (default)
 	SettingLibraryView              = "library_view"
 	SettingLibrarySort              = "library_sort"               // stored as "<sortKey>:<sortDir>", e.g. "title:asc"
 	SettingLibraryMode              = "library_mode"               // "manage" | "details"

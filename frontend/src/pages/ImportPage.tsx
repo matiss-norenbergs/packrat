@@ -108,7 +108,7 @@ export function ImportPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold">Import</h1>
+          <h1 className="text-2xl font-semibold">File Import</h1>
           <p className="text-sm text-muted-foreground">
             Files placed directly under your media root, outside the app.
           </p>

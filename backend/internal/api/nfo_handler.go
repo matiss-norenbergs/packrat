@@ -15,14 +15,6 @@ import (
 	"packrat/backend/internal/repository"
 )
 
-// nfoAbsPathFor returns the sidecar .nfo path for a media file — same
-// basename, .nfo extension — mirroring thumbnailAbsPathFor's convention
-// (thumbnail_handler.go), which Jellyfin also expects for per-file sidecars.
-func nfoAbsPathFor(mediaAbs string) string {
-	ext := filepath.Ext(mediaAbs)
-	return mediaAbs[:len(mediaAbs)-len(ext)] + ".nfo"
-}
-
 // writeNFO builds and writes item's .nfo sidecar to disk, overwriting
 // whatever is there. Shared by the manual "Generate NFO Now" action and
 // every metadata-editing handler that keeps an opted-in item's NFO in sync
@@ -33,8 +25,7 @@ func writeNFO(ctx context.Context, mediaRoot string, tagsRepo *repository.TagsRe
 		return fmt.Errorf("loading tags for nfo: %w", err)
 	}
 	mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-	doc := nfo.Build(*item, tags)
-	if err := os.WriteFile(nfoAbsPathFor(mediaAbs), doc, 0o644); err != nil {
+	if err := nfo.WriteSidecar(mediaAbs, *item, tags); err != nil {
 		return fmt.Errorf("writing nfo file: %w", err)
 	}
 	return nil
@@ -89,7 +80,7 @@ func GetLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRepo) gi
 		}
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-		content, err := os.ReadFile(nfoAbsPathFor(mediaAbs))
+		content, err := os.ReadFile(nfo.SidecarPath(mediaAbs))
 		if err != nil {
 			if os.IsNotExist(err) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "no .nfo file has been generated for this item"})
@@ -123,7 +114,7 @@ func DeleteLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRepo)
 		}
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-		if err := os.Remove(nfoAbsPathFor(mediaAbs)); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(nfo.SidecarPath(mediaAbs)); err != nil && !os.IsNotExist(err) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

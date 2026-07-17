@@ -17,6 +17,7 @@ import (
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
+	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/ws"
@@ -42,6 +43,7 @@ type DownloadManager struct {
 	collectionsRepo  *repository.CollectionsRepo
 	historyRepo      *repository.HistoryRepo
 	artistsRepo      *repository.ArtistsRepo
+	tagsRepo         *repository.TagsRepo
 	settingsRepo     *repository.SettingsRepo
 	jellyfinClient   *jellyfin.Client
 	jellyfinDebounce *jellyfin.Debouncer
@@ -78,6 +80,7 @@ func NewDownloadManager(
 	collectionsRepo *repository.CollectionsRepo,
 	historyRepo *repository.HistoryRepo,
 	artistsRepo *repository.ArtistsRepo,
+	tagsRepo *repository.TagsRepo,
 	settingsRepo *repository.SettingsRepo,
 	jellyfinClient *jellyfin.Client,
 	progress *ProgressStore,
@@ -91,6 +94,7 @@ func NewDownloadManager(
 		collectionsRepo: collectionsRepo,
 		historyRepo:     historyRepo,
 		artistsRepo:     artistsRepo,
+		tagsRepo:        tagsRepo,
 		settingsRepo:    settingsRepo,
 		jellyfinClient:  jellyfinClient,
 		progress:        progress,
@@ -368,10 +372,36 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	}
 
 	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, sizeBytes)
+	libItem.GenerateNFO = d.GenerateNFO
 	libID, err := m.libraryRepo.Create(parentCtx, libItem)
 	if err != nil {
 		log.Printf("queue: creating library item failed for %d: %v", id, err)
 		return
+	}
+
+	// Best-effort: attach any tag override (currently only set by the
+	// backup/library import flow — see ImportLibrary) now that the item has
+	// an id to attach them to. Creates missing tag names rather than
+	// silently dropping them, matching bulk-assign-tags' behavior.
+	if len(d.OverrideTags) > 0 {
+		if tagIDs, err := m.tagsRepo.GetOrCreateByNames(parentCtx, d.OverrideTags); err != nil {
+			log.Printf("queue: creating override tags for %d failed: %v", id, err)
+		} else if err := m.tagsRepo.SetForLibraryItem(parentCtx, libID, tagIDs); err != nil {
+			log.Printf("queue: assigning override tags for %d failed: %v", id, err)
+		}
+	}
+
+	// Best-effort: write the .nfo sidecar up front when "Generate NFO" was
+	// requested at download time, same file writeNFO (library_handler.go)
+	// produces for the manual "Generate NFO Now" action — fetched after the
+	// override-tags block above so a batch item's tags are already settled.
+	if d.GenerateNFO {
+		tags, err := m.tagsRepo.TagsForLibraryItem(parentCtx, libID)
+		if err != nil {
+			log.Printf("queue: loading tags for nfo for %d failed: %v", id, err)
+		} else if err := nfo.WriteSidecar(result.FinalPath, *libItem, tags); err != nil {
+			log.Printf("queue: writing nfo for %d failed: %v", id, err)
+		}
 	}
 
 	m.triggerJellyfinRefresh(parentCtx, d)

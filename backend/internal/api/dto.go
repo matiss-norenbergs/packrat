@@ -9,6 +9,7 @@ import (
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/models"
+	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/queue"
 )
 
@@ -51,6 +52,16 @@ type CreateDownloadRequest struct {
 	// FilenamePrefix is combined with the effective title at completion
 	// time to build the final filename — ignored if Filename is also set.
 	FilenamePrefix *string `json:"filenamePrefix"`
+	// Tags are applied to the resulting library item once the download
+	// completes (tag names, created if missing) — currently only set by
+	// the backup/library import flow (see ImportLibrary), which knows the
+	// original item's tags but has no library_id yet to attach them to.
+	Tags []string `json:"tags"`
+	// GenerateNFO turns on the resulting library item's "Generate NFO"
+	// toggle up front and writes its .nfo sidecar once the download
+	// completes — the download-time equivalent of enabling it afterward via
+	// the Edit dialog.
+	GenerateNFO bool `json:"generateNfo"`
 }
 
 type PreviewDownloadRequest struct {
@@ -236,7 +247,7 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 		tags = []string{}
 	}
 	mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-	_, err := os.Stat(nfoAbsPathFor(mediaAbs))
+	_, err := os.Stat(nfo.SidecarPath(mediaAbs))
 	nfoExists := err == nil
 	return LibraryItemResponse{
 		ID:             item.ID,
@@ -294,6 +305,31 @@ type UpdateLibraryItemRequest struct {
 type BulkAssignTagsRequest struct {
 	ItemIDs []int64  `json:"itemIds" binding:"required,min=1"`
 	Tags    []string `json:"tags"`
+}
+
+// BulkDeleteRequest is shared by the tags/artists/collections bulk-delete
+// endpoints — all three delete by plain id list.
+type BulkDeleteRequest struct {
+	IDs []int64 `json:"ids" binding:"required,min=1"`
+}
+
+// BulkDeleteResponse reports how many ids were actually deleted. Skipped is
+// only ever populated by collections bulk-delete — a selected collection
+// whose child wasn't also selected in the same batch can't be deleted (see
+// CollectionsRepo.Delete's ErrHasChildren); tags/artists never reject a
+// delete for being "in use", so they have nothing to skip beyond an id
+// that's already gone, which isn't worth surfacing.
+type BulkDeleteResponse struct {
+	Deleted int     `json:"deleted"`
+	Skipped []int64 `json:"skipped,omitempty"`
+}
+
+// BulkDeleteLibraryItemsRequest mirrors DeleteLibraryItem's per-item
+// semantics (see that handler) applied to a batch — DeleteFiles is a single
+// flag for the whole batch, not per item.
+type BulkDeleteLibraryItemsRequest struct {
+	ItemIDs     []int64 `json:"itemIds" binding:"required,min=1"`
+	DeleteFiles bool    `json:"deleteFiles"`
 }
 
 // ThumbnailCandidateResponse is one of the 4 candidate frames returned by
@@ -416,6 +452,7 @@ type SettingsResponse struct {
 	ImportIgnoredFolders     []string `json:"importIgnoredFolders"`
 	HistoryAnonymizeURLs     bool     `json:"historyAnonymizeUrls"`
 	HistoryRetentionDays     int      `json:"historyRetentionDays"`
+	DownloadLogRetentionDays int      `json:"downloadLogRetentionDays"`
 	LibraryView              string   `json:"libraryView"`
 	LibrarySortKey           string   `json:"librarySortKey"`
 	LibrarySortDir           string   `json:"librarySortDir"`
@@ -440,6 +477,7 @@ type UpdateSettingsRequest struct {
 	ImportIgnoredFolders     *[]string `json:"importIgnoredFolders"`
 	HistoryAnonymizeURLs     *bool     `json:"historyAnonymizeUrls"`
 	HistoryRetentionDays     *int      `json:"historyRetentionDays" binding:"omitempty,min=0"`
+	DownloadLogRetentionDays *int      `json:"downloadLogRetentionDays" binding:"omitempty,min=0"`
 	LibraryView              *string   `json:"libraryView" binding:"omitempty,oneof=grid folders"`
 	LibrarySortKey           *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber"`
 	LibrarySortDir           *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
@@ -654,6 +692,26 @@ type ScannedFileResponse struct {
 type ImportRequest struct {
 	Path        string  `json:"path" binding:"required"`
 	OriginalURL *string `json:"originalUrl"`
+}
+
+type BackupExportRequest struct {
+	Password *string `json:"password"` // empty/absent = unencrypted export
+}
+
+type BackupImportRequest struct {
+	Data     string  `json:"data" binding:"required"` // raw text of a previously-exported file
+	Password *string `json:"password"`
+}
+
+type BackupImportSettingsResponse struct {
+	Applied int `json:"applied"`
+}
+
+type BackupImportLibraryResponse struct {
+	CollectionsEnsured int `json:"collectionsEnsured"`
+	TagsCreated        int `json:"tagsCreated"`
+	ArtistsCreated     int `json:"artistsCreated"`
+	DownloadsQueued    int `json:"downloadsQueued"`
 }
 
 type StatsResponse struct {

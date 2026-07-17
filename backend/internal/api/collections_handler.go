@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"path"
+	"sort"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -197,5 +198,77 @@ func DeleteCollection(repo *repository.CollectionsRepo) gin.HandlerFunc {
 			return
 		}
 		c.Status(http.StatusNoContent)
+	}
+}
+
+// sortDeepestFirst orders ids by their depth in the collection tree,
+// deepest first — so that within one bulk-delete batch, a selected child is
+// always deleted before its selected parent is attempted. Without this, a
+// parent+child selection order that happens to list the parent first would
+// spuriously fail with ErrHasChildren even though the child is also about
+// to be deleted.
+func sortDeepestFirst(ids []int64, all []models.Collection) []int64 {
+	byID := make(map[int64]models.Collection, len(all))
+	for _, c := range all {
+		byID[c.ID] = c
+	}
+
+	depth := make(map[int64]int, len(all))
+	var depthOf func(id int64) int
+	depthOf = func(id int64) int {
+		if d, ok := depth[id]; ok {
+			return d
+		}
+		col, ok := byID[id]
+		if !ok || col.ParentID == nil {
+			depth[id] = 0
+			return 0
+		}
+		d := depthOf(*col.ParentID) + 1
+		depth[id] = d
+		return d
+	}
+
+	sorted := append([]int64(nil), ids...)
+	sort.Slice(sorted, func(i, j int) bool { return depthOf(sorted[i]) > depthOf(sorted[j]) })
+	return sorted
+}
+
+// BulkDeleteCollections deletes every listed collection, deepest-first (see
+// sortDeepestFirst) so a selected parent+child pair deletes cleanly
+// regardless of selection order. A collection that still has a child left
+// over — one that wasn't part of this batch — is skipped and reported
+// rather than treated as a hard failure, since that's an expected outcome
+// of a partial-subtree selection, not an error.
+func BulkDeleteCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkDeleteRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		all, err := repo.List(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		var resp BulkDeleteResponse
+		for _, id := range sortDeepestFirst(req.IDs, all) {
+			if err := repo.Delete(c.Request.Context(), id); err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					continue
+				}
+				if errors.Is(err, repository.ErrHasChildren) {
+					resp.Skipped = append(resp.Skipped, id)
+					continue
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			resp.Deleted++
+		}
+		c.JSON(http.StatusOK, resp)
 	}
 }

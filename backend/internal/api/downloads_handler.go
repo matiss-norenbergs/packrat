@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -114,6 +115,8 @@ func enqueueDownload(ctx context.Context, mgr *queue.DownloadManager, collection
 		OverrideSeasonNumber:   req.SeasonNumber,
 		OverrideSequenceNumber: req.SequenceNumber,
 		FilenamePrefix:         req.FilenamePrefix,
+		OverrideTags:           req.Tags,
+		GenerateNFO:            req.GenerateNFO,
 	}
 	if req.AudioFormat != "" {
 		d.AudioFormat = &req.AudioFormat
@@ -227,5 +230,21 @@ func DeleteDownload(repo *repository.DownloadsRepo) gin.HandlerFunc {
 			return
 		}
 		c.Status(http.StatusNoContent)
+	}
+}
+
+// ClearDownloadLog permanently removes every terminal (non-active) download
+// log entry, regardless of age — a manual complement to the automated
+// retention sweep (cleanupDownloadLog in cmd/server/main.go). Never touches
+// an active download: DeleteOlderThan itself excludes those, so this can't
+// be used to short-circuit DeleteDownload's cancel-first guard.
+func ClearDownloadLog(repo *repository.DownloadsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		n, err := repo.DeleteOlderThan(c.Request.Context(), time.Now())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deleted": n})
 	}
 }

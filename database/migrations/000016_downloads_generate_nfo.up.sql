@@ -1,0 +1,1 @@
+ALTER TABLE downloads ADD COLUMN generate_nfo INTEGER NOT NULL DEFAULT 0;

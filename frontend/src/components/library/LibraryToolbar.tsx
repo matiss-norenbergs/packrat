@@ -17,6 +17,7 @@ import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
 import { BulkAssignTagsDialog } from "./BulkAssignTagsDialog"
+import { BulkDeleteLibraryItemsDialog } from "./BulkDeleteLibraryItemsDialog"
 import { useRevealAll } from "./RevealAllContext"
 import { useSelection } from "./SelectionContext"
 
@@ -48,6 +49,7 @@ export function LibraryToolbar() {
   const { revealAll, toggleRevealAll } = useRevealAll()
   const { selectionActive, approxCount, clear } = useSelection()
   const [bulkTagsOpen, setBulkTagsOpen] = useState(false)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
 
   const view = settings?.libraryView === "folders" ? "folders" : "grid"
   const mode = (settings?.libraryMode as "manage" | "details") || "manage"
@@ -310,14 +312,16 @@ export function LibraryToolbar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" disabled={!selectionActive}>
-              Bulk edit
+              Bulk operations
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" className="min-w-48">
             <DropdownMenuItem onSelect={() => setBulkTagsOpen(true)}>Assign tags…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkDeleteOpen(true)}>Delete selected…</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <BulkAssignTagsDialog open={bulkTagsOpen} onOpenChange={setBulkTagsOpen} />
+        <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
       </div>
     )}
     </div>

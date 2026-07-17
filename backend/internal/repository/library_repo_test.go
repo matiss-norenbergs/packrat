@@ -17,13 +17,21 @@ func TestLibraryRepo_CRUDAndActions(t *testing.T) {
 	originalURL := "https://example.com/x"
 	id, err := repo.Create(ctx, &models.LibraryItem{
 		Title: "Original Title", Filename: "video.mp4", Path: "video.mp4",
-		OriginalURL: &originalURL, Status: "completed",
+		OriginalURL: &originalURL, Status: "completed", GenerateNFO: true,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	if id == 0 {
 		t.Fatalf("expected nonzero id")
+	}
+
+	created, err := repo.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created.GenerateNFO {
+		t.Fatalf("expected GenerateNFO=true to round-trip through Create, got %+v", created)
 	}
 
 	if _, err := repo.Get(ctx, 99999); !errors.Is(err, ErrNotFound) {

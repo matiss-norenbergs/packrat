@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -115,5 +116,20 @@ func DeleteHistoryItem(repo *repository.HistoryRepo) gin.HandlerFunc {
 			return
 		}
 		c.Status(http.StatusNoContent)
+	}
+}
+
+// ClearHistory permanently removes every history entry, regardless of age —
+// a manual complement to the automated retention sweep (cleanupHistory in
+// cmd/server/main.go), for a user who wants to wipe the log right now rather
+// than wait for it or lower the retention setting.
+func ClearHistory(repo *repository.HistoryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		n, err := repo.DeleteOlderThan(c.Request.Context(), time.Now())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deleted": n})
 	}
 }

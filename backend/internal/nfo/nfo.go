@@ -5,9 +5,28 @@ package nfo
 
 import (
 	"encoding/xml"
+	"os"
+	"path/filepath"
 
 	"packrat/backend/internal/models"
 )
+
+// SidecarPath returns the .nfo path for a media file — same basename, .nfo
+// extension — mirroring thumbnailAbsPathFor's convention in the api
+// package, which Jellyfin also expects for per-file sidecars.
+func SidecarPath(mediaAbsPath string) string {
+	ext := filepath.Ext(mediaAbsPath)
+	return mediaAbsPath[:len(mediaAbsPath)-len(ext)] + ".nfo"
+}
+
+// WriteSidecar builds and writes item's .nfo sidecar next to mediaAbsPath,
+// overwriting whatever is there. Shared by the manual "Generate NFO Now"
+// action, every metadata-editing handler that keeps an opted-in item's NFO
+// in sync, and the queue manager's download-time "Generate NFO" option.
+func WriteSidecar(mediaAbsPath string, item models.LibraryItem, tags []string) error {
+	doc := Build(item, tags)
+	return os.WriteFile(SidecarPath(mediaAbsPath), doc, 0o644)
+}
 
 // episodeDetails uses Jellyfin/Kodi's <episodedetails> schema — the schema
 // read for a per-file (not per-show) same-basename NFO, which matches

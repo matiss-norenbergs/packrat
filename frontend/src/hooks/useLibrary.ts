@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   bulkAssignTags,
+  bulkDeleteLibraryItems,
   deleteLibraryItem,
   deleteLibraryItemNFO,
   fetchLibrary,
@@ -18,7 +19,13 @@ import {
   setLibraryThumbnail,
   updateLibraryItem,
 } from "@/lib/api"
-import type { BulkAssignTagsRequest, LibraryQueryParams, MoveLibraryItemRequest, UpdateLibraryItemRequest } from "@/types/api"
+import type {
+  BulkAssignTagsRequest,
+  BulkDeleteLibraryItemsRequest,
+  LibraryQueryParams,
+  MoveLibraryItemRequest,
+  UpdateLibraryItemRequest,
+} from "@/types/api"
 import { downloadsQueryKey } from "./useDownloads"
 
 export const libraryQueryKey = ["library"] as const
@@ -89,6 +96,18 @@ export function useBulkAssignTags() {
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to update tags: ${err.message}`),
+  })
+}
+
+export function useBulkDeleteLibraryItems() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: BulkDeleteLibraryItemsRequest) => bulkDeleteLibraryItems(payload),
+    onSuccess: (result) => {
+      toast.success(`Deleted ${result.deleted} ${result.deleted === 1 ? "file" : "files"}`)
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to delete: ${err.message}`),
   })
 }
 

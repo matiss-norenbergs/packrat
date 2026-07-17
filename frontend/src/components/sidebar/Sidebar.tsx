@@ -10,6 +10,7 @@ import {
   Package,
   Tags,
   Mic2,
+  Archive,
   LogOut,
 } from "lucide-react"
 import { Link } from "react-router-dom"
@@ -25,8 +26,9 @@ const navItems = [
   { to: "/collections", label: "Collections", icon: FolderKanban },
   { to: "/tags", label: "Tags", icon: Tags },
   { to: "/artists", label: "Artists", icon: Mic2 },
-  { to: "/import", label: "Import", icon: Import },
+  { to: "/import", label: "File Import", icon: Import },
   { to: "/history", label: "History", icon: History },
+  { to: "/backup", label: "Backup", icon: Archive },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/logs", label: "Logs", icon: ScrollText },
 ]

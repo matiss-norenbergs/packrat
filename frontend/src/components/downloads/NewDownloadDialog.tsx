@@ -464,9 +464,13 @@ export function NewDownloadDialog() {
               <Label htmlFor="filename">Filename (optional)</Label>
               <Input
                 id="filename"
-                placeholder="Leave blank to use the video title"
+                placeholder={
+                  filenamePrefix ? "Disabled — a filename prefix is set below" : "Leave blank to use the video title"
+                }
                 value={filename}
+                disabled={!!filenamePrefix}
                 onChange={(e) => setFilename(e.target.value)}
+                title={filenamePrefix ? "Clear the filename prefix in Advanced to set a literal filename instead" : undefined}
               />
             </div>
           )}

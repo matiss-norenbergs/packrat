@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   cancelDownload,
+  clearDownloadLog,
   createBatchDownload,
   createDownload,
   createPlaylistDownload,
@@ -10,6 +11,7 @@ import {
   previewDownload,
 } from "@/lib/api"
 import { historyQueryKey } from "@/hooks/useHistory"
+import { logsQueryKey } from "@/hooks/useLogs"
 import type { CreateBatchDownloadRequest, CreateDownloadRequest, CreatePlaylistDownloadRequest } from "@/types/api"
 
 export const downloadsQueryKey = ["downloads"] as const
@@ -97,6 +99,21 @@ export function useDeleteDownload() {
     },
     onError: (err: Error) => {
       toast.error(`Failed to delete: ${err.message}`)
+    },
+  })
+}
+
+export function useClearDownloadLog() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => clearDownloadLog(),
+    onSuccess: (result) => {
+      toast.success(`Deleted ${result.deleted} log ${result.deleted === 1 ? "entry" : "entries"}`)
+      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+      queryClient.invalidateQueries({ queryKey: logsQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to clear download log: ${err.message}`)
     },
   })
 }

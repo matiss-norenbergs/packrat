@@ -74,6 +74,7 @@ export interface CreateDownloadRequest {
   seasonNumber?: number
   sequenceNumber?: number
   filenamePrefix?: string
+  generateNfo?: boolean
 }
 
 export interface Collection {
@@ -169,6 +170,20 @@ export interface BulkAssignTagsRequest {
   tags: string[]
 }
 
+export interface BulkDeleteRequest {
+  ids: number[]
+}
+
+export interface BulkDeleteResponse {
+  deleted: number
+  skipped?: number[]
+}
+
+export interface BulkDeleteLibraryItemsRequest {
+  itemIds: number[]
+  deleteFiles: boolean
+}
+
 export interface UpdateLibraryItemRequest {
   title?: string
   filename?: string
@@ -234,6 +249,7 @@ export interface Settings {
   importIgnoredFolders: string[]
   historyAnonymizeUrls: boolean
   historyRetentionDays: number
+  downloadLogRetentionDays: number
   libraryView: string
   librarySortKey: string
   librarySortDir: string
@@ -325,6 +341,7 @@ export interface UpdateSettingsRequest {
   importIgnoredFolders?: string[]
   historyAnonymizeUrls?: boolean
   historyRetentionDays?: number
+  downloadLogRetentionDays?: number
   libraryView?: string
   librarySortKey?: string
   librarySortDir?: string
@@ -380,6 +397,27 @@ export interface LogEntry {
   errorMessage: string | null
   createdAt: string
   completedAt: string | null
+}
+
+export interface BackupEnvelope {
+  packrat: boolean
+  version: number
+  kind: "settings" | "library"
+  exportedAt: string
+  encrypted: boolean
+  salt?: string
+  data: string
+}
+
+export interface BackupImportSettingsResult {
+  applied: number
+}
+
+export interface BackupImportLibraryResult {
+  collectionsEnsured: number
+  tagsCreated: number
+  artistsCreated: number
+  downloadsQueued: number
 }
 
 export interface Stats {

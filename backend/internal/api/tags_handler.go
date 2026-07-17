@@ -96,3 +96,29 @@ func DeleteTag(repo *repository.TagsRepo) gin.HandlerFunc {
 		c.Status(http.StatusNoContent)
 	}
 }
+
+// BulkDeleteTags deletes every listed tag, best-effort — an id that's
+// already gone (ErrNotFound) is skipped rather than failing the batch,
+// since deleting a tag never fails for being "in use" (library_tags cascades).
+func BulkDeleteTags(repo *repository.TagsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkDeleteRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var resp BulkDeleteResponse
+		for _, id := range req.IDs {
+			if err := repo.Delete(c.Request.Context(), id); err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					continue
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			resp.Deleted++
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}

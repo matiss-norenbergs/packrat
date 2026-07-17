@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { ListPlus, Plus, X } from "lucide-react"
+import { ChevronDown, ChevronRight, ListPlus, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -13,28 +13,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { createBatchDownload } from "@/lib/api"
 import { downloadsQueryKey } from "@/hooks/useDownloads"
 import { historyQueryKey } from "@/hooks/useHistory"
-import { useCollections } from "@/hooks/useCollections"
+import { NO_ARTIST } from "@/components/library/ArtistSelect"
+import { BulkDownloadRow } from "./BulkDownloadRow"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
 
-const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
-const AUDIO_FORMATS: AudioFormat[] = ["mp3", "flac", "m4a", "aac", "wav"]
 const NO_COLLECTION = "none"
 const MAX_ROWS = 50
 
-interface BulkRow {
+export interface BulkRow {
   key: string
   url: string
   collectionId: string
@@ -42,18 +33,31 @@ interface BulkRow {
   quality: VideoQuality
   audioFormat: AudioFormat
   filename: string
+  titleOverride: string
+  artistId: string
+  year: string
+  seasonNumber: string
+  sequenceNumber: string
+  generateNfo: boolean
+  advancedOpen: boolean
 }
 
 // Fields worth carrying over when creating a new row from an existing one —
 // deliberately excludes "key" (must always be freshly generated, never
 // leaked from a previous row — a duplicate key across two rows breaks
 // React's reconciliation, causing edits/removals to land on the wrong row)
-// and "url"/"filename" (a new row is for a different URL, so pre-filling
-// either would just create an unwanted duplicate/collision).
-type RowCarryOver = Pick<BulkRow, "collectionId" | "downloadType" | "quality" | "audioFormat">
+// and "url"/"filename"/"titleOverride" (a new row is for a different item,
+// so pre-filling any of these would just create an unwanted duplicate).
+// sequenceNumber is deliberately NOT here — it's carried separately as
+// prev+1 (see nextSequence), not a literal copy, since two rows in the same
+// batch almost never share one sequence number.
+type RowCarryOver = Pick<
+  BulkRow,
+  "collectionId" | "downloadType" | "quality" | "audioFormat" | "artistId" | "year" | "seasonNumber" | "generateNfo" | "advancedOpen"
+>
 
 let rowCounter = 0
-function newRow(carryOver?: Partial<RowCarryOver>): BulkRow {
+function newRow(carryOver?: Partial<RowCarryOver>, sequenceNumber?: string): BulkRow {
   rowCounter += 1
   return {
     key: `row-${rowCounter}`,
@@ -63,26 +67,59 @@ function newRow(carryOver?: Partial<RowCarryOver>): BulkRow {
     quality: "best",
     audioFormat: "mp3",
     filename: "",
+    titleOverride: "",
+    artistId: NO_ARTIST,
+    year: "",
+    seasonNumber: "",
+    sequenceNumber: sequenceNumber ?? "",
+    generateNfo: false,
+    advancedOpen: false,
     ...carryOver,
   }
+}
+
+// Sequence # auto-increments from the previous row rather than being tied
+// to row position (up/down reordering never touches it) — this covers the
+// common "next episode" case for free while staying correct when a batch
+// mixes unrelated sources, since it's just a starting suggestion the user
+// can clear/edit per row like any other carried-over field.
+function nextSequence(prev: string): string {
+  const n = Number(prev)
+  if (prev.trim() === "" || Number.isNaN(n)) return ""
+  return String(n + 1)
 }
 
 function blankRows(count: number): BulkRow[] {
   return Array.from({ length: count }, () => newRow())
 }
 
+function carryOverFrom(row: BulkRow): RowCarryOver {
+  return {
+    collectionId: row.collectionId,
+    downloadType: row.downloadType,
+    quality: row.quality,
+    audioFormat: row.audioFormat,
+    artistId: row.artistId,
+    year: row.year,
+    seasonNumber: row.seasonNumber,
+    generateNfo: row.generateNfo,
+    advancedOpen: row.advancedOpen,
+  }
+}
+
 export function BulkDownloadDialog() {
   const [open, setOpen] = useState(false)
-  const [rows, setRows] = useState<BulkRow[]>(() => blankRows(3))
+  const [rows, setRows] = useState<BulkRow[]>(() => blankRows(1))
+  const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [skipDuplicates, setSkipDuplicates] = useState(true)
 
-  const { data: collections } = useCollections()
   const queryClient = useQueryClient()
 
   const reset = () => {
-    setRows(blankRows(3))
+    setRows(blankRows(1))
+    setPasteOpen(false)
     setPasteText("")
     setSkipDuplicates(true)
   }
@@ -102,19 +139,21 @@ export function BulkDownloadDialog() {
     setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.key !== key) : prev))
   }
 
+  const moveRow = (index: number, direction: -1 | 1) => {
+    setRows((prev) => {
+      const target = index + direction
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
+
   const addRow = () => {
     if (atCap) return
     setRows((prev) => {
       const last = prev[prev.length - 1]
-      return [
-        ...prev,
-        newRow({
-          collectionId: last.collectionId,
-          downloadType: last.downloadType,
-          quality: last.quality,
-          audioFormat: last.audioFormat,
-        }),
-      ]
+      return [...prev, newRow(carryOverFrom(last), nextSequence(last.sequenceNumber))]
     })
   }
 
@@ -127,15 +166,14 @@ export function BulkDownloadDialog() {
 
     setRows((prev) => {
       const last = prev[prev.length - 1]
-      const carryOver: RowCarryOver = {
-        collectionId: last.collectionId,
-        downloadType: last.downloadType,
-        quality: last.quality,
-        audioFormat: last.audioFormat,
-      }
+      const carryOver = carryOverFrom(last)
       const room = MAX_ROWS - prev.length
       const toAdd = urls.slice(0, Math.max(room, 0))
-      const appended = toAdd.map((url) => ({ ...newRow(carryOver), url }))
+      let seq = last.sequenceNumber
+      const appended = toAdd.map((url) => {
+        seq = nextSequence(seq)
+        return { ...newRow(carryOver, seq), url }
+      })
       return [...prev, ...appended]
     })
     setPasteText("")
@@ -149,14 +187,25 @@ export function BulkDownloadDialog() {
     let result
     try {
       result = await createBatchDownload({
-        items: toSubmit.map((r) => ({
-          url: r.url.trim(),
-          collectionId: r.collectionId === NO_COLLECTION ? undefined : Number(r.collectionId),
-          downloadType: r.downloadType,
-          quality: r.downloadType === "video" ? r.quality : undefined,
-          audioFormat: r.downloadType === "audio" ? r.audioFormat : undefined,
-          filename: r.filename.trim() || undefined,
-        })),
+        items: toSubmit.map((r) => {
+          const parsedYear = r.year.trim() === "" ? undefined : Number(r.year)
+          const parsedSeason = r.seasonNumber.trim() === "" ? undefined : Number(r.seasonNumber)
+          const parsedSequence = r.sequenceNumber.trim() === "" ? undefined : Number(r.sequenceNumber)
+          return {
+            url: r.url.trim(),
+            collectionId: r.collectionId === NO_COLLECTION ? undefined : Number(r.collectionId),
+            downloadType: r.downloadType,
+            quality: r.downloadType === "video" ? r.quality : undefined,
+            audioFormat: r.downloadType === "audio" ? r.audioFormat : undefined,
+            filename: r.filename.trim() || undefined,
+            title: r.titleOverride.trim() || undefined,
+            artistId: r.artistId === NO_ARTIST ? undefined : Number(r.artistId),
+            year: parsedYear != null && !Number.isNaN(parsedYear) ? parsedYear : undefined,
+            seasonNumber: parsedSeason != null && !Number.isNaN(parsedSeason) ? parsedSeason : undefined,
+            sequenceNumber: parsedSequence != null && !Number.isNaN(parsedSequence) ? parsedSequence : undefined,
+            generateNfo: r.generateNfo || undefined,
+          }
+        }),
         skipDuplicates,
       })
     } catch (err) {
@@ -195,139 +244,54 @@ export function BulkDownloadDialog() {
           Bulk Download
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-[90vw]">
         <DialogHeader>
           <DialogTitle>Bulk Download</DialogTitle>
           <DialogDescription>
-            Queue multiple URLs at once. Each row can have its own collection, type, and quality.
+            Queue multiple URLs at once. Each row can have its own collection, type, quality, and metadata.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="bulk-paste">Paste URLs (one per line)</Label>
-            <div className="flex gap-2">
-              <Textarea
-                id="bulk-paste"
-                rows={2}
-                placeholder="https://...&#10;https://..."
-                value={pasteText}
-                onChange={(e) => setPasteText(e.target.value)}
-              />
-              <Button variant="secondary" onClick={handlePasteApply} disabled={!pasteText.trim() || atCap}>
-                Add
-              </Button>
-            </div>
-          </div>
-
-          <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
-            {rows.map((row) => (
-              <div key={row.key} className="flex flex-wrap items-end gap-2 rounded-md border p-3">
-                <div className="min-w-[160px] flex-1 space-y-1 sm:min-w-[220px]">
-                  <Label htmlFor={`bulk-url-${row.key}`}>URL</Label>
-                  <Input
-                    id={`bulk-url-${row.key}`}
-                    placeholder="https://..."
-                    value={row.url}
-                    onChange={(e) => updateRow(row.key, { url: e.target.value })}
-                  />
-                </div>
-
-                <div className="w-full space-y-1 sm:w-40">
-                  <Label>Collection</Label>
-                  <Select
-                    value={row.collectionId}
-                    onValueChange={(v) => updateRow(row.key, { collectionId: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_COLLECTION}>None</SelectItem>
-                      {collections?.map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>
-                          {c.path}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="w-[calc(50%-0.25rem)] space-y-1 sm:w-28">
-                  <Label>Type</Label>
-                  <Select
-                    value={row.downloadType}
-                    onValueChange={(v) => updateRow(row.key, { downloadType: v as DownloadType })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="video">Video</SelectItem>
-                      <SelectItem value="audio">Audio</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {row.downloadType === "video" ? (
-                  <div className="w-[calc(50%-0.25rem)] space-y-1 sm:w-28">
-                    <Label>Quality</Label>
-                    <Select
-                      value={row.quality}
-                      onValueChange={(v) => updateRow(row.key, { quality: v as VideoQuality })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {VIDEO_QUALITIES.map((q) => (
-                          <SelectItem key={q} value={q}>
-                            {q}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <div className="w-[calc(50%-0.25rem)] space-y-1 sm:w-28">
-                    <Label>Format</Label>
-                    <Select
-                      value={row.audioFormat}
-                      onValueChange={(v) => updateRow(row.key, { audioFormat: v as AudioFormat })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {AUDIO_FORMATS.map((f) => (
-                          <SelectItem key={f} value={f}>
-                            {f}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div className="w-full space-y-1 sm:w-36">
-                  <Label>Filename</Label>
-                  <Input
-                    placeholder="optional"
-                    value={row.filename}
-                    onChange={(e) => updateRow(row.key, { filename: e.target.value })}
-                  />
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Remove row"
-                  disabled={rows.length <= 1}
-                  onClick={() => removeRow(row.key)}
-                >
-                  <X className="h-4 w-4" />
+            <button
+              type="button"
+              className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+              onClick={() => setPasteOpen((v) => !v)}
+            >
+              {pasteOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              Paste URLs (one per line)
+            </button>
+            {pasteOpen && (
+              <div className="flex gap-2">
+                <Textarea
+                  id="bulk-paste"
+                  rows={2}
+                  placeholder="https://...&#10;https://..."
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                />
+                <Button variant="secondary" onClick={handlePasteApply} disabled={!pasteText.trim() || atCap}>
+                  Add
                 </Button>
               </div>
+            )}
+          </div>
+
+          <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+            {rows.map((row, index) => (
+              <BulkDownloadRow
+                key={row.key}
+                row={row}
+                rowNumber={index + 1}
+                isFirst={index === 0}
+                isLast={index === rows.length - 1}
+                canRemove={rows.length > 1}
+                onChange={(patch) => updateRow(row.key, patch)}
+                onRemove={() => removeRow(row.key)}
+                onMoveUp={() => moveRow(index, -1)}
+                onMoveDown={() => moveRow(index, 1)}
+              />
             ))}
           </div>
 

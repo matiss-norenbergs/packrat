@@ -15,7 +15,7 @@ import (
 // is covered by a real end-to-end run (see docs/architecture.md); this test
 // is just the deterministic size-tracking part.
 func TestSetWorkerCount(t *testing.T) {
-	mgr := NewDownloadManager("", nil, nil, nil, nil, nil, nil, nil, nil, NewProgressStore(), ws.NoopBroadcaster{})
+	mgr := NewDownloadManager("", nil, nil, nil, nil, nil, nil, nil, nil, nil, NewProgressStore(), ws.NoopBroadcaster{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

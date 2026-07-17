@@ -68,6 +68,27 @@ func HistoryRetentionDays(ctx context.Context, repo *repository.SettingsRepo) (i
 	return n, nil
 }
 
+// DownloadLogRetentionDays reads the download_log_retention_days setting, defaulting to 0 — keep
+// forever — if it's never been set (or is somehow corrupt). Mirrors HistoryRetentionDays exactly;
+// the download log is the same downloads table the live queue and Logs page read, so this only
+// prunes terminal (non-active) rows — see DownloadsRepo.DeleteOlderThan. Shared by GetSettings; the
+// cleanup sweep in cmd/server/main.go reads this same key directly via settingsRepo.Get rather than
+// calling this helper, to avoid an import cycle (see triggerJellyfinRefresh for precedent).
+func DownloadLogRetentionDays(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingDownloadLogRetentionDays)
+	if errors.Is(err, repository.ErrNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0, nil
+	}
+	return n, nil
+}
+
 // LibraryView reads the library_view setting, defaulting to "grid" if it's
 // never been set. Shared by GetSettings.
 func LibraryView(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
@@ -300,6 +321,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		downloadLogRetentionDays, err := DownloadLogRetentionDays(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		libraryView, err := LibraryView(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -374,6 +400,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			ImportIgnoredFolders:     ignoredFolders,
 			HistoryAnonymizeURLs:     anonymizeHistory,
 			HistoryRetentionDays:     historyRetentionDays,
+			DownloadLogRetentionDays: downloadLogRetentionDays,
 			LibraryView:              libraryView,
 			LibrarySortKey:           librarySortKey,
 			LibrarySortDir:           librarySortDir,
@@ -447,6 +474,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 		}
 		if req.HistoryRetentionDays != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingHistoryRetentionDays, strconv.Itoa(*req.HistoryRetentionDays)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.DownloadLogRetentionDays != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingDownloadLogRetentionDays, strconv.Itoa(*req.DownloadLogRetentionDays)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

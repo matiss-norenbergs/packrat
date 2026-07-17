@@ -150,6 +150,12 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
               <span>{item.downloadId == null ? "Imported" : "Downloaded"}</span>
               <span className="text-foreground">{new Date(item.downloadedAt).toLocaleDateString()}</span>
             </div>
+            <div className="flex justify-between gap-2">
+              <span>Source URL</span>
+              <span className={item.originalUrl ? "text-foreground" : "text-destructive"}>
+                {item.originalUrl ? "Saved" : "Not saved"}
+              </span>
+            </div>
           </div>
         )}
       </CardContent>

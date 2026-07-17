@@ -10,6 +10,7 @@ import { TagsPage } from "@/pages/TagsPage"
 import { ArtistsPage } from "@/pages/ArtistsPage"
 import { ImportPage } from "@/pages/ImportPage"
 import { HistoryPage } from "@/pages/HistoryPage"
+import { BackupPage } from "@/pages/BackupPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { LogsPage } from "@/pages/LogsPage"
 
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
       { path: "/artists", element: <ArtistsPage /> },
       { path: "/import", element: <ImportPage /> },
       { path: "/history", element: <HistoryPage /> },
+      { path: "/backup", element: <BackupPage /> },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/logs", element: <LogsPage /> },
     ],

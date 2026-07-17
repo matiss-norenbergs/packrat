@@ -54,6 +54,27 @@ func cleanupHistory(ctx context.Context, historyRepo *repository.HistoryRepo, se
 	}
 }
 
+// cleanupDownloadLog deletes download log entries (the downloads table —
+// same rows the live queue and Logs page read) older than the configured
+// retention window. Mirrors cleanupHistory exactly; DeleteOlderThan itself
+// guards against ever touching a still-active row regardless of age.
+func cleanupDownloadLog(ctx context.Context, downloadsRepo *repository.DownloadsRepo, settingsRepo *repository.SettingsRepo) {
+	raw, err := settingsRepo.Get(ctx, models.SettingDownloadLogRetentionDays)
+	days, convErr := strconv.Atoi(raw)
+	if err != nil || convErr != nil || days <= 0 {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -days)
+	n, err := downloadsRepo.DeleteOlderThan(ctx, cutoff)
+	if err != nil {
+		log.Printf("download log cleanup failed: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("download log cleanup: removed %d entries older than %d days", n, days)
+	}
+}
+
 func run() error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -95,7 +116,7 @@ func run() error {
 	hub := ws.NewHub()
 	go hub.Run(ctx)
 
-	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, settingsRepo, jellyfinClient, progressStore, hub)
+	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, jellyfinClient, progressStore, hub)
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)
 	if err != nil {
@@ -121,7 +142,10 @@ func run() error {
 	mgr.Start(ctx, workerCount)
 
 	go func() {
+		// Both sweeps share one ticker — they run on the same cadence and
+		// each is already a no-op when its own retention setting is unset.
 		cleanupHistory(ctx, historyRepo, settingsRepo) // once immediately, so a just-raised retention takes effect right away
+		cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
 		ticker := time.NewTicker(historyCleanupInterval)
 		defer ticker.Stop()
 		for {
@@ -130,6 +154,7 @@ func run() error {
 				return
 			case <-ticker.C:
 				cleanupHistory(ctx, historyRepo, settingsRepo)
+				cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
 			}
 		}
 	}()

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { createTag, deleteTag, fetchTags, updateTag } from "@/lib/api"
-import type { CreateTagRequest, UpdateTagRequest } from "@/types/api"
+import { bulkDeleteTags, createTag, deleteTag, fetchTags, updateTag } from "@/lib/api"
+import type { BulkDeleteRequest, CreateTagRequest, UpdateTagRequest } from "@/types/api"
 import { libraryQueryKey } from "./useLibrary"
 
 export const tagsQueryKey = ["tags"] as const
@@ -57,6 +57,21 @@ export function useDeleteTag() {
     },
     onError: (err: Error) => {
       toast.error(`Failed to delete tag: ${err.message}`)
+    },
+  })
+}
+
+export function useBulkDeleteTags() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: BulkDeleteRequest) => bulkDeleteTags(payload),
+    onSuccess: (result) => {
+      toast.success(`Deleted ${result.deleted} tag${result.deleted === 1 ? "" : "s"}`)
+      queryClient.invalidateQueries({ queryKey: tagsQueryKey })
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to delete tags: ${err.message}`)
     },
   })
 }

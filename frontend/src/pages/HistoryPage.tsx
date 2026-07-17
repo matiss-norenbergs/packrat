@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useDeleteHistoryItem, useHistory, useRetryHistoryItem } from "@/hooks/useHistory"
+import { formatDownloadStatus } from "@/lib/utils"
 import type { HistoryItem } from "@/types/api"
 
 // "duplicate" is deliberately excluded — it was never queued, so there's
@@ -72,7 +73,7 @@ function HistoryRow({ item }: { item: HistoryItem }) {
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium">{item.title ?? item.url}</p>
-          <Badge variant={STATUS_VARIANT[item.status] ?? "outline"}>{item.status}</Badge>
+          <Badge variant={STATUS_VARIANT[item.status] ?? "outline"}>{formatDownloadStatus(item.status)}</Badge>
         </div>
         {(item.status === "failed" || item.status === "duplicate") && item.errorMessage ? (
           <p className={`truncate text-xs ${item.status === "failed" ? "text-destructive" : "text-muted-foreground"}`}>

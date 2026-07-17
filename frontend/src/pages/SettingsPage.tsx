@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -14,6 +25,8 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useChangePassword } from "@/hooks/useAuth"
+import { useClearDownloadLog } from "@/hooks/useDownloads"
+import { useClearHistory } from "@/hooks/useHistory"
 import {
   useRescanJellyfinLibrary,
   useSettings,
@@ -353,6 +366,7 @@ function YtDlpCard() {
 function DownloadsCard() {
   const { data: settings, isLoading } = useSettings()
   const updateSettings = useUpdateSettings()
+  const clearDownloadLog = useClearDownloadLog()
 
   const [defaultQuality, setDefaultQuality] = useState<VideoQuality>("best")
   const [defaultDownloadType, setDefaultDownloadType] = useState<DownloadType>("video")
@@ -432,6 +446,51 @@ function DownloadsCard() {
                   the queue.
                 </p>
               </div>
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <Label>Keep download log for</Label>
+              <Select
+                value={String(settings.downloadLogRetentionDays)}
+                onValueChange={(v) => updateSettings.mutate({ downloadLogRetentionDays: Number(v) })}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RETENTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Entries older than this are deleted automatically from the Downloads and Logs
+                pages. Only completed/failed/cancelled entries are ever removed — anything still
+                queued or in progress is never touched, regardless of age.
+              </p>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={clearDownloadLog.isPending}>
+                    Clear all now
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete all download log entries?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Removes every completed/failed/cancelled entry from the Downloads and Logs
+                      pages right now, regardless of age. Anything still queued or in progress is
+                      left untouched.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => clearDownloadLog.mutate()}>Delete all</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </>
         )}
@@ -575,6 +634,7 @@ const RETENTION_OPTIONS: { value: string; label: string }[] = [
 function HistoryCard() {
   const { data: settings, isLoading } = useSettings()
   const updateSettings = useUpdateSettings()
+  const clearHistory = useClearHistory()
 
   return (
     <Card>
@@ -625,6 +685,29 @@ function HistoryCard() {
                 History entries older than this are deleted automatically. Doesn't affect your
                 library files or downloads — only the History page's log.
               </p>
+            </div>
+
+            <div className="border-t pt-4">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={clearHistory.isPending}>
+                    Clear all now
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete all history entries?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Removes every entry from the History page right now, regardless of age.
+                      Doesn't affect your library files or downloads.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => clearHistory.mutate()}>Delete all</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </>
         )}

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { createArtist, deleteArtist, fetchArtists, updateArtist } from "@/lib/api"
-import type { CreateArtistRequest, UpdateArtistRequest } from "@/types/api"
+import { bulkDeleteArtists, createArtist, deleteArtist, fetchArtists, updateArtist } from "@/lib/api"
+import type { BulkDeleteRequest, CreateArtistRequest, UpdateArtistRequest } from "@/types/api"
 import { libraryQueryKey } from "./useLibrary"
 
 export const artistsQueryKey = ["artists"] as const
@@ -57,6 +57,21 @@ export function useDeleteArtist() {
     },
     onError: (err: Error) => {
       toast.error(`Failed to delete artist: ${err.message}`)
+    },
+  })
+}
+
+export function useBulkDeleteArtists() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: BulkDeleteRequest) => bulkDeleteArtists(payload),
+    onSuccess: (result) => {
+      toast.success(`Deleted ${result.deleted} artist${result.deleted === 1 ? "" : "s"}`)
+      queryClient.invalidateQueries({ queryKey: artistsQueryKey })
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to delete artists: ${err.message}`)
     },
   })
 }

@@ -2,6 +2,7 @@ import { useState } from "react"
 import { ChevronDown, ChevronRight, FolderPlus, Lock, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,17 +18,22 @@ import { CollectionDialog } from "./CollectionDialog"
 import { useDeleteCollection } from "@/hooks/useCollections"
 import type { CollectionTreeNode } from "@/lib/collectionTree"
 
-export function CollectionTree({ nodes }: { nodes: CollectionTreeNode[] }) {
+interface SelectionProps {
+  isSelected: (id: number) => boolean
+  onToggle: (id: number) => void
+}
+
+export function CollectionTree({ nodes, isSelected, onToggle }: { nodes: CollectionTreeNode[] } & SelectionProps) {
   return (
     <div className="space-y-2">
       {nodes.map((node) => (
-        <CollectionNode key={node.id} node={node} />
+        <CollectionNode key={node.id} node={node} isSelected={isSelected} onToggle={onToggle} />
       ))}
     </div>
   )
 }
 
-function CollectionNode({ node }: { node: CollectionTreeNode }) {
+function CollectionNode({ node, isSelected, onToggle }: { node: CollectionTreeNode } & SelectionProps) {
   const [expanded, setExpanded] = useState(true)
   const deleteCollection = useDeleteCollection()
   const hasChildren = node.children.length > 0
@@ -35,6 +41,8 @@ function CollectionNode({ node }: { node: CollectionTreeNode }) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 rounded-md border p-3">
+        <Checkbox checked={isSelected(node.id)} onCheckedChange={() => onToggle(node.id)} />
+
         {hasChildren ? (
           <Button
             variant="ghost"
@@ -108,7 +116,7 @@ function CollectionNode({ node }: { node: CollectionTreeNode }) {
       {hasChildren && expanded && (
         <div className="ml-6 mt-2 space-y-2 border-l pl-4">
           {node.children.map((child) => (
-            <CollectionNode key={child.id} node={child} />
+            <CollectionNode key={child.id} node={child} isSelected={isSelected} onToggle={onToggle} />
           ))}
         </div>
       )}

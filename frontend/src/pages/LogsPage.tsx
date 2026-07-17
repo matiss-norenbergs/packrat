@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { LogDetailDialog } from "@/components/logs/LogDetailDialog"
 import { useLogs } from "@/hooks/useLogs"
+import { formatDownloadStatus } from "@/lib/utils"
 import type { DownloadStatus, LogEntry } from "@/types/api"
 
 const NONE = "none"
@@ -18,15 +19,15 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   interrupted: "destructive",
 }
 
-const STATUS_OPTIONS: { value: DownloadStatus; label: string }[] = [
-  { value: "queued", label: "Queued" },
-  { value: "fetching_metadata", label: "Fetching metadata" },
-  { value: "downloading", label: "Downloading" },
-  { value: "processing", label: "Processing" },
-  { value: "completed", label: "Completed" },
-  { value: "failed", label: "Failed" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "interrupted", label: "Interrupted" },
+const STATUS_OPTIONS: DownloadStatus[] = [
+  "queued",
+  "fetching_metadata",
+  "downloading",
+  "processing",
+  "completed",
+  "failed",
+  "cancelled",
+  "interrupted",
 ]
 
 export function LogsPage() {
@@ -72,8 +73,8 @@ export function LogsPage() {
           <SelectContent>
             <SelectItem value={NONE}>All statuses</SelectItem>
             {STATUS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
+              <SelectItem key={opt} value={opt}>
+                {formatDownloadStatus(opt)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -120,7 +121,7 @@ function LogRow({ entry, onView }: { entry: LogEntry; onView: () => void }) {
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium">{entry.title ?? entry.url}</p>
-          <Badge variant={STATUS_VARIANT[entry.status] ?? "outline"}>{entry.status}</Badge>
+          <Badge variant={STATUS_VARIANT[entry.status] ?? "outline"}>{formatDownloadStatus(entry.status)}</Badge>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>{new Date(entry.createdAt).toLocaleString()}</span>
