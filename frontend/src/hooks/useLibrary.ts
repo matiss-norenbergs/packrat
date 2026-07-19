@@ -7,6 +7,7 @@ import {
   deleteLibraryItemNFO,
   fetchLibrary,
   fetchLibraryFacets,
+  fetchLibraryItemMetadataPreview,
   fetchLibraryItemNFO,
   fetchLibraryQuery,
   fetchLibraryThumbnailCandidates,
@@ -178,6 +179,17 @@ export function useLibraryThumbnailCandidates(id: number, enabled: boolean) {
     enabled,
     staleTime: 0,
     gcTime: 0,
+  })
+}
+
+export function useLibraryItemMetadataPreview(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["library", id, "metadata-preview"],
+    queryFn: () => fetchLibraryItemMetadataPreview(id),
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
   })
 }
 

@@ -15,8 +15,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useCollections } from "@/hooks/useCollections"
 import { useDownloadPreview } from "@/hooks/useDownloads"
 import { useSettings } from "@/hooks/useSettings"
+import { useTags } from "@/hooks/useTags"
 import { ArtistSelect } from "@/components/library/ArtistSelect"
-import { formatDuration } from "@/lib/utils"
+import { TagInput } from "@/components/library/TagInput"
+import { cn, formatDuration } from "@/lib/utils"
+import { resolveInheritedArtistId } from "@/lib/collectionTree"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
 import type { BulkRow } from "./BulkDownloadDialog"
 
@@ -49,6 +52,7 @@ export function BulkDownloadRow({
 }: BulkDownloadRowProps) {
   const { data: collections } = useCollections()
   const { data: settings } = useSettings()
+  const { data: allTags } = useTags()
   const [previewRequested, setPreviewRequested] = useState(false)
 
   const previewAllowed = !settings?.skipDownloadPreview
@@ -58,7 +62,7 @@ export function BulkDownloadRow({
   )
 
   return (
-    <div className="space-y-3 rounded-md border p-3">
+    <div className={cn("space-y-3 rounded-md border p-3", rowNumber % 2 === 0 && "bg-muted/40")}>
       <div className="flex items-center gap-2">
         <div className="flex shrink-0 flex-col gap-0.5">
           <Button
@@ -117,72 +121,89 @@ export function BulkDownloadRow({
               </div>
             </div>
 
-            <div className="w-full shrink-0 space-y-1 sm:w-40">
-              <Label>Collection</Label>
-              <Select value={row.collectionId} onValueChange={(v) => onChange({ collectionId: v })}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_COLLECTION}>None</SelectItem>
-                  {collections?.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.path}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="w-full shrink-0 space-y-1 sm:w-24">
-              <Label>Type</Label>
-              <Select
-                value={row.downloadType}
-                onValueChange={(v) => onChange({ downloadType: v as DownloadType })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="video">Video</SelectItem>
-                  <SelectItem value="audio">Audio</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {row.downloadType === "video" ? (
-              <div className="w-full shrink-0 space-y-1 sm:w-24">
-                <Label>Quality</Label>
-                <Select value={row.quality} onValueChange={(v) => onChange({ quality: v as VideoQuality })}>
+            <div className="flex w-full flex-wrap gap-2 min-[1100px]:contents">
+              <div className="w-full space-y-1 sm:max-[1099px]:flex-1 min-[1100px]:w-40 min-[1100px]:shrink-0">
+                <Label>Collection</Label>
+                <Select
+                  value={row.collectionId}
+                  onValueChange={(v) => {
+                    const col = collections?.find((c) => String(c.id) === v)
+                    const inheritedArtistId = resolveInheritedArtistId(collections ?? [], col?.id ?? null)
+                    onChange({
+                      collectionId: v,
+                      ...(col?.seasonNumber != null
+                        ? { seasonNumber: String(col.seasonNumber), advancedOpen: true }
+                        : {}),
+                      ...(inheritedArtistId != null
+                        ? { artistId: String(inheritedArtistId), advancedOpen: true }
+                        : {}),
+                    })
+                  }}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {VIDEO_QUALITIES.map((q) => (
-                      <SelectItem key={q} value={q}>
-                        {q}
+                    <SelectItem value={NO_COLLECTION}>None</SelectItem>
+                    {collections?.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.path}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            ) : (
-              <div className="w-full shrink-0 space-y-1 sm:w-24">
-                <Label>Format</Label>
-                <Select value={row.audioFormat} onValueChange={(v) => onChange({ audioFormat: v as AudioFormat })}>
+
+              <div className="w-full space-y-1 sm:max-[1099px]:flex-1 min-[1100px]:w-24 min-[1100px]:shrink-0">
+                <Label>Type</Label>
+                <Select
+                  value={row.downloadType}
+                  onValueChange={(v) => onChange({ downloadType: v as DownloadType })}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {AUDIO_FORMATS.map((f) => (
-                      <SelectItem key={f} value={f}>
-                        {f}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="video">Video</SelectItem>
+                    <SelectItem value="audio">Audio</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            )}
+
+              {row.downloadType === "video" ? (
+                <div className="w-full space-y-1 sm:max-[1099px]:flex-1 min-[1100px]:w-24 min-[1100px]:shrink-0">
+                  <Label>Quality</Label>
+                  <Select value={row.quality} onValueChange={(v) => onChange({ quality: v as VideoQuality })}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VIDEO_QUALITIES.map((q) => (
+                        <SelectItem key={q} value={q}>
+                          {q}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="w-full space-y-1 sm:max-[1099px]:flex-1 min-[1100px]:w-24 min-[1100px]:shrink-0">
+                  <Label>Format</Label>
+                  <Select value={row.audioFormat} onValueChange={(v) => onChange({ audioFormat: v as AudioFormat })}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AUDIO_FORMATS.map((f) => (
+                        <SelectItem key={f} value={f}>
+                          {f}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -197,7 +218,7 @@ export function BulkDownloadRow({
       </div>
 
       {previewRequested && row.url.trim() && (
-        <div className="rounded-md border p-2">
+        <div className="ml-[4.25rem] rounded-md border p-2">
           {previewLoading ? (
             <div className="flex items-center gap-3">
               <Skeleton className="h-10 w-16 shrink-0 rounded" />
@@ -235,7 +256,7 @@ export function BulkDownloadRow({
         </div>
       )}
 
-      <div className="border-t pt-2">
+      <div className="ml-[4.25rem] border-t pt-2">
         <button
           type="button"
           className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -290,7 +311,15 @@ export function BulkDownloadRow({
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-5">
+            <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+              <Label>Tags</Label>
+              <TagInput
+                value={row.tags}
+                onChange={(next) => onChange({ tags: next })}
+                suggestions={allTags?.map((t) => t.name) ?? []}
+              />
+            </div>
+            <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-2">
               <Checkbox
                 id={`bulk-nfo-${row.key}`}
                 checked={row.generateNfo}

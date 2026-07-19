@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useCreateTag, useUpdateTag } from "@/hooks/useTags"
@@ -24,13 +25,17 @@ export function TagDialog({ tag, trigger }: TagDialogProps) {
   const isEdit = tag != null
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(tag?.name ?? "")
+  const [isPrivate, setIsPrivate] = useState(tag?.isPrivate ?? false)
 
   const createTag = useCreateTag()
   const updateTag = useUpdateTag()
   const pending = createTag.isPending || updateTag.isPending
 
   const handleOpenChange = (next: boolean) => {
-    if (next) setName(tag?.name ?? "")
+    if (next) {
+      setName(tag?.name ?? "")
+      setIsPrivate(tag?.isPrivate ?? false)
+    }
     setOpen(next)
   }
 
@@ -39,9 +44,9 @@ export function TagDialog({ tag, trigger }: TagDialogProps) {
     if (!trimmed) return
 
     if (isEdit) {
-      updateTag.mutate({ id: tag.id, payload: { name: trimmed } }, { onSuccess: () => setOpen(false) })
+      updateTag.mutate({ id: tag.id, payload: { name: trimmed, isPrivate } }, { onSuccess: () => setOpen(false) })
     } else {
-      createTag.mutate({ name: trimmed }, { onSuccess: () => setOpen(false) })
+      createTag.mutate({ name: trimmed, isPrivate }, { onSuccess: () => setOpen(false) })
     }
   }
 
@@ -65,15 +70,33 @@ export function TagDialog({ tag, trigger }: TagDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2">
-          <Label htmlFor="tag-name">Name</Label>
-          <Input
-            id="tag-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          />
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="tag-name">Name</Label>
+            <Input
+              id="tag-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            />
+          </div>
+
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="tag-private"
+              checked={isPrivate}
+              onCheckedChange={(v) => setIsPrivate(v === true)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="tag-private" className="font-normal">
+                Private
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Blurs thumbnails and hides titles for every item with this tag.
+              </p>
+            </div>
+          </div>
         </div>
 
         <DialogFooter>

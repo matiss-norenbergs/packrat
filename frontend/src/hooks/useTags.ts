@@ -34,13 +34,14 @@ export function useUpdateTag() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: UpdateTagRequest }) => updateTag(id, payload),
     onSuccess: () => {
-      toast.success("Tag renamed")
+      toast.success("Tag saved")
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })
-      // Renaming changes the tag name shown on every library item's badges.
+      // Renaming changes the tag name shown on every library item's badges,
+      // and toggling privacy changes whether those items render blurred.
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
     onError: (err: Error) => {
-      toast.error(`Failed to rename tag: ${err.message}`)
+      toast.error(`Failed to save tag: ${err.message}`)
     },
   })
 }

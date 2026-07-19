@@ -16,12 +16,13 @@ any site you point it at.
 
 ## Status
 
-This is a **working skeleton**, not the full feature set described in
-[`docker-app-plan.md`](../docker-app-plan.md). One real flow is implemented end to end: submit a
-URL, `yt-dlp` fetches metadata, the download runs as a subprocess with live progress over
-WebSocket, and the completed file lands in the Library. See
-[`docs/FEATURES.md`](docs/FEATURES.md) for a page-by-page guide to everything that's implemented,
-and [`docs/architecture.md`](docs/architecture.md) for what is and is not built yet under the hood.
+Well past the original ["working skeleton"](../docker-app-plan.md) starting point — the core
+download → library flow, plus collections, tags, artists, playlist/batch downloads, full-text
+search, private-content blurring, NFO sidecars, Jellyfin auto-refresh, encrypted backup/restore,
+and session auth with CSRF protection are all implemented. See [`docs/FEATURES.md`](docs/FEATURES.md)
+for a page-by-page guide to everything that's implemented, [`docs/api.md`](docs/api.md) for the
+full REST/WebSocket surface, and [`docs/architecture.md`](docs/architecture.md) for how it's built
+and what's still deliberately out of scope.
 
 ## Stack
 

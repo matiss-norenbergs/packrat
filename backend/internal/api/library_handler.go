@@ -103,10 +103,23 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		privateTagNames, err := tagsRepo.PrivateTagNames(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 
 		out := make([]LibraryItemResponse, 0, len(rows))
 		for _, item := range rows {
 			blurred := item.CollectionID != nil && privacy[*item.CollectionID]
+			if !blurred {
+				for _, t := range tagsByID[item.ID] {
+					if privateTagNames[t] {
+						blurred = true
+						break
+					}
+				}
+			}
 			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID], mediaRoot))
 		}
 		c.JSON(http.StatusOK, LibraryListResponse{Items: out, Total: total})
@@ -612,6 +625,13 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		if !blurred {
+			blurred, err = tagsRepo.HasPrivateTag(c.Request.Context(), tags)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
 
 		if updated.GenerateNFO {
 			if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, updated); err != nil {
@@ -620,6 +640,43 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 		}
 
 		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, mediaRoot))
+	}
+}
+
+// CompareLibraryItemMetadata re-fetches yt-dlp metadata for the item's
+// original URL and returns it as-is for a side-by-side comparison against
+// the saved item — unlike RefreshLibraryItemMetadata, this never writes
+// anything back to the DB.
+func CompareLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+
+		item, err := repo.Get(c.Request.Context(), id)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if item.OriginalURL == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "no source URL set for this item"})
+			return
+		}
+
+		meta, err := ytdlp.FetchMetadata(c.Request.Context(), *item.OriginalURL)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "fetching metadata: " + err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, toLibraryItemMetadataPreviewResponse(meta))
 	}
 }
 

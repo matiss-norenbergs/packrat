@@ -48,3 +48,22 @@ export function collectDescendantIds(node: CollectionTreeNode): number[] {
   }
   return ids
 }
+
+// Walks from collectionId up through parentId, returning the nearest
+// artistId found (checking the collection itself first, then each ancestor
+// in turn) — unlike seasonNumber (deliberately direct-only, see the
+// collection season feature), a collection's artist is meant to be set once
+// on a top-level "Artist Name" folder and inherited by every season/other
+// sub-collection nested under it, since a real layout is often
+// root/some-folder/artist/season/file. Returns null if collectionId is null
+// or nothing in the chain up to the root has an artist set.
+export function resolveInheritedArtistId(collections: Collection[], collectionId: number | null): number | null {
+  if (collectionId == null) return null
+  const byId = new Map(collections.map((c) => [c.id, c]))
+  let current = byId.get(collectionId)
+  while (current) {
+    if (current.artistId != null) return current.artistId
+    current = current.parentId != null ? byId.get(current.parentId) : undefined
+  }
+  return null
+}

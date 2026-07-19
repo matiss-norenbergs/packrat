@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent } from "react"
+import { Popover as PopoverPrimitive } from "radix-ui"
 import { X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -26,19 +27,20 @@ export function TagInput({ value, onChange, suggestions = [] }: TagInputProps) {
   // suggestion adds it immediately rather than just filling the text box,
   // which previously required a confusing second "press Enter to actually
   // add it" step (the native <datalist> this replaced never committed a
-  // selection on its own).
-  const addTag = (name: string) => {
+  // selection on its own). Deliberately doesn't touch showSuggestions —
+  // that's the caller's call (see the two call sites below).
+  const commitTag = (name: string) => {
     const trimmed = name.trim()
     if (!trimmed || value.includes(trimmed)) return
     onChange([...value, trimmed])
     setDraft("")
-    setShowSuggestions(false)
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault()
-      addTag(draft)
+      commitTag(draft)
+      setShowSuggestions(false)
     } else if (e.key === "Escape") {
       setShowSuggestions(false)
     }
@@ -62,39 +64,55 @@ export function TagInput({ value, onChange, suggestions = [] }: TagInputProps) {
           ))}
         </div>
       )}
-      <div className="relative">
-        <Input
-          placeholder="Add a tag…"
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value)
-            setShowSuggestions(true)
-          }}
-          onFocus={() => setShowSuggestions(true)}
-          // Delayed so a suggestion's onMouseDown (below) fires first — a
-          // plain onClick there would lose the race to this blur closing
-          // the dropdown before the click registers.
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 100)}
-          onKeyDown={handleKeyDown}
-        />
-        {showSuggestions && filteredSuggestions.length > 0 && (
-          <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+      {/* A real Popover (not a plain absolutely-positioned div) is what's
+          needed here, not just a portal: Radix's Dialog only recognizes
+          clicks as "inside" when the target belongs to a layer it knows
+          about via its own dismissable-layer stack. A hand-rolled portaled
+          div doesn't register as one, so the parent Dialog treated clicks
+          on it as outside clicks and closed itself before the click handler
+          could run. Popover.Content registers correctly, so nested clicks
+          work and the parent dialog stays open. */}
+      <PopoverPrimitive.Root open={showSuggestions && filteredSuggestions.length > 0}>
+        <PopoverPrimitive.Anchor asChild>
+          <Input
+            placeholder="Add a tag…"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              setShowSuggestions(true)
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            // Delayed so a suggestion's onMouseDown (below) fires first — a
+            // plain onClick there would lose the race to this blur closing
+            // the dropdown before the click registers.
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 100)}
+            onKeyDown={handleKeyDown}
+          />
+        </PopoverPrimitive.Anchor>
+        <PopoverPrimitive.Portal>
+          <PopoverPrimitive.Content
+            className="z-50 max-h-40 w-(--radix-popover-trigger-width) overflow-y-auto rounded-md border bg-popover p-1 shadow-md"
+            align="start"
+            sideOffset={4}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
             {filteredSuggestions.map((s) => (
               <button
                 key={s}
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  addTag(s)
+                  commitTag(s)
                 }}
                 className="block w-full truncate rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
               >
                 {s}
               </button>
             ))}
-          </div>
-        )}
-      </div>
+          </PopoverPrimitive.Content>
+        </PopoverPrimitive.Portal>
+      </PopoverPrimitive.Root>
     </div>
   )
 }

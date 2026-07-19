@@ -35,10 +35,12 @@ import { MoveLibraryItemDialog } from "./MoveLibraryItemDialog"
 import { DeleteLibraryItemDialog } from "./DeleteLibraryItemDialog"
 import { NfoContentDialog } from "./NfoContentDialog"
 import { ThumbnailPickerDialog } from "./ThumbnailPickerDialog"
+import { CompareMetadataDialog } from "./CompareMetadataDialog"
 import type { LibraryItem } from "@/types/api"
 
 export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [editOpen, setEditOpen] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [refreshWarningOpen, setRefreshWarningOpen] = useState(false)
@@ -75,16 +77,21 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => setEditOpen(true)}>Edit</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setMoveOpen(true)}>Move</DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleCopyUrl} disabled={!hasUrl}>
             Copy URL
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setMoveOpen(true)}>Move</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setCompareOpen(true)} disabled={!hasUrl}>
+            Compare Metadata
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setRefreshWarningOpen(true)} disabled={!hasUrl}>
             Refresh Metadata
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => redownload.mutate(item.id)} disabled={!hasUrl}>
             Redownload
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>NFO</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
@@ -117,6 +124,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
       </DropdownMenu>
 
       <EditLibraryItemDialog item={item} open={editOpen} onOpenChange={setEditOpen} />
+      <CompareMetadataDialog item={item} open={compareOpen} onOpenChange={setCompareOpen} />
       <MoveLibraryItemDialog item={item} open={moveOpen} onOpenChange={setMoveOpen} />
       <DeleteLibraryItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
       <ThumbnailPickerDialog item={item} open={thumbnailPickerOpen} onOpenChange={setThumbnailPickerOpen} />

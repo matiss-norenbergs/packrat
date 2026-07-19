@@ -39,6 +39,7 @@ export interface BulkRow {
   seasonNumber: string
   sequenceNumber: string
   generateNfo: boolean
+  tags: string[]
   advancedOpen: boolean
 }
 
@@ -53,7 +54,16 @@ export interface BulkRow {
 // batch almost never share one sequence number.
 type RowCarryOver = Pick<
   BulkRow,
-  "collectionId" | "downloadType" | "quality" | "audioFormat" | "artistId" | "year" | "seasonNumber" | "generateNfo" | "advancedOpen"
+  | "collectionId"
+  | "downloadType"
+  | "quality"
+  | "audioFormat"
+  | "artistId"
+  | "year"
+  | "seasonNumber"
+  | "generateNfo"
+  | "tags"
+  | "advancedOpen"
 >
 
 let rowCounter = 0
@@ -73,6 +83,7 @@ function newRow(carryOver?: Partial<RowCarryOver>, sequenceNumber?: string): Bul
     seasonNumber: "",
     sequenceNumber: sequenceNumber ?? "",
     generateNfo: false,
+    tags: [],
     advancedOpen: false,
     ...carryOver,
   }
@@ -103,6 +114,7 @@ function carryOverFrom(row: BulkRow): RowCarryOver {
     year: row.year,
     seasonNumber: row.seasonNumber,
     generateNfo: row.generateNfo,
+    tags: row.tags,
     advancedOpen: row.advancedOpen,
   }
 }
@@ -204,6 +216,7 @@ export function BulkDownloadDialog() {
             seasonNumber: parsedSeason != null && !Number.isNaN(parsedSeason) ? parsedSeason : undefined,
             sequenceNumber: parsedSequence != null && !Number.isNaN(parsedSequence) ? parsedSequence : undefined,
             generateNfo: r.generateNfo || undefined,
+            tags: r.tags.length > 0 ? r.tags : undefined,
           }
         }),
         skipDuplicates,

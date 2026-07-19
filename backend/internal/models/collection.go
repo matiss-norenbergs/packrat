@@ -12,6 +12,8 @@ type Collection struct {
 	FilenameTemplate    string
 	JellyfinLibrary     *string
 	IsPrivate           bool
+	SeasonNumber        *int
+	ArtistID            *int64
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }

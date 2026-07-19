@@ -90,6 +90,8 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			DefaultDownloadType: req.DefaultDownloadType,
 			IsPrivate:           req.IsPrivate,
 			JellyfinLibrary:     req.JellyfinLibraryID,
+			SeasonNumber:        req.SeasonNumber,
+			ArtistID:            req.ArtistID,
 		}
 		id, err := repo.Create(c.Request.Context(), &col)
 		if err != nil {
@@ -159,6 +161,8 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			DefaultDownloadType: req.DefaultDownloadType,
 			IsPrivate:           req.IsPrivate,
 			JellyfinLibrary:     req.JellyfinLibraryID,
+			SeasonNumber:        req.SeasonNumber,
+			ArtistID:            req.ArtistID,
 		}
 		if err := repo.Update(c.Request.Context(), id, &col); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {

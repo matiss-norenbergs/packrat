@@ -47,15 +47,15 @@ func (r *TagsRepo) nameInUse(ctx context.Context, name string, excludeID int64) 
 	return true, nil
 }
 
-func (r *TagsRepo) Create(ctx context.Context, name string) (*models.Tag, error) {
+func (r *TagsRepo) Create(ctx context.Context, name string, isPrivate bool) (*models.Tag, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.createLocked(ctx, name)
+	return r.createLocked(ctx, name, isPrivate)
 }
 
 // createLocked performs the actual check-then-insert; callers must already
 // hold r.mu.
-func (r *TagsRepo) createLocked(ctx context.Context, name string) (*models.Tag, error) {
+func (r *TagsRepo) createLocked(ctx context.Context, name string, isPrivate bool) (*models.Tag, error) {
 	inUse, err := r.nameInUse(ctx, name, 0)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (r *TagsRepo) createLocked(ctx context.Context, name string) (*models.Tag, 
 		return nil, ErrTagNameInUse
 	}
 
-	res, err := r.db.ExecContext(ctx, `INSERT INTO tags (name) VALUES (?)`, name)
+	res, err := r.db.ExecContext(ctx, `INSERT INTO tags (name, is_private) VALUES (?, ?)`, name, isPrivate)
 	if err != nil {
 		return nil, fmt.Errorf("inserting tag: %w", err)
 	}
@@ -78,8 +78,8 @@ func (r *TagsRepo) createLocked(ctx context.Context, name string) (*models.Tag, 
 func (r *TagsRepo) Get(ctx context.Context, id int64) (*models.Tag, error) {
 	var t models.Tag
 	var createdAt string
-	err := r.db.QueryRowContext(ctx, `SELECT id, name, created_at FROM tags WHERE id = ?`, id).
-		Scan(&t.ID, &t.Name, &createdAt)
+	err := r.db.QueryRowContext(ctx, `SELECT id, name, is_private, created_at FROM tags WHERE id = ?`, id).
+		Scan(&t.ID, &t.Name, &t.IsPrivate, &createdAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -97,7 +97,7 @@ func (r *TagsRepo) Get(ctx context.Context, id int64) (*models.Tag, error) {
 // ordered by name — used by the Tags management page.
 func (r *TagsRepo) List(ctx context.Context) ([]models.TagWithCount, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT t.id, t.name, t.created_at, COUNT(lt.library_id) AS usage_count
+		SELECT t.id, t.name, t.is_private, t.created_at, COUNT(lt.library_id) AS usage_count
 		FROM tags t
 		LEFT JOIN library_tags lt ON lt.tag_id = t.id
 		GROUP BY t.id
@@ -111,7 +111,7 @@ func (r *TagsRepo) List(ctx context.Context) ([]models.TagWithCount, error) {
 	for rows.Next() {
 		var t models.TagWithCount
 		var createdAt string
-		if err := rows.Scan(&t.ID, &t.Name, &createdAt, &t.UsageCount); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.IsPrivate, &createdAt, &t.UsageCount); err != nil {
 			return nil, fmt.Errorf("scanning tag: %w", err)
 		}
 		t.CreatedAt, err = parseSQLiteTime(createdAt)
@@ -123,7 +123,11 @@ func (r *TagsRepo) List(ctx context.Context) ([]models.TagWithCount, error) {
 	return out, rows.Err()
 }
 
-func (r *TagsRepo) Rename(ctx context.Context, id int64, newName string) error {
+// Update renames a tag and sets its privacy flag in one write — a tag
+// marked private blurs every library item it's attached to, the same way a
+// private collection blurs everything inside it (see effectivePrivacyMap /
+// PrivateTagNames).
+func (r *TagsRepo) Update(ctx context.Context, id int64, newName string, isPrivate bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -138,9 +142,9 @@ func (r *TagsRepo) Rename(ctx context.Context, id int64, newName string) error {
 		return ErrTagNameInUse
 	}
 
-	res, err := r.db.ExecContext(ctx, `UPDATE tags SET name = ? WHERE id = ?`, newName, id)
+	res, err := r.db.ExecContext(ctx, `UPDATE tags SET name = ?, is_private = ? WHERE id = ?`, newName, isPrivate, id)
 	if err != nil {
-		return fmt.Errorf("renaming tag: %w", err)
+		return fmt.Errorf("updating tag: %w", err)
 	}
 	return checkRowsAffected(res)
 }
@@ -174,7 +178,7 @@ func (r *TagsRepo) GetOrCreateByNames(ctx context.Context, names []string) ([]in
 		var id int64
 		err := r.db.QueryRowContext(ctx, `SELECT id FROM tags WHERE name = ?`, name).Scan(&id)
 		if err == sql.ErrNoRows {
-			tag, err := r.createLocked(ctx, name)
+			tag, err := r.createLocked(ctx, name, false)
 			if err != nil {
 				return nil, fmt.Errorf("creating tag %q: %w", name, err)
 			}
@@ -307,6 +311,53 @@ func (r *TagsRepo) TagsByLibraryIDs(ctx context.Context, ids []int64) (map[int64
 		out[libraryID] = append(out[libraryID], name)
 	}
 	return out, rows.Err()
+}
+
+// PrivateTagNames returns the set of tag names currently marked private —
+// fetched once per list request and cross-referenced against each item's
+// own tag names (already in hand via TagsByLibraryIDs), the same
+// fetch-once-then-lookup shape effectivePrivacyMap uses for collections.
+func (r *TagsRepo) PrivateTagNames(ctx context.Context) (map[string]bool, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT name FROM tags WHERE is_private = 1`)
+	if err != nil {
+		return nil, fmt.Errorf("listing private tags: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scanning private tag: %w", err)
+		}
+		out[name] = true
+	}
+	return out, rows.Err()
+}
+
+// HasPrivateTag reports whether any of the given tag names is currently
+// marked private — the single-item counterpart to PrivateTagNames, used by
+// response-building call sites that already have one item's tag names in
+// hand (e.g. after refreshing metadata or setting a thumbnail) rather than
+// a whole list.
+func (r *TagsRepo) HasPrivateTag(ctx context.Context, names []string) (bool, error) {
+	if len(names) == 0 {
+		return false, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(names)), ",")
+	args := make([]any, len(names))
+	for i, n := range names {
+		args[i] = n
+	}
+	var exists int
+	err := r.db.QueryRowContext(ctx, `SELECT 1 FROM tags WHERE is_private = 1 AND name IN (`+placeholders+`) LIMIT 1`, args...).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("checking private tags: %w", err)
+	}
+	return true, nil
 }
 
 // TagsForLibraryItem is a single-item convenience wrapper around

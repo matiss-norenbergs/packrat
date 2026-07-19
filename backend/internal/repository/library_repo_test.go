@@ -152,7 +152,7 @@ func TestLibraryRepo_Query(t *testing.T) {
 		t.Fatalf("creating gamma item: %v", err)
 	}
 
-	tagID, err := tagsRepo.Create(ctx, "favorite")
+	tagID, err := tagsRepo.Create(ctx, "favorite", false)
 	if err != nil {
 		t.Fatalf("creating tag: %v", err)
 	}

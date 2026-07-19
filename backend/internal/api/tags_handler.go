@@ -33,7 +33,7 @@ func CreateTag(repo *repository.TagsRepo) gin.HandlerFunc {
 			return
 		}
 
-		tag, err := repo.Create(c.Request.Context(), req.Name)
+		tag, err := repo.Create(c.Request.Context(), req.Name, req.IsPrivate)
 		if err != nil {
 			if errors.Is(err, repository.ErrTagNameInUse) {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -61,7 +61,7 @@ func UpdateTag(repo *repository.TagsRepo) gin.HandlerFunc {
 			return
 		}
 
-		if err := repo.Rename(c.Request.Context(), id, req.Name); err != nil {
+		if err := repo.Update(c.Request.Context(), id, req.Name, req.IsPrivate); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "tag not found"})
 				return

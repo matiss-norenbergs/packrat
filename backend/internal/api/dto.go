@@ -127,6 +127,34 @@ func toPreviewDownloadResponse(m *downloader.Metadata, dup *models.LibraryItem) 
 	return resp
 }
 
+// LibraryItemMetadataPreviewResponse is the read-only "what's currently at
+// the source URL" side of the Compare Metadata dialog — the same field set
+// RefreshLibraryItemMetadata would overwrite the saved item with, but never
+// written to the DB here.
+type LibraryItemMetadataPreviewResponse struct {
+	Title       string  `json:"title"`
+	Uploader    string  `json:"uploader"`
+	Duration    int     `json:"duration"`
+	Description string  `json:"description"`
+	Thumbnail   string  `json:"thumbnail"`
+	Resolution  *string `json:"resolution"`
+}
+
+func toLibraryItemMetadataPreviewResponse(m *downloader.Metadata) LibraryItemMetadataPreviewResponse {
+	resp := LibraryItemMetadataPreviewResponse{
+		Title:       m.Title,
+		Uploader:    m.Uploader,
+		Duration:    int(m.Duration),
+		Description: m.Description,
+		Thumbnail:   m.Thumbnail,
+	}
+	if m.Width > 0 && m.Height > 0 {
+		res := fmt.Sprintf("%dx%d", m.Width, m.Height)
+		resp.Resolution = &res
+	}
+	return resp
+}
+
 type DownloadResponse struct {
 	ID               int64   `json:"id"`
 	URL              string  `json:"url"`
@@ -358,6 +386,8 @@ type CreateCollectionRequest struct {
 	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
 	IsPrivate           bool    `json:"isPrivate"`
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
+	SeasonNumber        *int    `json:"seasonNumber"`
+	ArtistID            *int64  `json:"artistId"`
 }
 
 type UpdateCollectionRequest struct {
@@ -367,6 +397,8 @@ type UpdateCollectionRequest struct {
 	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
 	IsPrivate           bool    `json:"isPrivate"`
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
+	SeasonNumber        *int    `json:"seasonNumber"`
+	ArtistID            *int64  `json:"artistId"`
 }
 
 type CollectionResponse struct {
@@ -378,6 +410,8 @@ type CollectionResponse struct {
 	DefaultQuality      string `json:"defaultQuality"`
 	DefaultDownloadType string `json:"defaultDownloadType"`
 	IsPrivate           bool   `json:"isPrivate"`
+	SeasonNumber        *int   `json:"seasonNumber"`
+	ArtistID            *int64 `json:"artistId"`
 	ItemCount           int    `json:"itemCount"`
 	// EffectiveIsPrivate and TotalItemCount account for inheritance down the
 	// collection tree — IsPrivate/ItemCount above are this collection's own,
@@ -398,22 +432,26 @@ type CollectionResponse struct {
 type TagResponse struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
+	IsPrivate  bool   `json:"isPrivate"`
 	CreatedAt  string `json:"createdAt"`
 	UsageCount int    `json:"usageCount"`
 }
 
 type CreateTagRequest struct {
-	Name string `json:"name" binding:"required"`
+	Name      string `json:"name" binding:"required"`
+	IsPrivate bool   `json:"isPrivate"`
 }
 
 type UpdateTagRequest struct {
-	Name string `json:"name" binding:"required"`
+	Name      string `json:"name" binding:"required"`
+	IsPrivate bool   `json:"isPrivate"`
 }
 
 func toTagResponse(t models.TagWithCount) TagResponse {
 	return TagResponse{
 		ID:         t.ID,
 		Name:       t.Name,
+		IsPrivate:  t.IsPrivate,
 		CreatedAt:  t.CreatedAt.Format(timeFormat),
 		UsageCount: t.UsageCount,
 	}
@@ -504,6 +542,8 @@ func toCollectionResponse(c models.Collection, path string, itemCount int, effec
 		DefaultQuality:      c.DefaultQuality,
 		DefaultDownloadType: c.DefaultDownloadType,
 		IsPrivate:           c.IsPrivate,
+		SeasonNumber:        c.SeasonNumber,
+		ArtistID:            c.ArtistID,
 		ItemCount:           itemCount,
 		EffectiveIsPrivate:  effectiveIsPrivate,
 		TotalItemCount:      totalItemCount,

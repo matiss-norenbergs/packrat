@@ -27,8 +27,11 @@ import { useCollections } from "@/hooks/useCollections"
 import { useDeleteLibraryItem } from "@/hooks/useLibrary"
 import { useArtists } from "@/hooks/useArtists"
 import { useSettings } from "@/hooks/useSettings"
+import { useTags } from "@/hooks/useTags"
 import { formatDuration } from "@/lib/utils"
+import { resolveInheritedArtistId } from "@/lib/collectionTree"
 import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
+import { TagInput } from "@/components/library/TagInput"
 import type { AudioFormat, DownloadType, PlaylistMode, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -90,6 +93,7 @@ export function NewDownloadDialog() {
   const [includeEpisode, setIncludeEpisode] = useState(false)
   const [includeYear, setIncludeYear] = useState(false)
   const [separator, setSeparator] = useState(".")
+  const [tags, setTags] = useState<string[]>([])
 
   const [playlistMode, setPlaylistMode] = useState<PlaylistMode>("entire")
   const [playlistStart, setPlaylistStart] = useState("")
@@ -100,6 +104,7 @@ export function NewDownloadDialog() {
   const { data: collections } = useCollections()
   const { data: artists } = useArtists()
   const { data: settings } = useSettings()
+  const { data: allTags } = useTags()
   const createDownload = useCreateDownload()
   const createPlaylistDownload = useCreatePlaylistDownload()
   const deleteLibraryItem = useDeleteLibraryItem()
@@ -137,6 +142,7 @@ export function NewDownloadDialog() {
     setIncludeEpisode(false)
     setIncludeYear(false)
     setSeparator(".")
+    setTags([])
     setPlaylistMode("entire")
     setPlaylistStart("")
     setPlaylistEnd("")
@@ -155,6 +161,15 @@ export function NewDownloadDialog() {
     if (collection) {
       setDownloadType(collection.defaultDownloadType)
       setQuality(collection.defaultQuality as VideoQuality)
+      if (collection.seasonNumber != null) {
+        setSeasonNumber(String(collection.seasonNumber))
+        setAdvancedOpen(true)
+      }
+      const inheritedArtistId = resolveInheritedArtistId(collections ?? [], collection.id)
+      if (inheritedArtistId != null) {
+        setArtistId(String(inheritedArtistId))
+        setAdvancedOpen(true)
+      }
     }
   }
 
@@ -193,6 +208,7 @@ export function NewDownloadDialog() {
         seasonNumber: parsedSeason != null && !Number.isNaN(parsedSeason) ? parsedSeason : undefined,
         sequenceNumber: parsedSequence != null && !Number.isNaN(parsedSequence) ? parsedSequence : undefined,
         filenamePrefix: filenamePrefix || undefined,
+        tags: tags.length > 0 ? tags : undefined,
       },
       {
         onSuccess: () => {
@@ -396,7 +412,7 @@ export function NewDownloadDialog() {
           <div className="space-y-2">
             <Label>Collection</Label>
             <Select value={collectionId} onValueChange={handleCollectionChange}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -541,6 +557,11 @@ export function NewDownloadDialog() {
                       onChange={(e) => setSequenceNumber(e.target.value)}
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Tags</Label>
+                  <TagInput value={tags} onChange={setTags} suggestions={allTags?.map((t) => t.name) ?? []} />
                 </div>
 
                 <div className="space-y-2 rounded-md border p-3">

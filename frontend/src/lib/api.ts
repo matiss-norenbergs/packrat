@@ -22,6 +22,7 @@ import type {
   ImportRequest,
   LibraryFacets,
   LibraryItem,
+  LibraryItemMetadataPreview,
   LibraryListResponse,
   LibraryQueryParams,
   LoginRequest,
@@ -210,6 +211,10 @@ export function quickGrabLibraryThumbnail(id: number): Promise<LibraryItem> {
 
 export function fetchLibraryThumbnailCandidates(id: number): Promise<{ candidates: ThumbnailCandidate[] }> {
   return request<{ candidates: ThumbnailCandidate[] }>(`/library/${id}/thumbnail/candidates`)
+}
+
+export function fetchLibraryItemMetadataPreview(id: number): Promise<LibraryItemMetadataPreview> {
+  return request<LibraryItemMetadataPreview>(`/library/${id}/metadata-preview`)
 }
 
 export function setLibraryThumbnail(id: number, imageBase64: string): Promise<LibraryItem> {

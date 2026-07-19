@@ -50,17 +50,19 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	repos := openTestRepos(t)
 
-	musicID, err := repos.collections.Create(ctx, &models.Collection{
-		Name: "Music", RootPath: "Music", DefaultQuality: "best", DefaultDownloadType: "audio",
-	})
-	if err != nil {
-		t.Fatalf("creating collection: %v", err)
-	}
 	artist, err := repos.artists.Create(ctx, "Test Artist")
 	if err != nil {
 		t.Fatalf("creating artist: %v", err)
 	}
-	tag, err := repos.tags.Create(ctx, "test-tag")
+	season := 2
+	musicID, err := repos.collections.Create(ctx, &models.Collection{
+		Name: "Music", RootPath: "Music", DefaultQuality: "best", DefaultDownloadType: "audio",
+		SeasonNumber: &season, ArtistID: &artist.ID,
+	})
+	if err != nil {
+		t.Fatalf("creating collection: %v", err)
+	}
+	tag, err := repos.tags.Create(ctx, "test-tag", true)
 	if err != nil {
 		t.Fatalf("creating tag: %v", err)
 	}
@@ -109,6 +111,15 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 	if len(item.Tags) != 1 || item.Tags[0] != "test-tag" {
 		t.Fatalf("expected tags to be exported, got %+v", item.Tags)
 	}
+	if len(bundle.Collections) != 1 || bundle.Collections[0].SeasonNumber == nil || *bundle.Collections[0].SeasonNumber != season {
+		t.Fatalf("expected the collection's season number to be exported, got %+v", bundle.Collections)
+	}
+	if bundle.Collections[0].ArtistName != "Test Artist" {
+		t.Fatalf("expected the collection's artist name to be exported, got %+v", bundle.Collections[0])
+	}
+	if len(bundle.Tags) != 1 || bundle.Tags[0].Name != "test-tag" || !bundle.Tags[0].IsPrivate {
+		t.Fatalf("expected the tag's privacy flag to be exported, got %+v", bundle.Tags)
+	}
 
 	// Applying the very same bundle back against the SAME database must not
 	// create duplicate collections/tags/artists — everything should already
@@ -145,6 +156,23 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 	}
 	if len(resolved2[0].Tags) != 1 || resolved2[0].Tags[0] != "test-tag" {
 		t.Fatalf("expected the resolved download to carry tags even into a fresh db, got %+v", resolved2[0].Tags)
+	}
+	freshCol, err := fresh.collections.Get(ctx, *resolved2[0].CollectionID)
+	if err != nil {
+		t.Fatalf("fetching freshly imported collection: %v", err)
+	}
+	if freshCol.SeasonNumber == nil || *freshCol.SeasonNumber != season {
+		t.Fatalf("expected the imported collection to carry the season number, got %+v", freshCol.SeasonNumber)
+	}
+	if freshCol.ArtistID == nil || *freshCol.ArtistID != *resolved2[0].ArtistID {
+		t.Fatalf("expected the imported collection to carry the artist id, got %+v", freshCol.ArtistID)
+	}
+	freshTags, err := fresh.tags.List(ctx)
+	if err != nil {
+		t.Fatalf("listing freshly imported tags: %v", err)
+	}
+	if len(freshTags) != 1 || !freshTags[0].IsPrivate {
+		t.Fatalf("expected the imported tag to be private, got %+v", freshTags)
 	}
 }
 

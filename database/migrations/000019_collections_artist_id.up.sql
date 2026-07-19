@@ -1,0 +1,1 @@
+ALTER TABLE collections ADD COLUMN artist_id INTEGER REFERENCES artists(id) ON DELETE SET NULL;

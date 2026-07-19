@@ -75,6 +75,7 @@ export interface CreateDownloadRequest {
   sequenceNumber?: number
   filenamePrefix?: string
   generateNfo?: boolean
+  tags?: string[]
 }
 
 export interface Collection {
@@ -86,6 +87,8 @@ export interface Collection {
   defaultQuality: string
   defaultDownloadType: DownloadType
   isPrivate: boolean
+  seasonNumber: number | null
+  artistId: number | null
   itemCount: number
   // Inheritance-aware versions of the two fields above — isPrivate/itemCount
   // are this collection's own flag and its own direct item count (what the
@@ -109,6 +112,8 @@ export interface CreateCollectionRequest {
   defaultDownloadType?: DownloadType
   isPrivate?: boolean
   jellyfinLibraryId?: string | null
+  seasonNumber?: number | null
+  artistId?: number | null
 }
 
 export type UpdateCollectionRequest = CreateCollectionRequest
@@ -165,6 +170,15 @@ export interface LibraryItem {
   tags: string[]
 }
 
+export interface LibraryItemMetadataPreview {
+  title: string
+  uploader: string
+  duration: number
+  description: string
+  thumbnail: string
+  resolution: string | null
+}
+
 export interface BulkAssignTagsRequest {
   itemIds: number[]
   tags: string[]
@@ -203,16 +217,19 @@ export interface UpdateLibraryItemRequest {
 export interface Tag {
   id: number
   name: string
+  isPrivate: boolean
   createdAt: string
   usageCount: number
 }
 
 export interface CreateTagRequest {
   name: string
+  isPrivate?: boolean
 }
 
 export interface UpdateTagRequest {
   name: string
+  isPrivate?: boolean
 }
 
 export interface Artist {

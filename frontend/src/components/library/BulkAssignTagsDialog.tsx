@@ -88,7 +88,7 @@ export function BulkAssignTagsDialog({ open, onOpenChange }: BulkAssignTagsDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Assign tags</DialogTitle>
           <DialogDescription>
@@ -112,7 +112,7 @@ export function BulkAssignTagsDialog({ open, onOpenChange }: BulkAssignTagsDialo
                 ) : (
                   <div className="h-8 w-14 shrink-0 rounded bg-muted" />
                 )}
-                <span className="truncate">{item.blurred ? hashText(item.title) : item.title}</span>
+                <span className="min-w-0 flex-1 truncate">{item.blurred ? hashText(item.title) : item.title}</span>
               </div>
             ))}
             {hiddenCount > 0 && <p className="px-1 py-1 text-xs text-muted-foreground">+{hiddenCount} more</p>}

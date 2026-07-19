@@ -16,6 +16,22 @@ type CollectionEntry struct {
 	DefaultDownloadType string   `json:"defaultDownloadType"`
 	IsPrivate           bool     `json:"isPrivate"`
 	JellyfinLibrary     *string  `json:"jellyfinLibrary,omitempty"`
+	SeasonNumber        *int     `json:"seasonNumber,omitempty"`
+	// ArtistName is a name reference, not the raw local ArtistID — like
+	// LibraryItemEntry.ArtistName, a numeric id means nothing on a different
+	// install, so this round-trips through the artist's name instead.
+	ArtistName string `json:"artistName,omitempty"`
+}
+
+// TagEntry is a tag definition in the library bundle — as opposed to a
+// LibraryItemEntry's/ResolvedDownload's plain []string Tags, which are just
+// the names assigned to that one item. This carries the tag's own
+// attributes (currently just IsPrivate) so re-importing a bundle restores
+// which tags blur their items, the same way CollectionEntry carries
+// IsPrivate for collections.
+type TagEntry struct {
+	Name      string `json:"name"`
+	IsPrivate bool   `json:"isPrivate,omitempty"`
 }
 
 type LibraryItemEntry struct {
@@ -36,7 +52,7 @@ type LibraryItemEntry struct {
 
 type LibraryBundle struct {
 	Collections  []CollectionEntry  `json:"collections"`
-	Tags         []string           `json:"tags"`
+	Tags         []TagEntry         `json:"tags"`
 	Artists      []string           `json:"artists"`
 	LibraryItems []LibraryItemEntry `json:"libraryItems"`
 }
@@ -85,20 +101,35 @@ func BuildLibraryBundle(
 ) (LibraryBundle, error) {
 	var bundle LibraryBundle
 
+	artistRows, err := artistsRepo.List(ctx)
+	if err != nil {
+		return bundle, err
+	}
+	artistNames := make(map[int64]string, len(artistRows))
+	for _, a := range artistRows {
+		bundle.Artists = append(bundle.Artists, a.Name)
+		artistNames[a.ID] = a.Name
+	}
+
 	cols, err := collectionsRepo.List(ctx)
 	if err != nil {
 		return bundle, err
 	}
 	paths := collectionPaths(cols)
 	for _, c := range cols {
-		bundle.Collections = append(bundle.Collections, CollectionEntry{
+		entry := CollectionEntry{
 			Path:                paths[c.ID],
 			Name:                c.Name,
 			DefaultQuality:      c.DefaultQuality,
 			DefaultDownloadType: c.DefaultDownloadType,
 			IsPrivate:           c.IsPrivate,
 			JellyfinLibrary:     c.JellyfinLibrary,
-		})
+			SeasonNumber:        c.SeasonNumber,
+		}
+		if c.ArtistID != nil {
+			entry.ArtistName = artistNames[*c.ArtistID]
+		}
+		bundle.Collections = append(bundle.Collections, entry)
 	}
 
 	tagRows, err := tagsRepo.List(ctx)
@@ -106,15 +137,7 @@ func BuildLibraryBundle(
 		return bundle, err
 	}
 	for _, t := range tagRows {
-		bundle.Tags = append(bundle.Tags, t.Name)
-	}
-
-	artistRows, err := artistsRepo.List(ctx)
-	if err != nil {
-		return bundle, err
-	}
-	for _, a := range artistRows {
-		bundle.Artists = append(bundle.Artists, a.Name)
+		bundle.Tags = append(bundle.Tags, TagEntry{Name: t.Name, IsPrivate: t.IsPrivate})
 	}
 
 	items, err := libraryRepo.List(ctx)
@@ -235,13 +258,24 @@ func ApplyLibraryBundle(
 		for _, t := range before {
 			existingTags[t.Name] = true
 		}
-		if _, err := tagsRepo.GetOrCreateByNames(ctx, bundle.Tags); err != nil {
+
+		names := make([]string, len(bundle.Tags))
+		for i, t := range bundle.Tags {
+			names[i] = t.Name
+		}
+		// GetOrCreateByNames returns ids in the same (deduplicated) order as
+		// names, so ids[i] corresponds to bundle.Tags[i] — used below to sync
+		// each tag's IsPrivate flag, the same way ensureCollection always
+		// overwrites a matched collection's metadata from the bundle.
+		ids, err := tagsRepo.GetOrCreateByNames(ctx, names)
+		if err != nil {
 			return nil, result, err
 		}
-		for _, name := range bundle.Tags {
+		for i, name := range names {
 			if !existingTags[name] {
 				result.TagsCreated++
 			}
+			_ = tagsRepo.Update(ctx, ids[i], bundle.Tags[i].Name, bundle.Tags[i].IsPrivate) // best-effort — a name clash just skips the sync
 		}
 	}
 
@@ -273,6 +307,9 @@ func ApplyLibraryBundle(
 	for _, item := range bundle.LibraryItems {
 		ensureArtist(item.ArtistName)
 	}
+	for _, entry := range bundle.Collections {
+		ensureArtist(entry.ArtistName)
+	}
 
 	collectionIDs := make(map[string]int64) // key: path segments joined by "/"
 	ensureCollection := func(path []string, entry *CollectionEntry) *int64 {
@@ -299,6 +336,14 @@ func ApplyLibraryBundle(
 				updated.DefaultDownloadType = entry.DefaultDownloadType
 				updated.IsPrivate = entry.IsPrivate
 				updated.JellyfinLibrary = entry.JellyfinLibrary
+				updated.SeasonNumber = entry.SeasonNumber
+				if entry.ArtistName != "" {
+					if artistID, ok := artistIDs[entry.ArtistName]; ok {
+						updated.ArtistID = &artistID
+					}
+				} else {
+					updated.ArtistID = nil
+				}
 				_ = collectionsRepo.Update(ctx, id, &updated) // best-effort — a name clash just skips the rename
 			}
 		}

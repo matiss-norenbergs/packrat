@@ -268,5 +268,12 @@ func writeThumbnailAndRespond(c *gin.Context, libraryRepo *repository.LibraryRep
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	if !blurred {
+		blurred, err = tagsRepo.HasPrivateTag(ctx, tags)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
 	c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, mediaRoot))
 }

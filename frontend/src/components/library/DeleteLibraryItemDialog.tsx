@@ -25,7 +25,7 @@ export function DeleteLibraryItemDialog({ item, open, onOpenChange }: DeleteLibr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Delete "{item.title}"?</DialogTitle>
           <DialogDescription>

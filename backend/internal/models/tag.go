@@ -5,6 +5,7 @@ import "time"
 type Tag struct {
 	ID        int64
 	Name      string
+	IsPrivate bool
 	CreatedAt time.Time
 }
 
@@ -13,6 +14,7 @@ type Tag struct {
 type TagWithCount struct {
 	ID         int64
 	Name       string
+	IsPrivate  bool
 	CreatedAt  time.Time
 	UsageCount int
 }

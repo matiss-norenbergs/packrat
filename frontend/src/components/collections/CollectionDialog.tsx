@@ -21,6 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useCreateCollection, useUpdateCollection } from "@/hooks/useCollections"
+import { useSettings } from "@/hooks/useSettings"
+import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
 import type { Collection, DownloadType, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -42,7 +44,12 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
   const [defaultDownloadType, setDefaultDownloadType] = useState<DownloadType>(collection?.defaultDownloadType ?? "video")
   const [isPrivate, setIsPrivate] = useState(collection?.isPrivate ?? false)
   const [jellyfinLibraryId, setJellyfinLibraryId] = useState(collection?.jellyfinLibraryId ?? "")
+  const [seasonNumber, setSeasonNumber] = useState(
+    collection?.seasonNumber != null ? String(collection.seasonNumber) : "",
+  )
+  const [artistId, setArtistId] = useState(collection?.artistId != null ? String(collection.artistId) : NO_ARTIST)
 
+  const { data: settings } = useSettings()
   const createCollection = useCreateCollection()
   const updateCollection = useUpdateCollection()
   const pending = createCollection.isPending || updateCollection.isPending
@@ -57,12 +64,15 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       setDefaultDownloadType(collection?.defaultDownloadType ?? "video")
       setIsPrivate(collection?.isPrivate ?? false)
       setJellyfinLibraryId(collection?.jellyfinLibraryId ?? "")
+      setSeasonNumber(collection?.seasonNumber != null ? String(collection.seasonNumber) : "")
+      setArtistId(collection?.artistId != null ? String(collection.artistId) : NO_ARTIST)
     }
     setOpen(next)
   }
 
   const handleSubmit = () => {
     if (!name.trim() || !rootPath.trim()) return
+    const parsedSeason = seasonNumber.trim() === "" ? null : Number(seasonNumber)
     const payload = {
       name: name.trim(),
       rootPath: rootPath.trim(),
@@ -70,6 +80,8 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       defaultDownloadType,
       isPrivate,
       jellyfinLibraryId: jellyfinLibraryId.trim() || null,
+      seasonNumber: parsedSeason != null && !Number.isNaN(parsedSeason) ? parsedSeason : null,
+      artistId: artistId === NO_ARTIST ? null : Number(artistId),
       ...(isEdit ? {} : { parentId }),
     }
 
@@ -155,6 +167,31 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
             </div>
           </div>
 
+          <div className="flex gap-4">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="collection-artist">Artist (optional)</Label>
+              <ArtistSelect value={artistId} onValueChange={setArtistId} />
+              <p className="text-xs text-muted-foreground">
+                New downloads added to this collection, or any sub-collection nested under it that
+                doesn't set its own, default their own Artist to this value.
+              </p>
+            </div>
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="collection-season">Season # (optional)</Label>
+              <Input
+                id="collection-season"
+                type="number"
+                min="1"
+                placeholder="e.g. 1"
+                value={seasonNumber}
+                onChange={(e) => setSeasonNumber(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                New downloads added to this collection default their own Season # to this value.
+              </p>
+            </div>
+          </div>
+
           <div className="flex items-start gap-2">
             <Checkbox
               id="collection-private"
@@ -171,19 +208,21 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="collection-jellyfin-library">Jellyfin Library ID (optional)</Label>
-            <Input
-              id="collection-jellyfin-library"
-              placeholder="e.g. 3c8f6b1a-..."
-              value={jellyfinLibraryId}
-              onChange={(e) => setJellyfinLibraryId(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Only used when Settings → Jellyfin → Refresh is set to "Specific library" — that
-              library gets refreshed after a download lands in this collection.
-            </p>
-          </div>
+          {settings?.jellyfinEnabled && (
+            <div className="space-y-2">
+              <Label htmlFor="collection-jellyfin-library">Jellyfin Library ID (optional)</Label>
+              <Input
+                id="collection-jellyfin-library"
+                placeholder="e.g. 3c8f6b1a-..."
+                value={jellyfinLibraryId}
+                onChange={(e) => setJellyfinLibraryId(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Only used when Settings → Jellyfin → Refresh is set to "Specific library" — that
+                library gets refreshed after a download lands in this collection.
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
