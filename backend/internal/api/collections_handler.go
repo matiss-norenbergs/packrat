@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"path"
@@ -67,6 +68,9 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 		if req.DefaultDownloadType == "" {
 			req.DefaultDownloadType = "video"
 		}
+		if req.FilenameTemplate == "" {
+			req.FilenameTemplate = "{title}"
+		}
 
 		prospectivePath, err := prospectiveCollectionPath(c.Request.Context(), repo, req.ParentID, req.RootPath)
 		if err != nil {
@@ -88,6 +92,7 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			RootPath:            req.RootPath,
 			DefaultQuality:      req.DefaultQuality,
 			DefaultDownloadType: req.DefaultDownloadType,
+			FilenameTemplate:    req.FilenameTemplate,
 			IsPrivate:           req.IsPrivate,
 			JellyfinLibrary:     req.JellyfinLibraryID,
 			SeasonNumber:        req.SeasonNumber,
@@ -130,6 +135,9 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 		if req.DefaultDownloadType == "" {
 			req.DefaultDownloadType = "video"
 		}
+		if req.FilenameTemplate == "" {
+			req.FilenameTemplate = "{title}"
+		}
 
 		existing, err := repo.Get(c.Request.Context(), id)
 		if err != nil {
@@ -159,6 +167,7 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			RootPath:            req.RootPath,
 			DefaultQuality:      req.DefaultQuality,
 			DefaultDownloadType: req.DefaultDownloadType,
+			FilenameTemplate:    req.FilenameTemplate,
 			IsPrivate:           req.IsPrivate,
 			JellyfinLibrary:     req.JellyfinLibraryID,
 			SeasonNumber:        req.SeasonNumber,
@@ -244,7 +253,11 @@ func sortDeepestFirst(ids []int64, all []models.Collection) []int64 {
 // over — one that wasn't part of this batch — is skipped and reported
 // rather than treated as a hard failure, since that's an expected outcome
 // of a partial-subtree selection, not an error.
-func BulkDeleteCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
+// The deletes run inside one transaction, so a genuine mid-batch failure
+// rolls back every row already deleted instead of leaving a partial batch —
+// skips (ErrNotFound/ErrHasChildren) don't delete anything, so they have
+// nothing to roll back.
+func BulkDeleteCollections(db *sql.DB, repo *repository.CollectionsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BulkDeleteRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -252,7 +265,15 @@ func BulkDeleteCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
 			return
 		}
 
-		all, err := repo.List(c.Request.Context())
+		tx, err := db.BeginTx(c.Request.Context(), nil)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		defer tx.Rollback()
+		txRepo := repo.WithTx(tx)
+
+		all, err := txRepo.List(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -260,7 +281,7 @@ func BulkDeleteCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
 
 		var resp BulkDeleteResponse
 		for _, id := range sortDeepestFirst(req.IDs, all) {
-			if err := repo.Delete(c.Request.Context(), id); err != nil {
+			if err := txRepo.Delete(c.Request.Context(), id); err != nil {
 				if errors.Is(err, repository.ErrNotFound) {
 					continue
 				}
@@ -272,6 +293,11 @@ func BulkDeleteCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
 				return
 			}
 			resp.Deleted++
+		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
 		c.JSON(http.StatusOK, resp)
 	}

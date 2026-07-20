@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 )
@@ -59,10 +60,20 @@ func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRe
 		Failed:  []FailedItemResponse{},
 	}
 
-	for _, entry := range entries {
+	// Batched into one query instead of one FindDuplicate call per entry —
+	// significant for a large playlist/bulk-download submission.
+	var dupsByIndex map[int]*models.LibraryItem
+	if skipDuplicates {
+		queries := make([]repository.DuplicateQuery, len(entries))
+		for i, entry := range entries {
+			queries[i] = repository.DuplicateQuery{URL: entry.req.URL, VideoID: entry.videoID}
+		}
+		dupsByIndex, _ = libraryRepo.FindDuplicates(ctx, queries) // best-effort — a lookup failure just skips dedup, same as FindDuplicate's err handling did per-entry before
+	}
+
+	for i, entry := range entries {
 		if skipDuplicates {
-			dup, err := libraryRepo.FindDuplicate(ctx, entry.req.URL, entry.videoID)
-			if err == nil && dup != nil {
+			if dup, ok := dupsByIndex[i]; ok {
 				result.Skipped = append(result.Skipped, SkippedItemResponse{
 					URL:           entry.req.URL,
 					Title:         dup.Title,
@@ -89,7 +100,7 @@ func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRe
 // used by the Bulk Download dialog, replacing what used to be N separate
 // POST /api/downloads calls with one request and one aggregated result.
 type CreateBatchDownloadRequest struct {
-	Items          []CreateDownloadRequest `json:"items" binding:"required,min=1,dive"`
+	Items          []CreateDownloadRequest `json:"items" binding:"required,min=1,max=200,dive"`
 	SkipDuplicates bool                    `json:"skipDuplicates"`
 }
 
@@ -161,6 +172,10 @@ func CreatePlaylistDownload(mgr *queue.DownloadManager, collectionsRepo *reposit
 		var req CreatePlaylistDownloadRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !isHTTPURL(req.URL) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "url must be an http or https URL"})
 			return
 		}
 

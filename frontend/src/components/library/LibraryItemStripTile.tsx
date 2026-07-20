@@ -8,8 +8,18 @@ import type { LibraryItem } from "@/types/api"
 // backTo is forwarded from the current item page's own "from" state (not
 // recomputed here) so that clicking through several siblings still returns
 // to the original library listing, not to whichever sibling was viewed
-// previously.
-export function LibraryItemStripTile({ item, backTo }: { item: LibraryItem; backTo: string }) {
+// previously. basePath lets this tile stay within whichever detail route
+// it's rendered under ("/library" from the management chrome, "/browse"
+// from the Browse chrome) instead of always jumping back into /library.
+export function LibraryItemStripTile({
+  item,
+  backTo,
+  basePath = "/library",
+}: {
+  item: LibraryItem
+  backTo: string
+  basePath?: string
+}) {
   const { isRevealed, toggleItem } = useRevealAll()
   const revealed = isRevealed(item.id)
   const toggleReveal = () => toggleItem(item.id)
@@ -27,7 +37,7 @@ export function LibraryItemStripTile({ item, backTo }: { item: LibraryItem; back
           />
         ) : null}
         {!item.blurred || revealed ? (
-          <Link to={`/library/${item.id}`} state={{ from: backTo }} className="absolute inset-0" aria-label={item.title} />
+          <Link to={`${basePath}/${item.id}`} state={{ from: backTo }} className="absolute inset-0" aria-label={item.title} />
         ) : null}
         {item.duration != null && (
           <span className="absolute bottom-1 right-1 rounded bg-background/80 px-1 text-[10px] text-foreground">
@@ -39,7 +49,7 @@ export function LibraryItemStripTile({ item, backTo }: { item: LibraryItem; back
         <p className="line-clamp-2 text-xs font-medium">{hashText(item.title)}</p>
       ) : (
         <Link
-          to={`/library/${item.id}`}
+          to={`${basePath}/${item.id}`}
           state={{ from: backTo }}
           className="line-clamp-2 block text-xs font-medium hover:underline"
         >

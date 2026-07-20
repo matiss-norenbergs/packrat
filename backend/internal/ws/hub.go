@@ -19,6 +19,12 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	broadcast  chan Event
+
+	// done is closed right before Run returns, once ctx fires — GinHandler
+	// selects on it alongside the h.register send so a connection arriving
+	// during/after shutdown doesn't block that request goroutine forever on
+	// the now-unread register channel.
+	done chan struct{}
 }
 
 func NewHub() *Hub {
@@ -27,12 +33,14 @@ func NewHub() *Hub {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan Event, 256),
+		done:       make(chan struct{}),
 	}
 }
 
 // Run owns the clients map exclusively, so client (de)registration and
 // broadcast fan-out never need a mutex. It blocks until ctx is cancelled.
 func (h *Hub) Run(ctx context.Context) {
+	defer close(h.done)
 	for {
 		select {
 		case <-ctx.Done():
@@ -93,9 +101,14 @@ func (h *Hub) GinHandler() gin.HandlerFunc {
 		}
 
 		client := &Client{hub: h, conn: conn, send: make(chan []byte, clientSendBuffer)}
-		h.register <- client
-
-		go client.writePump()
-		go client.readPump()
+		select {
+		case h.register <- client:
+			go client.writePump()
+			go client.readPump()
+		case <-h.done:
+			// Hub.Run has stopped reading h.register (shutting down) — close
+			// the freshly-upgraded connection instead of blocking forever.
+			conn.Close()
+		}
 	}
 }

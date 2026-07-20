@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router-dom"
 import { AppLayout } from "@/layouts/AppLayout"
+import { BrowseLayout } from "@/layouts/BrowseLayout"
 import { LoginPage } from "@/pages/LoginPage"
 import { DashboardPage } from "@/pages/DashboardPage"
 import { DownloadsPage } from "@/pages/DownloadsPage"
@@ -13,6 +14,8 @@ import { HistoryPage } from "@/pages/HistoryPage"
 import { BackupPage } from "@/pages/BackupPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { LogsPage } from "@/pages/LogsPage"
+import { BrowsePage } from "@/pages/BrowsePage"
+import { BrowseItemPage } from "@/pages/BrowseItemPage"
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -31,6 +34,15 @@ export const router = createBrowserRouter([
       { path: "/backup", element: <BackupPage /> },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/logs", element: <LogsPage /> },
+    ],
+  },
+  {
+    // A deliberately separate branch from AppLayout — see BrowseLayout for
+    // why (no shared Sidebar/MobileNav with the management area).
+    element: <BrowseLayout />,
+    children: [
+      { path: "/browse", element: <BrowsePage /> },
+      { path: "/browse/:id", element: <BrowseItemPage /> },
     ],
   },
 ])

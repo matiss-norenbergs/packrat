@@ -20,7 +20,7 @@ var ErrDuplicateName = errors.New("collection name already in use")
 var ErrHasChildren = errors.New("collection has child collections")
 
 type CollectionsRepo struct {
-	db *sql.DB
+	db dbtx
 
 	// mu serializes every check-then-write sequence (Create, Update,
 	// EnsureChain) against races between concurrent requests. Collection
@@ -30,12 +30,21 @@ type CollectionsRepo struct {
 	// importing several files at once under a not-yet-existing folder:
 	// concurrent requests each saw the parent collection missing and each
 	// created their own copy. Collection creation is low-frequency, so
-	// serializing it has no meaningful performance cost.
-	mu sync.Mutex
+	// serializing it has no meaningful performance cost. A pointer so WithTx
+	// copies share the same lock as the original.
+	mu *sync.Mutex
 }
 
 func NewCollectionsRepo(db *sql.DB) *CollectionsRepo {
-	return &CollectionsRepo{db: db}
+	return &CollectionsRepo{db: db, mu: &sync.Mutex{}}
+}
+
+// WithTx returns a copy of r whose queries run against tx instead of the
+// underlying connection pool — see TagsRepo.WithTx for the full rationale.
+func (r *CollectionsRepo) WithTx(tx *sql.Tx) *CollectionsRepo {
+	cp := *r
+	cp.db = tx
+	return &cp
 }
 
 // nameInUse checks name uniqueness scoped to parentID (nil meaning a
@@ -85,9 +94,9 @@ func (r *CollectionsRepo) createLocked(ctx context.Context, c *models.Collection
 	}
 
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO collections (name, parent_id, root_path, default_quality, default_download_type, is_private, jellyfin_library, season_number, artist_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Name, c.ParentID, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.ArtistID,
+		INSERT INTO collections (name, parent_id, root_path, default_quality, default_download_type, filename_template, is_private, jellyfin_library, season_number, artist_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.ParentID, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.FilenameTemplate, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.ArtistID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting collection: %w", err)
@@ -146,9 +155,9 @@ func (r *CollectionsRepo) ItemCounts(ctx context.Context) (map[int64]int, error)
 }
 
 // Update overwrites name/root_path/default_quality/default_download_type/
-// is_private/jellyfin_library for id. Callers apply partial-update semantics
-// before calling this (fetch, merge, write) — this method always writes all
-// six columns.
+// filename_template/is_private/jellyfin_library for id. Callers apply
+// partial-update semantics before calling this (fetch, merge, write) — this
+// method always writes all of these columns.
 func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collection) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -168,9 +177,9 @@ func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collec
 
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE collections
-		SET name = ?, root_path = ?, default_quality = ?, default_download_type = ?, is_private = ?, jellyfin_library = ?, season_number = ?, artist_id = ?, updated_at = datetime('now')
+		SET name = ?, root_path = ?, default_quality = ?, default_download_type = ?, filename_template = ?, is_private = ?, jellyfin_library = ?, season_number = ?, artist_id = ?, updated_at = datetime('now')
 		WHERE id = ?`,
-		c.Name, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.ArtistID, id,
+		c.Name, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.FilenameTemplate, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.ArtistID, id,
 	)
 	if err != nil {
 		return fmt.Errorf("updating collection: %w", err)
@@ -275,7 +284,7 @@ func (r *CollectionsRepo) EnsureChain(ctx context.Context, segments []string) (*
 		if child == nil {
 			newCol := models.Collection{
 				Name: seg, ParentID: parentID, RootPath: seg,
-				DefaultQuality: "best", DefaultDownloadType: "video",
+				DefaultQuality: "best", DefaultDownloadType: "video", FilenameTemplate: "{title}",
 			}
 			newID, err := r.createLocked(ctx, &newCol)
 			if err != nil {

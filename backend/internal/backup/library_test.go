@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 )
 
 type testRepos struct {
+	db          *sql.DB
 	collections *repository.CollectionsRepo
 	tags        *repository.TagsRepo
 	artists     *repository.ArtistsRepo
@@ -37,6 +39,7 @@ func openTestRepos(t *testing.T) testRepos {
 	}
 
 	return testRepos{
+		db:          conn,
 		collections: repository.NewCollectionsRepo(conn),
 		tags:        repository.NewTagsRepo(conn),
 		artists:     repository.NewArtistsRepo(conn),
@@ -124,7 +127,7 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 	// Applying the very same bundle back against the SAME database must not
 	// create duplicate collections/tags/artists — everything should already
 	// match by name/path.
-	resolved, result, err := ApplyLibraryBundle(ctx, repos.collections, repos.tags, repos.artists, bundle)
+	resolved, result, err := ApplyLibraryBundle(ctx, repos.db, repos.collections, repos.tags, repos.artists, bundle)
 	if err != nil {
 		t.Fatalf("ApplyLibraryBundle: %v", err)
 	}
@@ -144,7 +147,7 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 
 	// Applying into a FRESH database must create everything from scratch.
 	fresh := openTestRepos(t)
-	resolved2, result2, err := ApplyLibraryBundle(ctx, fresh.collections, fresh.tags, fresh.artists, bundle)
+	resolved2, result2, err := ApplyLibraryBundle(ctx, fresh.db, fresh.collections, fresh.tags, fresh.artists, bundle)
 	if err != nil {
 		t.Fatalf("ApplyLibraryBundle (fresh db): %v", err)
 	}
@@ -193,7 +196,7 @@ func TestApplyLibraryBundle_InfersAudioTypeFromMissingDownloadType(t *testing.T)
 		},
 	}
 
-	resolved, _, err := ApplyLibraryBundle(ctx, repos.collections, repos.tags, repos.artists, bundle)
+	resolved, _, err := ApplyLibraryBundle(ctx, repos.db, repos.collections, repos.tags, repos.artists, bundle)
 	if err != nil {
 		t.Fatalf("ApplyLibraryBundle: %v", err)
 	}
@@ -209,6 +212,94 @@ func TestApplyLibraryBundle_InfersAudioTypeFromMissingDownloadType(t *testing.T)
 	mp4 := resolved[1]
 	if mp4.DownloadType != "" {
 		t.Fatalf("expected the .mp4 item to leave DownloadType empty (caller's video default applies), got %q", mp4.DownloadType)
+	}
+}
+
+func TestPreviewLibraryBundle(t *testing.T) {
+	ctx := context.Background()
+	repos := openTestRepos(t)
+
+	// Seed a bit of existing state so the preview has something to diff
+	// against: one existing collection, tag, artist, and one library item
+	// that a bundle entry will match by URL.
+	musicID, err := repos.collections.Create(ctx, &models.Collection{
+		Name: "Music", RootPath: "Music", DefaultQuality: "best", DefaultDownloadType: "audio",
+	})
+	if err != nil {
+		t.Fatalf("creating collection: %v", err)
+	}
+	if _, err := repos.tags.Create(ctx, "existing-tag", false); err != nil {
+		t.Fatalf("creating tag: %v", err)
+	}
+	if _, err := repos.artists.Create(ctx, "Existing Artist"); err != nil {
+		t.Fatalf("creating artist: %v", err)
+	}
+	existingURL := "https://example.com/existing"
+	if _, err := repos.library.Create(ctx, &models.LibraryItem{
+		Title: "Existing Song", Filename: "existing.mp3", Path: "Music/existing.mp3",
+		CollectionID: &musicID, OriginalURL: &existingURL, Status: "completed",
+	}); err != nil {
+		t.Fatalf("creating existing library item: %v", err)
+	}
+
+	bundle := LibraryBundle{
+		Collections: []CollectionEntry{
+			{Path: []string{"Music"}, Name: "Music", DefaultQuality: "best", DefaultDownloadType: "audio"},
+			{Path: []string{"Shows", "Anime"}, Name: "Anime", DefaultQuality: "best", DefaultDownloadType: "video"},
+		},
+		Tags: []TagEntry{
+			{Name: "existing-tag"},
+			{Name: "new-tag"},
+		},
+		Artists: []string{"Existing Artist", "New Artist"},
+		LibraryItems: []LibraryItemEntry{
+			{Title: "Existing Song", OriginalURL: existingURL, CollectionPath: []string{"Music"}, Filename: "existing.mp3"},
+			{Title: "New Song", OriginalURL: "https://example.com/new", CollectionPath: []string{"Shows", "Anime"}, ArtistName: "New Artist", Filename: "new.mp4"},
+		},
+	}
+
+	preview, err := PreviewLibraryBundle(ctx, repos.collections, repos.tags, repos.artists, repos.library, bundle)
+	if err != nil {
+		t.Fatalf("PreviewLibraryBundle: %v", err)
+	}
+
+	if preview.CollectionsNew != 1 {
+		t.Fatalf("expected 1 new collection (Shows/Anime), got %d: %+v", preview.CollectionsNew, preview.Collections)
+	}
+	if preview.TagsNew != 1 {
+		t.Fatalf("expected 1 new tag, got %d", preview.TagsNew)
+	}
+	if preview.ArtistsNew != 1 {
+		t.Fatalf("expected 1 new artist, got %d", preview.ArtistsNew)
+	}
+	if preview.AlreadyInLibrary != 1 {
+		t.Fatalf("expected 1 item already in library, got %d", preview.AlreadyInLibrary)
+	}
+	if len(preview.Items) != 2 || !preview.Items[0].AlreadyInLibrary || preview.Items[1].AlreadyInLibrary {
+		t.Fatalf("expected item 0 flagged as duplicate and item 1 not, got %+v", preview.Items)
+	}
+
+	// A preview must never write anything — confirm nothing changed.
+	cols, err := repos.collections.List(ctx)
+	if err != nil {
+		t.Fatalf("listing collections: %v", err)
+	}
+	if len(cols) != 1 {
+		t.Fatalf("expected collections untouched by preview, got %d", len(cols))
+	}
+	tags, err := repos.tags.List(ctx)
+	if err != nil {
+		t.Fatalf("listing tags: %v", err)
+	}
+	if len(tags) != 1 {
+		t.Fatalf("expected tags untouched by preview, got %d", len(tags))
+	}
+	artists, err := repos.artists.List(ctx)
+	if err != nil {
+		t.Fatalf("listing artists: %v", err)
+	}
+	if len(artists) != 1 {
+		t.Fatalf("expected artists untouched by preview, got %d", len(artists))
 	}
 }
 

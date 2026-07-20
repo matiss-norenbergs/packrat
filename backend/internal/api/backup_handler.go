@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -137,6 +138,56 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 	}
 }
 
+// decodeLibraryBundle binds a BackupImportRequest from the request body,
+// then parses/decrypts/unmarshals it into a LibraryBundle — the shared first
+// steps of ImportLibrary and PreviewLibraryImport. On any failure it writes
+// the appropriate error response itself and returns ok=false, so callers can
+// just check ok and return.
+func decodeLibraryBundle(c *gin.Context) (bundle backup.LibraryBundle, ok bool) {
+	var req BackupImportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return bundle, false
+	}
+
+	env, err := backup.ParseEnvelope(req.Data)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return bundle, false
+	}
+	plaintext, err := backup.Open(env, "library", passwordFrom(req.Password))
+	if err != nil {
+		writeBackupOpenError(c, err)
+		return bundle, false
+	}
+
+	if err := json.Unmarshal(plaintext, &bundle); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt library export: " + err.Error()})
+		return bundle, false
+	}
+	return bundle, true
+}
+
+// PreviewLibraryImport decrypts/parses a library export the same way
+// ImportLibrary does, but only reads (List/FindDuplicates) — never writes —
+// so the Backup page can show what an import would do before the user
+// commits to it. See backup.PreviewLibraryBundle for the diffing logic.
+func PreviewLibraryImport(collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		bundle, ok := decodeLibraryBundle(c)
+		if !ok {
+			return
+		}
+
+		preview, err := backup.PreviewLibraryBundle(c.Request.Context(), collectionsRepo, tagsRepo, artistsRepo, libraryRepo, bundle)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, preview)
+	}
+}
+
 // ImportLibrary merges a previously-exported library bundle into the local
 // database (see backup.ApplyLibraryBundle) and re-queues a download for
 // every resolved item — the same enqueueDownload helper CreateDownload and
@@ -145,32 +196,14 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 // export didn't carry a type (its originating Download row was gone).
 // Each item is enqueued independently and best-effort — one bad URL/folder
 // doesn't abort the rest of the import.
-func ImportLibrary(collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, mgr *queue.DownloadManager, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
+func ImportLibrary(db *sql.DB, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, mgr *queue.DownloadManager, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var req BackupImportRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		bundle, ok := decodeLibraryBundle(c)
+		if !ok {
 			return
 		}
 
-		env, err := backup.ParseEnvelope(req.Data)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		plaintext, err := backup.Open(env, "library", passwordFrom(req.Password))
-		if err != nil {
-			writeBackupOpenError(c, err)
-			return
-		}
-
-		var bundle backup.LibraryBundle
-		if err := json.Unmarshal(plaintext, &bundle); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt library export: " + err.Error()})
-			return
-		}
-
-		resolved, result, err := backup.ApplyLibraryBundle(c.Request.Context(), collectionsRepo, tagsRepo, artistsRepo, bundle)
+		resolved, result, err := backup.ApplyLibraryBundle(c.Request.Context(), db, collectionsRepo, tagsRepo, artistsRepo, bundle)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

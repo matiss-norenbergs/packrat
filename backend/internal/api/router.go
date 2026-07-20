@@ -40,8 +40,19 @@ func noCacheHeaders(c *gin.Context) {
 	c.Next()
 }
 
+// maxRequestBodyBytes bounds any single request body — generous enough for
+// the largest legitimate payloads (a base64 thumbnail upload, a full backup
+// bundle) without leaving request bodies effectively unbounded.
+const maxRequestBodyBytes = 50 << 20 // 50MB
+
+func limitRequestBody(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBodyBytes)
+	c.Next()
+}
+
 func SetupRouter(deps Deps) *gin.Engine {
 	r := gin.Default()
+	r.Use(limitRequestBody)
 
 	// All JSON API routes live under /api so they can never collide with a
 	// frontend client-side route of the same name (e.g. both the SPA and the
@@ -80,7 +91,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
 		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo, deps.ArtistsRepo))
 		api.POST("/library/bulk-tags", BulkAssignTags(deps.LibraryRepo, deps.TagsRepo, deps.MediaRoot))
-		api.POST("/library/bulk-delete", BulkDeleteLibraryItems(deps.LibraryRepo, deps.MediaRoot))
+		api.POST("/library/bulk-delete", BulkDeleteLibraryItems(deps.DB, deps.LibraryRepo, deps.MediaRoot))
 		api.POST("/library/:id/move", MoveLibraryItem(deps.LibraryRepo, deps.Manager, deps.MediaRoot))
 		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.MediaRoot))
 		api.GET("/library/:id/metadata-preview", CompareLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp))
@@ -97,19 +108,19 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/collections", CreateCollection(deps.CollectionsRepo, deps.Manager))
 		api.PATCH("/collections/:id", UpdateCollection(deps.CollectionsRepo, deps.Manager))
 		api.DELETE("/collections/:id", DeleteCollection(deps.CollectionsRepo))
-		api.POST("/collections/bulk-delete", BulkDeleteCollections(deps.CollectionsRepo))
+		api.POST("/collections/bulk-delete", BulkDeleteCollections(deps.DB, deps.CollectionsRepo))
 
 		api.GET("/tags", ListTags(deps.TagsRepo))
 		api.POST("/tags", CreateTag(deps.TagsRepo))
 		api.PATCH("/tags/:id", UpdateTag(deps.TagsRepo))
 		api.DELETE("/tags/:id", DeleteTag(deps.TagsRepo))
-		api.POST("/tags/bulk-delete", BulkDeleteTags(deps.TagsRepo))
+		api.POST("/tags/bulk-delete", BulkDeleteTags(deps.DB, deps.TagsRepo))
 
 		api.GET("/artists", ListArtists(deps.ArtistsRepo))
 		api.POST("/artists", CreateArtist(deps.ArtistsRepo))
 		api.PATCH("/artists/:id", UpdateArtist(deps.ArtistsRepo))
 		api.DELETE("/artists/:id", DeleteArtist(deps.ArtistsRepo))
-		api.POST("/artists/bulk-delete", BulkDeleteArtists(deps.ArtistsRepo))
+		api.POST("/artists/bulk-delete", BulkDeleteArtists(deps.DB, deps.ArtistsRepo))
 
 		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.MediaRoot))
 		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager))
@@ -117,7 +128,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/backup/export/settings", ExportSettings(deps.SettingsRepo))
 		api.POST("/backup/export/library", ExportLibrary(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.DownloadsRepo))
 		api.POST("/backup/import/settings", ImportSettings(deps.SettingsRepo, deps.Manager))
-		api.POST("/backup/import/library", ImportLibrary(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.Manager, deps.SettingsRepo))
+		api.POST("/backup/preview/library", PreviewLibraryImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
+		api.POST("/backup/import/library", ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.Manager, deps.SettingsRepo))
 
 		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
 		api.POST("/import", CreateImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))

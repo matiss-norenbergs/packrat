@@ -1,6 +1,7 @@
 import { Wand2 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
+import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -16,20 +17,14 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useUpdateLibraryItem } from "@/hooks/useLibrary"
 import { useTags } from "@/hooks/useTags"
+import { mediaFileUrl } from "@/lib/api"
+import { artistIdToSelectValue, baseNameWithoutExt, buildLibraryItemUpdatePayload } from "@/lib/libraryItemEdit"
 import { parseSeasonEpisode } from "@/lib/seasonEpisode"
 import { formatDuration } from "@/lib/utils"
-import { ArtistSelect, NO_ARTIST } from "./ArtistSelect"
+import { ArtistSelect } from "./ArtistSelect"
+import { useRevealAll } from "./RevealAllContext"
 import { TagInput } from "./TagInput"
-import type { LibraryItem, UpdateLibraryItemRequest } from "@/types/api"
-
-function artistIdToSelectValue(artistId: number | null): string {
-  return artistId != null ? String(artistId) : NO_ARTIST
-}
-
-function baseNameWithoutExt(filename: string): string {
-  const idx = filename.lastIndexOf(".")
-  return idx > 0 ? filename.slice(0, idx) : filename
-}
+import type { LibraryItem } from "@/types/api"
 
 interface EditLibraryItemDialogProps {
   item: LibraryItem
@@ -52,6 +47,8 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
 
   const updateLibraryItem = useUpdateLibraryItem()
   const { data: allTags } = useTags()
+  const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
+  const revealed = isRevealed(item.id)
 
   const resetFields = () => {
     setTitle(item.title)
@@ -84,46 +81,19 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
   }
 
   const handleSubmit = () => {
-    const payload: UpdateLibraryItemRequest = {}
-
-    const trimmedTitle = title.trim()
-    if (trimmedTitle && trimmedTitle !== item.title) payload.title = trimmedTitle
-
-    const trimmedFilename = filename.trim()
-    if (trimmedFilename && trimmedFilename !== baseNameWithoutExt(item.filename)) payload.filename = trimmedFilename
-
-    const trimmedUploader = uploader.trim()
-    if (trimmedUploader !== (item.uploader ?? "")) payload.uploader = trimmedUploader
-
-    const initialArtistId = artistIdToSelectValue(item.artistId)
-    if (artistId !== initialArtistId) payload.artistId = artistId === NO_ARTIST ? 0 : Number(artistId)
-
-    const parsedYear = year.trim() === "" ? null : Number(year)
-    if (parsedYear !== item.year && parsedYear != null && !Number.isNaN(parsedYear)) {
-      payload.year = parsedYear
-    }
-
-    const parsedSequenceNumber = sequenceNumber.trim() === "" ? null : Number(sequenceNumber)
-    if (parsedSequenceNumber !== item.sequenceNumber && parsedSequenceNumber != null && !Number.isNaN(parsedSequenceNumber)) {
-      payload.sequenceNumber = parsedSequenceNumber
-    }
-
-    const parsedSeasonNumber = seasonNumber.trim() === "" ? null : Number(seasonNumber)
-    if (parsedSeasonNumber !== item.seasonNumber && parsedSeasonNumber != null && !Number.isNaN(parsedSeasonNumber)) {
-      payload.seasonNumber = parsedSeasonNumber
-    }
-
-    const trimmedDescription = description.trim()
-    if (trimmedDescription !== (item.description ?? "")) payload.description = trimmedDescription
-
-    const trimmedOriginalUrl = originalUrl.trim()
-    if (trimmedOriginalUrl !== (item.originalUrl ?? "")) payload.originalUrl = trimmedOriginalUrl
-
-    // Array identity won't work for the diff — compare contents, not order.
-    const tagsKey = (arr: string[]) => [...arr].sort().join("|")
-    if (tagsKey(tags) !== tagsKey(item.tags)) payload.tags = tags
-
-    if (generateNfo !== item.generateNfo) payload.generateNfo = generateNfo
+    const payload = buildLibraryItemUpdatePayload(item, {
+      title,
+      filename,
+      uploader,
+      artistId,
+      year,
+      sequenceNumber,
+      seasonNumber,
+      description,
+      originalUrl,
+      tags,
+      generateNfo,
+    })
 
     if (Object.keys(payload).length === 0) {
       onOpenChange(false)
@@ -235,6 +205,18 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
           </div>
 
           <div className="space-y-4">
+            {item.thumbnail && (
+              <div className="overflow-hidden rounded-md border bg-muted">
+                <BlurredThumbnail
+                  src={mediaFileUrl(item.thumbnail)}
+                  className="aspect-video w-full object-cover"
+                  blurred={item.blurred}
+                  revealed={revealed}
+                  onToggleReveal={() => toggleReveal(item.id)}
+                />
+              </div>
+            )}
+
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               File Metadata
             </h3>

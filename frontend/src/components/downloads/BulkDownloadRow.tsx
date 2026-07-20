@@ -18,6 +18,7 @@ import { useSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import { ArtistSelect } from "@/components/library/ArtistSelect"
 import { TagInput } from "@/components/library/TagInput"
+import { FilenameTemplateBuilderDialog } from "./FilenameTemplateBuilderDialog"
 import { cn, formatDuration } from "@/lib/utils"
 import { resolveInheritedArtistId } from "@/lib/collectionTree"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
@@ -206,13 +207,30 @@ export function BulkDownloadRow({
             </div>
           </div>
 
-          <div className="space-y-1">
-            <Label>Filename</Label>
-            <Input
-              placeholder="optional"
-              value={row.filename}
-              onChange={(e) => onChange({ filename: e.target.value })}
-            />
+          <div className="flex gap-2">
+            <div className="flex-1 space-y-1">
+              <Label>Filename</Label>
+              <Input
+                placeholder="optional"
+                value={row.filename}
+                onChange={(e) => onChange({ filename: e.target.value })}
+              />
+            </div>
+            <div className="flex-1 space-y-1">
+              <Label>Filename Template</Label>
+              <div className="relative">
+                <Input
+                  placeholder="{artist}/{title}"
+                  className="pr-8"
+                  value={row.filenameTemplate}
+                  onChange={(e) => onChange({ filenameTemplate: e.target.value })}
+                />
+                <FilenameTemplateBuilderDialog
+                  value={row.filenameTemplate}
+                  onApply={(v) => onChange({ filenameTemplate: v })}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>

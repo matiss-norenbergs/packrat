@@ -17,6 +17,7 @@ import (
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
+	"packrat/backend/internal/nametemplate"
 	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/repository"
@@ -302,25 +303,24 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		m.finishError(parentCtx, runCtx, id, d.URL, "invalid folder: "+err.Error(), "", "")
 		return
 	}
-	if err := fsutil.EnsureDir(destDir); err != nil {
-		m.finishError(parentCtx, runCtx, id, d.URL, "creating destination directory: "+err.Error(), "", "")
-		return
-	}
 
 	audioFormat := ""
 	if d.AudioFormat != nil {
 		audioFormat = *d.AudioFormat
 	}
 
-	// The literal Filename override always wins if set (existing,
-	// unchanged behavior). Otherwise, a FilenamePrefix is combined with
-	// effectiveTitle to build the name — e.g. "Matt.Iceberg.S01E01" +
-	// "My big moment" -> "Matt.Iceberg.S01E01 My big moment". With
-	// neither set, filename stays "" and yt-dlp's own default naming
-	// applies, exactly as before this feature existed.
-	filename := d.Filename
-	if filename == "" && d.FilenamePrefix != nil && strings.TrimSpace(*d.FilenamePrefix) != "" {
-		filename = strings.TrimSpace(*d.FilenamePrefix) + " " + effectiveTitle
+	var templateVars nametemplate.Vars
+	if d.FilenameTemplate != nil && strings.TrimSpace(*d.FilenameTemplate) != "" {
+		templateVars = m.filenameTemplateVars(runCtx, d, effectiveTitle, meta)
+	}
+	filename, extraDirSegments := resolveFilename(d.Filename, d.FilenameTemplate, d.FilenamePrefix, effectiveTitle, templateVars)
+	if len(extraDirSegments) > 0 {
+		destDir = filepath.Join(append([]string{destDir}, extraDirSegments...)...)
+	}
+
+	if err := fsutil.EnsureDir(destDir); err != nil {
+		m.finishError(parentCtx, runCtx, id, d.URL, "creating destination directory: "+err.Error(), "", "")
+		return
 	}
 
 	job := downloader.DownloadJob{
@@ -426,6 +426,73 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	}
 
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: id, LibraryID: libID, Title: libItem.Title}})
+}
+
+// resolveFilename decides the final base filename for a download — and, if
+// a FilenameTemplate produced a nested path, which extra directory segments
+// need appending to destDir before it — given the literal Filename
+// override, the newer FilenameTemplate, the legacy FilenamePrefix, and the
+// effective title. Precedence: literal Filename always wins if set;
+// otherwise FilenameTemplate (resolved against vars, which the caller only
+// bothers to populate when a template is actually present) takes priority
+// over FilenamePrefix (combined with effectiveTitle, e.g.
+// "Matt.Iceberg.S01E01" + "My big moment" -> "Matt.Iceberg.S01E01 My big
+// moment"); with none set, filename is "" and yt-dlp's own default naming
+// applies, exactly as before either feature existed. Pure and side-effect
+// free so it's easy to unit test directly, unlike the rest of runOne.
+func resolveFilename(literal string, filenameTemplate, filenamePrefix *string, effectiveTitle string, vars nametemplate.Vars) (filename string, extraDirSegments []string) {
+	if literal != "" {
+		return literal, nil
+	}
+	if filenameTemplate != nil && strings.TrimSpace(*filenameTemplate) != "" {
+		segments := nametemplate.Resolve(*filenameTemplate, vars)
+		if len(segments) > 0 {
+			return segments[len(segments)-1], segments[:len(segments)-1]
+		}
+		return "", nil
+	}
+	if filenamePrefix != nil && strings.TrimSpace(*filenamePrefix) != "" {
+		return strings.TrimSpace(*filenamePrefix) + " " + effectiveTitle, nil
+	}
+	return "", nil
+}
+
+// filenameTemplateVars resolves everything a filename template's {variable}
+// tokens can reference. Only called when d.FilenameTemplate is actually set
+// (see runOne), so a plain download never pays for the extra artist/
+// collection lookups here.
+func (m *DownloadManager) filenameTemplateVars(ctx context.Context, d *models.Download, effectiveTitle string, meta *downloader.Metadata) nametemplate.Vars {
+	vars := nametemplate.Vars{
+		Title:    effectiveTitle,
+		Uploader: meta.Uploader,
+		Date:     meta.UploadDate,
+		Season:   optionalIntString(d.OverrideSeasonNumber),
+		Sequence: optionalIntString(d.OverrideSequenceNumber),
+	}
+	if d.OverrideYear != nil {
+		vars.Year = strconv.Itoa(*d.OverrideYear)
+	} else if len(meta.UploadDate) >= 4 {
+		vars.Year = meta.UploadDate[:4]
+	}
+	if d.OverrideArtistID != nil {
+		if a, err := m.artistsRepo.Get(ctx, *d.OverrideArtistID); err == nil {
+			vars.Artist = a.Name
+		}
+	}
+	if d.CollectionID != nil {
+		if col, err := m.collectionsRepo.Get(ctx, *d.CollectionID); err == nil {
+			vars.Collection = col.Name
+		}
+	}
+	return vars
+}
+
+// optionalIntString formats an *int as a string, or "" if nil.
+func optionalIntString(n *int) string {
+	if n == nil {
+		return ""
+	}
+	return strconv.Itoa(*n)
 }
 
 func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download, title string, meta *downloader.Metadata, finalPath string, resolution *string, sizeBytes *int64) *models.LibraryItem {

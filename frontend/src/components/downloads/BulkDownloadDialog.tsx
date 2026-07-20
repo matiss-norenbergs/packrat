@@ -33,6 +33,7 @@ export interface BulkRow {
   quality: VideoQuality
   audioFormat: AudioFormat
   filename: string
+  filenameTemplate: string
   titleOverride: string
   artistId: string
   year: string
@@ -61,6 +62,7 @@ type RowCarryOver = Pick<
   | "artistId"
   | "year"
   | "seasonNumber"
+  | "filenameTemplate"
   | "generateNfo"
   | "tags"
   | "advancedOpen"
@@ -77,6 +79,7 @@ function newRow(carryOver?: Partial<RowCarryOver>, sequenceNumber?: string): Bul
     quality: "best",
     audioFormat: "mp3",
     filename: "",
+    filenameTemplate: "",
     titleOverride: "",
     artistId: NO_ARTIST,
     year: "",
@@ -113,6 +116,7 @@ function carryOverFrom(row: BulkRow): RowCarryOver {
     artistId: row.artistId,
     year: row.year,
     seasonNumber: row.seasonNumber,
+    filenameTemplate: row.filenameTemplate,
     generateNfo: row.generateNfo,
     tags: row.tags,
     advancedOpen: row.advancedOpen,
@@ -210,6 +214,7 @@ export function BulkDownloadDialog() {
             quality: r.downloadType === "video" ? r.quality : undefined,
             audioFormat: r.downloadType === "audio" ? r.audioFormat : undefined,
             filename: r.filename.trim() || undefined,
+            filenameTemplate: r.filenameTemplate.trim() || undefined,
             title: r.titleOverride.trim() || undefined,
             artistId: r.artistId === NO_ARTIST ? undefined : Number(r.artistId),
             year: parsedYear != null && !Number.isNaN(parsedYear) ? parsedYear : undefined,

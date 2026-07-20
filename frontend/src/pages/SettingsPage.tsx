@@ -38,6 +38,12 @@ import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
 
+// Radix Select disallows an empty-string item value, so "none" is used as
+// the sentinel for "no cookies browser configured" and translated back to
+// "" on save — same trick used by FilenameTemplateBuilderDialog's NO_MODIFIER.
+const NO_COOKIES_BROWSER = "none"
+const YTDLP_COOKIE_BROWSERS = ["brave", "chrome", "chromium", "edge", "firefox", "opera", "safari", "vivaldi", "whale"] as const
+
 export function SettingsPage() {
   const { data: settings, isLoading } = useSettings()
   const updateSettings = useUpdateSettings()
@@ -328,6 +334,39 @@ function AccountCard() {
 function YtDlpCard() {
   const { data, isLoading } = useYtDlpVersion()
   const update = useUpdateYtDlp()
+  const { data: settings, isLoading: settingsLoading } = useSettings()
+  const updateSettings = useUpdateSettings()
+
+  const [cookiesBrowser, setCookiesBrowser] = useState(NO_COOKIES_BROWSER)
+  const [cookiesProfile, setCookiesProfile] = useState("")
+  const [proxy, setProxy] = useState("")
+  const [rateLimit, setRateLimit] = useState("")
+  const [retries, setRetries] = useState("")
+
+  useEffect(() => {
+    if (!settings) return
+    setCookiesBrowser(settings.ytdlpCookiesBrowser || NO_COOKIES_BROWSER)
+    setCookiesProfile(settings.ytdlpCookiesProfile)
+    setProxy(settings.ytdlpProxy)
+    setRateLimit(settings.ytdlpRateLimit)
+    setRetries(settings.ytdlpRetries > 0 ? String(settings.ytdlpRetries) : "")
+  }, [settings])
+
+  const handleSaveYtdlpSettings = () => {
+    if (!settings) return
+    const payload: UpdateSettingsRequest = {}
+
+    const browserValue = cookiesBrowser === NO_COOKIES_BROWSER ? "" : cookiesBrowser
+    if (browserValue !== settings.ytdlpCookiesBrowser) payload.ytdlpCookiesBrowser = browserValue
+    if (cookiesProfile !== settings.ytdlpCookiesProfile) payload.ytdlpCookiesProfile = cookiesProfile
+    if (proxy !== settings.ytdlpProxy) payload.ytdlpProxy = proxy
+    if (rateLimit !== settings.ytdlpRateLimit) payload.ytdlpRateLimit = rateLimit
+    const retriesValue = retries.trim() === "" ? 0 : Number(retries)
+    if (!Number.isNaN(retriesValue) && retriesValue !== settings.ytdlpRetries) payload.ytdlpRetries = retriesValue
+
+    if (Object.keys(payload).length === 0) return
+    updateSettings.mutate(payload)
+  }
 
   return (
     <Card>
@@ -357,6 +396,81 @@ function YtDlpCard() {
               {update.isPending ? "Updating…" : "Update yt-dlp"}
             </Button>
           </>
+        )}
+
+        {settingsLoading || !settings ? (
+          <Skeleton className="h-40 w-full" />
+        ) : (
+          <div className="space-y-4 border-t pt-4">
+            <div className="space-y-2">
+              <Label>Cookies browser</Label>
+              <Select value={cookiesBrowser} onValueChange={setCookiesBrowser}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_COOKIES_BROWSER}>None</SelectItem>
+                  {YTDLP_COOKIE_BROWSERS.map((b) => (
+                    <SelectItem key={b} value={b}>
+                      {b[0].toUpperCase() + b.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Reads cookies directly from an installed browser's profile — useful for
+                members-only or age-gated videos.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ytdlp-cookies-profile">Profile (optional)</Label>
+              <Input
+                id="ytdlp-cookies-profile"
+                placeholder="e.g. Default"
+                value={cookiesProfile}
+                onChange={(e) => setCookiesProfile(e.target.value)}
+                disabled={cookiesBrowser === NO_COOKIES_BROWSER}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ytdlp-proxy">Proxy</Label>
+              <Input
+                id="ytdlp-proxy"
+                placeholder="e.g. socks5://127.0.0.1:1080"
+                value={proxy}
+                onChange={(e) => setProxy(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ytdlp-rate-limit">Rate limit</Label>
+                <Input
+                  id="ytdlp-rate-limit"
+                  placeholder="e.g. 500K"
+                  value={rateLimit}
+                  onChange={(e) => setRateLimit(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ytdlp-retries">Retries</Label>
+                <Input
+                  id="ytdlp-retries"
+                  type="number"
+                  min="0"
+                  placeholder="10 (yt-dlp default)"
+                  value={retries}
+                  onChange={(e) => setRetries(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <Button onClick={handleSaveYtdlpSettings} disabled={updateSettings.isPending}>
+              {updateSettings.isPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>

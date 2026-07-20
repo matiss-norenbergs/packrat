@@ -2,6 +2,8 @@ package backup
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -157,6 +159,17 @@ func BuildLibraryBundle(
 		return bundle, err
 	}
 
+	var downloadIDs []int64
+	for _, it := range filtered {
+		if it.DownloadID != nil {
+			downloadIDs = append(downloadIDs, *it.DownloadID)
+		}
+	}
+	downloadsByID, err := downloadsRepo.GetByIDs(ctx, downloadIDs)
+	if err != nil {
+		return bundle, err
+	}
+
 	for _, it := range filtered {
 		entry := LibraryItemEntry{
 			Title:          it.Title,
@@ -178,7 +191,7 @@ func BuildLibraryBundle(
 		// LibraryItem itself — omit them (importer falls back to defaults)
 		// when that row is gone, same as RedownloadLibraryItem already does.
 		if it.DownloadID != nil {
-			if dl, err := downloadsRepo.Get(ctx, *it.DownloadID); err == nil {
+			if dl, ok := downloadsByID[*it.DownloadID]; ok {
 				entry.DownloadType = dl.DownloadType
 				entry.Quality = dl.Quality
 				if dl.AudioFormat != nil {
@@ -190,6 +203,152 @@ func BuildLibraryBundle(
 	}
 
 	return bundle, nil
+}
+
+// PreviewCollectionEntry is one collection in a preview's flattened list,
+// annotated with whether it already exists locally (matched by path) or
+// would be newly created by an import.
+type PreviewCollectionEntry struct {
+	Path  []string `json:"path"`
+	Name  string   `json:"name"`
+	IsNew bool     `json:"isNew"`
+}
+
+// PreviewLibraryItem is one library item in a preview, carrying the same
+// human-readable (name-based) fields LibraryItemEntry does plus whether it
+// already matches an existing library row by URL.
+type PreviewLibraryItem struct {
+	Title            string   `json:"title"`
+	OriginalURL      string   `json:"originalUrl"`
+	CollectionPath   []string `json:"collectionPath,omitempty"`
+	ArtistName       string   `json:"artistName,omitempty"`
+	Tags             []string `json:"tags,omitempty"`
+	DownloadType     string   `json:"downloadType,omitempty"`
+	Quality          string   `json:"quality,omitempty"`
+	Year             *int     `json:"year,omitempty"`
+	AlreadyInLibrary bool     `json:"alreadyInLibrary"`
+}
+
+// LibraryBundlePreview is a read-only summary of what ApplyLibraryBundle
+// would do with bundle, computed by PreviewLibraryBundle without writing
+// anything — for the Backup page's "Preview" step, so a user can see what's
+// inside an export before committing to importing it.
+type LibraryBundlePreview struct {
+	Collections      []PreviewCollectionEntry `json:"collections"`
+	CollectionsNew   int                      `json:"collectionsNew"`
+	Tags             []string                 `json:"tags"`
+	TagsNew          int                      `json:"tagsNew"`
+	Artists          []string                 `json:"artists"`
+	ArtistsNew       int                      `json:"artistsNew"`
+	Items            []PreviewLibraryItem     `json:"items"`
+	AlreadyInLibrary int                      `json:"alreadyInLibrary"`
+}
+
+// PreviewLibraryBundle computes LibraryBundlePreview via read-only List/
+// FindDuplicates lookups — mirroring ApplyLibraryBundle's name/path matching
+// logic exactly, but never creating or updating anything, so it's safe to
+// run against an untrusted uploaded file before the user decides to import.
+func PreviewLibraryBundle(
+	ctx context.Context,
+	collectionsRepo *repository.CollectionsRepo,
+	tagsRepo *repository.TagsRepo,
+	artistsRepo *repository.ArtistsRepo,
+	libraryRepo *repository.LibraryRepo,
+	bundle LibraryBundle,
+) (LibraryBundlePreview, error) {
+	var preview LibraryBundlePreview
+
+	cols, err := collectionsRepo.List(ctx)
+	if err != nil {
+		return preview, err
+	}
+	paths := collectionPaths(cols)
+	existingCollectionPaths := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		existingCollectionPaths[strings.Join(p, "/")] = true
+	}
+	preview.Collections = make([]PreviewCollectionEntry, len(bundle.Collections))
+	for i, c := range bundle.Collections {
+		isNew := !existingCollectionPaths[strings.Join(c.Path, "/")]
+		preview.Collections[i] = PreviewCollectionEntry{Path: c.Path, Name: c.Name, IsNew: isNew}
+		if isNew {
+			preview.CollectionsNew++
+		}
+	}
+
+	tagRows, err := tagsRepo.List(ctx)
+	if err != nil {
+		return preview, err
+	}
+	existingTagNames := make(map[string]bool, len(tagRows))
+	for _, t := range tagRows {
+		existingTagNames[t.Name] = true
+	}
+	for _, t := range bundle.Tags {
+		preview.Tags = append(preview.Tags, t.Name)
+		if !existingTagNames[t.Name] {
+			preview.TagsNew++
+		}
+	}
+
+	artistRows, err := artistsRepo.List(ctx)
+	if err != nil {
+		return preview, err
+	}
+	existingArtistNames := make(map[string]bool, len(artistRows))
+	for _, a := range artistRows {
+		existingArtistNames[a.Name] = true
+	}
+	seenArtistNames := make(map[string]bool)
+	addArtist := func(name string) {
+		if name == "" || seenArtistNames[name] {
+			return
+		}
+		seenArtistNames[name] = true
+		preview.Artists = append(preview.Artists, name)
+		if !existingArtistNames[name] {
+			preview.ArtistsNew++
+		}
+	}
+	for _, name := range bundle.Artists {
+		addArtist(name)
+	}
+	for _, item := range bundle.LibraryItems {
+		addArtist(item.ArtistName)
+	}
+	for _, entry := range bundle.Collections {
+		addArtist(entry.ArtistName)
+	}
+
+	queries := make([]repository.DuplicateQuery, len(bundle.LibraryItems))
+	for i, item := range bundle.LibraryItems {
+		queries[i] = repository.DuplicateQuery{URL: item.OriginalURL}
+	}
+	dupsByIndex, err := libraryRepo.FindDuplicates(ctx, queries)
+	if err != nil {
+		return preview, err
+	}
+
+	preview.Items = make([]PreviewLibraryItem, len(bundle.LibraryItems))
+	for i, item := range bundle.LibraryItems {
+		_, alreadyInLibrary := dupsByIndex[i]
+		preview.Items[i] = PreviewLibraryItem{
+			Title:            item.Title,
+			OriginalURL:      item.OriginalURL,
+			CollectionPath:   item.CollectionPath,
+			ArtistName:       item.ArtistName,
+			Tags:             item.Tags,
+			DownloadType:     item.DownloadType,
+			Quality:          item.Quality,
+			Year:             item.Year,
+			AlreadyInLibrary: alreadyInLibrary,
+		}
+		if alreadyInLibrary {
+			preview.AlreadyInLibrary++
+		}
+	}
+
+	return preview, nil
 }
 
 // ResolvedDownload is a library item resolved against the local database —
@@ -237,17 +396,31 @@ func audioFormatFromExtension(filename string) (downloadType, audioFormat string
 
 // ApplyLibraryBundle merges bundle into the local database — matching
 // collections by path and tags/artists by name, creating only what's
-// missing, never deleting anything. Every step is best-effort: a conflict
-// on one entry (e.g. a collection rename colliding with an existing
-// sibling) is skipped rather than aborting the whole import.
+// missing, never deleting anything. Every step is best-effort in the sense
+// that a conflict on one entry (e.g. a collection rename colliding with an
+// existing sibling) is skipped rather than aborting the whole import — but
+// the reconciliation as a whole runs inside one transaction, so a crash or
+// cancellation partway through rolls back cleanly instead of leaving the
+// bundle half-applied with no record of where it stopped.
 func ApplyLibraryBundle(
 	ctx context.Context,
+	db *sql.DB,
 	collectionsRepo *repository.CollectionsRepo,
 	tagsRepo *repository.TagsRepo,
 	artistsRepo *repository.ArtistsRepo,
 	bundle LibraryBundle,
 ) ([]ResolvedDownload, ApplyResult, error) {
 	var result ApplyResult
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, result, fmt.Errorf("beginning import transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	collectionsRepo = collectionsRepo.WithTx(tx)
+	tagsRepo = tagsRepo.WithTx(tx)
+	artistsRepo = artistsRepo.WithTx(tx)
 
 	if len(bundle.Tags) > 0 {
 		before, err := tagsRepo.List(ctx)
@@ -394,5 +567,8 @@ func ApplyLibraryBundle(
 		resolved = append(resolved, r)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, result, fmt.Errorf("committing import transaction: %w", err)
+	}
 	return resolved, result, nil
 }

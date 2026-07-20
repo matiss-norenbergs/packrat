@@ -1,9 +1,25 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { ArrowDownAZ, ArrowUpAZ, Eye, EyeOff, FolderTree, Info, LayoutGrid, Pencil, Rows3, Search, Tags, X } from "lucide-react"
+import {
+  ArrowDownAZ,
+  ArrowUpAZ,
+  Eye,
+  EyeOff,
+  FolderTree,
+  Info,
+  LayoutGrid,
+  Pencil,
+  Rows3,
+  Search,
+  SlidersHorizontal,
+  Tags,
+  X,
+} from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -18,6 +34,7 @@ import { useTags } from "@/hooks/useTags"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
 import { BulkAssignTagsDialog } from "./BulkAssignTagsDialog"
 import { BulkDeleteLibraryItemsDialog } from "./BulkDeleteLibraryItemsDialog"
+import { BulkEditLibraryItemsDialog } from "./BulkEditLibraryItemsDialog"
 import { useRevealAll } from "./RevealAllContext"
 import { useSelection } from "./SelectionContext"
 
@@ -48,8 +65,19 @@ export function LibraryToolbar() {
   const updateSettings = useUpdateSettings()
   const { revealAll, toggleRevealAll } = useRevealAll()
   const { selectionActive, approxCount, clear } = useSelection()
+  const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [bulkTagsOpen, setBulkTagsOpen] = useState(false)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  // Draft copies of the filter/sort controls that live inside the dialog —
+  // edits only touch this local state, so opening the picker doesn't
+  // re-filter/re-sort the grid on every click. Applying commits everything
+  // in one settings PATCH + one URL update instead of one request per field.
+  const [draftSortKey, setDraftSortKey] = useState<LibrarySortKey>("downloadedAt")
+  const [draftSortDir, setDraftSortDir] = useState<LibrarySortDir>("desc")
+  const [draftCollectionId, setDraftCollectionId] = useState(NONE)
+  const [draftYear, setDraftYear] = useState(NONE)
+  const [draftTags, setDraftTags] = useState<string[]>([])
 
   const view = settings?.libraryView === "folders" ? "folders" : "grid"
   const mode = (settings?.libraryMode as "manage" | "details") || "manage"
@@ -72,6 +100,9 @@ export function LibraryToolbar() {
   const pageSize = settings?.libraryPageSize || 48
 
   const years = facets?.years ?? []
+  // Sort isn't counted here — it always has a value, so it wouldn't make a
+  // meaningful "N active" indicator the way an unset-by-default filter does.
+  const activeFilterCount = (collectionId !== NONE ? 1 : 0) + (year !== NONE ? 1 : 0) + selectedTags.length
 
   const update = (key: string, value: string | null) => {
     const next = new URLSearchParams(searchParams)
@@ -97,11 +128,6 @@ export function LibraryToolbar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput])
 
-  const toggleTag = (name: string) => {
-    const next = selectedTags.includes(name) ? selectedTags.filter((t) => t !== name) : [...selectedTags, name]
-    update("tags", next.length > 0 ? next.join(",") : null)
-  }
-
   const setView = (next: "grid" | "folders") => {
     updateSettings.mutate({ libraryView: next })
     // Switching modes makes a stale "collection" filter/location ambiguous
@@ -119,10 +145,40 @@ export function LibraryToolbar() {
     if (next !== "manage") clear()
   }
 
+  const openFilters = () => {
+    setDraftSortKey(sortKey)
+    setDraftSortDir(sortDir)
+    setDraftCollectionId(collectionId)
+    setDraftYear(year)
+    setDraftTags(selectedTags)
+    setFiltersOpen(true)
+  }
+
+  const toggleDraftTag = (name: string) => {
+    setDraftTags((prev) => (prev.includes(name) ? prev.filter((t) => t !== name) : [...prev, name]))
+  }
+
+  const applyFilters = () => {
+    if (draftSortKey !== sortKey || draftSortDir !== sortDir) {
+      updateSettings.mutate({ librarySortKey: draftSortKey, librarySortDir: draftSortDir })
+    }
+    const next = new URLSearchParams(searchParams)
+    for (const [key, value] of [
+      ["collection", draftCollectionId],
+      ["year", draftYear],
+      ["tags", draftTags.join(",")],
+    ] as const) {
+      if (value === "" || value === NONE) next.delete(key)
+      else next.set(key, value)
+    }
+    setSearchParams(next, { replace: true })
+    setFiltersOpen(false)
+  }
+
   return (
     <div className="space-y-2">
     <div className="flex flex-wrap items-center gap-2">
-      <div className="relative min-w-[140px] flex-1 sm:min-w-[200px]">
+      <div className="relative min-w-[140px] max-w-[280px] flex-1 sm:min-w-[200px] sm:max-w-[400px]">
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search title, uploader, artist, description…"
@@ -147,88 +203,20 @@ export function LibraryToolbar() {
         )}
       </div>
 
-      <Select value={sortKey} onValueChange={(v) => updateSettings.mutate({ librarySortKey: v })}>
-        <SelectTrigger className="w-[130px] sm:w-[170px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {SORT_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Button
-        variant="outline"
-        size="icon"
-        title={sortDir === "asc" ? "Ascending" : "Descending"}
-        onClick={() => updateSettings.mutate({ librarySortDir: sortDir === "asc" ? "desc" : "asc" })}
-      >
-        {sortDir === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
+      <Button variant="outline" onClick={openFilters}>
+        <SlidersHorizontal className="h-4 w-4" />
+        Filters &amp; Sort
+        {activeFilterCount > 0 && (
+          <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
+            {activeFilterCount}
+          </span>
+        )}
       </Button>
-
-      {view === "grid" && (
-        <Select value={collectionId} onValueChange={(v) => update("collection", v)}>
-          <SelectTrigger className="w-[130px] sm:w-[160px]">
-            <SelectValue placeholder="Collection" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>All collections</SelectItem>
-            {collections?.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>
-                {c.path}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
-      <Select value={year} onValueChange={(v) => update("year", v)}>
-        <SelectTrigger className="w-[100px] sm:w-[110px]">
-          <SelectValue placeholder="Year" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE}>All years</SelectItem>
-          {years.map((y) => (
-            <SelectItem key={y} value={String(y)}>
-              {y}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="w-[110px] justify-start sm:w-[130px]">
-            <Tags className="h-4 w-4" />
-            {selectedTags.length > 0 ? `Tags (${selectedTags.length})` : "Tags"}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          {(allTags ?? []).length === 0 ? (
-            <p className="px-2 py-1.5 text-sm text-muted-foreground">No tags yet</p>
-          ) : (
-            allTags?.map((tag) => (
-              <DropdownMenuCheckboxItem
-                key={tag.id}
-                checked={selectedTags.includes(tag.name)}
-                onSelect={(e) => {
-                  e.preventDefault()
-                  toggleTag(tag.name)
-                }}
-              >
-                {tag.name}
-              </DropdownMenuCheckboxItem>
-            ))
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
 
       <Button
         variant={revealAll ? "secondary" : "outline"}
         size="icon"
+        className="ml-auto"
         title={revealAll ? "Hide all private items" : "Reveal all private items"}
         disabled={!hasBlurred}
         onClick={toggleRevealAll}
@@ -316,14 +304,120 @@ export function LibraryToolbar() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-48">
+            <DropdownMenuItem onSelect={() => setBulkEditOpen(true)}>Edit…</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setBulkTagsOpen(true)}>Assign tags…</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setBulkDeleteOpen(true)}>Delete selected…</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <BulkEditLibraryItemsDialog open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
         <BulkAssignTagsDialog open={bulkTagsOpen} onOpenChange={setBulkTagsOpen} />
         <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
       </div>
     )}
+
+    <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Filters &amp; Sort</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Sort by</Label>
+            <div className="flex gap-2">
+              <Select value={draftSortKey} onValueChange={(v) => setDraftSortKey(v as LibrarySortKey)}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="icon"
+                title={draftSortDir === "asc" ? "Ascending" : "Descending"}
+                onClick={() => setDraftSortDir(draftSortDir === "asc" ? "desc" : "asc")}
+              >
+                {draftSortDir === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+
+          {view === "grid" && (
+            <div className="space-y-2">
+              <Label>Collection</Label>
+              <Select value={draftCollectionId} onValueChange={setDraftCollectionId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Collection" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>All collections</SelectItem>
+                  {collections?.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.path}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Year</Label>
+            <Select value={draftYear} onValueChange={setDraftYear}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>All years</SelectItem>
+                {years.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full justify-start">
+                  <Tags className="h-4 w-4" />
+                  {draftTags.length > 0 ? `Tags (${draftTags.length})` : "Tags"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">
+                {(allTags ?? []).length === 0 ? (
+                  <p className="px-2 py-1.5 text-sm text-muted-foreground">No tags yet</p>
+                ) : (
+                  allTags?.map((tag) => (
+                    <DropdownMenuCheckboxItem
+                      key={tag.id}
+                      checked={draftTags.includes(tag.name)}
+                      onSelect={(e) => {
+                        e.preventDefault()
+                        toggleDraftTag(tag.name)
+                      }}
+                    >
+                      {tag.name}
+                    </DropdownMenuCheckboxItem>
+                  ))
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={applyFilters}>Apply</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </div>
   )
 }

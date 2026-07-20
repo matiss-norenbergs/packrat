@@ -106,7 +106,7 @@ func run() error {
 	tagsRepo := repository.NewTagsRepo(conn)
 	artistsRepo := repository.NewArtistsRepo(conn)
 	usersRepo := repository.NewUsersRepo(conn)
-	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath)
+	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath, settingsRepo)
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
 
@@ -179,8 +179,17 @@ func run() error {
 	})
 
 	srv := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: router,
+		Addr:              ":" + cfg.Port,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       5 * time.Minute,
+		IdleTimeout:       2 * time.Minute,
+		// No WriteTimeout: /media-files streams multi-gigabyte video files to
+		// slow LAN clients, and it would also clip the response side of every
+		// active /ws connection (which relies on its own read/write deadlines
+		// in internal/ws/client.go, not this server-wide one) if it ever fired
+		// mid-write. ReadHeaderTimeout + IdleTimeout + the request body cap in
+		// router.go cover the slowloris-style DoS vectors this fix targets.
 	}
 
 	go func() {

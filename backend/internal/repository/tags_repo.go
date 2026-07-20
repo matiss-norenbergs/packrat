@@ -18,19 +18,36 @@ import (
 var ErrTagNameInUse = errors.New("tag name already in use")
 
 type TagsRepo struct {
-	db *sql.DB
+	db dbtx
+
+	// rawDB is always the real connection pool, never a WithTx substitution —
+	// SetForLibraryItem/SetForLibraryItems open their own subordinate
+	// transaction and SQLite doesn't support nesting one inside another, so
+	// those two methods must always start from a real *sql.DB.
+	rawDB *sql.DB
 
 	// mu serializes every check-then-write name-uniqueness sequence
 	// (Create, Rename, GetOrCreateByNames) — same race CollectionsRepo.mu
 	// prevents (see its doc comment in collections_repo.go): tag name
 	// uniqueness is enforced at the app layer via nameInUse, not purely by
 	// the DB constraint, so concurrent requests could otherwise both see a
-	// name as free and both create it.
-	mu sync.Mutex
+	// name as free and both create it. A pointer so WithTx copies share the
+	// same lock as the original.
+	mu *sync.Mutex
 }
 
 func NewTagsRepo(db *sql.DB) *TagsRepo {
-	return &TagsRepo{db: db}
+	return &TagsRepo{db: db, rawDB: db, mu: &sync.Mutex{}}
+}
+
+// WithTx returns a copy of r whose queries run against tx instead of the
+// underlying connection pool, so its writes commit or roll back together
+// with whatever else the caller does on tx. Shares r's mutex, so uniqueness
+// locking still applies across both the original and the copy.
+func (r *TagsRepo) WithTx(tx *sql.Tx) *TagsRepo {
+	cp := *r
+	cp.db = tx
+	return &cp
 }
 
 // nameInUse checks name uniqueness globally — unlike collections, tags have
@@ -194,7 +211,7 @@ func (r *TagsRepo) GetOrCreateByNames(ctx context.Context, names []string) ([]in
 // SetForLibraryItem replaces every tag association for libraryID with
 // exactly tagIDs.
 func (r *TagsRepo) SetForLibraryItem(ctx context.Context, libraryID int64, tagIDs []int64) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.rawDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("beginning tag update transaction: %w", err)
 	}
@@ -224,7 +241,7 @@ func (r *TagsRepo) SetForLibraryItems(ctx context.Context, libraryIDs []int64, t
 		return nil
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.rawDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("beginning bulk tag update transaction: %w", err)
 	}

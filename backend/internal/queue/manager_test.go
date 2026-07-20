@@ -2,9 +2,11 @@ package queue
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
+	"packrat/backend/internal/nametemplate"
 	"packrat/backend/internal/ws"
 )
 
@@ -66,4 +68,46 @@ func TestClassifyRunCtxErr(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestResolveFilename covers the precedence order documented on
+// models.Download.FilenameTemplate: literal Filename > FilenameTemplate >
+// legacy FilenamePrefix > yt-dlp's own default naming.
+func TestResolveFilename(t *testing.T) {
+	vars := nametemplate.Vars{Artist: "Some Artist", Title: "Some Title"}
+
+	t.Run("literal filename wins over everything", func(t *testing.T) {
+		filename, extra := resolveFilename("Literal Name", strPtr("{artist}/{title}"), strPtr("Prefix"), "Effective Title", vars)
+		if filename != "Literal Name" || extra != nil {
+			t.Fatalf("got filename=%q extra=%v, want %q nil", filename, extra, "Literal Name")
+		}
+	})
+
+	t.Run("template wins over legacy prefix", func(t *testing.T) {
+		filename, extra := resolveFilename("", strPtr("{artist}/{title}"), strPtr("Prefix"), "Effective Title", vars)
+		if filename != "Some Title" || !reflect.DeepEqual(extra, []string{"Some Artist"}) {
+			t.Fatalf("got filename=%q extra=%v, want %q [%q]", filename, extra, "Some Title", "Some Artist")
+		}
+	})
+
+	t.Run("legacy prefix applies when no template set", func(t *testing.T) {
+		filename, extra := resolveFilename("", nil, strPtr("Matt.Iceberg.S01E01"), "My big moment", nametemplate.Vars{})
+		if filename != "Matt.Iceberg.S01E01 My big moment" || extra != nil {
+			t.Fatalf("got filename=%q extra=%v, want %q nil", filename, extra, "Matt.Iceberg.S01E01 My big moment")
+		}
+	})
+
+	t.Run("nothing set falls through to yt-dlp default", func(t *testing.T) {
+		filename, extra := resolveFilename("", nil, nil, "Effective Title", nametemplate.Vars{})
+		if filename != "" || extra != nil {
+			t.Fatalf("got filename=%q extra=%v, want empty/nil", filename, extra)
+		}
+	})
+
+	t.Run("blank template falls through to legacy prefix", func(t *testing.T) {
+		filename, extra := resolveFilename("", strPtr("   "), strPtr("Prefix"), "Effective Title", nametemplate.Vars{})
+		if filename != "Prefix Effective Title" || extra != nil {
+			t.Fatalf("got filename=%q extra=%v, want %q nil", filename, extra, "Prefix Effective Title")
+		}
+	})
 }

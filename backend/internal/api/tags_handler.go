@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -100,7 +101,9 @@ func DeleteTag(repo *repository.TagsRepo) gin.HandlerFunc {
 // BulkDeleteTags deletes every listed tag, best-effort — an id that's
 // already gone (ErrNotFound) is skipped rather than failing the batch,
 // since deleting a tag never fails for being "in use" (library_tags cascades).
-func BulkDeleteTags(repo *repository.TagsRepo) gin.HandlerFunc {
+// The deletes run inside one transaction, so a genuine mid-batch failure
+// rolls back every row already deleted instead of leaving a partial batch.
+func BulkDeleteTags(db *sql.DB, repo *repository.TagsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BulkDeleteRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -108,9 +111,17 @@ func BulkDeleteTags(repo *repository.TagsRepo) gin.HandlerFunc {
 			return
 		}
 
+		tx, err := db.BeginTx(c.Request.Context(), nil)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		defer tx.Rollback()
+		txRepo := repo.WithTx(tx)
+
 		var resp BulkDeleteResponse
 		for _, id := range req.IDs {
-			if err := repo.Delete(c.Request.Context(), id); err != nil {
+			if err := txRepo.Delete(c.Request.Context(), id); err != nil {
 				if errors.Is(err, repository.ErrNotFound) {
 					continue
 				}
@@ -118,6 +129,11 @@ func BulkDeleteTags(repo *repository.TagsRepo) gin.HandlerFunc {
 				return
 			}
 			resp.Deleted++
+		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
 		c.JSON(http.StatusOK, resp)
 	}

@@ -29,9 +29,11 @@ import { useArtists } from "@/hooks/useArtists"
 import { useSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import { formatDuration } from "@/lib/utils"
+import { resolveFilenameTemplatePreview } from "@/lib/nametemplate"
 import { resolveInheritedArtistId } from "@/lib/collectionTree"
 import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
 import { TagInput } from "@/components/library/TagInput"
+import { FilenameTemplateBuilderDialog } from "./FilenameTemplateBuilderDialog"
 import type { AudioFormat, DownloadType, PlaylistMode, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -45,33 +47,18 @@ const PLAYLIST_MODE_OPTIONS: { value: PlaylistMode; label: string }[] = [
   { value: "first_n", label: "First N" },
 ]
 
-// Joins the included parts with a plain space, then replaces every space in
-// the result with the chosen separator — so a multi-word field like an
-// artist name gets the separator between its own words too, not just
-// between fields. E.g. artist "Matt Iceberg" + season 1 + sequence 1 with
-// separator "." -> "Matt.Iceberg.S01E01".
-function buildFilenamePrefix(opts: {
-  artist: string
-  season: string
-  sequence: string
-  year: string
-  includeArtist: boolean
-  includeEpisode: boolean
-  includeYear: boolean
-  separator: string
-}): string {
-  const parts: string[] = []
-  if (opts.includeArtist && opts.artist.trim()) parts.push(opts.artist.trim())
-  if (opts.includeEpisode && (opts.season.trim() || opts.sequence.trim())) {
-    const s = opts.season.trim() ? `S${opts.season.trim().padStart(2, "0")}` : ""
-    const e = opts.sequence.trim() ? `E${opts.sequence.trim().padStart(2, "0")}` : ""
-    parts.push(`${s}${e}`)
-  }
-  if (opts.includeYear && opts.year.trim()) parts.push(opts.year.trim())
-  if (parts.length === 0) return ""
-  const sep = opts.separator || " "
-  return parts.join(" ").split(" ").join(sep)
-}
+// Available {variable} tokens for the Filename Template field, in the order
+// shown as insert-buttons below the input.
+const FILENAME_TEMPLATE_TOKENS = [
+  "{title}",
+  "{artist}",
+  "{uploader}",
+  "{date}",
+  "{year}",
+  "{season}",
+  "{sequence}",
+  "{collection}",
+] as const
 
 export function NewDownloadDialog() {
   const [open, setOpen] = useState(false)
@@ -89,10 +76,7 @@ export function NewDownloadDialog() {
   const [year, setYear] = useState("")
   const [seasonNumber, setSeasonNumber] = useState("")
   const [sequenceNumber, setSequenceNumber] = useState("")
-  const [includeArtist, setIncludeArtist] = useState(false)
-  const [includeEpisode, setIncludeEpisode] = useState(false)
-  const [includeYear, setIncludeYear] = useState(false)
-  const [separator, setSeparator] = useState(".")
+  const [filenameTemplate, setFilenameTemplate] = useState("")
   const [tags, setTags] = useState<string[]>([])
 
   const [playlistMode, setPlaylistMode] = useState<PlaylistMode>("entire")
@@ -138,10 +122,7 @@ export function NewDownloadDialog() {
     setYear("")
     setSeasonNumber("")
     setSequenceNumber("")
-    setIncludeArtist(false)
-    setIncludeEpisode(false)
-    setIncludeYear(false)
-    setSeparator(".")
+    setFilenameTemplate("")
     setTags([])
     setPlaylistMode("entire")
     setPlaylistStart("")
@@ -170,22 +151,26 @@ export function NewDownloadDialog() {
         setArtistId(String(inheritedArtistId))
         setAdvancedOpen(true)
       }
+      if (!filenameTemplate.trim() && collection.filenameTemplate) {
+        setFilenameTemplate(collection.filenameTemplate)
+        setAdvancedOpen(true)
+      }
     }
   }
 
   const artistName = artistId === NO_ARTIST ? "" : (artists?.find((a) => String(a.id) === artistId)?.name ?? "")
-
-  const filenamePrefix = buildFilenamePrefix({
+  const collectionName = collectionId === NO_COLLECTION ? "" : (collections?.find((c) => String(c.id) === collectionId)?.name ?? "")
+  const previewTitle = titleOverride.trim() || preview?.title
+  const filenameTemplatePreview = resolveFilenameTemplatePreview(filenameTemplate, {
+    title: previewTitle,
+    uploader: preview?.uploader,
+    uploadDate: preview?.uploadDate,
     artist: artistName,
+    year,
     season: seasonNumber,
     sequence: sequenceNumber,
-    year,
-    includeArtist,
-    includeEpisode,
-    includeYear,
-    separator,
+    collection: collectionName,
   })
-  const previewTitle = titleOverride.trim() || preview?.title
 
   const handleSubmit = () => {
     if (!url.trim()) return
@@ -207,7 +192,7 @@ export function NewDownloadDialog() {
         year: parsedYear != null && !Number.isNaN(parsedYear) ? parsedYear : undefined,
         seasonNumber: parsedSeason != null && !Number.isNaN(parsedSeason) ? parsedSeason : undefined,
         sequenceNumber: parsedSequence != null && !Number.isNaN(parsedSequence) ? parsedSequence : undefined,
-        filenamePrefix: filenamePrefix || undefined,
+        filenameTemplate: filenameTemplate.trim() || undefined,
         tags: tags.length > 0 ? tags : undefined,
       },
       {
@@ -481,12 +466,12 @@ export function NewDownloadDialog() {
               <Input
                 id="filename"
                 placeholder={
-                  filenamePrefix ? "Disabled — a filename prefix is set below" : "Leave blank to use the video title"
+                  filenameTemplate.trim() ? "Disabled — a filename template is set below" : "Leave blank to use the video title"
                 }
                 value={filename}
-                disabled={!!filenamePrefix}
+                disabled={!!filenameTemplate.trim()}
                 onChange={(e) => setFilename(e.target.value)}
-                title={filenamePrefix ? "Clear the filename prefix in Advanced to set a literal filename instead" : undefined}
+                title={filenameTemplate.trim() ? "Clear the filename template in Advanced to set a literal filename instead" : undefined}
               />
             </div>
           )}
@@ -565,55 +550,49 @@ export function NewDownloadDialog() {
                 </div>
 
                 <div className="space-y-2 rounded-md border p-3">
-                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Filename Prefix
+                  <Label htmlFor="dl-filename-template" className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Filename Template
                   </Label>
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="dl-prefix-artist"
-                        checked={includeArtist}
-                        onCheckedChange={(v) => setIncludeArtist(v === true)}
-                      />
-                      <Label htmlFor="dl-prefix-artist" className="font-normal">
-                        Artist
-                      </Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="dl-prefix-episode"
-                        checked={includeEpisode}
-                        onCheckedChange={(v) => setIncludeEpisode(v === true)}
-                      />
-                      <Label htmlFor="dl-prefix-episode" className="font-normal">
-                        Season/Episode
-                      </Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="dl-prefix-year"
-                        checked={includeYear}
-                        onCheckedChange={(v) => setIncludeYear(v === true)}
-                      />
-                      <Label htmlFor="dl-prefix-year" className="font-normal">
-                        Year
-                      </Label>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="dl-separator" className="shrink-0 font-normal">
-                      Separator
-                    </Label>
+                  <div className="relative">
                     <Input
-                      id="dl-separator"
-                      className="w-16"
-                      value={separator}
-                      onChange={(e) => setSeparator(e.target.value)}
+                      id="dl-filename-template"
+                      placeholder="{artist}/{title}"
+                      className="pr-8"
+                      value={filenameTemplate}
+                      onChange={(e) => setFilenameTemplate(e.target.value)}
+                    />
+                    <FilenameTemplateBuilderDialog
+                      value={filenameTemplate}
+                      onApply={setFilenameTemplate}
+                      previewVars={{
+                        title: previewTitle,
+                        uploader: preview?.uploader,
+                        uploadDate: preview?.uploadDate,
+                        artist: artistName,
+                        year,
+                        season: seasonNumber,
+                        sequence: sequenceNumber,
+                        collection: collectionName,
+                      }}
                     />
                   </div>
-                  {filenamePrefix && (
+                  <div className="flex flex-wrap gap-1">
+                    {FILENAME_TEMPLATE_TOKENS.map((token) => (
+                      <Button
+                        key={token}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-6 px-2 font-mono text-xs"
+                        onClick={() => setFilenameTemplate((v) => v + token)}
+                      >
+                        {token}
+                      </Button>
+                    ))}
+                  </div>
+                  {filenameTemplate.trim() && (
                     <p className="truncate text-xs text-muted-foreground">
-                      Filename: <span className="font-mono">{filenamePrefix} {previewTitle || "(video title)"}</span>
+                      Resolves to: <span className="font-mono">{filenameTemplatePreview || "(nothing yet)"}</span>
                       {filename.trim() && " — ignored, a literal Filename is set above"}
                     </p>
                   )}

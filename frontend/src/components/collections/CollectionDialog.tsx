@@ -23,6 +23,7 @@ import {
 import { useCreateCollection, useUpdateCollection } from "@/hooks/useCollections"
 import { useSettings } from "@/hooks/useSettings"
 import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
+import { FilenameTemplateBuilderDialog } from "@/components/downloads/FilenameTemplateBuilderDialog"
 import type { Collection, DownloadType, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -48,6 +49,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
     collection?.seasonNumber != null ? String(collection.seasonNumber) : "",
   )
   const [artistId, setArtistId] = useState(collection?.artistId != null ? String(collection.artistId) : NO_ARTIST)
+  const [filenameTemplate, setFilenameTemplate] = useState(collection?.filenameTemplate ?? "")
 
   const { data: settings } = useSettings()
   const createCollection = useCreateCollection()
@@ -66,6 +68,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       setJellyfinLibraryId(collection?.jellyfinLibraryId ?? "")
       setSeasonNumber(collection?.seasonNumber != null ? String(collection.seasonNumber) : "")
       setArtistId(collection?.artistId != null ? String(collection.artistId) : NO_ARTIST)
+      setFilenameTemplate(collection?.filenameTemplate ?? "")
     }
     setOpen(next)
   }
@@ -82,6 +85,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       jellyfinLibraryId: jellyfinLibraryId.trim() || null,
       seasonNumber: parsedSeason != null && !Number.isNaN(parsedSeason) ? parsedSeason : null,
       artistId: artistId === NO_ARTIST ? null : Number(artistId),
+      filenameTemplate: filenameTemplate.trim() || undefined,
       ...(isEdit ? {} : { parentId }),
     }
 
@@ -190,6 +194,24 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
                 New downloads added to this collection default their own Season # to this value.
               </p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="collection-filename-template">Filename Template (optional)</Label>
+            <div className="relative">
+              <Input
+                id="collection-filename-template"
+                placeholder="e.g. {artist}/{title}"
+                className="pr-8"
+                value={filenameTemplate}
+                onChange={(e) => setFilenameTemplate(e.target.value)}
+              />
+              <FilenameTemplateBuilderDialog value={filenameTemplate} onApply={setFilenameTemplate} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              New downloads added to this collection default their own Filename Template to this
+              value. Available tokens: {"{title} {uploader} {date} {artist} {year} {season} {sequence} {collection}"}
+            </p>
           </div>
 
           <div className="flex items-start gap-2">

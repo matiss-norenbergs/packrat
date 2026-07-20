@@ -15,16 +15,25 @@ import (
 var ErrArtistNameInUse = errors.New("artist name already in use")
 
 type ArtistsRepo struct {
-	db *sql.DB
+	db dbtx
 
 	// mu serializes every check-then-write name-uniqueness sequence
 	// (Create, Rename) — same race TagsRepo.mu prevents (see its doc
-	// comment in tags_repo.go).
-	mu sync.Mutex
+	// comment in tags_repo.go). A pointer so WithTx copies share the same
+	// lock as the original.
+	mu *sync.Mutex
 }
 
 func NewArtistsRepo(db *sql.DB) *ArtistsRepo {
-	return &ArtistsRepo{db: db}
+	return &ArtistsRepo{db: db, mu: &sync.Mutex{}}
+}
+
+// WithTx returns a copy of r whose queries run against tx instead of the
+// underlying connection pool — see TagsRepo.WithTx for the full rationale.
+func (r *ArtistsRepo) WithTx(tx *sql.Tx) *ArtistsRepo {
+	cp := *r
+	cp.db = tx
+	return &cp
 }
 
 func (r *ArtistsRepo) nameInUse(ctx context.Context, name string, excludeID int64) (bool, error) {

@@ -25,4 +25,9 @@ const (
 	SettingJellyfinAPIKey           = "jellyfin_api_key"
 	SettingJellyfinRefreshMode      = "jellyfin_refresh_mode" // "entire" | "specific" | "none"; default "none"
 	SettingLibraryAutoplay          = "library_autoplay"      // bool, default true — matches the player's pre-existing hardcoded behavior
+	SettingYtdlpCookiesBrowser      = "ytdlp_cookies_browser" // "" | one of yt-dlp's supported browser names; "" = disabled
+	SettingYtdlpCookiesProfile      = "ytdlp_cookies_profile" // optional profile name, only meaningful when CookiesBrowser is set
+	SettingYtdlpProxy               = "ytdlp_proxy"           // e.g. "socks5://127.0.0.1:1080"; "" = disabled
+	SettingYtdlpRateLimit           = "ytdlp_rate_limit"      // e.g. "500K"; "" = disabled
+	SettingYtdlpRetries             = "ytdlp_retries"         // int as string; 0 = yt-dlp's own default (10), not passed explicitly
 )

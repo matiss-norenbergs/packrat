@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -12,6 +13,19 @@ import (
 	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/queue"
 )
+
+// isHTTPURL reports whether raw parses as an absolute http(s) URL with a
+// host. The `url` binding tag alone accepts any scheme (file://, data:,
+// etc.) since it only checks "this parses as a URL" — handlers that hand a
+// request's URL field to yt-dlp call this afterward as a defense-in-depth
+// check independent of whatever protocol allowlisting yt-dlp itself does.
+func isHTTPURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	return (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
 
 type SetupRequest struct {
 	Username string `json:"username" binding:"required"`
@@ -52,6 +66,10 @@ type CreateDownloadRequest struct {
 	// FilenamePrefix is combined with the effective title at completion
 	// time to build the final filename — ignored if Filename is also set.
 	FilenamePrefix *string `json:"filenamePrefix"`
+	// FilenameTemplate is the newer, more general replacement for
+	// FilenamePrefix (see internal/nametemplate) — takes priority over it,
+	// but still loses to a literal Filename.
+	FilenameTemplate *string `json:"filenameTemplate"`
 	// Tags are applied to the resulting library item once the download
 	// completes (tag names, created if missing) — currently only set by
 	// the backup/library import flow (see ImportLibrary), which knows the
@@ -71,7 +89,8 @@ type PreviewDownloadRequest struct {
 type PreviewDownloadResponse struct {
 	Title      string  `json:"title"`
 	Uploader   string  `json:"uploader"`
-	Duration   int     `json:"duration"` // seconds, rounded from yt-dlp's float
+	UploadDate string  `json:"uploadDate"` // yt-dlp upload_date, YYYYMMDD; "" if unknown
+	Duration   int     `json:"duration"`   // seconds, rounded from yt-dlp's float
 	Thumbnail  string  `json:"thumbnail"`
 	Resolution *string `json:"resolution"` // nil unless yt-dlp reported both width and height
 
@@ -107,10 +126,11 @@ func toPreviewDownloadResponse(m *downloader.Metadata, dup *models.LibraryItem) 
 	}
 
 	resp := PreviewDownloadResponse{
-		Title:     m.Title,
-		Uploader:  m.Uploader,
-		Duration:  int(m.Duration),
-		Thumbnail: m.Thumbnail,
+		Title:      m.Title,
+		Uploader:   m.Uploader,
+		UploadDate: m.UploadDate,
+		Duration:   int(m.Duration),
+		Thumbnail:  m.Thumbnail,
 	}
 	if m.Width > 0 && m.Height > 0 {
 		res := fmt.Sprintf("%dx%d", m.Width, m.Height)
@@ -384,6 +404,7 @@ type CreateCollectionRequest struct {
 	RootPath            string  `json:"rootPath" binding:"required"`
 	DefaultQuality      string  `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
 	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	FilenameTemplate    string  `json:"filenameTemplate"`
 	IsPrivate           bool    `json:"isPrivate"`
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 	SeasonNumber        *int    `json:"seasonNumber"`
@@ -395,6 +416,7 @@ type UpdateCollectionRequest struct {
 	RootPath            string  `json:"rootPath" binding:"required"`
 	DefaultQuality      string  `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
 	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	FilenameTemplate    string  `json:"filenameTemplate"`
 	IsPrivate           bool    `json:"isPrivate"`
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 	SeasonNumber        *int    `json:"seasonNumber"`
@@ -409,6 +431,7 @@ type CollectionResponse struct {
 	Path                string `json:"path"`
 	DefaultQuality      string `json:"defaultQuality"`
 	DefaultDownloadType string `json:"defaultDownloadType"`
+	FilenameTemplate    string `json:"filenameTemplate"`
 	IsPrivate           bool   `json:"isPrivate"`
 	SeasonNumber        *int   `json:"seasonNumber"`
 	ArtistID            *int64 `json:"artistId"`
@@ -505,6 +528,11 @@ type SettingsResponse struct {
 	JellyfinAPIKey           string   `json:"jellyfinApiKey"`
 	JellyfinRefreshMode      string   `json:"jellyfinRefreshMode"`
 	LibraryAutoplay          bool     `json:"libraryAutoplay"`
+	YtdlpCookiesBrowser      string   `json:"ytdlpCookiesBrowser"`
+	YtdlpCookiesProfile      string   `json:"ytdlpCookiesProfile"`
+	YtdlpProxy               string   `json:"ytdlpProxy"`
+	YtdlpRateLimit           string   `json:"ytdlpRateLimit"`
+	YtdlpRetries             int      `json:"ytdlpRetries"`
 }
 
 type UpdateSettingsRequest struct {
@@ -530,6 +558,11 @@ type UpdateSettingsRequest struct {
 	JellyfinAPIKey           *string   `json:"jellyfinApiKey"`
 	JellyfinRefreshMode      *string   `json:"jellyfinRefreshMode" binding:"omitempty,oneof=entire specific none"`
 	LibraryAutoplay          *bool     `json:"libraryAutoplay"`
+	YtdlpCookiesBrowser      *string   `json:"ytdlpCookiesBrowser"`
+	YtdlpCookiesProfile      *string   `json:"ytdlpCookiesProfile"`
+	YtdlpProxy               *string   `json:"ytdlpProxy"`
+	YtdlpRateLimit           *string   `json:"ytdlpRateLimit"`
+	YtdlpRetries             *int      `json:"ytdlpRetries" binding:"omitempty,min=0"`
 }
 
 func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int) CollectionResponse {
@@ -541,6 +574,7 @@ func toCollectionResponse(c models.Collection, path string, itemCount int, effec
 		Path:                path,
 		DefaultQuality:      c.DefaultQuality,
 		DefaultDownloadType: c.DefaultDownloadType,
+		FilenameTemplate:    c.FilenameTemplate,
 		IsPrivate:           c.IsPrivate,
 		SeasonNumber:        c.SeasonNumber,
 		ArtistID:            c.ArtistID,

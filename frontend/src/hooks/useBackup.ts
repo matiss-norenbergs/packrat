@@ -5,6 +5,7 @@ import {
   exportSettingsBackup,
   importLibraryBackup,
   importSettingsBackup,
+  previewLibraryImport,
 } from "@/lib/api"
 import { downloadJson } from "@/lib/utils"
 import { artistsQueryKey } from "./useArtists"
@@ -54,6 +55,15 @@ export function useImportSettings() {
     },
     onError: (err: Error) => {
       toast.error(`Import failed: ${err.message}`)
+    },
+  })
+}
+
+export function useLibraryImportPreview() {
+  return useMutation({
+    mutationFn: ({ data, password }: { data: string; password: string }) => previewLibraryImport(data, password),
+    onError: (err: Error) => {
+      toast.error(`Preview failed: ${err.message}`)
     },
   })
 }

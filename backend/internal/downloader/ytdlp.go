@@ -12,16 +12,39 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"packrat/backend/internal/repository"
 )
 
 type YtDlpService struct {
-	BinPath    string
-	FFmpegPath string
-	PipPath    string
+	BinPath      string
+	FFmpegPath   string
+	PipPath      string
+	SettingsRepo *repository.SettingsRepo
 }
 
-func NewYtDlpService(binPath, ffmpegPath, pipPath string) *YtDlpService {
-	return &YtDlpService{BinPath: binPath, FFmpegPath: ffmpegPath, PipPath: pipPath}
+func NewYtDlpService(binPath, ffmpegPath, pipPath string, settingsRepo *repository.SettingsRepo) *YtDlpService {
+	return &YtDlpService{BinPath: binPath, FFmpegPath: ffmpegPath, PipPath: pipPath, SettingsRepo: settingsRepo}
+}
+
+// processTreeKillGrace bounds how long Wait() waits for killProcessTree's
+// own kill signal/command to actually take effect before exec forcibly
+// tears down the subprocess's I/O — a safety net, not the normal path.
+const processTreeKillGrace = 10 * time.Second
+
+// newTreeKillCmd builds a Cmd whose cancellation (ctx done, or the
+// caller-imposed timeout below) kills the whole process tree rooted at it,
+// not just the direct child — see procgroup_unix.go/procgroup_windows.go.
+// Every yt-dlp/ffmpeg invocation in this file can spawn its own ffmpeg
+// children (format merge, --embed-metadata, thumbnail conversion), which
+// exec.CommandContext's default single-process kill would otherwise orphan
+// on cancel/timeout.
+func newTreeKillCmd(ctx context.Context, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
+	configureProcessGroup(cmd)
+	cmd.Cancel = func() error { return killProcessTree(cmd) }
+	cmd.WaitDelay = processTreeKillGrace
+	return cmd
 }
 
 // metadataFetchTimeout is a ceiling, not a fixed wait — bumped from the
@@ -42,7 +65,9 @@ func (s *YtDlpService) FetchMetadata(ctx context.Context, url string) (*Metadata
 	ctx, cancel := context.WithTimeout(ctx, metadataFetchTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, s.BinPath, "--dump-single-json", "--flat-playlist", "--skip-download", "--no-warnings", url)
+	args := append([]string{"--dump-single-json", "--flat-playlist", "--skip-download", "--no-warnings"}, s.globalArgs(ctx)...)
+	args = append(args, url)
+	cmd := newTreeKillCmd(ctx, s.BinPath, args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if stderr, ok := err.(*exec.ExitError); ok {
@@ -73,10 +98,11 @@ func (s *YtDlpService) FetchThumbnail(ctx context.Context, url, destDir, baseFil
 		"--no-playlist", "--no-warnings",
 		"--ffmpeg-location", resolveFFmpegLocation(s.FFmpegPath),
 		"-o", outputTemplate,
-		url,
 	}
+	args = append(args, s.globalArgs(ctx)...)
+	args = append(args, url)
 
-	cmd := exec.CommandContext(ctx, s.BinPath, args...)
+	cmd := newTreeKillCmd(ctx, s.BinPath, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("yt-dlp thumbnail fetch failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -125,7 +151,7 @@ func (s *YtDlpService) EmbedMetadata(ctx context.Context, mediaPath, title strin
 	}
 	args = append(args, tmpPath)
 
-	cmd := exec.CommandContext(ctx, s.FFmpegPath, args...)
+	cmd := newTreeKillCmd(ctx, s.FFmpegPath, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		os.Remove(tmpPath)
@@ -152,7 +178,7 @@ func (s *YtDlpService) ExtractFrame(ctx context.Context, mediaPath string, atSec
 		"-y", "-ss", strconv.FormatFloat(atSeconds, 'f', 3, 64), "-i", mediaPath,
 		"-frames:v", "1", "-q:v", "2", "-f", "image2", "-vcodec", "mjpeg", "-",
 	}
-	cmd := exec.CommandContext(ctx, s.FFmpegPath, args...)
+	cmd := newTreeKillCmd(ctx, s.FFmpegPath, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -182,8 +208,8 @@ const logTailCap = 8000 // characters; caps stored stdout/stderr per the Logging
 // (including progress lines) so the caller can keep a capped tail for
 // debugging. Run blocks until the subprocess exits or ctx is cancelled.
 func (s *YtDlpService) Run(ctx context.Context, job DownloadJob, onProgress func(ProgressEvent)) (RunResult, error) {
-	args := s.BuildArgs(job)
-	cmd := exec.CommandContext(ctx, s.BinPath, args...)
+	args := s.BuildArgs(ctx, job)
+	cmd := newTreeKillCmd(ctx, s.BinPath, args...)
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {

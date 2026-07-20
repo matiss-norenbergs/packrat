@@ -1,11 +1,18 @@
 package fsutil
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
 )
+
+// ErrDestinationExists is returned by RenamePair when the target media or
+// thumbnail path is already occupied by another file — renaming/moving over
+// it would silently clobber that file's bytes while leaving whatever
+// library row still points at it referencing now-wrong content.
+var ErrDestinationExists = errors.New("destination already exists")
 
 // unsafeFilenameChars matches characters that are invalid or troublesome in
 // filenames across Windows/Linux/macOS filesystems.
@@ -29,11 +36,29 @@ func EnsureDir(path string) error {
 // RenamePair renames a media file and its companion thumbnail together —
 // used for both Rename (same directory, new base name) and Move (new
 // directory, same base name), which are the same filesystem operation
-// either way. oldThumb/newThumb may be "" if there is no thumbnail. If the
-// thumbnail rename fails after the media rename succeeded, the media file
-// is renamed back so the two never end up split across old and new
-// locations (there's no real filesystem transaction to fall back on).
+// either way. oldThumb/newThumb may be "" if there is no thumbnail. Both
+// destinations are checked for a pre-existing file (returning
+// ErrDestinationExists rather than silently overwriting it) before either
+// rename is attempted. If the thumbnail rename fails after the media rename
+// succeeded, the media file is renamed back so the two never end up split
+// across old and new locations (there's no real filesystem transaction to
+// fall back on).
 func RenamePair(oldMedia, newMedia, oldThumb, newThumb string) error {
+	if newMedia != oldMedia {
+		if _, err := os.Stat(newMedia); err == nil {
+			return fmt.Errorf("renaming media file: %w", ErrDestinationExists)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("checking destination media file: %w", err)
+		}
+	}
+	if oldThumb != "" && newThumb != oldThumb {
+		if _, err := os.Stat(newThumb); err == nil {
+			return fmt.Errorf("renaming thumbnail: %w", ErrDestinationExists)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("checking destination thumbnail file: %w", err)
+		}
+	}
+
 	if err := os.Rename(oldMedia, newMedia); err != nil {
 		return fmt.Errorf("renaming media file: %w", err)
 	}

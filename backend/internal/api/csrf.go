@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -34,7 +35,10 @@ func RequireCSRF() gin.HandlerFunc {
 
 		cookieVal, err := c.Cookie(csrfCookieName)
 		header := c.GetHeader("X-CSRF-Token")
-		if err != nil || header == "" || header != cookieVal {
+		// Constant-time compare: the cookie value is a secret the double-submit pattern relies on
+		// an attacker not being able to read directly, so a plain != would leak it byte-by-byte
+		// through a timing side-channel over many requests.
+		if err != nil || header == "" || subtle.ConstantTimeCompare([]byte(header), []byte(cookieVal)) != 1 {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "invalid or missing CSRF token"})
 			return
 		}

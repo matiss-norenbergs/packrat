@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,6 +15,18 @@ import (
 	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/repository"
 )
+
+// writeLibraryItemGetError maps a libraryRepo.Get error the same way every
+// other library handler does — ErrNotFound is 404, anything else (a real DB
+// failure) is 500 — instead of collapsing both into 404 as this file's three
+// handlers previously did.
+func writeLibraryItemGetError(c *gin.Context, err error) {
+	if errors.Is(err, repository.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+}
 
 // writeNFO builds and writes item's .nfo sidecar to disk, overwriting
 // whatever is there. Shared by the manual "Generate NFO Now" action and
@@ -45,7 +58,7 @@ func GenerateLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRep
 
 		item, err := libraryRepo.Get(c.Request.Context(), id)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+			writeLibraryItemGetError(c, err)
 			return
 		}
 		if !item.GenerateNFO {
@@ -75,7 +88,7 @@ func GetLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRepo) gi
 
 		item, err := libraryRepo.Get(c.Request.Context(), id)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+			writeLibraryItemGetError(c, err)
 			return
 		}
 
@@ -109,7 +122,7 @@ func DeleteLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRepo)
 
 		item, err := libraryRepo.Get(c.Request.Context(), id)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+			writeLibraryItemGetError(c, err)
 			return
 		}
 

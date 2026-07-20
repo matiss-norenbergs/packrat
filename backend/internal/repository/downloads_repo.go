@@ -26,10 +26,10 @@ func (r *DownloadsRepo) Create(ctx context.Context, d *models.Download) (int64, 
 	}
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO downloads (url, collection_id, folder, filename, download_type, quality, audio_format, status,
-		                        override_title, override_artist_id, override_year, override_season_number, override_sequence_number, filename_prefix, override_tags, generate_nfo)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		                        override_title, override_artist_id, override_year, override_season_number, override_sequence_number, filename_prefix, filename_template, override_tags, generate_nfo)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		d.URL, d.CollectionID, d.Folder, d.Filename, d.DownloadType, d.Quality, d.AudioFormat, d.Status,
-		d.OverrideTitle, d.OverrideArtistID, d.OverrideYear, d.OverrideSeasonNumber, d.OverrideSequenceNumber, d.FilenamePrefix, overrideTags, d.GenerateNFO,
+		d.OverrideTitle, d.OverrideArtistID, d.OverrideYear, d.OverrideSeasonNumber, d.OverrideSequenceNumber, d.FilenamePrefix, d.FilenameTemplate, overrideTags, d.GenerateNFO,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting download: %w", err)
@@ -72,6 +72,37 @@ func (r *DownloadsRepo) Get(ctx context.Context, id int64) (*models.Download, er
 	return d, err
 }
 
+// GetByIDs batch-fetches downloads for every id, keyed by id — used by
+// backup.BuildLibraryBundle so exporting a library with N items costs one
+// query for their originating Download rows, not N.
+func (r *DownloadsRepo) GetByIDs(ctx context.Context, ids []int64) (map[int64]*models.Download, error) {
+	out := make(map[int64]*models.Download, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	rows, err := r.db.QueryContext(ctx, downloadSelectColumns+` WHERE d.id IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("batch-fetching downloads: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		d, err := scanDownload(rows)
+		if err != nil {
+			return nil, err
+		}
+		out[d.ID] = d
+	}
+	return out, rows.Err()
+}
+
 func (r *DownloadsRepo) List(ctx context.Context) ([]models.Download, error) {
 	rows, err := r.db.QueryContext(ctx, downloadSelectColumns+` ORDER BY d.created_at DESC`)
 	if err != nil {
@@ -91,54 +122,72 @@ func (r *DownloadsRepo) List(ctx context.Context) ([]models.Download, error) {
 }
 
 func (r *DownloadsRepo) UpdateStatus(ctx context.Context, id int64, status models.DownloadStatus, errMsg *string) error {
-	_, err := r.db.ExecContext(ctx, `
+	res, err := r.db.ExecContext(ctx, `
 		UPDATE downloads SET status = ?, error_message = ?, updated_at = datetime('now') WHERE id = ?`,
 		status, errMsg, id,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("updating download status: %w", err)
+	}
+	return checkRowsAffected(res)
 }
 
 func (r *DownloadsRepo) UpdateMetadata(ctx context.Context, id int64, videoID, title, uploader *string, duration *int, thumbnail *string) error {
-	_, err := r.db.ExecContext(ctx, `
+	res, err := r.db.ExecContext(ctx, `
 		UPDATE downloads
 		SET video_id = ?, title = ?, uploader = ?, duration = ?, thumbnail = ?, updated_at = datetime('now')
 		WHERE id = ?`,
 		videoID, title, uploader, duration, thumbnail, id,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("updating download metadata: %w", err)
+	}
+	return checkRowsAffected(res)
 }
 
 func (r *DownloadsRepo) SetCommand(ctx context.Context, id int64, command string) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE downloads SET ytdlp_command = ?, updated_at = datetime('now') WHERE id = ?`, command, id)
-	return err
+	res, err := r.db.ExecContext(ctx, `UPDATE downloads SET ytdlp_command = ?, updated_at = datetime('now') WHERE id = ?`, command, id)
+	if err != nil {
+		return fmt.Errorf("setting download command: %w", err)
+	}
+	return checkRowsAffected(res)
 }
 
 func (r *DownloadsRepo) MarkCompleted(ctx context.Context, id int64, exitCode int, resolution *string, stdoutTail, stderrTail string) error {
-	_, err := r.db.ExecContext(ctx, `
+	res, err := r.db.ExecContext(ctx, `
 		UPDATE downloads
 		SET status = ?, exit_code = ?, resolution = COALESCE(?, resolution), stdout_tail = ?, stderr_tail = ?, completed_at = datetime('now'), updated_at = datetime('now')
 		WHERE id = ?`,
 		models.StatusCompleted, exitCode, resolution, stdoutTail, stderrTail, id,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("marking download completed: %w", err)
+	}
+	return checkRowsAffected(res)
 }
 
 func (r *DownloadsRepo) MarkFailed(ctx context.Context, id int64, exitCode int, errMsg, stdoutTail, stderrTail string) error {
-	_, err := r.db.ExecContext(ctx, `
+	res, err := r.db.ExecContext(ctx, `
 		UPDATE downloads
 		SET status = ?, exit_code = ?, error_message = ?, stdout_tail = ?, stderr_tail = ?, completed_at = datetime('now'), updated_at = datetime('now')
 		WHERE id = ?`,
 		models.StatusFailed, exitCode, errMsg, stdoutTail, stderrTail, id,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("marking download failed: %w", err)
+	}
+	return checkRowsAffected(res)
 }
 
 func (r *DownloadsRepo) MarkCancelled(ctx context.Context, id int64) error {
-	_, err := r.db.ExecContext(ctx, `
+	res, err := r.db.ExecContext(ctx, `
 		UPDATE downloads SET status = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
 		models.StatusCancelled, id,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("marking download cancelled: %w", err)
+	}
+	return checkRowsAffected(res)
 }
 
 // Delete removes a download's history row. Safe to call even for a download
@@ -259,7 +308,7 @@ const downloadSelectColumns = `
 	SELECT d.id, d.url, d.video_id, d.collection_id, c.name, d.folder, d.filename, d.download_type, d.quality, d.audio_format,
 	       d.status, d.title, d.uploader, d.duration, d.resolution, d.thumbnail, d.error_message, d.ytdlp_command,
 	       d.exit_code, d.stdout_tail, d.stderr_tail, d.retry_count, d.created_at, d.updated_at, d.completed_at,
-	       d.override_title, d.override_artist_id, d.override_year, d.override_season_number, d.override_sequence_number, d.filename_prefix, d.override_tags, d.generate_nfo
+	       d.override_title, d.override_artist_id, d.override_year, d.override_season_number, d.override_sequence_number, d.filename_prefix, d.filename_template, d.override_tags, d.generate_nfo
 	FROM downloads d
 	LEFT JOIN collections c ON c.id = d.collection_id`
 
@@ -277,7 +326,7 @@ func scanDownload(row rowScanner) (*models.Download, error) {
 		&d.ID, &d.URL, &d.VideoID, &d.CollectionID, &d.CollectionName, &d.Folder, &d.Filename, &d.DownloadType, &d.Quality, &d.AudioFormat,
 		&d.Status, &d.Title, &d.Uploader, &d.Duration, &d.Resolution, &d.Thumbnail, &d.ErrorMessage, &d.YtDlpCommand,
 		&d.ExitCode, &d.StdoutTail, &d.StderrTail, &d.RetryCount, &createdAt, &updatedAt, &completedAt,
-		&d.OverrideTitle, &d.OverrideArtistID, &d.OverrideYear, &d.OverrideSeasonNumber, &d.OverrideSequenceNumber, &d.FilenamePrefix, &overrideTags, &d.GenerateNFO,
+		&d.OverrideTitle, &d.OverrideArtistID, &d.OverrideYear, &d.OverrideSeasonNumber, &d.OverrideSequenceNumber, &d.FilenamePrefix, &d.FilenameTemplate, &overrideTags, &d.GenerateNFO,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

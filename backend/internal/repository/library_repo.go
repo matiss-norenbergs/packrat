@@ -10,11 +10,19 @@ import (
 )
 
 type LibraryRepo struct {
-	db *sql.DB
+	db dbtx
 }
 
 func NewLibraryRepo(db *sql.DB) *LibraryRepo {
 	return &LibraryRepo{db: db}
+}
+
+// WithTx returns a copy of r whose queries run against tx instead of the
+// underlying connection pool — see TagsRepo.WithTx for the full rationale.
+func (r *LibraryRepo) WithTx(tx *sql.Tx) *LibraryRepo {
+	cp := *r
+	cp.db = tx
+	return &cp
 }
 
 func (r *LibraryRepo) Create(ctx context.Context, item *models.LibraryItem) (int64, error) {
@@ -70,6 +78,93 @@ func (r *LibraryRepo) FindDuplicate(ctx context.Context, originalURL, videoID st
 		return nil, nil
 	}
 	return item, err
+}
+
+// DuplicateQuery is one FindDuplicate lookup's input — the batched
+// counterpart's per-entry key.
+type DuplicateQuery struct {
+	URL     string
+	VideoID string
+}
+
+// FindDuplicates batches FindDuplicate across many URL/videoID pairs into a
+// single query instead of one round trip per entry — used by enqueueBatch so
+// a large playlist/bulk-download submission with skipDuplicates costs one
+// query, not N. The returned map is keyed by the input slice's index;
+// entries with no match are simply absent.
+func (r *LibraryRepo) FindDuplicates(ctx context.Context, queries []DuplicateQuery) (map[int]*models.LibraryItem, error) {
+	result := make(map[int]*models.LibraryItem)
+	if len(queries) == 0 {
+		return result, nil
+	}
+
+	urlSet := make(map[string]bool)
+	videoIDSet := make(map[string]bool)
+	for _, q := range queries {
+		if q.URL != "" {
+			urlSet[q.URL] = true
+		}
+		if q.VideoID != "" {
+			videoIDSet[q.VideoID] = true
+		}
+	}
+	if len(urlSet) == 0 && len(videoIDSet) == 0 {
+		return result, nil
+	}
+
+	var conditions []string
+	var args []any
+	if len(urlSet) > 0 {
+		conditions = append(conditions, `l.original_url IN (`+strings.TrimSuffix(strings.Repeat("?,", len(urlSet)), ",")+`)`)
+		for u := range urlSet {
+			args = append(args, u)
+		}
+	}
+	if len(videoIDSet) > 0 {
+		conditions = append(conditions, `l.video_id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(videoIDSet)), ",")+`)`)
+		for v := range videoIDSet {
+			args = append(args, v)
+		}
+	}
+
+	rows, err := r.db.QueryContext(ctx, librarySelectColumns+` WHERE `+strings.Join(conditions, " OR "), args...)
+	if err != nil {
+		return nil, fmt.Errorf("batch-finding duplicates: %w", err)
+	}
+	defer rows.Close()
+
+	byURL := make(map[string]*models.LibraryItem)
+	byVideoID := make(map[string]*models.LibraryItem)
+	for rows.Next() {
+		item, err := scanLibraryItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		if item.OriginalURL != nil {
+			byURL[*item.OriginalURL] = item
+		}
+		if item.VideoID != nil && *item.VideoID != "" {
+			byVideoID[*item.VideoID] = item
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i, q := range queries {
+		if q.URL != "" {
+			if item, ok := byURL[q.URL]; ok {
+				result[i] = item
+				continue
+			}
+		}
+		if q.VideoID != "" {
+			if item, ok := byVideoID[q.VideoID]; ok {
+				result[i] = item
+			}
+		}
+	}
+	return result, nil
 }
 
 // List returns the entire library, unfiltered — used by call sites that

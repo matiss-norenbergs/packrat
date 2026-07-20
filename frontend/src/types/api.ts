@@ -74,6 +74,7 @@ export interface CreateDownloadRequest {
   seasonNumber?: number
   sequenceNumber?: number
   filenamePrefix?: string
+  filenameTemplate?: string
   generateNfo?: boolean
   tags?: string[]
 }
@@ -86,6 +87,7 @@ export interface Collection {
   path: string
   defaultQuality: string
   defaultDownloadType: DownloadType
+  filenameTemplate: string
   isPrivate: boolean
   seasonNumber: number | null
   artistId: number | null
@@ -110,6 +112,7 @@ export interface CreateCollectionRequest {
   rootPath: string
   defaultQuality?: string
   defaultDownloadType?: DownloadType
+  filenameTemplate?: string
   isPrivate?: boolean
   jellyfinLibraryId?: string | null
   seasonNumber?: number | null
@@ -281,6 +284,11 @@ export interface Settings {
   jellyfinApiKey: string
   jellyfinRefreshMode: string
   libraryAutoplay: boolean
+  ytdlpCookiesBrowser: string
+  ytdlpCookiesProfile: string
+  ytdlpProxy: string
+  ytdlpRateLimit: string
+  ytdlpRetries: number
 }
 
 export interface YtDlpVersionInfo {
@@ -292,6 +300,7 @@ export interface YtDlpVersionInfo {
 export interface DownloadPreview {
   title: string
   uploader: string
+  uploadDate: string
   duration: number
   thumbnail: string
   resolution: string | null
@@ -373,6 +382,11 @@ export interface UpdateSettingsRequest {
   jellyfinApiKey?: string
   jellyfinRefreshMode?: string
   libraryAutoplay?: boolean
+  ytdlpCookiesBrowser?: string
+  ytdlpCookiesProfile?: string
+  ytdlpProxy?: string
+  ytdlpRateLimit?: string
+  ytdlpRetries?: number
 }
 
 export interface ScannedFile {
@@ -435,6 +449,35 @@ export interface BackupImportLibraryResult {
   tagsCreated: number
   artistsCreated: number
   downloadsQueued: number
+}
+
+export interface PreviewCollectionEntry {
+  path: string[]
+  name: string
+  isNew: boolean
+}
+
+export interface PreviewLibraryItem {
+  title: string
+  originalUrl: string
+  collectionPath?: string[]
+  artistName?: string
+  tags?: string[]
+  downloadType?: string
+  quality?: string
+  year?: number
+  alreadyInLibrary: boolean
+}
+
+export interface LibraryImportPreview {
+  collections: PreviewCollectionEntry[]
+  collectionsNew: number
+  tags: string[]
+  tagsNew: number
+  artists: string[]
+  artistsNew: number
+  items: PreviewLibraryItem[]
+  alreadyInLibrary: number
 }
 
 export interface Stats {

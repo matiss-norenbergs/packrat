@@ -63,6 +63,14 @@ type Download struct {
 	OverrideSeasonNumber   *int
 	OverrideSequenceNumber *int
 	FilenamePrefix         *string
+	// FilenameTemplate is the newer, more general replacement for
+	// FilenamePrefix — a string with {title}/{uploader}/{channel}/{date}/
+	// {artist}/{year}/{season}/{sequence}/{collection} tokens (see
+	// internal/nametemplate), resolved at completion time and taking
+	// priority over FilenamePrefix (which stays functional for old rows and
+	// API-only callers that never send this field), but still loses to a
+	// literal Filename override above.
+	FilenameTemplate *string
 	// OverrideTags are applied to the resulting library item once the
 	// download completes (same "apply on completion" shape as the other
 	// overrides above) — currently only set by the backup/library import

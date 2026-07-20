@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -20,6 +21,26 @@ import (
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 )
+
+// embedMetadataSem caps how many EmbedMetadata goroutines (below, in
+// UpdateLibraryItem) can run at once — each is an ffmpeg remux, so with no
+// cap a large bulk edit (BulkEditLibraryItemsDialog fires one PATCH per
+// changed row, N in parallel) would fan out N simultaneous ffmpeg processes
+// with no backpressure. Sized as a fixed small constant rather than tied to
+// the (runtime-editable) download worker count, since this is a short,
+// CPU-light remux rather than a full download.
+var embedMetadataSem = make(chan struct{}, 4)
+
+// writeRenamePairError reports a fsutil.RenamePair failure as 409 when it's
+// a destination-already-exists collision, matching the 409-style handling
+// collections/tags/artists already use for name clashes, or 500 otherwise.
+func writeRenamePairError(c *gin.Context, err error) {
+	if errors.Is(err, fsutil.ErrDestinationExists) {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+}
 
 // ListLibrary supports search/filter/sort/pagination via query params —
 // ?q=&collectionId=&collectionIds=1,2&year=&tags=a,b&sortKey=&sortDir=&page=&pageSize= — all
@@ -198,8 +219,15 @@ func deleteLibraryItemFiles(mediaRoot string, item *models.LibraryItem) {
 
 // BulkDeleteLibraryItems mirrors DeleteLibraryItem applied to a batch — one
 // shared DeleteFiles flag for the whole request, not per item. An id that's
-// already gone (ErrNotFound) is skipped rather than failing the batch.
-func BulkDeleteLibraryItems(repo *repository.LibraryRepo, mediaRoot string) gin.HandlerFunc {
+// already gone (ErrNotFound) is skipped rather than failing the batch. The
+// DB deletes run inside one transaction, so a genuine mid-batch failure
+// rolls back every row this call already deleted instead of leaving a mix
+// of deleted/not-deleted rows — files removed from disk in earlier
+// iterations aren't part of that transaction (there's no filesystem
+// rollback), but the DB and the on-disk library it describes were already
+// only best-effort synced before this fix, and DeleteFiles failures are
+// logged, not fatal, so this doesn't make that any worse.
+func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BulkDeleteLibraryItemsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -207,9 +235,17 @@ func BulkDeleteLibraryItems(repo *repository.LibraryRepo, mediaRoot string) gin.
 			return
 		}
 
+		tx, err := db.BeginTx(c.Request.Context(), nil)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		defer tx.Rollback()
+		txRepo := repo.WithTx(tx)
+
 		var resp BulkDeleteResponse
 		for _, id := range req.ItemIDs {
-			item, err := repo.Get(c.Request.Context(), id)
+			item, err := txRepo.Get(c.Request.Context(), id)
 			if err != nil {
 				if errors.Is(err, repository.ErrNotFound) {
 					continue
@@ -222,7 +258,7 @@ func BulkDeleteLibraryItems(repo *repository.LibraryRepo, mediaRoot string) gin.
 				deleteLibraryItemFiles(mediaRoot, item)
 			}
 
-			if err := repo.Delete(c.Request.Context(), id); err != nil {
+			if err := txRepo.Delete(c.Request.Context(), id); err != nil {
 				if errors.Is(err, repository.ErrNotFound) {
 					continue
 				}
@@ -230,6 +266,11 @@ func BulkDeleteLibraryItems(repo *repository.LibraryRepo, mediaRoot string) gin.
 				return
 			}
 			resp.Deleted++
+		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
 		c.JSON(http.StatusOK, resp)
 	}
@@ -300,7 +341,7 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			}
 
 			if err := fsutil.RenamePair(oldMediaAbs, newMediaAbs, oldThumbAbs, newThumbAbs); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeRenamePairError(c, err)
 				return
 			}
 
@@ -389,7 +430,10 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			// Backgrounded: c.Request.Context() would be cancelled as soon as
 			// the handler returns, so this uses context.Background() instead —
 			// EmbedMetadata applies its own internal timeout regardless.
+			// embedMetadataSem bounds how many of these run concurrently.
 			go func(path, title string, artist *string, year, sequenceNumber, seasonNumber *int) {
+				embedMetadataSem <- struct{}{}
+				defer func() { <-embedMetadataSem }()
 				if err := ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, sequenceNumber, seasonNumber); err != nil {
 					log.Printf("library: embedding metadata into %s failed: %v", path, err)
 				}
@@ -540,7 +584,7 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 		}
 
 		if err := fsutil.RenamePair(oldMediaAbs, newMediaAbs, oldThumbAbs, newThumbAbs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeRenamePairError(c, err)
 			return
 		}
 

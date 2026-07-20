@@ -283,6 +283,64 @@ func LibraryAutoplay(ctx context.Context, repo *repository.SettingsRepo) (bool, 
 	return strconv.ParseBool(raw)
 }
 
+// YtdlpCookiesBrowser reads the ytdlp_cookies_browser setting, defaulting to
+// "" (disabled) if it's never been set. Shared by GetSettings.
+func YtdlpCookiesBrowser(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingYtdlpCookiesBrowser)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", nil
+	}
+	return raw, err
+}
+
+// YtdlpCookiesProfile reads the ytdlp_cookies_profile setting, defaulting to
+// "" if it's never been set. Shared by GetSettings.
+func YtdlpCookiesProfile(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingYtdlpCookiesProfile)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", nil
+	}
+	return raw, err
+}
+
+// YtdlpProxy reads the ytdlp_proxy setting, defaulting to "" (disabled) if
+// it's never been set. Shared by GetSettings.
+func YtdlpProxy(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingYtdlpProxy)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", nil
+	}
+	return raw, err
+}
+
+// YtdlpRateLimit reads the ytdlp_rate_limit setting, defaulting to ""
+// (disabled) if it's never been set. Shared by GetSettings.
+func YtdlpRateLimit(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingYtdlpRateLimit)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", nil
+	}
+	return raw, err
+}
+
+// YtdlpRetries reads the ytdlp_retries setting, defaulting to 0 — yt-dlp's
+// own built-in default, not explicitly passed — if it's never been set (or
+// is somehow corrupt). Shared by GetSettings.
+func YtdlpRetries(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingYtdlpRetries)
+	if errors.Is(err, repository.ErrNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0, nil
+	}
+	return n, nil
+}
+
 // GetSettings reports live state where it exists rather than a possibly
 // stale DB copy: downloadDirectory comes from the actual MEDIA_ROOT config
 // value (the DB row is legacy/display only), and maxConcurrentDownloads
@@ -391,6 +449,31 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		ytdlpCookiesBrowser, err := YtdlpCookiesBrowser(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		ytdlpCookiesProfile, err := YtdlpCookiesProfile(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		ytdlpProxy, err := YtdlpProxy(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		ytdlpRateLimit, err := YtdlpRateLimit(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		ytdlpRetries, err := YtdlpRetries(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, SettingsResponse{
 			DownloadDirectory:        mediaRoot,
 			MaxConcurrentDownloads:   mgr.WorkerCount(),
@@ -415,6 +498,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			JellyfinAPIKey:           jellyfinAPIKey,
 			JellyfinRefreshMode:      jellyfinRefreshMode,
 			LibraryAutoplay:          libraryAutoplay,
+			YtdlpCookiesBrowser:      ytdlpCookiesBrowser,
+			YtdlpCookiesProfile:      ytdlpCookiesProfile,
+			YtdlpProxy:               ytdlpProxy,
+			YtdlpRateLimit:           ytdlpRateLimit,
+			YtdlpRetries:             ytdlpRetries,
 		})
 	}
 }
@@ -572,6 +660,36 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 		}
 		if req.LibraryAutoplay != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingLibraryAutoplay, strconv.FormatBool(*req.LibraryAutoplay)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.YtdlpCookiesBrowser != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingYtdlpCookiesBrowser, *req.YtdlpCookiesBrowser); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.YtdlpCookiesProfile != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingYtdlpCookiesProfile, *req.YtdlpCookiesProfile); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.YtdlpProxy != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingYtdlpProxy, *req.YtdlpProxy); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.YtdlpRateLimit != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingYtdlpRateLimit, *req.YtdlpRateLimit); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.YtdlpRetries != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingYtdlpRetries, strconv.Itoa(*req.YtdlpRetries)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

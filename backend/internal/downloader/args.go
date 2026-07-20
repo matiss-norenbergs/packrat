@@ -1,9 +1,13 @@
 package downloader
 
 import (
+	"context"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+
+	"packrat/backend/internal/models"
 )
 
 // DownloadJob describes one yt-dlp invocation. DestDir must already be an
@@ -19,7 +23,7 @@ type DownloadJob struct {
 }
 
 // BuildArgs returns the full yt-dlp argument list for job.
-func (s *YtDlpService) BuildArgs(job DownloadJob) []string {
+func (s *YtDlpService) BuildArgs(ctx context.Context, job DownloadJob) []string {
 	base := job.Filename
 	if base == "" {
 		base = "%(title)s"
@@ -52,7 +56,51 @@ func (s *YtDlpService) BuildArgs(job DownloadJob) []string {
 		args = append(args, "-f", BuildFormatSelector(job.Quality))
 	}
 
+	args = append(args, s.globalArgs(ctx)...)
 	args = append(args, job.URL)
+	return args
+}
+
+// globalArgs reads the user-configured cookies/proxy/rate-limit/retries
+// settings and returns the corresponding yt-dlp flags. Any settings-read
+// error (including a never-set key) is treated as "unset" rather than
+// surfaced — same tolerant-default convention already used throughout
+// settings_handler.go (e.g. ThumbnailFrameCount) — so a transient DB hiccup
+// just means these optional flags are skipped for that one invocation
+// rather than failing the whole download.
+func (s *YtDlpService) globalArgs(ctx context.Context) []string {
+	browser, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpCookiesBrowser)
+	profile, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpCookiesProfile)
+	proxy, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpProxy)
+	rateLimit, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpRateLimit)
+	retries, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpRetries)
+	return buildGlobalArgs(browser, profile, proxy, rateLimit, retries)
+}
+
+// buildGlobalArgs turns the four global yt-dlp settings into their CLI
+// flags. Blank/zero values mean "not configured" and are skipped, so
+// leaving everything unset reproduces pre-existing flag-free behavior
+// exactly. Pulled out as a pure function (no settings-repo access) so it's
+// unit-testable without a DB, same extraction rationale as
+// queue/manager.go's resolveFilename.
+func buildGlobalArgs(cookiesBrowser, cookiesProfile, proxy, rateLimit, retries string) []string {
+	var args []string
+	if cookiesBrowser != "" {
+		value := cookiesBrowser
+		if cookiesProfile != "" {
+			value += ":" + cookiesProfile
+		}
+		args = append(args, "--cookies-from-browser", value)
+	}
+	if proxy != "" {
+		args = append(args, "--proxy", proxy)
+	}
+	if rateLimit != "" {
+		args = append(args, "--limit-rate", rateLimit)
+	}
+	if n, err := strconv.Atoi(retries); err == nil && n > 0 {
+		args = append(args, "--retries", retries, "--fragment-retries", retries)
+	}
 	return args
 }
 

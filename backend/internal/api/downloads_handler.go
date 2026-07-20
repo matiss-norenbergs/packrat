@@ -46,6 +46,10 @@ func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *reposi
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if !isHTTPURL(req.URL) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "url must be an http or https URL"})
+			return
+		}
 
 		meta, err := ytdlp.FetchMetadata(c.Request.Context(), req.URL)
 		if err != nil {
@@ -70,6 +74,9 @@ func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *reposi
 // destination path, and queues the download. Shared by CreateDownload and
 // RedownloadLibraryItem so both go through identical validation.
 func enqueueDownload(ctx context.Context, mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, req CreateDownloadRequest) (int64, error) {
+	if !isHTTPURL(req.URL) {
+		return 0, invalidURLError{}
+	}
 	if req.CollectionID != nil {
 		collection, err := collectionsRepo.Get(ctx, *req.CollectionID)
 		if err != nil {
@@ -77,6 +84,12 @@ func enqueueDownload(ctx context.Context, mgr *queue.DownloadManager, collection
 		}
 		if req.Quality == "" {
 			req.Quality = collection.DefaultQuality
+		}
+		// Only fall back to the collection's template when the caller left
+		// both the literal filename and their own template empty — an
+		// explicit choice at request time always wins, same as Quality above.
+		if req.Filename == "" && (req.FilenameTemplate == nil || *req.FilenameTemplate == "") && collection.FilenameTemplate != "" {
+			req.FilenameTemplate = &collection.FilenameTemplate
 		}
 	}
 	if req.Quality == "" {
@@ -115,6 +128,7 @@ func enqueueDownload(ctx context.Context, mgr *queue.DownloadManager, collection
 		OverrideSeasonNumber:   req.SeasonNumber,
 		OverrideSequenceNumber: req.SequenceNumber,
 		FilenamePrefix:         req.FilenamePrefix,
+		FilenameTemplate:       req.FilenameTemplate,
 		OverrideTags:           req.Tags,
 		GenerateNFO:            req.GenerateNFO,
 	}
@@ -133,11 +147,22 @@ type invalidFolderError struct{ err error }
 func (e invalidFolderError) Error() string { return e.err.Error() }
 func (e invalidFolderError) Unwrap() error { return e.err }
 
+// invalidURLError marks enqueueDownload's URL-scheme rejection so
+// writeEnqueueError can report it as a 400 instead of a 500.
+type invalidURLError struct{}
+
+func (e invalidURLError) Error() string { return "url must be an http or https URL" }
+
 // writeEnqueueError maps an enqueueDownload error to an HTTP response.
 func writeEnqueueError(c *gin.Context, err error) {
 	var folderErr invalidFolderError
 	if errors.As(err, &folderErr) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid folder: " + folderErr.Error()})
+		return
+	}
+	var urlErr invalidURLError
+	if errors.As(err, &urlErr) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": urlErr.Error()})
 		return
 	}
 	if errors.Is(err, repository.ErrNotFound) {

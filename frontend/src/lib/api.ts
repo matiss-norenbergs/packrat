@@ -22,6 +22,7 @@ import type {
   ImportRequest,
   LibraryFacets,
   LibraryItem,
+  LibraryImportPreview,
   LibraryItemMetadataPreview,
   LibraryListResponse,
   LibraryQueryParams,
@@ -350,6 +351,13 @@ export function importSettingsBackup(data: string, password: string): Promise<Ba
 
 export function importLibraryBackup(data: string, password: string): Promise<BackupImportLibraryResult> {
   return request<BackupImportLibraryResult>("/backup/import/library", {
+    method: "POST",
+    body: JSON.stringify({ data, password: password || undefined }),
+  })
+}
+
+export function previewLibraryImport(data: string, password: string): Promise<LibraryImportPreview> {
+  return request<LibraryImportPreview>("/backup/preview/library", {
     method: "POST",
     body: JSON.stringify({ data, password: password || undefined }),
   })

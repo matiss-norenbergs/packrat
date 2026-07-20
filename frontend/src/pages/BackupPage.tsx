@@ -14,12 +14,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { LibraryImportPreviewDialog } from "@/components/backup/LibraryImportPreviewDialog"
 import {
   useExportLibrary,
   useExportSettings,
   useImportLibrary,
   useImportSettings,
+  useLibraryImportPreview,
 } from "@/hooks/useBackup"
+import type { LibraryImportPreview } from "@/types/api"
 
 export function BackupPage() {
   return (
@@ -225,6 +228,17 @@ function LibraryBackupCard() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const importMutation = useImportLibrary()
 
+  const previewMutation = useLibraryImportPreview()
+  const [preview, setPreview] = useState<LibraryImportPreview | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+
+  const resetImportState = () => {
+    setFileText("")
+    setNeedsPassword(false)
+    setImportPassword("")
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     setImportPassword("")
@@ -287,10 +301,38 @@ function LibraryBackupCard() {
               />
             </div>
           )}
-          <Button variant="outline" onClick={() => setConfirmOpen(true)} disabled={!canImport || importMutation.isPending}>
-            {importMutation.isPending ? "Importing…" : "Import"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                previewMutation.mutate(
+                  { data: fileText, password: importPassword },
+                  {
+                    onSuccess: (result) => {
+                      setPreview(result)
+                      setPreviewOpen(true)
+                    },
+                  },
+                )
+              }
+              disabled={!canImport || previewMutation.isPending}
+            >
+              {previewMutation.isPending ? "Loading preview…" : "Preview"}
+            </Button>
+            <Button variant="outline" onClick={() => setConfirmOpen(true)} disabled={!canImport || importMutation.isPending}>
+              {importMutation.isPending ? "Importing…" : "Import"}
+            </Button>
+          </div>
         </div>
+
+        <LibraryImportPreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          preview={preview}
+          data={fileText}
+          password={importPassword}
+          onImported={resetImportState}
+        />
 
         <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <AlertDialogContent>
@@ -309,14 +351,7 @@ function LibraryBackupCard() {
                 onClick={() =>
                   importMutation.mutate(
                     { data: fileText, password: importPassword },
-                    {
-                      onSuccess: () => {
-                        setFileText("")
-                        setNeedsPassword(false)
-                        setImportPassword("")
-                        if (fileInputRef.current) fileInputRef.current.value = ""
-                      },
-                    },
+                    { onSuccess: resetImportState },
                   )
                 }
               >
