@@ -226,6 +226,23 @@ func PrivacyBlurStrength(ctx context.Context, repo *repository.SettingsRepo) (st
 	}
 }
 
+// BrowseIgnorePrivacy reads the browse_ignore_privacy setting, defaulting to
+// false — private/blurred items keep blurring everywhere, including Browse,
+// unless explicitly turned off. When true, this only affects how the Browse
+// page renders items client-side; it does not change what the API reports
+// as blurred, and it has no effect on the Library/management pages. Shared
+// by GetSettings.
+func BrowseIgnorePrivacy(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingBrowseIgnorePrivacy)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
+}
+
 // SkipDownloadPreview reads the skip_download_preview setting, defaulting to false (previews
 // shown) if it's never been set (no migration seeds this key) — previews are on by default.
 // Shared by GetSettings.
@@ -419,6 +436,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		browseIgnorePrivacy, err := BrowseIgnorePrivacy(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		skipDownloadPreview, err := SkipDownloadPreview(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -492,6 +514,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			LibraryPageSize:          libraryPageSize,
 			ThumbnailFrameCount:      thumbnailFrameCount,
 			PrivacyBlurStrength:      privacyBlurStrength,
+			BrowseIgnorePrivacy:      browseIgnorePrivacy,
 			SkipDownloadPreview:      skipDownloadPreview,
 			JellyfinEnabled:          jellyfinEnabled,
 			JellyfinURL:              jellyfinURL,
@@ -624,6 +647,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 		}
 		if req.PrivacyBlurStrength != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingPrivacyBlurStrength, *req.PrivacyBlurStrength); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.BrowseIgnorePrivacy != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingBrowseIgnorePrivacy, strconv.FormatBool(*req.BrowseIgnorePrivacy)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

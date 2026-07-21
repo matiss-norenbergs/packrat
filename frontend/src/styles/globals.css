@@ -128,3 +128,27 @@
     @apply font-sans;
     }
 }
+
+@layer utilities {
+  /* A slimmer, lower-contrast scrollbar for the Browse row strips — still
+     visible as a scroll affordance, just not competing with the poster art
+     for attention the way the browser default (full-height, high-contrast
+     thumb) does. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+  }
+}

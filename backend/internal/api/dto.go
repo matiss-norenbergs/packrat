@@ -242,32 +242,42 @@ func toDownloadResponse(d models.Download, live *queue.LiveProgress, blurred boo
 const timeFormat = "2006-01-02T15:04:05Z07:00"
 
 type LibraryItemResponse struct {
-	ID             int64    `json:"id"`
-	DownloadID     *int64   `json:"downloadId"`
-	Title          string   `json:"title"`
-	Filename       string   `json:"filename"`
-	Path           string   `json:"path"`
-	CollectionID   *int64   `json:"collectionId"`
-	CollectionName *string  `json:"collectionName"`
-	Folder         string   `json:"folder"`
-	OriginalURL    *string  `json:"originalUrl"`
-	Uploader       *string  `json:"uploader"`
-	Duration       *int     `json:"duration"`
-	Resolution     *string  `json:"resolution"`
-	Thumbnail      *string  `json:"thumbnail"`
-	Description    *string  `json:"description"`
-	ArtistID       *int64   `json:"artistId"`
-	ArtistName     *string  `json:"artistName"`
-	Year           *int     `json:"year"`
-	SequenceNumber *int     `json:"sequenceNumber"`
-	SeasonNumber   *int     `json:"seasonNumber"`
-	GenerateNFO    bool     `json:"generateNfo"`
-	NFOExists      bool     `json:"nfoExists"`
-	DownloadedAt   string   `json:"downloadedAt"`
-	Status         string   `json:"status"`
-	Blurred        bool     `json:"blurred"`
-	FileSizeBytes  *int64   `json:"fileSizeBytes"`
-	Tags           []string `json:"tags"`
+	ID                      int64    `json:"id"`
+	DownloadID              *int64   `json:"downloadId"`
+	Title                   string   `json:"title"`
+	Filename                string   `json:"filename"`
+	Path                    string   `json:"path"`
+	CollectionID            *int64   `json:"collectionId"`
+	CollectionName          *string  `json:"collectionName"`
+	Folder                  string   `json:"folder"`
+	OriginalURL             *string  `json:"originalUrl"`
+	Uploader                *string  `json:"uploader"`
+	Duration                *int     `json:"duration"`
+	Resolution              *string  `json:"resolution"`
+	Thumbnail               *string  `json:"thumbnail"`
+	Description             *string  `json:"description"`
+	ArtistID                *int64   `json:"artistId"`
+	ArtistName              *string  `json:"artistName"`
+	Year                    *int     `json:"year"`
+	SequenceNumber          *int     `json:"sequenceNumber"`
+	SeasonNumber            *int     `json:"seasonNumber"`
+	GenerateNFO             bool     `json:"generateNfo"`
+	NFOExists               bool     `json:"nfoExists"`
+	DownloadedAt            string   `json:"downloadedAt"`
+	Status                  string   `json:"status"`
+	Blurred                 bool     `json:"blurred"`
+	FileSizeBytes           *int64   `json:"fileSizeBytes"`
+	Tags                    []string `json:"tags"`
+	PlaybackPositionSeconds *int     `json:"playbackPositionSeconds"`
+	LastWatchedAt           *string  `json:"lastWatchedAt"`
+}
+
+// UpdateLibraryProgressRequest is POST /library/:id/progress's body — a
+// narrow, frequently-called endpoint (fired every few seconds during video
+// playback) kept separate from UpdateLibraryItemRequest's general field-edit
+// form.
+type UpdateLibraryProgressRequest struct {
+	PositionSeconds int `json:"positionSeconds" binding:"gte=0"`
 }
 
 // LibraryListResponse wraps GET /api/library's results — always a wrapper
@@ -297,33 +307,40 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 	mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 	_, err := os.Stat(nfo.SidecarPath(mediaAbs))
 	nfoExists := err == nil
+	var lastWatchedAt *string
+	if item.LastWatchedAt != nil {
+		s := item.LastWatchedAt.Format(timeFormat)
+		lastWatchedAt = &s
+	}
 	return LibraryItemResponse{
-		ID:             item.ID,
-		DownloadID:     item.DownloadID,
-		Title:          item.Title,
-		Filename:       item.Filename,
-		Path:           item.Path,
-		CollectionID:   item.CollectionID,
-		CollectionName: item.CollectionName,
-		Folder:         item.Folder,
-		OriginalURL:    item.OriginalURL,
-		Uploader:       item.Uploader,
-		Duration:       item.Duration,
-		Resolution:     item.Resolution,
-		Thumbnail:      item.Thumbnail,
-		Description:    item.Description,
-		ArtistID:       item.ArtistID,
-		ArtistName:     item.ArtistName,
-		Year:           item.ReleaseYear,
-		SequenceNumber: item.SequenceNumber,
-		SeasonNumber:   item.SeasonNumber,
-		GenerateNFO:    item.GenerateNFO,
-		NFOExists:      nfoExists,
-		DownloadedAt:   item.DownloadedAt.Format(timeFormat),
-		Status:         item.Status,
-		Blurred:        blurred,
-		FileSizeBytes:  item.FileSizeBytes,
-		Tags:           tags,
+		ID:                      item.ID,
+		DownloadID:              item.DownloadID,
+		Title:                   item.Title,
+		Filename:                item.Filename,
+		Path:                    item.Path,
+		CollectionID:            item.CollectionID,
+		CollectionName:          item.CollectionName,
+		Folder:                  item.Folder,
+		OriginalURL:             item.OriginalURL,
+		Uploader:                item.Uploader,
+		Duration:                item.Duration,
+		Resolution:              item.Resolution,
+		Thumbnail:               item.Thumbnail,
+		Description:             item.Description,
+		ArtistID:                item.ArtistID,
+		ArtistName:              item.ArtistName,
+		Year:                    item.ReleaseYear,
+		SequenceNumber:          item.SequenceNumber,
+		SeasonNumber:            item.SeasonNumber,
+		GenerateNFO:             item.GenerateNFO,
+		NFOExists:               nfoExists,
+		DownloadedAt:            item.DownloadedAt.Format(timeFormat),
+		Status:                  item.Status,
+		Blurred:                 blurred,
+		FileSizeBytes:           item.FileSizeBytes,
+		Tags:                    tags,
+		PlaybackPositionSeconds: item.PlaybackPositionSeconds,
+		LastWatchedAt:           lastWatchedAt,
 	}
 }
 
@@ -522,6 +539,7 @@ type SettingsResponse struct {
 	LibraryPageSize          int      `json:"libraryPageSize"`
 	ThumbnailFrameCount      int      `json:"thumbnailFrameCount"`
 	PrivacyBlurStrength      string   `json:"privacyBlurStrength"`
+	BrowseIgnorePrivacy      bool     `json:"browseIgnorePrivacy"`
 	SkipDownloadPreview      bool     `json:"skipDownloadPreview"`
 	JellyfinEnabled          bool     `json:"jellyfinEnabled"`
 	JellyfinURL              string   `json:"jellyfinUrl"`
@@ -552,6 +570,7 @@ type UpdateSettingsRequest struct {
 	LibraryPageSize          *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
 	ThumbnailFrameCount      *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
 	PrivacyBlurStrength      *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
+	BrowseIgnorePrivacy      *bool     `json:"browseIgnorePrivacy"`
 	SkipDownloadPreview      *bool     `json:"skipDownloadPreview"`
 	JellyfinEnabled          *bool     `json:"jellyfinEnabled"`
 	JellyfinURL              *string   `json:"jellyfinUrl"`

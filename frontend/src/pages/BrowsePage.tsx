@@ -4,15 +4,24 @@ import { BrowseHero } from "@/components/browse/BrowseHero"
 import { BrowseRow } from "@/components/browse/BrowseRow"
 import { BrowseTile } from "@/components/browse/BrowseTile"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
-import { useLibrary, useLibraryQuery } from "@/hooks/useLibrary"
+import { useLibrary, useLibraryQuery, useUpdateLibraryProgress } from "@/hooks/useLibrary"
 import { useCollections } from "@/hooks/useCollections"
 import { useArtists } from "@/hooks/useArtists"
+import { useSettings } from "@/hooks/useSettings"
 import { buildCollectionTree, collectDescendantIds } from "@/lib/collectionTree"
 import { sortLibraryItems } from "@/lib/libraryFilters"
+import { isAudioFilename } from "@/lib/utils"
 
 const RECENTLY_ADDED_COUNT = 24
+const CONTINUE_WATCHING_COUNT = 24
 // Artists with fewer items than this aren't worth a whole row of their own.
 const MIN_ARTIST_ROW_SIZE = 2
+// Below this, playback barely started — not worth resuming.
+const CONTINUE_WATCHING_MIN_SECONDS = 5
+// Above this fraction watched, treat it as finished rather than "in
+// progress" — otherwise a video sits in Continue Watching forever after the
+// credits roll, just because its position never technically hit the end.
+const CONTINUE_WATCHING_MAX_FRACTION = 0.95
 
 export function BrowsePage() {
   const [searchParams] = useSearchParams()
@@ -21,7 +30,15 @@ export function BrowsePage() {
   const { data: items, isLoading: itemsLoading } = useLibrary()
   const { data: collections, isLoading: collectionsLoading } = useCollections()
   const { data: artists, isLoading: artistsLoading } = useArtists()
+  const { data: settings } = useSettings()
+  const ignorePrivacy = settings?.browseIgnorePrivacy ?? false
   const searchResults = useLibraryQuery({ q: search, pageSize: 100 }, search.length > 0)
+  const updateProgress = useUpdateLibraryProgress()
+  // Resetting position to 0 both drops the item out of the Continue
+  // Watching filter (below the min-seconds threshold) and makes the next
+  // open of that item start over from the beginning, which is the correct
+  // "forget this" semantics for an explicit remove.
+  const removeFromContinueWatching = (id: number) => updateProgress.mutate({ id, positionSeconds: 0 })
 
   if (search) {
     return (
@@ -55,7 +72,22 @@ export function BrowsePage() {
   }
 
   const recentlyAdded = sortLibraryItems(items, "downloadedAt", "desc").slice(0, RECENTLY_ADDED_COUNT)
-  const hero = recentlyAdded.find((i) => !i.blurred)
+  const hero = recentlyAdded.find((i) => ignorePrivacy || !i.blurred)
+
+  // Video only — music has no "continue watching" concept, and
+  // playbackPositionSeconds is never set for audio items in the first
+  // place (see usePlaybackProgress).
+  const continueWatching = items
+    .filter(
+      (i) =>
+        !isAudioFilename(i.filename) &&
+        i.playbackPositionSeconds != null &&
+        i.playbackPositionSeconds >= CONTINUE_WATCHING_MIN_SECONDS &&
+        (i.duration == null || i.playbackPositionSeconds < i.duration * CONTINUE_WATCHING_MAX_FRACTION) &&
+        i.lastWatchedAt != null,
+    )
+    .sort((a, b) => new Date(b.lastWatchedAt!).getTime() - new Date(a.lastWatchedAt!).getTime())
+    .slice(0, CONTINUE_WATCHING_COUNT)
 
   const collectionRows = buildCollectionTree(collections)
     .map((root) => {
@@ -87,6 +119,12 @@ export function BrowsePage() {
       <div className="space-y-8 pb-8">
         {hero && <BrowseHero item={hero} />}
         <div className="space-y-6 px-4 md:px-8">
+          <BrowseRow
+            title="Continue Watching"
+            items={continueWatching}
+            showProgress
+            onRemoveItem={removeFromContinueWatching}
+          />
           <BrowseRow title="Recently Added" items={recentlyAdded} />
           {collectionRows.map((row) => (
             <BrowseRow key={row.key} title={row.title} items={row.items} />

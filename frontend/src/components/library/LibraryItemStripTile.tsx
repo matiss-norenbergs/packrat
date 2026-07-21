@@ -11,18 +11,23 @@ import type { LibraryItem } from "@/types/api"
 // previously. basePath lets this tile stay within whichever detail route
 // it's rendered under ("/library" from the management chrome, "/browse"
 // from the Browse chrome) instead of always jumping back into /library.
+// ignorePrivacy mirrors LibraryItemDetail's prop of the same name — only
+// forwarded from the Browse chrome, never from Library.
 export function LibraryItemStripTile({
   item,
   backTo,
   basePath = "/library",
+  ignorePrivacy = false,
 }: {
   item: LibraryItem
   backTo: string
   basePath?: string
+  ignorePrivacy?: boolean
 }) {
   const { isRevealed, toggleItem } = useRevealAll()
   const revealed = isRevealed(item.id)
   const toggleReveal = () => toggleItem(item.id)
+  const effectiveBlurred = item.blurred && !ignorePrivacy
 
   return (
     <div className="w-40 shrink-0 space-y-1.5">
@@ -31,12 +36,12 @@ export function LibraryItemStripTile({
           <BlurredThumbnail
             src={mediaFileUrl(item.thumbnail)}
             className="absolute inset-0 h-full w-full object-cover"
-            blurred={item.blurred}
+            blurred={effectiveBlurred}
             revealed={revealed}
             onToggleReveal={toggleReveal}
           />
         ) : null}
-        {!item.blurred || revealed ? (
+        {!effectiveBlurred || revealed ? (
           <Link to={`${basePath}/${item.id}`} state={{ from: backTo }} className="absolute inset-0" aria-label={item.title} />
         ) : null}
         {item.duration != null && (
@@ -45,7 +50,7 @@ export function LibraryItemStripTile({
           </span>
         )}
       </div>
-      {item.blurred && !revealed ? (
+      {effectiveBlurred && !revealed ? (
         <p className="line-clamp-2 text-xs font-medium">{hashText(item.title)}</p>
       ) : (
         <Link

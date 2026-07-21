@@ -19,6 +19,7 @@ const (
 	SettingLibraryPageSize          = "library_page_size"
 	SettingThumbnailFrameCount      = "thumbnail_frame_count"
 	SettingPrivacyBlurStrength      = "privacy_blur_strength" // "weak" | "default" | "strong"
+	SettingBrowseIgnorePrivacy      = "browse_ignore_privacy" // bool, default false — Browse-page-only override, doesn't affect Library
 	SettingSkipDownloadPreview      = "skip_download_preview" // bool, true = skip the New Download preview card
 	SettingJellyfinEnabled          = "jellyfin_enabled"
 	SettingJellyfinURL              = "jellyfin_url"

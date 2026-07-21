@@ -410,6 +410,22 @@ func (r *LibraryRepo) UpdateOriginalURL(ctx context.Context, id int64, url *stri
 	return checkRowsAffected(res)
 }
 
+// UpdatePlaybackPosition records how far into playback (in seconds) the
+// user has gotten, and stamps last_watched_at — powers the Browse page's
+// "Continue Watching" row. Called frequently (throttled client-side) while
+// a video plays, so it's kept as a narrow, single-purpose update rather
+// than folded into UpdateMetadata.
+func (r *LibraryRepo) UpdatePlaybackPosition(ctx context.Context, id int64, positionSeconds int) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE library SET playback_position_seconds = ?, last_watched_at = datetime('now') WHERE id = ?`,
+		positionSeconds, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating library playback position: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // DistinctYears returns every distinct release_year present in the library,
 // descending — backs the year filter dropdown, which needs every possible
 // value regardless of whatever search/filter/page is currently active.
@@ -484,7 +500,8 @@ func checkRowsAffected(res sql.Result) error {
 
 const librarySelectPrefix = `
 	SELECT l.id, l.download_id, l.title, l.filename, l.path, l.collection_id, c.name, l.folder, l.original_url, l.video_id,
-	       l.uploader, l.duration, l.resolution, l.thumbnail, l.description, l.artist_id, a.name, l.release_year, l.sequence_number, l.season_number, l.generate_nfo, l.downloaded_at, l.status, l.file_size_bytes`
+	       l.uploader, l.duration, l.resolution, l.thumbnail, l.description, l.artist_id, a.name, l.release_year, l.sequence_number, l.season_number, l.generate_nfo, l.downloaded_at, l.status, l.file_size_bytes,
+	       l.playback_position_seconds, l.last_watched_at`
 
 const libraryFromClause = `
 	FROM library l
@@ -496,11 +513,13 @@ const librarySelectColumns = librarySelectPrefix + libraryFromClause
 func scanLibraryItem(row rowScanner) (*models.LibraryItem, error) {
 	var item models.LibraryItem
 	var downloadedAt string
+	var lastWatchedAt sql.NullString
 
 	err := row.Scan(
 		&item.ID, &item.DownloadID, &item.Title, &item.Filename, &item.Path, &item.CollectionID, &item.CollectionName, &item.Folder,
 		&item.OriginalURL, &item.VideoID, &item.Uploader, &item.Duration, &item.Resolution, &item.Thumbnail,
 		&item.Description, &item.ArtistID, &item.ArtistName, &item.ReleaseYear, &item.SequenceNumber, &item.SeasonNumber, &item.GenerateNFO, &downloadedAt, &item.Status, &item.FileSizeBytes,
+		&item.PlaybackPositionSeconds, &lastWatchedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -512,6 +531,13 @@ func scanLibraryItem(row rowScanner) (*models.LibraryItem, error) {
 	item.DownloadedAt, err = parseSQLiteTime(downloadedAt)
 	if err != nil {
 		return nil, err
+	}
+	if lastWatchedAt.Valid {
+		t, err := parseSQLiteTime(lastWatchedAt.String)
+		if err != nil {
+			return nil, err
+		}
+		item.LastWatchedAt = &t
 	}
 	return &item, nil
 }

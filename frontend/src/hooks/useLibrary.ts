@@ -19,10 +19,12 @@ import {
   refreshLibraryItemMetadata,
   setLibraryThumbnail,
   updateLibraryItem,
+  updateLibraryItemProgress,
 } from "@/lib/api"
 import type {
   BulkAssignTagsRequest,
   BulkDeleteLibraryItemsRequest,
+  LibraryItem,
   LibraryQueryParams,
   MoveLibraryItemRequest,
   UpdateLibraryItemRequest,
@@ -85,6 +87,31 @@ export function useUpdateLibraryItem() {
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to save: ${err.message}`),
+  })
+}
+
+// Fires every few seconds during video playback (see usePlaybackProgress),
+// so unlike the other mutations here it deliberately skips the toast and
+// invalidateQueries — a toast per autosave would be obnoxious, and
+// invalidating the whole library list on every tick would force refetches
+// while the same item is still playing. Patching the cached list directly
+// keeps the Browse page's "Continue Watching" row correct next time it
+// mounts without any of that.
+export function useUpdateLibraryProgress() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, positionSeconds }: { id: number; positionSeconds: number }) =>
+      updateLibraryItemProgress(id, { positionSeconds }),
+    onSuccess: (_data, { id, positionSeconds }) => {
+      const lastWatchedAt = new Date().toISOString()
+      // Exact-match setQueryData, not setQueriesData — libraryQueryKey alone
+      // is also a prefix of useLibraryQuery's/useLibraryItemNFO's etc. keys,
+      // whose cached shape isn't a bare LibraryItem[] and would break if the
+      // updater below ran against it.
+      queryClient.setQueryData<LibraryItem[]>(libraryQueryKey, (old) =>
+        old?.map((item) => (item.id === id ? { ...item, playbackPositionSeconds: positionSeconds, lastWatchedAt } : item)),
+      )
+    },
   })
 }
 

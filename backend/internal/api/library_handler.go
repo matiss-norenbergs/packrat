@@ -200,6 +200,36 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 	}
 }
 
+// UpdateLibraryItemProgress records the current playback position for the
+// Browse page's "Continue Watching" row. The frontend only calls this for
+// video items (never audio) and throttles calls client-side, so this stays
+// a narrow, cheap single-field update rather than routing through the
+// general UpdateLibraryItem PATCH.
+func UpdateLibraryItemProgress(repo *repository.LibraryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+		var req UpdateLibraryProgressRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if err := repo.UpdatePlaybackPosition(c.Request.Context(), id, req.PositionSeconds); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
 // deleteLibraryItemFiles best-effort removes item's media file and
 // thumbnail (if any) from mediaRoot — a missing file is logged, not treated
 // as an error, since the end state (file gone) is the same either way.

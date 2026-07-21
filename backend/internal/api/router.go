@@ -90,6 +90,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/library/facets", GetLibraryFacets(deps.LibraryRepo))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
 		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo, deps.ArtistsRepo))
+		api.POST("/library/:id/progress", UpdateLibraryItemProgress(deps.LibraryRepo))
 		api.POST("/library/bulk-tags", BulkAssignTags(deps.LibraryRepo, deps.TagsRepo, deps.MediaRoot))
 		api.POST("/library/bulk-delete", BulkDeleteLibraryItems(deps.DB, deps.LibraryRepo, deps.MediaRoot))
 		api.POST("/library/:id/move", MoveLibraryItem(deps.LibraryRepo, deps.Manager, deps.MediaRoot))

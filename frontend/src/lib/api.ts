@@ -39,6 +39,7 @@ import type {
   UpdateArtistRequest,
   UpdateCollectionRequest,
   UpdateLibraryItemRequest,
+  UpdateLibraryProgressRequest,
   UpdateSettingsRequest,
   UpdateTagRequest,
   YtDlpVersionInfo,
@@ -189,6 +190,13 @@ export function bulkDeleteLibraryItems(payload: BulkDeleteLibraryItemsRequest): 
 
 export function moveLibraryItem(id: number, payload: MoveLibraryItemRequest): Promise<void> {
   return request<void>(`/library/${id}/move`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateLibraryItemProgress(id: number, payload: UpdateLibraryProgressRequest): Promise<void> {
+  return request<void>(`/library/${id}/progress`, {
     method: "POST",
     body: JSON.stringify(payload),
   })

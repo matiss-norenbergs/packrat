@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useLibrary } from "@/hooks/useLibrary"
+import { useSettings } from "@/hooks/useSettings"
 import { LibraryItemDetail } from "@/components/library/LibraryItemDetail"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { useMiniPlayer } from "@/components/browse/MiniPlayerContext"
@@ -13,6 +14,7 @@ import { useMiniPlayer } from "@/components/browse/MiniPlayerContext"
 export function BrowseItemPage() {
   const { id } = useParams<{ id: string }>()
   const { data: items, isLoading } = useLibrary()
+  const { data: settings } = useSettings()
   const item = items?.find((i) => i.id === Number(id))
   const navigate = useNavigate()
   const location = useLocation()
@@ -67,6 +69,7 @@ export function BrowseItemPage() {
           playerHeightClass="h-[calc(100vh-57px)]"
           resumeAt={resumeAt}
           resumePaused={resumePaused}
+          ignorePrivacy={settings?.browseIgnorePrivacy ?? false}
           onMinimize={(currentTime, paused) => {
             minimize(item, currentTime, paused)
             navigate("/browse")

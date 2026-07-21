@@ -171,6 +171,12 @@ export interface LibraryItem {
   blurred: boolean
   fileSizeBytes: number | null
   tags: string[]
+  playbackPositionSeconds: number | null
+  lastWatchedAt: string | null
+}
+
+export interface UpdateLibraryProgressRequest {
+  positionSeconds: number
 }
 
 export interface LibraryItemMetadataPreview {
@@ -278,6 +284,7 @@ export interface Settings {
   libraryPageSize: number
   thumbnailFrameCount: number
   privacyBlurStrength: string
+  browseIgnorePrivacy: boolean
   skipDownloadPreview: boolean
   jellyfinEnabled: boolean
   jellyfinUrl: string
@@ -376,6 +383,7 @@ export interface UpdateSettingsRequest {
   libraryPageSize?: number
   thumbnailFrameCount?: number
   privacyBlurStrength?: string
+  browseIgnorePrivacy?: boolean
   skipDownloadPreview?: boolean
   jellyfinEnabled?: boolean
   jellyfinUrl?: string

@@ -710,27 +710,45 @@ function PrivacyCard() {
         {isLoading || !settings ? (
           <Skeleton className="h-20 w-full" />
         ) : (
-          <div className="space-y-2">
-            <Label>Private Collection Blur Strength</Label>
-            <Select
-              value={settings.privacyBlurStrength}
-              onValueChange={(v) => updateSettings.mutate({ privacyBlurStrength: v })}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {BLUR_STRENGTH_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              How strongly thumbnails in private collections are blurred until clicked to reveal.
-            </p>
-          </div>
+          <>
+            <div className="space-y-2">
+              <Label>Private Collection Blur Strength</Label>
+              <Select
+                value={settings.privacyBlurStrength}
+                onValueChange={(v) => updateSettings.mutate({ privacyBlurStrength: v })}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BLUR_STRENGTH_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                How strongly thumbnails in private collections are blurred until clicked to reveal.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="browse-ignore-privacy"
+                  checked={settings.browseIgnorePrivacy}
+                  disabled={updateSettings.isPending}
+                  onCheckedChange={(v) => updateSettings.mutate({ browseIgnorePrivacy: v === true })}
+                />
+                <Label htmlFor="browse-ignore-privacy" className="font-normal">
+                  Show private items unblurred in Browse
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Only affects the Browse page — Library and Collections keep blurring private items as usual.
+              </p>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

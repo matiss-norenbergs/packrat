@@ -5,6 +5,7 @@ import { syncMediaOnReady } from "@/lib/mediaSeek"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { mediaFileUrl } from "@/lib/api"
+import { usePlaybackProgress } from "@/hooks/usePlaybackProgress"
 import { useSettings } from "@/hooks/useSettings"
 import { sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
 import { formatBytes, hashText, isAudioFilename } from "@/lib/utils"
@@ -30,6 +31,9 @@ import type { LibraryItem } from "@/types/api"
 // setting so a paused-then-expanded item doesn't unexpectedly start playing.
 // onMinimize, if provided, shows a "Minimize" button next to Back — only
 // BrowseItemPage passes it, since the mini-player is a Browse-only feature.
+// ignorePrivacy, if true, treats this item and its siblings as unblurred —
+// only BrowseItemPage passes it (from the browseIgnorePrivacy setting);
+// LibraryItemPage never does, so Library's blur behavior is unaffected.
 export function LibraryItemDetail({
   item,
   items,
@@ -39,6 +43,7 @@ export function LibraryItemDetail({
   resumeAt,
   resumePaused,
   onMinimize,
+  ignorePrivacy = false,
 }: {
   item: LibraryItem
   items: LibraryItem[]
@@ -48,24 +53,37 @@ export function LibraryItemDetail({
   resumeAt?: number
   resumePaused?: boolean
   onMinimize?: (currentTime: number, paused: boolean) => void
+  ignorePrivacy?: boolean
 }) {
   const { data: settings } = useSettings()
   const { isRevealed, toggleItem, revealItems } = useRevealAll()
   const revealed = isRevealed(item.id)
-  const locked = item.blurred && !revealed
+  const effectiveBlurred = item.blurred && !ignorePrivacy
+  const locked = effectiveBlurred && !revealed
 
   const autoPlay = resumePaused != null ? !resumePaused : (settings?.libraryAutoplay ?? true)
   const audioRef = usePersistedVolume<HTMLAudioElement>()
   const videoRef = usePersistedVolume<HTMLVideoElement>()
+  const isVideo = !isAudioFilename(item.filename)
+
+  // resumeAt (mini-player hand-off) wins when present; otherwise fall back
+  // to the persisted server-side position powering Continue Watching — only
+  // meaningful for video, since playback position is never tracked for
+  // music (see usePlaybackProgress below).
+  const effectiveResumeAt = resumeAt ?? (isVideo && item.playbackPositionSeconds ? item.playbackPositionSeconds : undefined)
 
   // Runs after commit, once the ref is populated — see syncMediaOnReady for
   // why this can't just be the JSX onLoadedMetadata prop.
   useEffect(() => {
     const el = isAudioFilename(item.filename) ? audioRef.current : videoRef.current
     if (!el) return
-    return syncMediaOnReady(el, resumeAt, autoPlay)
+    return syncMediaOnReady(el, effectiveResumeAt, autoPlay)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.path])
+
+  // Video only, per Continue Watching's scope — music has no "continue
+  // watching" concept, so audio items never report a position at all.
+  usePlaybackProgress(videoRef, item.id, isVideo && !locked)
 
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
   const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
@@ -197,9 +215,15 @@ export function LibraryItemDetail({
         {siblings.length > 0 && (
           <div className="space-y-2">
             <h2 className="text-sm font-medium text-muted-foreground">More from this collection</h2>
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="scrollbar-thin flex gap-3 overflow-x-auto pb-2">
               {siblings.map((sibling) => (
-                <LibraryItemStripTile key={sibling.id} item={sibling} backTo={backTo} basePath={basePath} />
+                <LibraryItemStripTile
+                  key={sibling.id}
+                  item={sibling}
+                  backTo={backTo}
+                  basePath={basePath}
+                  ignorePrivacy={ignorePrivacy}
+                />
               ))}
             </div>
           </div>

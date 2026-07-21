@@ -27,4 +27,9 @@ type LibraryItem struct {
 	DownloadedAt   time.Time
 	Status         string
 	FileSizeBytes  *int64
+	// PlaybackPositionSeconds/LastWatchedAt back the Browse page's "Continue
+	// Watching" row — nil means never played (or played to completion and
+	// cleared). Only meaningful for video; music playback never sets these.
+	PlaybackPositionSeconds *int
+	LastWatchedAt           *time.Time
 }
