@@ -31,7 +31,7 @@ export function LibraryListView() {
   const location = useLocation()
   const [page, setPage] = useState(1)
   const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
-  const { selectionActive, isItemSelected, toggleItem: toggleSelected } = useSelection()
+  const { selectionActive, isItemSelected, toggleItem: toggleSelected, selectItems, deselectItems } = useSelection()
   const { visibleColumns } = useLibraryColumns()
   const mode = (settings?.libraryMode as "manage" | "details") || "manage"
 
@@ -96,12 +96,33 @@ export function LibraryListView() {
 
   const columns = LIBRARY_COLUMNS.filter((col) => visibleColumns.has(col.key))
 
+  // Selects/deselects every row currently loaded on this page — not
+  // whatever matches the current filters beyond it, since the list is
+  // paginated and only this page's items are in `data.items` to begin with.
+  const pageSelectedCount = data.items.filter((i) => isItemSelected(i.id)).length
+  const allOnPageSelected = pageSelectedCount === data.items.length
+  const toggleSelectAll = () => {
+    if (allOnPageSelected) {
+      deselectItems(data.items.map((i) => i.id))
+    } else {
+      selectItems(data.items)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <Table containerClassName="relative max-h-[calc(100vh-239px)] w-full overflow-auto rounded-md border">
         <TableHeader>
           <TableRow>
-            {mode === "manage" && <TableHead className="w-10" />}
+            {mode === "manage" && (
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={pageSelectedCount === 0 ? false : allOnPageSelected ? true : "indeterminate"}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all"
+                />
+              </TableHead>
+            )}
             <TableHead className="w-16">Thumb</TableHead>
             <TableHead className="min-w-48">
               <button

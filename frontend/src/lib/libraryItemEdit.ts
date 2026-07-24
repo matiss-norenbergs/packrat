@@ -61,18 +61,23 @@ export function buildLibraryItemUpdatePayload(item: LibraryItem, fields: Library
   const initialArtistId = artistIdToSelectValue(item.artistId)
   if (fields.artistId !== initialArtistId) payload.artistId = fields.artistId === NO_ARTIST ? 0 : Number(fields.artistId)
 
-  const parsedYear = fields.year.trim() === "" ? null : Number(fields.year)
-  if (parsedYear !== item.year && parsedYear != null && !Number.isNaN(parsedYear)) {
+  // 0 is the wire-level "clear this field" sentinel the backend expects
+  // (see clearableInt in library_handler.go) — a real year/season/sequence
+  // is never legitimately 0, so an emptied field maps to 0 rather than
+  // being dropped from the payload, which would just leave the old value
+  // in place instead of clearing it.
+  const parsedYear = fields.year.trim() === "" ? 0 : Number(fields.year)
+  if (!Number.isNaN(parsedYear) && parsedYear !== (item.year ?? 0)) {
     payload.year = parsedYear
   }
 
-  const parsedSequenceNumber = fields.sequenceNumber.trim() === "" ? null : Number(fields.sequenceNumber)
-  if (parsedSequenceNumber !== item.sequenceNumber && parsedSequenceNumber != null && !Number.isNaN(parsedSequenceNumber)) {
+  const parsedSequenceNumber = fields.sequenceNumber.trim() === "" ? 0 : Number(fields.sequenceNumber)
+  if (!Number.isNaN(parsedSequenceNumber) && parsedSequenceNumber !== (item.sequenceNumber ?? 0)) {
     payload.sequenceNumber = parsedSequenceNumber
   }
 
-  const parsedSeasonNumber = fields.seasonNumber.trim() === "" ? null : Number(fields.seasonNumber)
-  if (parsedSeasonNumber !== item.seasonNumber && parsedSeasonNumber != null && !Number.isNaN(parsedSeasonNumber)) {
+  const parsedSeasonNumber = fields.seasonNumber.trim() === "" ? 0 : Number(fields.seasonNumber)
+  if (!Number.isNaN(parsedSeasonNumber) && parsedSeasonNumber !== (item.seasonNumber ?? 0)) {
     payload.seasonNumber = parsedSeasonNumber
   }
 

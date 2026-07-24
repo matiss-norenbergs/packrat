@@ -94,9 +94,9 @@ func (r *CollectionsRepo) createLocked(ctx context.Context, c *models.Collection
 	}
 
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO collections (name, parent_id, root_path, default_quality, default_download_type, filename_template, is_private, jellyfin_library, season_number, artist_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Name, c.ParentID, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.FilenameTemplate, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.ArtistID,
+		INSERT INTO collections (name, parent_id, root_path, default_quality, default_download_type, filename_template, is_private, jellyfin_library, season_number, artist_id, browse_as_show)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.ParentID, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.FilenameTemplate, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.ArtistID, c.BrowseAsShow,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting collection: %w", err)
@@ -155,9 +155,12 @@ func (r *CollectionsRepo) ItemCounts(ctx context.Context) (map[int64]int, error)
 }
 
 // Update overwrites name/root_path/default_quality/default_download_type/
-// filename_template/is_private/jellyfin_library for id. Callers apply
-// partial-update semantics before calling this (fetch, merge, write) — this
-// method always writes all of these columns.
+// filename_template/is_private/jellyfin_library/season_number/artist_id/
+// browse_as_show for id. Callers apply partial-update semantics before
+// calling this (fetch, merge, write) — this method always writes all of
+// these columns. cover_image_path is deliberately NOT included — it's only
+// ever written by SetCoverImage, so a general update here can never clobber
+// it.
 func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collection) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -177,12 +180,31 @@ func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collec
 
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE collections
-		SET name = ?, root_path = ?, default_quality = ?, default_download_type = ?, filename_template = ?, is_private = ?, jellyfin_library = ?, season_number = ?, artist_id = ?, updated_at = datetime('now')
+		SET name = ?, root_path = ?, default_quality = ?, default_download_type = ?, filename_template = ?, is_private = ?, jellyfin_library = ?, season_number = ?, artist_id = ?, browse_as_show = ?, updated_at = datetime('now')
 		WHERE id = ?`,
-		c.Name, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.FilenameTemplate, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.ArtistID, id,
+		c.Name, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.FilenameTemplate, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.ArtistID, c.BrowseAsShow, id,
 	)
 	if err != nil {
 		return fmt.Errorf("updating collection: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetCoverImage narrowly updates just the collection's cover image path —
+// kept separate from Update so setting/clearing a cover never needs to
+// round-trip every other field (mirrors ArtistsRepo.SetSelectedImage).
+// path == nil clears the cover.
+func (r *CollectionsRepo) SetCoverImage(ctx context.Context, id int64, path *string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE collections SET cover_image_path = ? WHERE id = ?`, path, id)
+	if err != nil {
+		return fmt.Errorf("updating collection cover image: %w", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -324,7 +346,7 @@ func FindChildByRootPath(cols []models.Collection, parentID *int64, segment stri
 
 const collectionSelectColumns = `
 	SELECT id, name, parent_id, root_path, default_quality, default_download_type, filename_template,
-	       jellyfin_library, is_private, season_number, artist_id, created_at, updated_at
+	       jellyfin_library, is_private, season_number, artist_id, cover_image_path, browse_as_show, created_at, updated_at
 	FROM collections`
 
 func scanCollection(row rowScanner) (*models.Collection, error) {
@@ -333,7 +355,7 @@ func scanCollection(row rowScanner) (*models.Collection, error) {
 
 	err := row.Scan(
 		&c.ID, &c.Name, &c.ParentID, &c.RootPath, &c.DefaultQuality, &c.DefaultDownloadType, &c.FilenameTemplate,
-		&c.JellyfinLibrary, &c.IsPrivate, &c.SeasonNumber, &c.ArtistID, &createdAt, &updatedAt,
+		&c.JellyfinLibrary, &c.IsPrivate, &c.SeasonNumber, &c.ArtistID, &c.CoverImagePath, &c.BrowseAsShow, &createdAt, &updatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

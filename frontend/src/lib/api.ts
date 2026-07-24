@@ -1,5 +1,7 @@
 import type {
   Artist,
+  ArtistImage,
+  ArtistImageCandidate,
   AuthStatus,
   BackupEnvelope,
   BackupImportLibraryResult,
@@ -10,6 +12,7 @@ import type {
   BulkDeleteResponse,
   ChangePasswordRequest,
   Collection,
+  CollectionCoverCandidate,
   CreateArtistRequest,
   CreateBatchDownloadRequest,
   CreateCollectionRequest,
@@ -31,6 +34,8 @@ import type {
   MoveLibraryItemRequest,
   ScannedFile,
   Settings,
+  SetArtistImageRequest,
+  SetCollectionCoverRequest,
   SetupRequest,
   Stats,
   Tag,
@@ -163,6 +168,12 @@ export function mediaFileUrl(relativePath: string): string {
   return `/media-files/${relativePath.split("/").map(encodeURIComponent).join("/")}`
 }
 
+// Resolves a relative path under the backend's images root (artist/collection
+// pictures Packrat itself copied in) into a URL — mirrors mediaFileUrl().
+export function imageUrl(relativePath: string): string {
+  return `/local-images/${relativePath.split("/").map(encodeURIComponent).join("/")}`
+}
+
 export function deleteLibraryItem(id: number, deleteFiles: boolean): Promise<void> {
   return request<void>(`/library/${id}?deleteFiles=${deleteFiles}`, { method: "DELETE" })
 }
@@ -272,6 +283,21 @@ export function bulkDeleteCollections(payload: BulkDeleteRequest): Promise<BulkD
     method: "POST",
     body: JSON.stringify(payload),
   })
+}
+
+export function fetchCollectionCoverCandidates(id: number): Promise<{ candidates: CollectionCoverCandidate[] }> {
+  return request<{ candidates: CollectionCoverCandidate[] }>(`/collections/${id}/cover-candidates`)
+}
+
+export function setCollectionCover(id: number, payload: SetCollectionCoverRequest): Promise<{ coverImagePath: string }> {
+  return request<{ coverImagePath: string }>(`/collections/${id}/cover`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteCollectionCover(id: number): Promise<void> {
+  return request<void>(`/collections/${id}/cover`, { method: "DELETE" })
 }
 
 export function fetchSettings(): Promise<Settings> {
@@ -427,4 +453,31 @@ export function bulkDeleteArtists(payload: BulkDeleteRequest): Promise<BulkDelet
     method: "POST",
     body: JSON.stringify(payload),
   })
+}
+
+export function fetchArtistImageCandidates(artistId: number): Promise<{ candidates: ArtistImageCandidate[] }> {
+  return request<{ candidates: ArtistImageCandidate[] }>(`/artists/${artistId}/image-candidates`)
+}
+
+export function fetchArtistImages(artistId: number): Promise<ArtistImage[]> {
+  return request<ArtistImage[]>(`/artists/${artistId}/images`)
+}
+
+export function addArtistImage(artistId: number, payload: SetArtistImageRequest): Promise<ArtistImage> {
+  return request<ArtistImage>(`/artists/${artistId}/images`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteArtistImage(artistId: number, imageId: number): Promise<void> {
+  return request<void>(`/artists/${artistId}/images/${imageId}`, { method: "DELETE" })
+}
+
+export function selectArtistImage(artistId: number, imageId: number): Promise<void> {
+  return request<void>(`/artists/${artistId}/images/${imageId}/select`, { method: "POST" })
+}
+
+export function clearArtistSelectedImage(artistId: number): Promise<void> {
+  return request<void>(`/artists/${artistId}/selected-image`, { method: "DELETE" })
 }

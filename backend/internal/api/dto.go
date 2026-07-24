@@ -426,6 +426,7 @@ type CreateCollectionRequest struct {
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 	SeasonNumber        *int    `json:"seasonNumber"`
 	ArtistID            *int64  `json:"artistId"`
+	BrowseAsShow        bool    `json:"browseAsShow"`
 }
 
 type UpdateCollectionRequest struct {
@@ -438,21 +439,24 @@ type UpdateCollectionRequest struct {
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 	SeasonNumber        *int    `json:"seasonNumber"`
 	ArtistID            *int64  `json:"artistId"`
+	BrowseAsShow        bool    `json:"browseAsShow"`
 }
 
 type CollectionResponse struct {
-	ID                  int64  `json:"id"`
-	Name                string `json:"name"`
-	ParentID            *int64 `json:"parentId"`
-	RootPath            string `json:"rootPath"`
-	Path                string `json:"path"`
-	DefaultQuality      string `json:"defaultQuality"`
-	DefaultDownloadType string `json:"defaultDownloadType"`
-	FilenameTemplate    string `json:"filenameTemplate"`
-	IsPrivate           bool   `json:"isPrivate"`
-	SeasonNumber        *int   `json:"seasonNumber"`
-	ArtistID            *int64 `json:"artistId"`
-	ItemCount           int    `json:"itemCount"`
+	ID                  int64   `json:"id"`
+	Name                string  `json:"name"`
+	ParentID            *int64  `json:"parentId"`
+	RootPath            string  `json:"rootPath"`
+	Path                string  `json:"path"`
+	DefaultQuality      string  `json:"defaultQuality"`
+	DefaultDownloadType string  `json:"defaultDownloadType"`
+	FilenameTemplate    string  `json:"filenameTemplate"`
+	IsPrivate           bool    `json:"isPrivate"`
+	SeasonNumber        *int    `json:"seasonNumber"`
+	ArtistID            *int64  `json:"artistId"`
+	CoverImagePath      *string `json:"coverImagePath"`
+	BrowseAsShow        bool    `json:"browseAsShow"`
+	ItemCount           int     `json:"itemCount"`
 	// EffectiveIsPrivate and TotalItemCount account for inheritance down the
 	// collection tree — IsPrivate/ItemCount above are this collection's own,
 	// non-inherited flag and its own direct (non-rolled-up) item count,
@@ -498,10 +502,11 @@ func toTagResponse(t models.TagWithCount) TagResponse {
 }
 
 type ArtistResponse struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	CreatedAt  string `json:"createdAt"`
-	UsageCount int    `json:"usageCount"`
+	ID                int64   `json:"id"`
+	Name              string  `json:"name"`
+	SelectedImagePath *string `json:"selectedImagePath"`
+	CreatedAt         string  `json:"createdAt"`
+	UsageCount        int     `json:"usageCount"`
 }
 
 type CreateArtistRequest struct {
@@ -514,11 +519,62 @@ type UpdateArtistRequest struct {
 
 func toArtistResponse(a models.ArtistWithCount) ArtistResponse {
 	return ArtistResponse{
-		ID:         a.ID,
-		Name:       a.Name,
-		CreatedAt:  a.CreatedAt.Format(timeFormat),
-		UsageCount: a.UsageCount,
+		ID:                a.ID,
+		Name:              a.Name,
+		SelectedImagePath: a.SelectedImagePath,
+		CreatedAt:         a.CreatedAt.Format(timeFormat),
+		UsageCount:        a.UsageCount,
 	}
+}
+
+// ArtistImageResponse is one entry in an artist's image gallery.
+type ArtistImageResponse struct {
+	ID           int64  `json:"id"`
+	RelativePath string `json:"relativePath"`
+	CreatedAt    string `json:"createdAt"`
+}
+
+func toArtistImageResponse(img models.ArtistImage) ArtistImageResponse {
+	return ArtistImageResponse{
+		ID:           img.ID,
+		RelativePath: img.RelativePath,
+		CreatedAt:    img.CreatedAt.Format(timeFormat),
+	}
+}
+
+// ArtistImageCandidateResponse is a suggested image the frontend can offer
+// to copy into an artist's gallery — sourced from that artist's library
+// items' thumbnails, not yet copied anywhere. RelPath is relative to
+// MediaRoot, resolved into a URL client-side the same way LibraryItem
+// thumbnails already are (via mediaFileUrl()).
+type ArtistImageCandidateResponse struct {
+	RelPath string `json:"relPath"`
+}
+
+// SetArtistImageRequest adds one image to an artist's gallery from exactly
+// one of two sources: SourceRelPath copies an existing file already on disk
+// under MediaRoot (e.g. a candidate from ThumbnailsByArtist), or
+// ImageBase64+Filename is a fresh browser upload — mirrors
+// SetLibraryThumbnailRequest's base64 pattern since this codebase has no
+// multipart upload anywhere.
+type SetArtistImageRequest struct {
+	SourceRelPath *string `json:"sourceRelPath"`
+	ImageBase64   *string `json:"imageBase64"`
+	Filename      *string `json:"filename"`
+}
+
+// CollectionCoverCandidateResponse is a suggested cover image found by
+// scanning the collection's own resolved folder, full depth.
+type CollectionCoverCandidateResponse struct {
+	RelPath string `json:"relPath"`
+}
+
+// SetCollectionCoverRequest sets a collection's cover from exactly one of
+// two sources — same dual-mode shape as SetArtistImageRequest.
+type SetCollectionCoverRequest struct {
+	SourceRelPath *string `json:"sourceRelPath"`
+	ImageBase64   *string `json:"imageBase64"`
+	Filename      *string `json:"filename"`
 }
 
 type SettingsResponse struct {
@@ -597,6 +653,8 @@ func toCollectionResponse(c models.Collection, path string, itemCount int, effec
 		IsPrivate:           c.IsPrivate,
 		SeasonNumber:        c.SeasonNumber,
 		ArtistID:            c.ArtistID,
+		CoverImagePath:      c.CoverImagePath,
+		BrowseAsShow:        c.BrowseAsShow,
 		ItemCount:           itemCount,
 		EffectiveIsPrivate:  effectiveIsPrivate,
 		TotalItemCount:      totalItemCount,

@@ -14,6 +14,8 @@ type Collection struct {
 	IsPrivate           bool
 	SeasonNumber        *int
 	ArtistID            *int64
+	CoverImagePath      *string
+	BrowseAsShow        bool
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }

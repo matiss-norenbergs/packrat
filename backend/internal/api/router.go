@@ -28,6 +28,7 @@ type Deps struct {
 	YtDlp           *downloader.YtDlpService
 	JellyfinClient  *jellyfin.Client
 	MediaRoot       string
+	ImagesRoot      string
 	FFProbePath     string
 	WSHandler       gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
 	StaticDir       string          // built frontend assets; empty in dev (Vite serves it)
@@ -110,6 +111,9 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.PATCH("/collections/:id", UpdateCollection(deps.CollectionsRepo, deps.Manager))
 		api.DELETE("/collections/:id", DeleteCollection(deps.CollectionsRepo))
 		api.POST("/collections/bulk-delete", BulkDeleteCollections(deps.DB, deps.CollectionsRepo))
+		api.GET("/collections/:id/cover-candidates", CollectionCoverCandidates(deps.MediaRoot, deps.CollectionsRepo))
+		api.POST("/collections/:id/cover", SetCollectionCover(deps.MediaRoot, deps.ImagesRoot, deps.CollectionsRepo))
+		api.DELETE("/collections/:id/cover", DeleteCollectionCover(deps.ImagesRoot, deps.CollectionsRepo))
 
 		api.GET("/tags", ListTags(deps.TagsRepo))
 		api.POST("/tags", CreateTag(deps.TagsRepo))
@@ -122,6 +126,12 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.PATCH("/artists/:id", UpdateArtist(deps.ArtistsRepo))
 		api.DELETE("/artists/:id", DeleteArtist(deps.ArtistsRepo))
 		api.POST("/artists/bulk-delete", BulkDeleteArtists(deps.DB, deps.ArtistsRepo))
+		api.GET("/artists/:id/image-candidates", ArtistImageCandidates(deps.LibraryRepo))
+		api.GET("/artists/:id/images", ListArtistImages(deps.ArtistsRepo))
+		api.POST("/artists/:id/images", AddArtistImage(deps.MediaRoot, deps.ImagesRoot, deps.ArtistsRepo))
+		api.DELETE("/artists/:id/images/:imageId", DeleteArtistImage(deps.ImagesRoot, deps.ArtistsRepo))
+		api.POST("/artists/:id/images/:imageId/select", SelectArtistImage(deps.ArtistsRepo))
+		api.DELETE("/artists/:id/selected-image", ClearArtistSelectedImage(deps.ArtistsRepo))
 
 		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.MediaRoot))
 		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager))
@@ -158,6 +168,15 @@ func SetupRouter(deps Deps) *gin.Engine {
 		// redownload, quick-grab), so a browser that trusted the response
 		// heuristically fresh would keep showing the old image after reload.
 		r.Group("/media-files", RequireAuth(deps.UsersRepo), noCacheHeaders).StaticFS("/", http.Dir(deps.MediaRoot))
+	}
+
+	if deps.ImagesRoot != "" {
+		// Artist/collection images Packrat itself copied in — same no-cache
+		// rationale as /media-files: a replaced cover/selected-image can
+		// land at a reused filename (e.g. collections/<id>/cover.jpg is
+		// always overwritten in place), so a browser that cached the old
+		// bytes as heuristically fresh would keep showing them after reload.
+		r.Group("/local-images", RequireAuth(deps.UsersRepo), noCacheHeaders).StaticFS("/", http.Dir(deps.ImagesRoot))
 	}
 
 	if deps.WSHandler != nil {

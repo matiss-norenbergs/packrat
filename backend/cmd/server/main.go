@@ -173,6 +173,7 @@ func run() error {
 		YtDlp:           ytdlpSvc,
 		JellyfinClient:  jellyfinClient,
 		MediaRoot:       cfg.MediaRoot,
+		ImagesRoot:      cfg.ImagesRoot,
 		FFProbePath:     cfg.FFProbePath,
 		WSHandler:       hub.GinHandler(),
 		StaticDir:       os.Getenv("STATIC_DIR"),

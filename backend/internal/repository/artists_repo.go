@@ -79,8 +79,8 @@ func (r *ArtistsRepo) createLocked(ctx context.Context, name string) (*models.Ar
 func (r *ArtistsRepo) Get(ctx context.Context, id int64) (*models.Artist, error) {
 	var a models.Artist
 	var createdAt string
-	err := r.db.QueryRowContext(ctx, `SELECT id, name, created_at FROM artists WHERE id = ?`, id).
-		Scan(&a.ID, &a.Name, &createdAt)
+	err := r.db.QueryRowContext(ctx, `SELECT id, name, selected_image_path, created_at FROM artists WHERE id = ?`, id).
+		Scan(&a.ID, &a.Name, &a.SelectedImagePath, &createdAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -98,7 +98,7 @@ func (r *ArtistsRepo) Get(ctx context.Context, id int64) (*models.Artist, error)
 // ordered by name — used by the Artists management page.
 func (r *ArtistsRepo) List(ctx context.Context) ([]models.ArtistWithCount, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT a.id, a.name, a.created_at, COUNT(l.id) AS usage_count
+		SELECT a.id, a.name, a.selected_image_path, a.created_at, COUNT(l.id) AS usage_count
 		FROM artists a
 		LEFT JOIN library l ON l.artist_id = a.id
 		GROUP BY a.id
@@ -112,7 +112,7 @@ func (r *ArtistsRepo) List(ctx context.Context) ([]models.ArtistWithCount, error
 	for rows.Next() {
 		var a models.ArtistWithCount
 		var createdAt string
-		if err := rows.Scan(&a.ID, &a.Name, &createdAt, &a.UsageCount); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.SelectedImagePath, &createdAt, &a.UsageCount); err != nil {
 			return nil, fmt.Errorf("scanning artist: %w", err)
 		}
 		a.CreatedAt, err = parseSQLiteTime(createdAt)
@@ -122,6 +122,88 @@ func (r *ArtistsRepo) List(ctx context.Context) ([]models.ArtistWithCount, error
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+
+// SetSelectedImage narrowly updates just the artist's chosen display image —
+// kept separate from Rename so picking/clearing a picture never needs to
+// round-trip the artist's name (mirrors LibraryRepo.UpdateThumbnail's
+// narrow-update style). path == nil clears the selection without touching
+// the underlying gallery.
+func (r *ArtistsRepo) SetSelectedImage(ctx context.Context, artistID int64, path *string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE artists SET selected_image_path = ? WHERE id = ?`, path, artistID)
+	if err != nil {
+		return fmt.Errorf("updating artist selected image: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// AddImage records a newly copied-in gallery image for an artist.
+func (r *ArtistsRepo) AddImage(ctx context.Context, artistID int64, relativePath string) (*models.ArtistImage, error) {
+	res, err := r.db.ExecContext(ctx, `INSERT INTO artist_images (artist_id, relative_path) VALUES (?, ?)`, artistID, relativePath)
+	if err != nil {
+		return nil, fmt.Errorf("inserting artist image: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetImage(ctx, id)
+}
+
+func (r *ArtistsRepo) GetImage(ctx context.Context, imageID int64) (*models.ArtistImage, error) {
+	var img models.ArtistImage
+	var createdAt string
+	err := r.db.QueryRowContext(ctx, `SELECT id, artist_id, relative_path, created_at FROM artist_images WHERE id = ?`, imageID).
+		Scan(&img.ID, &img.ArtistID, &img.RelativePath, &createdAt)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("scanning artist image: %w", err)
+	}
+	img.CreatedAt, err = parseSQLiteTime(createdAt)
+	if err != nil {
+		return nil, err
+	}
+	return &img, nil
+}
+
+// ListImages returns an artist's full image gallery, oldest first.
+func (r *ArtistsRepo) ListImages(ctx context.Context, artistID int64) ([]models.ArtistImage, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, artist_id, relative_path, created_at FROM artist_images WHERE artist_id = ? ORDER BY created_at, id`, artistID)
+	if err != nil {
+		return nil, fmt.Errorf("listing artist images: %w", err)
+	}
+	defer rows.Close()
+
+	var out []models.ArtistImage
+	for rows.Next() {
+		var img models.ArtistImage
+		var createdAt string
+		if err := rows.Scan(&img.ID, &img.ArtistID, &img.RelativePath, &createdAt); err != nil {
+			return nil, fmt.Errorf("scanning artist image: %w", err)
+		}
+		img.CreatedAt, err = parseSQLiteTime(createdAt)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, img)
+	}
+	return out, rows.Err()
+}
+
+// DeleteImage removes a gallery image's row and hands back its relative
+// path so the caller can also unlink the file and, if it was the artist's
+// selected image, clear that pointer too.
+func (r *ArtistsRepo) DeleteImage(ctx context.Context, imageID int64) (string, error) {
+	img, err := r.GetImage(ctx, imageID)
+	if err != nil {
+		return "", err
+	}
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM artist_images WHERE id = ?`, imageID); err != nil {
+		return "", fmt.Errorf("deleting artist image: %w", err)
+	}
+	return img.RelativePath, nil
 }
 
 func (r *ArtistsRepo) Rename(ctx context.Context, id int64, newName string) error {

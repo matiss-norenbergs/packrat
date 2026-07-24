@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         "/api": `http://localhost:${backendPort}`,
         "/media-files": `http://localhost:${backendPort}`,
+        "/local-images": `http://localhost:${backendPort}`,
         "/ws": {
           target: `ws://localhost:${backendPort}`,
           ws: true,

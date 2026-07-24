@@ -27,7 +27,7 @@ export function BrowseHeader() {
   }, [searchInput])
 
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-4 border-b bg-background/95 px-4 py-3 backdrop-blur-sm md:px-8">
+    <header className="sticky top-0 z-20 flex items-center gap-4 border-b bg-background/95 px-4 py-3 backdrop-blur-sm md:px-8">
       <Link to="/browse" className="flex shrink-0 items-center gap-2">
         <Package className="h-5 w-5" />
         <span className="text-base font-semibold">Packrat</span>

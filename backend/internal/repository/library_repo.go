@@ -398,6 +398,28 @@ func (r *LibraryRepo) UpdateThumbnail(ctx context.Context, id int64, thumbnail *
 	return checkRowsAffected(res)
 }
 
+// ThumbnailsByArtist returns the distinct thumbnail paths of every library
+// item assigned to an artist — the candidate source for "add from downloaded
+// files" in the artist images picker (an artist isn't tied to one folder the
+// way a collection is, so this is DB-driven rather than a filesystem walk).
+func (r *LibraryRepo) ThumbnailsByArtist(ctx context.Context, artistID int64) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT DISTINCT thumbnail FROM library WHERE artist_id = ? AND thumbnail IS NOT NULL`, artistID)
+	if err != nil {
+		return nil, fmt.Errorf("listing artist thumbnails: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var thumbnail string
+		if err := rows.Scan(&thumbnail); err != nil {
+			return nil, fmt.Errorf("scanning artist thumbnail: %w", err)
+		}
+		out = append(out, thumbnail)
+	}
+	return out, rows.Err()
+}
+
 // UpdateGenerateNFO toggles whether a .nfo sidecar file should be kept in
 // sync for this item — kept separate from the metadata bundle (UpdateMetadata)
 // since toggling it needs to trigger NFO generation itself, not just persist

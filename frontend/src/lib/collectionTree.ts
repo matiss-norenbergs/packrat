@@ -67,3 +67,18 @@ export function resolveInheritedArtistId(collections: Collection[], collectionId
   }
   return null
 }
+
+// Walks up parentId to the collection with no parent (or whose parent isn't
+// in the list) — used to bucket flagged "show" collections into one Browse
+// row per top-level ancestor, so e.g. several artists/albums nested under
+// one "Music" root land in a single "Music" row together. Returns null only
+// if collectionId isn't present in collections at all.
+export function topLevelAncestor(collections: Collection[], collectionId: number): Collection | null {
+  const byId = new Map(collections.map((c) => [c.id, c]))
+  let current = byId.get(collectionId)
+  if (!current) return null
+  while (current.parentId != null && byId.has(current.parentId)) {
+    current = byId.get(current.parentId)!
+  }
+  return current
+}

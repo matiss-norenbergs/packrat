@@ -319,6 +319,24 @@ func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, mediaRoot 
 // the whole file via ffmpeg and can take several seconds for a real video;
 // a failure there is logged but never fails the request, since the app's
 // own DB state is the source of truth for what Packrat displays.
+// clearableInt resolves a PATCH-provided *int field against the item's
+// current value, treating 0 as an explicit "clear to NULL" sentinel — same
+// convention as UpdateLibraryItemRequest.ArtistID's 0-means-clear. Once
+// JSON-unmarshaled, a Go *int can't distinguish "field omitted" from "field
+// explicitly set to null" (both produce nil), so a real, non-zero sentinel
+// is the only way for the client to signal "clear this" for a numeric
+// field. Year/Season/Sequence are never legitimately 0 through this API —
+// the Edit dialog's inputs enforce min="1" — so 0 is safe to reserve.
+func clearableInt(reqVal *int, current *int) *int {
+	if reqVal == nil {
+		return current
+	}
+	if *reqVal == 0 {
+		return nil
+	}
+	return reqVal
+}
+
 func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *downloader.YtDlpService, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -388,7 +406,7 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 		}
 
 		if req.Uploader != nil || req.Description != nil || req.Duration != nil || req.Resolution != nil || req.ArtistID != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil {
-			uploader, description, duration, resolution, year, sequenceNumber, seasonNumber := req.Uploader, req.Description, req.Duration, req.Resolution, req.Year, req.SequenceNumber, req.SeasonNumber
+			uploader, description, duration, resolution := req.Uploader, req.Description, req.Duration, req.Resolution
 			if uploader == nil {
 				uploader = item.Uploader
 			}
@@ -409,15 +427,9 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 					artistID = req.ArtistID
 				}
 			}
-			if year == nil {
-				year = item.ReleaseYear
-			}
-			if sequenceNumber == nil {
-				sequenceNumber = item.SequenceNumber
-			}
-			if seasonNumber == nil {
-				seasonNumber = item.SeasonNumber
-			}
+			year := clearableInt(req.Year, item.ReleaseYear)
+			sequenceNumber := clearableInt(req.SequenceNumber, item.SequenceNumber)
+			seasonNumber := clearableInt(req.SeasonNumber, item.SeasonNumber)
 			// title=nil relies on UpdateMetadata's COALESCE(?, title) so this
 			// call never touches title — that's handled by UpdateTitle above.
 			if err := repo.UpdateMetadata(c.Request.Context(), id, nil, uploader, duration, resolution, description, artistID, year, sequenceNumber, seasonNumber); err != nil {
@@ -445,18 +457,9 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 					artistName = &a.Name
 				}
 			}
-			year := item.ReleaseYear
-			if req.Year != nil {
-				year = req.Year
-			}
-			sequenceNumber := item.SequenceNumber
-			if req.SequenceNumber != nil {
-				sequenceNumber = req.SequenceNumber
-			}
-			seasonNumber := item.SeasonNumber
-			if req.SeasonNumber != nil {
-				seasonNumber = req.SeasonNumber
-			}
+			year := clearableInt(req.Year, item.ReleaseYear)
+			sequenceNumber := clearableInt(req.SequenceNumber, item.SequenceNumber)
+			seasonNumber := clearableInt(req.SeasonNumber, item.SeasonNumber)
 			// Backgrounded: c.Request.Context() would be cancelled as soon as
 			// the handler returns, so this uses context.Background() instead —
 			// EmbedMetadata applies its own internal timeout regardless.

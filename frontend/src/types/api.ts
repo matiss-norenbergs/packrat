@@ -91,6 +91,8 @@ export interface Collection {
   isPrivate: boolean
   seasonNumber: number | null
   artistId: number | null
+  coverImagePath: string | null
+  browseAsShow: boolean
   itemCount: number
   // Inheritance-aware versions of the two fields above — isPrivate/itemCount
   // are this collection's own flag and its own direct item count (what the
@@ -117,9 +119,23 @@ export interface CreateCollectionRequest {
   jellyfinLibraryId?: string | null
   seasonNumber?: number | null
   artistId?: number | null
+  browseAsShow?: boolean
 }
 
 export type UpdateCollectionRequest = CreateCollectionRequest
+
+export interface CollectionCoverCandidate {
+  relPath: string
+}
+
+// Exactly one of sourceRelPath (copy an existing on-disk file, e.g. a
+// candidate from fetchCollectionCoverCandidates) or imageBase64+filename (a
+// fresh upload) must be set.
+export interface SetCollectionCoverRequest {
+  sourceRelPath?: string
+  imageBase64?: string
+  filename?: string
+}
 
 export interface LibraryQueryParams {
   q?: string
@@ -244,6 +260,7 @@ export interface UpdateTagRequest {
 export interface Artist {
   id: number
   name: string
+  selectedImagePath: string | null
   createdAt: string
   usageCount: number
 }
@@ -254,6 +271,25 @@ export interface CreateArtistRequest {
 
 export interface UpdateArtistRequest {
   name: string
+}
+
+export interface ArtistImage {
+  id: number
+  relativePath: string
+  createdAt: string
+}
+
+export interface ArtistImageCandidate {
+  relPath: string
+}
+
+// Exactly one of sourceRelPath (copy an existing on-disk file, e.g. a
+// candidate from fetchArtistImageCandidates) or imageBase64+filename (a
+// fresh upload) must be set.
+export interface SetArtistImageRequest {
+  sourceRelPath?: string
+  imageBase64?: string
+  filename?: string
 }
 
 export interface ThumbnailCandidate {
