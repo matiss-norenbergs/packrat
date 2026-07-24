@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { Link } from "react-router-dom"
-import { Minimize2, Music } from "lucide-react"
+import { ArrowLeft, Minimize2, Music } from "lucide-react"
 import { syncMediaOnReady } from "@/lib/mediaSeek"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -29,8 +29,9 @@ import type { LibraryItem } from "@/types/api"
 // restore playback position and play/pause state (used when restoring from
 // the Browse mini-player) — resumePaused, when set, overrides the autoplay
 // setting so a paused-then-expanded item doesn't unexpectedly start playing.
-// onMinimize, if provided, shows a "Minimize" button next to Back — only
-// BrowseItemPage passes it, since the mini-player is a Browse-only feature.
+// onMinimize, if provided, shows a floating "Minimize" icon button next to
+// Back (top-left, over the player) — only BrowseItemPage passes it, since
+// the mini-player is a Browse-only feature.
 // ignorePrivacy, if true, treats this item and its siblings as unblurred —
 // only BrowseItemPage passes it (from the browseIgnorePrivacy setting);
 // LibraryItemPage never does, so Library's blur behavior is unaffected.
@@ -117,7 +118,29 @@ export function LibraryItemDetail({
 
   return (
     <div>
-      <div className={`-m-4 bg-black md:-m-6 ${playerHeightClass}`}>
+      <div className={`relative -m-4 bg-black md:-m-6 ${playerHeightClass}`}>
+        <div className="absolute left-2 top-2 z-10 flex gap-2 md:left-4 md:top-4">
+          <Button asChild variant="ghost" size="icon" title="Back" className="bg-black/50 text-white hover:bg-black/70">
+            <Link to={backTo}>
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          {onMinimize && !locked && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              title="Minimize"
+              onClick={() => {
+                const el = (isAudioFilename(item.filename) ? audioRef : videoRef).current
+                onMinimize(el?.currentTime ?? 0, el?.paused ?? false)
+              }}
+              className="bg-black/50 text-white hover:bg-black/70"
+            >
+              <Minimize2 className="h-5 w-5" />
+            </Button>
+          )}
+        </div>
         {locked ? (
           <button
             type="button"
@@ -188,26 +211,6 @@ export function LibraryItemDetail({
               >
                 {item.originalUrl}
               </a>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link to={backTo}>← Back</Link>
-            </Button>
-            {onMinimize && !locked && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const el = (isAudioFilename(item.filename) ? audioRef : videoRef).current
-                  onMinimize(el?.currentTime ?? 0, el?.paused ?? false)
-                }}
-              >
-                <Minimize2 className="h-3.5 w-3.5" />
-                Minimize
-              </Button>
             )}
           </div>
         </div>

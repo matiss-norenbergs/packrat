@@ -262,10 +262,6 @@ func (r *LibraryRepo) Query(ctx context.Context, q LibraryQuery) ([]models.Libra
 		return nil, 0, fmt.Errorf("counting library items: %w", err)
 	}
 
-	sortCol, ok := librarySortColumns[q.SortKey]
-	if !ok {
-		sortCol = "l.downloaded_at"
-	}
 	sortDir := "DESC"
 	if q.SortDir == "asc" {
 		sortDir = "ASC"
@@ -273,7 +269,22 @@ func (r *LibraryRepo) Query(ctx context.Context, q LibraryQuery) ([]models.Libra
 	// "<col> IS NULL" sorts ASC (0 before 1), so nulls always land last
 	// regardless of the requested direction — matches the frontend's old
 	// compareValues behavior.
-	orderBy := fmt.Sprintf(" ORDER BY %s IS NULL, %s %s", sortCol, sortCol, sortDir)
+	var orderBy string
+	if q.SortKey == "seasonNumber" {
+		// The list view's combined Season/Episode column sorts on both
+		// fields together (season first, sequence as the tiebreaker within
+		// a season) — the only sort key backed by two columns instead of one.
+		orderBy = fmt.Sprintf(
+			" ORDER BY l.season_number IS NULL, l.season_number %s, l.sequence_number IS NULL, l.sequence_number %s",
+			sortDir, sortDir,
+		)
+	} else {
+		sortCol, ok := librarySortColumns[q.SortKey]
+		if !ok {
+			sortCol = "l.downloaded_at"
+		}
+		orderBy = fmt.Sprintf(" ORDER BY %s IS NULL, %s %s", sortCol, sortCol, sortDir)
+	}
 
 	listQuery := librarySelectPrefix + libraryFromClause + joins.String() + where + orderBy
 	listArgs := append([]any{}, args...)

@@ -1,6 +1,6 @@
 import type { LibraryItem } from "@/types/api"
 
-export type LibrarySortKey = "downloadedAt" | "title" | "filename" | "year" | "duration" | "sequenceNumber"
+export type LibrarySortKey = "downloadedAt" | "title" | "filename" | "year" | "duration" | "sequenceNumber" | "seasonNumber"
 export type LibrarySortDir = "asc" | "desc"
 
 function compareValues(a: string | number | null, b: string | number | null): number {
@@ -24,6 +24,12 @@ export function sortLibraryItems(items: LibraryItem[], sortKey: LibrarySortKey, 
         return compareValues(a.duration, b.duration)
       case "sequenceNumber":
         return compareValues(a.sequenceNumber, b.sequenceNumber)
+      case "seasonNumber": {
+        // Season first, sequence (episode) as the tiebreaker within a
+        // season — matches the backend's compound ORDER BY for this key.
+        const seasonCmp = compareValues(a.seasonNumber, b.seasonNumber)
+        return seasonCmp !== 0 ? seasonCmp : compareValues(a.sequenceNumber, b.sequenceNumber)
+      }
       case "downloadedAt":
       default:
         return compareValues(a.downloadedAt, b.downloadedAt)

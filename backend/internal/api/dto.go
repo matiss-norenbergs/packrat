@@ -562,8 +562,8 @@ type UpdateSettingsRequest struct {
 	HistoryAnonymizeURLs     *bool     `json:"historyAnonymizeUrls"`
 	HistoryRetentionDays     *int      `json:"historyRetentionDays" binding:"omitempty,min=0"`
 	DownloadLogRetentionDays *int      `json:"downloadLogRetentionDays" binding:"omitempty,min=0"`
-	LibraryView              *string   `json:"libraryView" binding:"omitempty,oneof=grid folders"`
-	LibrarySortKey           *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber"`
+	LibraryView              *string   `json:"libraryView" binding:"omitempty,oneof=grid folders list"`
+	LibrarySortKey           *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber seasonNumber"`
 	LibrarySortDir           *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
 	LibraryMode              *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
 	LibraryPaginationEnabled *bool     `json:"libraryPaginationEnabled"`

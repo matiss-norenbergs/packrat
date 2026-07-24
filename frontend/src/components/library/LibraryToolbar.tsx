@@ -3,11 +3,13 @@ import { useSearchParams } from "react-router-dom"
 import {
   ArrowDownAZ,
   ArrowUpAZ,
+  Columns3,
   Eye,
   EyeOff,
   FolderTree,
   Info,
   LayoutGrid,
+  List,
   Pencil,
   Rows3,
   Search,
@@ -35,6 +37,7 @@ import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
 import { BulkAssignTagsDialog } from "./BulkAssignTagsDialog"
 import { BulkDeleteLibraryItemsDialog } from "./BulkDeleteLibraryItemsDialog"
 import { BulkEditLibraryItemsDialog } from "./BulkEditLibraryItemsDialog"
+import { LIBRARY_COLUMNS, useLibraryColumns } from "./LibraryColumnsContext"
 import { useRevealAll } from "./RevealAllContext"
 import { useSelection } from "./SelectionContext"
 
@@ -45,6 +48,7 @@ const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
   { value: "year", label: "Year" },
   { value: "duration", label: "Duration" },
   { value: "sequenceNumber", label: "Sequence #" },
+  { value: "seasonNumber", label: "Season & Episode" },
 ]
 
 const PAGE_SIZE_OPTIONS = [24, 48, 96, 200]
@@ -65,6 +69,7 @@ export function LibraryToolbar() {
   const updateSettings = useUpdateSettings()
   const { revealAll, toggleRevealAll } = useRevealAll()
   const { selectionActive, approxCount, clear } = useSelection()
+  const { visibleColumns, toggleColumn } = useLibraryColumns()
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [bulkTagsOpen, setBulkTagsOpen] = useState(false)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
@@ -79,7 +84,8 @@ export function LibraryToolbar() {
   const [draftYear, setDraftYear] = useState(NONE)
   const [draftTags, setDraftTags] = useState<string[]>([])
 
-  const view = settings?.libraryView === "folders" ? "folders" : "grid"
+  const view =
+    settings?.libraryView === "folders" ? "folders" : settings?.libraryView === "list" ? "list" : "grid"
   const mode = (settings?.libraryMode as "manage" | "details") || "manage"
   // Whether any collection is private (itself or an inherited ancestor) and
   // has at least one item somewhere under it — uses the inheritance-aware
@@ -128,7 +134,7 @@ export function LibraryToolbar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput])
 
-  const setView = (next: "grid" | "folders") => {
+  const setView = (next: "grid" | "folders" | "list") => {
     updateSettings.mutate({ libraryView: next })
     // Switching modes makes a stale "collection" filter/location ambiguous
     // between the two views' different meanings for that param — clear it.
@@ -260,6 +266,14 @@ export function LibraryToolbar() {
         >
           <FolderTree className="h-4 w-4" />
         </Button>
+        <Button
+          variant={view === "list" ? "secondary" : "ghost"}
+          size="icon"
+          title="List view"
+          onClick={() => setView("list")}
+        >
+          <List className="h-4 w-4" />
+        </Button>
       </div>
 
       <Button
@@ -312,6 +326,31 @@ export function LibraryToolbar() {
         <BulkEditLibraryItemsDialog open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
         <BulkAssignTagsDialog open={bulkTagsOpen} onOpenChange={setBulkTagsOpen} />
         <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
+
+        {view === "list" && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="ml-auto">
+                <Columns3 className="h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              {LIBRARY_COLUMNS.map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col.key}
+                  checked={visibleColumns.has(col.key)}
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    toggleColumn(col.key)
+                  }}
+                >
+                  {col.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     )}
 
@@ -347,7 +386,7 @@ export function LibraryToolbar() {
             </div>
           </div>
 
-          {view === "grid" && (
+          {(view === "grid" || view === "list") && (
             <div className="space-y-2">
               <Label>Collection</Label>
               <Select value={draftCollectionId} onValueChange={setDraftCollectionId}>
