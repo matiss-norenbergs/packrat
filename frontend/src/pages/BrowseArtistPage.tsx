@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LibraryItemStripTile } from "@/components/library/LibraryItemStripTile"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
+import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
 import { useLibrary } from "@/hooks/useLibrary"
 import { useArtists } from "@/hooks/useArtists"
 import { useSettings } from "@/hooks/useSettings"
@@ -74,7 +75,7 @@ export function BrowseArtistPage() {
         {groups.map((group) => (
           <section key={group.key} className="space-y-2">
             <h2 className="text-lg font-semibold">{group.label}</h2>
-            <div className="scrollbar-thin flex gap-3 overflow-x-auto pb-2">
+            <HorizontalScroller className="gap-3">
               {group.items.map((item) => (
                 <LibraryItemStripTile
                   key={item.id}
@@ -84,7 +85,7 @@ export function BrowseArtistPage() {
                   ignorePrivacy={ignorePrivacy}
                 />
               ))}
-            </div>
+            </HorizontalScroller>
           </section>
         ))}
 

@@ -1,8 +1,10 @@
 import { Link, useParams } from "react-router-dom"
 import { ImageIcon } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BrowseShowRow } from "@/components/browse/BrowseShowRow"
+import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
 import { LibraryItemStripTile } from "@/components/library/LibraryItemStripTile"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { useLibrary } from "@/hooks/useLibrary"
@@ -16,7 +18,7 @@ import {
   resolveInheritedArtistId,
   topLevelAncestor,
 } from "@/lib/collectionTree"
-import { buildShowSummary, groupShowItems, type ShowSummary } from "@/lib/browseShows"
+import { buildShowSummary, computeShowStats, groupShowItems, type ShowSummary } from "@/lib/browseShows"
 import { imageUrl } from "@/lib/api"
 
 export function BrowseShowPage() {
@@ -62,6 +64,7 @@ export function BrowseShowPage() {
   const showItems = items.filter((i) => i.collectionId != null && descendantIds.has(i.collectionId))
   const summary = buildShowSummary(collection, showItems)
   const effectiveBlurred = summary.isPrivate && !ignorePrivacy
+  const stats = computeShowStats(showItems)
 
   const artistId = resolveInheritedArtistId(collections, collection.id)
   const artist = artistId != null ? artists.find((a) => a.id === artistId) : undefined
@@ -102,8 +105,18 @@ export function BrowseShowPage() {
           <div className="relative space-y-2 p-6 md:p-10">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {summary.itemCount} {summary.itemCount === 1 ? "item" : "items"}
+              {stats.yearRange && ` · ${stats.yearRange}`}
             </p>
             <h1 className="max-w-xl text-2xl font-bold md:text-4xl">{summary.name}</h1>
+            {stats.topTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {stats.topTags.map((tag) => (
+                  <Badge key={tag} variant="secondary">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -126,7 +139,7 @@ export function BrowseShowPage() {
           {episodeGroups.map((group) => (
             <section key={group.key} className="space-y-2">
               <h2 className="text-lg font-semibold">{group.label}</h2>
-              <div className="scrollbar-thin flex gap-3 overflow-x-auto pb-2">
+              <HorizontalScroller className="gap-3">
                 {group.items.map((item) => (
                   <LibraryItemStripTile
                     key={item.id}
@@ -136,7 +149,7 @@ export function BrowseShowPage() {
                     ignorePrivacy={ignorePrivacy}
                   />
                 ))}
-              </div>
+              </HorizontalScroller>
             </section>
           ))}
 

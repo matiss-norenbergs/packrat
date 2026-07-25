@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/queue"
@@ -70,6 +71,11 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 		}
 		if req.FilenameTemplate == "" {
 			req.FilenameTemplate = "{title}"
+		}
+		req.RootPath = fsutil.SanitizeFilename(req.RootPath)
+		if req.RootPath == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid root path"})
+			return
 		}
 
 		prospectivePath, err := prospectiveCollectionPath(c.Request.Context(), repo, req.ParentID, req.RootPath)
@@ -138,6 +144,11 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 		}
 		if req.FilenameTemplate == "" {
 			req.FilenameTemplate = "{title}"
+		}
+		req.RootPath = fsutil.SanitizeFilename(req.RootPath)
+		if req.RootPath == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid root path"})
+			return
 		}
 
 		existing, err := repo.Get(c.Request.Context(), id)

@@ -29,6 +29,22 @@ func SanitizeFilename(name string) string {
 	return name
 }
 
+// SanitizeRelativePath sanitizes a user-provided relative path made of one
+// or more "/"-separated segments (e.g. a download's destination Folder),
+// applying SanitizeFilename to each segment independently so a literal "/"
+// in the input still expresses real nesting rather than being stripped
+// along with the other unsafe characters. Segments that sanitize to "" (a
+// blank segment, or a traversal attempt like "..") are dropped.
+func SanitizeRelativePath(path string) string {
+	var segments []string
+	for _, seg := range strings.Split(path, "/") {
+		if clean := SanitizeFilename(seg); clean != "" {
+			segments = append(segments, clean)
+		}
+	}
+	return strings.Join(segments, "/")
+}
+
 func EnsureDir(path string) error {
 	return os.MkdirAll(path, 0o755)
 }

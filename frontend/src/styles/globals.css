@@ -151,4 +151,15 @@
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background-color: var(--muted-foreground);
   }
+
+  /* Fully hides the scrollbar for HorizontalScroller's rows — the arrows +
+     segment cells are the scroll affordance there, so a native scrollbar
+     underneath would be redundant clutter rather than a fallback. */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }

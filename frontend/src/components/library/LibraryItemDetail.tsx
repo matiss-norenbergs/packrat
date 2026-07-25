@@ -4,6 +4,7 @@ import { ArrowLeft, Minimize2, Music } from "lucide-react"
 import { syncMediaOnReady } from "@/lib/mediaSeek"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
 import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress"
 import { useSettings } from "@/hooks/useSettings"
@@ -218,7 +219,7 @@ export function LibraryItemDetail({
         {siblings.length > 0 && (
           <div className="space-y-2">
             <h2 className="text-sm font-medium text-muted-foreground">More from this collection</h2>
-            <div className="scrollbar-thin flex gap-3 overflow-x-auto pb-2">
+            <HorizontalScroller className="gap-3">
               {siblings.map((sibling) => (
                 <LibraryItemStripTile
                   key={sibling.id}
@@ -228,7 +229,7 @@ export function LibraryItemDetail({
                   ignorePrivacy={ignorePrivacy}
                 />
               ))}
-            </div>
+            </HorizontalScroller>
           </div>
         )}
       </div>

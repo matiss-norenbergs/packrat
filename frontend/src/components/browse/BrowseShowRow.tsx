@@ -1,4 +1,5 @@
 import { BrowseShowTile } from "./BrowseShowTile"
+import { HorizontalScroller } from "./HorizontalScroller"
 import type { ShowSummary } from "@/lib/browseShows"
 
 // Same horizontal-scroll shell as BrowseRow, sized for ShowSummary/
@@ -13,11 +14,11 @@ export function BrowseShowRow({ title, shows }: { title: string; shows: ShowSumm
   return (
     <section className="space-y-2">
       <h2 className="text-lg font-semibold">{title}</h2>
-      <div className="scrollbar-thin flex gap-3 overflow-x-auto pb-2">
+      <HorizontalScroller className="gap-3">
         {shows.map((show) => (
           <BrowseShowTile key={show.collectionId} show={show} />
         ))}
-      </div>
+      </HorizontalScroller>
     </section>
   )
 }

@@ -18,9 +18,11 @@ import { useSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import { ArtistSelect } from "@/components/library/ArtistSelect"
 import { TagInput } from "@/components/library/TagInput"
+import { FilenameCharWarning } from "./FilenameCharWarning"
 import { FilenameTemplateBuilderDialog } from "./FilenameTemplateBuilderDialog"
 import { cn, formatDuration } from "@/lib/utils"
 import { resolveInheritedArtistId } from "@/lib/collectionTree"
+import { invalidSegmentChars, invalidTemplateChars } from "@/lib/filenameValidation"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
 import type { BulkRow } from "./BulkDownloadDialog"
 
@@ -215,6 +217,7 @@ export function BulkDownloadRow({
                 value={row.filename}
                 onChange={(e) => onChange({ filename: e.target.value })}
               />
+              <FilenameCharWarning chars={invalidSegmentChars(row.filename)} />
             </div>
             <div className="flex-1 space-y-1">
               <Label>Filename Template</Label>
@@ -230,6 +233,7 @@ export function BulkDownloadRow({
                   onApply={(v) => onChange({ filenameTemplate: v })}
                 />
               </div>
+              <FilenameCharWarning chars={invalidTemplateChars(row.filenameTemplate)} />
             </div>
           </div>
         </div>
@@ -293,6 +297,9 @@ export function BulkDownloadRow({
                 value={row.titleOverride}
                 onChange={(e) => onChange({ titleOverride: e.target.value })}
               />
+              {!row.filename.trim() && !row.filenameTemplate.trim() && (
+                <FilenameCharWarning chars={invalidSegmentChars(row.titleOverride)} />
+              )}
             </div>
             <div className="space-y-1">
               <Label>Artist</Label>

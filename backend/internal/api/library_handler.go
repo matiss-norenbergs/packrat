@@ -597,6 +597,7 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid collection root: " + err.Error()})
 			return
 		}
+		req.Folder = fsutil.SanitizeRelativePath(req.Folder)
 		destDir, err := pathsafe.ResolveUnderRoot(effectiveRoot, req.Folder)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid folder: " + err.Error()})

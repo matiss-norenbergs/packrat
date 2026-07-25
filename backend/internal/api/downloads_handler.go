@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/queue"
@@ -102,6 +103,8 @@ func enqueueDownload(ctx context.Context, mgr *queue.DownloadManager, collection
 	if req.DownloadType == "audio" && req.AudioFormat == "" {
 		req.AudioFormat = "mp3"
 	}
+
+	req.Folder = fsutil.SanitizeRelativePath(req.Folder)
 
 	// Reject path traversal (and unknown collections) up front, before ever
 	// queuing the job — the queue worker re-validates this too, but failing

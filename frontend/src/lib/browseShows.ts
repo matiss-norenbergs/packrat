@@ -42,6 +42,43 @@ export function buildShowSummary(collection: Collection, showItems: LibraryItem[
   }
 }
 
+// Year range + most common tags across a show's items — shown as a
+// subtitle under BrowseShowPage's hero title. Tags need a minimum
+// occurrence count before they qualify as "common"; without that floor,
+// a show with mostly-unique per-item tags would surface arbitrary
+// one-off tags that aren't actually representative of the collection.
+export interface ShowStats {
+  yearRange: string | null
+  topTags: string[]
+}
+
+const COMMON_TAG_MIN_COUNT = 3
+const MAX_TOP_TAGS = 3
+
+export function computeShowStats(items: LibraryItem[]): ShowStats {
+  const years = items.map((i) => i.year).filter((y): y is number => y != null)
+  const yearRange =
+    years.length === 0
+      ? null
+      : Math.min(...years) === Math.max(...years)
+        ? `${Math.min(...years)}`
+        : `${Math.min(...years)}–${Math.max(...years)}`
+
+  const tagCounts = new Map<string, number>()
+  for (const item of items) {
+    for (const tag of item.tags) {
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
+    }
+  }
+  const topTags = Array.from(tagCounts.entries())
+    .filter(([, count]) => count >= COMMON_TAG_MIN_COUNT)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, MAX_TOP_TAGS)
+    .map(([tag]) => tag)
+
+  return { yearRange, topTags }
+}
+
 // One labeled group of items in an episode/track listing — key is a stable
 // React key, label is what's shown as the section heading.
 export interface EpisodeGroup {
