@@ -1,4 +1,4 @@
-import { imageUrl, mediaFileUrl } from "./api"
+import { collectionSmallCoverUrl, imageUrl, librarySmallThumbnailUrl, mediaFileUrl } from "./api"
 import { collectDescendantIds, type CollectionTreeNode } from "./collectionTree"
 import { sortLibraryItems } from "./libraryFilters"
 import type { Collection, LibraryItem } from "@/types/api"
@@ -6,10 +6,15 @@ import type { Collection, LibraryItem } from "@/types/api"
 // A "show/album" tile's display data — one per collection flagged
 // browseAsShow, shared between BrowsePage's rows and BrowseShowPage's
 // "similar content" row so the two never resolve a cover differently.
+// coverUrlSmall is for tile-sized rendering (BrowseShowTile); coverUrlLarge
+// is for the full-bleed backdrop (BrowseShowPage's own hero) — same source
+// image, different derivative tier, since one URL can't serve both sizes
+// well.
 export interface ShowSummary {
   collectionId: number
   name: string
-  coverUrl: string | null
+  coverUrlSmall: string | null
+  coverUrlLarge: string | null
   itemCount: number
   isPrivate: boolean
 }
@@ -17,19 +22,21 @@ export interface ShowSummary {
 // Resolves what image represents a show/album tile: the collection's own
 // explicitly chosen cover if set, else the most recently downloaded
 // descendant item's thumbnail — the "default to the last downloaded file's
-// image" fallback. Only falls through to the placeholder icon (coverUrl:
-// null) when neither exists.
+// image" fallback. Only falls through to the placeholder icon (coverUrl*:
+// null) when neither exists. coverUrlLarge always resolves to the original
+// (full-fidelity) tier of whichever source is used — a resized derivative
+// would look soft stretched across a full-bleed backdrop.
 export function buildShowSummary(collection: Collection, showItems: LibraryItem[]): ShowSummary {
   const mostRecentWithThumb = sortLibraryItems(showItems, "downloadedAt", "desc").find((i) => i.thumbnail)
-  const coverUrl = collection.coverImagePath
-    ? imageUrl(collection.coverImagePath)
-    : mostRecentWithThumb?.thumbnail
-      ? mediaFileUrl(mostRecentWithThumb.thumbnail)
-      : null
+  const fallbackSmall = mostRecentWithThumb ? librarySmallThumbnailUrl(mostRecentWithThumb) : null
+  const fallbackOriginal = mostRecentWithThumb?.thumbnail ? mediaFileUrl(mostRecentWithThumb.thumbnail) : null
+  const coverUrlSmall = collection.coverImagePath ? collectionSmallCoverUrl(collection) : fallbackSmall
+  const coverUrlLarge = collection.coverImagePath ? imageUrl(collection.coverImagePath) : fallbackOriginal
   return {
     collectionId: collection.id,
     name: collection.name,
-    coverUrl,
+    coverUrlSmall,
+    coverUrlLarge,
     itemCount: showItems.length,
     isPrivate: collection.effectiveIsPrivate,
   }

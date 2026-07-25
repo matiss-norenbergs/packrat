@@ -92,6 +92,8 @@ export interface Collection {
   seasonNumber: number | null
   artistId: number | null
   coverImagePath: string | null
+  coverImageSmallPath: string | null
+  coverImageMediumPath: string | null
   browseAsShow: boolean
   itemCount: number
   // Inheritance-aware versions of the two fields above — isPrivate/itemCount
@@ -174,6 +176,8 @@ export interface LibraryItem {
   duration: number | null
   resolution: string | null
   thumbnail: string | null
+  thumbnailSmallPath: string | null
+  thumbnailMediumPath: string | null
   description: string | null
   artistId: number | null
   artistName: string | null
@@ -338,6 +342,21 @@ export interface YtDlpVersionInfo {
   currentVersion: string
   latestVersion: string | null
   updateAvailable: boolean
+}
+
+// Progress snapshot for the background image-derivative backfill (small/
+// medium/original WebP tiers for library thumbnails, artist images, and
+// collection covers) — GET/POST /settings/backfill-images both return this.
+export interface ImageBackfillStatus {
+  running: boolean
+  startedAt: string | null
+  finishedAt: string | null
+  libraryProcessed: number
+  libraryFailed: number
+  artistProcessed: number
+  artistFailed: number
+  coverProcessed: number
+  coverFailed: number
 }
 
 export interface DownloadPreview {

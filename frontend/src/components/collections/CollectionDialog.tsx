@@ -26,7 +26,7 @@ import { useSettings } from "@/hooks/useSettings"
 import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
 import { CollectionCoverDialog } from "./CollectionCoverDialog"
 import { FilenameTemplateBuilderDialog } from "@/components/downloads/FilenameTemplateBuilderDialog"
-import { imageUrl } from "@/lib/api"
+import { collectionMediumCoverUrl } from "@/lib/api"
 import type { Collection, DownloadType, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -206,7 +206,7 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
                     {collection.coverImagePath ? (
                       <>
                         <img
-                          src={imageUrl(collection.coverImagePath)}
+                          src={collectionMediumCoverUrl(collection)!}
                           alt=""
                           className="h-full w-full object-cover"
                         />

@@ -15,6 +15,7 @@ import (
 	"packrat/backend/internal/config"
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/imagebackfill"
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
@@ -116,7 +117,8 @@ func run() error {
 	hub := ws.NewHub()
 	go hub.Run(ctx)
 
-	mgr := queue.NewDownloadManager(cfg.MediaRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, jellyfinClient, progressStore, hub)
+	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, jellyfinClient, progressStore, hub)
+	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)
 	if err != nil {
@@ -160,23 +162,24 @@ func run() error {
 	}()
 
 	router := api.SetupRouter(api.Deps{
-		DB:              conn,
-		Manager:         mgr,
-		DownloadsRepo:   downloadsRepo,
-		LibraryRepo:     libraryRepo,
-		CollectionsRepo: collectionsRepo,
-		SettingsRepo:    settingsRepo,
-		HistoryRepo:     historyRepo,
-		TagsRepo:        tagsRepo,
-		ArtistsRepo:     artistsRepo,
-		UsersRepo:       usersRepo,
-		YtDlp:           ytdlpSvc,
-		JellyfinClient:  jellyfinClient,
-		MediaRoot:       cfg.MediaRoot,
-		ImagesRoot:      cfg.ImagesRoot,
-		FFProbePath:     cfg.FFProbePath,
-		WSHandler:       hub.GinHandler(),
-		StaticDir:       os.Getenv("STATIC_DIR"),
+		DB:                   conn,
+		Manager:              mgr,
+		DownloadsRepo:        downloadsRepo,
+		LibraryRepo:          libraryRepo,
+		CollectionsRepo:      collectionsRepo,
+		SettingsRepo:         settingsRepo,
+		HistoryRepo:          historyRepo,
+		TagsRepo:             tagsRepo,
+		ArtistsRepo:          artistsRepo,
+		UsersRepo:            usersRepo,
+		YtDlp:                ytdlpSvc,
+		JellyfinClient:       jellyfinClient,
+		ImageBackfillManager: imageBackfillMgr,
+		MediaRoot:            cfg.MediaRoot,
+		ImagesRoot:           cfg.ImagesRoot,
+		FFProbePath:          cfg.FFProbePath,
+		WSHandler:            hub.GinHandler(),
+		StaticDir:            os.Getenv("STATIC_DIR"),
 	})
 
 	srv := &http.Server{

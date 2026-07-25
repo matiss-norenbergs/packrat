@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
-import { mediaFileUrl } from "@/lib/api"
+import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { useSettings } from "@/hooks/useSettings"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
@@ -32,6 +32,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
 
   const { selectionActive, isItemSelected, toggleItem: toggleSelected } = useSelection()
   const selected = isItemSelected(item.id)
+  const thumbUrl = libraryMediumThumbnailUrl(item)
 
   return (
     <Card
@@ -39,9 +40,9 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
       onClick={selectionActive ? () => toggleSelected(item) : undefined}
     >
       <div className="group relative aspect-video w-full bg-muted">
-        {item.thumbnail ? (
+        {thumbUrl ? (
           <BlurredThumbnail
-            src={mediaFileUrl(item.thumbnail)}
+            src={thumbUrl}
             className="absolute inset-0 h-full w-full object-cover"
             blurred={item.blurred}
             revealed={revealed}

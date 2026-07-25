@@ -28,8 +28,10 @@ import { useChangePassword } from "@/hooks/useAuth"
 import { useClearDownloadLog } from "@/hooks/useDownloads"
 import { useClearHistory } from "@/hooks/useHistory"
 import {
+  useImageBackfillStatus,
   useRescanJellyfinLibrary,
   useSettings,
+  useStartImageBackfill,
   useUpdateSettings,
   useUpdateYtDlp,
   useYtDlpVersion,
@@ -618,13 +620,15 @@ const FRAME_COUNT_OPTIONS = [2, 4, 6, 8]
 function ThumbnailsCard() {
   const { data: settings, isLoading } = useSettings()
   const updateSettings = useUpdateSettings()
+  const { data: backfillStatus } = useImageBackfillStatus()
+  const startBackfill = useStartImageBackfill()
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Thumbnails</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         {isLoading || !settings ? (
           <Skeleton className="h-10 w-full" />
         ) : (
@@ -650,6 +654,39 @@ function ThumbnailsCard() {
             </p>
           </div>
         )}
+
+        <div className="space-y-2 border-t pt-4">
+          <Label>Image derivatives</Label>
+          <p className="text-xs text-muted-foreground">
+            Generates small/medium-size versions of library thumbnails, artist images, and
+            collection covers, so most of the app loads a much smaller file instead of the
+            original. Only needed once for items that predate this feature (or after resetting
+            the images folder) — anything downloaded or edited afterward gets this automatically.
+          </p>
+          {backfillStatus?.running ? (
+            <p className="text-sm text-muted-foreground">
+              Running… library {backfillStatus.libraryProcessed} processed
+              {backfillStatus.libraryFailed > 0 ? ` (${backfillStatus.libraryFailed} failed)` : ""}, artists{" "}
+              {backfillStatus.artistProcessed} processed
+              {backfillStatus.artistFailed > 0 ? ` (${backfillStatus.artistFailed} failed)` : ""}, covers{" "}
+              {backfillStatus.coverProcessed} processed
+              {backfillStatus.coverFailed > 0 ? ` (${backfillStatus.coverFailed} failed)` : ""}.
+            </p>
+          ) : backfillStatus?.finishedAt ? (
+            <p className="text-sm text-muted-foreground">
+              Last run: library {backfillStatus.libraryProcessed}/{backfillStatus.libraryFailed} failed, artists{" "}
+              {backfillStatus.artistProcessed}/{backfillStatus.artistFailed} failed, covers{" "}
+              {backfillStatus.coverProcessed}/{backfillStatus.coverFailed} failed.
+            </p>
+          ) : null}
+          <Button
+            variant="outline"
+            onClick={() => startBackfill.mutate()}
+            disabled={startBackfill.isPending || backfillStatus?.running}
+          >
+            {backfillStatus?.running ? "Running…" : "Backfill Images"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

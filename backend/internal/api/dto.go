@@ -255,6 +255,8 @@ type LibraryItemResponse struct {
 	Duration                *int     `json:"duration"`
 	Resolution              *string  `json:"resolution"`
 	Thumbnail               *string  `json:"thumbnail"`
+	ThumbnailSmallPath      *string  `json:"thumbnailSmallPath"`
+	ThumbnailMediumPath     *string  `json:"thumbnailMediumPath"`
 	Description             *string  `json:"description"`
 	ArtistID                *int64   `json:"artistId"`
 	ArtistName              *string  `json:"artistName"`
@@ -326,6 +328,8 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 		Duration:                item.Duration,
 		Resolution:              item.Resolution,
 		Thumbnail:               item.Thumbnail,
+		ThumbnailSmallPath:      item.ThumbnailSmallPath,
+		ThumbnailMediumPath:     item.ThumbnailMediumPath,
 		Description:             item.Description,
 		ArtistID:                item.ArtistID,
 		ArtistName:              item.ArtistName,
@@ -443,20 +447,22 @@ type UpdateCollectionRequest struct {
 }
 
 type CollectionResponse struct {
-	ID                  int64   `json:"id"`
-	Name                string  `json:"name"`
-	ParentID            *int64  `json:"parentId"`
-	RootPath            string  `json:"rootPath"`
-	Path                string  `json:"path"`
-	DefaultQuality      string  `json:"defaultQuality"`
-	DefaultDownloadType string  `json:"defaultDownloadType"`
-	FilenameTemplate    string  `json:"filenameTemplate"`
-	IsPrivate           bool    `json:"isPrivate"`
-	SeasonNumber        *int    `json:"seasonNumber"`
-	ArtistID            *int64  `json:"artistId"`
-	CoverImagePath      *string `json:"coverImagePath"`
-	BrowseAsShow        bool    `json:"browseAsShow"`
-	ItemCount           int     `json:"itemCount"`
+	ID                   int64   `json:"id"`
+	Name                 string  `json:"name"`
+	ParentID             *int64  `json:"parentId"`
+	RootPath             string  `json:"rootPath"`
+	Path                 string  `json:"path"`
+	DefaultQuality       string  `json:"defaultQuality"`
+	DefaultDownloadType  string  `json:"defaultDownloadType"`
+	FilenameTemplate     string  `json:"filenameTemplate"`
+	IsPrivate            bool    `json:"isPrivate"`
+	SeasonNumber         *int    `json:"seasonNumber"`
+	ArtistID             *int64  `json:"artistId"`
+	CoverImagePath       *string `json:"coverImagePath"`
+	CoverImageSmallPath  *string `json:"coverImageSmallPath"`
+	CoverImageMediumPath *string `json:"coverImageMediumPath"`
+	BrowseAsShow         bool    `json:"browseAsShow"`
+	ItemCount            int     `json:"itemCount"`
 	// EffectiveIsPrivate and TotalItemCount account for inheritance down the
 	// collection tree — IsPrivate/ItemCount above are this collection's own,
 	// non-inherited flag and its own direct (non-rolled-up) item count,
@@ -642,25 +648,27 @@ type UpdateSettingsRequest struct {
 
 func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int) CollectionResponse {
 	return CollectionResponse{
-		ID:                  c.ID,
-		Name:                c.Name,
-		ParentID:            c.ParentID,
-		RootPath:            c.RootPath,
-		Path:                path,
-		DefaultQuality:      c.DefaultQuality,
-		DefaultDownloadType: c.DefaultDownloadType,
-		FilenameTemplate:    c.FilenameTemplate,
-		IsPrivate:           c.IsPrivate,
-		SeasonNumber:        c.SeasonNumber,
-		ArtistID:            c.ArtistID,
-		CoverImagePath:      c.CoverImagePath,
-		BrowseAsShow:        c.BrowseAsShow,
-		ItemCount:           itemCount,
-		EffectiveIsPrivate:  effectiveIsPrivate,
-		TotalItemCount:      totalItemCount,
-		JellyfinLibraryID:   c.JellyfinLibrary,
-		CreatedAt:           c.CreatedAt.Format(timeFormat),
-		UpdatedAt:           c.UpdatedAt.Format(timeFormat),
+		ID:                   c.ID,
+		Name:                 c.Name,
+		ParentID:             c.ParentID,
+		RootPath:             c.RootPath,
+		Path:                 path,
+		DefaultQuality:       c.DefaultQuality,
+		DefaultDownloadType:  c.DefaultDownloadType,
+		FilenameTemplate:     c.FilenameTemplate,
+		IsPrivate:            c.IsPrivate,
+		SeasonNumber:         c.SeasonNumber,
+		ArtistID:             c.ArtistID,
+		CoverImagePath:       c.CoverImagePath,
+		CoverImageSmallPath:  c.CoverImageSmallPath,
+		CoverImageMediumPath: c.CoverImageMediumPath,
+		BrowseAsShow:         c.BrowseAsShow,
+		ItemCount:            itemCount,
+		EffectiveIsPrivate:   effectiveIsPrivate,
+		TotalItemCount:       totalItemCount,
+		JellyfinLibraryID:    c.JellyfinLibrary,
+		CreatedAt:            c.CreatedAt.Format(timeFormat),
+		UpdatedAt:            c.UpdatedAt.Format(timeFormat),
 	}
 }
 

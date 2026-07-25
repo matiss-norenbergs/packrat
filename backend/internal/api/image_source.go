@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"packrat/backend/internal/pathsafe"
 )
@@ -40,18 +38,5 @@ func resolveImageSourceBytes(mediaRoot string, sourceRelPath, imageBase64, filen
 		return data, name, nil
 	default:
 		return nil, "", errors.New("either sourceRelPath or imageBase64 must be set")
-	}
-}
-
-// imageExtFor returns a safe, lowercased image extension derived from name,
-// defaulting to .jpg when name has none or an unrecognized one — every write
-// path here always produces a real image, so an unknown/missing extension is
-// a naming detail, not something worth failing the request over.
-func imageExtFor(name string) string {
-	switch ext := strings.ToLower(filepath.Ext(name)); ext {
-	case ".jpg", ".jpeg", ".png", ".webp":
-		return ext
-	default:
-		return ".jpg"
 	}
 }

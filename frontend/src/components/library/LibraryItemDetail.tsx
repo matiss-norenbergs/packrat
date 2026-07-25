@@ -4,7 +4,7 @@ import { ArrowLeft, Minimize2, Music } from "lucide-react"
 import { syncMediaOnReady } from "@/lib/mediaSeek"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { mediaFileUrl } from "@/lib/api"
+import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress"
 import { useSettings } from "@/hooks/useSettings"
 import { sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
@@ -154,7 +154,7 @@ export function LibraryItemDetail({
           <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-8">
             <div className="aspect-square h-full max-h-72 w-auto overflow-hidden rounded-lg bg-neutral-800 shadow-lg">
               {item.thumbnail ? (
-                <img src={mediaFileUrl(item.thumbnail)} alt="" className="h-full w-full object-cover" />
+                <img src={libraryMediumThumbnailUrl(item)!} alt="" className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
                   <Music className="h-16 w-16 text-white/30" />

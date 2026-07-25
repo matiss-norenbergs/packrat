@@ -4,7 +4,7 @@ import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { Button } from "@/components/ui/button"
 import { useRevealAll } from "@/components/library/RevealAllContext"
 import { useSettings } from "@/hooks/useSettings"
-import { mediaFileUrl } from "@/lib/api"
+import { librarySmallThumbnailUrl } from "@/lib/api"
 import { hashText } from "@/lib/utils"
 import type { LibraryItem } from "@/types/api"
 
@@ -32,13 +32,14 @@ export function BrowseTile({
   const effectiveBlurred = item.blurred && !settings?.browseIgnorePrivacy
   const unlocked = !effectiveBlurred || revealed
   const showProgress = progressFraction != null && unlocked
+  const thumbUrl = librarySmallThumbnailUrl(item)
 
   return (
     <div className="group w-44 shrink-0 space-y-1.5">
       <div className="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
-        {item.thumbnail ? (
+        {thumbUrl ? (
           <BlurredThumbnail
-            src={mediaFileUrl(item.thumbnail)}
+            src={thumbUrl}
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
             blurred={effectiveBlurred}
             revealed={revealed}

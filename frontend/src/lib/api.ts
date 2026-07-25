@@ -22,6 +22,7 @@ import type {
   DownloadPreview,
   EnqueueResult,
   HistoryItem,
+  ImageBackfillStatus,
   ImportRequest,
   LibraryFacets,
   LibraryItem,
@@ -174,6 +175,37 @@ export function imageUrl(relativePath: string): string {
   return `/local-images/${relativePath.split("/").map(encodeURIComponent).join("/")}`
 }
 
+// Small/medium-tier URL builders with a fallback to the original — items
+// created before the multi-size-image feature shipped (or not yet
+// backfilled) have no derivative paths yet, so every display site falls
+// back to the original rather than showing a broken image. The two tiers
+// live under different roots (derivatives under ImagesRoot via imageUrl(),
+// the original under MediaRoot via mediaFileUrl()), so the helper — not
+// each call site — is what needs to know which root a given field resolves
+// against.
+export function librarySmallThumbnailUrl(item: Pick<LibraryItem, "thumbnail" | "thumbnailSmallPath">): string | null {
+  if (item.thumbnailSmallPath) return imageUrl(item.thumbnailSmallPath)
+  return item.thumbnail ? mediaFileUrl(item.thumbnail) : null
+}
+
+export function libraryMediumThumbnailUrl(item: Pick<LibraryItem, "thumbnail" | "thumbnailMediumPath">): string | null {
+  if (item.thumbnailMediumPath) return imageUrl(item.thumbnailMediumPath)
+  return item.thumbnail ? mediaFileUrl(item.thumbnail) : null
+}
+
+// Collection cover tiers all live under ImagesRoot already, so no
+// mediaFileUrl() fallback is needed here — just fall back to the original
+// cover path when the requested derivative isn't populated yet.
+export function collectionSmallCoverUrl(c: Pick<Collection, "coverImagePath" | "coverImageSmallPath">): string | null {
+  const p = c.coverImageSmallPath ?? c.coverImagePath
+  return p ? imageUrl(p) : null
+}
+
+export function collectionMediumCoverUrl(c: Pick<Collection, "coverImagePath" | "coverImageMediumPath">): string | null {
+  const p = c.coverImageMediumPath ?? c.coverImagePath
+  return p ? imageUrl(p) : null
+}
+
 export function deleteLibraryItem(id: number, deleteFiles: boolean): Promise<void> {
   return request<void>(`/library/${id}?deleteFiles=${deleteFiles}`, { method: "DELETE" })
 }
@@ -321,6 +353,14 @@ export function fetchYtDlpVersion(): Promise<YtDlpVersionInfo> {
 
 export function updateYtDlp(): Promise<{ version: string }> {
   return request<{ version: string }>("/ytdlp/update", { method: "POST" })
+}
+
+export function fetchImageBackfillStatus(): Promise<ImageBackfillStatus> {
+  return request<ImageBackfillStatus>("/settings/backfill-images")
+}
+
+export function startImageBackfill(): Promise<ImageBackfillStatus> {
+  return request<ImageBackfillStatus>("/settings/backfill-images", { method: "POST" })
 }
 
 export function fetchImportScan(): Promise<ScannedFile[]> {

@@ -70,17 +70,32 @@ export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
     }
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1)
-      addImage.mutate({ imageBase64: base64, filename: file.name })
-    }
-    reader.readAsDataURL(file)
+  const readFileAsBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        resolve(dataUrl.slice(dataUrl.indexOf(",") + 1))
+      }
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+
+  // Uploaded one at a time (not Promise.all) so a multi-file select doesn't
+  // fire a burst of concurrent ffmpeg processes on the backend — addImage's
+  // own onError already toasts per-file failures, so one bad file doesn't
+  // stop the rest of the batch.
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
     e.target.value = ""
+    for (const file of files) {
+      try {
+        const base64 = await readFileAsBase64(file)
+        await addImage.mutateAsync({ imageBase64: base64, filename: file.name })
+      } catch {
+        // already toasted by the mutation's onError
+      }
+    }
   }
 
   return (
@@ -187,12 +202,13 @@ export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
                 Add from downloaded files
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                Upload image
+                Upload images
               </Button>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                multiple
                 className="hidden"
                 onChange={handleFileChange}
               />

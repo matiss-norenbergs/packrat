@@ -2,7 +2,7 @@ import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { Maximize2, Music, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { mediaFileUrl } from "@/lib/api"
+import { librarySmallThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { isAudioFilename } from "@/lib/utils"
 import { usePersistedVolume } from "@/hooks/usePersistedVolume"
 import { syncMediaOnReady } from "@/lib/mediaSeek"
@@ -37,6 +37,7 @@ export function MiniPlayerDock() {
 
   if (!miniPlayer) return null
   const { item, startTime, paused } = miniPlayer
+  const thumbUrl = librarySmallThumbnailUrl(item)
 
   const expand = () => {
     const currentTime = mediaRef.current?.currentTime ?? startTime
@@ -70,8 +71,8 @@ export function MiniPlayerDock() {
         <div className="space-y-2 p-3">
           <div className="flex items-center gap-2">
             <div className="h-9 w-9 shrink-0 overflow-hidden rounded bg-neutral-800">
-              {item.thumbnail ? (
-                <img src={mediaFileUrl(item.thumbnail)} alt="" className="h-full w-full object-cover" />
+              {thumbUrl ? (
+                <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
                   <Music className="h-4 w-4 text-white/30" />

@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useUpdateLibraryItem } from "@/hooks/useLibrary"
 import { useTags } from "@/hooks/useTags"
-import { mediaFileUrl } from "@/lib/api"
+import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { artistIdToSelectValue, baseNameWithoutExt, buildLibraryItemUpdatePayload } from "@/lib/libraryItemEdit"
 import { parseSeasonEpisode } from "@/lib/seasonEpisode"
 import { formatDuration } from "@/lib/utils"
@@ -208,7 +208,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
             {item.thumbnail && (
               <div className="overflow-hidden rounded-md border bg-muted">
                 <BlurredThumbnail
-                  src={mediaFileUrl(item.thumbnail)}
+                  src={libraryMediumThumbnailUrl(item)!}
                   className="aspect-video w-full object-cover"
                   blurred={item.blurred}
                   revealed={revealed}

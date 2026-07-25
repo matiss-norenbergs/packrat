@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
-import { mediaFileUrl } from "@/lib/api"
+import { librarySmallThumbnailUrl } from "@/lib/api"
 import { formatDuration, hashText } from "@/lib/utils"
 import { useRevealAll } from "./RevealAllContext"
 import type { LibraryItem } from "@/types/api"
@@ -28,13 +28,14 @@ export function LibraryItemStripTile({
   const revealed = isRevealed(item.id)
   const toggleReveal = () => toggleItem(item.id)
   const effectiveBlurred = item.blurred && !ignorePrivacy
+  const thumbUrl = librarySmallThumbnailUrl(item)
 
   return (
     <div className="w-40 shrink-0 space-y-1.5">
       <div className="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
-        {item.thumbnail ? (
+        {thumbUrl ? (
           <BlurredThumbnail
-            src={mediaFileUrl(item.thumbnail)}
+            src={thumbUrl}
             className="absolute inset-0 h-full w-full object-cover"
             blurred={effectiveBlurred}
             revealed={revealed}

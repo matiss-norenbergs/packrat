@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/importer"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
@@ -111,7 +112,7 @@ func resolveCollectionPathStatus(cols []models.Collection, segments []string) (c
 // image if one exists, else — only if originalUrl was given — a best-effort
 // yt-dlp thumbnail-only fetch), and creates the library row. Never triggers
 // a real download or a full metadata refresh.
-func CreateImport(mediaRoot string, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, ytdlp *downloader.YtDlpService, ffprobePath string) gin.HandlerFunc {
+func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, ytdlp *downloader.YtDlpService, ffprobePath string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
@@ -191,6 +192,18 @@ func CreateImport(mediaRoot string, libraryRepo *repository.LibraryRepo, collect
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+
+		// Best-effort — a failed derivative generation shouldn't fail the
+		// whole import; the item just falls back to the original thumbnail
+		// until a later edit (or the backfill tool) regenerates them.
+		if thumbRelPtr != nil {
+			thumbAbs := filepath.Join(mediaRoot, filepath.FromSlash(*thumbRelPtr))
+			if tiers, err := imageproc.GenerateTiersFromPath(ctx, ytdlp.FFmpegPath, imagesRoot, "library", id, thumbAbs, libraryThumbnailTiers); err != nil {
+				log.Printf("import: generating thumbnail derivatives for library item %d failed: %v", id, err)
+			} else if err := libraryRepo.UpdateThumbnailTiers(ctx, id, &tiers[0], &tiers[1]); err != nil {
+				log.Printf("import: saving thumbnail derivatives for library item %d failed: %v", id, err)
+			}
 		}
 
 		created, err := libraryRepo.Get(ctx, id)

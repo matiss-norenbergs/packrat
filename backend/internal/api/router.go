@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/imagebackfill"
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
@@ -15,23 +16,24 @@ import (
 // Deps holds everything the router needs to wire up routes. Fields are added
 // incrementally as the corresponding subsystems (queue, library, ws) land.
 type Deps struct {
-	DB              *sql.DB
-	Manager         *queue.DownloadManager
-	DownloadsRepo   *repository.DownloadsRepo
-	LibraryRepo     *repository.LibraryRepo
-	CollectionsRepo *repository.CollectionsRepo
-	SettingsRepo    *repository.SettingsRepo
-	HistoryRepo     *repository.HistoryRepo
-	TagsRepo        *repository.TagsRepo
-	ArtistsRepo     *repository.ArtistsRepo
-	UsersRepo       *repository.UsersRepo
-	YtDlp           *downloader.YtDlpService
-	JellyfinClient  *jellyfin.Client
-	MediaRoot       string
-	ImagesRoot      string
-	FFProbePath     string
-	WSHandler       gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
-	StaticDir       string          // built frontend assets; empty in dev (Vite serves it)
+	DB                   *sql.DB
+	Manager              *queue.DownloadManager
+	DownloadsRepo        *repository.DownloadsRepo
+	LibraryRepo          *repository.LibraryRepo
+	CollectionsRepo      *repository.CollectionsRepo
+	SettingsRepo         *repository.SettingsRepo
+	HistoryRepo          *repository.HistoryRepo
+	TagsRepo             *repository.TagsRepo
+	ArtistsRepo          *repository.ArtistsRepo
+	UsersRepo            *repository.UsersRepo
+	YtDlp                *downloader.YtDlpService
+	JellyfinClient       *jellyfin.Client
+	ImageBackfillManager *imagebackfill.Manager
+	MediaRoot            string
+	ImagesRoot           string
+	FFProbePath          string
+	WSHandler            gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
+	StaticDir            string          // built frontend assets; empty in dev (Vite serves it)
 }
 
 // noCacheHeaders forces revalidation on every request instead of letting the
@@ -98,10 +100,10 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.MediaRoot))
 		api.GET("/library/:id/metadata-preview", CompareLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp))
 		api.POST("/library/:id/redownload", RedownloadLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
-		api.POST("/library/:id/thumbnail/redownload", RedownloadLibraryThumbnail(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo))
-		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.CollectionsRepo, deps.TagsRepo))
+		api.POST("/library/:id/thumbnail/redownload", RedownloadLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo))
+		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.CollectionsRepo, deps.TagsRepo))
 		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo))
-		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo))
+		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo))
 		api.POST("/library/:id/nfo", GenerateLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo, deps.TagsRepo))
 		api.GET("/library/:id/nfo", GetLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
 		api.DELETE("/library/:id/nfo", DeleteLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
@@ -112,7 +114,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/collections/:id", DeleteCollection(deps.CollectionsRepo))
 		api.POST("/collections/bulk-delete", BulkDeleteCollections(deps.DB, deps.CollectionsRepo))
 		api.GET("/collections/:id/cover-candidates", CollectionCoverCandidates(deps.MediaRoot, deps.CollectionsRepo))
-		api.POST("/collections/:id/cover", SetCollectionCover(deps.MediaRoot, deps.ImagesRoot, deps.CollectionsRepo))
+		api.POST("/collections/:id/cover", SetCollectionCover(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.CollectionsRepo))
 		api.DELETE("/collections/:id/cover", DeleteCollectionCover(deps.ImagesRoot, deps.CollectionsRepo))
 
 		api.GET("/tags", ListTags(deps.TagsRepo))
@@ -128,13 +130,15 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/artists/bulk-delete", BulkDeleteArtists(deps.DB, deps.ArtistsRepo))
 		api.GET("/artists/:id/image-candidates", ArtistImageCandidates(deps.LibraryRepo))
 		api.GET("/artists/:id/images", ListArtistImages(deps.ArtistsRepo))
-		api.POST("/artists/:id/images", AddArtistImage(deps.MediaRoot, deps.ImagesRoot, deps.ArtistsRepo))
+		api.POST("/artists/:id/images", AddArtistImage(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.ArtistsRepo))
 		api.DELETE("/artists/:id/images/:imageId", DeleteArtistImage(deps.ImagesRoot, deps.ArtistsRepo))
 		api.POST("/artists/:id/images/:imageId/select", SelectArtistImage(deps.ArtistsRepo))
 		api.DELETE("/artists/:id/selected-image", ClearArtistSelectedImage(deps.ArtistsRepo))
 
 		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.MediaRoot))
 		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager))
+		api.POST("/settings/backfill-images", StartImageBackfill(deps.ImageBackfillManager))
+		api.GET("/settings/backfill-images", GetImageBackfillStatus(deps.ImageBackfillManager))
 
 		api.POST("/backup/export/settings", ExportSettings(deps.SettingsRepo))
 		api.POST("/backup/export/library", ExportLibrary(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.DownloadsRepo))
@@ -143,7 +147,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/backup/import/library", ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.Manager, deps.SettingsRepo))
 
 		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
-		api.POST("/import", CreateImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))
+		api.POST("/import", CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))
 
 		api.GET("/history", ListHistory(deps.HistoryRepo, deps.SettingsRepo))
 		api.POST("/history/:id/retry", RetryHistoryItem(deps.HistoryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))

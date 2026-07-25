@@ -28,11 +28,13 @@ func (r *LibraryRepo) WithTx(tx *sql.Tx) *LibraryRepo {
 func (r *LibraryRepo) Create(ctx context.Context, item *models.LibraryItem) (int64, error) {
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO library (download_id, title, filename, path, collection_id, folder, original_url,
-		                      video_id, uploader, duration, resolution, thumbnail, description, artist_id, release_year,
+		                      video_id, uploader, duration, resolution, thumbnail, thumbnail_small_path, thumbnail_medium_path,
+		                      description, artist_id, release_year,
 		                      sequence_number, season_number, generate_nfo, status, file_size_bytes)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		item.DownloadID, item.Title, item.Filename, item.Path, item.CollectionID, item.Folder, item.OriginalURL,
-		item.VideoID, item.Uploader, item.Duration, item.Resolution, item.Thumbnail, item.Description, item.ArtistID, item.ReleaseYear,
+		item.VideoID, item.Uploader, item.Duration, item.Resolution, item.Thumbnail, item.ThumbnailSmallPath, item.ThumbnailMediumPath,
+		item.Description, item.ArtistID, item.ReleaseYear,
 		item.SequenceNumber, item.SeasonNumber, item.GenerateNFO, item.Status, item.FileSizeBytes,
 	)
 	if err != nil {
@@ -398,6 +400,20 @@ func (r *LibraryRepo) UpdateThumbnail(ctx context.Context, id int64, thumbnail *
 	return checkRowsAffected(res)
 }
 
+// UpdateThumbnailTiers sets the item's small/medium WebP derivative paths —
+// called alongside UpdateThumbnail whenever the original thumbnail is
+// (re)generated, and by the one-off backfill tool for pre-existing items.
+func (r *LibraryRepo) UpdateThumbnailTiers(ctx context.Context, id int64, small, medium *string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE library SET thumbnail_small_path = ?, thumbnail_medium_path = ? WHERE id = ?`,
+		small, medium, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating library thumbnail tiers: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // ThumbnailsByArtist returns the distinct thumbnail paths of every library
 // item assigned to an artist — the candidate source for "add from downloaded
 // files" in the artist images picker (an artist isn't tied to one folder the
@@ -533,7 +549,7 @@ func checkRowsAffected(res sql.Result) error {
 
 const librarySelectPrefix = `
 	SELECT l.id, l.download_id, l.title, l.filename, l.path, l.collection_id, c.name, l.folder, l.original_url, l.video_id,
-	       l.uploader, l.duration, l.resolution, l.thumbnail, l.description, l.artist_id, a.name, l.release_year, l.sequence_number, l.season_number, l.generate_nfo, l.downloaded_at, l.status, l.file_size_bytes,
+	       l.uploader, l.duration, l.resolution, l.thumbnail, l.thumbnail_small_path, l.thumbnail_medium_path, l.description, l.artist_id, a.name, l.release_year, l.sequence_number, l.season_number, l.generate_nfo, l.downloaded_at, l.status, l.file_size_bytes,
 	       l.playback_position_seconds, l.last_watched_at`
 
 const libraryFromClause = `
@@ -550,7 +566,7 @@ func scanLibraryItem(row rowScanner) (*models.LibraryItem, error) {
 
 	err := row.Scan(
 		&item.ID, &item.DownloadID, &item.Title, &item.Filename, &item.Path, &item.CollectionID, &item.CollectionName, &item.Folder,
-		&item.OriginalURL, &item.VideoID, &item.Uploader, &item.Duration, &item.Resolution, &item.Thumbnail,
+		&item.OriginalURL, &item.VideoID, &item.Uploader, &item.Duration, &item.Resolution, &item.Thumbnail, &item.ThumbnailSmallPath, &item.ThumbnailMediumPath,
 		&item.Description, &item.ArtistID, &item.ArtistName, &item.ReleaseYear, &item.SequenceNumber, &item.SeasonNumber, &item.GenerateNFO, &downloadedAt, &item.Status, &item.FileSizeBytes,
 		&item.PlaybackPositionSeconds, &lastWatchedAt,
 	)

@@ -91,8 +91,8 @@ export function BrowseShowPage() {
     <RevealAllProvider>
       <div className="space-y-8 pb-8">
         <div className="relative flex h-[40vh] min-h-56 w-full items-end overflow-hidden">
-          {summary.coverUrl && !effectiveBlurred ? (
-            <img src={summary.coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          {summary.coverUrlLarge && !effectiveBlurred ? (
+            <img src={summary.coverUrlLarge} alt="" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center bg-muted">
               <ImageIcon className="h-12 w-12 text-muted-foreground/40" />
@@ -110,16 +110,16 @@ export function BrowseShowPage() {
         <div className="space-y-8 px-4 md:px-8">
           {artist && (
             <Link to={`/browse/artist/${artist.id}`} className="flex w-fit items-center gap-3 hover:opacity-80">
-              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full bg-muted">
+              <div className="h-[4.86rem] w-[4.86rem] shrink-0 overflow-hidden rounded-full bg-muted">
                 {artist.selectedImagePath ? (
                   <img src={imageUrl(artist.selectedImagePath)} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center">
-                    <ImageIcon className="h-10 w-10 text-muted-foreground/40" />
+                    <ImageIcon className="h-[2.025rem] w-[2.025rem] text-muted-foreground/40" />
                   </div>
                 )}
               </div>
-              <p className="text-[1.75rem] font-medium">{artist.name}</p>
+              <p className="text-[1.4175rem] font-medium">{artist.name}</p>
             </Link>
           )}
 

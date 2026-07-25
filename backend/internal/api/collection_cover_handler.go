@@ -10,12 +10,34 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
+	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/importer"
+	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/repository"
 )
+
+var coverImageTiers = []imageproc.Tier{
+	{Name: "small", MaxWidth: imageproc.ThumbnailSmallWidth},
+	{Name: "medium", MaxWidth: imageproc.ThumbnailMediumWidth},
+	{Name: "original", MaxWidth: imageproc.CoverOriginalWidth},
+}
+
+// removeCoverFiles best-effort deletes every tier file for a collection's
+// current cover — used both when replacing (old files no longer referenced)
+// and when clearing.
+func removeCoverFiles(imagesRoot string, c *models.Collection) {
+	for _, p := range []*string{c.CoverImagePath, c.CoverImageSmallPath, c.CoverImageMediumPath} {
+		if p == nil {
+			continue
+		}
+		abs := filepath.Join(imagesRoot, filepath.FromSlash(*p))
+		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+			log.Printf("collection cover: failed to delete old cover file %s: %v", abs, err)
+		}
+	}
+}
 
 // CollectionCoverCandidates scans the collection's own resolved folder, full
 // depth, for image files already sitting among its downloaded content —
@@ -58,11 +80,12 @@ func CollectionCoverCandidates(mediaRoot string, collectionsRepo *repository.Col
 	}
 }
 
-// SetCollectionCover copies a new cover image (from an existing file or a
-// fresh upload) into the collection's own images folder, replacing whatever
-// was there before — always safe to delete-and-replace since this is
-// Packrat's own copy, never the user's original media.
-func SetCollectionCover(mediaRoot, imagesRoot string, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
+// SetCollectionCover generates small/medium/original WebP derivatives from a
+// new cover image (from an existing file or a fresh upload) into the
+// collection's own images folder, replacing whatever was there before —
+// always safe to delete-and-replace since this is Packrat's own copy, never
+// the user's original media.
+func SetCollectionCover(mediaRoot, imagesRoot, ffmpegPath string, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -92,32 +115,17 @@ func SetCollectionCover(mediaRoot, imagesRoot string, collectionsRepo *repositor
 			return
 		}
 
-		destDir := filepath.Join(imagesRoot, "collections", strconv.FormatInt(id, 10))
-		if err := os.MkdirAll(destDir, 0o755); err != nil {
+		tiers, err := imageproc.GenerateTiers(ctx, ffmpegPath, imagesRoot, "collections", id, data, nameHint, coverImageTiers)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		// Unique per-upload filename (not a fixed "cover.<ext>") so the
-		// <img src> URL always changes when the cover is replaced — a fixed
-		// name would let the browser keep showing the old cached bytes
-		// after a same-extension replacement, since React never sees the
-		// src prop change. Same convention as artist images.
-		destAbs := filepath.Join(destDir, uuid.NewString()+imageExtFor(nameHint))
-		if err := os.WriteFile(destAbs, data, 0o644); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		destRel := toRelSlash(imagesRoot, destAbs)
+		small, medium, original := tiers[0], tiers[1], tiers[2]
 
-		// Clean up the old file now that the DB will stop pointing at it.
-		if existing.CoverImagePath != nil && *existing.CoverImagePath != destRel {
-			oldAbs := filepath.Join(imagesRoot, filepath.FromSlash(*existing.CoverImagePath))
-			if err := os.Remove(oldAbs); err != nil && !os.IsNotExist(err) {
-				log.Printf("collection cover: failed to delete old cover file %s: %v", oldAbs, err)
-			}
-		}
+		// Clean up the old files now that the DB will stop pointing at them.
+		removeCoverFiles(imagesRoot, existing)
 
-		if err := collectionsRepo.SetCoverImage(ctx, id, &destRel); err != nil {
+		if err := collectionsRepo.SetCoverImageTiers(ctx, id, &small, &medium, &original); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -127,12 +135,16 @@ func SetCollectionCover(mediaRoot, imagesRoot string, collectionsRepo *repositor
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"coverImagePath": updated.CoverImagePath})
+		c.JSON(http.StatusOK, gin.H{
+			"coverImagePath":       updated.CoverImagePath,
+			"coverImageSmallPath":  updated.CoverImageSmallPath,
+			"coverImageMediumPath": updated.CoverImageMediumPath,
+		})
 	}
 }
 
-// DeleteCollectionCover removes the collection's cover — the file
-// (best-effort) and the DB reference.
+// DeleteCollectionCover removes the collection's cover — all tier files
+// (best-effort) and the DB references.
 func DeleteCollectionCover(imagesRoot string, collectionsRepo *repository.CollectionsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -152,14 +164,9 @@ func DeleteCollectionCover(imagesRoot string, collectionsRepo *repository.Collec
 			return
 		}
 
-		if existing.CoverImagePath != nil {
-			abs := filepath.Join(imagesRoot, filepath.FromSlash(*existing.CoverImagePath))
-			if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
-				log.Printf("collection cover: failed to delete cover file %s: %v", abs, err)
-			}
-		}
+		removeCoverFiles(imagesRoot, existing)
 
-		if err := collectionsRepo.SetCoverImage(ctx, id, nil); err != nil {
+		if err := collectionsRepo.SetCoverImageTiers(ctx, id, nil, nil, nil); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

@@ -192,6 +192,18 @@ func (r *ArtistsRepo) ListImages(ctx context.Context, artistID int64) ([]models.
 	return out, rows.Err()
 }
 
+// UpdateImagePath rewrites an existing gallery image's stored path in
+// place — used by the one-off image-derivative backfill tool to point an
+// already-recorded row at its newly re-encoded file without changing the
+// row's identity (id, created_at).
+func (r *ArtistsRepo) UpdateImagePath(ctx context.Context, imageID int64, relativePath string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE artist_images SET relative_path = ? WHERE id = ?`, relativePath, imageID)
+	if err != nil {
+		return fmt.Errorf("updating artist image path: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // DeleteImage removes a gallery image's row and hands back its relative
 // path so the caller can also unlink the file and, if it was the artist's
 // selected image, clear that pointer too.

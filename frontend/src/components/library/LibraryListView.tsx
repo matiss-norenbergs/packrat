@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
-import { mediaFileUrl } from "@/lib/api"
+import { librarySmallThumbnailUrl } from "@/lib/api"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import type { LibrarySortKey } from "@/lib/libraryFilters"
 import type { LibraryItem } from "@/types/api"
@@ -267,6 +267,7 @@ function LibraryListRow({
   const visibleTags = item.tags.slice(0, MAX_VISIBLE_TAGS)
   const hiddenTags = item.tags.slice(MAX_VISIBLE_TAGS)
   const columnDefsByKey = Object.fromEntries(LIBRARY_COLUMNS.map((c) => [c.key, c]))
+  const thumbUrl = librarySmallThumbnailUrl(item)
 
   return (
     <TableRow
@@ -286,9 +287,9 @@ function LibraryListRow({
       )}
       <TableCell>
         <div className="relative aspect-video w-14 overflow-hidden rounded bg-muted">
-          {item.thumbnail && (
+          {thumbUrl && (
             <BlurredThumbnail
-              src={mediaFileUrl(item.thumbnail)}
+              src={thumbUrl}
               className="absolute inset-0 h-full w-full object-cover"
               blurred={item.blurred}
               revealed={revealed}

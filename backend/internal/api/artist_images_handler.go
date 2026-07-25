@@ -9,10 +9,15 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
+	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/repository"
 )
+
+// Artist images are a single tier (no small/medium split) — "image" rather
+// than "original" since the stored file is always resized to
+// ArtistImageWidth, never the untouched upload.
+var artistImageTiers = []imageproc.Tier{{Name: "image", MaxWidth: imageproc.ArtistImageWidth}}
 
 // ArtistImageCandidates lists that artist's downloaded items' thumbnails as
 // suggested images to add to the gallery — read-only, nothing copied yet.
@@ -61,9 +66,9 @@ func ListArtistImages(artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
 	}
 }
 
-// AddArtistImage copies a new image (from an existing file or a fresh
-// upload) into that artist's gallery folder and records it.
-func AddArtistImage(mediaRoot, imagesRoot string, artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
+// AddArtistImage generates a single WebP derivative (from an existing file
+// or a fresh upload) into that artist's gallery folder and records it.
+func AddArtistImage(mediaRoot, imagesRoot, ffmpegPath string, artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -92,18 +97,13 @@ func AddArtistImage(mediaRoot, imagesRoot string, artistsRepo *repository.Artist
 			return
 		}
 
-		destDir := filepath.Join(imagesRoot, "artists", strconv.FormatInt(id, 10))
-		if err := os.MkdirAll(destDir, 0o755); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		destAbs := filepath.Join(destDir, uuid.NewString()+imageExtFor(nameHint))
-		if err := os.WriteFile(destAbs, data, 0o644); err != nil {
+		tiers, err := imageproc.GenerateTiers(ctx, ffmpegPath, imagesRoot, "artists", id, data, nameHint, artistImageTiers)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		img, err := artistsRepo.AddImage(ctx, id, toRelSlash(imagesRoot, destAbs))
+		img, err := artistsRepo.AddImage(ctx, id, tiers[0])
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

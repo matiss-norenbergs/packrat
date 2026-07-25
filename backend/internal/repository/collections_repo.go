@@ -158,9 +158,9 @@ func (r *CollectionsRepo) ItemCounts(ctx context.Context) (map[int64]int, error)
 // filename_template/is_private/jellyfin_library/season_number/artist_id/
 // browse_as_show for id. Callers apply partial-update semantics before
 // calling this (fetch, merge, write) — this method always writes all of
-// these columns. cover_image_path is deliberately NOT included — it's only
-// ever written by SetCoverImage, so a general update here can never clobber
-// it.
+// these columns. The three cover_image_*_path columns are deliberately NOT
+// included — they're only ever written by SetCoverImageTiers, so a general
+// update here can never clobber them.
 func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collection) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -197,12 +197,15 @@ func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collec
 	return nil
 }
 
-// SetCoverImage narrowly updates just the collection's cover image path —
-// kept separate from Update so setting/clearing a cover never needs to
-// round-trip every other field (mirrors ArtistsRepo.SetSelectedImage).
-// path == nil clears the cover.
-func (r *CollectionsRepo) SetCoverImage(ctx context.Context, id int64, path *string) error {
-	res, err := r.db.ExecContext(ctx, `UPDATE collections SET cover_image_path = ? WHERE id = ?`, path, id)
+// SetCoverImageTiers narrowly updates the collection's three cover image
+// tiers — kept separate from Update so setting/clearing a cover never needs
+// to round-trip every other field (mirrors ArtistsRepo.SetSelectedImage).
+// All-nil clears the cover.
+func (r *CollectionsRepo) SetCoverImageTiers(ctx context.Context, id int64, small, medium, original *string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE collections SET cover_image_small_path = ?, cover_image_medium_path = ?, cover_image_path = ? WHERE id = ?`,
+		small, medium, original, id,
+	)
 	if err != nil {
 		return fmt.Errorf("updating collection cover image: %w", err)
 	}
@@ -346,7 +349,7 @@ func FindChildByRootPath(cols []models.Collection, parentID *int64, segment stri
 
 const collectionSelectColumns = `
 	SELECT id, name, parent_id, root_path, default_quality, default_download_type, filename_template,
-	       jellyfin_library, is_private, season_number, artist_id, cover_image_path, browse_as_show, created_at, updated_at
+	       jellyfin_library, is_private, season_number, artist_id, cover_image_path, cover_image_small_path, cover_image_medium_path, browse_as_show, created_at, updated_at
 	FROM collections`
 
 func scanCollection(row rowScanner) (*models.Collection, error) {
@@ -355,7 +358,7 @@ func scanCollection(row rowScanner) (*models.Collection, error) {
 
 	err := row.Scan(
 		&c.ID, &c.Name, &c.ParentID, &c.RootPath, &c.DefaultQuality, &c.DefaultDownloadType, &c.FilenameTemplate,
-		&c.JellyfinLibrary, &c.IsPrivate, &c.SeasonNumber, &c.ArtistID, &c.CoverImagePath, &c.BrowseAsShow, &createdAt, &updatedAt,
+		&c.JellyfinLibrary, &c.IsPrivate, &c.SeasonNumber, &c.ArtistID, &c.CoverImagePath, &c.CoverImageSmallPath, &c.CoverImageMediumPath, &c.BrowseAsShow, &createdAt, &updatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

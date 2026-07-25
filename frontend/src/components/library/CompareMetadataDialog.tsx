@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { useLibraryItemMetadataPreview } from "@/hooks/useLibrary"
-import { mediaFileUrl } from "@/lib/api"
+import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { cn, formatDuration } from "@/lib/utils"
 import type { LibraryItem } from "@/types/api"
 
@@ -80,7 +80,7 @@ export function CompareMetadataDialog({ item, open, onOpenChange }: CompareMetad
             <div className="aspect-video w-full overflow-hidden rounded-md bg-muted">
               {item.thumbnail ? (
                 <BlurredThumbnail
-                  src={mediaFileUrl(item.thumbnail)}
+                  src={libraryMediumThumbnailUrl(item)!}
                   className="h-full w-full object-cover"
                   blurred={item.blurred}
                   revealed={revealed}

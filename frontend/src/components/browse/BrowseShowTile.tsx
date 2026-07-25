@@ -46,9 +46,9 @@ export function BrowseShowTile({ show }: { show: ShowSummary }) {
   return (
     <div className="group w-44 shrink-0 space-y-1.5">
       <div className="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
-        {show.coverUrl ? (
+        {show.coverUrlSmall ? (
           <BlurredThumbnail
-            src={show.coverUrl}
+            src={show.coverUrlSmall}
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
             blurred={effectiveBlurred}
             revealed={revealed}
