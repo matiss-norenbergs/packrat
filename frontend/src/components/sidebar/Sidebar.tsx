@@ -16,8 +16,9 @@ import {
 } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLogout } from "@/hooks/useAuth"
-import { useYtDlpVersion } from "@/hooks/useSettings"
+import { useAppVersion, useYtDlpVersion } from "@/hooks/useSettings"
 import { NavItem } from "./NavItem"
 
 const navItems = [
@@ -57,6 +58,7 @@ export function SidebarContent() {
           <NavItem key={item.to} {...item} />
         ))}
       </nav>
+      <AppVersionLine />
       <VersionLine />
       <div className="px-2 py-2">
         <Button
@@ -73,6 +75,13 @@ export function SidebarContent() {
   )
 }
 
+function AppVersionLine() {
+  const { data } = useAppVersion()
+  if (!data) return null
+
+  return <div className="px-4 py-1 text-xs text-muted-foreground">Packrat v{data.version}</div>
+}
+
 function VersionLine() {
   const { data } = useYtDlpVersion()
   if (!data) return null
@@ -84,7 +93,12 @@ function VersionLine() {
     >
       <span>yt-dlp v{data.currentVersion}</span>
       {data.updateAvailable && (
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" title="Update available" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          </TooltipTrigger>
+          <TooltipContent>Update available</TooltipContent>
+        </Tooltip>
       )}
     </Link>
   )

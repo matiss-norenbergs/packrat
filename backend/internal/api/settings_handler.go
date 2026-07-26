@@ -89,6 +89,26 @@ func DownloadLogRetentionDays(ctx context.Context, repo *repository.SettingsRepo
 	return n, nil
 }
 
+// AutoBackupIntervalHours reads the auto_backup_interval_hours setting,
+// defaulting to 0 — disabled — if it's never been set (or is corrupt).
+// Shared by GetSettings; backup.RunScheduledBackupIfDue reads this same key
+// directly via settingsRepo.Get rather than calling this helper, to avoid an
+// import cycle (api already imports backup).
+func AutoBackupIntervalHours(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingAutoBackupIntervalHours)
+	if errors.Is(err, repository.ErrNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0, nil
+	}
+	return n, nil
+}
+
 // LibraryView reads the library_view setting, defaulting to "grid" if it's
 // never been set. Shared by GetSettings.
 func LibraryView(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
@@ -496,6 +516,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		autoBackupIntervalHours, err := AutoBackupIntervalHours(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, SettingsResponse{
 			DownloadDirectory:        mediaRoot,
 			MaxConcurrentDownloads:   mgr.WorkerCount(),
@@ -526,6 +551,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			YtdlpProxy:               ytdlpProxy,
 			YtdlpRateLimit:           ytdlpRateLimit,
 			YtdlpRetries:             ytdlpRetries,
+			AutoBackupIntervalHours:  autoBackupIntervalHours,
 		})
 	}
 }
@@ -591,6 +617,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 		}
 		if req.DownloadLogRetentionDays != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingDownloadLogRetentionDays, strconv.Itoa(*req.DownloadLogRetentionDays)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.AutoBackupIntervalHours != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingAutoBackupIntervalHours, strconv.Itoa(*req.AutoBackupIntervalHours)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

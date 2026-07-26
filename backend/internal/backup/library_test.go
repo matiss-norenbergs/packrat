@@ -53,7 +53,7 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	repos := openTestRepos(t)
 
-	artist, err := repos.artists.Create(ctx, "Test Artist")
+	artist, err := repos.artists.Create(ctx, "Test Artist", nil)
 	if err != nil {
 		t.Fatalf("creating artist: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestPreviewLibraryBundle(t *testing.T) {
 	if _, err := repos.tags.Create(ctx, "existing-tag", false); err != nil {
 		t.Fatalf("creating tag: %v", err)
 	}
-	if _, err := repos.artists.Create(ctx, "Existing Artist"); err != nil {
+	if _, err := repos.artists.Create(ctx, "Existing Artist", nil); err != nil {
 		t.Fatalf("creating artist: %v", err)
 	}
 	existingURL := "https://example.com/existing"

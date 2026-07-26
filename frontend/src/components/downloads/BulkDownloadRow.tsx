@@ -12,15 +12,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useCollections } from "@/hooks/useCollections"
 import { useDownloadPreview } from "@/hooks/useDownloads"
 import { useSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import { ArtistSelect } from "@/components/library/ArtistSelect"
 import { TagInput } from "@/components/library/TagInput"
+import { FilenameCharWarning } from "./FilenameCharWarning"
 import { FilenameTemplateBuilderDialog } from "./FilenameTemplateBuilderDialog"
 import { cn, formatDuration } from "@/lib/utils"
 import { resolveInheritedArtistId } from "@/lib/collectionTree"
+import { invalidSegmentChars, invalidTemplateChars } from "@/lib/filenameValidation"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
 import type { BulkRow } from "./BulkDownloadDialog"
 
@@ -66,33 +69,30 @@ export function BulkDownloadRow({
     <div className={cn("space-y-3 rounded-md border p-3", rowNumber % 2 === 0 && "bg-muted/40")}>
       <div className="flex items-center gap-2">
         <div className="flex shrink-0 flex-col gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Move up"
-            disabled={isFirst}
-            onClick={onMoveUp}
-          >
-            <ArrowUp className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Move down"
-            disabled={isLast}
-            onClick={onMoveDown}
-          >
-            <ArrowDown className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Remove row"
-            disabled={!canRemove}
-            onClick={onRemove}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-sm" disabled={isFirst} onClick={onMoveUp}>
+                <ArrowUp className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Move up</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-sm" disabled={isLast} onClick={onMoveDown}>
+                <ArrowDown className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Move down</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-sm" disabled={!canRemove} onClick={onRemove}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Remove row</TooltipContent>
+          </Tooltip>
         </div>
 
         <span className="w-6 shrink-0 text-center text-xs text-muted-foreground">#{rowNumber}</span>
@@ -108,16 +108,20 @@ export function BulkDownloadRow({
                   onChange={(e) => onChange({ url: e.target.value })}
                 />
                 {previewAllowed && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    title="Fetch preview"
-                    disabled={!row.url.trim()}
-                    onClick={() => setPreviewRequested(true)}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={!row.url.trim()}
+                        onClick={() => setPreviewRequested(true)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Fetch preview</TooltipContent>
+                  </Tooltip>
                 )}
               </div>
             </div>
@@ -215,6 +219,7 @@ export function BulkDownloadRow({
                 value={row.filename}
                 onChange={(e) => onChange({ filename: e.target.value })}
               />
+              <FilenameCharWarning chars={invalidSegmentChars(row.filename)} />
             </div>
             <div className="flex-1 space-y-1">
               <Label>Filename Template</Label>
@@ -230,6 +235,7 @@ export function BulkDownloadRow({
                   onApply={(v) => onChange({ filenameTemplate: v })}
                 />
               </div>
+              <FilenameCharWarning chars={invalidTemplateChars(row.filenameTemplate)} />
             </div>
           </div>
         </div>
@@ -293,6 +299,9 @@ export function BulkDownloadRow({
                 value={row.titleOverride}
                 onChange={(e) => onChange({ titleOverride: e.target.value })}
               />
+              {!row.filename.trim() && !row.filenameTemplate.trim() && (
+                <FilenameCharWarning chars={invalidSegmentChars(row.titleOverride)} />
+              )}
             </div>
             <div className="space-y-1">
               <Label>Artist</Label>

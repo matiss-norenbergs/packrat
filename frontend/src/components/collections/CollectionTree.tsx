@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { ChevronDown, ChevronRight, FolderPlus, Info, Lock, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +14,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { CollectionDialog } from "./CollectionDialog"
 import { useDeleteCollection } from "@/hooks/useCollections"
 import { useArtists } from "@/hooks/useArtists"
@@ -25,11 +25,25 @@ interface SelectionProps {
   onToggle: (id: number) => void
 }
 
+// Expand/collapse state is lifted to the caller (CollectionsPage) rather
+// than kept per-node, so the toolbar's Expand all/Collapse all buttons can
+// drive every node at once — mirrors SelectionProps' shape exactly.
+interface ExpansionProps {
+  isExpanded: (id: number) => boolean
+  onToggleExpanded: (id: number) => void
+}
+
 function capitalize(s: string): string {
   return s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s
 }
 
-export function CollectionTree({ nodes, isSelected, onToggle }: { nodes: CollectionTreeNode[] } & SelectionProps) {
+export function CollectionTree({
+  nodes,
+  isSelected,
+  onToggle,
+  isExpanded,
+  onToggleExpanded,
+}: { nodes: CollectionTreeNode[] } & SelectionProps & ExpansionProps) {
   const { data: artists } = useArtists()
   const artistNameById = new Map((artists ?? []).map((a) => [a.id, a.name]))
 
@@ -41,6 +55,8 @@ export function CollectionTree({ nodes, isSelected, onToggle }: { nodes: Collect
           node={node}
           isSelected={isSelected}
           onToggle={onToggle}
+          isExpanded={isExpanded}
+          onToggleExpanded={onToggleExpanded}
           artistNameById={artistNameById}
         />
       ))}
@@ -52,9 +68,11 @@ function CollectionNode({
   node,
   isSelected,
   onToggle,
+  isExpanded,
+  onToggleExpanded,
   artistNameById,
-}: { node: CollectionTreeNode; artistNameById: Map<number, string> } & SelectionProps) {
-  const [expanded, setExpanded] = useState(true)
+}: { node: CollectionTreeNode; artistNameById: Map<number, string> } & SelectionProps & ExpansionProps) {
+  const expanded = isExpanded(node.id)
   const deleteCollection = useDeleteCollection()
   const hasChildren = node.children.length > 0
 
@@ -68,7 +86,7 @@ function CollectionNode({
             variant="ghost"
             size="icon"
             className="h-6 w-6 shrink-0"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => onToggleExpanded(node.id)}
           >
             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </Button>
@@ -79,17 +97,19 @@ function CollectionNode({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate font-medium">{node.name}</span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex items-center text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  title="Collection details"
-                >
-                  <Info className="h-3.5 w-3.5" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-72" align="start">
+            <Tooltip>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex items-center text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                </PopoverTrigger>
+                <PopoverContent className="w-72" align="start">
                 <dl className="space-y-1.5 text-sm">
                   <div className="flex gap-2">
                     <dt className="w-16 shrink-0 text-muted-foreground">Folder</dt>
@@ -116,12 +136,19 @@ function CollectionNode({
                     </div>
                   )}
                 </dl>
-              </PopoverContent>
-            </Popover>
+                </PopoverContent>
+              </Popover>
+              <TooltipContent>Collection details</TooltipContent>
+            </Tooltip>
             {node.isPrivate && (
-              <span title="Private">
-                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Private</TooltipContent>
+              </Tooltip>
             )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -130,44 +157,59 @@ function CollectionNode({
         </div>
 
         <div className="flex shrink-0 gap-1">
-          <CollectionDialog
-            parentId={node.id}
-            trigger={
-              <Button variant="ghost" size="icon" title="Add sub-collection">
-                <FolderPlus className="h-4 w-4" />
-              </Button>
-            }
-          />
-          <CollectionDialog
-            collection={node}
-            trigger={
-              <Button variant="ghost" size="icon" title="Edit">
-                <Pencil className="h-4 w-4" />
-              </Button>
-            }
-          />
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" title="Delete">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete "{node.name}"?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Existing downloads and library items in this collection become uncategorized —
-                  they are not deleted. Sub-collections must be moved or deleted first.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => deleteCollection.mutate(node.id)}>
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <Tooltip>
+            <CollectionDialog
+              parentId={node.id}
+              trigger={
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <FolderPlus className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+              }
+            />
+            <TooltipContent>Add sub-collection</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <CollectionDialog
+              collection={node}
+              trigger={
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+              }
+            />
+            <TooltipContent>Edit</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete "{node.name}"?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Existing downloads and library items in this collection become uncategorized —
+                    they are not deleted. Sub-collections must be moved or deleted first.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deleteCollection.mutate(node.id)}>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <TooltipContent>Delete</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -179,6 +221,8 @@ function CollectionNode({
               node={child}
               isSelected={isSelected}
               onToggle={onToggle}
+              isExpanded={isExpanded}
+              onToggleExpanded={onToggleExpanded}
               artistNameById={artistNameById}
             />
           ))}

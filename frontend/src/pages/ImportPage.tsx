@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { createImport } from "@/lib/api"
 import { useImportScan } from "@/hooks/useImport"
 import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
@@ -236,15 +237,14 @@ function IgnoreFolderButton({ folderPath }: { folderPath: string }) {
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="h-5 w-5"
-      title={`Ignore "${folderPath}" (and its sub-folders) in future scans`}
-      onClick={handleIgnore}
-    >
-      <EyeOff className="h-3 w-3" />
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleIgnore}>
+          <EyeOff className="h-3 w-3" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{`Ignore "${folderPath}" (and its sub-folders) in future scans`}</TooltipContent>
+    </Tooltip>
   )
 }
 

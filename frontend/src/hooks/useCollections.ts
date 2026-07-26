@@ -1,7 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { bulkDeleteCollections, createCollection, deleteCollection, fetchCollections, updateCollection } from "@/lib/api"
-import type { BulkDeleteRequest, CreateCollectionRequest, UpdateCollectionRequest } from "@/types/api"
+import {
+  bulkDeleteCollections,
+  createCollection,
+  deleteCollection,
+  deleteCollectionCover,
+  fetchCollectionCoverCandidates,
+  fetchCollections,
+  setCollectionCover,
+  updateCollection,
+} from "@/lib/api"
+import type { BulkDeleteRequest, CreateCollectionRequest, SetCollectionCoverRequest, UpdateCollectionRequest } from "@/types/api"
 import { downloadsQueryKey } from "./useDownloads"
 import { libraryQueryKey } from "./useLibrary"
 
@@ -58,6 +67,40 @@ export function useDeleteCollection() {
     },
     onError: (err: Error) => {
       toast.error(`Failed to delete collection: ${err.message}`)
+    },
+  })
+}
+
+export function useCollectionCoverCandidates(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["collections", id, "cover-candidates"],
+    queryFn: () => fetchCollectionCoverCandidates(id),
+    enabled,
+  })
+}
+
+export function useSetCollectionCover(id: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: SetCollectionCoverRequest) => setCollectionCover(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: collectionsQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to set cover: ${err.message}`)
+    },
+  })
+}
+
+export function useDeleteCollectionCover(id: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => deleteCollectionCover(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: collectionsQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to remove cover: ${err.message}`)
     },
   })
 }

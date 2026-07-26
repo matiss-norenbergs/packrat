@@ -13,6 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useDeleteHistoryItem, useHistory, useRetryHistoryItem } from "@/hooks/useHistory"
 import { formatDownloadStatus } from "@/lib/utils"
 import type { HistoryItem } from "@/types/api"
@@ -85,20 +86,24 @@ function HistoryRow({ item }: { item: HistoryItem }) {
       </div>
 
       {retryable && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => retry.mutate(item.id)}
-          disabled={retry.isPending}
-          title="Retry"
-        >
-          <RotateCcw className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" onClick={() => retry.mutate(item.id)} disabled={retry.isPending}>
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Retry</TooltipContent>
+        </Tooltip>
       )}
 
-      <Button variant="ghost" size="icon" onClick={() => setDeleteOpen(true)} title="Delete">
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" onClick={() => setDeleteOpen(true)}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Delete</TooltipContent>
+      </Tooltip>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { useTags } from "@/hooks/useTags"
-import { mediaFileUrl } from "@/lib/api"
+import { librarySmallThumbnailUrl } from "@/lib/api"
 import type { LibraryItemEditFields } from "@/lib/libraryItemEdit"
 import { cn, hashText } from "@/lib/utils"
 import { ArtistSelect } from "./ArtistSelect"
@@ -25,13 +25,14 @@ interface BulkEditLibraryItemRowProps {
 // otherwise-identical bordered rows is hard to visually track.
 export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange }: BulkEditLibraryItemRowProps) {
   const { data: allTags } = useTags()
+  const thumbUrl = librarySmallThumbnailUrl(item)
 
   return (
     <div className={cn("space-y-3 rounded-md border p-3", rowNumber % 2 === 0 && "bg-muted/40")}>
       <div className="flex items-center gap-2">
-        {item.thumbnail ? (
+        {thumbUrl ? (
           <BlurredThumbnail
-            src={mediaFileUrl(item.thumbnail)}
+            src={thumbUrl}
             className="h-10 w-16 shrink-0 rounded object-cover"
             blurred={item.blurred}
             revealed={false}

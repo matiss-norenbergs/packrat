@@ -1,4 +1,5 @@
 import { useSettings } from "@/hooks/useSettings"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 // Literal class strings — Tailwind's build-time scanner only picks up whole
@@ -42,7 +43,7 @@ export function BlurredThumbnail({
   const showBlur = blurred && !revealed
   const clickable = blurred && interactive
 
-  return (
+  const img = (
     <img
       src={src}
       alt={alt}
@@ -56,7 +57,15 @@ export function BlurredThumbnail({
         clickable && "cursor-pointer",
       )}
       onClick={clickable ? onToggleReveal : undefined}
-      title={clickable ? (revealed ? "Click to hide" : "Click to reveal") : undefined}
     />
+  )
+
+  if (!clickable) return img
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{img}</TooltipTrigger>
+      <TooltipContent>{revealed ? "Click to hide" : "Click to reveal"}</TooltipContent>
+    </Tooltip>
   )
 }

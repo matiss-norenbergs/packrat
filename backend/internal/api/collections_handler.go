@@ -11,13 +11,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 )
 
-func ListCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
+func ListCollections(repo *repository.CollectionsRepo, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
@@ -29,12 +30,22 @@ func ListCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		latestThumbnails, err := libraryRepo.LatestThumbnailsByCollection(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		paths := collectionPaths(rows)
 		privacy := effectivePrivacyMap(rows)
 		totals := totalItemCounts(rows, itemCounts)
+		rolledUpThumbnails := rollupLatestThumbnails(rows, latestThumbnails)
 		out := make([]CollectionResponse, 0, len(rows))
 		for _, col := range rows {
-			out = append(out, toCollectionResponse(col, paths[col.ID], itemCounts[col.ID], privacy[col.ID], totals[col.ID]))
+			var thumb *string
+			if t, ok := rolledUpThumbnails[col.ID]; ok {
+				thumb = &t
+			}
+			out = append(out, toCollectionResponse(col, paths[col.ID], itemCounts[col.ID], privacy[col.ID], totals[col.ID], thumb))
 		}
 		c.JSON(http.StatusOK, out)
 	}
@@ -71,6 +82,11 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 		if req.FilenameTemplate == "" {
 			req.FilenameTemplate = "{title}"
 		}
+		req.RootPath = fsutil.SanitizeFilename(req.RootPath)
+		if req.RootPath == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid root path"})
+			return
+		}
 
 		prospectivePath, err := prospectiveCollectionPath(c.Request.Context(), repo, req.ParentID, req.RootPath)
 		if err != nil {
@@ -97,6 +113,7 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			JellyfinLibrary:     req.JellyfinLibraryID,
 			SeasonNumber:        req.SeasonNumber,
 			ArtistID:            req.ArtistID,
+			BrowseAsShow:        req.BrowseAsShow,
 		}
 		id, err := repo.Create(c.Request.Context(), &col)
 		if err != nil {
@@ -138,6 +155,11 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 		if req.FilenameTemplate == "" {
 			req.FilenameTemplate = "{title}"
 		}
+		req.RootPath = fsutil.SanitizeFilename(req.RootPath)
+		if req.RootPath == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid root path"})
+			return
+		}
 
 		existing, err := repo.Get(c.Request.Context(), id)
 		if err != nil {
@@ -172,6 +194,7 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			JellyfinLibrary:     req.JellyfinLibraryID,
 			SeasonNumber:        req.SeasonNumber,
 			ArtistID:            req.ArtistID,
+			BrowseAsShow:        req.BrowseAsShow,
 		}
 		if err := repo.Update(c.Request.Context(), id, &col); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {

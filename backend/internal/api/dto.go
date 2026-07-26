@@ -12,6 +12,7 @@ import (
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/queue"
+	"packrat/backend/internal/repository"
 )
 
 // isHTTPURL reports whether raw parses as an absolute http(s) URL with a
@@ -255,6 +256,8 @@ type LibraryItemResponse struct {
 	Duration                *int     `json:"duration"`
 	Resolution              *string  `json:"resolution"`
 	Thumbnail               *string  `json:"thumbnail"`
+	ThumbnailSmallPath      *string  `json:"thumbnailSmallPath"`
+	ThumbnailMediumPath     *string  `json:"thumbnailMediumPath"`
 	Description             *string  `json:"description"`
 	ArtistID                *int64   `json:"artistId"`
 	ArtistName              *string  `json:"artistName"`
@@ -326,6 +329,8 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 		Duration:                item.Duration,
 		Resolution:              item.Resolution,
 		Thumbnail:               item.Thumbnail,
+		ThumbnailSmallPath:      item.ThumbnailSmallPath,
+		ThumbnailMediumPath:     item.ThumbnailMediumPath,
 		Description:             item.Description,
 		ArtistID:                item.ArtistID,
 		ArtistName:              item.ArtistName,
@@ -426,6 +431,7 @@ type CreateCollectionRequest struct {
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 	SeasonNumber        *int    `json:"seasonNumber"`
 	ArtistID            *int64  `json:"artistId"`
+	BrowseAsShow        bool    `json:"browseAsShow"`
 }
 
 type UpdateCollectionRequest struct {
@@ -438,21 +444,26 @@ type UpdateCollectionRequest struct {
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 	SeasonNumber        *int    `json:"seasonNumber"`
 	ArtistID            *int64  `json:"artistId"`
+	BrowseAsShow        bool    `json:"browseAsShow"`
 }
 
 type CollectionResponse struct {
-	ID                  int64  `json:"id"`
-	Name                string `json:"name"`
-	ParentID            *int64 `json:"parentId"`
-	RootPath            string `json:"rootPath"`
-	Path                string `json:"path"`
-	DefaultQuality      string `json:"defaultQuality"`
-	DefaultDownloadType string `json:"defaultDownloadType"`
-	FilenameTemplate    string `json:"filenameTemplate"`
-	IsPrivate           bool   `json:"isPrivate"`
-	SeasonNumber        *int   `json:"seasonNumber"`
-	ArtistID            *int64 `json:"artistId"`
-	ItemCount           int    `json:"itemCount"`
+	ID                   int64   `json:"id"`
+	Name                 string  `json:"name"`
+	ParentID             *int64  `json:"parentId"`
+	RootPath             string  `json:"rootPath"`
+	Path                 string  `json:"path"`
+	DefaultQuality       string  `json:"defaultQuality"`
+	DefaultDownloadType  string  `json:"defaultDownloadType"`
+	FilenameTemplate     string  `json:"filenameTemplate"`
+	IsPrivate            bool    `json:"isPrivate"`
+	SeasonNumber         *int    `json:"seasonNumber"`
+	ArtistID             *int64  `json:"artistId"`
+	CoverImagePath       *string `json:"coverImagePath"`
+	CoverImageSmallPath  *string `json:"coverImageSmallPath"`
+	CoverImageMediumPath *string `json:"coverImageMediumPath"`
+	BrowseAsShow         bool    `json:"browseAsShow"`
+	ItemCount            int     `json:"itemCount"`
 	// EffectiveIsPrivate and TotalItemCount account for inheritance down the
 	// collection tree — IsPrivate/ItemCount above are this collection's own,
 	// non-inherited flag and its own direct (non-rolled-up) item count,
@@ -462,11 +473,17 @@ type CollectionResponse struct {
 	// needed by the Library toolbar's reveal-all button, which otherwise
 	// can't tell if there's any blurred content when a private *parent*
 	// holds no items directly and its items live in unmarked children.
-	EffectiveIsPrivate bool    `json:"effectiveIsPrivate"`
-	TotalItemCount     int     `json:"totalItemCount"`
-	JellyfinLibraryID  *string `json:"jellyfinLibraryId"`
-	CreatedAt          string  `json:"createdAt"`
-	UpdatedAt          string  `json:"updatedAt"`
+	EffectiveIsPrivate bool `json:"effectiveIsPrivate"`
+	TotalItemCount     int  `json:"totalItemCount"`
+	// LatestItemThumbnailPath is the thumbnail of the most recently
+	// downloaded item anywhere in this collection's subtree (rolled up the
+	// same way TotalItemCount is) — Browse's fallback cover for a show/album
+	// tile that has no explicit CoverImagePath set. Nil when the subtree has
+	// no thumbnailed item at all.
+	LatestItemThumbnailPath *string `json:"latestItemThumbnailPath"`
+	JellyfinLibraryID       *string `json:"jellyfinLibraryId"`
+	CreatedAt               string  `json:"createdAt"`
+	UpdatedAt               string  `json:"updatedAt"`
 }
 
 type TagResponse struct {
@@ -498,27 +515,84 @@ func toTagResponse(t models.TagWithCount) TagResponse {
 }
 
 type ArtistResponse struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	CreatedAt  string `json:"createdAt"`
-	UsageCount int    `json:"usageCount"`
+	ID                int64   `json:"id"`
+	Name              string  `json:"name"`
+	SelectedImagePath *string `json:"selectedImagePath"`
+	// Birthday is a date-only string ("2006-01-02"), nil when unset.
+	Birthday   *string `json:"birthday"`
+	CreatedAt  string  `json:"createdAt"`
+	UsageCount int     `json:"usageCount"`
 }
 
 type CreateArtistRequest struct {
-	Name string `json:"name" binding:"required"`
+	Name     string  `json:"name" binding:"required"`
+	Birthday *string `json:"birthday"`
 }
 
 type UpdateArtistRequest struct {
-	Name string `json:"name" binding:"required"`
+	Name     string  `json:"name" binding:"required"`
+	Birthday *string `json:"birthday"`
 }
 
 func toArtistResponse(a models.ArtistWithCount) ArtistResponse {
 	return ArtistResponse{
-		ID:         a.ID,
-		Name:       a.Name,
-		CreatedAt:  a.CreatedAt.Format(timeFormat),
-		UsageCount: a.UsageCount,
+		ID:                a.ID,
+		Name:              a.Name,
+		SelectedImagePath: a.SelectedImagePath,
+		Birthday:          a.Birthday,
+		CreatedAt:         a.CreatedAt.Format(timeFormat),
+		UsageCount:        a.UsageCount,
 	}
+}
+
+// ArtistImageResponse is one entry in an artist's image gallery.
+type ArtistImageResponse struct {
+	ID           int64  `json:"id"`
+	RelativePath string `json:"relativePath"`
+	CreatedAt    string `json:"createdAt"`
+}
+
+func toArtistImageResponse(img models.ArtistImage) ArtistImageResponse {
+	return ArtistImageResponse{
+		ID:           img.ID,
+		RelativePath: img.RelativePath,
+		CreatedAt:    img.CreatedAt.Format(timeFormat),
+	}
+}
+
+// ArtistImageCandidateResponse is a suggested image the frontend can offer
+// to copy into an artist's gallery — sourced from that artist's library
+// items' thumbnails, not yet copied anywhere. RelPath is relative to
+// MediaRoot, resolved into a URL client-side the same way LibraryItem
+// thumbnails already are (via mediaFileUrl()).
+type ArtistImageCandidateResponse struct {
+	RelPath string `json:"relPath"`
+}
+
+// SetArtistImageRequest adds one image to an artist's gallery from exactly
+// one of two sources: SourceRelPath copies an existing file already on disk
+// under MediaRoot (e.g. a candidate from ThumbnailsByArtist), or
+// ImageBase64+Filename is a fresh browser upload — mirrors
+// SetLibraryThumbnailRequest's base64 pattern since this codebase has no
+// multipart upload anywhere.
+type SetArtistImageRequest struct {
+	SourceRelPath *string `json:"sourceRelPath"`
+	ImageBase64   *string `json:"imageBase64"`
+	Filename      *string `json:"filename"`
+}
+
+// CollectionCoverCandidateResponse is a suggested cover image found by
+// scanning the collection's own resolved folder, full depth.
+type CollectionCoverCandidateResponse struct {
+	RelPath string `json:"relPath"`
+}
+
+// SetCollectionCoverRequest sets a collection's cover from exactly one of
+// two sources — same dual-mode shape as SetArtistImageRequest.
+type SetCollectionCoverRequest struct {
+	SourceRelPath *string `json:"sourceRelPath"`
+	ImageBase64   *string `json:"imageBase64"`
+	Filename      *string `json:"filename"`
 }
 
 type SettingsResponse struct {
@@ -551,6 +625,7 @@ type SettingsResponse struct {
 	YtdlpProxy               string   `json:"ytdlpProxy"`
 	YtdlpRateLimit           string   `json:"ytdlpRateLimit"`
 	YtdlpRetries             int      `json:"ytdlpRetries"`
+	AutoBackupIntervalHours  int      `json:"autoBackupIntervalHours"`
 }
 
 type UpdateSettingsRequest struct {
@@ -582,27 +657,33 @@ type UpdateSettingsRequest struct {
 	YtdlpProxy               *string   `json:"ytdlpProxy"`
 	YtdlpRateLimit           *string   `json:"ytdlpRateLimit"`
 	YtdlpRetries             *int      `json:"ytdlpRetries" binding:"omitempty,min=0"`
+	AutoBackupIntervalHours  *int      `json:"autoBackupIntervalHours" binding:"omitempty,oneof=0 6 12 24 72 168"`
 }
 
-func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int) CollectionResponse {
+func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int, latestItemThumbnailPath *string) CollectionResponse {
 	return CollectionResponse{
-		ID:                  c.ID,
-		Name:                c.Name,
-		ParentID:            c.ParentID,
-		RootPath:            c.RootPath,
-		Path:                path,
-		DefaultQuality:      c.DefaultQuality,
-		DefaultDownloadType: c.DefaultDownloadType,
-		FilenameTemplate:    c.FilenameTemplate,
-		IsPrivate:           c.IsPrivate,
-		SeasonNumber:        c.SeasonNumber,
-		ArtistID:            c.ArtistID,
-		ItemCount:           itemCount,
-		EffectiveIsPrivate:  effectiveIsPrivate,
-		TotalItemCount:      totalItemCount,
-		JellyfinLibraryID:   c.JellyfinLibrary,
-		CreatedAt:           c.CreatedAt.Format(timeFormat),
-		UpdatedAt:           c.UpdatedAt.Format(timeFormat),
+		ID:                      c.ID,
+		Name:                    c.Name,
+		ParentID:                c.ParentID,
+		RootPath:                c.RootPath,
+		Path:                    path,
+		DefaultQuality:          c.DefaultQuality,
+		DefaultDownloadType:     c.DefaultDownloadType,
+		FilenameTemplate:        c.FilenameTemplate,
+		IsPrivate:               c.IsPrivate,
+		SeasonNumber:            c.SeasonNumber,
+		ArtistID:                c.ArtistID,
+		CoverImagePath:          c.CoverImagePath,
+		CoverImageSmallPath:     c.CoverImageSmallPath,
+		CoverImageMediumPath:    c.CoverImageMediumPath,
+		BrowseAsShow:            c.BrowseAsShow,
+		ItemCount:               itemCount,
+		EffectiveIsPrivate:      effectiveIsPrivate,
+		TotalItemCount:          totalItemCount,
+		LatestItemThumbnailPath: latestItemThumbnailPath,
+		JellyfinLibraryID:       c.JellyfinLibrary,
+		CreatedAt:               c.CreatedAt.Format(timeFormat),
+		UpdatedAt:               c.UpdatedAt.Format(timeFormat),
 	}
 }
 
@@ -634,6 +715,47 @@ func totalItemCounts(cols []models.Collection, direct map[int64]int) map[int64]i
 		sum(c.ID)
 	}
 	return totals
+}
+
+// rollupLatestThumbnails resolves, per collection, the thumbnail of the most
+// recently downloaded item anywhere in its subtree — same memoized-recursion
+// shape as totalItemCounts, but keeping whichever of "this collection's own
+// direct latest" and "each child's already-rolled-up latest" has the newer
+// DownloadedAt, rather than summing. A collection with no thumbnailed item
+// anywhere under it (including itself) is simply absent from the result.
+func rollupLatestThumbnails(cols []models.Collection, direct map[int64]repository.LatestThumbnail) map[int64]string {
+	children := make(map[int64][]int64, len(cols))
+	for _, c := range cols {
+		if c.ParentID != nil {
+			children[*c.ParentID] = append(children[*c.ParentID], c.ID)
+		}
+	}
+	resolved := make(map[int64]*repository.LatestThumbnail, len(cols))
+	var resolve func(id int64) *repository.LatestThumbnail
+	resolve = func(id int64) *repository.LatestThumbnail {
+		if v, ok := resolved[id]; ok {
+			return v
+		}
+		var best *repository.LatestThumbnail
+		if d, ok := direct[id]; ok {
+			d := d
+			best = &d
+		}
+		for _, childID := range children[id] {
+			if childBest := resolve(childID); childBest != nil && (best == nil || childBest.DownloadedAt.After(best.DownloadedAt)) {
+				best = childBest
+			}
+		}
+		resolved[id] = best
+		return best
+	}
+	out := make(map[int64]string, len(cols))
+	for _, c := range cols {
+		if best := resolve(c.ID); best != nil {
+			out[c.ID] = best.Thumbnail
+		}
+	}
+	return out
 }
 
 // effectivePrivacyMap builds, for every collection in cols, whether it or
@@ -805,6 +927,61 @@ type BackupImportLibraryResponse struct {
 	TagsCreated        int `json:"tagsCreated"`
 	ArtistsCreated     int `json:"artistsCreated"`
 	DownloadsQueued    int `json:"downloadsQueued"`
+}
+
+type BackupHistoryResponse struct {
+	ID                int64   `json:"id"`
+	CreatedAt         string  `json:"createdAt"`
+	TriggerType       string  `json:"triggerType"`
+	Status            string  `json:"status"`
+	FileName          *string `json:"fileName"`
+	FileSizeBytes     *int64  `json:"fileSizeBytes"`
+	LibraryItemsCount *int    `json:"libraryItemsCount"`
+	CollectionsCount  *int    `json:"collectionsCount"`
+	TagsCount         *int    `json:"tagsCount"`
+	ArtistsCount      *int    `json:"artistsCount"`
+	ErrorMessage      *string `json:"errorMessage"`
+}
+
+func toBackupHistoryResponse(b models.BackupHistory) BackupHistoryResponse {
+	return BackupHistoryResponse{
+		ID:                b.ID,
+		CreatedAt:         b.CreatedAt.Format(timeFormat),
+		TriggerType:       b.TriggerType,
+		Status:            b.Status,
+		FileName:          b.FileName,
+		FileSizeBytes:     b.FileSizeBytes,
+		LibraryItemsCount: b.LibraryItemsCount,
+		CollectionsCount:  b.CollectionsCount,
+		TagsCount:         b.TagsCount,
+		ArtistsCount:      b.ArtistsCount,
+		ErrorMessage:      b.ErrorMessage,
+	}
+}
+
+// BackupContentPreviewResponse is a read-only, human-readable summary of
+// what's inside a backup file — no isNew/alreadyInLibrary diffing like
+// backup.LibraryBundlePreview, since this is just inspection, not a step
+// before importing.
+type BackupContentPreviewResponse struct {
+	SettingsCount int                       `json:"settingsCount"`
+	Collections   []BackupPreviewCollection `json:"collections"`
+	Tags          []string                  `json:"tags"`
+	Artists       []string                  `json:"artists"`
+	Items         []BackupPreviewItem       `json:"items"`
+}
+
+type BackupPreviewCollection struct {
+	Path []string `json:"path"`
+	Name string   `json:"name"`
+}
+
+type BackupPreviewItem struct {
+	Title          string   `json:"title"`
+	OriginalURL    string   `json:"originalUrl"`
+	CollectionPath []string `json:"collectionPath,omitempty"`
+	ArtistName     string   `json:"artistName,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
 }
 
 type StatsResponse struct {

@@ -15,6 +15,10 @@ interface SelectionContextValue {
   isCollectionSelected: (id: number) => boolean
   toggleItem: (item: LibraryItem) => void
   toggleCollection: (id: number, totalItemCount: number) => void
+  // Bulk variants for a "select all" header checkbox — add/remove every
+  // given item in one state update rather than toggling one at a time.
+  selectItems: (items: LibraryItem[]) => void
+  deselectItems: (ids: number[]) => void
   clear: () => void
 }
 
@@ -27,6 +31,8 @@ const SelectionContext = createContext<SelectionContextValue>({
   isCollectionSelected: () => false,
   toggleItem: () => {},
   toggleCollection: () => {},
+  selectItems: () => {},
+  deselectItems: () => {},
   clear: () => {},
 })
 
@@ -46,6 +52,22 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
       const next = new Map(prev)
       if (next.has(item.id)) next.delete(item.id)
       else next.set(item.id, item)
+      return next
+    })
+  }
+
+  const selectItems = (items: LibraryItem[]) => {
+    setSelectedItems((prev) => {
+      const next = new Map(prev)
+      for (const item of items) next.set(item.id, item)
+      return next
+    })
+  }
+
+  const deselectItems = (ids: number[]) => {
+    setSelectedItems((prev) => {
+      const next = new Map(prev)
+      for (const id of ids) next.delete(id)
       return next
     })
   }
@@ -92,6 +114,8 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
         isCollectionSelected,
         toggleItem,
         toggleCollection,
+        selectItems,
+        deselectItems,
         clear,
       }}
     >

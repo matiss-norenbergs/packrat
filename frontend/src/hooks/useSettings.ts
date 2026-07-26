@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { fetchSettings, fetchYtDlpVersion, rescanJellyfinLibrary, updateSettings, updateYtDlp } from "@/lib/api"
+import {
+  fetchAppVersion,
+  fetchImageBackfillStatus,
+  fetchSettings,
+  fetchYtDlpVersion,
+  rescanJellyfinLibrary,
+  startImageBackfill,
+  updateSettings,
+  updateYtDlp,
+} from "@/lib/api"
 import type { UpdateSettingsRequest } from "@/types/api"
 
 export const settingsQueryKey = ["settings"] as const
@@ -32,6 +41,18 @@ export function useRescanJellyfinLibrary() {
   })
 }
 
+export const appVersionQueryKey = ["app", "version"] as const
+
+// staleTime: Infinity — the running binary's version can't change without a
+// restart, so there's nothing to ever refetch this for.
+export function useAppVersion() {
+  return useQuery({
+    queryKey: appVersionQueryKey,
+    queryFn: fetchAppVersion,
+    staleTime: Infinity,
+  })
+}
+
 export const ytdlpVersionQueryKey = ["ytdlp", "version"] as const
 
 export function useYtDlpVersion() {
@@ -51,5 +72,30 @@ export function useUpdateYtDlp() {
       queryClient.invalidateQueries({ queryKey: ytdlpVersionQueryKey })
     },
     onError: (err: Error) => toast.error(`Update failed: ${err.message}`),
+  })
+}
+
+export const imageBackfillStatusQueryKey = ["settings", "image-backfill"] as const
+
+// Polls every 2s only while a run is in progress — cheap in-memory status
+// read on the backend, and this is the only place in the app that needs a
+// "is a background job still running" poll loop.
+export function useImageBackfillStatus() {
+  return useQuery({
+    queryKey: imageBackfillStatusQueryKey,
+    queryFn: fetchImageBackfillStatus,
+    refetchInterval: (query) => (query.state.data?.running ? 2000 : false),
+  })
+}
+
+export function useStartImageBackfill() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => startImageBackfill(),
+    onSuccess: (data) => {
+      queryClient.setQueryData(imageBackfillStatusQueryKey, data)
+      toast.success("Image backfill started — this can take a while for a large library")
+    },
+    onError: (err: Error) => toast.error(`Failed to start image backfill: ${err.message}`),
   })
 }

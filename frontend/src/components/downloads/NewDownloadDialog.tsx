@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Select,
   SelectContent,
@@ -31,8 +32,10 @@ import { useTags } from "@/hooks/useTags"
 import { formatDuration } from "@/lib/utils"
 import { resolveFilenameTemplatePreview } from "@/lib/nametemplate"
 import { resolveInheritedArtistId } from "@/lib/collectionTree"
+import { invalidSegmentChars, invalidTemplateChars } from "@/lib/filenameValidation"
 import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
 import { TagInput } from "@/components/library/TagInput"
+import { FilenameCharWarning } from "./FilenameCharWarning"
 import { FilenameTemplateBuilderDialog } from "./FilenameTemplateBuilderDialog"
 import type { AudioFormat, DownloadType, PlaylistMode, VideoQuality } from "@/types/api"
 
@@ -463,16 +466,28 @@ export function NewDownloadDialog() {
           {!preview?.isPlaylist && (
             <div className="space-y-2">
               <Label htmlFor="filename">Filename (optional)</Label>
-              <Input
-                id="filename"
-                placeholder={
-                  filenameTemplate.trim() ? "Disabled — a filename template is set below" : "Leave blank to use the video title"
-                }
-                value={filename}
-                disabled={!!filenameTemplate.trim()}
-                onChange={(e) => setFilename(e.target.value)}
-                title={filenameTemplate.trim() ? "Clear the filename template in Advanced to set a literal filename instead" : undefined}
-              />
+              {filenameTemplate.trim() ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Input
+                      id="filename"
+                      placeholder="Disabled — a filename template is set below"
+                      value={filename}
+                      disabled
+                      onChange={(e) => setFilename(e.target.value)}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>Clear the filename template in Advanced to set a literal filename instead</TooltipContent>
+                </Tooltip>
+              ) : (
+                <Input
+                  id="filename"
+                  placeholder="Leave blank to use the video title"
+                  value={filename}
+                  onChange={(e) => setFilename(e.target.value)}
+                />
+              )}
+              <FilenameCharWarning chars={invalidSegmentChars(filename)} />
             </div>
           )}
 
@@ -503,6 +518,9 @@ export function NewDownloadDialog() {
                     value={titleOverride}
                     onChange={(e) => setTitleOverride(e.target.value)}
                   />
+                  {!filename.trim() && !filenameTemplate.trim() && (
+                    <FilenameCharWarning chars={invalidSegmentChars(titleOverride)} />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -576,6 +594,7 @@ export function NewDownloadDialog() {
                       }}
                     />
                   </div>
+                  <FilenameCharWarning chars={invalidTemplateChars(filenameTemplate)} />
                   <div className="flex flex-wrap gap-1">
                     {FILENAME_TEMPLATE_TOKENS.map((token) => (
                       <Button

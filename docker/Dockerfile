@@ -53,6 +53,6 @@ ENV PORT=50505 \
 EXPOSE 50505
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:50505/api/health || exit 1
+    CMD wget -qO- http://localhost:$PORT/api/health || exit 1
 
 ENTRYPOINT ["/app/entrypoint.sh"]

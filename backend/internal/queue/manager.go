@@ -15,6 +15,7 @@ import (
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
+	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/nametemplate"
@@ -36,8 +37,17 @@ const jellyfinRefreshDebounce = 20 * time.Second
 // forwarded 1:1 to clients.
 const progressBroadcastInterval = time.Second
 
+// libraryThumbnailTiers mirrors api.libraryThumbnailTiers — kept as a
+// separate copy here since queue can't import api (api already imports
+// queue) and this is the only place in this package that needs it.
+var libraryThumbnailTiers = []imageproc.Tier{
+	{Name: "small", MaxWidth: imageproc.ThumbnailSmallWidth},
+	{Name: "medium", MaxWidth: imageproc.ThumbnailMediumWidth},
+}
+
 type DownloadManager struct {
 	mediaRoot        string
+	imagesRoot       string
 	ytdlp            *downloader.YtDlpService
 	downloadsRepo    *repository.DownloadsRepo
 	libraryRepo      *repository.LibraryRepo
@@ -74,7 +84,7 @@ type DownloadManager struct {
 }
 
 func NewDownloadManager(
-	mediaRoot string,
+	mediaRoot, imagesRoot string,
 	ytdlp *downloader.YtDlpService,
 	downloadsRepo *repository.DownloadsRepo,
 	libraryRepo *repository.LibraryRepo,
@@ -89,6 +99,7 @@ func NewDownloadManager(
 ) *DownloadManager {
 	m := &DownloadManager{
 		mediaRoot:       mediaRoot,
+		imagesRoot:      imagesRoot,
 		ytdlp:           ytdlp,
 		downloadsRepo:   downloadsRepo,
 		libraryRepo:     libraryRepo,
@@ -377,6 +388,18 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	if err != nil {
 		log.Printf("queue: creating library item failed for %d: %v", id, err)
 		return
+	}
+
+	// Best-effort — a failed derivative generation shouldn't fail the whole
+	// download; the item just falls back to the original thumbnail until a
+	// later edit (or the backfill tool) regenerates them.
+	if libItem.Thumbnail != nil {
+		thumbAbs := filepath.Join(m.mediaRoot, filepath.FromSlash(*libItem.Thumbnail))
+		if tiers, err := imageproc.GenerateTiersFromPath(parentCtx, m.ytdlp.FFmpegPath, m.imagesRoot, "library", libID, thumbAbs, libraryThumbnailTiers); err != nil {
+			log.Printf("queue: generating thumbnail derivatives for library item %d failed: %v", libID, err)
+		} else if err := m.libraryRepo.UpdateThumbnailTiers(parentCtx, libID, &tiers[0], &tiers[1]); err != nil {
+			log.Printf("queue: saving thumbnail derivatives for library item %d failed: %v", libID, err)
+		}
 	}
 
 	// Best-effort: attach any tag override (currently only set by the

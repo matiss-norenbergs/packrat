@@ -11,6 +11,8 @@ type Config struct {
 	Port                   string
 	DBPath                 string
 	MediaRoot              string
+	ImagesRoot             string
+	BackupsRoot            string
 	MaxConcurrentDownloads int
 	YtDlpPath              string
 	FFmpegPath             string
@@ -23,6 +25,8 @@ func Load() (Config, error) {
 		Port:                   getEnv("PORT", "50505"),
 		DBPath:                 getEnv("DB_PATH", "./data/db/packrat.db"),
 		MediaRoot:              getEnv("MEDIA_ROOT", "./data/media"),
+		ImagesRoot:             getEnv("IMAGES_ROOT", "./data/images"),
+		BackupsRoot:            getEnv("BACKUPS_ROOT", "./data/backups"),
 		MaxConcurrentDownloads: 2,
 		YtDlpPath:              getEnv("YTDLP_PATH", "yt-dlp"),
 		FFmpegPath:             getEnv("FFMPEG_PATH", "ffmpeg"),
@@ -46,6 +50,24 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("creating MEDIA_ROOT %q: %w", mediaRoot, err)
 	}
 	cfg.MediaRoot = mediaRoot
+
+	imagesRoot, err := filepath.Abs(cfg.ImagesRoot)
+	if err != nil {
+		return Config{}, fmt.Errorf("resolving IMAGES_ROOT: %w", err)
+	}
+	if err := os.MkdirAll(imagesRoot, 0o755); err != nil {
+		return Config{}, fmt.Errorf("creating IMAGES_ROOT %q: %w", imagesRoot, err)
+	}
+	cfg.ImagesRoot = imagesRoot
+
+	backupsRoot, err := filepath.Abs(cfg.BackupsRoot)
+	if err != nil {
+		return Config{}, fmt.Errorf("resolving BACKUPS_ROOT: %w", err)
+	}
+	if err := os.MkdirAll(backupsRoot, 0o755); err != nil {
+		return Config{}, fmt.Errorf("creating BACKUPS_ROOT %q: %w", backupsRoot, err)
+	}
+	cfg.BackupsRoot = backupsRoot
 
 	dbDir := filepath.Dir(cfg.DBPath)
 	if err := os.MkdirAll(dbDir, 0o755); err != nil {

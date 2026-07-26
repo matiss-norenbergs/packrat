@@ -152,24 +152,32 @@ export function FilenameTemplateBuilderDialog({ value, onApply, previewVars }: F
             {elements.map((el, index) => (
               <div key={el.id} className="flex items-center gap-2 rounded-md border p-2">
                 <div className="flex shrink-0 flex-col gap-0.5">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    title="Move up"
-                    disabled={index === 0}
-                    onClick={() => moveElement(index, -1)}
-                  >
-                    <ArrowUp className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    title="Move down"
-                    disabled={index === elements.length - 1}
-                    onClick={() => moveElement(index, 1)}
-                  >
-                    <ArrowDown className="h-3.5 w-3.5" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={index === 0}
+                        onClick={() => moveElement(index, -1)}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Move up</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={index === elements.length - 1}
+                        onClick={() => moveElement(index, 1)}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Move down</TooltipContent>
+                  </Tooltip>
                 </div>
 
                 {el.kind === "token" ? (
@@ -238,9 +246,14 @@ export function FilenameTemplateBuilderDialog({ value, onApply, previewVars }: F
                   />
                 )}
 
-                <Button variant="ghost" size="icon-sm" title="Remove" onClick={() => removeElement(el.id)}>
-                  <X className="h-3.5 w-3.5" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon-sm" onClick={() => removeElement(el.id)}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Remove</TooltipContent>
+                </Tooltip>
               </div>
             ))}
           </div>

@@ -14,8 +14,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useCancelDownload, useDeleteDownload } from "@/hooks/useDownloads"
-import { cn, formatDownloadStatus, formatEta, formatSpeed, hashText } from "@/lib/utils"
+import { formatDownloadStatus, formatEta, formatSpeed, hashText } from "@/lib/utils"
 import type { Download } from "@/types/api"
 
 const CANCELLABLE_STATUSES = new Set(["queued", "fetching_metadata", "downloading", "processing"])
@@ -56,13 +57,18 @@ export function DownloadQueueItem({ download }: { download: Download }) {
 
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2">
-          <p
-            className={cn("truncate text-sm font-medium", download.blurred && "cursor-pointer")}
-            onClick={download.blurred ? toggleReveal : undefined}
-            title={download.blurred ? (revealed ? "Click to hide" : "Click to reveal") : undefined}
-          >
-            {download.blurred && !revealed ? hashText(displayName) : displayName}
-          </p>
+          {download.blurred ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <p className="cursor-pointer truncate text-sm font-medium" onClick={toggleReveal}>
+                  {!revealed ? hashText(displayName) : displayName}
+                </p>
+              </TooltipTrigger>
+              <TooltipContent>{revealed ? "Click to hide" : "Click to reveal"}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <p className="truncate text-sm font-medium">{displayName}</p>
+          )}
           <Badge variant={STATUS_VARIANT[download.status] ?? "outline"}>{formatDownloadStatus(download.status)}</Badge>
         </div>
 
@@ -82,19 +88,28 @@ export function DownloadQueueItem({ download }: { download: Download }) {
       </div>
 
       {cancellable ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => cancelDownload.mutate(download.id)}
-          disabled={cancelDownload.isPending}
-          title="Cancel"
-        >
-          <X className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => cancelDownload.mutate(download.id)}
+              disabled={cancelDownload.isPending}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Cancel</TooltipContent>
+        </Tooltip>
       ) : (
-        <Button variant="ghost" size="icon" onClick={() => setDeleteOpen(true)} title="Delete">
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Delete</TooltipContent>
+        </Tooltip>
       )}
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>

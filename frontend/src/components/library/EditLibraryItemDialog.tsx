@@ -15,9 +15,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useUpdateLibraryItem } from "@/hooks/useLibrary"
 import { useTags } from "@/hooks/useTags"
-import { mediaFileUrl } from "@/lib/api"
+import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { artistIdToSelectValue, baseNameWithoutExt, buildLibraryItemUpdatePayload } from "@/lib/libraryItemEdit"
 import { parseSeasonEpisode } from "@/lib/seasonEpisode"
 import { formatDuration } from "@/lib/utils"
@@ -132,16 +133,20 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
                   onChange={(e) => setFilename(e.target.value)}
                   className="flex-1"
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleDetectSeasonEpisode}
-                  title="Detect Season/Episode from filename (e.g. S01E02)"
-                  aria-label="Detect Season/Episode from filename"
-                >
-                  <Wand2 className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={handleDetectSeasonEpisode}
+                      aria-label="Detect Season/Episode from filename"
+                    >
+                      <Wand2 className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Detect Season/Episode from filename (e.g. S01E02)</TooltipContent>
+                </Tooltip>
               </div>
             </div>
 
@@ -208,7 +213,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
             {item.thumbnail && (
               <div className="overflow-hidden rounded-md border bg-muted">
                 <BlurredThumbnail
-                  src={mediaFileUrl(item.thumbnail)}
+                  src={libraryMediumThumbnailUrl(item)!}
                   className="aspect-video w-full object-cover"
                   blurred={item.blurred}
                   revealed={revealed}

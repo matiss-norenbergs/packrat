@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -193,19 +194,23 @@ export function LibraryToolbar() {
           onChange={(e) => setSearchInput(e.target.value)}
         />
         {searchInput && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            title="Clear search"
-            onClick={() => {
-              setSearchInput("")
-              update("q", null)
-            }}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setSearchInput("")
+                  update("q", null)
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Clear search</TooltipContent>
+          </Tooltip>
         )}
       </div>
 
@@ -219,71 +224,93 @@ export function LibraryToolbar() {
         )}
       </Button>
 
-      <Button
-        variant={revealAll ? "secondary" : "outline"}
-        size="icon"
-        className="ml-auto"
-        title={revealAll ? "Hide all private items" : "Reveal all private items"}
-        disabled={!hasBlurred}
-        onClick={toggleRevealAll}
-      >
-        {revealAll ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={revealAll ? "secondary" : "outline"}
+            size="icon"
+            className="ml-auto"
+            disabled={!hasBlurred}
+            onClick={toggleRevealAll}
+          >
+            {revealAll ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{revealAll ? "Hide all private items" : "Reveal all private items"}</TooltipContent>
+      </Tooltip>
 
       <div className="flex gap-1 rounded-md border p-0.5">
-        <Button
-          variant={mode === "manage" ? "secondary" : "ghost"}
-          size="icon"
-          title="Manage mode"
-          onClick={() => setMode("manage")}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-        <Button
-          variant={mode === "details" ? "secondary" : "ghost"}
-          size="icon"
-          title="Details mode"
-          onClick={() => setMode("details")}
-        >
-          <Info className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={mode === "manage" ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => setMode("manage")}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Manage mode</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={mode === "details" ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => setMode("details")}
+            >
+              <Info className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Details mode</TooltipContent>
+        </Tooltip>
       </div>
 
       <div className="flex gap-1 rounded-md border p-0.5">
-        <Button
-          variant={view === "grid" ? "secondary" : "ghost"}
-          size="icon"
-          title="Grid view"
-          onClick={() => setView("grid")}
-        >
-          <LayoutGrid className="h-4 w-4" />
-        </Button>
-        <Button
-          variant={view === "folders" ? "secondary" : "ghost"}
-          size="icon"
-          title="Folder view"
-          onClick={() => setView("folders")}
-        >
-          <FolderTree className="h-4 w-4" />
-        </Button>
-        <Button
-          variant={view === "list" ? "secondary" : "ghost"}
-          size="icon"
-          title="List view"
-          onClick={() => setView("list")}
-        >
-          <List className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant={view === "grid" ? "secondary" : "ghost"} size="icon" onClick={() => setView("grid")}>
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Grid view</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={view === "folders" ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => setView("folders")}
+            >
+              <FolderTree className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Folder view</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant={view === "list" ? "secondary" : "ghost"} size="icon" onClick={() => setView("list")}>
+              <List className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>List view</TooltipContent>
+        </Tooltip>
       </div>
 
-      <Button
-        variant={paginationEnabled ? "secondary" : "outline"}
-        size="icon"
-        title={paginationEnabled ? "Pagination on — click to show everything" : "Showing everything — click to paginate"}
-        onClick={() => updateSettings.mutate({ libraryPaginationEnabled: !paginationEnabled })}
-      >
-        <Rows3 className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={paginationEnabled ? "secondary" : "outline"}
+            size="icon"
+            onClick={() => updateSettings.mutate({ libraryPaginationEnabled: !paginationEnabled })}
+          >
+            <Rows3 className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {paginationEnabled ? "Pagination on — click to show everything" : "Showing everything — click to paginate"}
+        </TooltipContent>
+      </Tooltip>
 
       {paginationEnabled && (
         <Select value={String(pageSize)} onValueChange={(v) => updateSettings.mutate({ libraryPageSize: Number(v) })}>
@@ -375,14 +402,18 @@ export function LibraryToolbar() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button
-                variant="outline"
-                size="icon"
-                title={draftSortDir === "asc" ? "Ascending" : "Descending"}
-                onClick={() => setDraftSortDir(draftSortDir === "asc" ? "desc" : "asc")}
-              >
-                {draftSortDir === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setDraftSortDir(draftSortDir === "asc" ? "desc" : "asc")}
+                  >
+                    {draftSortDir === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{draftSortDir === "asc" ? "Ascending" : "Descending"}</TooltipContent>
+              </Tooltip>
             </div>
           </div>
 

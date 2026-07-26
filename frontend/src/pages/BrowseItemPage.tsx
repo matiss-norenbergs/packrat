@@ -21,9 +21,14 @@ export function BrowseItemPage() {
   const { minimize, close } = useMiniPlayer()
   // Set by MiniPlayerDock's "expand" action so playback resumes at the same
   // position and play/pause state, rather than restarting from 0/autoplaying.
-  const resumeState = location.state as { resumeAt?: number; resumePaused?: boolean } | null
-  const resumeAt = resumeState?.resumeAt
-  const resumePaused = resumeState?.resumePaused
+  // "from", when set (a show page's episode strip forwarding its own URL —
+  // see LibraryItemStripTile), lets Back return to that show instead of
+  // always the top-level Browse page — mirrors LibraryItemPage's own
+  // location.state.from handling.
+  const navState = location.state as { resumeAt?: number; resumePaused?: boolean; from?: string } | null
+  const resumeAt = navState?.resumeAt
+  const resumePaused = navState?.resumePaused
+  const backTo = navState?.from || "/browse"
 
   // This page is about to render its own full player for whatever item is
   // being viewed, so any dock still playing something else (or the same
@@ -52,7 +57,7 @@ export function BrowseItemPage() {
       <div className="flex flex-col items-center gap-3 py-16 text-center">
         <p className="text-sm text-muted-foreground">This library item doesn't exist (it may have been deleted).</p>
         <Button asChild variant="outline">
-          <Link to="/browse">Back to Browse</Link>
+          <Link to={backTo}>Back to Browse</Link>
         </Button>
       </div>
     )
@@ -64,7 +69,7 @@ export function BrowseItemPage() {
         <LibraryItemDetail
           item={item}
           items={items}
-          backTo="/browse"
+          backTo={backTo}
           basePath="/browse"
           playerHeightClass="h-[calc(100vh-57px)]"
           resumeAt={resumeAt}
@@ -72,7 +77,7 @@ export function BrowseItemPage() {
           ignorePrivacy={settings?.browseIgnorePrivacy ?? false}
           onMinimize={(currentTime, paused) => {
             minimize(item, currentTime, paused)
-            navigate("/browse")
+            navigate(backTo)
           }}
         />
       </div>

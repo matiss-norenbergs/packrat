@@ -1,4 +1,5 @@
 import { BrowseTile } from "./BrowseTile"
+import { HorizontalScroller } from "./HorizontalScroller"
 import type { LibraryItem } from "@/types/api"
 
 // showProgress draws each tile's watched-progress bar from
@@ -21,7 +22,7 @@ export function BrowseRow({
   return (
     <section className="space-y-2">
       <h2 className="text-lg font-semibold">{title}</h2>
-      <div className="scrollbar-thin flex gap-3 overflow-x-auto pb-2">
+      <HorizontalScroller className="gap-3">
         {items.map((item) => (
           <BrowseTile
             key={item.id}
@@ -34,7 +35,7 @@ export function BrowseRow({
             onRemove={onRemoveItem ? () => onRemoveItem(item.id) : undefined}
           />
         ))}
-      </div>
+      </HorizontalScroller>
     </section>
   )
 }

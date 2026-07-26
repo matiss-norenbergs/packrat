@@ -1,7 +1,12 @@
 import type {
+  AppVersion,
   Artist,
+  ArtistImage,
+  ArtistImageCandidate,
   AuthStatus,
+  BackupContentPreview,
   BackupEnvelope,
+  BackupHistoryEntry,
   BackupImportLibraryResult,
   BackupImportSettingsResult,
   BulkAssignTagsRequest,
@@ -10,6 +15,7 @@ import type {
   BulkDeleteResponse,
   ChangePasswordRequest,
   Collection,
+  CollectionCoverCandidate,
   CreateArtistRequest,
   CreateBatchDownloadRequest,
   CreateCollectionRequest,
@@ -19,6 +25,7 @@ import type {
   DownloadPreview,
   EnqueueResult,
   HistoryItem,
+  ImageBackfillStatus,
   ImportRequest,
   LibraryFacets,
   LibraryItem,
@@ -31,6 +38,8 @@ import type {
   MoveLibraryItemRequest,
   ScannedFile,
   Settings,
+  SetArtistImageRequest,
+  SetCollectionCoverRequest,
   SetupRequest,
   Stats,
   Tag,
@@ -73,6 +82,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function fetchAuthStatus(): Promise<AuthStatus> {
   return request<AuthStatus>("/auth/status")
+}
+
+export function fetchAppVersion(): Promise<AppVersion> {
+  return request<AppVersion>("/version")
 }
 
 export function setupAccount(payload: SetupRequest): Promise<void> {
@@ -145,8 +158,10 @@ export function fetchLibraryQuery(params: LibraryQueryParams): Promise<LibraryLi
   if (params.collectionIds && params.collectionIds.length > 0) search.set("collectionIds", params.collectionIds.join(","))
   else if (params.collectionId === null) search.set("collectionId", "none")
   else if (params.collectionId != null) search.set("collectionId", String(params.collectionId))
+  if (params.artistId != null) search.set("artistId", String(params.artistId))
   if (params.year != null) search.set("year", String(params.year))
   if (params.tags && params.tags.length > 0) search.set("tags", params.tags.join(","))
+  if (params.inProgress) search.set("inProgress", "true")
   if (params.sortKey) search.set("sortKey", params.sortKey)
   if (params.sortDir) search.set("sortDir", params.sortDir)
   if (params.page != null) search.set("page", String(params.page))
@@ -161,6 +176,43 @@ export function fetchLibraryFacets(): Promise<LibraryFacets> {
 
 export function mediaFileUrl(relativePath: string): string {
   return `/media-files/${relativePath.split("/").map(encodeURIComponent).join("/")}`
+}
+
+// Resolves a relative path under the backend's images root (artist/collection
+// pictures Packrat itself copied in) into a URL — mirrors mediaFileUrl().
+export function imageUrl(relativePath: string): string {
+  return `/local-images/${relativePath.split("/").map(encodeURIComponent).join("/")}`
+}
+
+// Small/medium-tier URL builders with a fallback to the original — items
+// created before the multi-size-image feature shipped (or not yet
+// backfilled) have no derivative paths yet, so every display site falls
+// back to the original rather than showing a broken image. The two tiers
+// live under different roots (derivatives under ImagesRoot via imageUrl(),
+// the original under MediaRoot via mediaFileUrl()), so the helper — not
+// each call site — is what needs to know which root a given field resolves
+// against.
+export function librarySmallThumbnailUrl(item: Pick<LibraryItem, "thumbnail" | "thumbnailSmallPath">): string | null {
+  if (item.thumbnailSmallPath) return imageUrl(item.thumbnailSmallPath)
+  return item.thumbnail ? mediaFileUrl(item.thumbnail) : null
+}
+
+export function libraryMediumThumbnailUrl(item: Pick<LibraryItem, "thumbnail" | "thumbnailMediumPath">): string | null {
+  if (item.thumbnailMediumPath) return imageUrl(item.thumbnailMediumPath)
+  return item.thumbnail ? mediaFileUrl(item.thumbnail) : null
+}
+
+// Collection cover tiers all live under ImagesRoot already, so no
+// mediaFileUrl() fallback is needed here — just fall back to the original
+// cover path when the requested derivative isn't populated yet.
+export function collectionSmallCoverUrl(c: Pick<Collection, "coverImagePath" | "coverImageSmallPath">): string | null {
+  const p = c.coverImageSmallPath ?? c.coverImagePath
+  return p ? imageUrl(p) : null
+}
+
+export function collectionMediumCoverUrl(c: Pick<Collection, "coverImagePath" | "coverImageMediumPath">): string | null {
+  const p = c.coverImageMediumPath ?? c.coverImagePath
+  return p ? imageUrl(p) : null
 }
 
 export function deleteLibraryItem(id: number, deleteFiles: boolean): Promise<void> {
@@ -274,6 +326,21 @@ export function bulkDeleteCollections(payload: BulkDeleteRequest): Promise<BulkD
   })
 }
 
+export function fetchCollectionCoverCandidates(id: number): Promise<{ candidates: CollectionCoverCandidate[] }> {
+  return request<{ candidates: CollectionCoverCandidate[] }>(`/collections/${id}/cover-candidates`)
+}
+
+export function setCollectionCover(id: number, payload: SetCollectionCoverRequest): Promise<{ coverImagePath: string }> {
+  return request<{ coverImagePath: string }>(`/collections/${id}/cover`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteCollectionCover(id: number): Promise<void> {
+  return request<void>(`/collections/${id}/cover`, { method: "DELETE" })
+}
+
 export function fetchSettings(): Promise<Settings> {
   return request<Settings>("/settings")
 }
@@ -295,6 +362,14 @@ export function fetchYtDlpVersion(): Promise<YtDlpVersionInfo> {
 
 export function updateYtDlp(): Promise<{ version: string }> {
   return request<{ version: string }>("/ytdlp/update", { method: "POST" })
+}
+
+export function fetchImageBackfillStatus(): Promise<ImageBackfillStatus> {
+  return request<ImageBackfillStatus>("/settings/backfill-images")
+}
+
+export function startImageBackfill(): Promise<ImageBackfillStatus> {
+  return request<ImageBackfillStatus>("/settings/backfill-images", { method: "POST" })
 }
 
 export function fetchImportScan(): Promise<ScannedFile[]> {
@@ -371,6 +446,30 @@ export function previewLibraryImport(data: string, password: string): Promise<Li
   })
 }
 
+export function fetchBackupHistory(): Promise<BackupHistoryEntry[]> {
+  return request<BackupHistoryEntry[]>("/backup/history")
+}
+
+export function runManualBackup(): Promise<BackupHistoryEntry> {
+  return request<BackupHistoryEntry>("/backup/run", { method: "POST" })
+}
+
+export function deleteBackupHistoryEntry(id: number): Promise<void> {
+  return request<void>(`/backup/history/${id}`, { method: "DELETE" })
+}
+
+// Not request()-wrapped: this needs to be a real browser navigation (a plain
+// <a href> click) so the server's Content-Disposition header triggers a
+// native save, rather than a JS-intercepted fetch response. Includes the
+// /api prefix explicitly since it bypasses request()'s auto-prefixing.
+export function backupDownloadUrl(id: number): string {
+  return `/api/backup/history/${id}/download`
+}
+
+export function fetchBackupPreview(id: number): Promise<BackupContentPreview> {
+  return request<BackupContentPreview>(`/backup/history/${id}/preview`)
+}
+
 export function fetchTags(): Promise<Tag[]> {
   return request<Tag[]>("/tags")
 }
@@ -427,4 +526,31 @@ export function bulkDeleteArtists(payload: BulkDeleteRequest): Promise<BulkDelet
     method: "POST",
     body: JSON.stringify(payload),
   })
+}
+
+export function fetchArtistImageCandidates(artistId: number): Promise<{ candidates: ArtistImageCandidate[] }> {
+  return request<{ candidates: ArtistImageCandidate[] }>(`/artists/${artistId}/image-candidates`)
+}
+
+export function fetchArtistImages(artistId: number): Promise<ArtistImage[]> {
+  return request<ArtistImage[]>(`/artists/${artistId}/images`)
+}
+
+export function addArtistImage(artistId: number, payload: SetArtistImageRequest): Promise<ArtistImage> {
+  return request<ArtistImage>(`/artists/${artistId}/images`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteArtistImage(artistId: number, imageId: number): Promise<void> {
+  return request<void>(`/artists/${artistId}/images/${imageId}`, { method: "DELETE" })
+}
+
+export function selectArtistImage(artistId: number, imageId: number): Promise<void> {
+  return request<void>(`/artists/${artistId}/images/${imageId}/select`, { method: "POST" })
+}
+
+export function clearArtistSelectedImage(artistId: number): Promise<void> {
+  return request<void>(`/artists/${artistId}/selected-image`, { method: "DELETE" })
 }

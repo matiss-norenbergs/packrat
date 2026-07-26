@@ -1,7 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { bulkDeleteArtists, createArtist, deleteArtist, fetchArtists, updateArtist } from "@/lib/api"
-import type { BulkDeleteRequest, CreateArtistRequest, UpdateArtistRequest } from "@/types/api"
+import {
+  addArtistImage,
+  bulkDeleteArtists,
+  clearArtistSelectedImage,
+  createArtist,
+  deleteArtist,
+  deleteArtistImage,
+  fetchArtistImageCandidates,
+  fetchArtistImages,
+  fetchArtists,
+  selectArtistImage,
+  updateArtist,
+} from "@/lib/api"
+import type { BulkDeleteRequest, CreateArtistRequest, SetArtistImageRequest, UpdateArtistRequest } from "@/types/api"
 import { libraryQueryKey } from "./useLibrary"
 
 export const artistsQueryKey = ["artists"] as const
@@ -72,6 +84,77 @@ export function useBulkDeleteArtists() {
     },
     onError: (err: Error) => {
       toast.error(`Failed to delete artists: ${err.message}`)
+    },
+  })
+}
+
+export function useArtistImages(artistId: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["artists", artistId, "images"],
+    queryFn: () => fetchArtistImages(artistId),
+    enabled,
+  })
+}
+
+export function useArtistImageCandidates(artistId: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["artists", artistId, "image-candidates"],
+    queryFn: () => fetchArtistImageCandidates(artistId),
+    enabled,
+  })
+}
+
+export function useAddArtistImage(artistId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: SetArtistImageRequest) => addArtistImage(artistId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["artists", artistId, "images"] })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to add image: ${err.message}`)
+    },
+  })
+}
+
+export function useDeleteArtistImage(artistId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (imageId: number) => deleteArtistImage(artistId, imageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["artists", artistId, "images"] })
+      // A deleted selected image also clears artists.selectedImagePath
+      // server-side — refresh the artist list so that shows up everywhere.
+      queryClient.invalidateQueries({ queryKey: artistsQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to delete image: ${err.message}`)
+    },
+  })
+}
+
+export function useSelectArtistImage(artistId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (imageId: number) => selectArtistImage(artistId, imageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: artistsQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to select image: ${err.message}`)
+    },
+  })
+}
+
+export function useClearArtistSelectedImage(artistId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => clearArtistSelectedImage(artistId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: artistsQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to clear selected image: ${err.message}`)
     },
   })
 }

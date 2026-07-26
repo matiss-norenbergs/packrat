@@ -35,6 +35,20 @@ export function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
+// birthday is a date-only string ("2006-01-02") — parsed with an explicit
+// midnight-local time so it isn't shifted a day off by UTC parsing near a
+// timezone boundary.
+export function calculateAge(birthday: string): number {
+  const dob = new Date(`${birthday}T00:00:00`)
+  const today = new Date()
+  let age = today.getFullYear() - dob.getFullYear()
+  const monthDiff = today.getMonth() - dob.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age--
+  }
+  return age
+}
+
 const STATUS_LABELS: Record<string, string> = {
   queued: "Queued",
   fetching_metadata: "Fetching Metadata",

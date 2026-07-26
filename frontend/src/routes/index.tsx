@@ -16,6 +16,8 @@ import { SettingsPage } from "@/pages/SettingsPage"
 import { LogsPage } from "@/pages/LogsPage"
 import { BrowsePage } from "@/pages/BrowsePage"
 import { BrowseItemPage } from "@/pages/BrowseItemPage"
+import { BrowseShowPage } from "@/pages/BrowseShowPage"
+import { BrowseArtistPage } from "@/pages/BrowseArtistPage"
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -42,6 +44,8 @@ export const router = createBrowserRouter([
     element: <BrowseLayout />,
     children: [
       { path: "/browse", element: <BrowsePage /> },
+      { path: "/browse/collection/:id", element: <BrowseShowPage /> },
+      { path: "/browse/artist/:id", element: <BrowseArtistPage /> },
       { path: "/browse/:id", element: <BrowseItemPage /> },
     ],
   },

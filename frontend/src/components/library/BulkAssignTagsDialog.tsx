@@ -13,7 +13,7 @@ import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { useCollections } from "@/hooks/useCollections"
 import { useBulkAssignTags, useLibraryQuery } from "@/hooks/useLibrary"
 import { useTags } from "@/hooks/useTags"
-import { mediaFileUrl } from "@/lib/api"
+import { librarySmallThumbnailUrl } from "@/lib/api"
 import { buildCollectionTree, collectDescendantIds, findNodeById } from "@/lib/collectionTree"
 import { hashText } from "@/lib/utils"
 import { TagInput } from "./TagInput"
@@ -101,9 +101,9 @@ export function BulkAssignTagsDialog({ open, onOpenChange }: BulkAssignTagsDialo
           <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
             {visibleItems.map((item) => (
               <div key={item.id} className="flex items-center gap-2 text-sm">
-                {item.thumbnail ? (
+                {librarySmallThumbnailUrl(item) ? (
                   <BlurredThumbnail
-                    src={mediaFileUrl(item.thumbnail)}
+                    src={librarySmallThumbnailUrl(item)!}
                     className="h-8 w-14 shrink-0 rounded object-cover"
                     blurred={item.blurred}
                     revealed={false}

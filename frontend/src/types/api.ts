@@ -91,6 +91,10 @@ export interface Collection {
   isPrivate: boolean
   seasonNumber: number | null
   artistId: number | null
+  coverImagePath: string | null
+  coverImageSmallPath: string | null
+  coverImageMediumPath: string | null
+  browseAsShow: boolean
   itemCount: number
   // Inheritance-aware versions of the two fields above — isPrivate/itemCount
   // are this collection's own flag and its own direct item count (what the
@@ -101,6 +105,12 @@ export interface Collection {
   // its own actually has any blurred content in its children.
   effectiveIsPrivate: boolean
   totalItemCount: number
+  // The thumbnail (original tier — see librarySmallThumbnailUrl for the
+  // fallback chain) of the most recently downloaded item anywhere in this
+  // collection's subtree — Browse's fallback cover for a show/album tile
+  // with no explicit coverImagePath set. Null if the subtree has no
+  // thumbnailed item at all.
+  latestItemThumbnailPath: string | null
   jellyfinLibraryId: string | null
   createdAt: string
   updatedAt: string
@@ -117,9 +127,23 @@ export interface CreateCollectionRequest {
   jellyfinLibraryId?: string | null
   seasonNumber?: number | null
   artistId?: number | null
+  browseAsShow?: boolean
 }
 
 export type UpdateCollectionRequest = CreateCollectionRequest
+
+export interface CollectionCoverCandidate {
+  relPath: string
+}
+
+// Exactly one of sourceRelPath (copy an existing on-disk file, e.g. a
+// candidate from fetchCollectionCoverCandidates) or imageBase64+filename (a
+// fresh upload) must be set.
+export interface SetCollectionCoverRequest {
+  sourceRelPath?: string
+  imageBase64?: string
+  filename?: string
+}
 
 export interface LibraryQueryParams {
   q?: string
@@ -127,8 +151,11 @@ export interface LibraryQueryParams {
   collectionId?: number | null
   /** IN-match against a set of collection ids — used only to resolve a bulk-selected folder plus its nested subcollections into concrete items; takes precedence over collectionId when set. */
   collectionIds?: number[]
+  artistId?: number
   year?: number
   tags?: string[]
+  /** true = only items eligible for "Continue Watching" (tracked position, past the barely-started floor, short of the credits-rolled ceiling) */
+  inProgress?: boolean
   sortKey?: string
   sortDir?: string
   page?: number
@@ -158,6 +185,8 @@ export interface LibraryItem {
   duration: number | null
   resolution: string | null
   thumbnail: string | null
+  thumbnailSmallPath: string | null
+  thumbnailMediumPath: string | null
   description: string | null
   artistId: number | null
   artistName: string | null
@@ -244,16 +273,40 @@ export interface UpdateTagRequest {
 export interface Artist {
   id: number
   name: string
+  selectedImagePath: string | null
+  // Date-only string ("2006-01-02"), null when unset.
+  birthday: string | null
   createdAt: string
   usageCount: number
 }
 
 export interface CreateArtistRequest {
   name: string
+  birthday?: string | null
 }
 
 export interface UpdateArtistRequest {
   name: string
+  birthday?: string | null
+}
+
+export interface ArtistImage {
+  id: number
+  relativePath: string
+  createdAt: string
+}
+
+export interface ArtistImageCandidate {
+  relPath: string
+}
+
+// Exactly one of sourceRelPath (copy an existing on-disk file, e.g. a
+// candidate from fetchArtistImageCandidates) or imageBase64+filename (a
+// fresh upload) must be set.
+export interface SetArtistImageRequest {
+  sourceRelPath?: string
+  imageBase64?: string
+  filename?: string
 }
 
 export interface ThumbnailCandidate {
@@ -296,12 +349,32 @@ export interface Settings {
   ytdlpProxy: string
   ytdlpRateLimit: string
   ytdlpRetries: number
+  autoBackupIntervalHours: number
 }
 
 export interface YtDlpVersionInfo {
   currentVersion: string
   latestVersion: string | null
   updateAvailable: boolean
+}
+
+export interface AppVersion {
+  version: string
+}
+
+// Progress snapshot for the background image-derivative backfill (small/
+// medium/original WebP tiers for library thumbnails, artist images, and
+// collection covers) — GET/POST /settings/backfill-images both return this.
+export interface ImageBackfillStatus {
+  running: boolean
+  startedAt: string | null
+  finishedAt: string | null
+  libraryProcessed: number
+  libraryFailed: number
+  artistProcessed: number
+  artistFailed: number
+  coverProcessed: number
+  coverFailed: number
 }
 
 export interface DownloadPreview {
@@ -395,6 +468,42 @@ export interface UpdateSettingsRequest {
   ytdlpProxy?: string
   ytdlpRateLimit?: string
   ytdlpRetries?: number
+  autoBackupIntervalHours?: number
+}
+
+export interface BackupHistoryEntry {
+  id: number
+  createdAt: string
+  triggerType: "manual" | "scheduled"
+  status: "success" | "failed"
+  fileName: string | null
+  fileSizeBytes: number | null
+  libraryItemsCount: number | null
+  collectionsCount: number | null
+  tagsCount: number | null
+  artistsCount: number | null
+  errorMessage: string | null
+}
+
+export interface BackupPreviewCollection {
+  path: string[]
+  name: string
+}
+
+export interface BackupPreviewItem {
+  title: string
+  originalUrl: string
+  collectionPath?: string[]
+  artistName?: string
+  tags?: string[]
+}
+
+export interface BackupContentPreview {
+  settingsCount: number
+  collections: BackupPreviewCollection[]
+  tags: string[]
+  artists: string[]
+  items: BackupPreviewItem[]
 }
 
 export interface ScannedFile {

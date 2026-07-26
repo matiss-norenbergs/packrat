@@ -25,6 +25,7 @@ import type {
   BulkAssignTagsRequest,
   BulkDeleteLibraryItemsRequest,
   LibraryItem,
+  LibraryListResponse,
   LibraryQueryParams,
   MoveLibraryItemRequest,
   UpdateLibraryItemRequest,
@@ -104,12 +105,17 @@ export function useUpdateLibraryProgress() {
       updateLibraryItemProgress(id, { positionSeconds }),
     onSuccess: (_data, { id, positionSeconds }) => {
       const lastWatchedAt = new Date().toISOString()
-      // Exact-match setQueryData, not setQueriesData — libraryQueryKey alone
-      // is also a prefix of useLibraryQuery's/useLibraryItemNFO's etc. keys,
-      // whose cached shape isn't a bare LibraryItem[] and would break if the
-      // updater below ran against it.
-      queryClient.setQueryData<LibraryItem[]>(libraryQueryKey, (old) =>
-        old?.map((item) => (item.id === id ? { ...item, playbackPositionSeconds: positionSeconds, lastWatchedAt } : item)),
+      const patch = (item: LibraryItem) =>
+        item.id === id ? { ...item, playbackPositionSeconds: positionSeconds, lastWatchedAt } : item
+      // Exact-match setQueryData for the bare LibraryItem[] shape (useLibrary).
+      queryClient.setQueryData<LibraryItem[]>(libraryQueryKey, (old) => old?.map(patch))
+      // Prefix-match setQueriesData for every useLibraryQuery cache entry
+      // (LibraryListResponse shape, e.g. Browse's Continue Watching row) —
+      // scoped to the "query" sub-key specifically so this doesn't also try
+      // (and fail) to patch differently-shaped entries like
+      // useLibraryItemNFO's, which share the "library" key prefix too.
+      queryClient.setQueriesData<LibraryListResponse>({ queryKey: [...libraryQueryKey, "query"] }, (old) =>
+        old ? { ...old, items: old.items.map(patch) } : old,
       )
     },
   })

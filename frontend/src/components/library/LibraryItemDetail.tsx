@@ -4,7 +4,9 @@ import { ArrowLeft, Minimize2, Music } from "lucide-react"
 import { syncMediaOnReady } from "@/lib/mediaSeek"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { mediaFileUrl } from "@/lib/api"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
+import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress"
 import { useSettings } from "@/hooks/useSettings"
 import { sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
@@ -120,25 +122,34 @@ export function LibraryItemDetail({
     <div>
       <div className={`relative -m-4 bg-black md:-m-6 ${playerHeightClass}`}>
         <div className="absolute left-2 top-2 z-10 flex gap-2 md:left-4 md:top-4">
-          <Button asChild variant="ghost" size="icon" title="Back" className="bg-black/50 text-white hover:bg-black/70">
-            <Link to={backTo}>
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button asChild variant="ghost" size="icon" className="bg-black/50 text-white hover:bg-black/70">
+                <Link to={backTo}>
+                  <ArrowLeft className="h-5 w-5" />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Back</TooltipContent>
+          </Tooltip>
           {onMinimize && !locked && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              title="Minimize"
-              onClick={() => {
-                const el = (isAudioFilename(item.filename) ? audioRef : videoRef).current
-                onMinimize(el?.currentTime ?? 0, el?.paused ?? false)
-              }}
-              className="bg-black/50 text-white hover:bg-black/70"
-            >
-              <Minimize2 className="h-5 w-5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    const el = (isAudioFilename(item.filename) ? audioRef : videoRef).current
+                    onMinimize(el?.currentTime ?? 0, el?.paused ?? false)
+                  }}
+                  className="bg-black/50 text-white hover:bg-black/70"
+                >
+                  <Minimize2 className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Minimize</TooltipContent>
+            </Tooltip>
           )}
         </div>
         {locked ? (
@@ -154,7 +165,7 @@ export function LibraryItemDetail({
           <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-8">
             <div className="aspect-square h-full max-h-72 w-auto overflow-hidden rounded-lg bg-neutral-800 shadow-lg">
               {item.thumbnail ? (
-                <img src={mediaFileUrl(item.thumbnail)} alt="" className="h-full w-full object-cover" />
+                <img src={libraryMediumThumbnailUrl(item)!} alt="" className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
                   <Music className="h-16 w-16 text-white/30" />
@@ -218,7 +229,7 @@ export function LibraryItemDetail({
         {siblings.length > 0 && (
           <div className="space-y-2">
             <h2 className="text-sm font-medium text-muted-foreground">More from this collection</h2>
-            <div className="scrollbar-thin flex gap-3 overflow-x-auto pb-2">
+            <HorizontalScroller className="gap-3">
               {siblings.map((sibling) => (
                 <LibraryItemStripTile
                   key={sibling.id}
@@ -228,7 +239,7 @@ export function LibraryItemDetail({
                   ignorePrivacy={ignorePrivacy}
                 />
               ))}
-            </div>
+            </HorizontalScroller>
           </div>
         )}
       </div>
