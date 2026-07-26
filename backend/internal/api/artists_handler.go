@@ -5,11 +5,25 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/repository"
 )
+
+// validateBirthday checks that a birthday, if given, is a valid date-only
+// string ("2006-01-02") — the format an <input type="date"> always submits.
+// nil (unset) is always valid.
+func validateBirthday(birthday *string) error {
+	if birthday == nil || *birthday == "" {
+		return nil
+	}
+	if _, err := time.Parse("2006-01-02", *birthday); err != nil {
+		return errors.New("invalid birthday: expected YYYY-MM-DD")
+	}
+	return nil
+}
 
 func ListArtists(repo *repository.ArtistsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -33,8 +47,12 @@ func CreateArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if err := validateBirthday(req.Birthday); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
-		artist, err := repo.Create(c.Request.Context(), req.Name)
+		artist, err := repo.Create(c.Request.Context(), req.Name, req.Birthday)
 		if err != nil {
 			if errors.Is(err, repository.ErrArtistNameInUse) {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -61,8 +79,12 @@ func UpdateArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if err := validateBirthday(req.Birthday); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
-		if err := repo.Rename(c.Request.Context(), id, req.Name); err != nil {
+		if err := repo.Update(c.Request.Context(), id, req.Name, req.Birthday); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
 				return

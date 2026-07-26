@@ -143,6 +143,7 @@ export function SettingsPage() {
           <DownloadsCard />
           <PrivacyCard />
           <HistoryCard />
+          <AutoBackupCard />
           <ThumbnailsCard />
           <PlayerCard />
           <JellyfinCard />
@@ -879,6 +880,56 @@ function HistoryCard() {
               </AlertDialog>
             </div>
           </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+const AUTO_BACKUP_OPTIONS: { value: string; label: string }[] = [
+  { value: "0", label: "Off" },
+  { value: "6", label: "Every 6 hours" },
+  { value: "12", label: "Every 12 hours" },
+  { value: "24", label: "Every day" },
+  { value: "72", label: "Every 3 days" },
+  { value: "168", label: "Every week" },
+]
+
+function AutoBackupCard() {
+  const { data: settings, isLoading } = useSettings()
+  const updateSettings = useUpdateSettings()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Auto Backup</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading || !settings ? (
+          <Skeleton className="h-16 w-full" />
+        ) : (
+          <div className="space-y-2">
+            <Label>Back up automatically</Label>
+            <Select
+              value={String(settings.autoBackupIntervalHours)}
+              onValueChange={(v) => updateSettings.mutate({ autoBackupIntervalHours: Number(v) })}
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AUTO_BACKUP_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Saves a full snapshot of your settings and library data under the Backup page. Off by
+              default.
+            </p>
+          </div>
         )}
       </CardContent>
     </Card>

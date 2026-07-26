@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { LibraryItemStripTile } from "@/components/library/LibraryItemStripTile"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
-import { useLibrary } from "@/hooks/useLibrary"
+import { useLibraryQuery } from "@/hooks/useLibrary"
 import { useArtists } from "@/hooks/useArtists"
 import { useSettings } from "@/hooks/useSettings"
 import { groupItemsByCollection } from "@/lib/browseShows"
@@ -14,13 +14,18 @@ import { imageUrl } from "@/lib/api"
 export function BrowseArtistPage() {
   const { id } = useParams<{ id: string }>()
   const artistId = Number(id)
+  const validArtistId = Number.isFinite(artistId)
 
-  const { data: items, isLoading: itemsLoading } = useLibrary()
+  // Scoped to just this artist's own items — never the whole library. Only
+  // enabled for a well-formed id so a bad URL falls through to the "doesn't
+  // exist" branch below instead of firing a request that 400s and leaves
+  // the query stuck loading forever.
+  const itemsQuery = useLibraryQuery({ artistId, sortKey: "downloadedAt", sortDir: "desc" }, validArtistId)
   const { data: artists, isLoading: artistsLoading } = useArtists()
   const { data: settings } = useSettings()
   const ignorePrivacy = settings?.browseIgnorePrivacy ?? false
 
-  if (itemsLoading || artistsLoading || !items || !artists) {
+  if (artistsLoading || (validArtistId && itemsQuery.isLoading) || !artists) {
     return (
       <div className="space-y-6 p-4 md:p-8">
         <Skeleton className="h-24 w-full" />
@@ -47,7 +52,7 @@ export function BrowseArtistPage() {
     )
   }
 
-  const artistItems = items.filter((i) => i.artistId === artist.id)
+  const artistItems = itemsQuery.data?.items ?? []
   const groups = groupItemsByCollection(artistItems)
   const backTo = `/browse/artist/${artist.id}`
 

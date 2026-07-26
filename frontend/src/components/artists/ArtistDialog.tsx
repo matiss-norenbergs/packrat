@@ -1,6 +1,8 @@
 import { useRef, useState, type ReactNode } from "react"
-import { ImageIcon, Plus, X } from "lucide-react"
+import { format, parseISO } from "date-fns"
+import { CalendarIcon, ImageIcon, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import {
   Dialog,
   DialogContent,
@@ -12,7 +14,9 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   useAddArtistImage,
   useArtistImageCandidates,
@@ -24,7 +28,7 @@ import {
   useUpdateArtist,
 } from "@/hooks/useArtists"
 import { imageUrl, mediaFileUrl } from "@/lib/api"
-import { cn } from "@/lib/utils"
+import { calculateAge, cn } from "@/lib/utils"
 import type { Artist } from "@/types/api"
 
 interface ArtistDialogProps {
@@ -36,6 +40,8 @@ export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
   const isEdit = artist != null
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(artist?.name ?? "")
+  const [birthday, setBirthday] = useState(artist?.birthday ?? "")
+  const [birthdayOpen, setBirthdayOpen] = useState(false)
   const [showCandidates, setShowCandidates] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -54,6 +60,7 @@ export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
   const handleOpenChange = (next: boolean) => {
     if (next) {
       setName(artist?.name ?? "")
+      setBirthday(artist?.birthday ?? "")
       setShowCandidates(false)
     }
     setOpen(next)
@@ -62,11 +69,12 @@ export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
   const handleSubmit = () => {
     const trimmed = name.trim()
     if (!trimmed) return
+    const payload = { name: trimmed, birthday: birthday || null }
 
     if (isEdit) {
-      updateArtist.mutate({ id: artist.id, payload: { name: trimmed } }, { onSuccess: () => setOpen(false) })
+      updateArtist.mutate({ id: artist.id, payload }, { onSuccess: () => setOpen(false) })
     } else {
-      createArtist.mutate({ name: trimmed }, { onSuccess: () => setOpen(false) })
+      createArtist.mutate(payload, { onSuccess: () => setOpen(false) })
     }
   }
 
@@ -134,27 +142,65 @@ export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
                 </div>
               )}
               {artist.selectedImagePath && (
-                <button
-                  type="button"
-                  onClick={() => clearSelectedImage.mutate()}
-                  disabled={clearSelectedImage.isPending}
-                  className="absolute top-1.5 right-1.5 rounded-full bg-black/70 p-1 text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-50"
-                  title="Remove selected image"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => clearSelectedImage.mutate()}
+                      disabled={clearSelectedImage.isPending}
+                      className="absolute top-1.5 right-1.5 rounded-full bg-black/70 p-1 text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-50"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Remove selected image</TooltipContent>
+                </Tooltip>
               )}
             </div>
           )}
-          <div className="flex-1 space-y-2">
-            <Label htmlFor="artist-name">Name</Label>
-            <Input
-              id="artist-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-            />
+          <div className="flex-1 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="artist-name">Name</Label>
+              <Input
+                id="artist-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="artist-birthday">Birthday</Label>
+              <Popover open={birthdayOpen} onOpenChange={setBirthdayOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="artist-birthday"
+                    type="button"
+                    variant="outline"
+                    className={cn("w-full justify-start font-normal", !birthday && "text-muted-foreground")}
+                  >
+                    <CalendarIcon className="h-4 w-4" />
+                    {birthday ? format(parseISO(birthday), "PPP") : "Pick a date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    captionLayout="dropdown"
+                    startMonth={new Date(1900, 0)}
+                    endMonth={new Date()}
+                    disabled={{ after: new Date() }}
+                    defaultMonth={birthday ? parseISO(birthday) : undefined}
+                    selected={birthday ? parseISO(birthday) : undefined}
+                    onSelect={(date) => {
+                      setBirthday(date ? format(date, "yyyy-MM-dd") : "")
+                      setBirthdayOpen(false)
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+              {birthday && <p className="text-sm text-muted-foreground">Age: {calculateAge(birthday)}</p>}
+            </div>
           </div>
         </div>
 
@@ -170,22 +216,30 @@ export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
                   const selected = artist.selectedImagePath === img.relativePath
                   return (
                     <div key={img.id} className="group relative aspect-square overflow-hidden rounded-md border">
-                      <button
-                        type="button"
-                        onClick={() => selectImage.mutate(img.id)}
-                        className="h-full w-full outline-hidden transition hover:opacity-80"
-                        title={selected ? "Currently selected" : "Use as display image"}
-                      >
-                        <img src={imageUrl(img.relativePath)} alt="" className="h-full w-full object-cover" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteImage.mutate(img.id)}
-                        className="absolute top-1 right-1 rounded-full bg-black/70 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
-                        title="Delete image"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => selectImage.mutate(img.id)}
+                            className="h-full w-full outline-hidden transition hover:opacity-80"
+                          >
+                            <img src={imageUrl(img.relativePath)} alt="" className="h-full w-full object-cover" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{selected ? "Currently selected" : "Use as display image"}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => deleteImage.mutate(img.id)}
+                            className="absolute top-1 right-1 rounded-full bg-black/70 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete image</TooltipContent>
+                      </Tooltip>
                     </div>
                   )
                 })}

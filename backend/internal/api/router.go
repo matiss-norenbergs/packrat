@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/backup"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/imagebackfill"
 	"packrat/backend/internal/jellyfin"
@@ -26,11 +27,13 @@ type Deps struct {
 	TagsRepo             *repository.TagsRepo
 	ArtistsRepo          *repository.ArtistsRepo
 	UsersRepo            *repository.UsersRepo
+	BackupHistoryRepo    *repository.BackupHistoryRepo
 	YtDlp                *downloader.YtDlpService
 	JellyfinClient       *jellyfin.Client
 	ImageBackfillManager *imagebackfill.Manager
 	MediaRoot            string
 	ImagesRoot           string
+	BackupsRoot          string
 	FFProbePath          string
 	WSHandler            gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
 	StaticDir            string          // built frontend assets; empty in dev (Vite serves it)
@@ -69,6 +72,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 	public := r.Group("/api")
 	{
 		public.GET("/health", Health(deps.DB))
+		public.GET("/version", GetVersion())
 		public.GET("/auth/status", AuthStatus(deps.UsersRepo))
 		public.POST("/auth/setup", AuthSetup(deps.UsersRepo))
 		public.POST("/auth/login", AuthLogin(deps.UsersRepo))
@@ -108,7 +112,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/library/:id/nfo", GetLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
 		api.DELETE("/library/:id/nfo", DeleteLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
 
-		api.GET("/collections", ListCollections(deps.CollectionsRepo))
+		api.GET("/collections", ListCollections(deps.CollectionsRepo, deps.LibraryRepo))
 		api.POST("/collections", CreateCollection(deps.CollectionsRepo, deps.Manager))
 		api.PATCH("/collections/:id", UpdateCollection(deps.CollectionsRepo, deps.Manager))
 		api.DELETE("/collections/:id", DeleteCollection(deps.CollectionsRepo))
@@ -145,6 +149,20 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/backup/import/settings", ImportSettings(deps.SettingsRepo, deps.Manager))
 		api.POST("/backup/preview/library", PreviewLibraryImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
 		api.POST("/backup/import/library", ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.Manager, deps.SettingsRepo))
+		api.GET("/backup/history", ListBackupHistory(deps.BackupHistoryRepo))
+		api.POST("/backup/run", RunManualBackup(backup.RunDeps{
+			BackupsRoot:       deps.BackupsRoot,
+			SettingsRepo:      deps.SettingsRepo,
+			CollectionsRepo:   deps.CollectionsRepo,
+			TagsRepo:          deps.TagsRepo,
+			ArtistsRepo:       deps.ArtistsRepo,
+			LibraryRepo:       deps.LibraryRepo,
+			DownloadsRepo:     deps.DownloadsRepo,
+			BackupHistoryRepo: deps.BackupHistoryRepo,
+		}))
+		api.GET("/backup/history/:id/download", DownloadBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
+		api.DELETE("/backup/history/:id", DeleteBackupHistoryEntry(deps.BackupsRoot, deps.BackupHistoryRepo))
+		api.GET("/backup/history/:id/preview", PreviewBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
 
 		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
 		api.POST("/import", CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))

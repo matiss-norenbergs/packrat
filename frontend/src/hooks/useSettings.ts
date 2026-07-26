@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  fetchAppVersion,
   fetchImageBackfillStatus,
   fetchSettings,
   fetchYtDlpVersion,
@@ -37,6 +38,18 @@ export function useRescanJellyfinLibrary() {
     mutationFn: () => rescanJellyfinLibrary(),
     onSuccess: () => toast.success("Jellyfin library rescan triggered"),
     onError: (err: Error) => toast.error(`Rescan failed: ${err.message}`),
+  })
+}
+
+export const appVersionQueryKey = ["app", "version"] as const
+
+// staleTime: Infinity — the running binary's version can't change without a
+// restart, so there's nothing to ever refetch this for.
+export function useAppVersion() {
+  return useQuery({
+    queryKey: appVersionQueryKey,
+    queryFn: fetchAppVersion,
+    staleTime: Infinity,
   })
 }
 

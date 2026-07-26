@@ -18,7 +18,7 @@ import (
 	"packrat/backend/internal/repository"
 )
 
-func ListCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
+func ListCollections(repo *repository.CollectionsRepo, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
@@ -30,12 +30,22 @@ func ListCollections(repo *repository.CollectionsRepo) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		latestThumbnails, err := libraryRepo.LatestThumbnailsByCollection(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		paths := collectionPaths(rows)
 		privacy := effectivePrivacyMap(rows)
 		totals := totalItemCounts(rows, itemCounts)
+		rolledUpThumbnails := rollupLatestThumbnails(rows, latestThumbnails)
 		out := make([]CollectionResponse, 0, len(rows))
 		for _, col := range rows {
-			out = append(out, toCollectionResponse(col, paths[col.ID], itemCounts[col.ID], privacy[col.ID], totals[col.ID]))
+			var thumb *string
+			if t, ok := rolledUpThumbnails[col.ID]; ok {
+				thumb = &t
+			}
+			out = append(out, toCollectionResponse(col, paths[col.ID], itemCounts[col.ID], privacy[col.ID], totals[col.ID], thumb))
 		}
 		c.JSON(http.StatusOK, out)
 	}

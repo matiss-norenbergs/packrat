@@ -467,7 +467,7 @@ func ApplyLibraryBundle(
 		if _, ok := artistIDs[name]; ok {
 			return
 		}
-		created, err := artistsRepo.Create(ctx, name)
+		created, err := artistsRepo.Create(ctx, name, nil) // backup never captured birthday, so imported artists start without one
 		if err != nil {
 			return // best-effort — e.g. a race with a concurrent creator
 		}

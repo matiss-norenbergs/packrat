@@ -5,34 +5,36 @@ import { BrowseRow } from "@/components/browse/BrowseRow"
 import { BrowseShowRow } from "@/components/browse/BrowseShowRow"
 import { BrowseTile } from "@/components/browse/BrowseTile"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
-import { useLibrary, useLibraryQuery, useUpdateLibraryProgress } from "@/hooks/useLibrary"
+import { useLibraryQuery, useUpdateLibraryProgress } from "@/hooks/useLibrary"
 import { useCollections } from "@/hooks/useCollections"
 import { useSettings } from "@/hooks/useSettings"
 import {
   buildCollectionTree,
   collectDescendantIds,
-  findNodeById,
   topLevelAncestor,
   type CollectionTreeNode,
 } from "@/lib/collectionTree"
 import { buildShowSummary, type ShowSummary } from "@/lib/browseShows"
-import { sortLibraryItems } from "@/lib/libraryFilters"
-import { isAudioFilename } from "@/lib/utils"
 
 const RECENTLY_ADDED_COUNT = 24
 const CONTINUE_WATCHING_COUNT = 24
-// Below this, playback barely started — not worth resuming.
+// How many of the most-recently-added items the hero banner rotates
+// through — deliberately smaller than RECENTLY_ADDED_COUNT itself, since at
+// 10s/item a full cycle through 24 items would take 4 minutes; a shorter
+// rotation reads as "freshly featured" rather than "the entire recent list."
+const HERO_ROTATION_COUNT = 8
+// Below this, playback barely started — not worth resuming. Mirrors the
+// backend's InProgress filter (see continueWatchingMin/MaxFraction in
+// library_repo.go); re-checked here too so an optimistic cache patch (e.g.
+// "remove from Continue Watching" resetting position to 0) drops the row
+// immediately instead of waiting on a refetch.
 const CONTINUE_WATCHING_MIN_SECONDS = 5
-// Above this fraction watched, treat it as finished rather than "in
-// progress" — otherwise a video sits in Continue Watching forever after the
-// credits roll, just because its position never technically hit the end.
 const CONTINUE_WATCHING_MAX_FRACTION = 0.95
 
 export function BrowsePage() {
   const [searchParams] = useSearchParams()
   const search = searchParams.get("q") ?? ""
 
-  const { data: items, isLoading: itemsLoading } = useLibrary()
   const { data: collections, isLoading: collectionsLoading } = useCollections()
   const { data: settings } = useSettings()
   const ignorePrivacy = settings?.browseIgnorePrivacy ?? false
@@ -43,6 +45,39 @@ export function BrowsePage() {
   // open of that item start over from the beginning, which is the correct
   // "forget this" semantics for an explicit remove.
   const removeFromContinueWatching = (id: number) => updateProgress.mutate({ id, positionSeconds: 0 })
+
+  const recentlyAddedQuery = useLibraryQuery(
+    { sortKey: "downloadedAt", sortDir: "desc", page: 1, pageSize: RECENTLY_ADDED_COUNT },
+    !search,
+  )
+  const continueWatchingQuery = useLibraryQuery(
+    { inProgress: true, sortKey: "lastWatchedAt", sortDir: "desc", page: 1, pageSize: CONTINUE_WATCHING_COUNT },
+    !search,
+  )
+
+  const tree = collections ? buildCollectionTree(collections) : []
+
+  // Any collection anywhere in the tree (not just roots) flagged
+  // browseAsShow becomes one show/album tile grouping all its descendants'
+  // items behind a single cover, instead of a flat row of per-item tiles —
+  // flag the artist collection itself for "whole artist as one card", or
+  // flag each album sub-collection instead for "one card per album".
+  const flaggedIds = new Set((collections ?? []).filter((c) => c.browseAsShow).map((c) => c.id))
+
+  const subtreeHasFlagged = (node: CollectionTreeNode): boolean =>
+    flaggedIds.has(node.id) || node.children.some(subtreeHasFlagged)
+
+  // Fallback roots (no flagged show anywhere in their subtree) need their
+  // actual items fetched, scoped to just those subtrees — never the whole
+  // library. Empty subtrees (totalItemCount already rolled up server-side)
+  // are skipped before they ever cost a descendant-id resolution or a spot
+  // in the fetch, so a collection with nothing in it never shows up here.
+  const fallbackRoots = tree.filter((root) => !subtreeHasFlagged(root) && root.totalItemCount > 0)
+  const fallbackDescendantIds = fallbackRoots.flatMap((root) => collectDescendantIds(root))
+  const fallbackItemsQuery = useLibraryQuery(
+    { collectionIds: fallbackDescendantIds, sortKey: "downloadedAt", sortDir: "desc" },
+    !search && fallbackDescendantIds.length > 0,
+  )
 
   if (search) {
     return (
@@ -65,7 +100,7 @@ export function BrowsePage() {
     )
   }
 
-  if (itemsLoading || collectionsLoading || !items || !collections) {
+  if (collectionsLoading || recentlyAddedQuery.isLoading || !collections) {
     return (
       <div className="space-y-8 p-4 md:p-8">
         <Skeleton className="h-[50vh] min-h-72 w-full md:h-[60vh]" />
@@ -75,47 +110,28 @@ export function BrowsePage() {
     )
   }
 
-  const recentlyAdded = sortLibraryItems(items, "downloadedAt", "desc").slice(0, RECENTLY_ADDED_COUNT)
-  const hero = recentlyAdded.find((i) => ignorePrivacy || !i.blurred)
+  const recentlyAdded = recentlyAddedQuery.data?.items ?? []
+  const heroItems = recentlyAdded.filter((i) => ignorePrivacy || !i.blurred).slice(0, HERO_ROTATION_COUNT)
 
-  // Video only — music has no "continue watching" concept, and
-  // playbackPositionSeconds is never set for audio items in the first
-  // place (see usePlaybackProgress).
-  const continueWatching = items
-    .filter(
-      (i) =>
-        !isAudioFilename(i.filename) &&
-        i.playbackPositionSeconds != null &&
-        i.playbackPositionSeconds >= CONTINUE_WATCHING_MIN_SECONDS &&
-        (i.duration == null || i.playbackPositionSeconds < i.duration * CONTINUE_WATCHING_MAX_FRACTION) &&
-        i.lastWatchedAt != null,
-    )
-    .sort((a, b) => new Date(b.lastWatchedAt!).getTime() - new Date(a.lastWatchedAt!).getTime())
-    .slice(0, CONTINUE_WATCHING_COUNT)
+  const continueWatching = (continueWatchingQuery.data?.items ?? []).filter(
+    (i) =>
+      i.playbackPositionSeconds != null &&
+      i.playbackPositionSeconds >= CONTINUE_WATCHING_MIN_SECONDS &&
+      (i.duration == null || i.playbackPositionSeconds < i.duration * CONTINUE_WATCHING_MAX_FRACTION),
+  )
 
-  const tree = buildCollectionTree(collections)
-
-  // Any collection anywhere in the tree (not just roots) flagged
-  // browseAsShow becomes one show/album tile grouping all its descendants'
-  // items behind a single cover, instead of a flat row of per-item tiles —
-  // flag the artist collection itself for "whole artist as one card", or
-  // flag each album sub-collection instead for "one card per album".
-  const flaggedIds = new Set(collections.filter((c) => c.browseAsShow).map((c) => c.id))
-
-  const subtreeHasFlagged = (node: CollectionTreeNode): boolean =>
-    flaggedIds.has(node.id) || node.children.some(subtreeHasFlagged)
-
+  // Shows/albums need no item fetch at all when they already have an
+  // explicit cover — cover, name, and item count all come straight off the
+  // collection response (see buildShowSummary). Subtrees with nothing in
+  // them (totalItemCount === 0) are dropped rather than shown as an empty
+  // card.
   const showsByTopLevelRoot = new Map<number, { title: string; shows: ShowSummary[] }>()
   for (const collection of collections) {
-    if (!collection.browseAsShow) continue
-    const node = findNodeById(tree, collection.id)
-    if (!node) continue
-    const descendantIds = new Set(collectDescendantIds(node))
-    const showItems = items.filter((i) => i.collectionId != null && descendantIds.has(i.collectionId))
+    if (!collection.browseAsShow || collection.totalItemCount === 0) continue
     const root = topLevelAncestor(collections, collection.id)
     if (!root) continue
     const bucket = showsByTopLevelRoot.get(root.id) ?? { title: root.name, shows: [] }
-    bucket.shows.push(buildShowSummary(collection, showItems))
+    bucket.shows.push(buildShowSummary(collection))
     showsByTopLevelRoot.set(root.id, bucket)
   }
   // A top-level collection that is itself the only flagged show in its
@@ -142,16 +158,13 @@ export function BrowsePage() {
 
   // Fallback, unchanged from before: a top-level collection with no flagged
   // collection anywhere in its subtree keeps today's behavior — one row of
-  // flat individual item tiles. Nothing regresses for collections not yet
-  // opted into the new flag.
-  const fallbackCollectionRows = tree
-    .filter((root) => !subtreeHasFlagged(root))
+  // flat individual item tiles, sourced from the single scoped fetch above
+  // (already sorted by downloadedAt desc) and split back out per root.
+  const fallbackCollectionRows = fallbackRoots
     .map((root) => {
       const descendantIds = new Set(collectDescendantIds(root))
-      const rowItems = sortLibraryItems(
-        items.filter((i) => i.collectionId != null && descendantIds.has(i.collectionId)),
-        "downloadedAt",
-        "desc",
+      const rowItems = (fallbackItemsQuery.data?.items ?? []).filter(
+        (i) => i.collectionId != null && descendantIds.has(i.collectionId),
       )
       return { key: `collection-${root.id}`, title: root.name, items: rowItems }
     })
@@ -160,7 +173,7 @@ export function BrowsePage() {
   return (
     <RevealAllProvider>
       <div className="space-y-8 pb-8">
-        {hero && <BrowseHero item={hero} />}
+        {heroItems.length > 0 && <BrowseHero items={heroItems} />}
         <div className="space-y-6 px-4 md:px-8">
           <BrowseRow
             title="Continue Watching"

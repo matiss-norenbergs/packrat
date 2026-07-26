@@ -69,30 +69,42 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
         )}
         {!selectionActive && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="pointer-events-none h-12 w-12 rounded-full bg-background/80 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background/90 group-hover:pointer-events-auto group-hover:opacity-100"
-              title="Play"
-              onClick={(e) => {
-                e.stopPropagation()
-                navigate(`/library/${item.id}`, { state: { from: `${location.pathname}${location.search}` } })
-              }}
-            >
-              <Play className="h-6 w-6" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="pointer-events-none h-12 w-12 rounded-full bg-background/80 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background/90 group-hover:pointer-events-auto group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(`/library/${item.id}`, { state: { from: `${location.pathname}${location.search}` } })
+                  }}
+                >
+                  <Play className="h-6 w-6" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Play</TooltipContent>
+            </Tooltip>
           </div>
         )}
       </div>
       <CardContent className="space-y-2 p-3">
-        <p
-          className={cn("line-clamp-2 text-sm font-medium", item.blurred && !selectionActive && "cursor-pointer")}
-          onClick={!selectionActive && item.blurred ? toggleRevealItem : undefined}
-          title={!selectionActive && item.blurred ? (revealed ? "Click to hide" : "Click to reveal") : undefined}
-        >
-          {item.sequenceNumber != null && `${item.sequenceNumber}. `}
-          {item.blurred && !revealed ? hashText(item.title) : item.title}
-        </p>
+        {!selectionActive && item.blurred ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="line-clamp-2 cursor-pointer text-sm font-medium" onClick={toggleRevealItem}>
+                {item.sequenceNumber != null && `${item.sequenceNumber}. `}
+                {!revealed ? hashText(item.title) : item.title}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent>{revealed ? "Click to hide" : "Click to reveal"}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <p className="line-clamp-2 text-sm font-medium">
+            {item.sequenceNumber != null && `${item.sequenceNumber}. `}
+            {item.blurred && !revealed ? hashText(item.title) : item.title}
+          </p>
+        )}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="truncate">{item.artistName ?? item.uploader ?? "Uncategorized"}</span>
           {item.duration != null && <span>{formatDuration(item.duration)}</span>}

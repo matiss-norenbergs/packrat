@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"packrat/backend/internal/models"
 )
@@ -186,13 +187,24 @@ type LibraryQuery struct {
 	CollectionID       *int64   // exact match; nil (with CollectionIDIsNull false) = no filter
 	CollectionIDIsNull bool     // true = filter to collection_id IS NULL (uncategorized items) — folder view's root, distinct from "no filter at all"
 	CollectionIDs      []int64  // IN-match against a set of ids; used by bulk-selection resolution (a folder + its nested subcollections), independent of CollectionID/CollectionIDIsNull — takes precedence over both when non-empty
+	ArtistID           *int64   // exact match on artist_id; nil = no filter
 	Year               *int     // exact match on release_year; nil = no filter
 	Tags               []string // AND semantics — an item must have every tag
-	SortKey            string   // downloadedAt|title|filename|year|duration|sequenceNumber
+	InProgress         bool     // true = filter to items eligible for "Continue Watching": a position tracked, past the barely-started floor, and short of the credits-rolled ceiling (see continueWatching* constants)
+	SortKey            string   // downloadedAt|title|filename|year|duration|sequenceNumber|lastWatchedAt
 	SortDir            string   // asc|desc
 	Page               int      // 1-based; 0 means "no pagination", return every matching row
 	PageSize           int      // only used when Page > 0; defaults to 48 if <= 0
 }
+
+// Mirrors BrowsePage.tsx's former client-side Continue Watching filter
+// (CONTINUE_WATCHING_MIN_SECONDS/CONTINUE_WATCHING_MAX_FRACTION), now
+// evaluated in SQL so the endpoint only returns rows actually eligible
+// instead of the caller fetching everything to filter itself.
+const (
+	continueWatchingMinSeconds  = 5
+	continueWatchingMaxFraction = 0.95
+)
 
 var librarySortColumns = map[string]string{
 	"downloadedAt":   "l.downloaded_at",
@@ -201,6 +213,7 @@ var librarySortColumns = map[string]string{
 	"year":           "l.release_year",
 	"duration":       "l.duration",
 	"sequenceNumber": "l.sequence_number",
+	"lastWatchedAt":  "l.last_watched_at",
 }
 
 // buildFTSMatchQuery turns free-text user input into a safe FTS5 MATCH
@@ -244,9 +257,18 @@ func (r *LibraryRepo) Query(ctx context.Context, q LibraryQuery) ([]models.Libra
 		conditions = append(conditions, `l.collection_id = ?`)
 		args = append(args, *q.CollectionID)
 	}
+	if q.ArtistID != nil {
+		conditions = append(conditions, `l.artist_id = ?`)
+		args = append(args, *q.ArtistID)
+	}
 	if q.Year != nil {
 		conditions = append(conditions, `l.release_year = ?`)
 		args = append(args, *q.Year)
+	}
+	if q.InProgress {
+		conditions = append(conditions,
+			`l.playback_position_seconds IS NOT NULL AND l.playback_position_seconds >= ? AND (l.duration IS NULL OR l.playback_position_seconds < l.duration * ?) AND l.last_watched_at IS NOT NULL`)
+		args = append(args, continueWatchingMinSeconds, continueWatchingMaxFraction)
 	}
 	for _, tag := range q.Tags {
 		conditions = append(conditions, `EXISTS (SELECT 1 FROM library_tags lt JOIN tags t ON t.id = lt.tag_id WHERE lt.library_id = l.id AND t.name = ?)`)
@@ -432,6 +454,53 @@ func (r *LibraryRepo) ThumbnailsByArtist(ctx context.Context, artistID int64) ([
 			return nil, fmt.Errorf("scanning artist thumbnail: %w", err)
 		}
 		out = append(out, thumbnail)
+	}
+	return out, rows.Err()
+}
+
+// LatestThumbnail is one collection's most-recently-downloaded direct item
+// that has a thumbnail — the raw ingredient for Browse's "no explicit cover
+// set" fallback (see LatestThumbnailsByCollection).
+type LatestThumbnail struct {
+	Thumbnail    string
+	DownloadedAt time.Time
+}
+
+// LatestThumbnailsByCollection returns, per collection, the thumbnail of the
+// most recently downloaded item placed *directly* in it (mirrors
+// CollectionsRepo.ItemCounts' "direct, not rolled up" scope) — callers that
+// want a whole show's fallback cover (rolled up across descendants) combine
+// this with the collection tree themselves, the same way toCollectionResponse
+// rolls up ItemCounts into TotalItemCount. Collections with no thumbnailed
+// item of their own are simply absent from the result. One query for the
+// whole library rather than a fetch of every item, so Browse can resolve
+// fallback covers without ever pulling item rows for collections that
+// already have an explicit cover set.
+func (r *LibraryRepo) LatestThumbnailsByCollection(ctx context.Context) (map[int64]LatestThumbnail, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT collection_id, thumbnail, downloaded_at FROM (
+			SELECT collection_id, thumbnail, downloaded_at,
+			       ROW_NUMBER() OVER (PARTITION BY collection_id ORDER BY downloaded_at DESC) AS rn
+			FROM library
+			WHERE collection_id IS NOT NULL AND thumbnail IS NOT NULL
+		) WHERE rn = 1`)
+	if err != nil {
+		return nil, fmt.Errorf("listing latest collection thumbnails: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int64]LatestThumbnail)
+	for rows.Next() {
+		var collectionID int64
+		var thumbnail, downloadedAt string
+		if err := rows.Scan(&collectionID, &thumbnail, &downloadedAt); err != nil {
+			return nil, fmt.Errorf("scanning latest collection thumbnail: %w", err)
+		}
+		t, err := parseSQLiteTime(downloadedAt)
+		if err != nil {
+			return nil, err
+		}
+		out[collectionID] = LatestThumbnail{Thumbnail: thumbnail, DownloadedAt: t}
 	}
 	return out, rows.Err()
 }

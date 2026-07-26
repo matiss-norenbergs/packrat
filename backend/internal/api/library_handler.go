@@ -81,6 +81,14 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 			}
 			q.CollectionID = &id
 		}
+		if v := c.Query("artistId"); v != "" {
+			id, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid artistId"})
+				return
+			}
+			q.ArtistID = &id
+		}
 		if v := c.Query("year"); v != "" {
 			year, err := strconv.Atoi(v)
 			if err != nil {
@@ -92,6 +100,7 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 		if v := c.Query("tags"); v != "" {
 			q.Tags = strings.Split(v, ",")
 		}
+		q.InProgress = c.Query("inProgress") == "true"
 		if v := c.Query("page"); v != "" {
 			page, err := strconv.Atoi(v)
 			if err != nil || page < 1 {

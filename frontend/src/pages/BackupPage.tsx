@@ -1,4 +1,5 @@
 import { useRef, useState } from "react"
+import { Info } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,6 +15,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { BackupHistoryTable } from "@/components/backup/BackupHistoryTable"
 import { LibraryImportPreviewDialog } from "@/components/backup/LibraryImportPreviewDialog"
 import {
   useExportLibrary,
@@ -39,6 +42,15 @@ export function BackupPage() {
         <SettingsBackupCard />
         <LibraryBackupCard />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Backup History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BackupHistoryTable />
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -265,11 +277,21 @@ function LibraryBackupCard() {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">Export</h3>
-          <p className="text-xs text-muted-foreground">
-            Tags, collections, artists, and any library item with a saved source URL — not the
-            media files themselves. Importing this elsewhere re-queues downloads from those URLs.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-medium">Export</h3>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground">
+                  <Info className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="text-xs text-muted-foreground">
+                Tags, collections, artists, and any library item with a saved source URL — not the
+                media files themselves. Importing this elsewhere re-queues downloads from those
+                URLs.
+              </PopoverContent>
+            </Popover>
+          </div>
           <EncryptFields
             encrypt={encrypt}
             setEncrypt={setEncrypt}

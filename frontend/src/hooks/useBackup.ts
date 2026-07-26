@@ -1,11 +1,15 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  deleteBackupHistoryEntry,
   exportLibraryBackup,
   exportSettingsBackup,
+  fetchBackupHistory,
+  fetchBackupPreview,
   importLibraryBackup,
   importSettingsBackup,
   previewLibraryImport,
+  runManualBackup,
 } from "@/lib/api"
 import { downloadJson } from "@/lib/utils"
 import { artistsQueryKey } from "./useArtists"
@@ -88,5 +92,51 @@ export function useImportLibrary() {
     onError: (err: Error) => {
       toast.error(`Import failed: ${err.message}`)
     },
+  })
+}
+
+export const backupHistoryQueryKey = ["backup-history"] as const
+
+export function useBackupHistory() {
+  return useQuery({ queryKey: backupHistoryQueryKey, queryFn: fetchBackupHistory })
+}
+
+export function useRunManualBackup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: runManualBackup,
+    onSuccess: (entry) => {
+      queryClient.invalidateQueries({ queryKey: backupHistoryQueryKey })
+      if (entry.status === "success") {
+        toast.success("Backup completed")
+      } else {
+        toast.error(`Backup failed: ${entry.errorMessage ?? "unknown error"}`)
+      }
+    },
+    onError: (err: Error) => {
+      toast.error(`Backup failed: ${err.message}`)
+    },
+  })
+}
+
+export function useDeleteBackupHistoryEntry() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: deleteBackupHistoryEntry,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: backupHistoryQueryKey })
+      toast.success("Backup deleted")
+    },
+    onError: (err: Error) => {
+      toast.error(`Delete failed: ${err.message}`)
+    },
+  })
+}
+
+export function useBackupPreview(id: number | null) {
+  return useQuery({
+    queryKey: ["backup-preview", id],
+    queryFn: () => fetchBackupPreview(id as number),
+    enabled: id != null,
   })
 }

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Select,
   SelectContent,
@@ -465,16 +466,27 @@ export function NewDownloadDialog() {
           {!preview?.isPlaylist && (
             <div className="space-y-2">
               <Label htmlFor="filename">Filename (optional)</Label>
-              <Input
-                id="filename"
-                placeholder={
-                  filenameTemplate.trim() ? "Disabled — a filename template is set below" : "Leave blank to use the video title"
-                }
-                value={filename}
-                disabled={!!filenameTemplate.trim()}
-                onChange={(e) => setFilename(e.target.value)}
-                title={filenameTemplate.trim() ? "Clear the filename template in Advanced to set a literal filename instead" : undefined}
-              />
+              {filenameTemplate.trim() ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Input
+                      id="filename"
+                      placeholder="Disabled — a filename template is set below"
+                      value={filename}
+                      disabled
+                      onChange={(e) => setFilename(e.target.value)}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>Clear the filename template in Advanced to set a literal filename instead</TooltipContent>
+                </Tooltip>
+              ) : (
+                <Input
+                  id="filename"
+                  placeholder="Leave blank to use the video title"
+                  value={filename}
+                  onChange={(e) => setFilename(e.target.value)}
+                />
+              )}
               <FilenameCharWarning chars={invalidSegmentChars(filename)} />
             </div>
           )}

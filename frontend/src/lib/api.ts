@@ -1,9 +1,12 @@
 import type {
+  AppVersion,
   Artist,
   ArtistImage,
   ArtistImageCandidate,
   AuthStatus,
+  BackupContentPreview,
   BackupEnvelope,
+  BackupHistoryEntry,
   BackupImportLibraryResult,
   BackupImportSettingsResult,
   BulkAssignTagsRequest,
@@ -81,6 +84,10 @@ export function fetchAuthStatus(): Promise<AuthStatus> {
   return request<AuthStatus>("/auth/status")
 }
 
+export function fetchAppVersion(): Promise<AppVersion> {
+  return request<AppVersion>("/version")
+}
+
 export function setupAccount(payload: SetupRequest): Promise<void> {
   return request<void>("/auth/setup", { method: "POST", body: JSON.stringify(payload) })
 }
@@ -151,8 +158,10 @@ export function fetchLibraryQuery(params: LibraryQueryParams): Promise<LibraryLi
   if (params.collectionIds && params.collectionIds.length > 0) search.set("collectionIds", params.collectionIds.join(","))
   else if (params.collectionId === null) search.set("collectionId", "none")
   else if (params.collectionId != null) search.set("collectionId", String(params.collectionId))
+  if (params.artistId != null) search.set("artistId", String(params.artistId))
   if (params.year != null) search.set("year", String(params.year))
   if (params.tags && params.tags.length > 0) search.set("tags", params.tags.join(","))
+  if (params.inProgress) search.set("inProgress", "true")
   if (params.sortKey) search.set("sortKey", params.sortKey)
   if (params.sortDir) search.set("sortDir", params.sortDir)
   if (params.page != null) search.set("page", String(params.page))
@@ -435,6 +444,30 @@ export function previewLibraryImport(data: string, password: string): Promise<Li
     method: "POST",
     body: JSON.stringify({ data, password: password || undefined }),
   })
+}
+
+export function fetchBackupHistory(): Promise<BackupHistoryEntry[]> {
+  return request<BackupHistoryEntry[]>("/backup/history")
+}
+
+export function runManualBackup(): Promise<BackupHistoryEntry> {
+  return request<BackupHistoryEntry>("/backup/run", { method: "POST" })
+}
+
+export function deleteBackupHistoryEntry(id: number): Promise<void> {
+  return request<void>(`/backup/history/${id}`, { method: "DELETE" })
+}
+
+// Not request()-wrapped: this needs to be a real browser navigation (a plain
+// <a href> click) so the server's Content-Disposition header triggers a
+// native save, rather than a JS-intercepted fetch response. Includes the
+// /api prefix explicitly since it bypasses request()'s auto-prefixing.
+export function backupDownloadUrl(id: number): string {
+  return `/api/backup/history/${id}/download`
+}
+
+export function fetchBackupPreview(id: number): Promise<BackupContentPreview> {
+  return request<BackupContentPreview>(`/backup/history/${id}/preview`)
 }
 
 export function fetchTags(): Promise<Tag[]> {

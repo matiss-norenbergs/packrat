@@ -6,7 +6,11 @@ type Artist struct {
 	ID                int64
 	Name              string
 	SelectedImagePath *string
-	CreatedAt         time.Time
+	// Birthday, when set, is a date-only string ("2006-01-02") — never a
+	// full timestamp, since a birthday has no meaningful time-of-day or
+	// timezone component.
+	Birthday  *string
+	CreatedAt time.Time
 }
 
 // ArtistWithCount is Artist plus how many library items currently have it —
@@ -15,6 +19,7 @@ type ArtistWithCount struct {
 	ID                int64
 	Name              string
 	SelectedImagePath *string
+	Birthday          *string
 	CreatedAt         time.Time
 	UsageCount        int
 }

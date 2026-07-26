@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { LogDetailDialog } from "@/components/logs/LogDetailDialog"
 import { useLogs } from "@/hooks/useLogs"
 import { formatDownloadStatus } from "@/lib/utils"
@@ -129,15 +130,20 @@ function LogRow({ entry, onView }: { entry: LogEntry; onView: () => void }) {
         </div>
       </div>
 
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onView}
-        disabled={!hasLog}
-        title={hasLog ? undefined : "No log captured yet"}
-      >
-        View log
-      </Button>
+      {hasLog ? (
+        <Button variant="outline" size="sm" onClick={onView}>
+          View log
+        </Button>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="sm" onClick={onView} disabled>
+              View log
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>No log captured yet</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   )
 }

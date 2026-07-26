@@ -17,7 +17,7 @@ const envelopeVersion = 1
 type Envelope struct {
 	Packrat    bool   `json:"packrat"` // sentinel: lets Open() reject a random JSON file with a clear error
 	Version    int    `json:"version"`
-	Kind       string `json:"kind"` // "settings" | "library"
+	Kind       string `json:"kind"` // "settings" | "library" | "full"
 	ExportedAt string `json:"exportedAt"`
 	Encrypted  bool   `json:"encrypted"`
 	Salt       string `json:"salt,omitempty"` // base64, present only if encrypted

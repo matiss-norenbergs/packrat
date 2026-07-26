@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"packrat/backend/internal/api"
+	"packrat/backend/internal/backup"
 	"packrat/backend/internal/config"
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
@@ -107,6 +108,7 @@ func run() error {
 	tagsRepo := repository.NewTagsRepo(conn)
 	artistsRepo := repository.NewArtistsRepo(conn)
 	usersRepo := repository.NewUsersRepo(conn)
+	backupHistoryRepo := repository.NewBackupHistoryRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath, settingsRepo)
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
@@ -143,11 +145,25 @@ func run() error {
 	}
 	mgr.Start(ctx, workerCount)
 
+	runDeps := backup.RunDeps{
+		BackupsRoot:       cfg.BackupsRoot,
+		SettingsRepo:      settingsRepo,
+		CollectionsRepo:   collectionsRepo,
+		TagsRepo:          tagsRepo,
+		ArtistsRepo:       artistsRepo,
+		LibraryRepo:       libraryRepo,
+		DownloadsRepo:     downloadsRepo,
+		BackupHistoryRepo: backupHistoryRepo,
+	}
+
 	go func() {
-		// Both sweeps share one ticker — they run on the same cadence and
-		// each is already a no-op when its own retention setting is unset.
+		// All three sweeps share one ticker — they run on the same cadence
+		// and each is already a no-op when its own setting is unset/not due.
+		// The smallest auto-backup interval option is 6h, so hourly-
+		// granularity checking is more than sufficient.
 		cleanupHistory(ctx, historyRepo, settingsRepo) // once immediately, so a just-raised retention takes effect right away
 		cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
+		backup.RunScheduledBackupIfDue(ctx, runDeps)
 		ticker := time.NewTicker(historyCleanupInterval)
 		defer ticker.Stop()
 		for {
@@ -157,6 +173,7 @@ func run() error {
 			case <-ticker.C:
 				cleanupHistory(ctx, historyRepo, settingsRepo)
 				cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
+				backup.RunScheduledBackupIfDue(ctx, runDeps)
 			}
 		}
 	}()
@@ -172,11 +189,13 @@ func run() error {
 		TagsRepo:             tagsRepo,
 		ArtistsRepo:          artistsRepo,
 		UsersRepo:            usersRepo,
+		BackupHistoryRepo:    backupHistoryRepo,
 		YtDlp:                ytdlpSvc,
 		JellyfinClient:       jellyfinClient,
 		ImageBackfillManager: imageBackfillMgr,
 		MediaRoot:            cfg.MediaRoot,
 		ImagesRoot:           cfg.ImagesRoot,
+		BackupsRoot:          cfg.BackupsRoot,
 		FFProbePath:          cfg.FFProbePath,
 		WSHandler:            hub.GinHandler(),
 		StaticDir:            os.Getenv("STATIC_DIR"),

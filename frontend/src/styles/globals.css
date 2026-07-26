@@ -163,3 +163,15 @@
     display: none;
   }
 }
+
+/* Drives BrowseHero's segmented rotation progress bar — width animates 0 to
+   100% over the current item's dwell time; the component controls duration
+   and play/pause via inline style, this just supplies the keyframes. */
+@keyframes hero-progress-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}

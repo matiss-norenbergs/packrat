@@ -7,7 +7,7 @@ import { BrowseShowRow } from "@/components/browse/BrowseShowRow"
 import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
 import { LibraryItemStripTile } from "@/components/library/LibraryItemStripTile"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
-import { useLibrary } from "@/hooks/useLibrary"
+import { useLibraryQuery } from "@/hooks/useLibrary"
 import { useCollections } from "@/hooks/useCollections"
 import { useArtists } from "@/hooks/useArtists"
 import { useSettings } from "@/hooks/useSettings"
@@ -18,20 +18,30 @@ import {
   resolveInheritedArtistId,
   topLevelAncestor,
 } from "@/lib/collectionTree"
-import { buildShowSummary, computeShowStats, groupShowItems, type ShowSummary } from "@/lib/browseShows"
+import { buildShowSummary, computeShowStats, groupShowItems } from "@/lib/browseShows"
 import { imageUrl } from "@/lib/api"
 
 export function BrowseShowPage() {
   const { id } = useParams<{ id: string }>()
   const collectionId = Number(id)
 
-  const { data: items, isLoading: itemsLoading } = useLibrary()
   const { data: collections, isLoading: collectionsLoading } = useCollections()
   const { data: artists, isLoading: artistsLoading } = useArtists()
   const { data: settings } = useSettings()
   const ignorePrivacy = settings?.browseIgnorePrivacy ?? false
 
-  if (itemsLoading || collectionsLoading || artistsLoading || !items || !collections || !artists) {
+  const tree = collections ? buildCollectionTree(collections) : []
+  const collection = collections?.find((c) => c.id === collectionId)
+  const node = collection ? findNodeById(tree, collection.id) : null
+  const descendantIds = node ? collectDescendantIds(node) : []
+
+  // Scoped to just this show's own subtree — never the whole library.
+  const itemsQuery = useLibraryQuery(
+    { collectionIds: descendantIds, sortKey: "downloadedAt", sortDir: "desc" },
+    descendantIds.length > 0,
+  )
+
+  if (collectionsLoading || artistsLoading || itemsQuery.isLoading || !collections || !artists) {
     return (
       <div className="space-y-6 p-4 md:p-8">
         <Skeleton className="h-[40vh] min-h-56 w-full" />
@@ -45,10 +55,6 @@ export function BrowseShowPage() {
     )
   }
 
-  const collection = collections.find((c) => c.id === collectionId)
-  const tree = buildCollectionTree(collections)
-  const node = collection ? findNodeById(tree, collection.id) : null
-
   if (!collection || !node) {
     return (
       <div className="flex flex-col items-center gap-3 py-16 text-center">
@@ -60,9 +66,8 @@ export function BrowseShowPage() {
     )
   }
 
-  const descendantIds = new Set(collectDescendantIds(node))
-  const showItems = items.filter((i) => i.collectionId != null && descendantIds.has(i.collectionId))
-  const summary = buildShowSummary(collection, showItems)
+  const showItems = itemsQuery.data?.items ?? []
+  const summary = buildShowSummary(collection)
   const effectiveBlurred = summary.isPrivate && !ignorePrivacy
   const stats = computeShowStats(showItems)
 
@@ -71,22 +76,17 @@ export function BrowseShowPage() {
 
   const episodeGroups = groupShowItems(node, showItems)
 
+  // Similar shows need no item fetch at all — buildShowSummary reads
+  // straight off each collection's own response fields (see BrowsePage).
   const root = topLevelAncestor(collections, collection.id)
   const similarShows = collections
-    .filter((c) => c.browseAsShow && c.id !== collection.id)
+    .filter((c) => c.browseAsShow && c.id !== collection.id && c.totalItemCount > 0)
     .filter((c) => {
       const cArtistId = resolveInheritedArtistId(collections, c.id)
       const cRoot = topLevelAncestor(collections, c.id)
       return (artistId != null && cArtistId === artistId) || (root != null && cRoot?.id === root.id)
     })
-    .map((c) => {
-      const cNode = findNodeById(tree, c.id)
-      if (!cNode) return null
-      const cDescendantIds = new Set(collectDescendantIds(cNode))
-      const cItems = items.filter((i) => i.collectionId != null && cDescendantIds.has(i.collectionId))
-      return buildShowSummary(c, cItems)
-    })
-    .filter((s): s is ShowSummary => s != null)
+    .map((c) => buildShowSummary(c))
 
   const backTo = `/browse/collection/${collection.id}`
 

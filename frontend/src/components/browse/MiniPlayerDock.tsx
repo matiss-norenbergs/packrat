@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { Maximize2, Music, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { librarySmallThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { isAudioFilename } from "@/lib/utils"
 import { usePersistedVolume } from "@/hooks/usePersistedVolume"
@@ -49,21 +50,35 @@ export function MiniPlayerDock() {
   return (
     <div className="fixed bottom-4 right-4 z-50 w-80 overflow-hidden rounded-lg border bg-background shadow-2xl">
       <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-2 py-1.5">
-        <button
-          type="button"
-          onClick={expand}
-          className="min-w-0 flex-1 truncate text-left text-xs font-medium hover:underline"
-          title={item.title}
-        >
-          {item.title}
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={expand}
+              className="min-w-0 flex-1 truncate text-left text-xs font-medium hover:underline"
+            >
+              {item.title}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{item.title}</TooltipContent>
+        </Tooltip>
         <div className="flex shrink-0 items-center gap-1">
-          <Button type="button" variant="ghost" size="icon-xs" onClick={expand} title="Expand">
-            <Maximize2 className="h-3.5 w-3.5" />
-          </Button>
-          <Button type="button" variant="ghost" size="icon-xs" onClick={close} title="Close">
-            <X className="h-3.5 w-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" variant="ghost" size="icon-xs" onClick={expand}>
+                <Maximize2 className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Expand</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" variant="ghost" size="icon-xs" onClick={close}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Close</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 

@@ -1,6 +1,5 @@
 import { collectionSmallCoverUrl, imageUrl, librarySmallThumbnailUrl, mediaFileUrl } from "./api"
 import { collectDescendantIds, type CollectionTreeNode } from "./collectionTree"
-import { sortLibraryItems } from "./libraryFilters"
 import type { Collection, LibraryItem } from "@/types/api"
 
 // A "show/album" tile's display data — one per collection flagged
@@ -20,16 +19,23 @@ export interface ShowSummary {
 }
 
 // Resolves what image represents a show/album tile: the collection's own
-// explicitly chosen cover if set, else the most recently downloaded
-// descendant item's thumbnail — the "default to the last downloaded file's
-// image" fallback. Only falls through to the placeholder icon (coverUrl*:
-// null) when neither exists. coverUrlLarge always resolves to the original
-// (full-fidelity) tier of whichever source is used — a resized derivative
-// would look soft stretched across a full-bleed backdrop.
-export function buildShowSummary(collection: Collection, showItems: LibraryItem[]): ShowSummary {
-  const mostRecentWithThumb = sortLibraryItems(showItems, "downloadedAt", "desc").find((i) => i.thumbnail)
-  const fallbackSmall = mostRecentWithThumb ? librarySmallThumbnailUrl(mostRecentWithThumb) : null
-  const fallbackOriginal = mostRecentWithThumb?.thumbnail ? mediaFileUrl(mostRecentWithThumb.thumbnail) : null
+// explicitly chosen cover if set, else latestItemThumbnailPath — the
+// server-computed "most recently downloaded descendant item's thumbnail"
+// (see LibraryRepo.LatestThumbnailsByCollection) — the "default to the last
+// downloaded file's image" fallback. Only falls through to the placeholder
+// icon (coverUrl*: null) when neither exists. coverUrlLarge always resolves
+// to the original (full-fidelity) tier of whichever source is used — a
+// resized derivative would look soft stretched across a full-bleed backdrop.
+// itemCount comes straight off the collection response (totalItemCount,
+// already rolled up server-side) — like the cover fallback, this used to
+// require fetching every item in the subtree just to count/sort them; now
+// it needs no items at all, so a show/album tile costs zero item fetches
+// whenever it already has an explicit cover.
+export function buildShowSummary(collection: Collection): ShowSummary {
+  const fallbackSmall = collection.latestItemThumbnailPath
+    ? librarySmallThumbnailUrl({ thumbnail: collection.latestItemThumbnailPath, thumbnailSmallPath: null })
+    : null
+  const fallbackOriginal = collection.latestItemThumbnailPath ? mediaFileUrl(collection.latestItemThumbnailPath) : null
   const coverUrlSmall = collection.coverImagePath ? collectionSmallCoverUrl(collection) : fallbackSmall
   const coverUrlLarge = collection.coverImagePath ? imageUrl(collection.coverImagePath) : fallbackOriginal
   return {
@@ -37,7 +43,7 @@ export function buildShowSummary(collection: Collection, showItems: LibraryItem[
     name: collection.name,
     coverUrlSmall,
     coverUrlLarge,
-    itemCount: showItems.length,
+    itemCount: collection.totalItemCount,
     isPrivate: collection.effectiveIsPrivate,
   }
 }

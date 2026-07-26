@@ -2,6 +2,7 @@ import { Link } from "react-router-dom"
 import { Music, X } from "lucide-react"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useRevealAll } from "@/components/library/RevealAllContext"
 import { useSettings } from "@/hooks/useSettings"
 import { librarySmallThumbnailUrl } from "@/lib/api"
@@ -52,19 +53,23 @@ export function BrowseTile({
         )}
         {unlocked && <Link to={`/browse/${item.id}`} className="absolute inset-0" aria-label={item.title} />}
         {onRemove && unlocked && (
-          <Button
-            type="button"
-            size="icon-xs"
-            title="Remove"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              onRemove()
-            }}
-            className="absolute right-1 top-1 z-10 bg-black/60 text-white opacity-0 hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100"
-          >
-            <X />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon-xs"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onRemove()
+                }}
+                className="absolute right-1 top-1 z-10 bg-black/60 text-white opacity-0 hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100"
+              >
+                <X />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Remove</TooltipContent>
+          </Tooltip>
         )}
         {showProgress && (
           <div className="absolute inset-x-0 bottom-0 h-1 bg-black/40">

@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { ChevronsDownUp, ChevronsUpDown } from "lucide-react"
 import { useCollections } from "@/hooks/useCollections"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,13 +23,25 @@ import { CollectionDialog } from "@/components/collections/CollectionDialog"
 import { CollectionTree } from "@/components/collections/CollectionTree"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { useBulkDeleteCollections } from "@/hooks/useCollections"
-import { buildCollectionTree } from "@/lib/collectionTree"
+import { buildCollectionTree, collectDescendantIds } from "@/lib/collectionTree"
 
 export function CollectionsPage() {
   const { data, isLoading, isError, error } = useCollections()
   const { selected, isSelected, toggle, clear, size, active } = useIdSelection()
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const bulkDeleteCollections = useBulkDeleteCollections()
+  // Collapsed by default (empty set) — the tree is opt-in expanded per
+  // node, or all at once via the toolbar's Expand all/Collapse all buttons.
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const tree = data ? buildCollectionTree(data) : []
+  const allIds = tree.flatMap(collectDescendantIds)
+  const toggleExpanded = (id: number) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   return (
     <div className="space-y-6">
@@ -100,9 +113,26 @@ export function CollectionsPage() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+
+            <div className="ml-auto flex gap-2">
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setExpandedIds(new Set(allIds))}>
+                <ChevronsUpDown className="h-4 w-4" />
+                Expand all
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setExpandedIds(new Set())}>
+                <ChevronsDownUp className="h-4 w-4" />
+                Collapse all
+              </Button>
+            </div>
           </div>
 
-          <CollectionTree nodes={buildCollectionTree(data)} isSelected={isSelected} onToggle={toggle} />
+          <CollectionTree
+            nodes={tree}
+            isSelected={isSelected}
+            onToggle={toggle}
+            isExpanded={(id) => expandedIds.has(id)}
+            onToggleExpanded={toggleExpanded}
+          />
         </>
       )}
     </div>

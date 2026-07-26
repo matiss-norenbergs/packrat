@@ -105,6 +105,12 @@ export interface Collection {
   // its own actually has any blurred content in its children.
   effectiveIsPrivate: boolean
   totalItemCount: number
+  // The thumbnail (original tier — see librarySmallThumbnailUrl for the
+  // fallback chain) of the most recently downloaded item anywhere in this
+  // collection's subtree — Browse's fallback cover for a show/album tile
+  // with no explicit coverImagePath set. Null if the subtree has no
+  // thumbnailed item at all.
+  latestItemThumbnailPath: string | null
   jellyfinLibraryId: string | null
   createdAt: string
   updatedAt: string
@@ -145,8 +151,11 @@ export interface LibraryQueryParams {
   collectionId?: number | null
   /** IN-match against a set of collection ids — used only to resolve a bulk-selected folder plus its nested subcollections into concrete items; takes precedence over collectionId when set. */
   collectionIds?: number[]
+  artistId?: number
   year?: number
   tags?: string[]
+  /** true = only items eligible for "Continue Watching" (tracked position, past the barely-started floor, short of the credits-rolled ceiling) */
+  inProgress?: boolean
   sortKey?: string
   sortDir?: string
   page?: number
@@ -265,16 +274,20 @@ export interface Artist {
   id: number
   name: string
   selectedImagePath: string | null
+  // Date-only string ("2006-01-02"), null when unset.
+  birthday: string | null
   createdAt: string
   usageCount: number
 }
 
 export interface CreateArtistRequest {
   name: string
+  birthday?: string | null
 }
 
 export interface UpdateArtistRequest {
   name: string
+  birthday?: string | null
 }
 
 export interface ArtistImage {
@@ -336,12 +349,17 @@ export interface Settings {
   ytdlpProxy: string
   ytdlpRateLimit: string
   ytdlpRetries: number
+  autoBackupIntervalHours: number
 }
 
 export interface YtDlpVersionInfo {
   currentVersion: string
   latestVersion: string | null
   updateAvailable: boolean
+}
+
+export interface AppVersion {
+  version: string
 }
 
 // Progress snapshot for the background image-derivative backfill (small/
@@ -450,6 +468,42 @@ export interface UpdateSettingsRequest {
   ytdlpProxy?: string
   ytdlpRateLimit?: string
   ytdlpRetries?: number
+  autoBackupIntervalHours?: number
+}
+
+export interface BackupHistoryEntry {
+  id: number
+  createdAt: string
+  triggerType: "manual" | "scheduled"
+  status: "success" | "failed"
+  fileName: string | null
+  fileSizeBytes: number | null
+  libraryItemsCount: number | null
+  collectionsCount: number | null
+  tagsCount: number | null
+  artistsCount: number | null
+  errorMessage: string | null
+}
+
+export interface BackupPreviewCollection {
+  path: string[]
+  name: string
+}
+
+export interface BackupPreviewItem {
+  title: string
+  originalUrl: string
+  collectionPath?: string[]
+  artistName?: string
+  tags?: string[]
+}
+
+export interface BackupContentPreview {
+  settingsCount: number
+  collections: BackupPreviewCollection[]
+  tags: string[]
+  artists: string[]
+  items: BackupPreviewItem[]
 }
 
 export interface ScannedFile {

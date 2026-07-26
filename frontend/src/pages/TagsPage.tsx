@@ -3,6 +3,7 @@ import { Lock, Pencil, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -138,33 +139,43 @@ function TagRow({
       </div>
 
       <div className="flex shrink-0 gap-1">
-        <TagDialog
-          tag={tag}
-          trigger={
-            <Button variant="ghost" size="icon" title="Rename">
-              <Pencil className="h-4 w-4" />
-            </Button>
-          }
-        />
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" title="Delete">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete "{tag.name}"?</AlertDialogTitle>
-              <AlertDialogDescription>
-                It will be removed from {tag.usageCount} item{tag.usageCount === 1 ? "" : "s"}.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => deleteTag.mutate(tag.id)}>Delete</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Tooltip>
+          <TagDialog
+            tag={tag}
+            trigger={
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+            }
+          />
+          <TooltipContent>Rename</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete "{tag.name}"?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  It will be removed from {tag.usageCount} item{tag.usageCount === 1 ? "" : "s"}.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => deleteTag.mutate(tag.id)}>Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <TooltipContent>Delete</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )

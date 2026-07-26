@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ArtistDialog } from "@/components/artists/ArtistDialog"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { useArtists, useBulkDeleteArtists, useDeleteArtist } from "@/hooks/useArtists"
@@ -142,33 +143,43 @@ function ArtistRow({
       </div>
 
       <div className="flex shrink-0 gap-1">
-        <ArtistDialog
-          artist={artist}
-          trigger={
-            <Button variant="ghost" size="icon" title="Rename">
-              <Pencil className="h-4 w-4" />
-            </Button>
-          }
-        />
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" title="Delete">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete "{artist.name}"?</AlertDialogTitle>
-              <AlertDialogDescription>
-                It will be cleared from {artist.usageCount} item{artist.usageCount === 1 ? "" : "s"}.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => deleteArtist.mutate(artist.id)}>Delete</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Tooltip>
+          <ArtistDialog
+            artist={artist}
+            trigger={
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+            }
+          />
+          <TooltipContent>Rename</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete "{artist.name}"?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  It will be cleared from {artist.usageCount} item{artist.usageCount === 1 ? "" : "s"}.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => deleteArtist.mutate(artist.id)}>Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <TooltipContent>Delete</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )
