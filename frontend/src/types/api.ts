@@ -105,6 +105,10 @@ export interface Collection {
   // its own actually has any blurred content in its children.
   effectiveIsPrivate: boolean
   totalItemCount: number
+  // Gaps in this collection's own items' sequence numbers (same direct-only
+  // scope as itemCount) — null when there are fewer than two sequence-
+  // numbered items, or none at all missing between the smallest and largest.
+  sequenceGaps: { min: number; max: number; count: number; missing: number[] } | null
   // The thumbnail (original tier — see librarySmallThumbnailUrl for the
   // fallback chain) of the most recently downloaded item anywhere in this
   // collection's subtree — Browse's fallback cover for a show/album tile

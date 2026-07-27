@@ -31,6 +31,7 @@ import type {
   UpdateLibraryItemRequest,
 } from "@/types/api"
 import { downloadsQueryKey } from "./useDownloads"
+import { tagsQueryKey } from "./useTags"
 
 export const libraryQueryKey = ["library"] as const
 
@@ -74,6 +75,9 @@ export function useDeleteLibraryItem() {
     onSuccess: () => {
       toast.success("Removed from library")
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      // Deleting the last item carrying a tag drops that tag's usageCount to
+      // 0 — the reveal-all button (and the tag picker) need the fresh count.
+      queryClient.invalidateQueries({ queryKey: tagsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to delete: ${err.message}`),
   })
@@ -86,6 +90,10 @@ export function useUpdateLibraryItem() {
     onSuccess: () => {
       toast.success("Saved")
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      // The edit dialog's tags field can add/remove tags on this item,
+      // changing usageCount — the reveal-all button (and the tag picker)
+      // need the fresh count, not just this one item's own blurred flag.
+      queryClient.invalidateQueries({ queryKey: tagsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to save: ${err.message}`),
   })
@@ -128,6 +136,7 @@ export function useBulkAssignTags() {
     onSuccess: (_data, payload) => {
       toast.success(`Tags updated on ${payload.itemIds.length} ${payload.itemIds.length === 1 ? "file" : "files"}`)
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      queryClient.invalidateQueries({ queryKey: tagsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to update tags: ${err.message}`),
   })
@@ -140,6 +149,7 @@ export function useBulkDeleteLibraryItems() {
     onSuccess: (result) => {
       toast.success(`Deleted ${result.deleted} ${result.deleted === 1 ? "file" : "files"}`)
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      queryClient.invalidateQueries({ queryKey: tagsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to delete: ${err.message}`),
   })

@@ -505,6 +505,80 @@ func (r *LibraryRepo) LatestThumbnailsByCollection(ctx context.Context) (map[int
 	return out, rows.Err()
 }
 
+// SequenceGap describes gaps in one collection's own (direct-items-only —
+// same scope as ItemCounts, not the recursive subtree) sequence numbers.
+// Min/Max are the smallest/largest sequence_number present; Missing lists up
+// to sequenceGapSampleCap of the missing integers in [Min,Max], ascending;
+// Count is the true total, which can exceed len(Missing) when the range is
+// large (e.g. a mistyped sequence number far from the rest).
+type SequenceGap struct {
+	Min     int
+	Max     int
+	Count   int
+	Missing []int
+}
+
+// sequenceGapSampleCap bounds how many missing numbers SequenceGapsByCollection
+// actually collects per collection, so a mistyped sequence number (e.g.
+// 100000 instead of 10) can't force building — and shipping to the client on
+// every collections-list fetch — a six-figure slice. Count still reports the
+// true total.
+const sequenceGapSampleCap = 50
+
+// SequenceGapsByCollection returns gap info only for collections that
+// actually have one — a collection with zero or one sequence-numbered item
+// (nothing to have a "range" in) or a fully dense sequence is absent from
+// the map, same convention as LatestThumbnailsByCollection.
+func (r *LibraryRepo) SequenceGapsByCollection(ctx context.Context) (map[int64]SequenceGap, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT collection_id, sequence_number FROM library
+		WHERE collection_id IS NOT NULL AND sequence_number IS NOT NULL
+		ORDER BY collection_id, sequence_number`)
+	if err != nil {
+		return nil, fmt.Errorf("listing sequence numbers: %w", err)
+	}
+	defer rows.Close()
+
+	values := make(map[int64][]int)
+	for rows.Next() {
+		var collectionID int64
+		var seq int
+		if err := rows.Scan(&collectionID, &seq); err != nil {
+			return nil, fmt.Errorf("scanning sequence number: %w", err)
+		}
+		values[collectionID] = append(values[collectionID], seq)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make(map[int64]SequenceGap)
+	for collectionID, seqs := range values {
+		min, max := seqs[0], seqs[len(seqs)-1] // rows arrive pre-sorted by sequence_number
+		if min == max {
+			continue
+		}
+		present := make(map[int]bool, len(seqs))
+		for _, s := range seqs {
+			present[s] = true
+		}
+		gap := SequenceGap{Min: min, Max: max}
+		for n := min; n <= max; n++ {
+			if present[n] {
+				continue
+			}
+			gap.Count++
+			if len(gap.Missing) < sequenceGapSampleCap {
+				gap.Missing = append(gap.Missing, n)
+			}
+		}
+		if gap.Count > 0 {
+			out[collectionID] = gap
+		}
+	}
+	return out, nil
+}
+
 // UpdateGenerateNFO toggles whether a .nfo sidecar file should be kept in
 // sync for this item — kept separate from the metadata bundle (UpdateMetadata)
 // since toggling it needs to trigger NFO generation itself, not just persist

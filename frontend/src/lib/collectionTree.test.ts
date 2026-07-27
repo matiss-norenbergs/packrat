@@ -26,6 +26,7 @@ function makeCollection(overrides: Partial<Collection> & { id: number; name: str
     itemCount: 0,
     effectiveIsPrivate: false,
     totalItemCount: 0,
+    sequenceGaps: null,
     latestItemThumbnailPath: null,
     jellyfinLibraryId: null,
     createdAt: "2026-01-01T00:00:00Z",

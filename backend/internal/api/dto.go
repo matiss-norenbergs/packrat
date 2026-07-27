@@ -447,6 +447,13 @@ type UpdateCollectionRequest struct {
 	BrowseAsShow        bool    `json:"browseAsShow"`
 }
 
+type SequenceGapResponse struct {
+	Min     int   `json:"min"`
+	Max     int   `json:"max"`
+	Count   int   `json:"count"`
+	Missing []int `json:"missing"`
+}
+
 type CollectionResponse struct {
 	ID                   int64   `json:"id"`
 	Name                 string  `json:"name"`
@@ -475,6 +482,10 @@ type CollectionResponse struct {
 	// holds no items directly and its items live in unmarked children.
 	EffectiveIsPrivate bool `json:"effectiveIsPrivate"`
 	TotalItemCount     int  `json:"totalItemCount"`
+	// SequenceGaps summarizes gaps in this collection's own items' sequence
+	// numbers (same direct-only scope as ItemCount). Nil when there's
+	// nothing to report — see LibraryRepo.SequenceGapsByCollection.
+	SequenceGaps *SequenceGapResponse `json:"sequenceGaps"`
 	// LatestItemThumbnailPath is the thumbnail of the most recently
 	// downloaded item anywhere in this collection's subtree (rolled up the
 	// same way TotalItemCount is) — Browse's fallback cover for a show/album
@@ -660,7 +671,7 @@ type UpdateSettingsRequest struct {
 	AutoBackupIntervalHours  *int      `json:"autoBackupIntervalHours" binding:"omitempty,oneof=0 6 12 24 72 168"`
 }
 
-func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int, latestItemThumbnailPath *string) CollectionResponse {
+func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int, latestItemThumbnailPath *string, sequenceGap *SequenceGapResponse) CollectionResponse {
 	return CollectionResponse{
 		ID:                      c.ID,
 		Name:                    c.Name,
@@ -680,6 +691,7 @@ func toCollectionResponse(c models.Collection, path string, itemCount int, effec
 		ItemCount:               itemCount,
 		EffectiveIsPrivate:      effectiveIsPrivate,
 		TotalItemCount:          totalItemCount,
+		SequenceGaps:            sequenceGap,
 		LatestItemThumbnailPath: latestItemThumbnailPath,
 		JellyfinLibraryID:       c.JellyfinLibrary,
 		CreatedAt:               c.CreatedAt.Format(timeFormat),
