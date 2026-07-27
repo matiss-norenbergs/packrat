@@ -107,6 +107,7 @@ func run() error {
 	historyRepo := repository.NewHistoryRepo(conn)
 	tagsRepo := repository.NewTagsRepo(conn)
 	artistsRepo := repository.NewArtistsRepo(conn)
+	compareListRepo := repository.NewCompareListRepo(conn)
 	usersRepo := repository.NewUsersRepo(conn)
 	backupHistoryRepo := repository.NewBackupHistoryRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath, settingsRepo)
@@ -188,6 +189,7 @@ func run() error {
 		HistoryRepo:          historyRepo,
 		TagsRepo:             tagsRepo,
 		ArtistsRepo:          artistsRepo,
+		CompareListRepo:      compareListRepo,
 		UsersRepo:            usersRepo,
 		BackupHistoryRepo:    backupHistoryRepo,
 		YtDlp:                ytdlpSvc,

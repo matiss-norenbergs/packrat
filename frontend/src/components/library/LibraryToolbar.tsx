@@ -35,6 +35,7 @@ import { useLibraryFacets } from "@/hooks/useLibrary"
 import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
+import { AddToCompareListDialog } from "./AddToCompareListDialog"
 import { BulkAssignTagsDialog } from "./BulkAssignTagsDialog"
 import { BulkDeleteLibraryItemsDialog } from "./BulkDeleteLibraryItemsDialog"
 import { BulkEditLibraryItemsDialog } from "./BulkEditLibraryItemsDialog"
@@ -76,6 +77,7 @@ export function LibraryToolbar() {
   const [bulkTagsOpen, setBulkTagsOpen] = useState(false)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [editSequenceOpen, setEditSequenceOpen] = useState(false)
+  const [addToCompareOpen, setAddToCompareOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   // Draft copies of the filter/sort controls that live inside the dialog —
   // edits only touch this local state, so opening the picker doesn't
@@ -358,12 +360,14 @@ export function LibraryToolbar() {
             <DropdownMenuItem onSelect={() => setBulkTagsOpen(true)}>Assign tags…</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setBulkDeleteOpen(true)}>Delete selected…</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setEditSequenceOpen(true)}>Edit sequence…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setAddToCompareOpen(true)}>Add to compare list…</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <BulkEditLibraryItemsDialog open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
         <BulkAssignTagsDialog open={bulkTagsOpen} onOpenChange={setBulkTagsOpen} />
         <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
         <EditSequenceDialog open={editSequenceOpen} onOpenChange={setEditSequenceOpen} />
+        <AddToCompareListDialog open={addToCompareOpen} onOpenChange={setAddToCompareOpen} />
 
         {view === "list" && (
           <DropdownMenu>
