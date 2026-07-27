@@ -53,6 +53,12 @@ export function CollectionFolderTile({ node, onClick }: { node: CollectionTreeNo
           <p className="text-xs text-muted-foreground">
             {node.itemCount} {node.itemCount === 1 ? "file" : "files"}
           </p>
+          {node.sequenceGaps && (
+            <p className="text-xs text-amber-600 dark:text-amber-500">
+              Missing seq: {node.sequenceGaps.missing.slice(0, 5).join(", ")}
+              {node.sequenceGaps.count > 5 ? ` (+${node.sequenceGaps.count - 5} more)` : ""}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

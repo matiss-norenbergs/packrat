@@ -16,11 +16,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useUpdateLibraryItem } from "@/hooks/useLibrary"
+import { useLibraryQuery, useUpdateLibraryItem } from "@/hooks/useLibrary"
 import { useTags } from "@/hooks/useTags"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { artistIdToSelectValue, baseNameWithoutExt, buildLibraryItemUpdatePayload } from "@/lib/libraryItemEdit"
 import { parseSeasonEpisode } from "@/lib/seasonEpisode"
+import { computeSequenceGaps } from "@/lib/sequenceGaps"
 import { formatDuration } from "@/lib/utils"
 import { ArtistSelect } from "./ArtistSelect"
 import { useRevealAll } from "./RevealAllContext"
@@ -50,6 +51,21 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
   const { data: allTags } = useTags()
   const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
   const revealed = isRevealed(item.id)
+
+  // Siblings in the same collection, fetched only while the dialog is open —
+  // used to show which sequence numbers are already taken/missing. Overlays
+  // this item's own in-progress form value below, so the hint answers "if I
+  // save this number" rather than only ever showing the stale pre-edit state.
+  const { data: siblings } = useLibraryQuery(
+    { collectionId: item.collectionId ?? undefined },
+    open && item.collectionId != null,
+  )
+  const parsedSequenceNumber = sequenceNumber.trim() === "" ? null : Number(sequenceNumber)
+  const sequenceGapInfo = computeSequenceGaps(
+    (siblings?.items ?? []).map((s) =>
+      s.id === item.id ? { sequenceNumber: parsedSequenceNumber } : { sequenceNumber: s.sequenceNumber },
+    ),
+  )
 
   const resetFields = () => {
     setTitle(item.title)
@@ -282,6 +298,15 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
                 />
               </div>
             </div>
+            {sequenceGapInfo && (
+              <p className="text-xs text-muted-foreground">
+                Sequence {sequenceGapInfo.min}–{sequenceGapInfo.max} · Missing:{" "}
+                {sequenceGapInfo.missing.length === 0
+                  ? "none"
+                  : sequenceGapInfo.missing.slice(0, 10).join(", ") +
+                    (sequenceGapInfo.missing.length > 10 ? ` (+${sequenceGapInfo.missing.length - 10} more)` : "")}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
               Title, Artist, Year, Season #, and Sequence # are also written into the file's own
               metadata tags on save.

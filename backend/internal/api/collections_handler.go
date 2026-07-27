@@ -35,6 +35,11 @@ func ListCollections(repo *repository.CollectionsRepo, libraryRepo *repository.L
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		sequenceGaps, err := libraryRepo.SequenceGapsByCollection(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		paths := collectionPaths(rows)
 		privacy := effectivePrivacyMap(rows)
 		totals := totalItemCounts(rows, itemCounts)
@@ -45,7 +50,11 @@ func ListCollections(repo *repository.CollectionsRepo, libraryRepo *repository.L
 			if t, ok := rolledUpThumbnails[col.ID]; ok {
 				thumb = &t
 			}
-			out = append(out, toCollectionResponse(col, paths[col.ID], itemCounts[col.ID], privacy[col.ID], totals[col.ID], thumb))
+			var seqGap *SequenceGapResponse
+			if g, ok := sequenceGaps[col.ID]; ok {
+				seqGap = &SequenceGapResponse{Min: g.Min, Max: g.Max, Count: g.Count, Missing: g.Missing}
+			}
+			out = append(out, toCollectionResponse(col, paths[col.ID], itemCounts[col.ID], privacy[col.ID], totals[col.ID], thumb, seqGap))
 		}
 		c.JSON(http.StatusOK, out)
 	}

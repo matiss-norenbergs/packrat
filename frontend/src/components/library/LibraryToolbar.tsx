@@ -38,6 +38,7 @@ import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
 import { BulkAssignTagsDialog } from "./BulkAssignTagsDialog"
 import { BulkDeleteLibraryItemsDialog } from "./BulkDeleteLibraryItemsDialog"
 import { BulkEditLibraryItemsDialog } from "./BulkEditLibraryItemsDialog"
+import { EditSequenceDialog } from "./EditSequenceDialog"
 import { LIBRARY_COLUMNS, useLibraryColumns } from "./LibraryColumnsContext"
 import { useRevealAll } from "./RevealAllContext"
 import { useSelection } from "./SelectionContext"
@@ -74,6 +75,7 @@ export function LibraryToolbar() {
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [bulkTagsOpen, setBulkTagsOpen] = useState(false)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [editSequenceOpen, setEditSequenceOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   // Draft copies of the filter/sort controls that live inside the dialog —
   // edits only touch this local state, so opening the picker doesn't
@@ -88,14 +90,21 @@ export function LibraryToolbar() {
   const view =
     settings?.libraryView === "folders" ? "folders" : settings?.libraryView === "list" ? "list" : "grid"
   const mode = (settings?.libraryMode as "manage" | "details") || "manage"
-  // Whether any collection is private (itself or an inherited ancestor) and
-  // has at least one item somewhere under it — uses the inheritance-aware
-  // effectiveIsPrivate/totalItemCount fields, not the raw isPrivate/itemCount
-  // (a private *parent* used purely for organization has itemCount 0 of its
-  // own, and its items live in a child whose own isPrivate is false since it
-  // only inherits — the raw fields alone would always read as "nothing
-  // blurred" in that, very normal, nested-collection setup).
-  const hasBlurred = (collections ?? []).some((c) => c.effectiveIsPrivate && c.totalItemCount > 0)
+  // Whether anything in the library is currently blurred — either a whole
+  // collection (itself or an inherited ancestor) is private and has at
+  // least one item somewhere under it, using the inheritance-aware
+  // effectiveIsPrivate/totalItemCount fields (a private *parent* used purely
+  // for organization has itemCount 0 of its own, with its items living in a
+  // non-private child that only inherits — the raw isPrivate/itemCount alone
+  // would always read as "nothing blurred" in that normal nested-collection
+  // setup) — or a private tag is applied to at least one item, independent
+  // of any collection (backend's blurred computation ORs both sources
+  // together; this needs to match, or a lone private-tagged item in an
+  // otherwise-public collection leaves the reveal button permanently
+  // disabled with no way to un-blur it).
+  const hasBlurred =
+    (collections ?? []).some((c) => c.effectiveIsPrivate && c.totalItemCount > 0) ||
+    (allTags ?? []).some((t) => t.isPrivate && t.usageCount > 0)
   const search = searchParams.get("q") ?? ""
   const [searchInput, setSearchInput] = useState(search)
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
@@ -348,11 +357,13 @@ export function LibraryToolbar() {
             <DropdownMenuItem onSelect={() => setBulkEditOpen(true)}>Edit…</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setBulkTagsOpen(true)}>Assign tags…</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setBulkDeleteOpen(true)}>Delete selected…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setEditSequenceOpen(true)}>Edit sequence…</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <BulkEditLibraryItemsDialog open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
         <BulkAssignTagsDialog open={bulkTagsOpen} onOpenChange={setBulkTagsOpen} />
         <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
+        <EditSequenceDialog open={editSequenceOpen} onOpenChange={setEditSequenceOpen} />
 
         {view === "list" && (
           <DropdownMenu>

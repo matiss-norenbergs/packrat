@@ -335,3 +335,67 @@ func TestLibraryRepo_FindDuplicate(t *testing.T) {
 		}
 	})
 }
+
+func TestLibraryRepo_SequenceGapsByCollection(t *testing.T) {
+	ctx := context.Background()
+	downloadsRepo := openTestDB(t)
+	repo := NewLibraryRepo(downloadsRepo.db)
+	collectionsRepo := NewCollectionsRepo(downloadsRepo.db)
+
+	mustCreateCollection := func(name string) int64 {
+		id, err := collectionsRepo.Create(ctx, &models.Collection{
+			Name: name, RootPath: name, DefaultQuality: "best", DefaultDownloadType: "video",
+		})
+		if err != nil {
+			t.Fatalf("creating collection %q: %v", name, err)
+		}
+		return id
+	}
+	mustCreateItem := func(collectionID int64, seq *int) {
+		_, err := repo.Create(ctx, &models.LibraryItem{
+			Title: "item", Filename: "item.mp4", Path: "item.mp4",
+			CollectionID: &collectionID, SequenceNumber: seq, Status: "completed",
+		})
+		if err != nil {
+			t.Fatalf("creating item: %v", err)
+		}
+	}
+	seq := func(n int) *int { return &n }
+
+	gapped := mustCreateCollection("Gapped")
+	mustCreateItem(gapped, seq(1))
+	mustCreateItem(gapped, seq(2))
+	mustCreateItem(gapped, seq(3))
+	mustCreateItem(gapped, seq(5))
+
+	dense := mustCreateCollection("Dense")
+	mustCreateItem(dense, seq(1))
+	mustCreateItem(dense, seq(2))
+	mustCreateItem(dense, seq(3))
+
+	single := mustCreateCollection("Single")
+	mustCreateItem(single, seq(1))
+
+	unsequenced := mustCreateCollection("Unsequenced")
+	mustCreateItem(unsequenced, nil)
+	mustCreateItem(unsequenced, nil)
+
+	gaps, err := repo.SequenceGapsByCollection(ctx)
+	if err != nil {
+		t.Fatalf("SequenceGapsByCollection: %v", err)
+	}
+
+	got, ok := gaps[gapped]
+	if !ok {
+		t.Fatalf("expected a gap entry for the gapped collection, got none in %+v", gaps)
+	}
+	if got.Min != 1 || got.Max != 5 || got.Count != 1 || len(got.Missing) != 1 || got.Missing[0] != 4 {
+		t.Fatalf("unexpected gap for gapped collection: %+v", got)
+	}
+
+	for name, id := range map[string]int64{"dense": dense, "single-item": single, "unsequenced": unsequenced} {
+		if _, ok := gaps[id]; ok {
+			t.Fatalf("expected no gap entry for the %s collection, got %+v", name, gaps[id])
+		}
+	}
+}
