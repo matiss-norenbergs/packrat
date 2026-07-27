@@ -377,6 +377,13 @@ type BulkAssignTagsRequest struct {
 	Tags    []string `json:"tags"`
 }
 
+// AddToCompareListRequest is POST /api/compare-list's body — a plain id
+// list, same shape as BulkDeleteRequest but semantically an add rather than
+// a delete.
+type AddToCompareListRequest struct {
+	ItemIDs []int64 `json:"itemIds" binding:"required,min=1"`
+}
+
 // BulkDeleteRequest is shared by the tags/artists/collections bulk-delete
 // endpoints — all three delete by plain id list.
 type BulkDeleteRequest struct {

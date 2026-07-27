@@ -1,4 +1,5 @@
 import type {
+  AddToCompareListRequest,
   AppVersion,
   Artist,
   ArtistImage,
@@ -497,6 +498,25 @@ export function bulkDeleteTags(payload: BulkDeleteRequest): Promise<BulkDeleteRe
     method: "POST",
     body: JSON.stringify(payload),
   })
+}
+
+export function fetchCompareList(): Promise<LibraryItem[]> {
+  return request<LibraryItem[]>("/compare-list")
+}
+
+export function addToCompareList(payload: AddToCompareListRequest): Promise<void> {
+  return request<void>("/compare-list", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function removeFromCompareList(id: number): Promise<void> {
+  return request<void>(`/compare-list/${id}`, { method: "DELETE" })
+}
+
+export function clearCompareList(): Promise<void> {
+  return request<void>("/compare-list", { method: "DELETE" })
 }
 
 export function fetchArtists(): Promise<Artist[]> {

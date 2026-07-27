@@ -41,7 +41,7 @@ export function BrowseItemPage() {
   if (isLoading) {
     return (
       <div className="p-4 md:p-6">
-        <div className="-m-4 h-[calc(100vh-57px)] md:-m-6">
+        <div className="-m-4 h-screen md:-m-6">
           <Skeleton className="h-full w-full rounded-none" />
         </div>
         <div className="space-y-2 pt-6">
@@ -71,7 +71,7 @@ export function BrowseItemPage() {
           items={items}
           backTo={backTo}
           basePath="/browse"
-          playerHeightClass="h-[calc(100vh-57px)]"
+          playerHeightClass="h-screen"
           resumeAt={resumeAt}
           resumePaused={resumePaused}
           ignorePrivacy={settings?.browseIgnorePrivacy ?? false}

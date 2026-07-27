@@ -26,6 +26,7 @@ type Deps struct {
 	HistoryRepo          *repository.HistoryRepo
 	TagsRepo             *repository.TagsRepo
 	ArtistsRepo          *repository.ArtistsRepo
+	CompareListRepo      *repository.CompareListRepo
 	UsersRepo            *repository.UsersRepo
 	BackupHistoryRepo    *repository.BackupHistoryRepo
 	YtDlp                *downloader.YtDlpService
@@ -126,6 +127,11 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.PATCH("/tags/:id", UpdateTag(deps.TagsRepo))
 		api.DELETE("/tags/:id", DeleteTag(deps.TagsRepo))
 		api.POST("/tags/bulk-delete", BulkDeleteTags(deps.DB, deps.TagsRepo))
+
+		api.GET("/compare-list", ListCompareList(deps.CompareListRepo, deps.TagsRepo, deps.CollectionsRepo, deps.MediaRoot))
+		api.POST("/compare-list", AddToCompareList(deps.CompareListRepo))
+		api.DELETE("/compare-list/:id", RemoveFromCompareList(deps.CompareListRepo))
+		api.DELETE("/compare-list", ClearCompareList(deps.CompareListRepo))
 
 		api.GET("/artists", ListArtists(deps.ArtistsRepo))
 		api.POST("/artists", CreateArtist(deps.ArtistsRepo))

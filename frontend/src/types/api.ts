@@ -226,6 +226,10 @@ export interface BulkAssignTagsRequest {
   tags: string[]
 }
 
+export interface AddToCompareListRequest {
+  itemIds: number[]
+}
+
 export interface BulkDeleteRequest {
   ids: number[]
 }

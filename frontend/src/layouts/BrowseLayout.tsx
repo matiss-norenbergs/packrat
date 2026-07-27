@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { Navigate, Outlet, useLocation } from "react-router-dom"
+import { matchPath, Navigate, Outlet, useLocation } from "react-router-dom"
 import { Toaster } from "@/components/ui/sonner"
 import { useAuthStatus } from "@/hooks/useAuth"
 import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
@@ -36,10 +36,19 @@ function AuthedBrowseLayout() {
     window.scrollTo(0, 0)
   }, [location.pathname])
 
+  // The single-item player (/browse/:id) goes edge-to-edge, full viewport
+  // — everything else in Browse keeps the header. This stays a conditional
+  // within one layout, rather than a separate route branch, specifically so
+  // MiniPlayerProvider/MiniPlayerDock (below) keep working exactly as they
+  // do today: pulling /browse/:id out into its own branch would either break
+  // the "minimize back to Browse" hand-off or require lifting the mini-player
+  // context somewhere shared, both worse than one conditional here.
+  const isSingleItemView = matchPath("/browse/:id", location.pathname) != null
+
   return (
     <MiniPlayerProvider>
       <div className="min-h-screen w-full bg-background text-foreground">
-        <BrowseHeader />
+        {!isSingleItemView && <BrowseHeader />}
         <main>
           <Outlet />
         </main>
