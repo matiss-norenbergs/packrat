@@ -129,8 +129,9 @@ export function LibraryToolbar() {
   // otherwise-public collection leaves the reveal button permanently
   // disabled with no way to un-blur it).
   const hasBlurred =
-    (collections ?? []).some((c) => c.effectiveIsPrivate && c.totalItemCount > 0) ||
-    (allTags ?? []).some((t) => t.isPrivate && t.usageCount > 0)
+    !!settings?.privacyEnabled &&
+    ((collections ?? []).some((c) => c.effectiveIsPrivate && c.totalItemCount > 0) ||
+      (allTags ?? []).some((t) => t.isPrivate && t.usageCount > 0))
   const search = searchParams.get("q") ?? ""
   const [searchInput, setSearchInput] = useState(search)
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
@@ -278,24 +279,31 @@ export function LibraryToolbar() {
         )}
       </Button>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={revealAll ? "secondary" : "outline"}
-            size="icon"
-            className="ml-auto"
-            disabled={!hasBlurred}
-            onClick={toggleRevealAll}
-          >
-            {revealAll ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{revealAll ? "Hide all private items" : "Reveal all private items"}</TooltipContent>
-      </Tooltip>
+      {settings?.privacyEnabled && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={revealAll ? "secondary" : "outline"}
+              size="icon"
+              className="ml-auto"
+              disabled={!hasBlurred}
+              onClick={toggleRevealAll}
+            >
+              {revealAll ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{revealAll ? "Hide all private items" : "Reveal all private items"}</TooltipContent>
+        </Tooltip>
+      )}
 
       <Popover open={settingsPopoverOpen} onOpenChange={openSettingsPopover}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="icon" aria-label="Library display settings">
+          <Button
+            variant="outline"
+            size="icon"
+            className={!settings?.privacyEnabled ? "ml-auto" : undefined}
+            aria-label="Library display settings"
+          >
             <Settings className="h-4 w-4" />
           </Button>
         </PopoverTrigger>

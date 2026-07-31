@@ -40,7 +40,7 @@ export function BrowseShowTile({ show }: { show: ShowSummary }) {
   const revealKey = revealKeyFor(show.collectionId)
   const revealed = isRevealed(revealKey)
   const toggleReveal = () => toggleItem(revealKey)
-  const effectiveBlurred = show.isPrivate && !settings?.browseIgnorePrivacy
+  const effectiveBlurred = !!settings?.privacyEnabled && show.isPrivate && !settings?.browseIgnorePrivacy
   const unlocked = !effectiveBlurred || revealed
 
   return (

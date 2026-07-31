@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { CollectionDialog } from "./CollectionDialog"
 import { useDeleteCollection } from "@/hooks/useCollections"
 import { useArtists } from "@/hooks/useArtists"
+import { useSettings } from "@/hooks/useSettings"
 import type { CollectionTreeNode } from "@/lib/collectionTree"
 
 interface SelectionProps {
@@ -74,6 +75,7 @@ function CollectionNode({
 }: { node: CollectionTreeNode; artistNameById: Map<number, string> } & SelectionProps & ExpansionProps) {
   const expanded = isExpanded(node.id)
   const deleteCollection = useDeleteCollection()
+  const { data: settings } = useSettings()
   const hasChildren = node.children.length > 0
 
   return (
@@ -140,7 +142,7 @@ function CollectionNode({
               </Popover>
               <TooltipContent>Collection details</TooltipContent>
             </Tooltip>
-            {node.isPrivate && (
+            {settings?.privacyEnabled && node.isPrivate && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span>

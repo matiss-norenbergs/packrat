@@ -218,6 +218,14 @@ export interface UpdateLibraryProgressRequest {
   positionSeconds: number
 }
 
+// GET /library/:id/probe-metadata — a read-only ffprobe pass over the item's
+// actual media file, used by the Edit dialog's rescan-resolution/duration
+// prompt. Never persisted server-side by this endpoint.
+export interface LibraryItemProbeResult {
+  resolution: string | null
+  durationSeconds: number | null
+}
+
 export interface LibraryItemMetadataPreview {
   title: string
   uploader: string
@@ -350,6 +358,7 @@ export interface Settings {
   libraryPaginationEnabled: boolean
   libraryPageSize: number
   thumbnailFrameCount: number
+  privacyEnabled: boolean
   privacyBlurStrength: string
   browseIgnorePrivacy: boolean
   skipDownloadPreview: boolean
@@ -364,6 +373,7 @@ export interface Settings {
   ytdlpRateLimit: string
   ytdlpRetries: number
   autoBackupIntervalHours: number
+  backupRetentionCount: number
 }
 
 export interface YtDlpVersionInfo {
@@ -469,6 +479,7 @@ export interface UpdateSettingsRequest {
   libraryPaginationEnabled?: boolean
   libraryPageSize?: number
   thumbnailFrameCount?: number
+  privacyEnabled?: boolean
   privacyBlurStrength?: string
   browseIgnorePrivacy?: boolean
   skipDownloadPreview?: boolean
@@ -483,6 +494,7 @@ export interface UpdateSettingsRequest {
   ytdlpRateLimit?: string
   ytdlpRetries?: number
   autoBackupIntervalHours?: number
+  backupRetentionCount?: number
 }
 
 export interface BackupHistoryEntry {
@@ -618,4 +630,13 @@ export interface Stats {
   libraryVideoCount: number
   libraryAudioCount: number
   totalStorageBytes: number
+}
+
+// One calendar day's tally from GET /stats/library-growth, oldest first.
+// cumulative is a running total over the item's entire history, not just
+// the returned range.
+export interface LibraryGrowthPoint {
+  date: string
+  count: number
+  cumulative: number
 }

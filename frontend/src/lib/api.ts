@@ -32,6 +32,8 @@ import type {
   LibraryItem,
   LibraryImportPreview,
   LibraryItemMetadataPreview,
+  LibraryItemProbeResult,
+  LibraryGrowthPoint,
   LibraryListResponse,
   LibraryQueryParams,
   LoginRequest,
@@ -259,6 +261,10 @@ export function refreshLibraryItemMetadata(id: number): Promise<LibraryItem> {
   return request<LibraryItem>(`/library/${id}/refresh-metadata`, { method: "POST" })
 }
 
+export function probeLibraryItemMetadata(id: number): Promise<LibraryItemProbeResult> {
+  return request<LibraryItemProbeResult>(`/library/${id}/probe-metadata`)
+}
+
 export function redownloadLibraryItem(id: number): Promise<{ id: number }> {
   return request<{ id: number }>(`/library/${id}/redownload`, { method: "POST" })
 }
@@ -410,6 +416,10 @@ export function clearDownloadLog(): Promise<{ deleted: number }> {
 
 export function fetchStats(): Promise<Stats> {
   return request<Stats>("/stats")
+}
+
+export function fetchLibraryGrowth(): Promise<LibraryGrowthPoint[]> {
+  return request<LibraryGrowthPoint[]>("/stats/library-growth")
 }
 
 export function exportSettingsBackup(password: string): Promise<BackupEnvelope> {

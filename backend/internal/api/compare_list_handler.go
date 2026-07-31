@@ -13,7 +13,7 @@ import (
 // ListCompareList returns every item currently on the compare list, oldest
 // added first — the same tag/privacy resolution ListLibrary does, so a
 // private item shows blurred here exactly like everywhere else.
-func ListCompareList(repo *repository.CompareListRepo, tagsRepo *repository.TagsRepo, collectionsRepo *repository.CollectionsRepo, mediaRoot string) gin.HandlerFunc {
+func ListCompareList(repo *repository.CompareListRepo, tagsRepo *repository.TagsRepo, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
@@ -42,11 +42,16 @@ func ListCompareList(repo *repository.CompareListRepo, tagsRepo *repository.Tags
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), settingsRepo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 
 		out := make([]LibraryItemResponse, 0, len(rows))
 		for _, item := range rows {
-			blurred := item.CollectionID != nil && privacy[*item.CollectionID]
-			if !blurred {
+			blurred := privacyEnabled && item.CollectionID != nil && privacy[*item.CollectionID]
+			if !blurred && privacyEnabled {
 				for _, t := range tagsByID[item.ID] {
 					if privateTagNames[t] {
 						blurred = true

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react"
-import { Eye, EyeOff, ImageIcon, Info, Plus, X } from "lucide-react"
+import { Eye, EyeOff, ImageIcon, Plus, X } from "lucide-react"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,7 +14,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { FieldLabel } from "@/components/ui/info-popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Select,
@@ -40,48 +40,6 @@ interface CollectionDialogProps {
    * collection's parent is fixed at creation time and cannot be changed. */
   parentId?: number
   trigger?: ReactNode
-}
-
-// A small info icon next to a field's label, opening a popover with the
-// field's explanation on hover — replaces the old always-visible hint
-// paragraph below each input, so the form reads shorter at a glance while
-// the explanation stays one hover away. Popover has no built-in hover mode,
-// so open/close is driven manually here — both the trigger and the content
-// itself need the enter/leave handlers, or moving the mouse off the small
-// icon and onto the content would immediately close it.
-function FieldInfoPopover({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="text-muted-foreground transition hover:text-foreground"
-          aria-label="More info"
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
-        >
-          <Info className="h-3.5 w-3.5" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="text-xs text-muted-foreground"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-      >
-        {children}
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-function FieldLabel({ htmlFor, children, info }: { htmlFor: string; children: ReactNode; info: ReactNode }) {
-  return (
-    <div className="flex items-center gap-1">
-      <Label htmlFor={htmlFor}>{children}</Label>
-      <FieldInfoPopover>{info}</FieldInfoPopover>
-    </div>
-  )
 }
 
 export function CollectionDialog({ collection, parentId, trigger }: CollectionDialogProps) {
@@ -418,21 +376,23 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
                 </div>
               </div>
 
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="collection-private"
-                  checked={isPrivate}
-                  onCheckedChange={(v) => setIsPrivate(v === true)}
-                />
-                <div className="space-y-1">
-                  <Label htmlFor="collection-private" className="font-normal">
-                    Private
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Blurs thumbnails for everything in this collection, including sub-collections.
-                  </p>
+              {settings?.privacyEnabled && (
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="collection-private"
+                    checked={isPrivate}
+                    onCheckedChange={(v) => setIsPrivate(v === true)}
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="collection-private" className="font-normal">
+                      Private
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Blurs thumbnails for everything in this collection, including sub-collections.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex items-start gap-2">
                 <Checkbox

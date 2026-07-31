@@ -701,6 +701,40 @@ func (r *LibraryRepo) Stats(ctx context.Context) (videoCount, audioCount int, to
 	return videoCount, audioCount, totalBytes, nil
 }
 
+// LibraryGrowthPoint is one calendar day's new-item tally for the
+// dashboard's growth chart.
+type LibraryGrowthPoint struct {
+	Date  string
+	Count int
+}
+
+// GrowthByDay returns one row per calendar day with at least one library
+// item, oldest first, using idx_library_downloaded_at. No date-range limit —
+// per-day granularity keeps this small even for a library with years of
+// history. The dashboard handler turns this into a running cumulative total.
+func (r *LibraryRepo) GrowthByDay(ctx context.Context) ([]LibraryGrowthPoint, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT date(downloaded_at), COUNT(*)
+		FROM library
+		GROUP BY date(downloaded_at)
+		ORDER BY date(downloaded_at)`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying library growth: %w", err)
+	}
+	defer rows.Close()
+
+	var out []LibraryGrowthPoint
+	for rows.Next() {
+		var p LibraryGrowthPoint
+		if err := rows.Scan(&p.Date, &p.Count); err != nil {
+			return nil, fmt.Errorf("scanning library growth row: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 func checkRowsAffected(res sql.Result) error {
 	n, err := res.RowsAffected()
 	if err != nil {

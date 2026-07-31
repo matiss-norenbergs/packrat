@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/backup"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
@@ -105,6 +106,29 @@ func AutoBackupIntervalHours(ctx context.Context, repo *repository.SettingsRepo)
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 0 {
 		return 0, nil
+	}
+	return n, nil
+}
+
+// BackupRetentionCount reads the backup_retention_count setting, defaulting
+// to backup.DefaultBackupRetentionCount if it's never been set (or is
+// corrupt/negative) — this default keeps pre-existing pruning behavior
+// unchanged for anyone who upgrades without touching the new setting. 0
+// means unlimited — every backup is kept, nothing is ever pruned.
+// backup.RunBackup's pruneOldBackups reads this same key directly via
+// settingsRepo.Get rather than calling this helper, to avoid an import
+// cycle (api already imports backup). Shared by GetSettings.
+func BackupRetentionCount(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingBackupRetentionCount)
+	if errors.Is(err, repository.ErrNotFound) {
+		return backup.DefaultBackupRetentionCount, nil
+	}
+	if err != nil {
+		return backup.DefaultBackupRetentionCount, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return backup.DefaultBackupRetentionCount, nil
 	}
 	return n, nil
 }
@@ -224,6 +248,25 @@ func ThumbnailFrameCount(ctx context.Context, repo *repository.SettingsRepo) (in
 		return 4, nil
 	}
 	return n, nil
+}
+
+// PrivacyEnabled reads the privacy_enabled setting, defaulting to false — the
+// master switch for the whole privacy workflow starts off, so upgrading to
+// this feature doesn't retroactively start blurring anything for anyone who
+// already has private collections/tags marked; they opt in explicitly. When
+// false, every privacy-derived `blurred` computation below is forced false,
+// but the underlying isPrivate values on collections/tags are never touched
+// — flipping this back on resumes blurring exactly where it left off. Shared
+// by GetSettings.
+func PrivacyEnabled(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingPrivacyEnabled)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
 }
 
 // PrivacyBlurStrength reads the privacy_blur_strength setting, defaulting to
@@ -451,6 +494,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		privacyBlurStrength, err := PrivacyBlurStrength(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -521,6 +569,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		backupRetentionCount, err := BackupRetentionCount(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, SettingsResponse{
 			DownloadDirectory:        mediaRoot,
 			MaxConcurrentDownloads:   mgr.WorkerCount(),
@@ -538,6 +591,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			LibraryPaginationEnabled: libraryPaginationEnabled,
 			LibraryPageSize:          libraryPageSize,
 			ThumbnailFrameCount:      thumbnailFrameCount,
+			PrivacyEnabled:           privacyEnabled,
 			PrivacyBlurStrength:      privacyBlurStrength,
 			BrowseIgnorePrivacy:      browseIgnorePrivacy,
 			SkipDownloadPreview:      skipDownloadPreview,
@@ -552,6 +606,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			YtdlpRateLimit:           ytdlpRateLimit,
 			YtdlpRetries:             ytdlpRetries,
 			AutoBackupIntervalHours:  autoBackupIntervalHours,
+			BackupRetentionCount:     backupRetentionCount,
 		})
 	}
 }
@@ -627,6 +682,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 				return
 			}
 		}
+		if req.BackupRetentionCount != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingBackupRetentionCount, strconv.Itoa(*req.BackupRetentionCount)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
 		if req.LibraryView != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingLibraryView, *req.LibraryView); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -673,6 +734,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 		}
 		if req.ThumbnailFrameCount != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameCount, strconv.Itoa(*req.ThumbnailFrameCount)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.PrivacyEnabled != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingPrivacyEnabled, strconv.FormatBool(*req.PrivacyEnabled)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

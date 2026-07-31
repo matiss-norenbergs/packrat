@@ -639,6 +639,7 @@ type SettingsResponse struct {
 	LibraryPaginationEnabled bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize          int      `json:"libraryPageSize"`
 	ThumbnailFrameCount      int      `json:"thumbnailFrameCount"`
+	PrivacyEnabled           bool     `json:"privacyEnabled"`
 	PrivacyBlurStrength      string   `json:"privacyBlurStrength"`
 	BrowseIgnorePrivacy      bool     `json:"browseIgnorePrivacy"`
 	SkipDownloadPreview      bool     `json:"skipDownloadPreview"`
@@ -653,6 +654,7 @@ type SettingsResponse struct {
 	YtdlpRateLimit           string   `json:"ytdlpRateLimit"`
 	YtdlpRetries             int      `json:"ytdlpRetries"`
 	AutoBackupIntervalHours  int      `json:"autoBackupIntervalHours"`
+	BackupRetentionCount    int      `json:"backupRetentionCount"`
 }
 
 type UpdateSettingsRequest struct {
@@ -671,6 +673,7 @@ type UpdateSettingsRequest struct {
 	LibraryPaginationEnabled *bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize          *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
 	ThumbnailFrameCount      *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
+	PrivacyEnabled           *bool     `json:"privacyEnabled"`
 	PrivacyBlurStrength      *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
 	BrowseIgnorePrivacy      *bool     `json:"browseIgnorePrivacy"`
 	SkipDownloadPreview      *bool     `json:"skipDownloadPreview"`
@@ -685,6 +688,7 @@ type UpdateSettingsRequest struct {
 	YtdlpRateLimit           *string   `json:"ytdlpRateLimit"`
 	YtdlpRetries             *int      `json:"ytdlpRetries" binding:"omitempty,min=0"`
 	AutoBackupIntervalHours  *int      `json:"autoBackupIntervalHours" binding:"omitempty,oneof=0 6 12 24 72 168"`
+	BackupRetentionCount    *int      `json:"backupRetentionCount" binding:"omitempty,min=0"`
 }
 
 func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int, latestItemThumbnailPath *string, sequenceGap *SequenceGapResponse) CollectionResponse {

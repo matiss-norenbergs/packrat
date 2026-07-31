@@ -1,7 +1,17 @@
-import { RefreshCw, Wand2 } from "lucide-react"
+import { RefreshCw, ScanLine, Wand2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -12,13 +22,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useArtists } from "@/hooks/useArtists"
 import { useCollections } from "@/hooks/useCollections"
-import { useLibraryQuery, useUpdateLibraryItem } from "@/hooks/useLibrary"
+import { useLibraryQuery, useProbeLibraryItemMetadata, useUpdateLibraryItem } from "@/hooks/useLibrary"
 import { useTags } from "@/hooks/useTags"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { artistIdToSelectValue, baseNameWithoutExt, buildLibraryItemUpdatePayload } from "@/lib/libraryItemEdit"
@@ -30,7 +41,7 @@ import { ArtistSelect, NO_ARTIST } from "./ArtistSelect"
 import { useRevealAll } from "./RevealAllContext"
 import { SequenceNumberField } from "./SequenceNumberField"
 import { TagInput } from "./TagInput"
-import type { LibraryItem } from "@/types/api"
+import type { LibraryItem, LibraryItemProbeResult } from "@/types/api"
 
 interface EditLibraryItemDialogProps {
   item: LibraryItem
@@ -50,8 +61,13 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
   const [originalUrl, setOriginalUrl] = useState(item.originalUrl ?? "")
   const [tags, setTags] = useState<string[]>(item.tags)
   const [generateNfo, setGenerateNfo] = useState(item.generateNfo)
+  const [resolution, setResolution] = useState(item.resolution ?? "")
+  const [duration, setDuration] = useState<number | null>(item.duration)
+  const [probeResult, setProbeResult] = useState<LibraryItemProbeResult | null>(null)
+  const [rescanPromptOpen, setRescanPromptOpen] = useState(false)
 
   const updateLibraryItem = useUpdateLibraryItem()
+  const probeMetadata = useProbeLibraryItemMetadata()
   const { data: allTags } = useTags()
   const { data: collections } = useCollections()
   const { data: artists } = useArtists()
@@ -99,6 +115,8 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     setOriginalUrl(item.originalUrl ?? "")
     setTags(item.tags)
     setGenerateNfo(item.generateNfo)
+    setResolution(item.resolution ?? "")
+    setDuration(item.duration)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item])
 
@@ -141,6 +159,28 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     )
   }
 
+  const handleRescan = () => {
+    probeMetadata.mutate(item.id, {
+      onSuccess: (result) => {
+        setProbeResult(result)
+        setRescanPromptOpen(true)
+      },
+    })
+  }
+
+  // Compared against the current form values, not the item's original stored
+  // values — so accepting a rescan once and running it again immediately
+  // correctly reports "already matches" instead of re-flagging a change.
+  const probeMatchesForm =
+    probeResult != null && probeResult.resolution === (resolution || null) && probeResult.durationSeconds === duration
+
+  const handleUseProbedValues = () => {
+    if (!probeResult) return
+    setResolution(probeResult.resolution ?? "")
+    setDuration(probeResult.durationSeconds)
+    setRescanPromptOpen(false)
+  }
+
   const handleSubmit = () => {
     const payload = buildLibraryItemUpdatePayload(item, {
       title,
@@ -154,6 +194,8 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
       originalUrl,
       tags,
       generateNfo,
+      resolution,
+      duration,
     })
 
     if (Object.keys(payload).length === 0) {
@@ -247,22 +289,20 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
               )}
             </div>
 
-            <div className="flex items-start gap-2">
+            <div className="flex items-center gap-1.5">
               <Checkbox
                 id="edit-generate-nfo"
                 checked={generateNfo}
                 onCheckedChange={(v) => setGenerateNfo(v === true)}
               />
-              <div className="space-y-1">
-                <Label htmlFor="edit-generate-nfo" className="font-normal">
-                  Generate NFO
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Writes a <code>{baseNameWithoutExt(item.filename)}.nfo</code> file Jellyfin can
-                  read for title/plot/year/tags/sequence — kept in sync automatically whenever you
-                  save changes here.
-                </p>
-              </div>
+              <Label htmlFor="edit-generate-nfo" className="font-normal">
+                Generate NFO
+              </Label>
+              <InfoPopover>
+                Writes a <code>{baseNameWithoutExt(item.filename)}.nfo</code> file Jellyfin can
+                read for title/plot/year/tags/sequence — kept in sync automatically whenever you
+                save changes here.
+              </InfoPopover>
             </div>
 
             <p className="text-xs text-muted-foreground">
@@ -283,9 +323,27 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
               </div>
             )}
 
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              File Metadata
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                File Metadata
+              </h3>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={handleRescan}
+                    disabled={probeMetadata.isPending}
+                    aria-label="Rescan file for actual resolution/duration"
+                  >
+                    <ScanLine className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Rescan file for actual resolution/duration</TooltipContent>
+              </Tooltip>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="edit-resolution" className="text-xs text-muted-foreground">
@@ -293,7 +351,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
                 </Label>
                 <Input
                   id="edit-resolution"
-                  value={item.resolution ?? "—"}
+                  value={resolution || "—"}
                   disabled
                   className="h-8 bg-muted/30 text-xs"
                 />
@@ -304,7 +362,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
                 </Label>
                 <Input
                   id="edit-duration"
-                  value={item.duration != null ? formatDuration(item.duration) : "—"}
+                  value={duration != null ? formatDuration(duration) : "—"}
                   disabled
                   className="h-8 bg-muted/30 text-xs"
                 />
@@ -409,6 +467,37 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
             {updateLibraryItem.isPending ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
+
+        <AlertDialog open={rescanPromptOpen} onOpenChange={setRescanPromptOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Rescan results</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                {probeMatchesForm ? (
+                  <p>The file's actual resolution and duration already match what's saved.</p>
+                ) : (
+                  <div className="space-y-1">
+                    <p>Resolution: {resolution || "—"} → {probeResult?.resolution || "—"}</p>
+                    <p>
+                      Duration: {duration != null ? formatDuration(duration) : "—"} →{" "}
+                      {probeResult?.durationSeconds != null ? formatDuration(probeResult.durationSeconds) : "—"}
+                    </p>
+                  </div>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              {probeMatchesForm ? (
+                <AlertDialogAction>Close</AlertDialogAction>
+              ) : (
+                <>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleUseProbedValues}>Use these values</AlertDialogAction>
+                </>
+              )}
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   )

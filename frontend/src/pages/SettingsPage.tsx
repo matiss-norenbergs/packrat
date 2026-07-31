@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -89,11 +90,13 @@ export function SettingsPage() {
               ) : (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="download-directory">Download Directory</Label>
+                    <FieldLabel
+                      htmlFor="download-directory"
+                      info={<>Set via the <code>MEDIA_ROOT</code> environment variable — not editable here.</>}
+                    >
+                      Download Directory
+                    </FieldLabel>
                     <Input id="download-directory" value={settings.downloadDirectory} disabled />
-                    <p className="text-xs text-muted-foreground">
-                      Set via the <code>MEDIA_ROOT</code> environment variable — not editable here.
-                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -108,7 +111,12 @@ export function SettingsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="download-timeout">Download Timeout (minutes)</Label>
+                    <FieldLabel
+                      htmlFor="download-timeout"
+                      info="Kills and marks failed any download still running past this limit. 0 = no limit."
+                    >
+                      Download Timeout (minutes)
+                    </FieldLabel>
                     <Input
                       id="download-timeout"
                       type="number"
@@ -117,9 +125,6 @@ export function SettingsPage() {
                       value={downloadTimeout}
                       onChange={(e) => setDownloadTimeout(e.target.value)}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Kills and marks failed any download still running past this limit. 0 = no limit.
-                    </p>
                   </div>
 
                   <Button onClick={handleSave} disabled={updateSettings.isPending}>
@@ -194,17 +199,15 @@ function JellyfinCard() {
           <Skeleton className="h-40 w-full" />
         ) : (
           <>
-            <div className="flex items-start gap-2">
+            <div className="flex items-center gap-1.5">
               <Checkbox id="jellyfin-enabled" checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
-              <div className="space-y-1">
-                <Label htmlFor="jellyfin-enabled" className="font-normal">
-                  Enable Jellyfin
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Lets you manually trigger a library rescan below, and controls the automatic
-                  refresh option underneath.
-                </p>
-              </div>
+              <Label htmlFor="jellyfin-enabled" className="font-normal">
+                Enable Jellyfin
+              </Label>
+              <InfoPopover>
+                Lets you manually trigger a library rescan below, and controls the automatic
+                refresh option underneath.
+              </InfoPopover>
             </div>
 
             <div className="space-y-2">
@@ -230,9 +233,22 @@ function JellyfinCard() {
             </div>
 
             <div className="space-y-2">
-              <Label>Refresh after download</Label>
+              <FieldLabel
+                htmlFor="jellyfin-refresh-mode"
+                info={
+                  <>
+                    "Specific library" refreshes only the Jellyfin library linked to the download's
+                    collection (set per-collection in Collections → Edit) — downloads in a
+                    collection with no library linked, or uncategorized downloads, don't trigger
+                    anything. A burst of downloads within a short window is coalesced into a single
+                    rescan.
+                  </>
+                }
+              >
+                Refresh after download
+              </FieldLabel>
               <Select value={refreshMode} onValueChange={setRefreshMode} disabled={!enabled}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="jellyfin-refresh-mode" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -241,12 +257,6 @@ function JellyfinCard() {
                   <SelectItem value="specific">Specific library</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                "Specific library" refreshes only the Jellyfin library linked to the download's
-                collection (set per-collection in Collections → Edit) — downloads in a collection
-                with no library linked, or uncategorized downloads, don't trigger anything. A burst
-                of downloads within a short window is coalesced into a single rescan.
-              </p>
             </div>
 
             <div className="flex gap-2">
@@ -406,9 +416,14 @@ function YtDlpCard() {
         ) : (
           <div className="space-y-4 border-t pt-4">
             <div className="space-y-2">
-              <Label>Cookies browser</Label>
+              <FieldLabel
+                htmlFor="ytdlp-cookies-browser"
+                info="Reads cookies directly from an installed browser's profile — useful for members-only or age-gated videos."
+              >
+                Cookies browser
+              </FieldLabel>
               <Select value={cookiesBrowser} onValueChange={setCookiesBrowser}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="ytdlp-cookies-browser" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -420,10 +435,6 @@ function YtDlpCard() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Reads cookies directly from an installed browser's profile — useful for
-                members-only or age-gated videos.
-              </p>
             </div>
 
             <div className="space-y-2">
@@ -546,32 +557,35 @@ function DownloadsCard() {
               {updateSettings.isPending ? "Saving…" : "Save"}
             </Button>
 
-            <div className="flex items-start gap-2 border-t pt-4">
+            <div className="flex items-center gap-1.5 border-t pt-4">
               <Checkbox
                 id="skip-download-preview"
                 checked={settings.skipDownloadPreview}
                 disabled={updateSettings.isPending}
                 onCheckedChange={(v) => updateSettings.mutate({ skipDownloadPreview: v === true })}
               />
-              <div className="space-y-1">
-                <Label htmlFor="skip-download-preview" className="font-normal">
-                  I trust this source (skip preview)
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Skips the thumbnail/title preview in the New Download dialog and queues
-                  immediately. Shown by default so you can catch a bad URL before it fails in
-                  the queue.
-                </p>
-              </div>
+              <Label htmlFor="skip-download-preview" className="font-normal">
+                I trust this source (skip preview)
+              </Label>
+              <InfoPopover>
+                Skips the thumbnail/title preview in the New Download dialog and queues
+                immediately. Shown by default so you can catch a bad URL before it fails in the
+                queue.
+              </InfoPopover>
             </div>
 
             <div className="space-y-2 border-t pt-4">
-              <Label>Keep download log for</Label>
+              <FieldLabel
+                htmlFor="download-log-retention"
+                info="Entries older than this are deleted automatically from the Downloads and Logs pages. Only completed/failed/cancelled entries are ever removed — anything still queued or in progress is never touched, regardless of age."
+              >
+                Keep download log for
+              </FieldLabel>
               <Select
                 value={String(settings.downloadLogRetentionDays)}
                 onValueChange={(v) => updateSettings.mutate({ downloadLogRetentionDays: Number(v) })}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger id="download-log-retention" className="w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -582,11 +596,6 @@ function DownloadsCard() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Entries older than this are deleted automatically from the Downloads and Logs
-                pages. Only completed/failed/cancelled entries are ever removed — anything still
-                queued or in progress is never touched, regardless of age.
-              </p>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" size="sm" disabled={clearDownloadLog.isPending}>
@@ -634,12 +643,17 @@ function ThumbnailsCard() {
           <Skeleton className="h-10 w-full" />
         ) : (
           <div className="space-y-2">
-            <Label>"Choose from Video" frame count</Label>
+            <FieldLabel
+              htmlFor="thumbnail-frame-count"
+              info="How many frame options to offer when picking a thumbnail from a video."
+            >
+              "Choose from Video" frame count
+            </FieldLabel>
             <Select
               value={String(settings.thumbnailFrameCount)}
               onValueChange={(v) => updateSettings.mutate({ thumbnailFrameCount: Number(v) })}
             >
-              <SelectTrigger className="w-32">
+              <SelectTrigger id="thumbnail-frame-count" className="w-32">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -650,20 +664,20 @@ function ThumbnailsCard() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
-              How many frame options to offer when picking a thumbnail from a video.
-            </p>
           </div>
         )}
 
         <div className="space-y-2 border-t pt-4">
-          <Label>Image derivatives</Label>
-          <p className="text-xs text-muted-foreground">
-            Generates small/medium-size versions of library thumbnails, artist images, and
-            collection covers, so most of the app loads a much smaller file instead of the
-            original. Only needed once for items that predate this feature (or after resetting
-            the images folder) — anything downloaded or edited afterward gets this automatically.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <Label>Image derivatives</Label>
+            <InfoPopover>
+              Generates small/medium-size versions of library thumbnails, artist images, and
+              collection covers, so most of the app loads a much smaller file instead of the
+              original. Only needed once for items that predate this feature (or after resetting
+              the images folder) — anything downloaded or edited afterward gets this
+              automatically.
+            </InfoPopover>
+          </div>
           {backfillStatus?.running ? (
             <p className="text-sm text-muted-foreground">
               Running… library {backfillStatus.libraryProcessed} processed
@@ -706,22 +720,20 @@ function PlayerCard() {
         {isLoading || !settings ? (
           <Skeleton className="h-10 w-full" />
         ) : (
-          <div className="flex items-start gap-2">
+          <div className="flex items-center gap-1.5">
             <Checkbox
               id="library-autoplay"
               checked={settings.libraryAutoplay}
               disabled={updateSettings.isPending}
               onCheckedChange={(v) => updateSettings.mutate({ libraryAutoplay: v === true })}
             />
-            <div className="space-y-1">
-              <Label htmlFor="library-autoplay" className="font-normal">
-                Autoplay
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Starts playback immediately when opening a library item — including a private one,
-                right after you reveal it. Volume is remembered automatically between plays.
-              </p>
-            </div>
+            <Label htmlFor="library-autoplay" className="font-normal">
+              Autoplay
+            </Label>
+            <InfoPopover>
+              Starts playback immediately when opening a library item — including a private one,
+              right after you reveal it. Volume is remembered automatically between plays.
+            </InfoPopover>
           </div>
         )}
       </CardContent>
@@ -738,6 +750,7 @@ const BLUR_STRENGTH_OPTIONS: { value: string; label: string }[] = [
 function PrivacyCard() {
   const { data: settings, isLoading } = useSettings()
   const updateSettings = useUpdateSettings()
+  const privacyOff = !settings?.privacyEnabled
 
   return (
     <Card>
@@ -750,12 +763,38 @@ function PrivacyCard() {
         ) : (
           <>
             <div className="space-y-2">
-              <Label>Private Collection Blur Strength</Label>
+              <div className="flex items-center gap-1.5">
+                <Checkbox
+                  id="privacy-enabled"
+                  checked={settings.privacyEnabled}
+                  disabled={updateSettings.isPending}
+                  onCheckedChange={(v) => updateSettings.mutate({ privacyEnabled: v === true })}
+                />
+                <Label htmlFor="privacy-enabled" className="font-normal">
+                  Enable privacy
+                </Label>
+                <InfoPopover>
+                  Master switch for the whole privacy workflow. When off, every privacy feature
+                  (blurring, lock icons, the reveal-all button, the Private checkboxes on
+                  collections/tags) is hidden app-wide — but a collection or tag's own Private
+                  value is never changed, so turning this back on restores blurring exactly where
+                  it was.
+                </InfoPopover>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="privacy-blur-strength"
+                info="How strongly thumbnails in private collections are blurred until clicked to reveal."
+              >
+                Private Collection Blur Strength
+              </FieldLabel>
               <Select
                 value={settings.privacyBlurStrength}
                 onValueChange={(v) => updateSettings.mutate({ privacyBlurStrength: v })}
+                disabled={privacyOff}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger id="privacy-blur-strength" className="w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -766,25 +805,23 @@ function PrivacyCard() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                How strongly thumbnails in private collections are blurred until clicked to reveal.
-              </p>
             </div>
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <Checkbox
                   id="browse-ignore-privacy"
                   checked={settings.browseIgnorePrivacy}
-                  disabled={updateSettings.isPending}
+                  disabled={privacyOff || updateSettings.isPending}
                   onCheckedChange={(v) => updateSettings.mutate({ browseIgnorePrivacy: v === true })}
                 />
                 <Label htmlFor="browse-ignore-privacy" className="font-normal">
                   Show private items unblurred in Browse
                 </Label>
+                <InfoPopover>
+                  Only affects the Browse page — Library and Collections keep blurring private
+                  items as usual.
+                </InfoPopover>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Only affects the Browse page — Library and Collections keep blurring private items as usual.
-              </p>
             </div>
           </>
         )}
@@ -816,31 +853,34 @@ function HistoryCard() {
           <Skeleton className="h-20 w-full" />
         ) : (
           <>
-            <div className="flex items-start gap-2">
+            <div className="flex items-center gap-1.5">
               <Checkbox
                 id="history-anonymize"
                 checked={settings.historyAnonymizeUrls}
                 disabled={updateSettings.isPending}
                 onCheckedChange={(v) => updateSettings.mutate({ historyAnonymizeUrls: v === true })}
               />
-              <div className="space-y-1">
-                <Label htmlFor="history-anonymize" className="font-normal">
-                  Anonymize History Links
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Replaces links on the History page with a hash — the actual file/download is
-                  unaffected, and Retry still works.
-                </p>
-              </div>
+              <Label htmlFor="history-anonymize" className="font-normal">
+                Anonymize History Links
+              </Label>
+              <InfoPopover>
+                Replaces links on the History page with a hash — the actual file/download is
+                unaffected, and Retry still works.
+              </InfoPopover>
             </div>
 
             <div className="space-y-2">
-              <Label>Keep history for</Label>
+              <FieldLabel
+                htmlFor="history-retention"
+                info="History entries older than this are deleted automatically. Doesn't affect your library files or downloads — only the History page's log."
+              >
+                Keep history for
+              </FieldLabel>
               <Select
                 value={String(settings.historyRetentionDays)}
                 onValueChange={(v) => updateSettings.mutate({ historyRetentionDays: Number(v) })}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger id="history-retention" className="w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -851,10 +891,6 @@ function HistoryCard() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                History entries older than this are deleted automatically. Doesn't affect your
-                library files or downloads — only the History page's log.
-              </p>
             </div>
 
             <div className="border-t pt-4">
@@ -895,6 +931,15 @@ const AUTO_BACKUP_OPTIONS: { value: string; label: string }[] = [
   { value: "168", label: "Every week" },
 ]
 
+const BACKUP_RETENTION_OPTIONS: { value: string; label: string }[] = [
+  { value: "7", label: "7 backups" },
+  { value: "14", label: "14 backups" },
+  { value: "30", label: "30 backups" },
+  { value: "50", label: "50 backups" },
+  { value: "100", label: "100 backups" },
+  { value: "0", label: "Unlimited" },
+]
+
 function AutoBackupCard() {
   const { data: settings, isLoading } = useSettings()
   const updateSettings = useUpdateSettings()
@@ -908,28 +953,54 @@ function AutoBackupCard() {
         {isLoading || !settings ? (
           <Skeleton className="h-16 w-full" />
         ) : (
-          <div className="space-y-2">
-            <Label>Back up automatically</Label>
-            <Select
-              value={String(settings.autoBackupIntervalHours)}
-              onValueChange={(v) => updateSettings.mutate({ autoBackupIntervalHours: Number(v) })}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AUTO_BACKUP_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Saves a full snapshot of your settings and library data under the Backup page. Off by
-              default.
-            </p>
-          </div>
+          <>
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="auto-backup-interval"
+                info="Saves a full snapshot of your settings and library data under the Backup page. Off by default."
+              >
+                Back up automatically
+              </FieldLabel>
+              <Select
+                value={String(settings.autoBackupIntervalHours)}
+                onValueChange={(v) => updateSettings.mutate({ autoBackupIntervalHours: Number(v) })}
+              >
+                <SelectTrigger id="auto-backup-interval" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AUTO_BACKUP_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="backup-retention-count"
+                info="How many backups (scheduled and manual) to keep on disk before the oldest are automatically deleted. Unlimited keeps every backup ever made — make sure you have the disk space."
+              >
+                Keep
+              </FieldLabel>
+              <Select
+                value={String(settings.backupRetentionCount)}
+                onValueChange={(v) => updateSettings.mutate({ backupRetentionCount: Number(v) })}
+              >
+                <SelectTrigger id="backup-retention-count" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BACKUP_RETENTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

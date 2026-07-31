@@ -16,6 +16,7 @@ import (
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
+	"packrat/backend/internal/importer"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/queue"
@@ -50,7 +51,7 @@ func writeRenamePairError(c *gin.Context, err error) {
 // the "pagination is opt-in, default off" behavior in Settings. collectionIds
 // is a separate IN-match filter (used to resolve a bulk-selected folder plus
 // its nested subcollections) that takes precedence over collectionId.
-func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, mediaRoot string) gin.HandlerFunc {
+func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		q := repository.LibraryQuery{
 			Search:  c.Query("q"),
@@ -138,11 +139,16 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), settingsRepo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 
 		out := make([]LibraryItemResponse, 0, len(rows))
 		for _, item := range rows {
-			blurred := item.CollectionID != nil && privacy[*item.CollectionID]
-			if !blurred {
+			blurred := privacyEnabled && item.CollectionID != nil && privacy[*item.CollectionID]
+			if !blurred && privacyEnabled {
 				for _, t := range tagsByID[item.ID] {
 					if privateTagNames[t] {
 						blurred = true
@@ -648,7 +654,7 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 // RefreshLibraryItemMetadata re-fetches yt-dlp metadata for the item's
 // original URL and updates the display fields — it never touches the
 // media file or thumbnail already on disk.
-func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, mediaRoot string) gin.HandlerFunc {
+func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -699,8 +705,13 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 			return
 		}
 
+		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), settingsRepo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		var blurred bool
-		if updated.CollectionID != nil {
+		if privacyEnabled && updated.CollectionID != nil {
 			blurred, err = collectionsRepo.IsPrivate(c.Request.Context(), *updated.CollectionID)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -712,7 +723,7 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if !blurred {
+		if !blurred && privacyEnabled {
 			blurred, err = tagsRepo.HasPrivateTag(c.Request.Context(), tags)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -727,6 +738,48 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 		}
 
 		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, mediaRoot))
+	}
+}
+
+// ProbeLibraryItemMetadataResponse mirrors importer.ProbeResult's
+// resolution/duration fields (naming matches ScannedFile's
+// durationSeconds, the import-scan equivalent).
+type ProbeLibraryItemMetadataResponse struct {
+	Resolution      *string `json:"resolution"`
+	DurationSeconds *int    `json:"durationSeconds"`
+}
+
+// ProbeLibraryItemMetadata runs ffprobe against the item's actual media file
+// on disk and returns what it finds — read-only, never writes to the DB.
+// Works uniformly across video/audio/image items since importer.Probe
+// already handles each (no video stream → nil resolution; no duration, e.g.
+// a still image → nil duration). Lets the Edit dialog show the user a
+// before/after prompt before committing to overwriting the stored values.
+func ProbeLibraryItemMetadata(repo *repository.LibraryRepo, mediaRoot, ffprobePath string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+
+		item, err := repo.Get(c.Request.Context(), id)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
+		probe := importer.Probe(c.Request.Context(), ffprobePath, mediaAbs)
+
+		c.JSON(http.StatusOK, ProbeLibraryItemMetadataResponse{
+			Resolution:      probe.Resolution,
+			DurationSeconds: probe.DurationSeconds,
+		})
 	}
 }
 

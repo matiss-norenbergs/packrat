@@ -53,7 +53,7 @@ export function CollectionFolderTile({ node, onClick }: { node: CollectionTreeNo
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="truncate text-sm font-medium">{node.name}</p>
-            {node.isPrivate && <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />}
+            {settings?.privacyEnabled && node.isPrivate && <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />}
           </div>
           <p className="text-xs text-muted-foreground">
             {node.children.length} {node.children.length === 1 ? "subcollection" : "subcollections"}

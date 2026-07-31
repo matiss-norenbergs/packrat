@@ -13,6 +13,7 @@ import {
   fetchLibraryThumbnailCandidates,
   generateLibraryItemNFO,
   moveLibraryItem,
+  probeLibraryItemMetadata,
   quickGrabLibraryThumbnail,
   redownloadLibraryItem,
   redownloadLibraryThumbnail,
@@ -176,6 +177,16 @@ export function useRefreshLibraryItemMetadata() {
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to refresh metadata: ${err.message}`),
+  })
+}
+
+// Read-only ffprobe pass over the item's actual file — no query invalidation
+// needed since nothing is persisted; the caller decides what to do with the
+// result (EditLibraryItemDialog's rescan-confirm prompt).
+export function useProbeLibraryItemMetadata() {
+  return useMutation({
+    mutationFn: (id: number) => probeLibraryItemMetadata(id),
+    onError: (err: Error) => toast.error(`Failed to rescan file: ${err.message}`),
   })
 }
 
