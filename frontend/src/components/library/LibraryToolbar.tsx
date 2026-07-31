@@ -11,34 +11,47 @@ import {
   LayoutGrid,
   List,
   Pencil,
-  Rows3,
   Search,
+  Settings,
   SlidersHorizontal,
   Tags,
   X,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useCollections } from "@/hooks/useCollections"
 import { useLibraryFacets } from "@/hooks/useLibrary"
 import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
+import { sortCollectionsByPath } from "@/lib/collectionTree"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
 import { AddToCompareListDialog } from "./AddToCompareListDialog"
 import { BulkAssignTagsDialog } from "./BulkAssignTagsDialog"
 import { BulkDeleteLibraryItemsDialog } from "./BulkDeleteLibraryItemsDialog"
 import { BulkEditLibraryItemsDialog } from "./BulkEditLibraryItemsDialog"
+import { BulkSetArtistDialog } from "./BulkSetArtistDialog"
+import { BulkSetGenerateNfoDialog } from "./BulkSetGenerateNfoDialog"
+import { BulkSetYearDialog } from "./BulkSetYearDialog"
 import { EditSequenceDialog } from "./EditSequenceDialog"
 import { LIBRARY_COLUMNS, useLibraryColumns } from "./LibraryColumnsContext"
 import { useRevealAll } from "./RevealAllContext"
@@ -55,6 +68,7 @@ const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
 ]
 
 const PAGE_SIZE_OPTIONS = [24, 48, 96, 200]
+const PAGINATION_DISABLED = "disabled"
 
 const NONE = "none"
 
@@ -75,10 +89,20 @@ export function LibraryToolbar() {
   const { visibleColumns, toggleColumn } = useLibraryColumns()
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [bulkTagsOpen, setBulkTagsOpen] = useState(false)
+  const [bulkArtistOpen, setBulkArtistOpen] = useState(false)
+  const [bulkYearOpen, setBulkYearOpen] = useState(false)
+  const [bulkNfoOpen, setBulkNfoOpen] = useState(false)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [editSequenceOpen, setEditSequenceOpen] = useState(false)
   const [addToCompareOpen, setAddToCompareOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
+  // Draft copies of Mode/View/Pagination — same draft-then-Apply idiom as
+  // the Filters & Sort dialog below, just surfaced in a Popover instead of a
+  // Dialog, so opening the popover doesn't touch anything until Apply.
+  const [draftMode, setDraftMode] = useState<"manage" | "details">("manage")
+  const [draftView, setDraftView] = useState<"grid" | "folders" | "list">("grid")
+  const [draftPagination, setDraftPagination] = useState(PAGINATION_DISABLED)
   // Draft copies of the filter/sort controls that live inside the dialog —
   // edits only touch this local state, so opening the picker doesn't
   // re-filter/re-sort the grid on every click. Applying commits everything
@@ -146,21 +170,40 @@ export function LibraryToolbar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput])
 
-  const setView = (next: "grid" | "folders" | "list") => {
-    updateSettings.mutate({ libraryView: next })
-    // Switching modes makes a stale "collection" filter/location ambiguous
-    // between the two views' different meanings for that param — clear it.
-    const params = new URLSearchParams(searchParams)
-    params.delete("collection")
-    setSearchParams(params, { replace: true })
+  const openSettingsPopover = (next: boolean) => {
+    if (next) {
+      setDraftMode(mode)
+      setDraftView(view)
+      setDraftPagination(paginationEnabled ? String(pageSize) : PAGINATION_DISABLED)
+    }
+    setSettingsPopoverOpen(next)
   }
 
-  const setMode = (next: "manage" | "details") => {
-    updateSettings.mutate({ libraryMode: next })
-    // Leaving manage mode hides every checkbox, so a lingering selection
-    // would silently reappear if the user switches back — clear it now
-    // instead.
-    if (next !== "manage") clear()
+  const applyLibrarySettings = () => {
+    const patch: { libraryMode?: string; libraryView?: string; libraryPaginationEnabled?: boolean; libraryPageSize?: number } = {}
+    if (draftMode !== mode) patch.libraryMode = draftMode
+    if (draftView !== view) patch.libraryView = draftView
+    const draftPaginationEnabled = draftPagination !== PAGINATION_DISABLED
+    if (draftPaginationEnabled !== paginationEnabled) patch.libraryPaginationEnabled = draftPaginationEnabled
+    if (draftPaginationEnabled && Number(draftPagination) !== pageSize) patch.libraryPageSize = Number(draftPagination)
+    if (Object.keys(patch).length > 0) updateSettings.mutate(patch)
+
+    // Preserve the two side effects the old per-control setters used to
+    // apply immediately on every click — now applied once at commit time.
+    if (draftView !== view) {
+      // Switching views makes a stale "collection" filter/location ambiguous
+      // between the two views' different meanings for that param — clear it.
+      const params = new URLSearchParams(searchParams)
+      params.delete("collection")
+      setSearchParams(params, { replace: true })
+    }
+    if (draftMode !== mode && draftMode !== "manage") {
+      // Leaving manage mode hides every checkbox, so a lingering selection
+      // would silently reappear if the user switches back — clear it now.
+      clear()
+    }
+
+    setSettingsPopoverOpen(false)
   }
 
   const openFilters = () => {
@@ -250,93 +293,99 @@ export function LibraryToolbar() {
         <TooltipContent>{revealAll ? "Hide all private items" : "Reveal all private items"}</TooltipContent>
       </Tooltip>
 
-      <div className="flex gap-1 rounded-md border p-0.5">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={mode === "manage" ? "secondary" : "ghost"}
-              size="icon"
-              onClick={() => setMode("manage")}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Manage mode</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={mode === "details" ? "secondary" : "ghost"}
-              size="icon"
-              onClick={() => setMode("details")}
-            >
-              <Info className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Details mode</TooltipContent>
-        </Tooltip>
-      </div>
-
-      <div className="flex gap-1 rounded-md border p-0.5">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant={view === "grid" ? "secondary" : "ghost"} size="icon" onClick={() => setView("grid")}>
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Grid view</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={view === "folders" ? "secondary" : "ghost"}
-              size="icon"
-              onClick={() => setView("folders")}
-            >
-              <FolderTree className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Folder view</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant={view === "list" ? "secondary" : "ghost"} size="icon" onClick={() => setView("list")}>
-              <List className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>List view</TooltipContent>
-        </Tooltip>
-      </div>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={paginationEnabled ? "secondary" : "outline"}
-            size="icon"
-            onClick={() => updateSettings.mutate({ libraryPaginationEnabled: !paginationEnabled })}
-          >
-            <Rows3 className="h-4 w-4" />
+      <Popover open={settingsPopoverOpen} onOpenChange={openSettingsPopover}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="icon" aria-label="Library display settings">
+            <Settings className="h-4 w-4" />
           </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          {paginationEnabled ? "Pagination on — click to show everything" : "Showing everything — click to paginate"}
-        </TooltipContent>
-      </Tooltip>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Mode</Label>
+            <div className="flex gap-1 rounded-md border p-0.5">
+              <Button
+                type="button"
+                variant={draftMode === "manage" ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => setDraftMode("manage")}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Manage
+              </Button>
+              <Button
+                type="button"
+                variant={draftMode === "details" ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => setDraftMode("details")}
+              >
+                <Info className="h-3.5 w-3.5" />
+                Details
+              </Button>
+            </div>
+          </div>
 
-      {paginationEnabled && (
-        <Select value={String(pageSize)} onValueChange={(v) => updateSettings.mutate({ libraryPageSize: Number(v) })}>
-          <SelectTrigger className="w-[100px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PAGE_SIZE_OPTIONS.map((n) => (
-              <SelectItem key={n} value={String(n)}>
-                {n}/page
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">View</Label>
+            <div className="flex gap-1 rounded-md border p-0.5">
+              <Button
+                type="button"
+                variant={draftView === "grid" ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => setDraftView("grid")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Grid
+              </Button>
+              <Button
+                type="button"
+                variant={draftView === "folders" ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => setDraftView("folders")}
+              >
+                <FolderTree className="h-3.5 w-3.5" />
+                Folders
+              </Button>
+              <Button
+                type="button"
+                variant={draftView === "list" ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => setDraftView("list")}
+              >
+                <List className="h-3.5 w-3.5" />
+                List
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="library-settings-pagination" className="text-xs text-muted-foreground">
+              Pagination
+            </Label>
+            <Select value={draftPagination} onValueChange={setDraftPagination}>
+              <SelectTrigger id="library-settings-pagination" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={PAGINATION_DISABLED}>Disabled</SelectItem>
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}/page
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button className="w-full" size="sm" onClick={applyLibrarySettings}>
+            Apply
+          </Button>
+        </PopoverContent>
+      </Popover>
     </div>
 
     {mode === "manage" && (
@@ -358,13 +407,22 @@ export function LibraryToolbar() {
           <DropdownMenuContent align="start" className="min-w-48">
             <DropdownMenuItem onSelect={() => setBulkEditOpen(true)}>Edit…</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setBulkTagsOpen(true)}>Assign tags…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setBulkDeleteOpen(true)}>Delete selected…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkArtistOpen(true)}>Set artist…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkYearOpen(true)}>Set year…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkNfoOpen(true)}>Generate NFO…</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setEditSequenceOpen(true)}>Edit sequence…</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setAddToCompareOpen(true)}>Add to compare list…</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => setBulkDeleteOpen(true)}>
+              Delete selected…
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <BulkEditLibraryItemsDialog open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
         <BulkAssignTagsDialog open={bulkTagsOpen} onOpenChange={setBulkTagsOpen} />
+        <BulkSetArtistDialog open={bulkArtistOpen} onOpenChange={setBulkArtistOpen} />
+        <BulkSetYearDialog open={bulkYearOpen} onOpenChange={setBulkYearOpen} />
+        <BulkSetGenerateNfoDialog open={bulkNfoOpen} onOpenChange={setBulkNfoOpen} />
         <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
         <EditSequenceDialog open={editSequenceOpen} onOpenChange={setEditSequenceOpen} />
         <AddToCompareListDialog open={addToCompareOpen} onOpenChange={setAddToCompareOpen} />
@@ -441,7 +499,8 @@ export function LibraryToolbar() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>All collections</SelectItem>
-                  {collections?.map((c) => (
+                  <SelectSeparator />
+                  {sortCollectionsByPath(collections ?? []).map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>
                       {c.path}
                     </SelectItem>

@@ -135,6 +135,8 @@ export function BulkEditLibraryItemsDialog({ open, onOpenChange }: BulkEditLibra
                 rowNumber={index}
                 fields={row.fields}
                 onChange={(patch) => updateRowFields(index, patch)}
+                sequenceMin={collections?.find((c) => c.id === row.item.collectionId)?.sequenceMin}
+                sequenceMax={collections?.find((c) => c.id === row.item.collectionId)?.sequenceMax}
               />
             ))
           )}

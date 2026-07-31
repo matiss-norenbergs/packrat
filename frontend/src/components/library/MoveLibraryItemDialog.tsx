@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,11 +14,13 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
 import { useCollections } from "@/hooks/useCollections"
 import { useMoveLibraryItem } from "@/hooks/useLibrary"
+import { sortCollectionsByPath } from "@/lib/collectionTree"
 import type { LibraryItem } from "@/types/api"
 
 const NO_COLLECTION = "none"
@@ -36,13 +38,17 @@ export function MoveLibraryItemDialog({ item, open, onOpenChange }: MoveLibraryI
   const { data: collections } = useCollections()
   const moveLibraryItem = useMoveLibraryItem()
 
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
-      setCollectionId(item.collectionId != null ? String(item.collectionId) : NO_COLLECTION)
-      setFolder(item.folder)
-    }
-    onOpenChange(next)
-  }
+  // `open` is set externally (the row's dropdown item flips it straight to
+  // true, not via a DialogTrigger), so Radix's own onOpenChange never fires
+  // on open — only on internally-triggered closes (Escape, overlay, the X
+  // button). A plain useEffect is what actually catches every open; without
+  // it, fields kept whatever was last picked from a previous open-without-save.
+  useEffect(() => {
+    if (!open) return
+    setCollectionId(item.collectionId != null ? String(item.collectionId) : NO_COLLECTION)
+    setFolder(item.folder)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, item])
 
   const handleSubmit = () => {
     moveLibraryItem.mutate(
@@ -58,7 +64,7 @@ export function MoveLibraryItemDialog({ item, open, onOpenChange }: MoveLibraryI
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Move</DialogTitle>
@@ -69,12 +75,13 @@ export function MoveLibraryItemDialog({ item, open, onOpenChange }: MoveLibraryI
           <div className="space-y-2">
             <Label>Collection</Label>
             <Select value={collectionId} onValueChange={setCollectionId}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_COLLECTION}>None</SelectItem>
-                {collections?.map((c) => (
+                <SelectSeparator />
+                {sortCollectionsByPath(collections ?? []).map((c) => (
                   <SelectItem key={c.id} value={String(c.id)}>
                     {c.path}
                   </SelectItem>

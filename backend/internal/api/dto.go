@@ -437,6 +437,9 @@ type CreateCollectionRequest struct {
 	IsPrivate           bool    `json:"isPrivate"`
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 	SeasonNumber        *int    `json:"seasonNumber"`
+	Year                *int    `json:"year"`
+	SequenceMin         *int    `json:"sequenceMin"`
+	SequenceMax         *int    `json:"sequenceMax"`
 	ArtistID            *int64  `json:"artistId"`
 	BrowseAsShow        bool    `json:"browseAsShow"`
 }
@@ -450,6 +453,9 @@ type UpdateCollectionRequest struct {
 	IsPrivate           bool    `json:"isPrivate"`
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 	SeasonNumber        *int    `json:"seasonNumber"`
+	Year                *int    `json:"year"`
+	SequenceMin         *int    `json:"sequenceMin"`
+	SequenceMax         *int    `json:"sequenceMax"`
 	ArtistID            *int64  `json:"artistId"`
 	BrowseAsShow        bool    `json:"browseAsShow"`
 }
@@ -472,6 +478,9 @@ type CollectionResponse struct {
 	FilenameTemplate     string  `json:"filenameTemplate"`
 	IsPrivate            bool    `json:"isPrivate"`
 	SeasonNumber         *int    `json:"seasonNumber"`
+	Year                 *int    `json:"year"`
+	SequenceMin          *int    `json:"sequenceMin"`
+	SequenceMax          *int    `json:"sequenceMax"`
 	ArtistID             *int64  `json:"artistId"`
 	CoverImagePath       *string `json:"coverImagePath"`
 	CoverImageSmallPath  *string `json:"coverImageSmallPath"`
@@ -690,6 +699,9 @@ func toCollectionResponse(c models.Collection, path string, itemCount int, effec
 		FilenameTemplate:        c.FilenameTemplate,
 		IsPrivate:               c.IsPrivate,
 		SeasonNumber:            c.SeasonNumber,
+		Year:                    c.Year,
+		SequenceMin:             c.SequenceMin,
+		SequenceMax:             c.SequenceMax,
 		ArtistID:                c.ArtistID,
 		CoverImagePath:          c.CoverImagePath,
 		CoverImageSmallPath:     c.CoverImageSmallPath,

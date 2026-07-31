@@ -90,6 +90,9 @@ export interface Collection {
   filenameTemplate: string
   isPrivate: boolean
   seasonNumber: number | null
+  year: number | null
+  sequenceMin: number | null
+  sequenceMax: number | null
   artistId: number | null
   coverImagePath: string | null
   coverImageSmallPath: string | null
@@ -130,6 +133,9 @@ export interface CreateCollectionRequest {
   isPrivate?: boolean
   jellyfinLibraryId?: string | null
   seasonNumber?: number | null
+  year?: number | null
+  sequenceMin?: number | null
+  sequenceMax?: number | null
   artistId?: number | null
   browseAsShow?: boolean
 }

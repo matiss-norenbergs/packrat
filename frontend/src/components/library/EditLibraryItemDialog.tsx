@@ -1,5 +1,5 @@
-import { Wand2 } from "lucide-react"
-import { useState } from "react"
+import { RefreshCw, Wand2 } from "lucide-react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { Button } from "@/components/ui/button"
@@ -16,15 +16,19 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useArtists } from "@/hooks/useArtists"
+import { useCollections } from "@/hooks/useCollections"
 import { useLibraryQuery, useUpdateLibraryItem } from "@/hooks/useLibrary"
 import { useTags } from "@/hooks/useTags"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { artistIdToSelectValue, baseNameWithoutExt, buildLibraryItemUpdatePayload } from "@/lib/libraryItemEdit"
+import { resolveFilenameTemplatePreview } from "@/lib/nametemplate"
 import { parseSeasonEpisode } from "@/lib/seasonEpisode"
 import { computeSequenceGaps } from "@/lib/sequenceGaps"
 import { formatDuration } from "@/lib/utils"
-import { ArtistSelect } from "./ArtistSelect"
+import { ArtistSelect, NO_ARTIST } from "./ArtistSelect"
 import { useRevealAll } from "./RevealAllContext"
+import { SequenceNumberField } from "./SequenceNumberField"
 import { TagInput } from "./TagInput"
 import type { LibraryItem } from "@/types/api"
 
@@ -49,16 +53,26 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
 
   const updateLibraryItem = useUpdateLibraryItem()
   const { data: allTags } = useTags()
+  const { data: collections } = useCollections()
+  const { data: artists } = useArtists()
   const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
   const revealed = isRevealed(item.id)
+
+  const itemCollection = collections?.find((c) => c.id === item.collectionId)
+  const sequenceMin = itemCollection?.sequenceMin
+  const sequenceMax = itemCollection?.sequenceMax
+  const artistName = artistId === NO_ARTIST ? "" : (artists?.find((a) => String(a.id) === artistId)?.name ?? "")
 
   // Siblings in the same collection, fetched only while the dialog is open —
   // used to show which sequence numbers are already taken/missing. Overlays
   // this item's own in-progress form value below, so the hint answers "if I
   // save this number" rather than only ever showing the stale pre-edit state.
+  // Superseded by SequenceNumberField's own picker once sequenceMax is set
+  // (the 1..max option list already conveys this), so this hint is only
+  // computed/shown when there's no configured max.
   const { data: siblings } = useLibraryQuery(
     { collectionId: item.collectionId ?? undefined },
-    open && item.collectionId != null,
+    open && item.collectionId != null && sequenceMax == null,
   )
   const parsedSequenceNumber = sequenceNumber.trim() === "" ? null : Number(sequenceNumber)
   const sequenceGapInfo = computeSequenceGaps(
@@ -67,7 +81,13 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     ),
   )
 
-  const resetFields = () => {
+  // `open` is set externally (the row's dropdown item flips it straight to
+  // true, not via a DialogTrigger), so Radix's own onOpenChange never fires
+  // on open — only on internally-triggered closes (Escape, overlay, the X
+  // button). A plain useEffect is what actually catches every open; without
+  // it, fields kept whatever was last typed from a previous open-without-save.
+  useEffect(() => {
+    if (!open) return
     setTitle(item.title)
     setFilename(baseNameWithoutExt(item.filename))
     setUploader(item.uploader ?? "")
@@ -79,22 +99,46 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     setOriginalUrl(item.originalUrl ?? "")
     setTags(item.tags)
     setGenerateNfo(item.generateNfo)
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, item])
 
-  const handleOpenChange = (next: boolean) => {
-    if (next) resetFields()
-    onOpenChange(next)
-  }
-
-  const handleDetectSeasonEpisode = () => {
+  const handleDetectSeason = () => {
     const result = parseSeasonEpisode(filename)
     if (!result) {
       toast.error("No S01E02-style season/episode pattern found in the filename")
       return
     }
     setSeasonNumber(String(result.season))
+    toast.success(`Detected Season ${result.season}`)
+  }
+
+  const handleDetectSequence = () => {
+    const result = parseSeasonEpisode(filename)
+    if (!result) {
+      toast.error("No S01E02-style season/episode pattern found in the filename")
+      return
+    }
     setSequenceNumber(String(result.episode))
-    toast.success(`Detected Season ${result.season}, Episode ${result.episode}`)
+    toast.success(`Detected Episode ${result.episode}`)
+  }
+
+  const handleReconstructFilename = () => {
+    if (!itemCollection?.filenameTemplate) {
+      toast.error("This item's collection has no filename template set")
+      return
+    }
+    setFilename(
+      resolveFilenameTemplatePreview(itemCollection.filenameTemplate, {
+        title,
+        uploader,
+        uploadDate: item.downloadedAt,
+        artist: artistName,
+        year,
+        season: seasonNumber,
+        sequence: sequenceNumber,
+        collection: item.collectionName ?? "",
+      }),
+    )
   }
 
   const handleSubmit = () => {
@@ -120,7 +164,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Edit</DialogTitle>
@@ -142,26 +186,27 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
 
             <div className="space-y-2">
               <Label htmlFor="edit-filename">Filename (without extension)</Label>
-              <div className="flex gap-2">
+              <div className="relative">
                 <Input
                   id="edit-filename"
                   value={filename}
                   onChange={(e) => setFilename(e.target.value)}
-                  className="flex-1"
+                  className="pr-8"
                 />
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={handleDetectSeasonEpisode}
-                      aria-label="Detect Season/Episode from filename"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={handleReconstructFilename}
+                      aria-label="Reconstruct from collection's filename template"
                     >
-                      <Wand2 className="h-4 w-4" />
+                      <RefreshCw className="h-3.5 w-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Detect Season/Episode from filename (e.g. S01E02)</TooltipContent>
+                  <TooltipContent>Reconstruct from the collection's filename template</TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -277,28 +322,73 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-season-number">Season #</Label>
-                <Input
-                  id="edit-season-number"
-                  type="number"
-                  min="1"
-                  placeholder="e.g. 1"
-                  value={seasonNumber}
-                  onChange={(e) => setSeasonNumber(e.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    id="edit-season-number"
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 1"
+                    className="pr-8"
+                    value={seasonNumber}
+                    onChange={(e) => setSeasonNumber(e.target.value)}
+                  />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={handleDetectSeason}
+                        aria-label="Detect Season from filename"
+                      >
+                        <Wand2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Detect from filename (e.g. S01E02)</TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-sequence-number">Sequence #</Label>
-                <Input
-                  id="edit-sequence-number"
-                  type="number"
-                  min="1"
-                  placeholder="e.g. 3"
-                  value={sequenceNumber}
-                  onChange={(e) => setSequenceNumber(e.target.value)}
-                />
+                {sequenceMax == null ? (
+                  <div className="relative">
+                    <SequenceNumberField
+                      id="edit-sequence-number"
+                      value={sequenceNumber}
+                      onChange={setSequenceNumber}
+                      sequenceMax={sequenceMax}
+                      sequenceMin={sequenceMin}
+                      className="pr-8"
+                    />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          onClick={handleDetectSequence}
+                          aria-label="Detect Episode from filename"
+                        >
+                          <Wand2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Detect from filename (e.g. S01E02)</TooltipContent>
+                    </Tooltip>
+                  </div>
+                ) : (
+                  <SequenceNumberField
+                    id="edit-sequence-number"
+                    value={sequenceNumber}
+                    onChange={setSequenceNumber}
+                    sequenceMax={sequenceMax}
+                    sequenceMin={sequenceMin}
+                  />
+                )}
               </div>
             </div>
-            {sequenceGapInfo && (
+            {sequenceMax == null && sequenceGapInfo && (
               <p className="text-xs text-muted-foreground">
                 Sequence {sequenceGapInfo.min}–{sequenceGapInfo.max} · Missing:{" "}
                 {sequenceGapInfo.missing.length === 0

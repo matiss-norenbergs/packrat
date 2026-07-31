@@ -525,11 +525,25 @@ type SequenceGap struct {
 // true total.
 const sequenceGapSampleCap = 50
 
+// SequenceRange overrides the reported min/max for a collection, when its
+// own configured Sequence Min/Max should widen the gap range beyond what's
+// merely been placed so far (e.g. items 1-8 exist but the collection expects
+// up to 12 — without this, gaps only ever get reported between placed
+// items). Either field nil falls back to that item-derived bound.
+type SequenceRange struct {
+	Min *int
+	Max *int
+}
+
 // SequenceGapsByCollection returns gap info only for collections that
 // actually have one — a collection with zero or one sequence-numbered item
 // (nothing to have a "range" in) or a fully dense sequence is absent from
-// the map, same convention as LatestThumbnailsByCollection.
-func (r *LibraryRepo) SequenceGapsByCollection(ctx context.Context) (map[int64]SequenceGap, error) {
+// the map, same convention as LatestThumbnailsByCollection. ranges lets a
+// collection's own configured Sequence Min/Max widen the reported range
+// beyond its placed items' own min/max; a collection missing from ranges (or
+// with nil fields) falls back to the item-derived bound, unchanged from
+// before ranges existed.
+func (r *LibraryRepo) SequenceGapsByCollection(ctx context.Context, ranges map[int64]SequenceRange) (map[int64]SequenceGap, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT collection_id, sequence_number FROM library
 		WHERE collection_id IS NOT NULL AND sequence_number IS NOT NULL
@@ -555,7 +569,15 @@ func (r *LibraryRepo) SequenceGapsByCollection(ctx context.Context) (map[int64]S
 	out := make(map[int64]SequenceGap)
 	for collectionID, seqs := range values {
 		min, max := seqs[0], seqs[len(seqs)-1] // rows arrive pre-sorted by sequence_number
-		if min == max {
+		if rng, ok := ranges[collectionID]; ok {
+			if rng.Min != nil {
+				min = *rng.Min
+			}
+			if rng.Max != nil {
+				max = *rng.Max
+			}
+		}
+		if min >= max {
 			continue
 		}
 		present := make(map[int]bool, len(seqs))

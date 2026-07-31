@@ -68,6 +68,14 @@ export function resolveInheritedArtistId(collections: Collection[], collectionId
   return null
 }
 
+// Alphabetical by full path — the same text every collection-picking Select
+// displays, so the on-screen order actually matches what's printed (the
+// backend's own ORDER BY name sorts by leaf name only, which can look
+// inconsistent once the label shown is the full path).
+export function sortCollectionsByPath<T extends { path: string }>(collections: T[]): T[] {
+  return [...collections].sort((a, b) => a.path.localeCompare(b.path))
+}
+
 // Walks up parentId to the collection with no parent (or whose parent isn't
 // in the list) — used to bucket flagged "show" collections into one Browse
 // row per top-level ancestor, so e.g. several artists/albums nested under

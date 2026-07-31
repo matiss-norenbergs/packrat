@@ -7,6 +7,7 @@ import type { LibraryItemEditFields } from "@/lib/libraryItemEdit"
 import { cn } from "@/lib/utils"
 import { ArtistSelect } from "./ArtistSelect"
 import { LibraryItemPreviewRow } from "./LibraryItemPreviewRow"
+import { SequenceNumberField } from "./SequenceNumberField"
 import { TagInput } from "./TagInput"
 import type { LibraryItem } from "@/types/api"
 
@@ -15,6 +16,8 @@ interface BulkEditLibraryItemRowProps {
   rowNumber: number
   fields: LibraryItemEditFields
   onChange: (patch: Partial<LibraryItemEditFields>) => void
+  sequenceMin: number | null | undefined
+  sequenceMax: number | null | undefined
 }
 
 // One item's full editable field set, always expanded (no Advanced toggle) —
@@ -22,7 +25,7 @@ interface BulkEditLibraryItemRowProps {
 // Resolution/Duration display fields. Alternating row shading (rowNumber %
 // 2) mirrors BulkDownloadRow's same convention, since a long list of
 // otherwise-identical bordered rows is hard to visually track.
-export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange }: BulkEditLibraryItemRowProps) {
+export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange, sequenceMin, sequenceMax }: BulkEditLibraryItemRowProps) {
   const { data: allTags } = useTags()
 
   return (
@@ -68,12 +71,11 @@ export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange }: Bu
         </div>
         <div className="space-y-1">
           <Label>Sequence #</Label>
-          <Input
-            type="number"
-            min="1"
-            placeholder="1"
+          <SequenceNumberField
             value={fields.sequenceNumber}
-            onChange={(e) => onChange({ sequenceNumber: e.target.value })}
+            onChange={(v) => onChange({ sequenceNumber: v })}
+            sequenceMax={sequenceMax}
+            sequenceMin={sequenceMin}
           />
         </div>
       </div>

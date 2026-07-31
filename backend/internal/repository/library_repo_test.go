@@ -380,7 +380,18 @@ func TestLibraryRepo_SequenceGapsByCollection(t *testing.T) {
 	mustCreateItem(unsequenced, nil)
 	mustCreateItem(unsequenced, nil)
 
-	gaps, err := repo.SequenceGapsByCollection(ctx)
+	// A collection whose placed items are dense on their own (1,2,3) but
+	// whose configured Sequence Max extends further — the override should
+	// surface the gap a plain item-derived min/max would miss entirely.
+	rangedMax := mustCreateCollection("RangedMax")
+	mustCreateItem(rangedMax, seq(1))
+	mustCreateItem(rangedMax, seq(2))
+	mustCreateItem(rangedMax, seq(3))
+
+	configuredMax := 6
+	gaps, err := repo.SequenceGapsByCollection(ctx, map[int64]SequenceRange{
+		rangedMax: {Max: &configuredMax},
+	})
 	if err != nil {
 		t.Fatalf("SequenceGapsByCollection: %v", err)
 	}
@@ -391,6 +402,14 @@ func TestLibraryRepo_SequenceGapsByCollection(t *testing.T) {
 	}
 	if got.Min != 1 || got.Max != 5 || got.Count != 1 || len(got.Missing) != 1 || got.Missing[0] != 4 {
 		t.Fatalf("unexpected gap for gapped collection: %+v", got)
+	}
+
+	gotRanged, ok := gaps[rangedMax]
+	if !ok {
+		t.Fatalf("expected a gap entry for the rangedMax collection (configured max beyond placed items), got none in %+v", gaps)
+	}
+	if gotRanged.Min != 1 || gotRanged.Max != 6 || gotRanged.Count != 3 || len(gotRanged.Missing) != 3 {
+		t.Fatalf("unexpected gap for rangedMax collection: %+v", gotRanged)
 	}
 
 	for name, id := range map[string]int64{"dense": dense, "single-item": single, "unsequenced": unsequenced} {

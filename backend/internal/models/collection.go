@@ -13,6 +13,9 @@ type Collection struct {
 	JellyfinLibrary      *string
 	IsPrivate            bool
 	SeasonNumber         *int
+	Year                 *int
+	SequenceMin          *int
+	SequenceMax          *int
 	ArtistID             *int64
 	CoverImagePath       *string
 	CoverImageSmallPath  *string

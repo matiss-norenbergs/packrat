@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react"
-import { ImageIcon, Plus, X } from "lucide-react"
+import { Eye, EyeOff, ImageIcon, Info, Plus, X } from "lucide-react"
+import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,6 +14,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Select,
@@ -40,6 +42,48 @@ interface CollectionDialogProps {
   trigger?: ReactNode
 }
 
+// A small info icon next to a field's label, opening a popover with the
+// field's explanation on hover — replaces the old always-visible hint
+// paragraph below each input, so the form reads shorter at a glance while
+// the explanation stays one hover away. Popover has no built-in hover mode,
+// so open/close is driven manually here — both the trigger and the content
+// itself need the enter/leave handlers, or moving the mouse off the small
+// icon and onto the content would immediately close it.
+function FieldInfoPopover({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-muted-foreground transition hover:text-foreground"
+          aria-label="More info"
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="text-xs text-muted-foreground"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+      >
+        {children}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function FieldLabel({ htmlFor, children, info }: { htmlFor: string; children: ReactNode; info: ReactNode }) {
+  return (
+    <div className="flex items-center gap-1">
+      <Label htmlFor={htmlFor}>{children}</Label>
+      <FieldInfoPopover>{info}</FieldInfoPopover>
+    </div>
+  )
+}
+
 export function CollectionDialog({ collection, parentId, trigger }: CollectionDialogProps) {
   const isEdit = collection != null
   const [open, setOpen] = useState(false)
@@ -52,10 +96,14 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
   const [seasonNumber, setSeasonNumber] = useState(
     collection?.seasonNumber != null ? String(collection.seasonNumber) : "",
   )
+  const [year, setYear] = useState(collection?.year != null ? String(collection.year) : "")
+  const [sequenceMin, setSequenceMin] = useState(collection?.sequenceMin != null ? String(collection.sequenceMin) : "")
+  const [sequenceMax, setSequenceMax] = useState(collection?.sequenceMax != null ? String(collection.sequenceMax) : "")
   const [artistId, setArtistId] = useState(collection?.artistId != null ? String(collection.artistId) : NO_ARTIST)
   const [filenameTemplate, setFilenameTemplate] = useState(collection?.filenameTemplate ?? "")
   const [browseAsShow, setBrowseAsShow] = useState(collection?.browseAsShow ?? false)
   const [coverDialogOpen, setCoverDialogOpen] = useState(false)
+  const [coverRevealed, setCoverRevealed] = useState(false)
 
   const { data: settings } = useSettings()
   const createCollection = useCreateCollection()
@@ -74,9 +122,13 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       setIsPrivate(collection?.isPrivate ?? false)
       setJellyfinLibraryId(collection?.jellyfinLibraryId ?? "")
       setSeasonNumber(collection?.seasonNumber != null ? String(collection.seasonNumber) : "")
+      setYear(collection?.year != null ? String(collection.year) : "")
+      setSequenceMin(collection?.sequenceMin != null ? String(collection.sequenceMin) : "")
+      setSequenceMax(collection?.sequenceMax != null ? String(collection.sequenceMax) : "")
       setArtistId(collection?.artistId != null ? String(collection.artistId) : NO_ARTIST)
       setFilenameTemplate(collection?.filenameTemplate ?? "")
       setBrowseAsShow(collection?.browseAsShow ?? false)
+      setCoverRevealed(false)
     }
     setOpen(next)
   }
@@ -84,6 +136,9 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
   const handleSubmit = () => {
     if (!name.trim() || !rootPath.trim()) return
     const parsedSeason = seasonNumber.trim() === "" ? null : Number(seasonNumber)
+    const parsedYear = year.trim() === "" ? null : Number(year)
+    const parsedSequenceMin = sequenceMin.trim() === "" ? null : Number(sequenceMin)
+    const parsedSequenceMax = sequenceMax.trim() === "" ? null : Number(sequenceMax)
     const payload = {
       name: name.trim(),
       rootPath: rootPath.trim(),
@@ -92,6 +147,9 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       isPrivate,
       jellyfinLibraryId: jellyfinLibraryId.trim() || null,
       seasonNumber: parsedSeason != null && !Number.isNaN(parsedSeason) ? parsedSeason : null,
+      year: parsedYear != null && !Number.isNaN(parsedYear) ? parsedYear : null,
+      sequenceMin: parsedSequenceMin != null && !Number.isNaN(parsedSequenceMin) ? parsedSequenceMin : null,
+      sequenceMax: parsedSequenceMax != null && !Number.isNaN(parsedSequenceMax) ? parsedSequenceMax : null,
       artistId: artistId === NO_ARTIST ? null : Number(artistId),
       filenameTemplate: filenameTemplate.trim() || undefined,
       browseAsShow,
@@ -195,6 +253,16 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium whitespace-nowrap">Cover art</span>
+                    {isPrivate && collection.coverImagePath && (
+                      <button
+                        type="button"
+                        onClick={() => setCoverRevealed((v) => !v)}
+                        aria-label={coverRevealed ? "Hide cover art" : "Reveal cover art"}
+                        className="text-muted-foreground transition hover:text-foreground"
+                      >
+                        {coverRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
                     <Separator className="flex-1" />
                   </div>
                   <div
@@ -206,10 +274,13 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
                   >
                     {collection.coverImagePath ? (
                       <>
-                        <img
+                        <BlurredThumbnail
                           src={collectionMediumCoverUrl(collection)!}
-                          alt=""
                           className="h-full w-full object-cover"
+                          blurred={isPrivate}
+                          revealed={coverRevealed}
+                          onToggleReveal={() => setCoverRevealed((v) => !v)}
+                          interactive={false}
                         />
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -246,17 +317,41 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
             {/* Optional / opt-in fields — everything here can be left at its
                 default with no effect on downloads landing in this collection. */}
             <div className="space-y-4 sm:border-l sm:pl-6">
-              <div className="flex gap-4">
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="collection-artist">Artist (optional)</Label>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <FieldLabel
+                    htmlFor="collection-artist"
+                    info="New downloads added to this collection, or any sub-collection nested under it
+                    that doesn't set its own, default their own Artist to this value."
+                  >
+                    Artist
+                  </FieldLabel>
                   <ArtistSelect value={artistId} onValueChange={setArtistId} />
-                  <p className="text-xs text-muted-foreground">
-                    New downloads added to this collection, or any sub-collection nested under it
-                    that doesn't set its own, default their own Artist to this value.
-                  </p>
                 </div>
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="collection-season">Season # (optional)</Label>
+                <div className="space-y-2">
+                  <FieldLabel
+                    htmlFor="collection-year"
+                    info="New downloads added directly to this collection default their own Year to
+                    this value."
+                  >
+                    Year
+                  </FieldLabel>
+                  <Input
+                    id="collection-year"
+                    type="number"
+                    placeholder="2024"
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel
+                    htmlFor="collection-season"
+                    info="New downloads added to this collection default their own Season # to this
+                    value."
+                  >
+                    Season #
+                  </FieldLabel>
                   <Input
                     id="collection-season"
                     type="number"
@@ -265,15 +360,52 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
                     value={seasonNumber}
                     onChange={(e) => setSeasonNumber(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    New downloads added to this collection default their own Season # to this
-                    value.
-                  </p>
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel
+                    htmlFor="collection-sequence-min"
+                    info="Sets the expected range of items in this collection — leave the first box blank
+                    to assume it starts at 1. Once the range is set, Sequence # fields for items here
+                    become a picker instead of a free number, and the Edit Sequence dialog shows the
+                    full range including slots you haven't reached yet."
+                  >
+                    Sequence range
+                  </FieldLabel>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      id="collection-sequence-min"
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={sequenceMin}
+                      onChange={(e) => setSequenceMin(e.target.value)}
+                    />
+                    <span className="shrink-0 text-muted-foreground">–</span>
+                    <Input
+                      id="collection-sequence-max"
+                      type="number"
+                      min="1"
+                      placeholder="12"
+                      value={sequenceMax}
+                      onChange={(e) => setSequenceMax(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="collection-filename-template">Filename Template (optional)</Label>
+                <FieldLabel
+                  htmlFor="collection-filename-template"
+                  info={
+                    <>
+                      New downloads added to this collection default their own Filename Template to this
+                      value. Available tokens:{" "}
+                      {"{title} {uploader} {date} {artist} {year} {season} {sequence} {collection}"}
+                    </>
+                  }
+                >
+                  Filename Template
+                </FieldLabel>
                 <div className="relative">
                   <Input
                     id="collection-filename-template"
@@ -284,11 +416,6 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
                   />
                   <FilenameTemplateBuilderDialog value={filenameTemplate} onApply={setFilenameTemplate} />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  New downloads added to this collection default their own Filename Template to
-                  this value. Available tokens:{" "}
-                  {"{title} {uploader} {date} {artist} {year} {season} {sequence} {collection}"}
-                </p>
               </div>
 
               <div className="flex items-start gap-2">
@@ -326,17 +453,19 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
 
               {settings?.jellyfinEnabled && (
                 <div className="space-y-2">
-                  <Label htmlFor="collection-jellyfin-library">Jellyfin Library ID (optional)</Label>
+                  <FieldLabel
+                    htmlFor="collection-jellyfin-library"
+                    info='Only used when Settings → Jellyfin → Refresh is set to "Specific library" — that
+                    library gets refreshed after a download lands in this collection.'
+                  >
+                    Jellyfin Library ID
+                  </FieldLabel>
                   <Input
                     id="collection-jellyfin-library"
                     placeholder="e.g. 3c8f6b1a-..."
                     value={jellyfinLibraryId}
                     onChange={(e) => setJellyfinLibraryId(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Only used when Settings → Jellyfin → Refresh is set to "Specific library" —
-                    that library gets refreshed after a download lands in this collection.
-                  </p>
                 </div>
               )}
             </div>
