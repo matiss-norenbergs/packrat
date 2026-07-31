@@ -108,7 +108,12 @@ export function BulkEditLibraryItemsDialog({ open, onOpenChange }: BulkEditLibra
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl" onOpenAutoFocus={(e) => e.preventDefault()}>
+      {/* This dialog's per-file field grid is the widest content of any
+          dialog in the app — a fixed rem cap leaves real screen space
+          unused on a big monitor, so from lg up it scales with the
+          viewport instead (bounded the same 80-85% range EditSequenceDialog
+          uses) rather than topping out at a fixed size. */}
+      <DialogContent className="sm:max-w-4xl lg:max-w-[85vw]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Edit {isLoading ? "…" : rows.length} selected {rows.length === 1 ? "file" : "files"}</DialogTitle>
           <DialogDescription>

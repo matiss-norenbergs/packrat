@@ -100,15 +100,29 @@ export function NewDownloadDialog() {
   const { data: preview, isLoading: previewLoading, isError: previewError } =
     useDownloadPreview(debouncedUrl, previewEnabled)
 
+  // Whether the pasted URL looks fetchable — computed from the raw (not
+  // debounced) url, so the preview box's presence doesn't wait out the
+  // debounce window before appearing. Showing the box (with a skeleton)
+  // the instant this goes true, rather than once debouncedUrl/the fetch
+  // resolves, is what keeps the rest of the form from jumping later: the
+  // box's mere appearance was the layout shift, not the swap from skeleton
+  // to real content within an already-present box.
+  const trimmedUrl = url.trim()
+  const looksLikeUrl = trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")
+  const showPreviewBox = previewEnabled && looksLikeUrl
+  // Still debouncing (or the debounced fetch hasn't started yet) counts as
+  // loading too — useDownloadPreview's query is disabled until debouncedUrl
+  // is set, so previewLoading alone would report false during that window.
+  const previewPending = !debouncedUrl || previewLoading
+
   useEffect(() => {
-    const trimmed = url.trim()
-    const looksLikeUrl = trimmed.startsWith("http://") || trimmed.startsWith("https://")
     if (!looksLikeUrl) {
       setDebouncedUrl("")
       return
     }
-    const timer = setTimeout(() => setDebouncedUrl(trimmed), 500)
+    const timer = setTimeout(() => setDebouncedUrl(trimmedUrl), 500)
     return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url])
 
   const reset = () => {
@@ -259,7 +273,7 @@ export function NewDownloadDialog() {
           New Download
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>New Download</DialogTitle>
           <DialogDescription>Paste any URL supported by yt-dlp.</DialogDescription>
@@ -277,12 +291,12 @@ export function NewDownloadDialog() {
             />
           </div>
 
-          {previewEnabled && debouncedUrl && (
+          {showPreviewBox && (
             <div className="rounded-md border p-3">
-              {previewLoading ? (
+              {previewPending ? (
                 <div className="flex items-center gap-3">
                   <Skeleton className="h-12 w-20 shrink-0 rounded" />
-                  <div className="flex-1 space-y-1.5">
+                  <div className="min-w-0 flex-1 space-y-1.5">
                     <Skeleton className="h-3.5 w-3/4" />
                     <Skeleton className="h-3 w-1/3" />
                   </div>
@@ -292,8 +306,8 @@ export function NewDownloadDialog() {
                   Couldn't fetch a preview for this URL — you can still queue the download.
                 </p>
               ) : preview?.isPlaylist ? (
-                <div>
-                  <p className="line-clamp-1 text-sm font-medium">{preview.playlistTitle || "Playlist"}</p>
+                <div className="min-w-0">
+                  <p className="line-clamp-1 text-sm font-medium break-words">{preview.playlistTitle || "Playlist"}</p>
                   <p className="text-xs text-muted-foreground">{preview.playlistCount} videos</p>
                 </div>
               ) : preview ? (
@@ -308,8 +322,8 @@ export function NewDownloadDialog() {
                     <div className="h-12 w-20 shrink-0 rounded bg-muted" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="line-clamp-1 text-sm font-medium">{preview.title}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="line-clamp-1 break-words text-sm font-medium">{preview.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">
                       {preview.uploader || "Unknown uploader"}
                       {preview.duration > 0 && ` · ${formatDuration(preview.duration)}`}
                       {preview.resolution && ` · ${preview.resolution}`}
@@ -391,7 +405,7 @@ export function NewDownloadDialog() {
           )}
 
           {!preview?.isPlaylist && preview?.duplicate && (
-            <div className="rounded-md border border-amber-600/50 bg-amber-500/10 p-3 text-sm">
+            <div className="rounded-md border border-amber-600/50 bg-amber-500/10 p-3 text-sm break-words">
               Already in your library: <span className="font-medium">{preview.duplicate.title}</span>, downloaded{" "}
               {new Date(preview.duplicate.downloadedAt).toLocaleDateString()}.
             </div>

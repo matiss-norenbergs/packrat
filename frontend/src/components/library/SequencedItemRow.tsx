@@ -3,10 +3,9 @@ import { CSS } from "@dnd-kit/utilities"
 import { ArrowDown, ArrowUp, GripVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BlurredThumbnail } from "@/components/BlurredThumbnail"
-import { librarySmallThumbnailUrl } from "@/lib/api"
 import type { PositionEntry } from "@/lib/sequenceArrangement"
-import { cn, hashText } from "@/lib/utils"
+import { cn } from "@/lib/utils"
+import { BlurredItemThumbnail } from "./BlurredItemThumbnail"
 import type { LibraryItem } from "@/types/api"
 
 interface SequencedItemRowProps {
@@ -33,7 +32,6 @@ export function SequencedItemRow({
   onJumpToPosition,
 }: SequencedItemRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
-  const thumbUrl = librarySmallThumbnailUrl(item)
 
   return (
     <div
@@ -85,33 +83,27 @@ export function SequencedItemRow({
         {displayNumber}
       </div>
 
-      {thumbUrl ? (
-        <BlurredThumbnail
-          src={thumbUrl}
-          className="h-10 w-16 shrink-0 rounded object-cover"
-          blurred={item.blurred}
-          revealed={false}
-          onToggleReveal={() => {}}
-        />
-      ) : (
-        <div className="h-10 w-16 shrink-0 rounded bg-muted" />
-      )}
+      <BlurredItemThumbnail item={item} className="h-10 w-16" />
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{item.blurred ? hashText(item.title) : item.title}</p>
+        <p className="truncate text-sm font-medium">{item.title}</p>
         {item.artistName && <p className="truncate text-xs text-muted-foreground">{item.artistName}</p>}
       </div>
 
       <Select value={String(displayNumber)} onValueChange={(v) => onJumpToPosition(Number(v))}>
-        <SelectTrigger className="w-44 shrink-0">
-          <SelectValue />
+        {/* Explicit children on SelectValue overrides Radix's default of
+            mirroring the matched SelectItem's full "position — title" text
+            — the collapsed trigger only needs the (at most 4-digit) number,
+            the full text is still there once the dropdown is open. */}
+        <SelectTrigger className="w-20 shrink-0 tabular-nums">
+          <SelectValue>{displayNumber}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {positions.map((p) => (
             <SelectItem key={p.position} value={String(p.position)}>
               {p.position}
               {p.occupant && p.occupant.id !== item.id
-                ? ` — ${p.occupant.blurred ? hashText(p.occupant.title) : p.occupant.title}`
+                ? ` — ${p.occupant.title}`
                 : p.occupant === null
                   ? " — empty (missing)"
                   : ""}
