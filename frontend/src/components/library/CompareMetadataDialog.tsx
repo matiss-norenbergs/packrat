@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { ResolutionValue } from "@/components/ResolutionValue"
 import { useLibraryItemMetadataPreview } from "@/hooks/useLibrary"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { cn, formatDuration } from "@/lib/utils"
@@ -17,6 +18,7 @@ interface Field {
   label: string
   source: string | null
   saved: string
+  resolution?: boolean
 }
 
 export function CompareMetadataDialog({ item, open, onOpenChange }: CompareMetadataDialogProps) {
@@ -32,7 +34,7 @@ export function CompareMetadataDialog({ item, open, onOpenChange }: CompareMetad
       source: data ? (data.duration ? formatDuration(data.duration) : "—") : null,
       saved: savedDuration,
     },
-    { label: "Resolution", source: data ? (data.resolution ?? "—") : null, saved: item.resolution ?? "—" },
+    { label: "Resolution", source: data ? (data.resolution ?? "—") : null, saved: item.resolution ?? "—", resolution: true },
     { label: "Description", source: data ? data.description || "—" : null, saved: item.description || "—" },
   ]
 
@@ -69,7 +71,13 @@ export function CompareMetadataDialog({ item, open, onOpenChange }: CompareMetad
                   />
                 </div>
                 {fields.map((f) => (
-                  <FieldRow key={f.label} label={f.label} value={f.source ?? "—"} differs={f.source !== f.saved} />
+                  <FieldRow
+                    key={f.label}
+                    label={f.label}
+                    value={f.source ?? "—"}
+                    differs={f.source !== f.saved}
+                    resolution={f.resolution}
+                  />
                 ))}
               </>
             ) : null}
@@ -89,7 +97,13 @@ export function CompareMetadataDialog({ item, open, onOpenChange }: CompareMetad
               ) : null}
             </div>
             {fields.map((f) => (
-              <FieldRow key={f.label} label={f.label} value={f.saved} differs={f.source != null && f.source !== f.saved} />
+              <FieldRow
+                key={f.label}
+                label={f.label}
+                value={f.saved}
+                differs={f.source != null && f.source !== f.saved}
+                resolution={f.resolution}
+              />
             ))}
           </div>
         </div>
@@ -98,14 +112,28 @@ export function CompareMetadataDialog({ item, open, onOpenChange }: CompareMetad
   )
 }
 
-function FieldRow({ label, value, differs }: { label: string; value: string; differs: boolean }) {
+function FieldRow({
+  label,
+  value,
+  differs,
+  resolution,
+}: {
+  label: string
+  value: string
+  differs: boolean
+  resolution?: boolean
+}) {
   return (
     <div className="space-y-0.5">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <span>{label}</span>
         {differs && <span className="text-amber-500">differs</span>}
       </div>
-      <p className={cn("text-sm whitespace-pre-wrap", differs && "text-amber-500")}>{value}</p>
+      {resolution ? (
+        <ResolutionValue resolution={value === "—" ? null : value} className="text-sm whitespace-pre-wrap" />
+      ) : (
+        <p className={cn("text-sm whitespace-pre-wrap", differs && "text-amber-500")}>{value}</p>
+      )}
     </div>
   )
 }

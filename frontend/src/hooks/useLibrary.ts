@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  acceptLibraryItemTrim,
   bulkAssignTags,
   bulkDeleteLibraryItems,
   deleteLibraryItem,
   deleteLibraryItemNFO,
+  discardLibraryItemTrim,
   fetchLibrary,
   fetchLibraryFacets,
   fetchLibraryItemMetadataPreview,
@@ -13,6 +15,7 @@ import {
   fetchLibraryThumbnailCandidates,
   generateLibraryItemNFO,
   moveLibraryItem,
+  previewLibraryItemTrim,
   probeLibraryItemMetadata,
   quickGrabLibraryThumbnail,
   redownloadLibraryItem,
@@ -29,6 +32,7 @@ import type {
   LibraryListResponse,
   LibraryQueryParams,
   MoveLibraryItemRequest,
+  TrimPreviewRequest,
   UpdateLibraryItemRequest,
 } from "@/types/api"
 import { downloadsQueryKey } from "./useDownloads"
@@ -187,6 +191,38 @@ export function useProbeLibraryItemMetadata() {
   return useMutation({
     mutationFn: (id: number) => probeLibraryItemMetadata(id),
     onError: (err: Error) => toast.error(`Failed to rescan file: ${err.message}`),
+  })
+}
+
+// Generates a trimmed preview file — nothing persisted, no query
+// invalidation needed. The caller (TrimLibraryItemDialog) holds onto the
+// result to drive the Original/Preview playback toggle and the Accept step.
+export function usePreviewLibraryItemTrim() {
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: TrimPreviewRequest }) => previewLibraryItemTrim(id, payload),
+    onError: (err: Error) => toast.error(`Failed to generate trim preview: ${err.message}`),
+  })
+}
+
+export function useAcceptLibraryItemTrim() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, previewPath }: { id: number; previewPath: string }) => acceptLibraryItemTrim(id, previewPath),
+    onSuccess: () => {
+      toast.success("Trim applied")
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to apply trim: ${err.message}`),
+  })
+}
+
+// No success toast/query invalidation — this also fires silently (fire and
+// forget) when the dialog closes without an explicit Accept, and nothing
+// persisted actually changed for either case.
+export function useDiscardLibraryItemTrim() {
+  return useMutation({
+    mutationFn: ({ id, previewPath }: { id: number; previewPath: string }) => discardLibraryItemTrim(id, previewPath),
+    onError: (err: Error) => toast.error(`Failed to discard trim preview: ${err.message}`),
   })
 }
 

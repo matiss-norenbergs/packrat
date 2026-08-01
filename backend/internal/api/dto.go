@@ -427,6 +427,30 @@ type MoveLibraryItemRequest struct {
 	Folder       string `json:"folder"`
 }
 
+// TrimPreviewRequest is POST /library/:id/trim/preview's body. At least one
+// of TrimStartSeconds/TrimEndSeconds must be set (validated in the
+// handler) — nil means "don't trim that end".
+type TrimPreviewRequest struct {
+	TrimStartSeconds *float64 `json:"trimStartSeconds"`
+	TrimEndSeconds   *float64 `json:"trimEndSeconds"`
+}
+
+// TrimPreviewResponse describes the generated preview file — PreviewPath is
+// MediaRoot-relative, same shape as LibraryItemResponse.Path, so the client
+// can build a playable URL with the existing mediaFileUrl() helper.
+type TrimPreviewResponse struct {
+	PreviewPath     string `json:"previewPath"`
+	DurationSeconds int    `json:"durationSeconds"`
+	FileSizeBytes   int64  `json:"fileSizeBytes"`
+}
+
+// TrimActionRequest is shared by POST /library/:id/trim/accept and
+// POST /library/:id/trim/discard — both just need to know which preview
+// file to act on.
+type TrimActionRequest struct {
+	PreviewPath string `json:"previewPath" binding:"required"`
+}
+
 type CreateCollectionRequest struct {
 	Name                string  `json:"name" binding:"required"`
 	ParentID            *int64  `json:"parentId"`
@@ -623,72 +647,78 @@ type SetCollectionCoverRequest struct {
 }
 
 type SettingsResponse struct {
-	DownloadDirectory        string   `json:"downloadDirectory"`
-	MaxConcurrentDownloads   int      `json:"maxConcurrentDownloads"`
-	DownloadTimeoutMinutes   int      `json:"downloadTimeoutMinutes"`
-	DefaultQuality           string   `json:"defaultQuality"`
-	DefaultDownloadType      string   `json:"defaultDownloadType"`
-	ImportIgnoredFolders     []string `json:"importIgnoredFolders"`
-	HistoryAnonymizeURLs     bool     `json:"historyAnonymizeUrls"`
-	HistoryRetentionDays     int      `json:"historyRetentionDays"`
-	DownloadLogRetentionDays int      `json:"downloadLogRetentionDays"`
-	LibraryView              string   `json:"libraryView"`
-	LibrarySortKey           string   `json:"librarySortKey"`
-	LibrarySortDir           string   `json:"librarySortDir"`
-	LibraryMode              string   `json:"libraryMode"`
-	LibraryPaginationEnabled bool     `json:"libraryPaginationEnabled"`
-	LibraryPageSize          int      `json:"libraryPageSize"`
-	ThumbnailFrameCount      int      `json:"thumbnailFrameCount"`
-	PrivacyEnabled           bool     `json:"privacyEnabled"`
-	PrivacyBlurStrength      string   `json:"privacyBlurStrength"`
-	BrowseIgnorePrivacy      bool     `json:"browseIgnorePrivacy"`
-	SkipDownloadPreview      bool     `json:"skipDownloadPreview"`
-	JellyfinEnabled          bool     `json:"jellyfinEnabled"`
-	JellyfinURL              string   `json:"jellyfinUrl"`
-	JellyfinAPIKey           string   `json:"jellyfinApiKey"`
-	JellyfinRefreshMode      string   `json:"jellyfinRefreshMode"`
-	LibraryAutoplay          bool     `json:"libraryAutoplay"`
-	YtdlpCookiesBrowser      string   `json:"ytdlpCookiesBrowser"`
-	YtdlpCookiesProfile      string   `json:"ytdlpCookiesProfile"`
-	YtdlpProxy               string   `json:"ytdlpProxy"`
-	YtdlpRateLimit           string   `json:"ytdlpRateLimit"`
-	YtdlpRetries             int      `json:"ytdlpRetries"`
-	AutoBackupIntervalHours  int      `json:"autoBackupIntervalHours"`
-	BackupRetentionCount    int      `json:"backupRetentionCount"`
+	DownloadDirectory           string   `json:"downloadDirectory"`
+	MaxConcurrentDownloads      int      `json:"maxConcurrentDownloads"`
+	DownloadTimeoutMinutes      int      `json:"downloadTimeoutMinutes"`
+	DefaultQuality              string   `json:"defaultQuality"`
+	DefaultDownloadType         string   `json:"defaultDownloadType"`
+	ImportIgnoredFolders        []string `json:"importIgnoredFolders"`
+	HistoryAnonymizeURLs        bool     `json:"historyAnonymizeUrls"`
+	HistoryRetentionDays        int      `json:"historyRetentionDays"`
+	DownloadLogRetentionDays    int      `json:"downloadLogRetentionDays"`
+	LibraryView                 string   `json:"libraryView"`
+	LibrarySortKey              string   `json:"librarySortKey"`
+	LibrarySortDir              string   `json:"librarySortDir"`
+	LibraryMode                 string   `json:"libraryMode"`
+	LibraryPaginationEnabled    bool     `json:"libraryPaginationEnabled"`
+	LibraryPageSize             int      `json:"libraryPageSize"`
+	ThumbnailFrameCount         int      `json:"thumbnailFrameCount"`
+	PrivacyEnabled              bool     `json:"privacyEnabled"`
+	PrivacyBlurStrength         string   `json:"privacyBlurStrength"`
+	BrowseIgnorePrivacy         bool     `json:"browseIgnorePrivacy"`
+	SkipDownloadPreview         bool     `json:"skipDownloadPreview"`
+	JellyfinEnabled             bool     `json:"jellyfinEnabled"`
+	JellyfinURL                 string   `json:"jellyfinUrl"`
+	JellyfinAPIKey              string   `json:"jellyfinApiKey"`
+	JellyfinRefreshMode         string   `json:"jellyfinRefreshMode"`
+	LibraryAutoplay             bool     `json:"libraryAutoplay"`
+	YtdlpCookiesBrowser         string   `json:"ytdlpCookiesBrowser"`
+	YtdlpCookiesProfile         string   `json:"ytdlpCookiesProfile"`
+	YtdlpProxy                  string   `json:"ytdlpProxy"`
+	YtdlpRateLimit              string   `json:"ytdlpRateLimit"`
+	YtdlpRetries                int      `json:"ytdlpRetries"`
+	AutoBackupIntervalHours     int      `json:"autoBackupIntervalHours"`
+	BackupRetentionCount        int      `json:"backupRetentionCount"`
+	ResolutionTierMediumEnabled bool     `json:"resolutionTierMediumEnabled"`
+	ResolutionThresholdLow      int      `json:"resolutionThresholdLow"`
+	ResolutionThresholdHigh     int      `json:"resolutionThresholdHigh"`
 }
 
 type UpdateSettingsRequest struct {
-	MaxConcurrentDownloads   *int      `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
-	DownloadTimeoutMinutes   *int      `json:"downloadTimeoutMinutes" binding:"omitempty,min=0"`
-	DefaultQuality           *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType      *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
-	ImportIgnoredFolders     *[]string `json:"importIgnoredFolders"`
-	HistoryAnonymizeURLs     *bool     `json:"historyAnonymizeUrls"`
-	HistoryRetentionDays     *int      `json:"historyRetentionDays" binding:"omitempty,min=0"`
-	DownloadLogRetentionDays *int      `json:"downloadLogRetentionDays" binding:"omitempty,min=0"`
-	LibraryView              *string   `json:"libraryView" binding:"omitempty,oneof=grid folders list"`
-	LibrarySortKey           *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber seasonNumber"`
-	LibrarySortDir           *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
-	LibraryMode              *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
-	LibraryPaginationEnabled *bool     `json:"libraryPaginationEnabled"`
-	LibraryPageSize          *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
-	ThumbnailFrameCount      *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
-	PrivacyEnabled           *bool     `json:"privacyEnabled"`
-	PrivacyBlurStrength      *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
-	BrowseIgnorePrivacy      *bool     `json:"browseIgnorePrivacy"`
-	SkipDownloadPreview      *bool     `json:"skipDownloadPreview"`
-	JellyfinEnabled          *bool     `json:"jellyfinEnabled"`
-	JellyfinURL              *string   `json:"jellyfinUrl"`
-	JellyfinAPIKey           *string   `json:"jellyfinApiKey"`
-	JellyfinRefreshMode      *string   `json:"jellyfinRefreshMode" binding:"omitempty,oneof=entire specific none"`
-	LibraryAutoplay          *bool     `json:"libraryAutoplay"`
-	YtdlpCookiesBrowser      *string   `json:"ytdlpCookiesBrowser"`
-	YtdlpCookiesProfile      *string   `json:"ytdlpCookiesProfile"`
-	YtdlpProxy               *string   `json:"ytdlpProxy"`
-	YtdlpRateLimit           *string   `json:"ytdlpRateLimit"`
-	YtdlpRetries             *int      `json:"ytdlpRetries" binding:"omitempty,min=0"`
-	AutoBackupIntervalHours  *int      `json:"autoBackupIntervalHours" binding:"omitempty,oneof=0 6 12 24 72 168"`
-	BackupRetentionCount    *int      `json:"backupRetentionCount" binding:"omitempty,min=0"`
+	MaxConcurrentDownloads      *int      `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
+	DownloadTimeoutMinutes      *int      `json:"downloadTimeoutMinutes" binding:"omitempty,min=0"`
+	DefaultQuality              *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
+	DefaultDownloadType         *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	ImportIgnoredFolders        *[]string `json:"importIgnoredFolders"`
+	HistoryAnonymizeURLs        *bool     `json:"historyAnonymizeUrls"`
+	HistoryRetentionDays        *int      `json:"historyRetentionDays" binding:"omitempty,min=0"`
+	DownloadLogRetentionDays    *int      `json:"downloadLogRetentionDays" binding:"omitempty,min=0"`
+	LibraryView                 *string   `json:"libraryView" binding:"omitempty,oneof=grid folders list"`
+	LibrarySortKey              *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber seasonNumber"`
+	LibrarySortDir              *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
+	LibraryMode                 *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
+	LibraryPaginationEnabled    *bool     `json:"libraryPaginationEnabled"`
+	LibraryPageSize             *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
+	ThumbnailFrameCount         *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
+	PrivacyEnabled              *bool     `json:"privacyEnabled"`
+	PrivacyBlurStrength         *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
+	BrowseIgnorePrivacy         *bool     `json:"browseIgnorePrivacy"`
+	SkipDownloadPreview         *bool     `json:"skipDownloadPreview"`
+	JellyfinEnabled             *bool     `json:"jellyfinEnabled"`
+	JellyfinURL                 *string   `json:"jellyfinUrl"`
+	JellyfinAPIKey              *string   `json:"jellyfinApiKey"`
+	JellyfinRefreshMode         *string   `json:"jellyfinRefreshMode" binding:"omitempty,oneof=entire specific none"`
+	LibraryAutoplay             *bool     `json:"libraryAutoplay"`
+	YtdlpCookiesBrowser         *string   `json:"ytdlpCookiesBrowser"`
+	YtdlpCookiesProfile         *string   `json:"ytdlpCookiesProfile"`
+	YtdlpProxy                  *string   `json:"ytdlpProxy"`
+	YtdlpRateLimit              *string   `json:"ytdlpRateLimit"`
+	YtdlpRetries                *int      `json:"ytdlpRetries" binding:"omitempty,min=0"`
+	AutoBackupIntervalHours     *int      `json:"autoBackupIntervalHours" binding:"omitempty,oneof=0 6 12 24 72 168"`
+	BackupRetentionCount        *int      `json:"backupRetentionCount" binding:"omitempty,min=0"`
+	ResolutionTierMediumEnabled *bool     `json:"resolutionTierMediumEnabled"`
+	ResolutionThresholdLow      *int      `json:"resolutionThresholdLow" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
+	ResolutionThresholdHigh     *int      `json:"resolutionThresholdHigh" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
 }
 
 func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int, latestItemThumbnailPath *string, sequenceGap *SequenceGapResponse) CollectionResponse {

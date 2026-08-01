@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { ResolutionValue } from "@/components/ResolutionValue"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { useSettings } from "@/hooks/useSettings"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
@@ -137,7 +138,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             </div>
             <div className="flex justify-between gap-2">
               <span>Resolution</span>
-              <span className="truncate text-foreground">{item.resolution ?? "-"}</span>
+              <ResolutionValue resolution={item.resolution} className="truncate text-foreground" />
             </div>
             <div className="flex justify-between gap-2">
               <span>Artist</span>

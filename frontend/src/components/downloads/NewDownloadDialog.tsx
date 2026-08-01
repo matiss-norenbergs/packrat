@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ResolutionValue } from "@/components/ResolutionValue"
 import { useCreateDownload, useCreatePlaylistDownload, useDownloadPreview } from "@/hooks/useDownloads"
 import { useCollections } from "@/hooks/useCollections"
 import { useDeleteLibraryItem } from "@/hooks/useLibrary"
@@ -464,7 +465,12 @@ export function NewDownloadDialog() {
                     <p className="truncate text-xs text-muted-foreground">
                       {preview.uploader || "Unknown uploader"}
                       {preview.duration > 0 && ` · ${formatDuration(preview.duration)}`}
-                      {preview.resolution && ` · ${preview.resolution}`}
+                      {preview.resolution && (
+                        <>
+                          {" · "}
+                          <ResolutionValue resolution={preview.resolution} />
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>

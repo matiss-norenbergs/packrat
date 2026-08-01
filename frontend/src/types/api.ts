@@ -224,6 +224,22 @@ export interface UpdateLibraryProgressRequest {
 export interface LibraryItemProbeResult {
   resolution: string | null
   durationSeconds: number | null
+  frameRate: number
+}
+
+// POST /library/:id/trim/preview's body — at least one of the two must be
+// set; the other means "don't trim that end".
+export interface TrimPreviewRequest {
+  trimStartSeconds?: number
+  trimEndSeconds?: number
+}
+
+// The generated preview's MediaRoot-relative path (playable via
+// mediaFileUrl()) plus what its actual duration/size came out to.
+export interface TrimPreviewResult {
+  previewPath: string
+  durationSeconds: number
+  fileSizeBytes: number
 }
 
 export interface LibraryItemMetadataPreview {
@@ -374,6 +390,9 @@ export interface Settings {
   ytdlpRetries: number
   autoBackupIntervalHours: number
   backupRetentionCount: number
+  resolutionTierMediumEnabled: boolean
+  resolutionThresholdLow: number
+  resolutionThresholdHigh: number
 }
 
 export interface YtDlpVersionInfo {
@@ -495,6 +514,9 @@ export interface UpdateSettingsRequest {
   ytdlpRetries?: number
   autoBackupIntervalHours?: number
   backupRetentionCount?: number
+  resolutionTierMediumEnabled?: boolean
+  resolutionThresholdLow?: number
+  resolutionThresholdHigh?: number
 }
 
 export interface BackupHistoryEntry {

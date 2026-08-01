@@ -640,6 +640,21 @@ func (r *LibraryRepo) UpdatePlaybackPosition(ctx context.Context, id int64, posi
 	return checkRowsAffected(res)
 }
 
+// UpdateDurationAndSize is used after accepting a trim — the file on disk
+// changed size/length outside the normal download/import/metadata-edit
+// paths, so it's kept as its own narrow update rather than folded into
+// UpdateMetadata.
+func (r *LibraryRepo) UpdateDurationAndSize(ctx context.Context, id int64, durationSeconds int, fileSizeBytes int64) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE library SET duration = ?, file_size_bytes = ? WHERE id = ?`,
+		durationSeconds, fileSizeBytes, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating library duration/size: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // DistinctYears returns every distinct release_year present in the library,
 // descending — backs the year filter dropdown, which needs every possible
 // value regardless of whatever search/filter/page is currently active.

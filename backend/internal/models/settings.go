@@ -34,4 +34,8 @@ const (
 	SettingYtdlpRetries             = "ytdlp_retries"              // int as string; 0 = yt-dlp's own default (10), not passed explicitly
 	SettingAutoBackupIntervalHours  = "auto_backup_interval_hours" // hours; 0 = disabled (default)
 	SettingBackupRetentionCount     = "backup_retention_count"     // count; 0 = unlimited; default backup.DefaultBackupRetentionCount
+
+	SettingResolutionTierMediumEnabled = "resolution_tier_medium_enabled" // bool, default true
+	SettingResolutionThresholdLow      = "resolution_threshold_low"       // height in px; default 720 — at/below is "low"
+	SettingResolutionThresholdHigh     = "resolution_threshold_high"      // height in px; default 2160 — at/above is "high"
 )

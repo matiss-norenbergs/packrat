@@ -48,6 +48,8 @@ import type {
   Tag,
   ThumbnailCandidate,
   CreateTagRequest,
+  TrimPreviewRequest,
+  TrimPreviewResult,
   UpdateArtistRequest,
   UpdateCollectionRequest,
   UpdateLibraryItemRequest,
@@ -263,6 +265,27 @@ export function refreshLibraryItemMetadata(id: number): Promise<LibraryItem> {
 
 export function probeLibraryItemMetadata(id: number): Promise<LibraryItemProbeResult> {
   return request<LibraryItemProbeResult>(`/library/${id}/probe-metadata`)
+}
+
+export function previewLibraryItemTrim(id: number, payload: TrimPreviewRequest): Promise<TrimPreviewResult> {
+  return request<TrimPreviewResult>(`/library/${id}/trim/preview`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function acceptLibraryItemTrim(id: number, previewPath: string): Promise<LibraryItem> {
+  return request<LibraryItem>(`/library/${id}/trim/accept`, {
+    method: "POST",
+    body: JSON.stringify({ previewPath }),
+  })
+}
+
+export function discardLibraryItemTrim(id: number, previewPath: string): Promise<void> {
+  return request<void>(`/library/${id}/trim/discard`, {
+    method: "POST",
+    body: JSON.stringify({ previewPath }),
+  })
 }
 
 export function redownloadLibraryItem(id: number): Promise<{ id: number }> {

@@ -747,6 +747,7 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 type ProbeLibraryItemMetadataResponse struct {
 	Resolution      *string `json:"resolution"`
 	DurationSeconds *int    `json:"durationSeconds"`
+	FrameRate       float64 `json:"frameRate"`
 }
 
 // ProbeLibraryItemMetadata runs ffprobe against the item's actual media file
@@ -755,7 +756,7 @@ type ProbeLibraryItemMetadataResponse struct {
 // already handles each (no video stream → nil resolution; no duration, e.g.
 // a still image → nil duration). Lets the Edit dialog show the user a
 // before/after prompt before committing to overwriting the stored values.
-func ProbeLibraryItemMetadata(repo *repository.LibraryRepo, mediaRoot, ffprobePath string) gin.HandlerFunc {
+func ProbeLibraryItemMetadata(repo *repository.LibraryRepo, mediaRoot, ffprobePath string, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -775,10 +776,12 @@ func ProbeLibraryItemMetadata(repo *repository.LibraryRepo, mediaRoot, ffprobePa
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		probe := importer.Probe(c.Request.Context(), ffprobePath, mediaAbs)
+		frameRate := ytdlp.ProbeFrameRate(c.Request.Context(), ffprobePath, mediaAbs)
 
 		c.JSON(http.StatusOK, ProbeLibraryItemMetadataResponse{
 			Resolution:      probe.Resolution,
 			DurationSeconds: probe.DurationSeconds,
+			FrameRate:       frameRate,
 		})
 	}
 }

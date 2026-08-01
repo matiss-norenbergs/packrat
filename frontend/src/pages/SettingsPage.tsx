@@ -14,6 +14,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ResolutionTierSlider } from "@/components/ResolutionTierSlider"
+import { RESOLUTION_STEP_LABELS } from "@/lib/resolution"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -146,6 +148,7 @@ export function SettingsPage() {
           </h2>
 
           <DownloadsCard />
+          <LibraryCard />
           <PrivacyCard />
           <HistoryCard />
           <AutoBackupCard />
@@ -746,6 +749,84 @@ const BLUR_STRENGTH_OPTIONS: { value: string; label: string }[] = [
   { value: "default", label: "Default" },
   { value: "strong", label: "Strong" },
 ]
+
+function LibraryCard() {
+  const { data: settings, isLoading } = useSettings()
+  const updateSettings = useUpdateSettings()
+
+  const [mediumEnabled, setMediumEnabled] = useState(true)
+  const [low, setLow] = useState(720)
+  const [high, setHigh] = useState(2160)
+
+  useEffect(() => {
+    if (!settings) return
+    setMediumEnabled(settings.resolutionTierMediumEnabled)
+    setLow(settings.resolutionThresholdLow)
+    setHigh(settings.resolutionThresholdHigh)
+  }, [settings])
+
+  const lowLabel = RESOLUTION_STEP_LABELS[low] ?? `${low}p`
+  const highLabel = RESOLUTION_STEP_LABELS[high] ?? `${high}p`
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Library</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading || !settings ? (
+          <Skeleton className="h-24 w-full" />
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5">
+              <Checkbox
+                id="resolution-medium-enabled"
+                checked={mediumEnabled}
+                disabled={updateSettings.isPending}
+                onCheckedChange={(v) => {
+                  const enabled = v === true
+                  setMediumEnabled(enabled)
+                  updateSettings.mutate({ resolutionTierMediumEnabled: enabled })
+                }}
+              />
+              <Label htmlFor="resolution-medium-enabled" className="font-normal">
+                Use medium tier
+              </Label>
+              <InfoPopover>
+                When off, resolution is split into just low/high. The medium threshold is kept
+                (not discarded) so turning this back on restores it.
+              </InfoPopover>
+            </div>
+
+            <div className="space-y-1.5">
+              <FieldLabel
+                htmlFor="resolution-tier-slider"
+                info="Colors the Resolution value in Library's Details mode, Compare Metadata, and the New Download preview according to which tier a file's resolution falls into."
+              >
+                Quality tiers
+              </FieldLabel>
+              <ResolutionTierSlider
+                mediumEnabled={mediumEnabled}
+                low={low}
+                high={high}
+                onCommit={(newLow, newHigh) => {
+                  setLow(newLow)
+                  setHigh(newHigh)
+                  updateSettings.mutate({ resolutionThresholdLow: newLow, resolutionThresholdHigh: newHigh })
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {mediumEnabled
+                  ? `Low: ≤${lowLabel} · Medium: ${lowLabel}–${highLabel} · High: ≥${highLabel}`
+                  : `Low: <${highLabel} · High: ≥${highLabel}`}
+              </p>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 function PrivacyCard() {
   const { data: settings, isLoading } = useSettings()

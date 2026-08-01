@@ -36,12 +36,14 @@ import { DeleteLibraryItemDialog } from "./DeleteLibraryItemDialog"
 import { NfoContentDialog } from "./NfoContentDialog"
 import { ThumbnailPickerDialog } from "./ThumbnailPickerDialog"
 import { CompareMetadataDialog } from "./CompareMetadataDialog"
+import { TrimLibraryItemDialog } from "./TrimLibraryItemDialog"
 import type { LibraryItem } from "@/types/api"
 
 export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [editOpen, setEditOpen] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
+  const [trimOpen, setTrimOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [refreshWarningOpen, setRefreshWarningOpen] = useState(false)
   const [redownloadThumbWarningOpen, setRedownloadThumbWarningOpen] = useState(false)
@@ -78,6 +80,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => setEditOpen(true)}>Edit</DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMoveOpen(true)}>Move</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setTrimOpen(true)}>Trim…</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleCopyUrl} disabled={!hasUrl}>
             Copy URL
@@ -126,6 +129,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
       <EditLibraryItemDialog item={item} open={editOpen} onOpenChange={setEditOpen} />
       <CompareMetadataDialog item={item} open={compareOpen} onOpenChange={setCompareOpen} />
       <MoveLibraryItemDialog item={item} open={moveOpen} onOpenChange={setMoveOpen} />
+      <TrimLibraryItemDialog item={item} open={trimOpen} onOpenChange={setTrimOpen} />
       <DeleteLibraryItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
       <ThumbnailPickerDialog item={item} open={thumbnailPickerOpen} onOpenChange={setThumbnailPickerOpen} />
       <NfoContentDialog item={item} open={nfoContentOpen} onOpenChange={setNfoContentOpen} />
