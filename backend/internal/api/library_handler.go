@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -823,9 +824,14 @@ func CompareLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 	}
 }
 
-// RedownloadLibraryItem re-queues a download from the item's original URL,
-// reusing the exact original type/quality/format/filename when the source
-// download row is still around, falling back to sensible defaults if not.
+// RedownloadLibraryItem re-fetches the file from the item's original URL
+// and swaps it into place over the existing item once the download
+// succeeds — reusing the exact original type/quality/format when the
+// source download row is still around, falling back to sensible defaults
+// if not. Only Resolution/Duration (which can legitimately change) get
+// overwritten in the DB; title/tags/season/sequence/year/artist/NFO
+// preference/thumbnail are left exactly as they were. See
+// queue/manager.go's completeRedownload for the actual swap.
 func RedownloadLibraryItem(libraryRepo *repository.LibraryRepo, downloadsRepo *repository.DownloadsRepo, mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -849,33 +855,138 @@ func RedownloadLibraryItem(libraryRepo *repository.LibraryRepo, downloadsRepo *r
 			return
 		}
 
-		downloadType := "video"
-		if def, err := settingsRepo.Get(c.Request.Context(), models.SettingDefaultDownloadType); err == nil && def != "" {
-			downloadType = def
-		}
-		req := CreateDownloadRequest{
-			URL:          *item.OriginalURL,
-			CollectionID: item.CollectionID,
-			Folder:       item.Folder,
-			DownloadType: downloadType,
-		}
-		if item.DownloadID != nil {
-			if orig, err := downloadsRepo.Get(c.Request.Context(), *item.DownloadID); err == nil {
-				req.DownloadType = orig.DownloadType
-				req.Quality = orig.Quality
-				req.Filename = orig.Filename
-				if orig.AudioFormat != nil {
-					req.AudioFormat = *orig.AudioFormat
-				}
-			}
-		}
-
-		newID, err := enqueueDownload(c.Request.Context(), mgr, collectionsRepo, settingsRepo, req)
+		newID, err := enqueueRedownload(c.Request.Context(), mgr, downloadsRepo, collectionsRepo, settingsRepo, item, *item.OriginalURL, []string{"resolution", "duration"})
 		if err != nil {
 			writeEnqueueError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, gin.H{"id": newID})
+	}
+}
+
+// redownloadOverwritableFields is the allowlist RedownloadLibraryItemFromURL
+// validates its OverwriteFields body against — must match
+// redownloadOverwritableFields in queue/manager.go, which is what actually
+// applies them on completion.
+var redownloadOverwritableFields = map[string]bool{
+	"title": true, "uploader": true, "description": true,
+	"thumbnail": true, "resolution": true, "duration": true,
+}
+
+// RedownloadLibraryItemFromURL is the "Redownload from different URL"
+// dialog's submit action — same swap-in-place mechanism as
+// RedownloadLibraryItem, but from a URL the user supplies instead of the
+// item's current OriginalURL, and with a user-chosen set of fields to
+// overwrite. OriginalURL and VideoID always update to the new URL
+// regardless of OverwriteFields (see queue/manager.go's completeRedownload)
+// — they're identifiers, not optional content.
+func RedownloadLibraryItemFromURL(libraryRepo *repository.LibraryRepo, downloadsRepo *repository.DownloadsRepo, mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+
+		var req RedownloadFromURLRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		for _, f := range req.OverwriteFields {
+			if !redownloadOverwritableFields[f] {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown overwrite field: " + f})
+				return
+			}
+		}
+
+		item, err := libraryRepo.Get(c.Request.Context(), id)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		newID, err := enqueueRedownload(c.Request.Context(), mgr, downloadsRepo, collectionsRepo, settingsRepo, item, req.URL, req.OverwriteFields)
+		if err != nil {
+			writeEnqueueError(c, err)
+			return
+		}
+		c.JSON(http.StatusCreated, gin.H{"id": newID})
+	}
+}
+
+// enqueueRedownload builds and queues a redownload job for item from url —
+// shared by RedownloadLibraryItem (same URL, resolution+duration only) and
+// RedownloadLibraryItemFromURL (a different URL, user-chosen fields).
+// Reuses the original download row's type/quality/audio format when it's
+// still around, same fallback RedownloadLibraryItem always had. Filename is
+// deliberately not carried over — completeRedownload always names the
+// swapped-in file after the target item's own existing filename, not
+// anything from the download row.
+func enqueueRedownload(ctx context.Context, mgr *queue.DownloadManager, downloadsRepo *repository.DownloadsRepo, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, item *models.LibraryItem, url string, overwriteFields []string) (int64, error) {
+	downloadType := "video"
+	if def, err := settingsRepo.Get(ctx, models.SettingDefaultDownloadType); err == nil && def != "" {
+		downloadType = def
+	}
+	req := CreateDownloadRequest{
+		URL:                 url,
+		CollectionID:        item.CollectionID,
+		Folder:              item.Folder,
+		DownloadType:        downloadType,
+		TargetLibraryItemID: &item.ID,
+		OverwriteFields:     overwriteFields,
+	}
+	if item.DownloadID != nil {
+		if orig, err := downloadsRepo.Get(ctx, *item.DownloadID); err == nil {
+			req.DownloadType = orig.DownloadType
+			req.Quality = orig.Quality
+			if orig.AudioFormat != nil {
+				req.AudioFormat = *orig.AudioFormat
+			}
+		}
+	}
+	return enqueueDownload(ctx, mgr, collectionsRepo, settingsRepo, req)
+}
+
+// PreviewRedownloadURL fetches yt-dlp metadata for a candidate URL — the
+// "Redownload from different URL" dialog's right-hand preview — and flags
+// whether that URL already matches a *different* library item (excludes a
+// self-match against the item being redownloaded, which isn't a real
+// duplicate). Never writes anything; mirrors CompareLibraryItemMetadata's
+// read-only shape but against an arbitrary URL instead of the item's own.
+func PreviewRedownloadURL(libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+		url := c.Query("url")
+		if !isHTTPURL(url) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "url must be an http or https URL"})
+			return
+		}
+
+		meta, err := ytdlp.FetchMetadata(c.Request.Context(), url)
+		if err != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			return
+		}
+
+		resp := RedownloadPreviewResponse{LibraryItemMetadataPreviewResponse: toLibraryItemMetadataPreviewResponse(meta)}
+		if dup, err := libraryRepo.FindDuplicate(c.Request.Context(), url, meta.ID); err == nil && dup != nil && dup.ID != id {
+			resp.Duplicate = &DuplicateInfo{
+				LibraryItemID: dup.ID,
+				Title:         dup.Title,
+				Thumbnail:     dup.Thumbnail,
+				DownloadedAt:  dup.DownloadedAt.Format(time.RFC3339),
+			}
+		}
+		c.JSON(http.StatusOK, resp)
 	}
 }
 

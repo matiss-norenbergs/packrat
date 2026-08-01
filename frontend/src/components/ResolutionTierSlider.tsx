@@ -12,7 +12,7 @@ interface ResolutionTierSliderProps {
 
 const TRACK_COLOR = {
   low: "bg-red-500",
-  medium: "bg-amber-500",
+  medium: "bg-yellow-500",
   high: "bg-green-500",
 } as const
 
@@ -46,10 +46,12 @@ export function ResolutionTierSlider({ mediumEnabled, low, high, onCommit }: Res
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediumEnabled, low, high])
 
-  const dragLowIndex = mediumEnabled ? dragValue[0] : 0
   const dragHighIndex = mediumEnabled ? dragValue[1] : dragValue[0]
-  const lowPct = indexToPercent(dragLowIndex)
   const highPct = indexToPercent(dragHighIndex)
+  // With medium off there's only one boundary (highPct) — everything below
+  // it is "low", so the red segment's right edge is highPct, not a
+  // (nonexistent) low-thumb position.
+  const lowPct = mediumEnabled ? indexToPercent(dragValue[0]) : highPct
 
   const handleCommit = (value: number[]) => {
     const newHigh = RESOLUTION_STEPS[mediumEnabled ? value[1] : value[0]]

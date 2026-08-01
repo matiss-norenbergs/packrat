@@ -134,6 +134,8 @@ func enqueueDownload(ctx context.Context, mgr *queue.DownloadManager, collection
 		FilenameTemplate:       req.FilenameTemplate,
 		OverrideTags:           req.Tags,
 		GenerateNFO:            req.GenerateNFO,
+		TargetLibraryItemID:    req.TargetLibraryItemID,
+		OverwriteFields:        req.OverwriteFields,
 	}
 	if req.AudioFormat != "" {
 		d.AudioFormat = &req.AudioFormat

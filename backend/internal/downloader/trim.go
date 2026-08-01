@@ -232,19 +232,34 @@ func nearestKeyframeAtOrBefore(ctx context.Context, ffprobePath, mediaPath strin
 // the result's stream parameters stay close enough to a stream-copied
 // neighbor segment for the concat demuxer to join them cleanly.
 //
-// Deliberately uses "-t <duration>" rather than "-to <end>": -ss is passed
-// as an input option (for fast/accurate seeking), which makes ffmpeg reset
-// output timestamps to start near zero — an output-side "-to <end>" would
-// then be measured against that reset clock (i.e. "end" seconds after the
-// seek point, not "end" seconds into the original file), silently keeping
-// far more of the file than intended. A duration is unambiguous regardless
-// of the timestamp reset.
+// Deliberately uses "-t <duration>" rather than "-to <end>" throughout: for
+// the re-encode path -ss is an input option (for fast/accurate seeking),
+// which makes ffmpeg reset output timestamps to start near zero — an
+// output-side "-to <end>" would then be measured against that reset clock
+// (i.e. "end" seconds after the seek point, not "end" seconds into the
+// original file), silently keeping far more of the file than intended. A
+// duration is unambiguous regardless of the timestamp reset.
+//
+// copyMode places -ss as an OUTPUT option instead (after -i), unlike the
+// re-encode path — confirmed by direct reproduction that input-side -ss
+// combined with "-c copy" writes wrong duration metadata into the resulting
+// Matroska/WebM container (observed: the container's reported duration came
+// out unrelated to the actual trimmed content — in one repro exactly the
+// full original length, in another an inconsistent partial overshoot —
+// which then corrupts the final concatenated preview's duration too, and
+// with it whatever a player derives its seek bar / total length from).
+// Output-side -ss for a copy (no decoding either way) still seeks straight
+// to the target keyframe with no measurable slowdown — this quirk is
+// specific to combining -c copy with an *input-side* seek.
 func runTrimSegment(ctx context.Context, ffmpegPath, srcPath, outPath string, start float64, end *float64, copyMode bool, info videoInfo) error {
 	args := []string{"-y"}
-	if start > 0 {
+	if !copyMode && start > 0 {
 		args = append(args, "-ss", formatSeconds(start))
 	}
 	args = append(args, "-i", srcPath)
+	if copyMode && start > 0 {
+		args = append(args, "-ss", formatSeconds(start))
+	}
 	if end != nil {
 		args = append(args, "-t", formatSeconds(*end-start))
 	}
@@ -299,14 +314,37 @@ func concatSegments(ctx context.Context, ffmpegPath string, segments []string, o
 	return nil
 }
 
+// trimTmpDirName is a single shared scratch subfolder (directly under
+// MediaRoot) — a dot-prefixed name so importer.Scan skips it (see scan.go)
+// and so it doesn't visually clutter collection folders the way writing
+// scratch files as siblings of the original did. Originally trim-only
+// (preview/segment files), it's since also used by the redownload flow
+// (queue/manager.go's completeRedownload) as a landing spot for a
+// just-downloaded file before it's swapped over the original — same
+// "write to shared scratch, only touch the original on confirmed success"
+// shape, so it made more sense to reuse than to add a second folder.
+const trimTmpDirName = ".packrat-tmp"
+
+// TrimTmpDir returns the shared scratch directory under mediaRoot. It does
+// not create the directory — callers that write into it (BuildTrimPreview,
+// completeRedownload) are responsible for that.
+func TrimTmpDir(mediaRoot string) string {
+	return filepath.Join(mediaRoot, trimTmpDirName)
+}
+
 // BuildTrimPreview writes a trimmed copy of mediaAbsPath — keeping
-// [trimStart, trimEnd] — to a new sibling preview file, never touching the
-// original. At least one of trimStart/trimEnd must be set. Uses the "smart
-// cut" technique: stream-copies the bulk of the kept range and only
-// re-encodes right at each boundary that isn't already a keyframe. Falls
-// back to a single whole-range re-encode when no valid keyframe split
-// exists (e.g. the kept range is shorter than one GOP).
-func (s *YtDlpService) BuildTrimPreview(ctx context.Context, ffprobePath, mediaAbsPath string, trimStart, trimEnd *float64) (previewAbsPath string, durationSeconds int, fileSizeBytes int64, err error) {
+// [trimStart, trimEnd] — to a new preview file under mediaRoot's shared
+// TrimTmpDir, never touching the original. Kept on the same volume as
+// mediaRoot (rather than a wholly separate temp root) deliberately: Accept
+// finishes with an os.Rename over the original, which requires both paths
+// to be on the same filesystem — a real constraint when MediaRoot points at
+// a separate/network-mounted volume, a common self-hosted setup. At least
+// one of trimStart/trimEnd must be set. Uses the "smart cut" technique:
+// stream-copies the bulk of the kept range and only re-encodes right at
+// each boundary that isn't already a keyframe. Falls back to a single
+// whole-range re-encode when no valid keyframe split exists (e.g. the kept
+// range is shorter than one GOP).
+func (s *YtDlpService) BuildTrimPreview(ctx context.Context, ffprobePath, mediaAbsPath, mediaRoot string, trimStart, trimEnd *float64) (previewAbsPath string, durationSeconds int, fileSizeBytes int64, err error) {
 	ctx, cancel := context.WithTimeout(ctx, trimTimeout)
 	defer cancel()
 
@@ -331,7 +369,10 @@ func (s *YtDlpService) BuildTrimPreview(ctx context.Context, ffprobePath, mediaA
 		return "", 0, 0, fmt.Errorf("nothing to trim")
 	}
 
-	dir := filepath.Dir(mediaAbsPath)
+	dir := TrimTmpDir(mediaRoot)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", 0, 0, fmt.Errorf("creating trim tmp dir: %w", err)
+	}
 	ext := filepath.Ext(mediaAbsPath)
 	base := strings.TrimSuffix(filepath.Base(mediaAbsPath), ext)
 	uid := strconv.FormatInt(time.Now().UnixNano(), 36)

@@ -18,7 +18,7 @@ export type ResolutionTier = "low" | "medium" | "high"
 
 export const RESOLUTION_TIER_CLASS: Record<ResolutionTier, string> = {
   low: "text-red-600 dark:text-red-500",
-  medium: "text-amber-600 dark:text-amber-500",
+  medium: "text-yellow-600 dark:text-yellow-500",
   high: "text-green-600 dark:text-green-500",
 }
 

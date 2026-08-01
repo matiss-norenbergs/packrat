@@ -20,16 +20,22 @@ func NewDownloadsRepo(db *sql.DB) *DownloadsRepo {
 }
 
 func (r *DownloadsRepo) Create(ctx context.Context, d *models.Download) (int64, error) {
-	overrideTags, err := encodeOverrideTags(d.OverrideTags)
+	overrideTags, err := encodeStringSlice(d.OverrideTags)
 	if err != nil {
 		return 0, fmt.Errorf("encoding override tags: %w", err)
 	}
+	overwriteFields, err := encodeStringSlice(d.OverwriteFields)
+	if err != nil {
+		return 0, fmt.Errorf("encoding overwrite fields: %w", err)
+	}
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO downloads (url, collection_id, folder, filename, download_type, quality, audio_format, status,
-		                        override_title, override_artist_id, override_year, override_season_number, override_sequence_number, filename_prefix, filename_template, override_tags, generate_nfo)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		                        override_title, override_artist_id, override_year, override_season_number, override_sequence_number, filename_prefix, filename_template, override_tags, generate_nfo,
+		                        target_library_item_id, overwrite_fields)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		d.URL, d.CollectionID, d.Folder, d.Filename, d.DownloadType, d.Quality, d.AudioFormat, d.Status,
 		d.OverrideTitle, d.OverrideArtistID, d.OverrideYear, d.OverrideSeasonNumber, d.OverrideSequenceNumber, d.FilenamePrefix, d.FilenameTemplate, overrideTags, d.GenerateNFO,
+		d.TargetLibraryItemID, overwriteFields,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting download: %w", err)
@@ -37,14 +43,15 @@ func (r *DownloadsRepo) Create(ctx context.Context, d *models.Download) (int64, 
 	return res.LastInsertId()
 }
 
-// encodeOverrideTags/decodeOverrideTags marshal OverrideTags to/from the
-// single override_tags TEXT column — nil (not "[]") when there's nothing to
-// store, so a plain download with no tag override leaves the column NULL.
-func encodeOverrideTags(tags []string) (*string, error) {
-	if len(tags) == 0 {
+// encodeStringSlice/decodeStringSlice marshal a []string to/from a single
+// TEXT column as a JSON array — nil (not "[]") when there's nothing to
+// store, so a row with nothing set leaves the column NULL. Shared by
+// OverrideTags (override_tags) and OverwriteFields (overwrite_fields).
+func encodeStringSlice(values []string) (*string, error) {
+	if len(values) == 0 {
 		return nil, nil
 	}
-	b, err := json.Marshal(tags)
+	b, err := json.Marshal(values)
 	if err != nil {
 		return nil, err
 	}
@@ -52,15 +59,15 @@ func encodeOverrideTags(tags []string) (*string, error) {
 	return &s, nil
 }
 
-func decodeOverrideTags(raw sql.NullString) ([]string, error) {
+func decodeStringSlice(raw sql.NullString) ([]string, error) {
 	if !raw.Valid || raw.String == "" {
 		return nil, nil
 	}
-	var tags []string
-	if err := json.Unmarshal([]byte(raw.String), &tags); err != nil {
-		return nil, fmt.Errorf("decoding override tags: %w", err)
+	var values []string
+	if err := json.Unmarshal([]byte(raw.String), &values); err != nil {
+		return nil, fmt.Errorf("decoding string slice column: %w", err)
 	}
-	return tags, nil
+	return values, nil
 }
 
 func (r *DownloadsRepo) Get(ctx context.Context, id int64) (*models.Download, error) {
@@ -308,7 +315,8 @@ const downloadSelectColumns = `
 	SELECT d.id, d.url, d.video_id, d.collection_id, c.name, d.folder, d.filename, d.download_type, d.quality, d.audio_format,
 	       d.status, d.title, d.uploader, d.duration, d.resolution, d.thumbnail, d.error_message, d.ytdlp_command,
 	       d.exit_code, d.stdout_tail, d.stderr_tail, d.retry_count, d.created_at, d.updated_at, d.completed_at,
-	       d.override_title, d.override_artist_id, d.override_year, d.override_season_number, d.override_sequence_number, d.filename_prefix, d.filename_template, d.override_tags, d.generate_nfo
+	       d.override_title, d.override_artist_id, d.override_year, d.override_season_number, d.override_sequence_number, d.filename_prefix, d.filename_template, d.override_tags, d.generate_nfo,
+	       d.target_library_item_id, d.overwrite_fields
 	FROM downloads d
 	LEFT JOIN collections c ON c.id = d.collection_id`
 
@@ -320,13 +328,14 @@ func scanDownload(row rowScanner) (*models.Download, error) {
 	var d models.Download
 	var createdAt, updatedAt string
 	var completedAt sql.NullString
-	var overrideTags sql.NullString
+	var overrideTags, overwriteFields sql.NullString
 
 	err := row.Scan(
 		&d.ID, &d.URL, &d.VideoID, &d.CollectionID, &d.CollectionName, &d.Folder, &d.Filename, &d.DownloadType, &d.Quality, &d.AudioFormat,
 		&d.Status, &d.Title, &d.Uploader, &d.Duration, &d.Resolution, &d.Thumbnail, &d.ErrorMessage, &d.YtDlpCommand,
 		&d.ExitCode, &d.StdoutTail, &d.StderrTail, &d.RetryCount, &createdAt, &updatedAt, &completedAt,
 		&d.OverrideTitle, &d.OverrideArtistID, &d.OverrideYear, &d.OverrideSeasonNumber, &d.OverrideSequenceNumber, &d.FilenamePrefix, &d.FilenameTemplate, &overrideTags, &d.GenerateNFO,
+		&d.TargetLibraryItemID, &overwriteFields,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -335,7 +344,11 @@ func scanDownload(row rowScanner) (*models.Download, error) {
 		return nil, fmt.Errorf("scanning download: %w", err)
 	}
 
-	d.OverrideTags, err = decodeOverrideTags(overrideTags)
+	d.OverrideTags, err = decodeStringSlice(overrideTags)
+	if err != nil {
+		return nil, err
+	}
+	d.OverwriteFields, err = decodeStringSlice(overwriteFields)
 	if err != nil {
 		return nil, err
 	}

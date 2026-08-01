@@ -35,6 +35,17 @@ export function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
+// mm:ss.mmm — unlike formatDuration() (whole seconds, for display lists),
+// trim points need millisecond precision visible so nudge/frame-pick
+// controls' effect is legible.
+export function formatPreciseTime(totalSeconds: number): string {
+  const clamped = Math.max(0, totalSeconds)
+  const m = Math.floor(clamped / 60)
+  const s = Math.floor(clamped % 60)
+  const ms = Math.round((clamped - Math.floor(clamped)) * 1000)
+  return `${m}:${s.toString().padStart(2, "0")}.${ms.toString().padStart(3, "0")}`
+}
+
 // birthday is a date-only string ("2006-01-02") — parsed with an explicit
 // midnight-local time so it isn't shifted a day off by UTC parsing near a
 // timezone boundary.

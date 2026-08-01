@@ -14,14 +14,50 @@ Maintenance notes:
 
 ## 2026-08-01
 
+- **Redesigned Settings page** — replaced the two-column wall of always-open
+  cards with a tabbed layout (General, Account, Downloads, Library, Privacy,
+  History, Backup, Jellyfin, yt-dlp, Appearance). Every tab now buffers its
+  edits locally and applies them with one Save button, instead of some
+  fields saving instantly on change and others requiring a click —
+  destructive actions (Clear log, Clear history) and one-off actions
+  (Update yt-dlp, Rescan library, Backfill images) stay as their own
+  separate buttons, unaffected by Save.
+- **Fixed: trim producing wildly wrong durations** — trimming a video (e.g.
+  cutting a few seconds off the start) could produce a preview whose reported
+  length was several times too long, with laggy/broken playback, even though
+  the underlying video content was fine. Root cause: the "smart cut" engine's
+  stream-copied middle segment used `-ss` as an ffmpeg *input* option, which
+  in combination with `-c copy` writes wrong duration metadata into the
+  resulting Matroska/WebM file (confirmed by direct reproduction — the same
+  bug independent of Packrat's own segment-selection logic). Fixed by moving
+  that `-ss` to an *output* option instead, which seeks just as fast (no
+  frame decoding either way) but writes correct duration.
 - **Precise trim (remove intro/outro)** — a Trim… action on library items cuts
   a portion off the start and/or end of a video or audio file. Uses a "smart
   cut" (stream-copy most of the file, re-encode only right at the cut
   boundary) for speed and no quality loss away from the cut, with
-  frame-stepping nudge controls for exact placement. Generates a preview
-  first — original and trimmed can be played side by side — and only
-  overwrites the original file on explicit Accept; trimming is not
-  reversible once accepted.
+  frame-stepping nudge controls and a "Pick exact frame" browser (every
+  decoded frame in a short window, click the one to use) for exact
+  placement. Generates a preview first — original and trimmed can be played
+  side by side — and only overwrites the original file on explicit Accept;
+  trimming is not reversible once accepted. Trim previews are written to a
+  shared `.packrat-tmp` folder under the media root rather than next to the
+  original file, and the dialog now takes up most of the viewport.
+- **Fixed Redownload** — "Redownload" previously created a duplicate library
+  item pointing at the same file, and usually didn't even re-fetch the video
+  (yt-dlp's default skips an existing file). It now genuinely re-fetches the
+  file and updates the existing item in place — only resolution and duration
+  change; title, tags, season/sequence, year, artist, NFO preference, and
+  thumbnail are left exactly as they were. The file is staged in the shared
+  `.packrat-tmp` scratch folder and only swapped into place once the download
+  fully succeeds, so a failed redownload never touches the original.
+- **New: Redownload from different URL** — replaces the file (and the saved
+  source URL) from a different link, for when the original source died or
+  moved. Shows the new link's fetched metadata side by side with what's
+  currently saved, with a checkbox per field to choose what else to
+  overwrite (resolution/duration checked by default) — anything left
+  unchecked stays as-is. Warns if the new URL already matches another
+  library item.
 - **Resolution quality tiers** — a new Library card in Settings sets
   low/medium/high resolution thresholds (snapped to standard steps —
   480p/720p/1080p/1440p/4K/8K — via a colored slider), with an option to

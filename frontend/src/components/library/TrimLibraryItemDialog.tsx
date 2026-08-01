@@ -19,8 +19,9 @@ import {
   usePreviewLibraryItemTrim,
   useProbeLibraryItemMetadata,
 } from "@/hooks/useLibrary"
+import { TrimFramePickerDialog } from "./TrimFramePickerDialog"
 import { mediaFileUrl } from "@/lib/api"
-import { isAudioFilename } from "@/lib/utils"
+import { formatPreciseTime, isAudioFilename } from "@/lib/utils"
 import type { LibraryItem, TrimPreviewRequest, TrimPreviewResult } from "@/types/api"
 
 interface TrimLibraryItemDialogProps {
@@ -29,18 +30,12 @@ interface TrimLibraryItemDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-// mm:ss.mmm — unlike formatDuration() (whole seconds, for display lists),
-// trim points need millisecond precision visible so the frame-nudge buttons'
-// effect is legible.
-function formatPreciseTime(totalSeconds: number): string {
-  const clamped = Math.max(0, totalSeconds)
-  const m = Math.floor(clamped / 60)
-  const s = Math.floor(clamped % 60)
-  const ms = Math.round((clamped - Math.floor(clamped)) * 1000)
-  return `${m}:${s.toString().padStart(2, "0")}.${ms.toString().padStart(3, "0")}`
-}
-
 const MIN_KEPT_RANGE = 0.05
+
+// The frame picker only stays fast/browsable for a short window — mirrors
+// the backend's downloader.MaxFrameWindowSeconds so the button disables
+// itself before firing a request that's guaranteed to fail.
+const MAX_FRAME_WINDOW_SECONDS = 15
 
 export function TrimLibraryItemDialog({ item, open, onOpenChange }: TrimLibraryItemDialogProps) {
   const isAudio = isAudioFilename(item.filename)
@@ -52,6 +47,8 @@ export function TrimLibraryItemDialog({ item, open, onOpenChange }: TrimLibraryI
   const [previewResult, setPreviewResult] = useState<TrimPreviewResult | null>(null)
   const [playbackSource, setPlaybackSource] = useState<"original" | "preview">("original")
   const [acceptConfirmOpen, setAcceptConfirmOpen] = useState(false)
+  const [startPickerOpen, setStartPickerOpen] = useState(false)
+  const [endPickerOpen, setEndPickerOpen] = useState(false)
 
   const probeMetadata = useProbeLibraryItemMetadata()
   const previewTrim = usePreviewLibraryItemTrim()
@@ -91,6 +88,11 @@ export function TrimLibraryItemDialog({ item, open, onOpenChange }: TrimLibraryI
   const hasTailTrim = item.duration != null && trimEnd < item.duration - 0.001
   const validRange = trimEnd - trimStart >= MIN_KEPT_RANGE
   const canGenerate = validRange && (hasHeadTrim || hasTailTrim) && !previewTrim.isPending
+
+  const startWindowLength = trimStart
+  const endWindowLength = item.duration != null ? item.duration - trimEnd : 0
+  const canPickStartFrame = startWindowLength > 0 && startWindowLength <= MAX_FRAME_WINDOW_SECONDS
+  const canPickEndFrame = endWindowLength > 0 && endWindowLength <= MAX_FRAME_WINDOW_SECONDS
 
   const nudgeStart = (delta: number) => {
     setTrimStart((v) => Math.min(Math.max(0, v + delta), Math.max(0, trimEnd - MIN_KEPT_RANGE)))
@@ -142,7 +144,7 @@ export function TrimLibraryItemDialog({ item, open, onOpenChange }: TrimLibraryI
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-[95vw] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Trim</DialogTitle>
             <DialogDescription>
@@ -157,7 +159,7 @@ export function TrimLibraryItemDialog({ item, open, onOpenChange }: TrimLibraryI
                 <source src={mediaUrl} />
               </audio>
             ) : (
-              <video key={mediaUrl} ref={mediaRef} controls className="max-h-[40vh] w-full object-contain">
+              <video key={mediaUrl} ref={mediaRef} controls className="max-h-[65vh] w-full object-contain">
                 <source src={mediaUrl} />
               </video>
             )}
@@ -192,6 +194,13 @@ export function TrimLibraryItemDialog({ item, open, onOpenChange }: TrimLibraryI
               onNudge={nudgeStart}
               onSetToCurrent={() => setTrimStart(mediaRef.current?.currentTime ?? trimStart)}
               frameStep={frameStep}
+              onPickFrame={() => setStartPickerOpen(true)}
+              pickFrameDisabled={!canPickStartFrame}
+              pickFrameDisabledReason={
+                startWindowLength <= 0
+                  ? "Move Start past 0:00.000 first"
+                  : `Only available for ranges up to ${MAX_FRAME_WINDOW_SECONDS}s — narrow Start first`
+              }
             />
             <TrimPointField
               label="End"
@@ -202,6 +211,13 @@ export function TrimLibraryItemDialog({ item, open, onOpenChange }: TrimLibraryI
               onNudge={nudgeEnd}
               onSetToCurrent={() => setTrimEnd(mediaRef.current?.currentTime ?? trimEnd)}
               frameStep={frameStep}
+              onPickFrame={() => setEndPickerOpen(true)}
+              pickFrameDisabled={!canPickEndFrame}
+              pickFrameDisabledReason={
+                endWindowLength <= 0
+                  ? "Move End before the very end first"
+                  : `Only available for ranges up to ${MAX_FRAME_WINDOW_SECONDS}s — narrow End first`
+              }
             />
           </div>
 
@@ -222,6 +238,23 @@ export function TrimLibraryItemDialog({ item, open, onOpenChange }: TrimLibraryI
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TrimFramePickerDialog
+        item={item}
+        open={startPickerOpen}
+        onOpenChange={setStartPickerOpen}
+        windowStart={0}
+        windowEnd={trimStart}
+        onPick={setTrimStart}
+      />
+      <TrimFramePickerDialog
+        item={item}
+        open={endPickerOpen}
+        onOpenChange={setEndPickerOpen}
+        windowStart={trimEnd}
+        windowEnd={item.duration ?? trimEnd}
+        onPick={setTrimEnd}
+      />
 
       <AlertDialog open={acceptConfirmOpen} onOpenChange={setAcceptConfirmOpen}>
         <AlertDialogContent>
@@ -246,6 +279,9 @@ function TrimPointField({
   onNudge,
   onSetToCurrent,
   frameStep,
+  onPickFrame,
+  pickFrameDisabled,
+  pickFrameDisabledReason,
 }: {
   label: string
   value: number
@@ -253,6 +289,9 @@ function TrimPointField({
   onNudge: (delta: number) => void
   onSetToCurrent: () => void
   frameStep: number
+  onPickFrame: () => void
+  pickFrameDisabled: boolean
+  pickFrameDisabledReason: string
 }) {
   return (
     <div className="space-y-2">
@@ -273,6 +312,17 @@ function TrimPointField({
           Use current
         </Button>
       </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full"
+        onClick={onPickFrame}
+        disabled={pickFrameDisabled}
+        title={pickFrameDisabled ? pickFrameDisabledReason : undefined}
+      >
+        Pick exact frame…
+      </Button>
       <div className="flex flex-wrap gap-1">
         <Button type="button" variant="outline" size="sm" onClick={() => onNudge(-1)}>
           -1s

@@ -655,6 +655,48 @@ func (r *LibraryRepo) UpdateDurationAndSize(ctx context.Context, id int64, durat
 	return checkRowsAffected(res)
 }
 
+// ApplyRedownloadParams is ApplyRedownload's input. Filename/Path/
+// FileSizeBytes/OriginalURL/VideoID are always overwritten — the file
+// genuinely changed, and the URL/VideoID are identifiers tied to whatever
+// source the redownload actually came from, not optional content. The rest
+// are nil-able "leave alone unless overwriting" fields, matching
+// UpdateMetadata's existing COALESCE idiom — the caller resolves which are
+// nil from the redownload's chosen overwrite-field set.
+type ApplyRedownloadParams struct {
+	Filename      string
+	Path          string
+	FileSizeBytes int64
+	OriginalURL   string
+	VideoID       string
+	Duration      *int
+	Resolution    *string
+	Title         *string
+	Uploader      *string
+	Description   *string
+}
+
+// ApplyRedownload updates an existing library item in place after a
+// redownload — the completion path used instead of Create when the
+// download's TargetLibraryItemID is set (see queue/manager.go's
+// completeRedownload). Deliberately never touches tags, artist, year,
+// season/sequence number, generate_nfo, or thumbnail (thumbnail is handled
+// by UpdateThumbnail/UpdateThumbnailTiers separately, only when checked).
+func (r *LibraryRepo) ApplyRedownload(ctx context.Context, id int64, p ApplyRedownloadParams) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE library
+		SET filename = ?, path = ?, file_size_bytes = ?, original_url = ?, video_id = ?,
+		    duration = COALESCE(?, duration), resolution = COALESCE(?, resolution),
+		    title = COALESCE(?, title), uploader = COALESCE(?, uploader), description = COALESCE(?, description)
+		WHERE id = ?`,
+		p.Filename, p.Path, p.FileSizeBytes, p.OriginalURL, p.VideoID,
+		p.Duration, p.Resolution, p.Title, p.Uploader, p.Description, id,
+	)
+	if err != nil {
+		return fmt.Errorf("applying redownload: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // DistinctYears returns every distinct release_year present in the library,
 // descending — backs the year filter dropdown, which needs every possible
 // value regardless of whatever search/filter/page is currently active.

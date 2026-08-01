@@ -81,6 +81,36 @@ type CreateDownloadRequest struct {
 	// completes — the download-time equivalent of enabling it afterward via
 	// the Edit dialog.
 	GenerateNFO bool `json:"generateNfo"`
+
+	// TargetLibraryItemID/OverwriteFields make this a redownload of an
+	// existing library item rather than a new one — json:"-" so a public
+	// POST /downloads client can never set them via the JSON body; only
+	// RedownloadLibraryItem/RedownloadLibraryItemFromURL set them
+	// internally before calling enqueueDownload.
+	TargetLibraryItemID *int64   `json:"-"`
+	OverwriteFields     []string `json:"-"`
+}
+
+// RedownloadFromURLRequest is the body of POST
+// /library/:id/redownload/from-url — the "Redownload from different URL"
+// dialog's submit action.
+type RedownloadFromURLRequest struct {
+	URL string `json:"url" binding:"required,url"`
+	// OverwriteFields is a subset of {"title","uploader","description",
+	// "thumbnail","resolution","duration"} — validated against that
+	// allowlist by the handler. OriginalURL/VideoID always update to the
+	// new URL regardless of this list; they're identifiers, not optional
+	// content.
+	OverwriteFields []string `json:"overwriteFields"`
+}
+
+// RedownloadPreviewResponse is the "Redownload from different URL" dialog's
+// right-hand preview — fetched metadata for a candidate URL, plus whether
+// that URL already matches a *different* library item (Duplicate is nil if
+// it matches nothing, or matches the item being redownloaded itself).
+type RedownloadPreviewResponse struct {
+	LibraryItemMetadataPreviewResponse
+	Duplicate *DuplicateInfo `json:"duplicate"`
 }
 
 type PreviewDownloadRequest struct {
@@ -449,6 +479,16 @@ type TrimPreviewResponse struct {
 // file to act on.
 type TrimActionRequest struct {
 	PreviewPath string `json:"previewPath" binding:"required"`
+}
+
+// TrimFrameResponse is one decoded frame returned by
+// GET /library/:id/trim/frames — the "browse every frame in a short window,
+// click the exact one" mechanism the trim dialog uses to set a precise
+// Start/End point without relying on the browser <video> element's own
+// (not reliably frame-accurate) seeking.
+type TrimFrameResponse struct {
+	TimestampSeconds float64 `json:"timestampSeconds"`
+	ImageBase64      string  `json:"imageBase64"`
 }
 
 type CreateCollectionRequest struct {

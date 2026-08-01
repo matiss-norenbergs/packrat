@@ -35,6 +35,13 @@ func Scan(mediaRoot string, known map[string]bool) ([]ScannedFile, error) {
 			return nil // skip unreadable entries, keep walking
 		}
 		if d.IsDir() {
+			// Dot-prefixed directories are treated as hidden/internal —
+			// notably downloader.TrimTmpDir (".packrat-tmp"), whose
+			// preview/segment files reuse the original's extension and
+			// would otherwise surface here as "new" importable files.
+			if strings.HasPrefix(d.Name(), ".") && p != mediaRoot {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 

@@ -48,6 +48,9 @@ import type {
   Tag,
   ThumbnailCandidate,
   CreateTagRequest,
+  RedownloadOverwriteField,
+  RedownloadPreview,
+  TrimFrame,
   TrimPreviewRequest,
   TrimPreviewResult,
   UpdateArtistRequest,
@@ -288,8 +291,27 @@ export function discardLibraryItemTrim(id: number, previewPath: string): Promise
   })
 }
 
+export function fetchLibraryItemTrimFrames(id: number, start: number, end: number): Promise<{ frames: TrimFrame[] }> {
+  return request<{ frames: TrimFrame[] }>(`/library/${id}/trim/frames?start=${start}&end=${end}`)
+}
+
 export function redownloadLibraryItem(id: number): Promise<{ id: number }> {
   return request<{ id: number }>(`/library/${id}/redownload`, { method: "POST" })
+}
+
+export function fetchRedownloadPreview(id: number, url: string): Promise<RedownloadPreview> {
+  return request<RedownloadPreview>(`/library/${id}/redownload/preview-url?url=${encodeURIComponent(url)}`)
+}
+
+export function redownloadLibraryItemFromUrl(
+  id: number,
+  url: string,
+  overwriteFields: RedownloadOverwriteField[],
+): Promise<{ id: number }> {
+  return request<{ id: number }>(`/library/${id}/redownload/from-url`, {
+    method: "POST",
+    body: JSON.stringify({ url, overwriteFields }),
+  })
 }
 
 export function redownloadLibraryThumbnail(id: number): Promise<LibraryItem> {

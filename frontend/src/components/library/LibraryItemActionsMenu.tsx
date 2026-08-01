@@ -36,6 +36,7 @@ import { DeleteLibraryItemDialog } from "./DeleteLibraryItemDialog"
 import { NfoContentDialog } from "./NfoContentDialog"
 import { ThumbnailPickerDialog } from "./ThumbnailPickerDialog"
 import { CompareMetadataDialog } from "./CompareMetadataDialog"
+import { RedownloadFromUrlDialog } from "./RedownloadFromUrlDialog"
 import { TrimLibraryItemDialog } from "./TrimLibraryItemDialog"
 import type { LibraryItem } from "@/types/api"
 
@@ -46,6 +47,8 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [trimOpen, setTrimOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [refreshWarningOpen, setRefreshWarningOpen] = useState(false)
+  const [redownloadWarningOpen, setRedownloadWarningOpen] = useState(false)
+  const [redownloadFromUrlOpen, setRedownloadFromUrlOpen] = useState(false)
   const [redownloadThumbWarningOpen, setRedownloadThumbWarningOpen] = useState(false)
   const [quickGrabWarningOpen, setQuickGrabWarningOpen] = useState(false)
   const [thumbnailPickerOpen, setThumbnailPickerOpen] = useState(false)
@@ -85,15 +88,26 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <DropdownMenuItem onClick={handleCopyUrl} disabled={!hasUrl}>
             Copy URL
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setCompareOpen(true)} disabled={!hasUrl}>
-            Compare Metadata
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setRefreshWarningOpen(true)} disabled={!hasUrl}>
-            Refresh Metadata
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => redownload.mutate(item.id)} disabled={!hasUrl}>
-            Redownload
-          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Metadata</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onClick={() => setCompareOpen(true)} disabled={!hasUrl}>
+                Compare
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setRefreshWarningOpen(true)} disabled={!hasUrl}>
+                Refresh
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Redownload</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onClick={() => setRedownloadWarningOpen(true)} disabled={!hasUrl}>
+                From Current URL
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setRedownloadFromUrlOpen(true)}>From Different URL…</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>NFO</DropdownMenuSubTrigger>
@@ -128,6 +142,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
 
       <EditLibraryItemDialog item={item} open={editOpen} onOpenChange={setEditOpen} />
       <CompareMetadataDialog item={item} open={compareOpen} onOpenChange={setCompareOpen} />
+      <RedownloadFromUrlDialog item={item} open={redownloadFromUrlOpen} onOpenChange={setRedownloadFromUrlOpen} />
       <MoveLibraryItemDialog item={item} open={moveOpen} onOpenChange={setMoveOpen} />
       <TrimLibraryItemDialog item={item} open={trimOpen} onOpenChange={setTrimOpen} />
       <DeleteLibraryItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
@@ -147,6 +162,23 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => refreshMetadata.mutate(item.id)}>Refresh</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={redownloadWarningOpen} onOpenChange={setRedownloadWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Redownload this file?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This re-fetches the file from its original URL and replaces it. Only resolution and
+              duration are updated here — title, tags, season/sequence, year, artist, and thumbnail
+              are left exactly as they are.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => redownload.mutate(item.id)}>Redownload</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

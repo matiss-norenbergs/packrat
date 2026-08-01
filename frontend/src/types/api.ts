@@ -242,6 +242,13 @@ export interface TrimPreviewResult {
   fileSizeBytes: number
 }
 
+// One decoded frame from GET /library/:id/trim/frames — the trim dialog's
+// "browse every frame in a short window, click the exact one" picker.
+export interface TrimFrame {
+  timestampSeconds: number
+  imageBase64: string
+}
+
 export interface LibraryItemMetadataPreview {
   title: string
   uploader: string
@@ -250,6 +257,19 @@ export interface LibraryItemMetadataPreview {
   thumbnail: string
   resolution: string | null
 }
+
+// The "Redownload from different URL" dialog's right-hand preview — same
+// fields as LibraryItemMetadataPreview, plus whether the candidate URL
+// already matches a *different* library item.
+export interface RedownloadPreview extends LibraryItemMetadataPreview {
+  duplicate: DuplicateInfo | null
+}
+
+// Subset of comparable fields the "Redownload from different URL" dialog
+// lets the user opt into overwriting — resolution/duration are always
+// available and checked by default; the rest default unchecked. Mirrors
+// the backend's redownloadOverwritableFields allowlist.
+export type RedownloadOverwriteField = "title" | "uploader" | "description" | "thumbnail" | "resolution" | "duration"
 
 export interface BulkAssignTagsRequest {
   itemIds: number[]
