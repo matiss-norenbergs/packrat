@@ -13,6 +13,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useSettings } from "@/hooks/useSettings"
 import { useCreateTag, useUpdateTag } from "@/hooks/useTags"
 import type { Tag } from "@/types/api"
 
@@ -27,6 +28,7 @@ export function TagDialog({ tag, trigger }: TagDialogProps) {
   const [name, setName] = useState(tag?.name ?? "")
   const [isPrivate, setIsPrivate] = useState(tag?.isPrivate ?? false)
 
+  const { data: settings } = useSettings()
   const createTag = useCreateTag()
   const updateTag = useUpdateTag()
   const pending = createTag.isPending || updateTag.isPending
@@ -82,21 +84,23 @@ export function TagDialog({ tag, trigger }: TagDialogProps) {
             />
           </div>
 
-          <div className="flex items-start gap-2">
-            <Checkbox
-              id="tag-private"
-              checked={isPrivate}
-              onCheckedChange={(v) => setIsPrivate(v === true)}
-            />
-            <div className="space-y-1">
-              <Label htmlFor="tag-private" className="font-normal">
-                Private
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Blurs thumbnails and hides titles for every item with this tag.
-              </p>
+          {settings?.privacyEnabled && (
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="tag-private"
+                checked={isPrivate}
+                onCheckedChange={(v) => setIsPrivate(v === true)}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="tag-private" className="font-normal">
+                  Private
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Blurs thumbnails and hides titles for every item with this tag.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <DialogFooter>

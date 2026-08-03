@@ -1,20 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  acceptLibraryItemTrim,
   bulkAssignTags,
   bulkDeleteLibraryItems,
   deleteLibraryItem,
   deleteLibraryItemNFO,
+  discardLibraryItemTrim,
   fetchLibrary,
   fetchLibraryFacets,
   fetchLibraryItemMetadataPreview,
   fetchLibraryItemNFO,
+  fetchLibraryItemTrimFrames,
   fetchLibraryQuery,
   fetchLibraryThumbnailCandidates,
   generateLibraryItemNFO,
   moveLibraryItem,
+  previewLibraryItemTrim,
+  probeLibraryItemMetadata,
+  fetchRedownloadPreview,
   quickGrabLibraryThumbnail,
   redownloadLibraryItem,
+  redownloadLibraryItemFromUrl,
   redownloadLibraryThumbnail,
   refreshLibraryItemMetadata,
   setLibraryThumbnail,
@@ -28,6 +35,8 @@ import type {
   LibraryListResponse,
   LibraryQueryParams,
   MoveLibraryItemRequest,
+  RedownloadOverwriteField,
+  TrimPreviewRequest,
   UpdateLibraryItemRequest,
 } from "@/types/api"
 import { downloadsQueryKey } from "./useDownloads"
@@ -179,10 +188,86 @@ export function useRefreshLibraryItemMetadata() {
   })
 }
 
+// Read-only ffprobe pass over the item's actual file — no query invalidation
+// needed since nothing is persisted; the caller decides what to do with the
+// result (EditLibraryItemDialog's rescan-confirm prompt).
+export function useProbeLibraryItemMetadata() {
+  return useMutation({
+    mutationFn: (id: number) => probeLibraryItemMetadata(id),
+    onError: (err: Error) => toast.error(`Failed to rescan file: ${err.message}`),
+  })
+}
+
+// Generates a trimmed preview file — nothing persisted, no query
+// invalidation needed. The caller (TrimLibraryItemDialog) holds onto the
+// result to drive the Original/Preview playback toggle and the Accept step.
+export function usePreviewLibraryItemTrim() {
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: TrimPreviewRequest }) => previewLibraryItemTrim(id, payload),
+    onError: (err: Error) => toast.error(`Failed to generate trim preview: ${err.message}`),
+  })
+}
+
+export function useAcceptLibraryItemTrim() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, previewPath }: { id: number; previewPath: string }) => acceptLibraryItemTrim(id, previewPath),
+    onSuccess: () => {
+      toast.success("Trim applied")
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to apply trim: ${err.message}`),
+  })
+}
+
+// No success toast/query invalidation — this also fires silently (fire and
+// forget) when the dialog closes without an explicit Accept, and nothing
+// persisted actually changed for either case.
+export function useDiscardLibraryItemTrim() {
+  return useMutation({
+    mutationFn: ({ id, previewPath }: { id: number; previewPath: string }) => discardLibraryItemTrim(id, previewPath),
+    onError: (err: Error) => toast.error(`Failed to discard trim preview: ${err.message}`),
+  })
+}
+
+// On-demand, not a query keyed on the window — the [start, end) window
+// changes continuously as the user adjusts the trim points, so there's no
+// stable cache key worth keying a useQuery on. Fired only when the frame
+// picker dialog opens for a given boundary.
+export function useLibraryItemTrimFrames() {
+  return useMutation({
+    mutationFn: ({ id, start, end }: { id: number; start: number; end: number }) => fetchLibraryItemTrimFrames(id, start, end),
+    onError: (err: Error) => toast.error(`Failed to load frames: ${err.message}`),
+  })
+}
+
 export function useRedownloadLibraryItem() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => redownloadLibraryItem(id),
+    onSuccess: () => {
+      toast.success("Redownload queued")
+      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to redownload: ${err.message}`),
+  })
+}
+
+// On-demand, not a query — the candidate URL changes per keystroke/submit
+// in the Redownload-from-different-URL dialog, so there's no stable cache
+// key worth using (same precedent as useLibraryItemTrimFrames).
+export function useRedownloadPreview() {
+  return useMutation({
+    mutationFn: ({ id, url }: { id: number; url: string }) => fetchRedownloadPreview(id, url),
+    onError: (err: Error) => toast.error(`Failed to load preview: ${err.message}`),
+  })
+}
+
+export function useRedownloadLibraryItemFromUrl() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, url, overwriteFields }: { id: number; url: string; overwriteFields: RedownloadOverwriteField[] }) =>
+      redownloadLibraryItemFromUrl(id, url, overwriteFields),
     onSuccess: () => {
       toast.success("Redownload queued")
       queryClient.invalidateQueries({ queryKey: downloadsQueryKey })

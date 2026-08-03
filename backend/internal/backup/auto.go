@@ -16,8 +16,9 @@ import (
 )
 
 // DefaultBackupRetentionCount is how many on-disk backups RunBackup keeps
-// around before pruning the oldest — a hardcoded constant rather than a
-// setting, since only the backup *interval* is user-facing for now.
+// around before pruning the oldest, used when the backup_retention_count
+// setting has never been set — preserves this app's original
+// pruning behavior for anyone upgrading without touching the new setting.
 const DefaultBackupRetentionCount = 14
 
 // FullBundle combines both existing export kinds into one payload for
@@ -133,12 +134,27 @@ func recordFailure(ctx context.Context, deps RunDeps, triggerType string, cause 
 	return entry, nil
 }
 
-// pruneOldBackups deletes history rows (and their files) past
-// DefaultBackupRetentionCount. Best-effort: logs failures rather than
-// propagating them, since a pruning hiccup shouldn't fail the backup that
-// just succeeded.
+// pruneOldBackups deletes history rows (and their files) past the
+// backup_retention_count setting (reading the raw key directly via
+// deps.SettingsRepo.Get, not the api-package getter, to avoid an import
+// cycle — same reasoning as RunScheduledBackupIfDue's interval read).
+// Unset/corrupt/negative falls back to DefaultBackupRetentionCount; 0 means
+// unlimited — every backup is kept, pruning is skipped entirely (passing 0
+// straight to DeleteExceedingRetention would instead delete everything).
+// Best-effort: logs failures rather than propagating them, since a pruning
+// hiccup shouldn't fail the backup that just succeeded.
 func pruneOldBackups(ctx context.Context, deps RunDeps) {
-	pruned, err := deps.BackupHistoryRepo.DeleteExceedingRetention(ctx, DefaultBackupRetentionCount)
+	keep := DefaultBackupRetentionCount
+	if raw, err := deps.SettingsRepo.Get(ctx, models.SettingBackupRetentionCount); err == nil {
+		if n, convErr := strconv.Atoi(raw); convErr == nil && n >= 0 {
+			keep = n
+		}
+	}
+	if keep == 0 {
+		return
+	}
+
+	pruned, err := deps.BackupHistoryRepo.DeleteExceedingRetention(ctx, keep)
 	if err != nil {
 		log.Printf("backup retention cleanup failed: %v", err)
 		return

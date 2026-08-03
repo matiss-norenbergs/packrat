@@ -81,6 +81,36 @@ type CreateDownloadRequest struct {
 	// completes — the download-time equivalent of enabling it afterward via
 	// the Edit dialog.
 	GenerateNFO bool `json:"generateNfo"`
+
+	// TargetLibraryItemID/OverwriteFields make this a redownload of an
+	// existing library item rather than a new one — json:"-" so a public
+	// POST /downloads client can never set them via the JSON body; only
+	// RedownloadLibraryItem/RedownloadLibraryItemFromURL set them
+	// internally before calling enqueueDownload.
+	TargetLibraryItemID *int64   `json:"-"`
+	OverwriteFields     []string `json:"-"`
+}
+
+// RedownloadFromURLRequest is the body of POST
+// /library/:id/redownload/from-url — the "Redownload from different URL"
+// dialog's submit action.
+type RedownloadFromURLRequest struct {
+	URL string `json:"url" binding:"required,url"`
+	// OverwriteFields is a subset of {"title","uploader","description",
+	// "thumbnail","resolution","duration"} — validated against that
+	// allowlist by the handler. OriginalURL/VideoID always update to the
+	// new URL regardless of this list; they're identifiers, not optional
+	// content.
+	OverwriteFields []string `json:"overwriteFields"`
+}
+
+// RedownloadPreviewResponse is the "Redownload from different URL" dialog's
+// right-hand preview — fetched metadata for a candidate URL, plus whether
+// that URL already matches a *different* library item (Duplicate is nil if
+// it matches nothing, or matches the item being redownloaded itself).
+type RedownloadPreviewResponse struct {
+	LibraryItemMetadataPreviewResponse
+	Duplicate *DuplicateInfo `json:"duplicate"`
 }
 
 type PreviewDownloadRequest struct {
@@ -427,6 +457,40 @@ type MoveLibraryItemRequest struct {
 	Folder       string `json:"folder"`
 }
 
+// TrimPreviewRequest is POST /library/:id/trim/preview's body. At least one
+// of TrimStartSeconds/TrimEndSeconds must be set (validated in the
+// handler) — nil means "don't trim that end".
+type TrimPreviewRequest struct {
+	TrimStartSeconds *float64 `json:"trimStartSeconds"`
+	TrimEndSeconds   *float64 `json:"trimEndSeconds"`
+}
+
+// TrimPreviewResponse describes the generated preview file — PreviewPath is
+// MediaRoot-relative, same shape as LibraryItemResponse.Path, so the client
+// can build a playable URL with the existing mediaFileUrl() helper.
+type TrimPreviewResponse struct {
+	PreviewPath     string `json:"previewPath"`
+	DurationSeconds int    `json:"durationSeconds"`
+	FileSizeBytes   int64  `json:"fileSizeBytes"`
+}
+
+// TrimActionRequest is shared by POST /library/:id/trim/accept and
+// POST /library/:id/trim/discard — both just need to know which preview
+// file to act on.
+type TrimActionRequest struct {
+	PreviewPath string `json:"previewPath" binding:"required"`
+}
+
+// TrimFrameResponse is one decoded frame returned by
+// GET /library/:id/trim/frames — the "browse every frame in a short window,
+// click the exact one" mechanism the trim dialog uses to set a precise
+// Start/End point without relying on the browser <video> element's own
+// (not reliably frame-accurate) seeking.
+type TrimFrameResponse struct {
+	TimestampSeconds float64 `json:"timestampSeconds"`
+	ImageBase64      string  `json:"imageBase64"`
+}
+
 type CreateCollectionRequest struct {
 	Name                string  `json:"name" binding:"required"`
 	ParentID            *int64  `json:"parentId"`
@@ -437,6 +501,9 @@ type CreateCollectionRequest struct {
 	IsPrivate           bool    `json:"isPrivate"`
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 	SeasonNumber        *int    `json:"seasonNumber"`
+	Year                *int    `json:"year"`
+	SequenceMin         *int    `json:"sequenceMin"`
+	SequenceMax         *int    `json:"sequenceMax"`
 	ArtistID            *int64  `json:"artistId"`
 	BrowseAsShow        bool    `json:"browseAsShow"`
 }
@@ -450,6 +517,9 @@ type UpdateCollectionRequest struct {
 	IsPrivate           bool    `json:"isPrivate"`
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
 	SeasonNumber        *int    `json:"seasonNumber"`
+	Year                *int    `json:"year"`
+	SequenceMin         *int    `json:"sequenceMin"`
+	SequenceMax         *int    `json:"sequenceMax"`
 	ArtistID            *int64  `json:"artistId"`
 	BrowseAsShow        bool    `json:"browseAsShow"`
 }
@@ -472,6 +542,9 @@ type CollectionResponse struct {
 	FilenameTemplate     string  `json:"filenameTemplate"`
 	IsPrivate            bool    `json:"isPrivate"`
 	SeasonNumber         *int    `json:"seasonNumber"`
+	Year                 *int    `json:"year"`
+	SequenceMin          *int    `json:"sequenceMin"`
+	SequenceMax          *int    `json:"sequenceMax"`
 	ArtistID             *int64  `json:"artistId"`
 	CoverImagePath       *string `json:"coverImagePath"`
 	CoverImageSmallPath  *string `json:"coverImageSmallPath"`
@@ -614,68 +687,78 @@ type SetCollectionCoverRequest struct {
 }
 
 type SettingsResponse struct {
-	DownloadDirectory        string   `json:"downloadDirectory"`
-	MaxConcurrentDownloads   int      `json:"maxConcurrentDownloads"`
-	DownloadTimeoutMinutes   int      `json:"downloadTimeoutMinutes"`
-	DefaultQuality           string   `json:"defaultQuality"`
-	DefaultDownloadType      string   `json:"defaultDownloadType"`
-	ImportIgnoredFolders     []string `json:"importIgnoredFolders"`
-	HistoryAnonymizeURLs     bool     `json:"historyAnonymizeUrls"`
-	HistoryRetentionDays     int      `json:"historyRetentionDays"`
-	DownloadLogRetentionDays int      `json:"downloadLogRetentionDays"`
-	LibraryView              string   `json:"libraryView"`
-	LibrarySortKey           string   `json:"librarySortKey"`
-	LibrarySortDir           string   `json:"librarySortDir"`
-	LibraryMode              string   `json:"libraryMode"`
-	LibraryPaginationEnabled bool     `json:"libraryPaginationEnabled"`
-	LibraryPageSize          int      `json:"libraryPageSize"`
-	ThumbnailFrameCount      int      `json:"thumbnailFrameCount"`
-	PrivacyBlurStrength      string   `json:"privacyBlurStrength"`
-	BrowseIgnorePrivacy      bool     `json:"browseIgnorePrivacy"`
-	SkipDownloadPreview      bool     `json:"skipDownloadPreview"`
-	JellyfinEnabled          bool     `json:"jellyfinEnabled"`
-	JellyfinURL              string   `json:"jellyfinUrl"`
-	JellyfinAPIKey           string   `json:"jellyfinApiKey"`
-	JellyfinRefreshMode      string   `json:"jellyfinRefreshMode"`
-	LibraryAutoplay          bool     `json:"libraryAutoplay"`
-	YtdlpCookiesBrowser      string   `json:"ytdlpCookiesBrowser"`
-	YtdlpCookiesProfile      string   `json:"ytdlpCookiesProfile"`
-	YtdlpProxy               string   `json:"ytdlpProxy"`
-	YtdlpRateLimit           string   `json:"ytdlpRateLimit"`
-	YtdlpRetries             int      `json:"ytdlpRetries"`
-	AutoBackupIntervalHours  int      `json:"autoBackupIntervalHours"`
+	DownloadDirectory           string   `json:"downloadDirectory"`
+	MaxConcurrentDownloads      int      `json:"maxConcurrentDownloads"`
+	DownloadTimeoutMinutes      int      `json:"downloadTimeoutMinutes"`
+	DefaultQuality              string   `json:"defaultQuality"`
+	DefaultDownloadType         string   `json:"defaultDownloadType"`
+	ImportIgnoredFolders        []string `json:"importIgnoredFolders"`
+	HistoryAnonymizeURLs        bool     `json:"historyAnonymizeUrls"`
+	HistoryRetentionDays        int      `json:"historyRetentionDays"`
+	DownloadLogRetentionDays    int      `json:"downloadLogRetentionDays"`
+	LibraryView                 string   `json:"libraryView"`
+	LibrarySortKey              string   `json:"librarySortKey"`
+	LibrarySortDir              string   `json:"librarySortDir"`
+	LibraryMode                 string   `json:"libraryMode"`
+	LibraryPaginationEnabled    bool     `json:"libraryPaginationEnabled"`
+	LibraryPageSize             int      `json:"libraryPageSize"`
+	ThumbnailFrameCount         int      `json:"thumbnailFrameCount"`
+	PrivacyEnabled              bool     `json:"privacyEnabled"`
+	PrivacyBlurStrength         string   `json:"privacyBlurStrength"`
+	BrowseIgnorePrivacy         bool     `json:"browseIgnorePrivacy"`
+	SkipDownloadPreview         bool     `json:"skipDownloadPreview"`
+	JellyfinEnabled             bool     `json:"jellyfinEnabled"`
+	JellyfinURL                 string   `json:"jellyfinUrl"`
+	JellyfinAPIKey              string   `json:"jellyfinApiKey"`
+	JellyfinRefreshMode         string   `json:"jellyfinRefreshMode"`
+	LibraryAutoplay             bool     `json:"libraryAutoplay"`
+	YtdlpCookiesBrowser         string   `json:"ytdlpCookiesBrowser"`
+	YtdlpCookiesProfile         string   `json:"ytdlpCookiesProfile"`
+	YtdlpProxy                  string   `json:"ytdlpProxy"`
+	YtdlpRateLimit              string   `json:"ytdlpRateLimit"`
+	YtdlpRetries                int      `json:"ytdlpRetries"`
+	AutoBackupIntervalHours     int      `json:"autoBackupIntervalHours"`
+	BackupRetentionCount        int      `json:"backupRetentionCount"`
+	ResolutionTierMediumEnabled bool     `json:"resolutionTierMediumEnabled"`
+	ResolutionThresholdLow      int      `json:"resolutionThresholdLow"`
+	ResolutionThresholdHigh     int      `json:"resolutionThresholdHigh"`
 }
 
 type UpdateSettingsRequest struct {
-	MaxConcurrentDownloads   *int      `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
-	DownloadTimeoutMinutes   *int      `json:"downloadTimeoutMinutes" binding:"omitempty,min=0"`
-	DefaultQuality           *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType      *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
-	ImportIgnoredFolders     *[]string `json:"importIgnoredFolders"`
-	HistoryAnonymizeURLs     *bool     `json:"historyAnonymizeUrls"`
-	HistoryRetentionDays     *int      `json:"historyRetentionDays" binding:"omitempty,min=0"`
-	DownloadLogRetentionDays *int      `json:"downloadLogRetentionDays" binding:"omitempty,min=0"`
-	LibraryView              *string   `json:"libraryView" binding:"omitempty,oneof=grid folders list"`
-	LibrarySortKey           *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber seasonNumber"`
-	LibrarySortDir           *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
-	LibraryMode              *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
-	LibraryPaginationEnabled *bool     `json:"libraryPaginationEnabled"`
-	LibraryPageSize          *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
-	ThumbnailFrameCount      *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
-	PrivacyBlurStrength      *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
-	BrowseIgnorePrivacy      *bool     `json:"browseIgnorePrivacy"`
-	SkipDownloadPreview      *bool     `json:"skipDownloadPreview"`
-	JellyfinEnabled          *bool     `json:"jellyfinEnabled"`
-	JellyfinURL              *string   `json:"jellyfinUrl"`
-	JellyfinAPIKey           *string   `json:"jellyfinApiKey"`
-	JellyfinRefreshMode      *string   `json:"jellyfinRefreshMode" binding:"omitempty,oneof=entire specific none"`
-	LibraryAutoplay          *bool     `json:"libraryAutoplay"`
-	YtdlpCookiesBrowser      *string   `json:"ytdlpCookiesBrowser"`
-	YtdlpCookiesProfile      *string   `json:"ytdlpCookiesProfile"`
-	YtdlpProxy               *string   `json:"ytdlpProxy"`
-	YtdlpRateLimit           *string   `json:"ytdlpRateLimit"`
-	YtdlpRetries             *int      `json:"ytdlpRetries" binding:"omitempty,min=0"`
-	AutoBackupIntervalHours  *int      `json:"autoBackupIntervalHours" binding:"omitempty,oneof=0 6 12 24 72 168"`
+	MaxConcurrentDownloads      *int      `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
+	DownloadTimeoutMinutes      *int      `json:"downloadTimeoutMinutes" binding:"omitempty,min=0"`
+	DefaultQuality              *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
+	DefaultDownloadType         *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	ImportIgnoredFolders        *[]string `json:"importIgnoredFolders"`
+	HistoryAnonymizeURLs        *bool     `json:"historyAnonymizeUrls"`
+	HistoryRetentionDays        *int      `json:"historyRetentionDays" binding:"omitempty,min=0"`
+	DownloadLogRetentionDays    *int      `json:"downloadLogRetentionDays" binding:"omitempty,min=0"`
+	LibraryView                 *string   `json:"libraryView" binding:"omitempty,oneof=grid folders list"`
+	LibrarySortKey              *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber seasonNumber"`
+	LibrarySortDir              *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
+	LibraryMode                 *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
+	LibraryPaginationEnabled    *bool     `json:"libraryPaginationEnabled"`
+	LibraryPageSize             *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
+	ThumbnailFrameCount         *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
+	PrivacyEnabled              *bool     `json:"privacyEnabled"`
+	PrivacyBlurStrength         *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
+	BrowseIgnorePrivacy         *bool     `json:"browseIgnorePrivacy"`
+	SkipDownloadPreview         *bool     `json:"skipDownloadPreview"`
+	JellyfinEnabled             *bool     `json:"jellyfinEnabled"`
+	JellyfinURL                 *string   `json:"jellyfinUrl"`
+	JellyfinAPIKey              *string   `json:"jellyfinApiKey"`
+	JellyfinRefreshMode         *string   `json:"jellyfinRefreshMode" binding:"omitempty,oneof=entire specific none"`
+	LibraryAutoplay             *bool     `json:"libraryAutoplay"`
+	YtdlpCookiesBrowser         *string   `json:"ytdlpCookiesBrowser"`
+	YtdlpCookiesProfile         *string   `json:"ytdlpCookiesProfile"`
+	YtdlpProxy                  *string   `json:"ytdlpProxy"`
+	YtdlpRateLimit              *string   `json:"ytdlpRateLimit"`
+	YtdlpRetries                *int      `json:"ytdlpRetries" binding:"omitempty,min=0"`
+	AutoBackupIntervalHours     *int      `json:"autoBackupIntervalHours" binding:"omitempty,oneof=0 6 12 24 72 168"`
+	BackupRetentionCount        *int      `json:"backupRetentionCount" binding:"omitempty,min=0"`
+	ResolutionTierMediumEnabled *bool     `json:"resolutionTierMediumEnabled"`
+	ResolutionThresholdLow      *int      `json:"resolutionThresholdLow" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
+	ResolutionThresholdHigh     *int      `json:"resolutionThresholdHigh" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
 }
 
 func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int, latestItemThumbnailPath *string, sequenceGap *SequenceGapResponse) CollectionResponse {
@@ -690,6 +773,9 @@ func toCollectionResponse(c models.Collection, path string, itemCount int, effec
 		FilenameTemplate:        c.FilenameTemplate,
 		IsPrivate:               c.IsPrivate,
 		SeasonNumber:            c.SeasonNumber,
+		Year:                    c.Year,
+		SequenceMin:             c.SequenceMin,
+		SequenceMax:             c.SequenceMax,
 		ArtistID:                c.ArtistID,
 		CoverImagePath:          c.CoverImagePath,
 		CoverImageSmallPath:     c.CoverImageSmallPath,
@@ -1010,4 +1096,9 @@ type StatsResponse struct {
 	LibraryVideoCount int   `json:"libraryVideoCount"`
 	LibraryAudioCount int   `json:"libraryAudioCount"`
 	TotalStorageBytes int64 `json:"totalStorageBytes"`
+	// DiskTotalBytes/DiskFreeBytes describe the filesystem underlying
+	// MediaRoot, not the whole host — 0 if the disk-usage lookup failed
+	// (unsupported filesystem, permissions, etc).
+	DiskTotalBytes int64 `json:"diskTotalBytes"`
+	DiskFreeBytes  int64 `json:"diskFreeBytes"`
 }

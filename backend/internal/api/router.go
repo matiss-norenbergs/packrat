@@ -86,7 +86,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.PATCH("/auth/password", ChangePassword(deps.UsersRepo))
 
 		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
-		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo))
+		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo, deps.SettingsRepo))
 		api.POST("/downloads/preview", PreviewDownloadMetadata(deps.YtDlp, deps.LibraryRepo))
 		api.POST("/downloads/playlist", CreatePlaylistDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo, deps.LibraryRepo, deps.HistoryRepo, deps.YtDlp))
 		api.POST("/downloads/batch", CreateBatchDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo, deps.LibraryRepo, deps.HistoryRepo))
@@ -94,7 +94,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/downloads/:id", DeleteDownload(deps.DownloadsRepo))
 		api.POST("/downloads/clear-log", ClearDownloadLog(deps.DownloadsRepo))
 
-		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.MediaRoot))
+		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.SettingsRepo, deps.MediaRoot))
 		api.GET("/library/facets", GetLibraryFacets(deps.LibraryRepo))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
 		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo, deps.ArtistsRepo))
@@ -102,9 +102,16 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/bulk-tags", BulkAssignTags(deps.LibraryRepo, deps.TagsRepo, deps.MediaRoot))
 		api.POST("/library/bulk-delete", BulkDeleteLibraryItems(deps.DB, deps.LibraryRepo, deps.MediaRoot))
 		api.POST("/library/:id/move", MoveLibraryItem(deps.LibraryRepo, deps.Manager, deps.MediaRoot))
-		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.MediaRoot))
+		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.SettingsRepo, deps.MediaRoot))
 		api.GET("/library/:id/metadata-preview", CompareLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp))
+		api.GET("/library/:id/probe-metadata", ProbeLibraryItemMetadata(deps.LibraryRepo, deps.MediaRoot, deps.FFProbePath, deps.YtDlp))
+		api.POST("/library/:id/trim/preview", PreviewLibraryItemTrim(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.FFProbePath))
+		api.POST("/library/:id/trim/accept", AcceptLibraryItemTrim(deps.LibraryRepo, deps.MediaRoot, deps.FFProbePath, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.SettingsRepo))
+		api.POST("/library/:id/trim/discard", DiscardLibraryItemTrim(deps.MediaRoot, deps.YtDlp))
+		api.GET("/library/:id/trim/frames", GetLibraryItemTrimFrames(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.FFProbePath))
 		api.POST("/library/:id/redownload", RedownloadLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
+		api.GET("/library/:id/redownload/preview-url", PreviewRedownloadURL(deps.LibraryRepo, deps.YtDlp))
+		api.POST("/library/:id/redownload/from-url", RedownloadLibraryItemFromURL(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.POST("/library/:id/thumbnail/redownload", RedownloadLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo))
 		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.CollectionsRepo, deps.TagsRepo))
 		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo))
@@ -128,7 +135,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/tags/:id", DeleteTag(deps.TagsRepo))
 		api.POST("/tags/bulk-delete", BulkDeleteTags(deps.DB, deps.TagsRepo))
 
-		api.GET("/compare-list", ListCompareList(deps.CompareListRepo, deps.TagsRepo, deps.CollectionsRepo, deps.MediaRoot))
+		api.GET("/compare-list", ListCompareList(deps.CompareListRepo, deps.TagsRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.MediaRoot))
 		api.POST("/compare-list", AddToCompareList(deps.CompareListRepo))
 		api.DELETE("/compare-list/:id", RemoveFromCompareList(deps.CompareListRepo))
 		api.DELETE("/compare-list", ClearCompareList(deps.CompareListRepo))
@@ -180,7 +187,9 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.GET("/logs", GetLogs(deps.DownloadsRepo, deps.SettingsRepo))
 
-		api.GET("/stats", GetStats(deps.DownloadsRepo, deps.LibraryRepo))
+		api.GET("/stats", GetStats(deps.DownloadsRepo, deps.LibraryRepo, deps.MediaRoot))
+		api.GET("/stats/library-growth", GetLibraryGrowth(deps.LibraryRepo))
+		api.GET("/stats/resolution-breakdown", GetResolutionBreakdown(deps.LibraryRepo))
 
 		api.POST("/jellyfin/rescan", RescanJellyfinLibrary(deps.SettingsRepo, deps.JellyfinClient))
 

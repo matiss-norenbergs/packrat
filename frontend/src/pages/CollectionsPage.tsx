@@ -31,8 +31,12 @@ export function CollectionsPage() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const bulkDeleteCollections = useBulkDeleteCollections()
   // Collapsed by default (empty set) — the tree is opt-in expanded per
-  // node, or all at once via the toolbar's Expand all/Collapse all buttons.
+  // node, or all at once via the toolbar's single toggle button below.
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  // Whether the toolbar's single toggle button is currently in "everything
+  // expanded" mode — drives its own label/icon; independent of any
+  // individual node the user has since expanded/collapsed by hand.
+  const [allExpanded, setAllExpanded] = useState(false)
   const tree = data ? buildCollectionTree(data) : []
   const allIds = tree.flatMap(collectDescendantIds)
   const toggleExpanded = (id: number) =>
@@ -114,16 +118,18 @@ export function CollectionsPage() {
               </AlertDialogContent>
             </AlertDialog>
 
-            <div className="ml-auto flex gap-2">
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setExpandedIds(new Set(allIds))}>
-                <ChevronsUpDown className="h-4 w-4" />
-                Expand all
-              </Button>
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setExpandedIds(new Set())}>
-                <ChevronsDownUp className="h-4 w-4" />
-                Collapse all
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto gap-1.5"
+              onClick={() => {
+                setAllExpanded((v) => !v)
+                setExpandedIds(allExpanded ? new Set() : new Set(allIds))
+              }}
+            >
+              {allExpanded ? <ChevronsDownUp className="h-4 w-4" /> : <ChevronsUpDown className="h-4 w-4" />}
+              {allExpanded ? "Collapse all" : "Expand all"}
+            </Button>
           </div>
 
           <CollectionTree

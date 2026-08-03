@@ -32,6 +32,9 @@ import type {
   LibraryItem,
   LibraryImportPreview,
   LibraryItemMetadataPreview,
+  LibraryItemProbeResult,
+  LibraryGrowthPoint,
+  ResolutionBreakdownPoint,
   LibraryListResponse,
   LibraryQueryParams,
   LoginRequest,
@@ -46,6 +49,11 @@ import type {
   Tag,
   ThumbnailCandidate,
   CreateTagRequest,
+  RedownloadOverwriteField,
+  RedownloadPreview,
+  TrimFrame,
+  TrimPreviewRequest,
+  TrimPreviewResult,
   UpdateArtistRequest,
   UpdateCollectionRequest,
   UpdateLibraryItemRequest,
@@ -259,8 +267,52 @@ export function refreshLibraryItemMetadata(id: number): Promise<LibraryItem> {
   return request<LibraryItem>(`/library/${id}/refresh-metadata`, { method: "POST" })
 }
 
+export function probeLibraryItemMetadata(id: number): Promise<LibraryItemProbeResult> {
+  return request<LibraryItemProbeResult>(`/library/${id}/probe-metadata`)
+}
+
+export function previewLibraryItemTrim(id: number, payload: TrimPreviewRequest): Promise<TrimPreviewResult> {
+  return request<TrimPreviewResult>(`/library/${id}/trim/preview`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function acceptLibraryItemTrim(id: number, previewPath: string): Promise<LibraryItem> {
+  return request<LibraryItem>(`/library/${id}/trim/accept`, {
+    method: "POST",
+    body: JSON.stringify({ previewPath }),
+  })
+}
+
+export function discardLibraryItemTrim(id: number, previewPath: string): Promise<void> {
+  return request<void>(`/library/${id}/trim/discard`, {
+    method: "POST",
+    body: JSON.stringify({ previewPath }),
+  })
+}
+
+export function fetchLibraryItemTrimFrames(id: number, start: number, end: number): Promise<{ frames: TrimFrame[] }> {
+  return request<{ frames: TrimFrame[] }>(`/library/${id}/trim/frames?start=${start}&end=${end}`)
+}
+
 export function redownloadLibraryItem(id: number): Promise<{ id: number }> {
   return request<{ id: number }>(`/library/${id}/redownload`, { method: "POST" })
+}
+
+export function fetchRedownloadPreview(id: number, url: string): Promise<RedownloadPreview> {
+  return request<RedownloadPreview>(`/library/${id}/redownload/preview-url?url=${encodeURIComponent(url)}`)
+}
+
+export function redownloadLibraryItemFromUrl(
+  id: number,
+  url: string,
+  overwriteFields: RedownloadOverwriteField[],
+): Promise<{ id: number }> {
+  return request<{ id: number }>(`/library/${id}/redownload/from-url`, {
+    method: "POST",
+    body: JSON.stringify({ url, overwriteFields }),
+  })
 }
 
 export function redownloadLibraryThumbnail(id: number): Promise<LibraryItem> {
@@ -410,6 +462,14 @@ export function clearDownloadLog(): Promise<{ deleted: number }> {
 
 export function fetchStats(): Promise<Stats> {
   return request<Stats>("/stats")
+}
+
+export function fetchLibraryGrowth(): Promise<LibraryGrowthPoint[]> {
+  return request<LibraryGrowthPoint[]>("/stats/library-growth")
+}
+
+export function fetchResolutionBreakdown(): Promise<ResolutionBreakdownPoint[]> {
+  return request<ResolutionBreakdownPoint[]>("/stats/resolution-breakdown")
 }
 
 export function exportSettingsBackup(password: string): Promise<BackupEnvelope> {

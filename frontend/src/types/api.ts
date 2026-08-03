@@ -90,6 +90,9 @@ export interface Collection {
   filenameTemplate: string
   isPrivate: boolean
   seasonNumber: number | null
+  year: number | null
+  sequenceMin: number | null
+  sequenceMax: number | null
   artistId: number | null
   coverImagePath: string | null
   coverImageSmallPath: string | null
@@ -130,6 +133,9 @@ export interface CreateCollectionRequest {
   isPrivate?: boolean
   jellyfinLibraryId?: string | null
   seasonNumber?: number | null
+  year?: number | null
+  sequenceMin?: number | null
+  sequenceMax?: number | null
   artistId?: number | null
   browseAsShow?: boolean
 }
@@ -212,6 +218,37 @@ export interface UpdateLibraryProgressRequest {
   positionSeconds: number
 }
 
+// GET /library/:id/probe-metadata — a read-only ffprobe pass over the item's
+// actual media file, used by the Edit dialog's rescan-resolution/duration
+// prompt. Never persisted server-side by this endpoint.
+export interface LibraryItemProbeResult {
+  resolution: string | null
+  durationSeconds: number | null
+  frameRate: number
+}
+
+// POST /library/:id/trim/preview's body — at least one of the two must be
+// set; the other means "don't trim that end".
+export interface TrimPreviewRequest {
+  trimStartSeconds?: number
+  trimEndSeconds?: number
+}
+
+// The generated preview's MediaRoot-relative path (playable via
+// mediaFileUrl()) plus what its actual duration/size came out to.
+export interface TrimPreviewResult {
+  previewPath: string
+  durationSeconds: number
+  fileSizeBytes: number
+}
+
+// One decoded frame from GET /library/:id/trim/frames — the trim dialog's
+// "browse every frame in a short window, click the exact one" picker.
+export interface TrimFrame {
+  timestampSeconds: number
+  imageBase64: string
+}
+
 export interface LibraryItemMetadataPreview {
   title: string
   uploader: string
@@ -220,6 +257,19 @@ export interface LibraryItemMetadataPreview {
   thumbnail: string
   resolution: string | null
 }
+
+// The "Redownload from different URL" dialog's right-hand preview — same
+// fields as LibraryItemMetadataPreview, plus whether the candidate URL
+// already matches a *different* library item.
+export interface RedownloadPreview extends LibraryItemMetadataPreview {
+  duplicate: DuplicateInfo | null
+}
+
+// Subset of comparable fields the "Redownload from different URL" dialog
+// lets the user opt into overwriting — resolution/duration are always
+// available and checked by default; the rest default unchecked. Mirrors
+// the backend's redownloadOverwritableFields allowlist.
+export type RedownloadOverwriteField = "title" | "uploader" | "description" | "thumbnail" | "resolution" | "duration"
 
 export interface BulkAssignTagsRequest {
   itemIds: number[]
@@ -344,6 +394,7 @@ export interface Settings {
   libraryPaginationEnabled: boolean
   libraryPageSize: number
   thumbnailFrameCount: number
+  privacyEnabled: boolean
   privacyBlurStrength: string
   browseIgnorePrivacy: boolean
   skipDownloadPreview: boolean
@@ -358,6 +409,10 @@ export interface Settings {
   ytdlpRateLimit: string
   ytdlpRetries: number
   autoBackupIntervalHours: number
+  backupRetentionCount: number
+  resolutionTierMediumEnabled: boolean
+  resolutionThresholdLow: number
+  resolutionThresholdHigh: number
 }
 
 export interface YtDlpVersionInfo {
@@ -463,6 +518,7 @@ export interface UpdateSettingsRequest {
   libraryPaginationEnabled?: boolean
   libraryPageSize?: number
   thumbnailFrameCount?: number
+  privacyEnabled?: boolean
   privacyBlurStrength?: string
   browseIgnorePrivacy?: boolean
   skipDownloadPreview?: boolean
@@ -477,6 +533,10 @@ export interface UpdateSettingsRequest {
   ytdlpRateLimit?: string
   ytdlpRetries?: number
   autoBackupIntervalHours?: number
+  backupRetentionCount?: number
+  resolutionTierMediumEnabled?: boolean
+  resolutionThresholdLow?: number
+  resolutionThresholdHigh?: number
 }
 
 export interface BackupHistoryEntry {
@@ -612,4 +672,25 @@ export interface Stats {
   libraryVideoCount: number
   libraryAudioCount: number
   totalStorageBytes: number
+  // Describe the filesystem underlying the server's media root, not the
+  // whole host — 0/0 if the disk-usage lookup failed server-side.
+  diskTotalBytes: number
+  diskFreeBytes: number
+}
+
+// One calendar day's tally from GET /stats/library-growth, oldest first.
+// cumulative is a running total over the item's entire history, not just
+// the returned range.
+export interface LibraryGrowthPoint {
+  date: string
+  count: number
+  cumulative: number
+}
+
+// One standard resolution step's item count from GET
+// /stats/resolution-breakdown — always includes every step (0 count if
+// empty), in ascending step order.
+export interface ResolutionBreakdownPoint {
+  step: number
+  count: number
 }

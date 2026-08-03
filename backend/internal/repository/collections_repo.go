@@ -94,9 +94,9 @@ func (r *CollectionsRepo) createLocked(ctx context.Context, c *models.Collection
 	}
 
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO collections (name, parent_id, root_path, default_quality, default_download_type, filename_template, is_private, jellyfin_library, season_number, artist_id, browse_as_show)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Name, c.ParentID, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.FilenameTemplate, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.ArtistID, c.BrowseAsShow,
+		INSERT INTO collections (name, parent_id, root_path, default_quality, default_download_type, filename_template, is_private, jellyfin_library, season_number, year, sequence_min, sequence_max, artist_id, browse_as_show)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.ParentID, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.FilenameTemplate, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.Year, c.SequenceMin, c.SequenceMax, c.ArtistID, c.BrowseAsShow,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting collection: %w", err)
@@ -180,9 +180,9 @@ func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collec
 
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE collections
-		SET name = ?, root_path = ?, default_quality = ?, default_download_type = ?, filename_template = ?, is_private = ?, jellyfin_library = ?, season_number = ?, artist_id = ?, browse_as_show = ?, updated_at = datetime('now')
+		SET name = ?, root_path = ?, default_quality = ?, default_download_type = ?, filename_template = ?, is_private = ?, jellyfin_library = ?, season_number = ?, year = ?, sequence_min = ?, sequence_max = ?, artist_id = ?, browse_as_show = ?, updated_at = datetime('now')
 		WHERE id = ?`,
-		c.Name, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.FilenameTemplate, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.ArtistID, c.BrowseAsShow, id,
+		c.Name, c.RootPath, c.DefaultQuality, c.DefaultDownloadType, c.FilenameTemplate, c.IsPrivate, c.JellyfinLibrary, c.SeasonNumber, c.Year, c.SequenceMin, c.SequenceMax, c.ArtistID, c.BrowseAsShow, id,
 	)
 	if err != nil {
 		return fmt.Errorf("updating collection: %w", err)
@@ -349,7 +349,7 @@ func FindChildByRootPath(cols []models.Collection, parentID *int64, segment stri
 
 const collectionSelectColumns = `
 	SELECT id, name, parent_id, root_path, default_quality, default_download_type, filename_template,
-	       jellyfin_library, is_private, season_number, artist_id, cover_image_path, cover_image_small_path, cover_image_medium_path, browse_as_show, created_at, updated_at
+	       jellyfin_library, is_private, season_number, year, sequence_min, sequence_max, artist_id, cover_image_path, cover_image_small_path, cover_image_medium_path, browse_as_show, created_at, updated_at
 	FROM collections`
 
 func scanCollection(row rowScanner) (*models.Collection, error) {
@@ -358,7 +358,7 @@ func scanCollection(row rowScanner) (*models.Collection, error) {
 
 	err := row.Scan(
 		&c.ID, &c.Name, &c.ParentID, &c.RootPath, &c.DefaultQuality, &c.DefaultDownloadType, &c.FilenameTemplate,
-		&c.JellyfinLibrary, &c.IsPrivate, &c.SeasonNumber, &c.ArtistID, &c.CoverImagePath, &c.CoverImageSmallPath, &c.CoverImageMediumPath, &c.BrowseAsShow, &createdAt, &updatedAt,
+		&c.JellyfinLibrary, &c.IsPrivate, &c.SeasonNumber, &c.Year, &c.SequenceMin, &c.SequenceMax, &c.ArtistID, &c.CoverImagePath, &c.CoverImageSmallPath, &c.CoverImageMediumPath, &c.BrowseAsShow, &createdAt, &updatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

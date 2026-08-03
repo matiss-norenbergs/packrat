@@ -18,6 +18,7 @@ const (
 	SettingLibraryPaginationEnabled = "library_pagination_enabled" // bool, default false — off shows every item
 	SettingLibraryPageSize          = "library_page_size"
 	SettingThumbnailFrameCount      = "thumbnail_frame_count"
+	SettingPrivacyEnabled           = "privacy_enabled"       // bool, default false — master switch for the whole privacy workflow
 	SettingPrivacyBlurStrength      = "privacy_blur_strength" // "weak" | "default" | "strong"
 	SettingBrowseIgnorePrivacy      = "browse_ignore_privacy" // bool, default false — Browse-page-only override, doesn't affect Library
 	SettingSkipDownloadPreview      = "skip_download_preview" // bool, true = skip the New Download preview card
@@ -32,4 +33,9 @@ const (
 	SettingYtdlpRateLimit           = "ytdlp_rate_limit"           // e.g. "500K"; "" = disabled
 	SettingYtdlpRetries             = "ytdlp_retries"              // int as string; 0 = yt-dlp's own default (10), not passed explicitly
 	SettingAutoBackupIntervalHours  = "auto_backup_interval_hours" // hours; 0 = disabled (default)
+	SettingBackupRetentionCount     = "backup_retention_count"     // count; 0 = unlimited; default backup.DefaultBackupRetentionCount
+
+	SettingResolutionTierMediumEnabled = "resolution_tier_medium_enabled" // bool, default true
+	SettingResolutionThresholdLow      = "resolution_threshold_low"       // height in px; default 720 — at/below is "low"
+	SettingResolutionThresholdHigh     = "resolution_threshold_high"      // height in px; default 2160 — at/above is "high"
 )

@@ -2,12 +2,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { useTags } from "@/hooks/useTags"
-import { librarySmallThumbnailUrl } from "@/lib/api"
 import type { LibraryItemEditFields } from "@/lib/libraryItemEdit"
-import { cn, hashText } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { ArtistSelect } from "./ArtistSelect"
+import { LibraryItemPreviewRow } from "./LibraryItemPreviewRow"
+import { SequenceNumberField } from "./SequenceNumberField"
 import { TagInput } from "./TagInput"
 import type { LibraryItem } from "@/types/api"
 
@@ -16,6 +16,8 @@ interface BulkEditLibraryItemRowProps {
   rowNumber: number
   fields: LibraryItemEditFields
   onChange: (patch: Partial<LibraryItemEditFields>) => void
+  sequenceMin: number | null | undefined
+  sequenceMax: number | null | undefined
 }
 
 // One item's full editable field set, always expanded (no Advanced toggle) —
@@ -23,28 +25,12 @@ interface BulkEditLibraryItemRowProps {
 // Resolution/Duration display fields. Alternating row shading (rowNumber %
 // 2) mirrors BulkDownloadRow's same convention, since a long list of
 // otherwise-identical bordered rows is hard to visually track.
-export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange }: BulkEditLibraryItemRowProps) {
+export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange, sequenceMin, sequenceMax }: BulkEditLibraryItemRowProps) {
   const { data: allTags } = useTags()
-  const thumbUrl = librarySmallThumbnailUrl(item)
 
   return (
     <div className={cn("space-y-3 rounded-md border p-3", rowNumber % 2 === 0 && "bg-muted/40")}>
-      <div className="flex items-center gap-2">
-        {thumbUrl ? (
-          <BlurredThumbnail
-            src={thumbUrl}
-            className="h-10 w-16 shrink-0 rounded object-cover"
-            blurred={item.blurred}
-            revealed={false}
-            onToggleReveal={() => {}}
-          />
-        ) : (
-          <div className="h-10 w-16 shrink-0 rounded bg-muted" />
-        )}
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {item.blurred ? hashText(item.title) : item.title}
-        </span>
-      </div>
+      <LibraryItemPreviewRow item={item} thumbnailClassName="h-10 w-16" />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="space-y-1 lg:col-span-2">
@@ -85,12 +71,11 @@ export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange }: Bu
         </div>
         <div className="space-y-1">
           <Label>Sequence #</Label>
-          <Input
-            type="number"
-            min="1"
-            placeholder="1"
+          <SequenceNumberField
             value={fields.sequenceNumber}
-            onChange={(e) => onChange({ sequenceNumber: e.target.value })}
+            onChange={(v) => onChange({ sequenceNumber: v })}
+            sequenceMax={sequenceMax}
+            sequenceMin={sequenceMin}
           />
         </div>
       </div>

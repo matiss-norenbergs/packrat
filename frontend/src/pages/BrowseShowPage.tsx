@@ -68,7 +68,7 @@ export function BrowseShowPage() {
 
   const showItems = itemsQuery.data?.items ?? []
   const summary = buildShowSummary(collection)
-  const effectiveBlurred = summary.isPrivate && !ignorePrivacy
+  const effectiveBlurred = !!settings?.privacyEnabled && summary.isPrivate && !ignorePrivacy
   const stats = computeShowStats(showItems)
 
   const artistId = resolveInheritedArtistId(collections, collection.id)

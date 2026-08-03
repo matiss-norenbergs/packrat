@@ -15,6 +15,7 @@ export interface SequencedEntry {
 export interface ArrangementState {
   sequencedList: SequencedEntry[]
   leadingGap: number // reserved slots before the very first entry
+  trailingGap: number // reserved slots after the last entry, up to a known expected max — 0 when no max is known
   unsequencedList: LibraryItem[] // no sequenceNumber; not part of sequencedList until placed
 }
 
@@ -49,7 +50,16 @@ export function normalizeHead(state: ArrangementState): ArrangementState {
 // data was already inconsistent. Items with no sequenceNumber become
 // unsequencedList, ordered by download date, untouched until the user
 // explicitly places one.
-export function seedSequenceArrangement(items: LibraryItem[]): ArrangementState {
+//
+// expectedMax (a collection's configured Sequence Max, when the whole
+// selection belongs to one collection) seeds trailingGap — the missing
+// slots after the last real item, up to that max. An item whose own
+// sequenceNumber already exceeds expectedMax is never clipped or flagged;
+// Math.max(0, ...) just means no trailing gap renders in that case. When
+// nothing is sequenced yet, there's no "last item" to attach a trailing gap
+// to, so the whole 1..expectedMax range folds into leadingGap instead,
+// keeping the "leadingGap lives before the first real item" invariant intact.
+export function seedSequenceArrangement(items: LibraryItem[], expectedMax?: number): ArrangementState {
   const withSeq = [...items]
     .filter((i): i is LibraryItem & { sequenceNumber: number } => i.sequenceNumber != null)
     .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
@@ -62,9 +72,18 @@ export function seedSequenceArrangement(items: LibraryItem[]): ArrangementState 
     const prev = withSeq[i - 1]
     return { item, gapBefore: Math.max(0, item.sequenceNumber - prev.sequenceNumber - 1) }
   })
-  const leadingGap = withSeq.length > 0 ? Math.max(0, withSeq[0].sequenceNumber - 1) : 0
 
-  return { sequencedList, leadingGap, unsequencedList }
+  let leadingGap = withSeq.length > 0 ? Math.max(0, withSeq[0].sequenceNumber - 1) : 0
+  let trailingGap = 0
+  if (expectedMax != null) {
+    if (withSeq.length === 0) {
+      leadingGap = expectedMax
+    } else {
+      trailingGap = Math.max(0, expectedMax - withSeq[withSeq.length - 1].sequenceNumber)
+    }
+  }
+
+  return { sequencedList, leadingGap, trailingGap, unsequencedList }
 }
 
 // The number every row displays is purely a live consequence of position —
@@ -82,15 +101,24 @@ export function computeDisplayNumbers(leadingGap: number, list: SequencedEntry[]
   return numbers
 }
 
-// Every integer position from 1 to the current max, paired with whatever
-// currently occupies it (or null, inside a gap). Powers each row's
-// "jump to position" select.
-export function positionMap(leadingGap: number, list: SequencedEntry[]): PositionEntry[] {
-  if (list.length === 0) return []
+// Every integer position from 1 to the current max (including any trailing
+// gap), paired with whatever currently occupies it (or null, inside a gap).
+// Powers each row's "jump to position" select. When the list is empty but
+// leadingGap is set (an all-unsequenced collection with a configured
+// Sequence Max), still enumerates 1..leadingGap so an unsequenced item can
+// jump straight into any slot of that fully-unplaced range.
+export function positionMap(leadingGap: number, list: SequencedEntry[], trailingGap = 0): PositionEntry[] {
+  if (list.length === 0) {
+    const result: PositionEntry[] = []
+    for (let p = 1; p <= leadingGap; p++) {
+      result.push({ position: p, occupant: null })
+    }
+    return result
+  }
   const numbers = computeDisplayNumbers(leadingGap, list)
   const byNumber = new Map<number, LibraryItem>()
   list.forEach((entry, i) => byNumber.set(numbers[i], entry.item))
-  const max = numbers[numbers.length - 1]
+  const max = numbers[numbers.length - 1] + trailingGap
   const result: PositionEntry[] = []
   for (let p = 1; p <= max; p++) {
     result.push({ position: p, occupant: byNumber.get(p) ?? null })
@@ -133,27 +161,50 @@ export function positionMap(leadingGap: number, list: SequencedEntry[]): Positio
 // neighbor instead, so the vacated slot the mover leaves behind survives as
 // a brand new gap rather than being silently absorbed into a shift.
 export function moveToPosition(state: ArrangementState, itemId: number, targetPosition: number): ArrangementState {
-  // Bootstrap case: positionMap is empty when sequencedList is (nothing to
-  // jump relative to yet), so this item just becomes the sole entry —
-  // otherwise there'd be no way to ever place the very first item when a
-  // selection is entirely unsequenced.
+  // Bootstrap case: positionMap only has entries when sequencedList does (or
+  // leadingGap is seeded from an expected max), so this item just becomes
+  // the sole entry — otherwise there'd be no way to ever place the very
+  // first item when a selection is entirely unsequenced. If leadingGap
+  // and/or trailingGap already encode a known expected-max range (see
+  // seedSequenceArrangement), that range is split around wherever this
+  // first item lands: everything before it becomes the new leadingGap,
+  // everything after becomes the new trailingGap.
   if (state.sequencedList.length === 0) {
     const mover = state.unsequencedList.find((i) => i.id === itemId)
     if (!mover || targetPosition < 1) return state
+    const originalMaxExtent = state.leadingGap + state.trailingGap
     return {
       sequencedList: [{ item: mover, gapBefore: 0 }],
       leadingGap: targetPosition - 1,
+      trailingGap: Math.max(0, originalMaxExtent - targetPosition),
       unsequencedList: state.unsequencedList.filter((i) => i.id !== itemId),
     }
   }
 
   const numbers = computeDisplayNumbers(state.leadingGap, state.sequencedList)
-  const map = positionMap(state.leadingGap, state.sequencedList)
+  const map = positionMap(state.leadingGap, state.sequencedList, state.trailingGap)
   const target = map.find((e) => e.position === targetPosition)
   if (!target) return state
   if (target.occupant?.id === itemId) return state
 
   const seqIdx = state.sequencedList.findIndex((e) => e.item.id === itemId)
+
+  // The collection's configured upper boundary (if any) is invariant across
+  // every operation below — reordering, inserting, or removing existing
+  // items never changes how many total slots the collection is expected to
+  // have. So rather than trying to track trailingGap incrementally through
+  // each branch's own bookkeeping (error-prone: an item landing via the
+  // "occupied target, moving backward" splice can shift *other* items'
+  // numbers too, so "the mover was last" doesn't reliably predict who's
+  // last afterward), trailingGap is simply re-derived at the very end of
+  // each branch from whatever the actual final last number turns out to
+  // be: fixedMaxExtent minus that number.
+  const fixedMaxExtent = numbers[numbers.length - 1] + state.trailingGap
+  const trailingGapFor = (finalLeadingGap: number, finalList: SequencedEntry[]): number => {
+    const finalNumbers = computeDisplayNumbers(finalLeadingGap, finalList)
+    const lastNumber = finalNumbers.length > 0 ? finalNumbers[finalNumbers.length - 1] : 0
+    return Math.max(0, fixedMaxExtent - lastNumber)
+  }
 
   // --- Occupied target: mover always lands exactly on the clicked number. ---
   if (target.occupant) {
@@ -183,26 +234,40 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
     if (movingForward) {
       const newList = [...sequencedList]
       newList.splice(idx + 1, 0, { item: mover, gapBefore: 0 })
-      return normalizeHead({ sequencedList: newList, leadingGap: state.leadingGap, unsequencedList })
+      return normalizeHead({
+        sequencedList: newList,
+        leadingGap: state.leadingGap,
+        trailingGap: trailingGapFor(state.leadingGap, newList),
+        unsequencedList,
+      })
     }
 
     const inherited = sequencedList[idx].gapBefore
     const newList = [...sequencedList]
     newList[idx] = { ...newList[idx], gapBefore: 0 }
     newList.splice(idx, 0, { item: mover, gapBefore: inherited })
-    return normalizeHead({ sequencedList: newList, leadingGap: state.leadingGap, unsequencedList })
+    return normalizeHead({
+      sequencedList: newList,
+      leadingGap: state.leadingGap,
+      trailingGap: trailingGapFor(state.leadingGap, newList),
+      unsequencedList,
+    })
   }
 
-  // --- Gap target: identify the gap's original before/after neighbors. ---
+  // --- Gap target: identify the gap's original before/after neighbors.
+  // afterIdxOriginal === state.sequencedList.length is the "nothing after"
+  // sentinel (landing in the trailing gap), symmetric with afterIdxOriginal
+  // === 0 / beforeId === null meaning "nothing before" (the leading gap). ---
   let beforeId: number | null = null
   let afterIdxOriginal: number
   if (targetPosition <= state.leadingGap) {
     afterIdxOriginal = 0
   } else {
-    afterIdxOriginal = numbers.findIndex((n) => n > targetPosition)
+    const idx = numbers.findIndex((n) => n > targetPosition)
+    afterIdxOriginal = idx === -1 ? state.sequencedList.length : idx
     if (afterIdxOriginal > 0) beforeId = state.sequencedList[afterIdxOriginal - 1].item.id
   }
-  const afterId = state.sequencedList[afterIdxOriginal].item.id
+  const afterId = afterIdxOriginal < state.sequencedList.length ? state.sequencedList[afterIdxOriginal].item.id : null
 
   const moverIsBefore = seqIdx !== -1 && beforeId === itemId
   const moverIsAfter = seqIdx !== -1 && afterId === itemId
@@ -228,9 +293,11 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
   // the gap. Normally that's afterEntity — unless afterEntity IS the mover
   // (moving backward into its own gap), in which case the remainder must
   // attach to the mover's own original successor instead, so the slot the
-  // mover vacates doesn't silently vanish.
+  // mover vacates doesn't silently vanish. When landing in the trailing gap,
+  // afterId is already null, so remainderOwnerId naturally stays null —
+  // there's nothing after the mover, its landing spot becomes the new end.
   let remainderOwnerId: number | null = afterId
-  let remainderNumber = numbers[afterIdxOriginal]
+  let remainderNumber = afterId !== null ? numbers[afterIdxOriginal] : 0
   if (moverIsAfter) {
     const grandAfterIdx = afterIdxOriginal + 1
     if (grandAfterIdx < state.sequencedList.length) {
@@ -273,7 +340,7 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
     }
   }
 
-  return normalizeHead({ sequencedList, leadingGap, unsequencedList })
+  return normalizeHead({ sequencedList, leadingGap, trailingGap: trailingGapFor(leadingGap, sequencedList), unsequencedList })
 }
 
 export type SequenceRenderNode =
@@ -284,14 +351,35 @@ export type SequenceRenderNode =
 // in either direction. "desc" is a pure display-order flip: every item
 // keeps its actual sequence number and every gap keeps its actual size,
 // nothing is recomputed. Concretely this reverses the flat
-// [leadingGap, item0, item1.gapBefore, item1, ...] sequence as a whole
-// (not just the items, and not the items-with-their-own-gapBefore-still-
-// attached-before-them) — a gap conceptually sits *before* the item whose
-// number it's short of, so flipping the whole reading direction puts that
-// gap immediately *after* that item instead, which is what correctly moves
-// the leading gap to the very end when reading highest-to-lowest.
-export function buildRenderNodes(leadingGap: number, list: SequencedEntry[], direction: "asc" | "desc"): SequenceRenderNode[] {
+// [leadingGap, item0, item1.gapBefore, item1, ..., trailingGap] sequence as
+// a whole (not just the items, and not the items-with-their-own-gapBefore-
+// still-attached-before-them) — a gap conceptually sits *before* the item
+// whose number it's short of, so flipping the whole reading direction puts
+// that gap immediately *after* that item instead, which is what correctly
+// moves the leading gap to the very end (and the trailing gap to the very
+// start) when reading highest-to-lowest.
+//
+// trailingGap only ever renders when > 0 — unlike leading/interior gaps,
+// there's no zero-size "insert" affordance at the end: growing the expected
+// range happens via the collection's own Sequence Max setting, not a stray
+// + button here. When the list is empty (nothing sequenced yet), the whole
+// expected range already lives in leadingGap (see seedSequenceArrangement),
+// so only a leading node is ever emitted in that case.
+export function buildRenderNodes(
+  leadingGap: number,
+  list: SequencedEntry[],
+  direction: "asc" | "desc",
+  trailingGap = 0,
+): SequenceRenderNode[] {
   const nodes: SequenceRenderNode[] = []
+
+  if (list.length === 0) {
+    if (leadingGap > 0) {
+      nodes.push({ kind: "gap", size: leadingGap, key: "leading", index: 0 })
+    }
+    return nodes
+  }
+
   list.forEach((entry, i) => {
     nodes.push({
       kind: "gap",
@@ -301,5 +389,8 @@ export function buildRenderNodes(leadingGap: number, list: SequencedEntry[], dir
     })
     nodes.push({ kind: "item", entry, index: i })
   })
+  if (trailingGap > 0) {
+    nodes.push({ kind: "gap", size: trailingGap, key: "trailing", index: list.length })
+  }
   return direction === "desc" ? nodes.reverse() : nodes
 }

@@ -9,13 +9,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { useCollections } from "@/hooks/useCollections"
 import { useAddToCompareList } from "@/hooks/useCompareList"
 import { useLibraryQuery } from "@/hooks/useLibrary"
-import { librarySmallThumbnailUrl } from "@/lib/api"
 import { buildCollectionTree, collectDescendantIds, findNodeById } from "@/lib/collectionTree"
-import { hashText } from "@/lib/utils"
+import { LibraryItemPreviewRow } from "./LibraryItemPreviewRow"
 import { useSelection } from "./SelectionContext"
 import type { LibraryItem } from "@/types/api"
 
@@ -90,20 +88,7 @@ export function AddToCompareListDialog({ open, onOpenChange }: AddToCompareListD
           <Label>{isLoading ? "Resolving files…" : `${affectedItems.length} ${affectedItems.length === 1 ? "file" : "files"} will be added`}</Label>
           <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
             {visibleItems.map((item) => (
-              <div key={item.id} className="flex items-center gap-2 text-sm">
-                {librarySmallThumbnailUrl(item) ? (
-                  <BlurredThumbnail
-                    src={librarySmallThumbnailUrl(item)!}
-                    className="h-8 w-14 shrink-0 rounded object-cover"
-                    blurred={item.blurred}
-                    revealed={false}
-                    onToggleReveal={() => {}}
-                  />
-                ) : (
-                  <div className="h-8 w-14 shrink-0 rounded bg-muted" />
-                )}
-                <span className="min-w-0 flex-1 truncate">{item.blurred ? hashText(item.title) : item.title}</span>
-              </div>
+              <LibraryItemPreviewRow key={item.id} item={item} />
             ))}
             {hiddenCount > 0 && <p className="px-1 py-1 text-xs text-muted-foreground">+{hiddenCount} more</p>}
             {!isLoading && affectedItems.length === 0 && (

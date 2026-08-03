@@ -85,4 +85,18 @@ type Download struct {
 	// completes — the download-time equivalent of turning on "Generate NFO"
 	// in the Edit dialog, but up front rather than as a follow-up action.
 	GenerateNFO bool
+
+	// TargetLibraryItemID, when set, means this download is a redownload of
+	// an existing library item rather than a brand new one — on completion
+	// the queue updates that item in place (file swap + selected fields)
+	// instead of creating a new library row. Never bound from the public
+	// POST /downloads JSON body (see CreateDownloadRequest's json:"-" tag);
+	// only set internally by RedownloadLibraryItem/RedownloadLibraryItemFromURL.
+	TargetLibraryItemID *int64
+	// OverwriteFields lists which of the target item's fields get
+	// overwritten with freshly-fetched data on completion — a subset of
+	// {"title","uploader","description","thumbnail","resolution","duration"}.
+	// Only meaningful when TargetLibraryItemID is set. Stored as a JSON
+	// array in a single TEXT column, same convention as OverrideTags.
+	OverwriteFields []string
 }

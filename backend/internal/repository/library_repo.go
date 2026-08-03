@@ -4,11 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"packrat/backend/internal/models"
 )
+
+// ResolutionSteps are the standard resolution heights the dashboard's
+// resolution-breakdown chart buckets into — mirrors frontend/src/lib/
+// resolution.ts's RESOLUTION_STEPS (kept in sync manually, same as that
+// file's own comment about UpdateSettingsRequest's oneof= constraint).
+var ResolutionSteps = []int{480, 720, 1080, 1440, 2160, 4320}
 
 type LibraryRepo struct {
 	db dbtx
@@ -525,11 +532,25 @@ type SequenceGap struct {
 // true total.
 const sequenceGapSampleCap = 50
 
+// SequenceRange overrides the reported min/max for a collection, when its
+// own configured Sequence Min/Max should widen the gap range beyond what's
+// merely been placed so far (e.g. items 1-8 exist but the collection expects
+// up to 12 — without this, gaps only ever get reported between placed
+// items). Either field nil falls back to that item-derived bound.
+type SequenceRange struct {
+	Min *int
+	Max *int
+}
+
 // SequenceGapsByCollection returns gap info only for collections that
 // actually have one — a collection with zero or one sequence-numbered item
 // (nothing to have a "range" in) or a fully dense sequence is absent from
-// the map, same convention as LatestThumbnailsByCollection.
-func (r *LibraryRepo) SequenceGapsByCollection(ctx context.Context) (map[int64]SequenceGap, error) {
+// the map, same convention as LatestThumbnailsByCollection. ranges lets a
+// collection's own configured Sequence Min/Max widen the reported range
+// beyond its placed items' own min/max; a collection missing from ranges (or
+// with nil fields) falls back to the item-derived bound, unchanged from
+// before ranges existed.
+func (r *LibraryRepo) SequenceGapsByCollection(ctx context.Context, ranges map[int64]SequenceRange) (map[int64]SequenceGap, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT collection_id, sequence_number FROM library
 		WHERE collection_id IS NOT NULL AND sequence_number IS NOT NULL
@@ -555,7 +576,15 @@ func (r *LibraryRepo) SequenceGapsByCollection(ctx context.Context) (map[int64]S
 	out := make(map[int64]SequenceGap)
 	for collectionID, seqs := range values {
 		min, max := seqs[0], seqs[len(seqs)-1] // rows arrive pre-sorted by sequence_number
-		if min == max {
+		if rng, ok := ranges[collectionID]; ok {
+			if rng.Min != nil {
+				min = *rng.Min
+			}
+			if rng.Max != nil {
+				max = *rng.Max
+			}
+		}
+		if min >= max {
 			continue
 		}
 		present := make(map[int]bool, len(seqs))
@@ -614,6 +643,63 @@ func (r *LibraryRepo) UpdatePlaybackPosition(ctx context.Context, id int64, posi
 	)
 	if err != nil {
 		return fmt.Errorf("updating library playback position: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// UpdateDurationAndSize is used after accepting a trim — the file on disk
+// changed size/length outside the normal download/import/metadata-edit
+// paths, so it's kept as its own narrow update rather than folded into
+// UpdateMetadata.
+func (r *LibraryRepo) UpdateDurationAndSize(ctx context.Context, id int64, durationSeconds int, fileSizeBytes int64) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE library SET duration = ?, file_size_bytes = ? WHERE id = ?`,
+		durationSeconds, fileSizeBytes, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating library duration/size: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// ApplyRedownloadParams is ApplyRedownload's input. Filename/Path/
+// FileSizeBytes/OriginalURL/VideoID are always overwritten — the file
+// genuinely changed, and the URL/VideoID are identifiers tied to whatever
+// source the redownload actually came from, not optional content. The rest
+// are nil-able "leave alone unless overwriting" fields, matching
+// UpdateMetadata's existing COALESCE idiom — the caller resolves which are
+// nil from the redownload's chosen overwrite-field set.
+type ApplyRedownloadParams struct {
+	Filename      string
+	Path          string
+	FileSizeBytes int64
+	OriginalURL   string
+	VideoID       string
+	Duration      *int
+	Resolution    *string
+	Title         *string
+	Uploader      *string
+	Description   *string
+}
+
+// ApplyRedownload updates an existing library item in place after a
+// redownload — the completion path used instead of Create when the
+// download's TargetLibraryItemID is set (see queue/manager.go's
+// completeRedownload). Deliberately never touches tags, artist, year,
+// season/sequence number, generate_nfo, or thumbnail (thumbnail is handled
+// by UpdateThumbnail/UpdateThumbnailTiers separately, only when checked).
+func (r *LibraryRepo) ApplyRedownload(ctx context.Context, id int64, p ApplyRedownloadParams) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE library
+		SET filename = ?, path = ?, file_size_bytes = ?, original_url = ?, video_id = ?,
+		    duration = COALESCE(?, duration), resolution = COALESCE(?, resolution),
+		    title = COALESCE(?, title), uploader = COALESCE(?, uploader), description = COALESCE(?, description)
+		WHERE id = ?`,
+		p.Filename, p.Path, p.FileSizeBytes, p.OriginalURL, p.VideoID,
+		p.Duration, p.Resolution, p.Title, p.Uploader, p.Description, id,
+	)
+	if err != nil {
+		return fmt.Errorf("applying redownload: %w", err)
 	}
 	return checkRowsAffected(res)
 }
@@ -677,6 +763,115 @@ func (r *LibraryRepo) Stats(ctx context.Context) (videoCount, audioCount int, to
 		return 0, 0, 0, fmt.Errorf("computing library stats: %w", err)
 	}
 	return videoCount, audioCount, totalBytes, nil
+}
+
+// LibraryGrowthPoint is one calendar day's new-item tally for the
+// dashboard's growth chart.
+type LibraryGrowthPoint struct {
+	Date  string
+	Count int
+}
+
+// GrowthByDay returns one row per calendar day with at least one library
+// item, oldest first, using idx_library_downloaded_at. No date-range limit —
+// per-day granularity keeps this small even for a library with years of
+// history. The dashboard handler turns this into a running cumulative total.
+func (r *LibraryRepo) GrowthByDay(ctx context.Context) ([]LibraryGrowthPoint, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT date(downloaded_at), COUNT(*)
+		FROM library
+		GROUP BY date(downloaded_at)
+		ORDER BY date(downloaded_at)`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying library growth: %w", err)
+	}
+	defer rows.Close()
+
+	var out []LibraryGrowthPoint
+	for rows.Next() {
+		var p LibraryGrowthPoint
+		if err := rows.Scan(&p.Date, &p.Count); err != nil {
+			return nil, fmt.Errorf("scanning library growth row: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// ResolutionStepCount is one standard resolution step's item tally for the
+// dashboard's resolution-breakdown chart.
+type ResolutionStepCount struct {
+	Step  int
+	Count int
+}
+
+// CountByResolutionStep groups every library item with a parseable
+// "WIDTHxHEIGHT" resolution into the nearest of ResolutionSteps (by absolute
+// difference in height, ties broken toward the lower step) and returns one
+// row per step that has at least one item, in ResolutionSteps order. Items
+// with no resolution (audio-only, or unparsed) are excluded rather than
+// bucketed, since there's no meaningful step for them.
+func (r *LibraryRepo) CountByResolutionStep(ctx context.Context) ([]ResolutionStepCount, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT resolution, COUNT(*)
+		FROM library
+		WHERE resolution IS NOT NULL AND resolution LIKE '%x%'
+		GROUP BY resolution`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying resolution breakdown: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[int]int, len(ResolutionSteps))
+	for rows.Next() {
+		var resolution string
+		var n int
+		if err := rows.Scan(&resolution, &n); err != nil {
+			return nil, fmt.Errorf("scanning resolution breakdown row: %w", err)
+		}
+		idx := strings.LastIndex(resolution, "x")
+		if idx < 0 || idx == len(resolution)-1 {
+			continue
+		}
+		height, err := strconv.Atoi(resolution[idx+1:])
+		if err != nil || height <= 0 {
+			continue
+		}
+		counts[nearestResolutionStep(height)] += n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make([]ResolutionStepCount, 0, len(ResolutionSteps))
+	for _, step := range ResolutionSteps {
+		if n, ok := counts[step]; ok {
+			out = append(out, ResolutionStepCount{Step: step, Count: n})
+		}
+	}
+	return out, nil
+}
+
+func nearestResolutionStep(height int) int {
+	best := ResolutionSteps[0]
+	bestDiff := abs(height - best)
+	for _, step := range ResolutionSteps[1:] {
+		diff := abs(height - step)
+		if diff < bestDiff {
+			best = step
+			bestDiff = diff
+		}
+	}
+	return best
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 func checkRowsAffected(res sql.Result) error {

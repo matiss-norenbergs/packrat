@@ -1,5 +1,11 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { LibraryGrowthChart } from "@/components/dashboard/LibraryGrowthChart"
+import { MediaTypeBreakdownChart } from "@/components/dashboard/MediaTypeBreakdownChart"
+import { ResolutionBreakdownChart } from "@/components/dashboard/ResolutionBreakdownChart"
+import { StorageChart } from "@/components/dashboard/StorageChart"
+import { TopArtistsChart } from "@/components/dashboard/TopArtistsChart"
+import { TopTagsChart } from "@/components/dashboard/TopTagsChart"
 import { useStats } from "@/hooks/useStats"
 import { formatBytes } from "@/lib/utils"
 
@@ -48,6 +54,14 @@ export function DashboardPage() {
             </p>
           </CardContent>
         </Card>
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <LibraryGrowthChart />
+        <MediaTypeBreakdownChart />
+        <ResolutionBreakdownChart />
+        <StorageChart />
+        <TopArtistsChart />
+        <TopTagsChart />
       </div>
     </div>
   )

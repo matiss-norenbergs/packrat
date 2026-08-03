@@ -19,21 +19,25 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ResolutionValue } from "@/components/ResolutionValue"
 import { useCreateDownload, useCreatePlaylistDownload, useDownloadPreview } from "@/hooks/useDownloads"
 import { useCollections } from "@/hooks/useCollections"
 import { useDeleteLibraryItem } from "@/hooks/useLibrary"
 import { useArtists } from "@/hooks/useArtists"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { useSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
-import { formatDuration } from "@/lib/utils"
+import { cn, formatDuration } from "@/lib/utils"
 import { resolveFilenameTemplatePreview } from "@/lib/nametemplate"
-import { resolveInheritedArtistId } from "@/lib/collectionTree"
+import { resolveInheritedArtistId, sortCollectionsByPath } from "@/lib/collectionTree"
 import { invalidSegmentChars, invalidTemplateChars } from "@/lib/filenameValidation"
 import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
+import { SequenceNumberField } from "@/components/library/SequenceNumberField"
 import { TagInput } from "@/components/library/TagInput"
 import { FilenameCharWarning } from "./FilenameCharWarning"
 import { FilenameTemplateBuilderDialog } from "./FilenameTemplateBuilderDialog"
@@ -96,19 +100,43 @@ export function NewDownloadDialog() {
   const createPlaylistDownload = useCreatePlaylistDownload()
   const deleteLibraryItem = useDeleteLibraryItem()
 
+  // On wide viewports, Advanced moves to a non-collapsible right-hand column
+  // instead of a collapsible section below — matches Tailwind's default lg
+  // breakpoint (1024px).
+  const isWideScreen = useMediaQuery("(min-width: 1024px)")
+
   const previewEnabled = !settings?.skipDownloadPreview
   const { data: preview, isLoading: previewLoading, isError: previewError } =
     useDownloadPreview(debouncedUrl, previewEnabled)
 
+  // Playlists never show Advanced at all, so the two-column layout (and the
+  // wider dialog that goes with it) never activates in that mode either —
+  // nothing would fill a second column.
+  const showTwoColumn = isWideScreen && !preview?.isPlaylist
+
+  // Whether the pasted URL looks fetchable — computed from the raw (not
+  // debounced) url, so the preview box's presence doesn't wait out the
+  // debounce window before appearing. Showing the box (with a skeleton)
+  // the instant this goes true, rather than once debouncedUrl/the fetch
+  // resolves, is what keeps the rest of the form from jumping later: the
+  // box's mere appearance was the layout shift, not the swap from skeleton
+  // to real content within an already-present box.
+  const trimmedUrl = url.trim()
+  const looksLikeUrl = trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")
+  const showPreviewBox = previewEnabled && looksLikeUrl
+  // Still debouncing (or the debounced fetch hasn't started yet) counts as
+  // loading too — useDownloadPreview's query is disabled until debouncedUrl
+  // is set, so previewLoading alone would report false during that window.
+  const previewPending = !debouncedUrl || previewLoading
+
   useEffect(() => {
-    const trimmed = url.trim()
-    const looksLikeUrl = trimmed.startsWith("http://") || trimmed.startsWith("https://")
     if (!looksLikeUrl) {
       setDebouncedUrl("")
       return
     }
-    const timer = setTimeout(() => setDebouncedUrl(trimmed), 500)
+    const timer = setTimeout(() => setDebouncedUrl(trimmedUrl), 500)
     return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url])
 
   const reset = () => {
@@ -149,6 +177,10 @@ export function NewDownloadDialog() {
         setSeasonNumber(String(collection.seasonNumber))
         setAdvancedOpen(true)
       }
+      if (collection.year != null) {
+        setYear(String(collection.year))
+        setAdvancedOpen(true)
+      }
       const inheritedArtistId = resolveInheritedArtistId(collections ?? [], collection.id)
       if (inheritedArtistId != null) {
         setArtistId(String(inheritedArtistId))
@@ -162,7 +194,8 @@ export function NewDownloadDialog() {
   }
 
   const artistName = artistId === NO_ARTIST ? "" : (artists?.find((a) => String(a.id) === artistId)?.name ?? "")
-  const collectionName = collectionId === NO_COLLECTION ? "" : (collections?.find((c) => String(c.id) === collectionId)?.name ?? "")
+  const selectedCollection = collectionId === NO_COLLECTION ? undefined : collections?.find((c) => String(c.id) === collectionId)
+  const collectionName = selectedCollection?.name ?? ""
   const previewTitle = titleOverride.trim() || preview?.title
   const filenameTemplatePreview = resolveFilenameTemplatePreview(filenameTemplate, {
     title: previewTitle,
@@ -251,6 +284,125 @@ export function NewDownloadDialog() {
     )
   }
 
+  // Shared between the wide-viewport (always-visible right column) and
+  // narrow-viewport (collapsible section) renderings below — computed once
+  // so the two layouts never duplicate this field markup.
+  const advancedFields = (
+    <>
+      <p className="text-xs text-muted-foreground">
+        Optional overrides — when set, used instead of whatever yt-dlp reports for that
+        field, and written into the file's own metadata tags once the download
+        completes.
+      </p>
+
+      <div className="space-y-2">
+        <Label htmlFor="dl-title">Title</Label>
+        <Input
+          id="dl-title"
+          placeholder={preview?.title || "Video title"}
+          value={titleOverride}
+          onChange={(e) => setTitleOverride(e.target.value)}
+        />
+        {!filename.trim() && !filenameTemplate.trim() && (
+          <FilenameCharWarning chars={invalidSegmentChars(titleOverride)} />
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="dl-artist">Artist</Label>
+          <ArtistSelect value={artistId} onValueChange={setArtistId} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="dl-year">Year</Label>
+          <Input
+            id="dl-year"
+            type="number"
+            placeholder="2024"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="dl-season">Season #</Label>
+          <Input
+            id="dl-season"
+            type="number"
+            min="1"
+            placeholder="e.g. 1"
+            value={seasonNumber}
+            onChange={(e) => setSeasonNumber(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="dl-sequence">Sequence #</Label>
+          <SequenceNumberField
+            id="dl-sequence"
+            value={sequenceNumber}
+            onChange={setSequenceNumber}
+            sequenceMax={selectedCollection?.sequenceMax}
+            sequenceMin={selectedCollection?.sequenceMin}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Tags</Label>
+        <TagInput value={tags} onChange={setTags} suggestions={allTags?.map((t) => t.name) ?? []} />
+      </div>
+
+      <div className="space-y-2 rounded-md border p-3">
+        <Label htmlFor="dl-filename-template" className="text-xs uppercase tracking-wide text-muted-foreground">
+          Filename Template
+        </Label>
+        <div className="relative">
+          <Input
+            id="dl-filename-template"
+            placeholder="{artist}/{title}"
+            className="pr-8"
+            value={filenameTemplate}
+            onChange={(e) => setFilenameTemplate(e.target.value)}
+          />
+          <FilenameTemplateBuilderDialog
+            value={filenameTemplate}
+            onApply={setFilenameTemplate}
+            previewVars={{
+              title: previewTitle,
+              uploader: preview?.uploader,
+              uploadDate: preview?.uploadDate,
+              artist: artistName,
+              year,
+              season: seasonNumber,
+              sequence: sequenceNumber,
+              collection: collectionName,
+            }}
+          />
+        </div>
+        <FilenameCharWarning chars={invalidTemplateChars(filenameTemplate)} />
+        <div className="flex flex-wrap gap-1">
+          {FILENAME_TEMPLATE_TOKENS.map((token) => (
+            <Button
+              key={token}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 font-mono text-xs"
+              onClick={() => setFilenameTemplate((v) => v + token)}
+            >
+              {token}
+            </Button>
+          ))}
+        </div>
+        {filenameTemplate.trim() && (
+          <p className="truncate text-xs text-muted-foreground">
+            Resolves to: <span className="font-mono">{filenameTemplatePreview || "(nothing yet)"}</span>
+            {filename.trim() && " — ignored, a literal Filename is set above"}
+          </p>
+        )}
+      </div>
+    </>
+  )
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
@@ -259,12 +411,13 @@ export function NewDownloadDialog() {
           New Download
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className={cn("sm:max-w-xl", showTwoColumn && "lg:max-w-4xl")}>
         <DialogHeader>
           <DialogTitle>New Download</DialogTitle>
           <DialogDescription>Paste any URL supported by yt-dlp.</DialogDescription>
         </DialogHeader>
 
+        <div className={showTwoColumn ? "grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start" : "space-y-4"}>
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="url">URL</Label>
@@ -277,12 +430,12 @@ export function NewDownloadDialog() {
             />
           </div>
 
-          {previewEnabled && debouncedUrl && (
+          {showPreviewBox && (
             <div className="rounded-md border p-3">
-              {previewLoading ? (
+              {previewPending ? (
                 <div className="flex items-center gap-3">
                   <Skeleton className="h-12 w-20 shrink-0 rounded" />
-                  <div className="flex-1 space-y-1.5">
+                  <div className="min-w-0 flex-1 space-y-1.5">
                     <Skeleton className="h-3.5 w-3/4" />
                     <Skeleton className="h-3 w-1/3" />
                   </div>
@@ -292,8 +445,8 @@ export function NewDownloadDialog() {
                   Couldn't fetch a preview for this URL — you can still queue the download.
                 </p>
               ) : preview?.isPlaylist ? (
-                <div>
-                  <p className="line-clamp-1 text-sm font-medium">{preview.playlistTitle || "Playlist"}</p>
+                <div className="min-w-0">
+                  <p className="line-clamp-1 text-sm font-medium break-words">{preview.playlistTitle || "Playlist"}</p>
                   <p className="text-xs text-muted-foreground">{preview.playlistCount} videos</p>
                 </div>
               ) : preview ? (
@@ -308,11 +461,16 @@ export function NewDownloadDialog() {
                     <div className="h-12 w-20 shrink-0 rounded bg-muted" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="line-clamp-1 text-sm font-medium">{preview.title}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="line-clamp-1 break-words text-sm font-medium">{preview.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">
                       {preview.uploader || "Unknown uploader"}
                       {preview.duration > 0 && ` · ${formatDuration(preview.duration)}`}
-                      {preview.resolution && ` · ${preview.resolution}`}
+                      {preview.resolution && (
+                        <>
+                          {" · "}
+                          <ResolutionValue resolution={preview.resolution} />
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -391,7 +549,7 @@ export function NewDownloadDialog() {
           )}
 
           {!preview?.isPlaylist && preview?.duplicate && (
-            <div className="rounded-md border border-amber-600/50 bg-amber-500/10 p-3 text-sm">
+            <div className="rounded-md border border-amber-600/50 bg-amber-500/10 p-3 text-sm break-words">
               Already in your library: <span className="font-medium">{preview.duplicate.title}</span>, downloaded{" "}
               {new Date(preview.duplicate.downloadedAt).toLocaleDateString()}.
             </div>
@@ -405,7 +563,8 @@ export function NewDownloadDialog() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_COLLECTION}>None</SelectItem>
-                {collections?.map((c) => (
+                <SelectSeparator />
+                {sortCollectionsByPath(collections ?? []).map((c) => (
                   <SelectItem key={c.id} value={String(c.id)}>
                     {c.path}
                   </SelectItem>
@@ -490,8 +649,17 @@ export function NewDownloadDialog() {
               <FilenameCharWarning chars={invalidSegmentChars(filename)} />
             </div>
           )}
+        </div>
 
-          {!preview?.isPlaylist && (
+        {showTwoColumn && (
+          <div className="space-y-4 lg:border-l lg:pl-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Advanced</h3>
+            {advancedFields}
+          </div>
+        )}
+        </div>
+
+        {!showTwoColumn && !preview?.isPlaylist && (
           <div className="space-y-3 border-t pt-3">
             <button
               type="button"
@@ -502,125 +670,9 @@ export function NewDownloadDialog() {
               Advanced
             </button>
 
-            {advancedOpen && (
-              <div className="space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  Optional overrides — when set, used instead of whatever yt-dlp reports for that
-                  field, and written into the file's own metadata tags once the download
-                  completes.
-                </p>
-
-                <div className="space-y-2">
-                  <Label htmlFor="dl-title">Title</Label>
-                  <Input
-                    id="dl-title"
-                    placeholder={preview?.title || "Video title"}
-                    value={titleOverride}
-                    onChange={(e) => setTitleOverride(e.target.value)}
-                  />
-                  {!filename.trim() && !filenameTemplate.trim() && (
-                    <FilenameCharWarning chars={invalidSegmentChars(titleOverride)} />
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="dl-artist">Artist</Label>
-                    <ArtistSelect value={artistId} onValueChange={setArtistId} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="dl-year">Year</Label>
-                    <Input
-                      id="dl-year"
-                      type="number"
-                      placeholder="2024"
-                      value={year}
-                      onChange={(e) => setYear(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="dl-season">Season #</Label>
-                    <Input
-                      id="dl-season"
-                      type="number"
-                      min="1"
-                      placeholder="e.g. 1"
-                      value={seasonNumber}
-                      onChange={(e) => setSeasonNumber(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="dl-sequence">Sequence #</Label>
-                    <Input
-                      id="dl-sequence"
-                      type="number"
-                      min="1"
-                      placeholder="e.g. 1"
-                      value={sequenceNumber}
-                      onChange={(e) => setSequenceNumber(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Tags</Label>
-                  <TagInput value={tags} onChange={setTags} suggestions={allTags?.map((t) => t.name) ?? []} />
-                </div>
-
-                <div className="space-y-2 rounded-md border p-3">
-                  <Label htmlFor="dl-filename-template" className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Filename Template
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="dl-filename-template"
-                      placeholder="{artist}/{title}"
-                      className="pr-8"
-                      value={filenameTemplate}
-                      onChange={(e) => setFilenameTemplate(e.target.value)}
-                    />
-                    <FilenameTemplateBuilderDialog
-                      value={filenameTemplate}
-                      onApply={setFilenameTemplate}
-                      previewVars={{
-                        title: previewTitle,
-                        uploader: preview?.uploader,
-                        uploadDate: preview?.uploadDate,
-                        artist: artistName,
-                        year,
-                        season: seasonNumber,
-                        sequence: sequenceNumber,
-                        collection: collectionName,
-                      }}
-                    />
-                  </div>
-                  <FilenameCharWarning chars={invalidTemplateChars(filenameTemplate)} />
-                  <div className="flex flex-wrap gap-1">
-                    {FILENAME_TEMPLATE_TOKENS.map((token) => (
-                      <Button
-                        key={token}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-6 px-2 font-mono text-xs"
-                        onClick={() => setFilenameTemplate((v) => v + token)}
-                      >
-                        {token}
-                      </Button>
-                    ))}
-                  </div>
-                  {filenameTemplate.trim() && (
-                    <p className="truncate text-xs text-muted-foreground">
-                      Resolves to: <span className="font-mono">{filenameTemplatePreview || "(nothing yet)"}</span>
-                      {filename.trim() && " — ignored, a literal Filename is set above"}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
+            {advancedOpen && <div className="space-y-4">{advancedFields}</div>}
           </div>
-          )}
-        </div>
+        )}
 
         <DialogFooter>
           {preview?.isPlaylist ? (

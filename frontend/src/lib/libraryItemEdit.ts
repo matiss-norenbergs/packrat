@@ -13,6 +13,8 @@ export interface LibraryItemEditFields {
   originalUrl: string
   tags: string[]
   generateNfo: boolean
+  resolution: string
+  duration: number | null
 }
 
 export function baseNameWithoutExt(filename: string): string {
@@ -39,6 +41,8 @@ export function libraryItemToEditFields(item: LibraryItem): LibraryItemEditField
     originalUrl: item.originalUrl ?? "",
     tags: item.tags,
     generateNfo: item.generateNfo,
+    resolution: item.resolution ?? "",
+    duration: item.duration,
   }
 }
 
@@ -92,6 +96,12 @@ export function buildLibraryItemUpdatePayload(item: LibraryItem, fields: Library
   if (tagsKey(fields.tags) !== tagsKey(item.tags)) payload.tags = fields.tags
 
   if (fields.generateNfo !== item.generateNfo) payload.generateNfo = fields.generateNfo
+
+  // resolution/duration are never user-typed — they only change via the Edit
+  // dialog's rescan-from-file action — so a plain inequality check is enough,
+  // no trim/sentinel dance needed.
+  if (fields.resolution !== (item.resolution ?? "")) payload.resolution = fields.resolution
+  if (fields.duration !== item.duration && fields.duration != null) payload.duration = fields.duration
 
   return payload
 }

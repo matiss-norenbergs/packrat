@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/backup"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
@@ -105,6 +106,96 @@ func AutoBackupIntervalHours(ctx context.Context, repo *repository.SettingsRepo)
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 0 {
 		return 0, nil
+	}
+	return n, nil
+}
+
+// BackupRetentionCount reads the backup_retention_count setting, defaulting
+// to backup.DefaultBackupRetentionCount if it's never been set (or is
+// corrupt/negative) — this default keeps pre-existing pruning behavior
+// unchanged for anyone who upgrades without touching the new setting. 0
+// means unlimited — every backup is kept, nothing is ever pruned.
+// backup.RunBackup's pruneOldBackups reads this same key directly via
+// settingsRepo.Get rather than calling this helper, to avoid an import
+// cycle (api already imports backup). Shared by GetSettings.
+func BackupRetentionCount(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingBackupRetentionCount)
+	if errors.Is(err, repository.ErrNotFound) {
+		return backup.DefaultBackupRetentionCount, nil
+	}
+	if err != nil {
+		return backup.DefaultBackupRetentionCount, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return backup.DefaultBackupRetentionCount, nil
+	}
+	return n, nil
+}
+
+// defaultResolutionThresholdLow/High are the resolution-tier defaults used
+// whenever the corresponding setting has never been set (or is corrupt) —
+// 720p and 2160p bracket the most common "standard-def", "HD/2K", and "4K"
+// buckets without requiring anyone to configure anything for sensible
+// out-of-the-box coloring.
+const (
+	defaultResolutionThresholdLow  = 720
+	defaultResolutionThresholdHigh = 2160
+)
+
+// ResolutionTierMediumEnabled reads the resolution_tier_medium_enabled
+// setting, defaulting to true if it's never been set (or is corrupt) — the
+// medium tier is on by default so newly-configured thresholds immediately
+// produce a three-way low/medium/high split. Shared by GetSettings.
+func ResolutionTierMediumEnabled(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingResolutionTierMediumEnabled)
+	if errors.Is(err, repository.ErrNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		return true, nil
+	}
+	return b, nil
+}
+
+// ResolutionThresholdLow reads the resolution_threshold_low setting
+// (heights at or below this are "low" quality), defaulting to
+// defaultResolutionThresholdLow if it's never been set or is corrupt.
+// Shared by GetSettings.
+func ResolutionThresholdLow(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingResolutionThresholdLow)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultResolutionThresholdLow, nil
+	}
+	if err != nil {
+		return defaultResolutionThresholdLow, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return defaultResolutionThresholdLow, nil
+	}
+	return n, nil
+}
+
+// ResolutionThresholdHigh reads the resolution_threshold_high setting
+// (heights at or above this are "high" quality), defaulting to
+// defaultResolutionThresholdHigh if it's never been set or is corrupt.
+// Shared by GetSettings.
+func ResolutionThresholdHigh(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingResolutionThresholdHigh)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultResolutionThresholdHigh, nil
+	}
+	if err != nil {
+		return defaultResolutionThresholdHigh, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return defaultResolutionThresholdHigh, nil
 	}
 	return n, nil
 }
@@ -224,6 +315,25 @@ func ThumbnailFrameCount(ctx context.Context, repo *repository.SettingsRepo) (in
 		return 4, nil
 	}
 	return n, nil
+}
+
+// PrivacyEnabled reads the privacy_enabled setting, defaulting to false — the
+// master switch for the whole privacy workflow starts off, so upgrading to
+// this feature doesn't retroactively start blurring anything for anyone who
+// already has private collections/tags marked; they opt in explicitly. When
+// false, every privacy-derived `blurred` computation below is forced false,
+// but the underlying isPrivate values on collections/tags are never touched
+// — flipping this back on resumes blurring exactly where it left off. Shared
+// by GetSettings.
+func PrivacyEnabled(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingPrivacyEnabled)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
 }
 
 // PrivacyBlurStrength reads the privacy_blur_strength setting, defaulting to
@@ -451,6 +561,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		privacyBlurStrength, err := PrivacyBlurStrength(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -521,37 +636,62 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, medi
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		backupRetentionCount, err := BackupRetentionCount(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		resolutionTierMediumEnabled, err := ResolutionTierMediumEnabled(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		resolutionThresholdLow, err := ResolutionThresholdLow(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		resolutionThresholdHigh, err := ResolutionThresholdHigh(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, SettingsResponse{
-			DownloadDirectory:        mediaRoot,
-			MaxConcurrentDownloads:   mgr.WorkerCount(),
-			DownloadTimeoutMinutes:   downloadTimeoutMinutes,
-			DefaultQuality:           defaultQuality,
-			DefaultDownloadType:      defaultDownloadType,
-			ImportIgnoredFolders:     ignoredFolders,
-			HistoryAnonymizeURLs:     anonymizeHistory,
-			HistoryRetentionDays:     historyRetentionDays,
-			DownloadLogRetentionDays: downloadLogRetentionDays,
-			LibraryView:              libraryView,
-			LibrarySortKey:           librarySortKey,
-			LibrarySortDir:           librarySortDir,
-			LibraryMode:              libraryMode,
-			LibraryPaginationEnabled: libraryPaginationEnabled,
-			LibraryPageSize:          libraryPageSize,
-			ThumbnailFrameCount:      thumbnailFrameCount,
-			PrivacyBlurStrength:      privacyBlurStrength,
-			BrowseIgnorePrivacy:      browseIgnorePrivacy,
-			SkipDownloadPreview:      skipDownloadPreview,
-			JellyfinEnabled:          jellyfinEnabled,
-			JellyfinURL:              jellyfinURL,
-			JellyfinAPIKey:           jellyfinAPIKey,
-			JellyfinRefreshMode:      jellyfinRefreshMode,
-			LibraryAutoplay:          libraryAutoplay,
-			YtdlpCookiesBrowser:      ytdlpCookiesBrowser,
-			YtdlpCookiesProfile:      ytdlpCookiesProfile,
-			YtdlpProxy:               ytdlpProxy,
-			YtdlpRateLimit:           ytdlpRateLimit,
-			YtdlpRetries:             ytdlpRetries,
-			AutoBackupIntervalHours:  autoBackupIntervalHours,
+			DownloadDirectory:           mediaRoot,
+			MaxConcurrentDownloads:      mgr.WorkerCount(),
+			DownloadTimeoutMinutes:      downloadTimeoutMinutes,
+			DefaultQuality:              defaultQuality,
+			DefaultDownloadType:         defaultDownloadType,
+			ImportIgnoredFolders:        ignoredFolders,
+			HistoryAnonymizeURLs:        anonymizeHistory,
+			HistoryRetentionDays:        historyRetentionDays,
+			DownloadLogRetentionDays:    downloadLogRetentionDays,
+			LibraryView:                 libraryView,
+			LibrarySortKey:              librarySortKey,
+			LibrarySortDir:              librarySortDir,
+			LibraryMode:                 libraryMode,
+			LibraryPaginationEnabled:    libraryPaginationEnabled,
+			LibraryPageSize:             libraryPageSize,
+			ThumbnailFrameCount:         thumbnailFrameCount,
+			PrivacyEnabled:              privacyEnabled,
+			PrivacyBlurStrength:         privacyBlurStrength,
+			BrowseIgnorePrivacy:         browseIgnorePrivacy,
+			SkipDownloadPreview:         skipDownloadPreview,
+			JellyfinEnabled:             jellyfinEnabled,
+			JellyfinURL:                 jellyfinURL,
+			JellyfinAPIKey:              jellyfinAPIKey,
+			JellyfinRefreshMode:         jellyfinRefreshMode,
+			LibraryAutoplay:             libraryAutoplay,
+			YtdlpCookiesBrowser:         ytdlpCookiesBrowser,
+			YtdlpCookiesProfile:         ytdlpCookiesProfile,
+			YtdlpProxy:                  ytdlpProxy,
+			YtdlpRateLimit:              ytdlpRateLimit,
+			YtdlpRetries:                ytdlpRetries,
+			AutoBackupIntervalHours:     autoBackupIntervalHours,
+			BackupRetentionCount:        backupRetentionCount,
+			ResolutionTierMediumEnabled: resolutionTierMediumEnabled,
+			ResolutionThresholdLow:      resolutionThresholdLow,
+			ResolutionThresholdHigh:     resolutionThresholdHigh,
 		})
 	}
 }
@@ -627,6 +767,62 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 				return
 			}
 		}
+		if req.BackupRetentionCount != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingBackupRetentionCount, strconv.Itoa(*req.BackupRetentionCount)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ResolutionTierMediumEnabled != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingResolutionTierMediumEnabled, strconv.FormatBool(*req.ResolutionTierMediumEnabled)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		// The low/high thresholds are validated together (low must stay below
+		// high) even though they're independently-optional fields — resolve
+		// whichever side isn't in this request from what's currently stored,
+		// so a lone update can't silently invert the pair.
+		if req.ResolutionThresholdLow != nil || req.ResolutionThresholdHigh != nil {
+			effectiveLow := 0
+			if req.ResolutionThresholdLow != nil {
+				effectiveLow = *req.ResolutionThresholdLow
+			} else {
+				var err error
+				effectiveLow, err = ResolutionThresholdLow(c.Request.Context(), repo)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			effectiveHigh := 0
+			if req.ResolutionThresholdHigh != nil {
+				effectiveHigh = *req.ResolutionThresholdHigh
+			} else {
+				var err error
+				effectiveHigh, err = ResolutionThresholdHigh(c.Request.Context(), repo)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			if effectiveLow >= effectiveHigh {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "resolution low threshold must be less than the high threshold"})
+				return
+			}
+			if req.ResolutionThresholdLow != nil {
+				if err := repo.Set(c.Request.Context(), models.SettingResolutionThresholdLow, strconv.Itoa(*req.ResolutionThresholdLow)); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			if req.ResolutionThresholdHigh != nil {
+				if err := repo.Set(c.Request.Context(), models.SettingResolutionThresholdHigh, strconv.Itoa(*req.ResolutionThresholdHigh)); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+		}
 		if req.LibraryView != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingLibraryView, *req.LibraryView); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -673,6 +869,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager) g
 		}
 		if req.ThumbnailFrameCount != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameCount, strconv.Itoa(*req.ThumbnailFrameCount)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.PrivacyEnabled != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingPrivacyEnabled, strconv.FormatBool(*req.PrivacyEnabled)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

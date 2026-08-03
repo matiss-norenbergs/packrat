@@ -226,6 +226,7 @@ function SettingsBackupCard() {
 }
 
 function LibraryBackupCard() {
+  const [exportInfoOpen, setExportInfoOpen] = useState(false)
   const [encrypt, setEncrypt] = useState(false)
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -279,13 +280,23 @@ function LibraryBackupCard() {
         <div className="space-y-3">
           <div className="flex items-center gap-1.5">
             <h3 className="text-sm font-medium">Export</h3>
-            <Popover>
+            <Popover open={exportInfoOpen} onOpenChange={setExportInfoOpen}>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 text-muted-foreground"
+                  onMouseEnter={() => setExportInfoOpen(true)}
+                  onMouseLeave={() => setExportInfoOpen(false)}
+                >
                   <Info className="h-3.5 w-3.5" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="text-xs text-muted-foreground">
+              <PopoverContent
+                className="text-xs text-muted-foreground"
+                onMouseEnter={() => setExportInfoOpen(true)}
+                onMouseLeave={() => setExportInfoOpen(false)}
+              >
                 Tags, collections, artists, and any library item with a saved source URL — not the
                 media files themselves. Importing this elsewhere re-queues downloads from those
                 URLs.

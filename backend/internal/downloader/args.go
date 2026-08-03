@@ -20,6 +20,14 @@ type DownloadJob struct {
 	DownloadType string // "video" | "audio"
 	Quality      string // video quality tier, ignored for audio
 	AudioFormat  string // "mp3" | "flac" | "m4a" | "aac" | "wav", required for audio
+	// ForceOverwrite passes --force-overwrites, overriding yt-dlp's default
+	// (--no-force-overwrites: skip re-fetching the video if a file already
+	// sits at the output path, but still overwrite thumbnails/metadata
+	// files). Set for redownload jobs, which write into a uid-suffixed
+	// scratch path specifically so a stale leftover there is never mistaken
+	// for a fresh result — this just closes the same hole for any other
+	// same-named collision.
+	ForceOverwrite bool
 }
 
 // BuildArgs returns the full yt-dlp argument list for job.
@@ -54,6 +62,10 @@ func (s *YtDlpService) BuildArgs(ctx context.Context, job DownloadJob) []string 
 		args = append(args, "-f", "bestaudio/best", "-x", "--audio-format", job.AudioFormat, "--audio-quality", "0")
 	} else {
 		args = append(args, "-f", BuildFormatSelector(job.Quality))
+	}
+
+	if job.ForceOverwrite {
+		args = append(args, "--force-overwrites")
 	}
 
 	args = append(args, s.globalArgs(ctx)...)

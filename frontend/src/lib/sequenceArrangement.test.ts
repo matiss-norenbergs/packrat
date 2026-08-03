@@ -121,6 +121,33 @@ describe("seedSequenceArrangement", () => {
     expect(result.sequencedList.every((e) => e.gapBefore >= 0)).toBe(true)
     expect(result.leadingGap).toBeGreaterThanOrEqual(0)
   })
+
+  it("without an expectedMax, trailingGap is always 0", () => {
+    const items = [makeItem({ id: 1, sequenceNumber: 1 })]
+    expect(seedSequenceArrangement(items).trailingGap).toBe(0)
+  })
+
+  it("with an expectedMax and existing sequenced items, seeds trailingGap from the last number to the max", () => {
+    const items = [makeItem({ id: 1, sequenceNumber: 1 }), makeItem({ id: 2, sequenceNumber: 3 })]
+    const result = seedSequenceArrangement(items, 5)
+    expect(result.leadingGap).toBe(0)
+    expect(result.trailingGap).toBe(2) // last number is 3, max is 5
+  })
+
+  it("with an expectedMax already exceeded by the last item, trailingGap clamps to 0 rather than going negative", () => {
+    const items = [makeItem({ id: 1, sequenceNumber: 7 })]
+    const result = seedSequenceArrangement(items, 5)
+    expect(result.trailingGap).toBe(0)
+    expect(result.sequencedList[0].item.sequenceNumber).toBe(7) // not clipped/blocked
+  })
+
+  it("with an expectedMax and nothing sequenced yet, the whole range folds into leadingGap instead of trailingGap", () => {
+    const items = [makeItem({ id: 1, downloadedAt: "2026-01-01T00:00:00Z" })]
+    const result = seedSequenceArrangement(items, 4)
+    expect(result.sequencedList).toEqual([])
+    expect(result.leadingGap).toBe(4)
+    expect(result.trailingGap).toBe(0)
+  })
 })
 
 describe("positionMap", () => {
@@ -147,12 +174,31 @@ describe("positionMap", () => {
       { position: 4, occupant: b },
     ])
   })
+
+  it("extends the range past the last item when a trailingGap is given", () => {
+    const a = makeItem({ id: 1 })
+    const b = makeItem({ id: 2 })
+    expect(positionMap(0, [entry(a), entry(b)], 2)).toEqual([
+      { position: 1, occupant: a },
+      { position: 2, occupant: b },
+      { position: 3, occupant: null },
+      { position: 4, occupant: null },
+    ])
+  })
+
+  it("enumerates 1..leadingGap for an empty list with a seeded leadingGap", () => {
+    expect(positionMap(3, [])).toEqual([
+      { position: 1, occupant: null },
+      { position: 2, occupant: null },
+      { position: 3, occupant: null },
+    ])
+  })
 })
 
 describe("normalizeHead", () => {
   it("folds a nonzero head gap into leadingGap", () => {
     const a = makeItem({ id: 1 })
-    const state: ArrangementState = { sequencedList: [entry(a, 3)], leadingGap: 1, unsequencedList: [] }
+    const state: ArrangementState = { sequencedList: [entry(a, 3)], leadingGap: 1, trailingGap: 0, unsequencedList: [] }
     const result = normalizeHead(state)
     expect(result.leadingGap).toBe(4)
     expect(result.sequencedList[0].gapBefore).toBe(0)
@@ -160,12 +206,12 @@ describe("normalizeHead", () => {
 
   it("is a no-op when the head gap is already 0", () => {
     const a = makeItem({ id: 1 })
-    const state: ArrangementState = { sequencedList: [entry(a, 0)], leadingGap: 1, unsequencedList: [] }
+    const state: ArrangementState = { sequencedList: [entry(a, 0)], leadingGap: 1, trailingGap: 0, unsequencedList: [] }
     expect(normalizeHead(state)).toEqual(state)
   })
 
   it("is a no-op for an empty list", () => {
-    const state: ArrangementState = { sequencedList: [], leadingGap: 0, unsequencedList: [] }
+    const state: ArrangementState = { sequencedList: [], leadingGap: 0, trailingGap: 0, unsequencedList: [] }
     expect(normalizeHead(state)).toEqual(state)
   })
 })
@@ -180,6 +226,7 @@ describe("moveToPosition", () => {
     const state: ArrangementState = {
       sequencedList: [entry(a), entry(b, 2), entry(c)],
       leadingGap: 0,
+      trailingGap: 0,
       unsequencedList: [x],
     }
     const result = moveToPosition(state, 99, 3)
@@ -198,6 +245,7 @@ describe("moveToPosition", () => {
     const state: ArrangementState = {
       sequencedList: [entry(a), entry(b), entry(c)],
       leadingGap: 0,
+      trailingGap: 0,
       unsequencedList: [],
     }
     const result = moveToPosition(state, 1, 3)
@@ -217,6 +265,7 @@ describe("moveToPosition", () => {
     const state: ArrangementState = {
       sequencedList: [entry(a), entry(b)],
       leadingGap: 2,
+      trailingGap: 0,
       unsequencedList: [],
     }
     const result = moveToPosition(state, 1, 4)
@@ -236,6 +285,7 @@ describe("moveToPosition", () => {
     const state: ArrangementState = {
       sequencedList: [entry(p), entry(m, 1), entry(t), entry(z, 2)],
       leadingGap: 0,
+      trailingGap: 0,
       unsequencedList: [],
     }
     const result = moveToPosition(state, 2, 4)
@@ -250,6 +300,7 @@ describe("moveToPosition", () => {
     const state: ArrangementState = {
       sequencedList: [entry(a), entry(b)],
       leadingGap: 0,
+      trailingGap: 0,
       unsequencedList: [x],
     }
     const result = moveToPosition(state, 99, 1)
@@ -269,6 +320,7 @@ describe("moveToPosition", () => {
     const state: ArrangementState = {
       sequencedList: [entry(a), entry(b), entry(c, 2)],
       leadingGap: 0,
+      trailingGap: 0,
       unsequencedList: [],
     }
     const result = moveToPosition(state, 2, 3)
@@ -285,6 +337,7 @@ describe("moveToPosition", () => {
     const state: ArrangementState = {
       sequencedList: [entry(x), entry(y)],
       leadingGap: 2,
+      trailingGap: 0,
       unsequencedList: [],
     }
     const result = moveToPosition(state, 1, 2)
@@ -300,6 +353,7 @@ describe("moveToPosition", () => {
     const state: ArrangementState = {
       sequencedList: [entry(a), entry(b), entry(c, 2)],
       leadingGap: 0,
+      trailingGap: 0,
       unsequencedList: [],
     }
     const before = computeDisplayNumbers(state.leadingGap, state.sequencedList)
@@ -316,6 +370,7 @@ describe("moveToPosition", () => {
     const state: ArrangementState = {
       sequencedList: [entry(a)],
       leadingGap: 3, // a is at position 4
+      trailingGap: 0,
       unsequencedList: [x],
     }
     const result = moveToPosition(state, 99, 2)
@@ -328,7 +383,7 @@ describe("moveToPosition", () => {
 
   it("bootstraps the very first item when sequencedList starts empty", () => {
     const x = makeItem({ id: 99 })
-    const state: ArrangementState = { sequencedList: [], leadingGap: 0, unsequencedList: [x] }
+    const state: ArrangementState = { sequencedList: [], leadingGap: 0, trailingGap: 0, unsequencedList: [x] }
     const result = moveToPosition(state, 99, 1)
     expect(result.sequencedList).toEqual([{ item: x, gapBefore: 0 }])
     expect(result.leadingGap).toBe(0)
@@ -338,13 +393,13 @@ describe("moveToPosition", () => {
   it("is a no-op when the item is already at the target position", () => {
     const a = makeItem({ id: 1 })
     const b = makeItem({ id: 2 })
-    const state: ArrangementState = { sequencedList: [entry(a), entry(b)], leadingGap: 0, unsequencedList: [] }
+    const state: ArrangementState = { sequencedList: [entry(a), entry(b)], leadingGap: 0, trailingGap: 0, unsequencedList: [] }
     expect(moveToPosition(state, 1, 1)).toEqual(state)
   })
 
   it("is a no-op for a position beyond the current range", () => {
     const a = makeItem({ id: 1 })
-    const state: ArrangementState = { sequencedList: [entry(a)], leadingGap: 0, unsequencedList: [] }
+    const state: ArrangementState = { sequencedList: [entry(a)], leadingGap: 0, trailingGap: 0, unsequencedList: [] }
     expect(moveToPosition(state, 1, 99)).toEqual(state)
   })
 
@@ -359,6 +414,7 @@ describe("moveToPosition", () => {
     const state: ArrangementState = {
       sequencedList: [entry(a), entry(b, 2), entry(c)],
       leadingGap: 0,
+      trailingGap: 0,
       unsequencedList: [x],
     }
     // Move the unsequenced item to position 1 (swap with A), forcing B out
@@ -375,6 +431,79 @@ describe("moveToPosition", () => {
     let missing = 0
     for (let p = 1; p <= max; p++) if (!occupied.has(p)) missing++
     expect(missing).toBe(totalMissingBefore)
+  })
+
+  it("jumps a foreign unsequenced item into the trailing gap, shrinking trailingGap to what's left beyond it", () => {
+    // A=1 (leadingGap 0), trailingGap 3 (max 4) — jump X into position 3.
+    const a = makeItem({ id: 1 })
+    const x = makeItem({ id: 99 })
+    const state: ArrangementState = {
+      sequencedList: [entry(a, 0)],
+      leadingGap: 0,
+      trailingGap: 3,
+      unsequencedList: [x],
+    }
+    const result = moveToPosition(state, 99, 3)
+    expect(result.sequencedList.map((e) => e.item.id)).toEqual([1, 99])
+    expect(computeDisplayNumbers(result.leadingGap, result.sequencedList)).toEqual([1, 3])
+    expect(result.trailingGap).toBe(1) // position 4 is still open
+    expect(result.unsequencedList).toEqual([])
+  })
+
+  it("self-referential: the last item moving further into its own trailing gap conserves the total missing count", () => {
+    // A=1 (leadingGap 0), trailingGap 3 (max 4) — A jumps to position 3, its own trailing space.
+    const a = makeItem({ id: 1 })
+    const state: ArrangementState = {
+      sequencedList: [entry(a, 0)],
+      leadingGap: 0,
+      trailingGap: 3,
+      unsequencedList: [],
+    }
+    const result = moveToPosition(state, 1, 3)
+    expect(computeDisplayNumbers(result.leadingGap, result.sequencedList)).toEqual([3])
+    expect(result.trailingGap).toBe(1) // position 4 is still open
+  })
+
+  it("moving the last item elsewhere grows trailingGap to absorb the vacated slot", () => {
+    // A=1, B=2 (leadingGap 0), trailingGap 3 (max 5) — B (last) moves onto A's position.
+    const a = makeItem({ id: 1 })
+    const b = makeItem({ id: 2 })
+    const state: ArrangementState = {
+      sequencedList: [entry(a, 0), entry(b, 0)],
+      leadingGap: 0,
+      trailingGap: 3,
+      unsequencedList: [],
+    }
+    const result = moveToPosition(state, 2, 1)
+    expect(result.sequencedList.map((e) => e.item.id)).toEqual([2, 1])
+    expect(computeDisplayNumbers(result.leadingGap, result.sequencedList)).toEqual([1, 2])
+    expect(result.trailingGap).toBe(3) // max (5) is unchanged; a is now last, still at 2, so trailing is still 5-2=3
+  })
+
+  it("a plain adjacent swap that doesn't touch the last item's number leaves trailingGap untouched", () => {
+    // A=1, B=2 (leadingGap 0), trailingGap 3 (max 5) — A moves onto B's position (both shift, B ends up last at 2, same as before).
+    const a = makeItem({ id: 1 })
+    const b = makeItem({ id: 2 })
+    const state: ArrangementState = {
+      sequencedList: [entry(a, 0), entry(b, 0)],
+      leadingGap: 0,
+      trailingGap: 3,
+      unsequencedList: [],
+    }
+    const result = moveToPosition(state, 1, 2)
+    expect(result.sequencedList.map((e) => e.item.id)).toEqual([2, 1])
+    expect(computeDisplayNumbers(result.leadingGap, result.sequencedList)).toEqual([1, 2])
+    expect(result.trailingGap).toBe(3) // b is still last, still at 2 — max (5) unaffected
+  })
+
+  it("bootstrapping the first item splits a known expected-max range around wherever it lands", () => {
+    // Nothing sequenced yet, leadingGap 5 (expectedMax 5 folded in per seedSequenceArrangement) — place X at position 2.
+    const x = makeItem({ id: 99 })
+    const state: ArrangementState = { sequencedList: [], leadingGap: 5, trailingGap: 0, unsequencedList: [x] }
+    const result = moveToPosition(state, 99, 2)
+    expect(result.leadingGap).toBe(1) // positions 1 is still open before x
+    expect(result.trailingGap).toBe(3) // positions 3,4,5 are still open after x
+    expect(computeDisplayNumbers(result.leadingGap, result.sequencedList)).toEqual([2])
   })
 })
 
@@ -419,8 +548,36 @@ describe("buildRenderNodes", () => {
     ])
   })
 
-  it("is empty for an empty list", () => {
+  it("is empty for a genuinely empty list (no leading gap either)", () => {
     expect(buildRenderNodes(0, [], "asc")).toEqual([])
-    expect(buildRenderNodes(3, [], "desc")).toEqual([])
+    expect(buildRenderNodes(0, [], "desc")).toEqual([])
+  })
+
+  it("emits just the leading gap node for an empty list with a seeded leadingGap (all-unsequenced collection with a configured max)", () => {
+    expect(buildRenderNodes(3, [], "asc")).toEqual([{ kind: "gap", size: 3, key: "leading", index: 0 }])
+    expect(buildRenderNodes(3, [], "desc")).toEqual([{ kind: "gap", size: 3, key: "leading", index: 0 }])
+  })
+
+  it("emits a terminal trailing gap node only when trailingGap > 0", () => {
+    const a = makeItem({ id: 1 })
+    const withTrailing = buildRenderNodes(0, [entry(a, 0)], "asc", 2)
+    expect(withTrailing).toEqual([
+      { kind: "gap", size: 0, key: "leading", index: 0 },
+      { kind: "item", entry: entry(a, 0), index: 0 },
+      { kind: "gap", size: 2, key: "trailing", index: 1 },
+    ])
+
+    const withoutTrailing = buildRenderNodes(0, [entry(a, 0)], "asc", 0)
+    expect(withoutTrailing.some((n) => n.kind === "gap" && n.key === "trailing")).toBe(false)
+  })
+
+  it("descending puts the trailing gap first, mirroring how the leading gap ends up last", () => {
+    const a = makeItem({ id: 1 })
+    const nodes = buildRenderNodes(0, [entry(a, 0)], "desc", 3)
+    expect(nodes.map((n) => (n.kind === "item" ? n.entry.item.id : `gap:${n.size}:${n.key}`))).toEqual([
+      "gap:3:trailing",
+      1,
+      "gap:0:leading",
+    ])
   })
 })

@@ -24,6 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { TagDialog } from "@/components/tags/TagDialog"
 import { useIdSelection } from "@/hooks/useIdSelection"
+import { useSettings } from "@/hooks/useSettings"
 import { useBulkDeleteTags, useDeleteTag, useTags } from "@/hooks/useTags"
 import type { Tag } from "@/types/api"
 
@@ -123,6 +124,7 @@ function TagRow({
   onSelectedChange: () => void
 }) {
   const deleteTag = useDeleteTag()
+  const { data: settings } = useSettings()
 
   return (
     <div className="flex items-center gap-2 rounded-md border p-3">
@@ -130,7 +132,7 @@ function TagRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          {tag.isPrivate && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+          {settings?.privacyEnabled && tag.isPrivate && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <span className="truncate font-medium">{tag.name}</span>
           <Badge variant="outline">
             {tag.usageCount} item{tag.usageCount === 1 ? "" : "s"}

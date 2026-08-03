@@ -35,7 +35,11 @@ func ListCollections(repo *repository.CollectionsRepo, libraryRepo *repository.L
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		sequenceGaps, err := libraryRepo.SequenceGapsByCollection(c.Request.Context())
+		ranges := make(map[int64]repository.SequenceRange, len(rows))
+		for _, col := range rows {
+			ranges[col.ID] = repository.SequenceRange{Min: col.SequenceMin, Max: col.SequenceMax}
+		}
+		sequenceGaps, err := libraryRepo.SequenceGapsByCollection(c.Request.Context(), ranges)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -121,6 +125,9 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			IsPrivate:           req.IsPrivate,
 			JellyfinLibrary:     req.JellyfinLibraryID,
 			SeasonNumber:        req.SeasonNumber,
+			Year:                req.Year,
+			SequenceMin:         req.SequenceMin,
+			SequenceMax:         req.SequenceMax,
 			ArtistID:            req.ArtistID,
 			BrowseAsShow:        req.BrowseAsShow,
 		}
@@ -202,6 +209,9 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			IsPrivate:           req.IsPrivate,
 			JellyfinLibrary:     req.JellyfinLibraryID,
 			SeasonNumber:        req.SeasonNumber,
+			Year:                req.Year,
+			SequenceMin:         req.SequenceMin,
+			SequenceMax:         req.SequenceMax,
 			ArtistID:            req.ArtistID,
 			BrowseAsShow:        req.BrowseAsShow,
 		}

@@ -309,38 +309,61 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		m.finishError(parentCtx, runCtx, id, d.URL, "resolving collection root: "+err.Error(), "", "")
 		return
 	}
-	destDir, err := pathsafe.ResolveUnderRoot(effectiveRoot, d.Folder)
-	if err != nil {
-		m.finishError(parentCtx, runCtx, id, d.URL, "invalid folder: "+err.Error(), "", "")
-		return
-	}
 
 	audioFormat := ""
 	if d.AudioFormat != nil {
 		audioFormat = *d.AudioFormat
 	}
 
-	var templateVars nametemplate.Vars
-	if d.FilenameTemplate != nil && strings.TrimSpace(*d.FilenameTemplate) != "" {
-		templateVars = m.filenameTemplateVars(runCtx, d, effectiveTitle, meta)
-	}
-	filename, extraDirSegments := resolveFilename(d.Filename, d.FilenameTemplate, d.FilenamePrefix, effectiveTitle, templateVars)
-	if len(extraDirSegments) > 0 {
-		destDir = filepath.Join(append([]string{destDir}, extraDirSegments...)...)
-	}
+	var destDir, filename string
+	isRedownload := d.TargetLibraryItemID != nil
+	if isRedownload {
+		// Redownload: land in the shared scratch folder, not the
+		// collection folder — completeRedownload only swaps this over the
+		// real file once the download has fully succeeded. The literal
+		// destination filename/template/prefix machinery below is
+		// irrelevant here: the final name is dictated by the existing
+		// library item, not derived from title/prefix/template.
+		destDir = downloader.TrimTmpDir(m.mediaRoot)
+		if err := fsutil.EnsureDir(destDir); err != nil {
+			m.finishError(parentCtx, runCtx, id, d.URL, "creating scratch directory: "+err.Error(), "", "")
+			return
+		}
+		uid := strconv.FormatInt(time.Now().UnixNano(), 36)
+		filename = fsutil.SanitizeFilename(fmt.Sprintf("redownload-%d-%s", *d.TargetLibraryItemID, uid))
+	} else {
+		destDir, err = pathsafe.ResolveUnderRoot(effectiveRoot, d.Folder)
+		if err != nil {
+			m.finishError(parentCtx, runCtx, id, d.URL, "invalid folder: "+err.Error(), "", "")
+			return
+		}
 
-	if err := fsutil.EnsureDir(destDir); err != nil {
-		m.finishError(parentCtx, runCtx, id, d.URL, "creating destination directory: "+err.Error(), "", "")
-		return
+		var templateVars nametemplate.Vars
+		if d.FilenameTemplate != nil && strings.TrimSpace(*d.FilenameTemplate) != "" {
+			templateVars = m.filenameTemplateVars(runCtx, d, effectiveTitle, meta)
+		}
+		var resolvedFilename string
+		var extraDirSegments []string
+		resolvedFilename, extraDirSegments = resolveFilename(d.Filename, d.FilenameTemplate, d.FilenamePrefix, effectiveTitle, templateVars)
+		if len(extraDirSegments) > 0 {
+			destDir = filepath.Join(append([]string{destDir}, extraDirSegments...)...)
+		}
+		filename = fsutil.SanitizeFilename(resolvedFilename)
+
+		if err := fsutil.EnsureDir(destDir); err != nil {
+			m.finishError(parentCtx, runCtx, id, d.URL, "creating destination directory: "+err.Error(), "", "")
+			return
+		}
 	}
 
 	job := downloader.DownloadJob{
-		URL:          d.URL,
-		DestDir:      destDir,
-		Filename:     fsutil.SanitizeFilename(filename),
-		DownloadType: d.DownloadType,
-		Quality:      d.Quality,
-		AudioFormat:  audioFormat,
+		URL:            d.URL,
+		DestDir:        destDir,
+		Filename:       filename,
+		DownloadType:   d.DownloadType,
+		Quality:        d.Quality,
+		AudioFormat:    audioFormat,
+		ForceOverwrite: isRedownload,
 	}
 
 	if err := m.downloadsRepo.UpdateStatus(runCtx, id, models.StatusDownloading, nil); err != nil {
@@ -369,17 +392,28 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		r := fmt.Sprintf("%dx%d", meta.Width, meta.Height)
 		resolution = &r
 	}
-	if err := m.downloadsRepo.MarkCompleted(parentCtx, id, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
-		log.Printf("queue: mark completed failed for %d: %v", id, err)
-	}
-	if _, err := m.historyRepo.Create(parentCtx, &id, d.URL, "completed", nil); err != nil {
-		log.Printf("queue: recording history for %d failed: %v", id, err)
-	}
 
 	var sizeBytes *int64
 	if info, err := os.Stat(result.FinalPath); err == nil {
 		s := info.Size()
 		sizeBytes = &s
+	}
+
+	if isRedownload {
+		// completeRedownload handles its own MarkCompleted/history — on a
+		// swap failure it routes through finishError instead, so the
+		// download row never claims "completed" for a redownload whose
+		// file was never actually swapped into place, and no duplicate
+		// history entry results.
+		m.completeRedownload(parentCtx, runCtx, id, d, effectiveTitle, meta, result, resolution, sizeBytes, effectiveRoot)
+		return
+	}
+
+	if err := m.downloadsRepo.MarkCompleted(parentCtx, id, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
+		log.Printf("queue: mark completed failed for %d: %v", id, err)
+	}
+	if _, err := m.historyRepo.Create(parentCtx, &id, d.URL, "completed", nil); err != nil {
+		log.Printf("queue: recording history for %d failed: %v", id, err)
 	}
 
 	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, sizeBytes)
@@ -563,6 +597,195 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 		Status:         "completed",
 		FileSizeBytes:  sizeBytes,
 	}
+}
+
+// redownloadOverwritableFields is the allowlist of values OverwriteFields
+// may contain — must match the allowlist RedownloadLibraryItemFromURL
+// validates against in library_handler.go.
+var redownloadOverwritableFields = map[string]bool{
+	"title": true, "uploader": true, "description": true,
+	"thumbnail": true, "resolution": true, "duration": true,
+}
+
+// completeRedownload is runOne's completion path when d.TargetLibraryItemID
+// is set: it swaps the freshly-downloaded scratch file over the existing
+// library item's file and updates that item in place (via
+// LibraryRepo.ApplyRedownload), instead of the normal path's
+// buildLibraryItem/Create. result.FinalPath is wherever the scratch
+// download actually landed (inside TrimTmpDir, per runOne's job-building
+// branch); effectiveRoot is the already-resolved collection root the
+// item's real folder lives under.
+//
+// The swap happens before MarkCompleted/history are recorded — a failure
+// (locked file, disk full) routes through finishError instead, so the
+// download row never claims "completed" for a redownload whose file was
+// never actually swapped into place, and no duplicate "completed" +
+// "failed" history pair results.
+func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, downloadID int64, d *models.Download, effectiveTitle string, meta *downloader.Metadata, result downloader.RunResult, resolution *string, sizeBytes *int64, effectiveRoot string) {
+	targetID := *d.TargetLibraryItemID
+
+	fail := func(msg string) {
+		m.finishError(parentCtx, runCtx, downloadID, d.URL, msg, result.StdoutTail, result.StderrTail)
+		os.Remove(result.FinalPath)
+		os.Remove(thumbnailPathFor(result.FinalPath))
+	}
+
+	target, err := m.libraryRepo.Get(parentCtx, targetID)
+	if err != nil {
+		fail("loading target library item: " + err.Error())
+		return
+	}
+
+	destDir, err := pathsafe.ResolveUnderRoot(effectiveRoot, target.Folder)
+	if err != nil {
+		fail("resolving target folder: " + err.Error())
+		return
+	}
+
+	newExt := filepath.Ext(result.FinalPath)
+	oldExt := filepath.Ext(target.Filename)
+	newFilename := fsutil.SanitizeFilename(strings.TrimSuffix(target.Filename, oldExt) + newExt)
+	newPath := filepath.Join(destDir, newFilename)
+	tmpThumbPath := thumbnailPathFor(result.FinalPath)
+
+	if err := os.Rename(result.FinalPath, newPath); err != nil {
+		fail("replacing file: " + err.Error())
+		return
+	}
+
+	// Extension changed (source now merges to a different container) —
+	// the old file is now orphaned at its old name; best-effort cleanup,
+	// same convention as the thumbnail-derivative error handling below.
+	if newFilename != target.Filename {
+		oldAbsPath := filepath.Join(m.mediaRoot, filepath.FromSlash(target.Path))
+		if err := os.Remove(oldAbsPath); err != nil && !os.IsNotExist(err) {
+			log.Printf("queue: removing stale redownloaded file %s failed: %v", oldAbsPath, err)
+		}
+	}
+
+	if err := m.downloadsRepo.MarkCompleted(parentCtx, downloadID, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
+		log.Printf("queue: mark completed failed for %d: %v", downloadID, err)
+	}
+	if _, err := m.historyRepo.Create(parentCtx, &downloadID, d.URL, "completed", nil); err != nil {
+		log.Printf("queue: recording history for %d failed: %v", downloadID, err)
+	}
+
+	overwrite := make(map[string]bool, len(d.OverwriteFields))
+	for _, f := range d.OverwriteFields {
+		if redownloadOverwritableFields[f] {
+			overwrite[f] = true
+		}
+	}
+
+	relPath := filepath.ToSlash(newPath)
+	if rel, err := filepath.Rel(m.mediaRoot, newPath); err == nil {
+		relPath = filepath.ToSlash(rel)
+	}
+	params := repository.ApplyRedownloadParams{
+		Filename:    newFilename,
+		Path:        relPath,
+		OriginalURL: d.URL,
+		VideoID:     meta.ID,
+	}
+	if sizeBytes != nil {
+		params.FileSizeBytes = *sizeBytes
+	}
+	duration := int(meta.Duration)
+	if overwrite["duration"] {
+		params.Duration = &duration
+	}
+	if overwrite["resolution"] {
+		params.Resolution = resolution
+	}
+	if overwrite["title"] {
+		params.Title = &effectiveTitle
+	}
+	if overwrite["uploader"] {
+		uploader := meta.Uploader
+		params.Uploader = &uploader
+	}
+	if overwrite["description"] {
+		description := meta.Description
+		params.Description = &description
+	}
+	if err := m.libraryRepo.ApplyRedownload(parentCtx, targetID, params); err != nil {
+		log.Printf("queue: applying redownload for library item %d failed: %v", targetID, err)
+	}
+
+	// Thumbnail: only swap + regenerate derivative tiers if explicitly
+	// requested — yt-dlp fetches one unconditionally (--write-thumbnail is
+	// always on, see BuildArgs), but it's discarded unused otherwise, and
+	// the item's existing thumbnail/tiers are left completely alone.
+	if overwrite["thumbnail"] {
+		if _, err := os.Stat(tmpThumbPath); err == nil {
+			newThumbPath := thumbnailPathFor(newPath)
+			var oldThumbAbs string
+			if target.Thumbnail != nil {
+				oldThumbAbs = filepath.Join(m.mediaRoot, filepath.FromSlash(*target.Thumbnail))
+			}
+			if err := os.Rename(tmpThumbPath, newThumbPath); err != nil {
+				log.Printf("queue: swapping thumbnail for library item %d failed: %v", targetID, err)
+			} else {
+				if oldThumbAbs != "" && oldThumbAbs != newThumbPath {
+					if err := os.Remove(oldThumbAbs); err != nil && !os.IsNotExist(err) {
+						log.Printf("queue: removing stale thumbnail %s failed: %v", oldThumbAbs, err)
+					}
+				}
+				thumbRel := filepath.ToSlash(newThumbPath)
+				if rel, err := filepath.Rel(m.mediaRoot, newThumbPath); err == nil {
+					thumbRel = filepath.ToSlash(rel)
+				}
+				if err := m.libraryRepo.UpdateThumbnail(parentCtx, targetID, &thumbRel); err != nil {
+					log.Printf("queue: updating thumbnail path for library item %d failed: %v", targetID, err)
+				}
+				if tiers, err := imageproc.GenerateTiersFromPath(parentCtx, m.ytdlp.FFmpegPath, m.imagesRoot, "library", targetID, newThumbPath, libraryThumbnailTiers); err != nil {
+					log.Printf("queue: generating thumbnail derivatives for library item %d failed: %v", targetID, err)
+				} else if err := m.libraryRepo.UpdateThumbnailTiers(parentCtx, targetID, &tiers[0], &tiers[1]); err != nil {
+					log.Printf("queue: saving thumbnail derivatives for library item %d failed: %v", targetID, err)
+				}
+			}
+		}
+	} else {
+		os.Remove(tmpThumbPath)
+	}
+
+	updated, err := m.libraryRepo.Get(parentCtx, targetID)
+	if err != nil {
+		log.Printf("queue: re-fetching library item %d after redownload failed: %v", targetID, err)
+		updated = target
+	}
+
+	// Best-effort: regenerate the .nfo sidecar if it's turned on for this
+	// item, so it doesn't go stale with pre-redownload duration/resolution.
+	if updated.GenerateNFO {
+		tags, err := m.tagsRepo.TagsForLibraryItem(parentCtx, targetID)
+		if err != nil {
+			log.Printf("queue: loading tags for nfo for library item %d failed: %v", targetID, err)
+		} else if err := nfo.WriteSidecar(newPath, *updated, tags); err != nil {
+			log.Printf("queue: writing nfo for library item %d failed: %v", targetID, err)
+		}
+	}
+
+	// Always re-embed the file's own container tags from the item's final
+	// (post-update) values — BuildArgs' --embed-metadata is unconditional,
+	// so the freshly-fetched source's title/uploader are already baked in
+	// regardless of what was checked; this keeps the file's own tags
+	// consistent with the DB record even when a field was left unchecked.
+	var artistName *string
+	if updated.ArtistID != nil {
+		if a, err := m.artistsRepo.Get(parentCtx, *updated.ArtistID); err == nil {
+			artistName = &a.Name
+		}
+	}
+	go func(path, title string, artist *string, year, seq, season *int) {
+		if err := m.ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, seq, season); err != nil {
+			log.Printf("queue: embedding metadata into %s failed: %v", path, err)
+		}
+	}(newPath, updated.Title, artistName, updated.ReleaseYear, updated.SequenceNumber, updated.SeasonNumber)
+
+	m.triggerJellyfinRefresh(parentCtx, d)
+
+	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: downloadID, LibraryID: targetID, Title: updated.Title}})
 }
 
 // triggerJellyfinRefresh schedules a debounced Jellyfin rescan for a just-

@@ -5,10 +5,13 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useCollections } from "@/hooks/useCollections"
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
+import { collectionsQueryKey, useCollections } from "@/hooks/useCollections"
 import { libraryQueryKey, useLibraryQuery } from "@/hooks/useLibrary"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { updateLibraryItem } from "@/lib/api"
 import { buildCollectionTree, collectDescendantIds, findNodeById } from "@/lib/collectionTree"
+import { cn } from "@/lib/utils"
 import {
   buildRenderNodes,
   computeDisplayNumbers,
@@ -29,7 +32,7 @@ interface EditSequenceDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-const EMPTY_ARRANGEMENT: ArrangementState = { sequencedList: [], leadingGap: 0, unsequencedList: [] }
+const EMPTY_ARRANGEMENT: ArrangementState = { sequencedList: [], leadingGap: 0, trailingGap: 0, unsequencedList: [] }
 
 export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogProps) {
   const { selectedItems, selectedCollectionIds, clear } = useSelection()
@@ -42,6 +45,13 @@ export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogPro
   // the same data highest-to-lowest instead of lowest-to-highest (so the
   // leading gap, the start of the sequence, ends up at the bottom).
   const [direction, setDirection] = useState<"asc" | "desc">("asc")
+  // Gates the resizable side-by-side layout — react-resizable-panels sets
+  // its own inline flex-basis on each panel, which would keep applying at
+  // every viewport size regardless of any Tailwind lg: classes layered on
+  // top, so the two-column/resizable structure has to not be mounted at all
+  // below lg rather than just hidden via CSS. matches Tailwind's default lg
+  // breakpoint (1024px).
+  const isWideScreen = useMediaQuery("(min-width: 1024px)")
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -73,6 +83,18 @@ export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogPro
 
   const isLoading = collectionIdsToResolve.length > 0 && resolving
 
+  // Trailing-gap mode activates whenever every item in this session shares
+  // one collection (not gated on a whole-collection bulk-select) and that
+  // collection has a configured Sequence Max — gives the fullest possible
+  // view of a collection's expected range without requiring the user to
+  // have explicitly selected "the whole collection."
+  const sharedCollectionId =
+    affectedItems.length > 0 && affectedItems.every((i) => i.collectionId === affectedItems[0].collectionId)
+      ? affectedItems[0].collectionId
+      : null
+  const sharedCollection = sharedCollectionId != null ? collections?.find((c) => c.id === sharedCollectionId) : undefined
+  const expectedMax = sharedCollection?.sequenceMax ?? undefined
+
   // Seeded once per open, same guard convention as BulkEditLibraryItemsDialog
   // — otherwise a background refetch while the user is mid-drag would blow
   // away their in-progress arrangement.
@@ -85,21 +107,24 @@ export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogPro
     }
     if (isLoading || initializedRef.current) return
     initializedRef.current = true
-    setArrangement(seedSequenceArrangement(affectedItems))
-  }, [open, isLoading, affectedItems])
+    setArrangement(seedSequenceArrangement(affectedItems, expectedMax))
+  }, [open, isLoading, affectedItems, collections, expectedMax])
 
-  const { sequencedList, leadingGap, unsequencedList } = arrangement
+  const { sequencedList, leadingGap, trailingGap, unsequencedList } = arrangement
   const displayNumbers = computeDisplayNumbers(leadingGap, sequencedList)
   const numberByItemId = new Map(sequencedList.map((e, i) => [e.item.id, displayNumbers[i]]))
-  const maxNumber = displayNumbers.length > 0 ? displayNumbers[displayNumbers.length - 1] : 0
-  const positions = positionMap(leadingGap, sequencedList)
-  const renderNodes = buildRenderNodes(leadingGap, sequencedList, direction)
+  const maxNumber = (displayNumbers.length > 0 ? displayNumbers[displayNumbers.length - 1] : 0) + trailingGap
+  const positions = positionMap(leadingGap, sequencedList, trailingGap)
+  const renderNodes = buildRenderNodes(leadingGap, sequencedList, direction, trailingGap)
   const sortableIds = (direction === "desc" ? [...sequencedList].reverse() : sequencedList).map((e) => e.item.id)
 
   const adjustGap = (index: number, delta: number) => {
     setArrangement((prev) => {
       if (index === 0) {
         return { ...prev, leadingGap: Math.max(0, prev.leadingGap + delta) }
+      }
+      if (index === prev.sequencedList.length) {
+        return { ...prev, trailingGap: Math.max(0, prev.trailingGap + delta) }
       }
       const list = [...prev.sequencedList]
       list[index] = { ...list[index], gapBefore: Math.max(0, list[index].gapBefore + delta) }
@@ -160,6 +185,10 @@ export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogPro
     const failed = results.length - succeeded
 
     queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    // The collection tile's "missing sequence" warning comes from
+    // useCollections() (a separate query from the library list), so it goes
+    // stale after a renumber unless this is invalidated too.
+    queryClient.invalidateQueries({ queryKey: collectionsQueryKey })
     if (succeeded > 0) toast.success(`Renumbered ${succeeded} file${succeeded === 1 ? "" : "s"}`)
     if (failed > 0) toast.error(`${failed} file${failed === 1 ? "" : "s"} failed to update`)
 
@@ -171,7 +200,11 @@ export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl" onOpenAutoFocus={(e) => e.preventDefault()}>
+      {/* Scales with the viewport from lg up (80-85% range) instead of
+          topping out at a fixed rem size — this dialog's two-panel layout
+          benefits from real screen space on a big monitor more than most
+          dialogs do. */}
+      <DialogContent className="sm:max-w-3xl lg:max-w-[85vw]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Edit sequence — {isLoading ? "…" : totalCount} selected {totalCount === 1 ? "file" : "files"}</DialogTitle>
           <DialogDescription>
@@ -196,67 +229,95 @@ export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogPro
           </Button>
         </div>
 
-        <div className="max-h-[55vh] space-y-1 overflow-y-auto">
-          {isLoading ? (
-            <p className="px-1 py-1 text-sm text-muted-foreground">Resolving files…</p>
-          ) : sequencedList.length === 0 ? (
-            <p className="px-1 py-1 text-sm text-muted-foreground">
-              Nothing sequenced yet — add an item from the list below.
-            </p>
-          ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-                {renderNodes.map((node) => {
-                  if (node.kind === "gap") {
-                    return node.size > 0 ? (
-                      <SequenceGapMarker
-                        key={node.key}
-                        count={node.size}
-                        onIncrement={() => adjustGap(node.index, 1)}
-                        onDecrement={() => adjustGap(node.index, -1)}
-                      />
-                    ) : (
-                      <SequenceGapInsertButton key={node.key} onInsert={() => adjustGap(node.index, 1)} />
-                    )
-                  }
-                  const displayNumber = numberByItemId.get(node.entry.item.id)!
-                  return (
-                    <SequencedItemRow
-                      key={node.entry.item.id}
-                      item={node.entry.item}
-                      displayNumber={displayNumber}
-                      rowNumber={node.index}
-                      positions={positions}
-                      canMoveUp={direction === "asc" ? displayNumber > 1 : displayNumber < maxNumber}
-                      canMoveDown={direction === "asc" ? displayNumber < maxNumber : displayNumber > 1}
-                      onMoveUp={() => moveArrowStep(node.entry.item.id, displayNumber, "up")}
-                      onMoveDown={() => moveArrowStep(node.entry.item.id, displayNumber, "down")}
-                      onJumpToPosition={(position) => handleJumpToPosition(node.entry.item.id, position)}
-                    />
-                  )
-                })}
-              </SortableContext>
-            </DndContext>
-          )}
-        </div>
+        {(() => {
+          const showSplitLayout = isWideScreen && !isLoading && unsequencedList.length > 0
 
-        {!isLoading && unsequencedList.length > 0 && (
-          <div className="space-y-2 border-t pt-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              No sequence number ({unsequencedList.length})
-            </p>
-            <div className="max-h-40 space-y-1 overflow-y-auto">
-              {unsequencedList.map((item) => (
-                <UnsequencedItemRow
-                  key={item.id}
-                  item={item}
-                  positions={positions}
-                  onJumpToPosition={(position) => handleJumpToPosition(item.id, position)}
-                />
-              ))}
+          const sequencedContent = (
+            <div className={cn("space-y-1", showSplitLayout ? "h-full overflow-y-auto pr-2" : "max-h-[55vh] overflow-y-auto")}>
+              {isLoading ? (
+                <p className="px-1 py-1 text-sm text-muted-foreground">Resolving files…</p>
+              ) : sequencedList.length === 0 && leadingGap === 0 ? (
+                <p className="px-1 py-1 text-sm text-muted-foreground">
+                  Nothing sequenced yet — add an item from the list below.
+                </p>
+              ) : (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                    {renderNodes.map((node) => {
+                      if (node.kind === "gap") {
+                        return node.size > 0 ? (
+                          <SequenceGapMarker
+                            key={node.key}
+                            count={node.size}
+                            onIncrement={() => adjustGap(node.index, 1)}
+                            onDecrement={() => adjustGap(node.index, -1)}
+                          />
+                        ) : (
+                          <SequenceGapInsertButton key={node.key} onInsert={() => adjustGap(node.index, 1)} />
+                        )
+                      }
+                      const displayNumber = numberByItemId.get(node.entry.item.id)!
+                      return (
+                        <SequencedItemRow
+                          key={node.entry.item.id}
+                          item={node.entry.item}
+                          displayNumber={displayNumber}
+                          rowNumber={node.index}
+                          positions={positions}
+                          canMoveUp={direction === "asc" ? displayNumber > 1 : displayNumber < maxNumber}
+                          canMoveDown={direction === "asc" ? displayNumber < maxNumber : displayNumber > 1}
+                          onMoveUp={() => moveArrowStep(node.entry.item.id, displayNumber, "up")}
+                          onMoveDown={() => moveArrowStep(node.entry.item.id, displayNumber, "down")}
+                          onJumpToPosition={(position) => handleJumpToPosition(node.entry.item.id, position)}
+                        />
+                      )
+                    })}
+                  </SortableContext>
+                </DndContext>
+              )}
             </div>
-          </div>
-        )}
+          )
+
+          const unsequencedContent = !isLoading && unsequencedList.length > 0 && (
+            <div className={cn("space-y-2", showSplitLayout ? "h-full overflow-y-auto pl-2" : "mt-4 border-t pt-3")}>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                No sequence number ({unsequencedList.length})
+              </p>
+              <div className={cn("space-y-1", showSplitLayout ? "" : "max-h-40 overflow-y-auto")}>
+                {unsequencedList.map((item) => (
+                  <UnsequencedItemRow
+                    key={item.id}
+                    item={item}
+                    positions={positions}
+                    onJumpToPosition={(position) => handleJumpToPosition(item.id, position)}
+                  />
+                ))}
+              </div>
+            </div>
+          )
+
+          // The resizable side-by-side layout is only mounted at all when
+          // wide — see isWideScreen's comment for why this can't just be a
+          // CSS breakpoint on an always-mounted ResizablePanelGroup. Below
+          // lg (or with nothing unsequenced to show), it's the original
+          // plain stacked layout, full width, no resize handle.
+          return showSplitLayout ? (
+            <ResizablePanelGroup direction="horizontal" className="h-[60vh]">
+              <ResizablePanel defaultSize={65} minSize={40}>
+                {sequencedContent}
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
+                {unsequencedContent}
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          ) : (
+            <>
+              {sequencedContent}
+              {unsequencedContent}
+            </>
+          )
+        })()}
 
         <DialogFooter>
           <Button onClick={handleSave} disabled={isSaving || isLoading || sequencedList.length === 0}>
