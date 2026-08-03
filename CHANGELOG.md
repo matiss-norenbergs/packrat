@@ -12,6 +12,58 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-03
+
+- **Dashboard: resolution breakdown and storage charts** — a new bar chart
+  shows how many library items fall into each standard resolution step
+  (480p/720p/1080p/1440p/4K/8K, each item bucketed to its nearest step), and
+  a new donut chart shows disk usage for the volume backing the media
+  library — Packrat's own usage, other usage on the same disk, and free
+  space.
+
+## 2026-08-02
+
+- **yt-dlp venv now installs `curl_cffi` (pinned to `<0.16,>=0.10`)** —
+  needed for sites (Dailymotion confirmed; others use the same mechanism)
+  whose extractor requires "impersonation" (mimicking a real browser's TLS
+  fingerprint) to get past anti-bot checks; downloads from those sites
+  previously failed with `The extractor is attempting impersonation, but
+  none of these impersonate targets are available`. Pinned below 0.16
+  deliberately — yt-dlp's own impersonation module only supports curl_cffi
+  0.5.10 or 0.10.x–0.15.x, and silently reports every target as
+  "unavailable" (no error) if a newer/unsupported version is installed
+  instead, e.g. curl_cffi 0.16.0 itself. Negligible footprint: ~2MB
+  prebuilt wheel, inert until an extractor actually needs it.
+
+- **Fixed: trim still producing wildly wrong durations for some MP4 sources**
+  (e.g. a 10-minute clip reporting itself as over an hour) even after the two
+  fixes below. Root cause: when a trim point isn't already a keyframe, the
+  small re-encoded boundary sliver gets muxed at whatever video timescale
+  ffmpeg's mp4 muxer defaults to for a fresh encode — which usually differs
+  from the original source's own video timescale. Concatenating that sliver
+  with the stream-copied remainder (which keeps the source's original
+  timescale) forces ffmpeg to rescale between the two, and for B-frame-
+  reordered packets specifically, that rescale can silently skip converting
+  a timestamp — leaving one packet several times too large and inflating the
+  whole file's declared duration by that same multiple, even though the
+  actual video content is untouched. Fixed by forcing the re-encoded sliver
+  onto the same timescale as the source whenever the output is MP4/MOV.
+- **Fixed: trim still producing wrong durations after the 08-01 fix** — the
+  previous day's fix (moving `-ss` to an output option) only covered the
+  simple case where the trim point already sits on a keyframe. The common
+  case — trimming at an arbitrary point, which needs a tiny re-encoded
+  sliver joined to the stream-copied remainder — still broke, because
+  `ffmpeg`'s `-ss`/`-c copy` combination turned out to be unreliable well
+  beyond wrong duration metadata: confirmed by direct reproduction that it
+  can silently drop several seconds of content from either end of the kept
+  range, or seek to a different timestamp than requested entirely,
+  corrupting the join between the re-encoded and copied portions. Fixed by
+  no longer pre-cutting the copied portion into its own file at all —
+  instead it's referenced directly from the original, untouched source file
+  via ffmpeg's concat-demuxer `inpoint`/`outpoint` directives, which was
+  confirmed by direct reproduction to always produce exact frame counts and
+  correctly continuous timestamps.
+
 ## 2026-08-01
 
 - **Redesigned Settings page** — replaced the two-column wall of always-open

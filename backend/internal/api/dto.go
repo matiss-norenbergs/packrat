@@ -1096,4 +1096,9 @@ type StatsResponse struct {
 	LibraryVideoCount int   `json:"libraryVideoCount"`
 	LibraryAudioCount int   `json:"libraryAudioCount"`
 	TotalStorageBytes int64 `json:"totalStorageBytes"`
+	// DiskTotalBytes/DiskFreeBytes describe the filesystem underlying
+	// MediaRoot, not the whole host — 0 if the disk-usage lookup failed
+	// (unsupported filesystem, permissions, etc).
+	DiskTotalBytes int64 `json:"diskTotalBytes"`
+	DiskFreeBytes  int64 `json:"diskFreeBytes"`
 }

@@ -672,6 +672,10 @@ export interface Stats {
   libraryVideoCount: number
   libraryAudioCount: number
   totalStorageBytes: number
+  // Describe the filesystem underlying the server's media root, not the
+  // whole host — 0/0 if the disk-usage lookup failed server-side.
+  diskTotalBytes: number
+  diskFreeBytes: number
 }
 
 // One calendar day's tally from GET /stats/library-growth, oldest first.
@@ -681,4 +685,12 @@ export interface LibraryGrowthPoint {
   date: string
   count: number
   cumulative: number
+}
+
+// One standard resolution step's item count from GET
+// /stats/resolution-breakdown — always includes every step (0 count if
+// empty), in ascending step order.
+export interface ResolutionBreakdownPoint {
+  step: number
+  count: number
 }

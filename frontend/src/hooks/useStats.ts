@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
-import { fetchLibraryGrowth, fetchStats } from "@/lib/api"
+import { fetchLibraryGrowth, fetchResolutionBreakdown, fetchStats } from "@/lib/api"
 
 export const statsQueryKey = ["stats"] as const
 export const libraryGrowthQueryKey = ["stats", "library-growth"] as const
+export const resolutionBreakdownQueryKey = ["stats", "resolution-breakdown"] as const
 
 export function useStats() {
   return useQuery({
@@ -18,5 +19,14 @@ export function useLibraryGrowth() {
   return useQuery({
     queryKey: libraryGrowthQueryKey,
     queryFn: fetchLibraryGrowth,
+  })
+}
+
+// No refetchInterval — resolution mix shifts only as new items are added,
+// same reasoning as useLibraryGrowth above.
+export function useResolutionBreakdown() {
+  return useQuery({
+    queryKey: resolutionBreakdownQueryKey,
+    queryFn: fetchResolutionBreakdown,
   })
 }

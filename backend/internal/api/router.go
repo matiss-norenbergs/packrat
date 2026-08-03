@@ -187,8 +187,9 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.GET("/logs", GetLogs(deps.DownloadsRepo, deps.SettingsRepo))
 
-		api.GET("/stats", GetStats(deps.DownloadsRepo, deps.LibraryRepo))
+		api.GET("/stats", GetStats(deps.DownloadsRepo, deps.LibraryRepo, deps.MediaRoot))
 		api.GET("/stats/library-growth", GetLibraryGrowth(deps.LibraryRepo))
+		api.GET("/stats/resolution-breakdown", GetResolutionBreakdown(deps.LibraryRepo))
 
 		api.POST("/jellyfin/rescan", RescanJellyfinLibrary(deps.SettingsRepo, deps.JellyfinClient))
 

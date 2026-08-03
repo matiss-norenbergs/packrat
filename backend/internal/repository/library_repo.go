@@ -4,11 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"packrat/backend/internal/models"
 )
+
+// ResolutionSteps are the standard resolution heights the dashboard's
+// resolution-breakdown chart buckets into — mirrors frontend/src/lib/
+// resolution.ts's RESOLUTION_STEPS (kept in sync manually, same as that
+// file's own comment about UpdateSettingsRequest's oneof= constraint).
+var ResolutionSteps = []int{480, 720, 1080, 1440, 2160, 4320}
 
 type LibraryRepo struct {
 	db dbtx
@@ -790,6 +797,81 @@ func (r *LibraryRepo) GrowthByDay(ctx context.Context) ([]LibraryGrowthPoint, er
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// ResolutionStepCount is one standard resolution step's item tally for the
+// dashboard's resolution-breakdown chart.
+type ResolutionStepCount struct {
+	Step  int
+	Count int
+}
+
+// CountByResolutionStep groups every library item with a parseable
+// "WIDTHxHEIGHT" resolution into the nearest of ResolutionSteps (by absolute
+// difference in height, ties broken toward the lower step) and returns one
+// row per step that has at least one item, in ResolutionSteps order. Items
+// with no resolution (audio-only, or unparsed) are excluded rather than
+// bucketed, since there's no meaningful step for them.
+func (r *LibraryRepo) CountByResolutionStep(ctx context.Context) ([]ResolutionStepCount, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT resolution, COUNT(*)
+		FROM library
+		WHERE resolution IS NOT NULL AND resolution LIKE '%x%'
+		GROUP BY resolution`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying resolution breakdown: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[int]int, len(ResolutionSteps))
+	for rows.Next() {
+		var resolution string
+		var n int
+		if err := rows.Scan(&resolution, &n); err != nil {
+			return nil, fmt.Errorf("scanning resolution breakdown row: %w", err)
+		}
+		idx := strings.LastIndex(resolution, "x")
+		if idx < 0 || idx == len(resolution)-1 {
+			continue
+		}
+		height, err := strconv.Atoi(resolution[idx+1:])
+		if err != nil || height <= 0 {
+			continue
+		}
+		counts[nearestResolutionStep(height)] += n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make([]ResolutionStepCount, 0, len(ResolutionSteps))
+	for _, step := range ResolutionSteps {
+		if n, ok := counts[step]; ok {
+			out = append(out, ResolutionStepCount{Step: step, Count: n})
+		}
+	}
+	return out, nil
+}
+
+func nearestResolutionStep(height int) int {
+	best := ResolutionSteps[0]
+	bestDiff := abs(height - best)
+	for _, step := range ResolutionSteps[1:] {
+		diff := abs(height - step)
+		if diff < bestDiff {
+			best = step
+			bestDiff = diff
+		}
+	}
+	return best
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 func checkRowsAffected(res sql.Result) error {

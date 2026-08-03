@@ -26,13 +26,19 @@ type videoInfo struct {
 	VideoCodec string
 	AudioCodec string
 	FrameRate  float64
+	// VideoTimescale is the denominator of the video stream's time_base
+	// (e.g. 90000 for "1/90000"), 0 if unknown. See runTrimSegment's doc
+	// comment for why a re-encoded boundary segment needs to be forced onto
+	// this same timescale for MP4/MOV outputs.
+	VideoTimescale int
 }
 
-// probeVideoInfo shells to ffprobe for the source's video/audio codec names
-// and video frame rate — best-effort, like importer.Probe: any failure just
-// returns a zero-value videoInfo rather than an error, since the caller
-// always has a sane fallback (ffmpeg's own default codec choice, or a fixed
-// nudge-step when frame rate is unknown).
+// probeVideoInfo shells to ffprobe for the source's video/audio codec names,
+// video frame rate, and video track timescale — best-effort, like
+// importer.Probe: any failure just returns a zero-value videoInfo rather
+// than an error, since the caller always has a sane fallback (ffmpeg's own
+// default codec/timescale choice, or a fixed nudge-step when frame rate is
+// unknown).
 func probeVideoInfo(ctx context.Context, ffprobePath, mediaPath string) videoInfo {
 	ctx, cancel := context.WithTimeout(ctx, trimProbeTimeout)
 	defer cancel()
@@ -49,6 +55,7 @@ func probeVideoInfo(ctx context.Context, ffprobePath, mediaPath string) videoInf
 			CodecType  string `json:"codec_type"`
 			CodecName  string `json:"codec_name"`
 			RFrameRate string `json:"r_frame_rate"`
+			TimeBase   string `json:"time_base"`
 		} `json:"streams"`
 	}
 	if err := json.Unmarshal(out, &parsed); err != nil {
@@ -65,6 +72,9 @@ func probeVideoInfo(ctx context.Context, ffprobePath, mediaPath string) videoInf
 			if info.FrameRate == 0 {
 				info.FrameRate = parseFrameRate(s.RFrameRate)
 			}
+			if info.VideoTimescale == 0 {
+				info.VideoTimescale = parseTimescale(s.TimeBase)
+			}
 		case "audio":
 			if info.AudioCodec == "" {
 				info.AudioCodec = s.CodecName
@@ -72,6 +82,22 @@ func probeVideoInfo(ctx context.Context, ffprobePath, mediaPath string) videoInf
 		}
 	}
 	return info
+}
+
+// parseTimescale extracts the denominator from an ffprobe time_base string
+// like "1/90000" — the numerator for a video stream's time_base is always 1
+// in practice, so anything else is treated as unparseable (0, never an
+// error) rather than risk passing a wrong timescale value to ffmpeg.
+func parseTimescale(s string) int {
+	num, den, ok := strings.Cut(s, "/")
+	if !ok || num != "1" {
+		return 0
+	}
+	d, err := strconv.Atoi(den)
+	if err != nil || d <= 0 {
+		return 0
+	}
+	return d
 }
 
 // parseFrameRate parses ffprobe's r_frame_rate field, e.g. "30000/1001" or
@@ -224,57 +250,78 @@ func nearestKeyframeAtOrBefore(ctx context.Context, ffprobePath, mediaPath strin
 	return best, ok
 }
 
-// runTrimSegment runs a single ffmpeg pass over srcPath, keeping
-// [start, end) (end nil means "to EOF"), writing outPath. copyMode uses
-// -c copy (fast, lossless, requires start to already be a keyframe);
-// otherwise it re-encodes using the source's own probed codecs (falling
-// back to ffmpeg's container defaults when a codec couldn't be probed) so
-// the result's stream parameters stay close enough to a stream-copied
-// neighbor segment for the concat demuxer to join them cleanly.
+// mp4FamilyExts are extensions whose muxer honors ffmpeg's
+// -video_track_timescale option (all handled by libavformat's movenc). Used
+// by runTrimSegment to decide whether it's safe to pass that flag — passing
+// it for a container that doesn't recognize it (e.g. Matroska/WebM) would
+// just be a silently-ignored no-op at best, so this is a minor safety/clarity
+// check rather than a strict requirement.
+var mp4FamilyExts = map[string]bool{
+	".mp4": true, ".m4v": true, ".m4a": true, ".mov": true,
+}
+
+// runTrimSegment runs a single ffmpeg pass over srcPath, re-encoding and
+// keeping [start, end) (end nil means "to EOF"), writing outPath, using the
+// source's own probed codecs (falling back to ffmpeg's container defaults
+// when a codec couldn't be probed) so the result's stream parameters stay
+// close enough to the concat-demuxer-joined copy portion for a clean join.
+// Always re-encodes — it's only ever used for the small boundary slivers (a
+// fraction of a second, right at a cut that isn't already a keyframe) and
+// the whole-range fallback when no valid keyframe split exists. The bulk of
+// the kept range is never routed through here: see concatSegments's doc
+// comment for why it's referenced directly from the original file instead.
 //
-// Deliberately uses "-t <duration>" rather than "-to <end>" throughout: for
-// the re-encode path -ss is an input option (for fast/accurate seeking),
-// which makes ffmpeg reset output timestamps to start near zero — an
-// output-side "-to <end>" would then be measured against that reset clock
-// (i.e. "end" seconds after the seek point, not "end" seconds into the
-// original file), silently keeping far more of the file than intended. A
-// duration is unambiguous regardless of the timestamp reset.
+// Deliberately uses "-t <duration>" rather than "-to <end>": -ss is an
+// input option here (for fast/accurate seeking), which makes ffmpeg reset
+// output timestamps to start near zero — an output-side "-to <end>" would
+// then be measured against that reset clock (i.e. "end" seconds after the
+// seek point, not "end" seconds into the original file), silently keeping
+// far more of the file than intended. A duration is unambiguous regardless
+// of the timestamp reset.
 //
-// copyMode places -ss as an OUTPUT option instead (after -i), unlike the
-// re-encode path — confirmed by direct reproduction that input-side -ss
-// combined with "-c copy" writes wrong duration metadata into the resulting
-// Matroska/WebM container (observed: the container's reported duration came
-// out unrelated to the actual trimmed content — in one repro exactly the
-// full original length, in another an inconsistent partial overshoot —
-// which then corrupts the final concatenated preview's duration too, and
-// with it whatever a player derives its seek bar / total length from).
-// Output-side -ss for a copy (no decoding either way) still seeks straight
-// to the target keyframe with no measurable slowdown — this quirk is
-// specific to combining -c copy with an *input-side* seek.
-func runTrimSegment(ctx context.Context, ffmpegPath, srcPath, outPath string, start float64, end *float64, copyMode bool, info videoInfo) error {
+// For MP4/MOV outputs, forces the re-encoded video track onto the SAME
+// timescale as the original source (via -video_track_timescale) when it's
+// known. Confirmed by direct reproduction to fix a real, severe corruption:
+// without it, ffmpeg's mp4 muxer picks its own default timescale for this
+// freshly re-encoded segment (typically derived from frame rate, e.g.
+// 15360), different from the original source's own video timescale (e.g.
+// 90000, common for h264 muxed from a 90kHz-clock pipeline). When
+// concatSegments later joins this segment with a copy-mode portion that
+// retains the source's original timescale, ffmpeg's mp4 muxer has to
+// rescale between the two — and for B-frame-reordered packets specifically,
+// that rescale silently drops the conversion for isolated DTS values,
+// leaving them in the *source's* timescale instead of the output's. Because
+// the ratio between the two timescales can be several-fold, one
+// mis-rescaled packet is enough to inflate the whole container's declared
+// duration by that same multiple (e.g. a 10-minute clip reporting itself as
+// over an hour) even though the actual frame count/content is unaffected —
+// this is a strictly worse variant of the same class of bug documented on
+// concatSegments, and only reachable via the exact combination of
+// (a) a trim point that isn't already a keyframe (needing this re-encoded
+// sliver at all), (b) an MP4/MOV source, and (c) B-frames in the source's
+// GOP structure — which is why it didn't surface during this fix's earlier
+// verification passes (those either had a keyframe-aligned trim point, or a
+// Matroska/WebM source, where no forced single-timescale muxing applies).
+func runTrimSegment(ctx context.Context, ffmpegPath, srcPath, outPath string, start float64, end *float64, info videoInfo) error {
 	args := []string{"-y"}
-	if !copyMode && start > 0 {
+	if start > 0 {
 		args = append(args, "-ss", formatSeconds(start))
 	}
 	args = append(args, "-i", srcPath)
-	if copyMode && start > 0 {
-		args = append(args, "-ss", formatSeconds(start))
-	}
 	if end != nil {
 		args = append(args, "-t", formatSeconds(*end-start))
 	}
 	args = append(args, "-map", "0")
-	if copyMode {
-		args = append(args, "-c", "copy")
-	} else {
-		if info.VideoCodec != "" {
-			enc := preferredEncoderName(info.VideoCodec)
-			args = append(args, "-c:v", enc)
-			args = append(args, fastEncodeArgs(enc)...)
-		}
-		if info.AudioCodec != "" {
-			args = append(args, "-c:a", preferredEncoderName(info.AudioCodec))
-		}
+	if info.VideoCodec != "" {
+		enc := preferredEncoderName(info.VideoCodec)
+		args = append(args, "-c:v", enc)
+		args = append(args, fastEncodeArgs(enc)...)
+	}
+	if info.AudioCodec != "" {
+		args = append(args, "-c:a", preferredEncoderName(info.AudioCodec))
+	}
+	if info.VideoTimescale > 0 && mp4FamilyExts[strings.ToLower(filepath.Ext(outPath))] {
+		args = append(args, "-video_track_timescale", strconv.Itoa(info.VideoTimescale))
 	}
 	args = append(args, outPath)
 
@@ -287,17 +334,50 @@ func runTrimSegment(ctx context.Context, ffmpegPath, srcPath, outPath string, st
 	return nil
 }
 
-// concatSegments joins segments (already-written files, same codecs/params)
-// into outPath via ffmpeg's concat demuxer with -c copy — no re-encoding at
-// the join, since every segment's boundary is already either an original
-// keyframe (stream-copied middle) or ends exactly where re-encoding placed
-// it (boundary segments).
-func concatSegments(ctx context.Context, ffmpegPath string, segments []string, outPath string) error {
+// concatEntry is one input to concatSegments: either a real segment file
+// already trimmed to its exact final range (segA/segC, the re-encoded
+// boundary slivers — no inpoint/outpoint needed), or a direct reference to
+// the original source with inpoint/outpoint telling the concat demuxer
+// which slice of it to use for the stream-copied portion.
+type concatEntry struct {
+	path     string
+	inpoint  *float64
+	outpoint *float64
+}
+
+// concatSegments joins entries into outPath via ffmpeg's concat demuxer
+// with -c copy — no re-encoding at the join, since every entry is already
+// either an original keyframe-aligned slice of the source or ends exactly
+// where re-encoding placed it (segA/segC).
+//
+// The stream-copied portion is deliberately expressed as inpoint/outpoint
+// directives against the ORIGINAL, untouched source file, rather than
+// pre-cut into its own file via a separate "ffmpeg -ss <t> -i src -c copy
+// out" pass (this codebase's first attempt at fixing a related bug — see
+// CHANGELOG). That approach turned out to still be broken: confirmed by
+// direct reproduction that this ffmpeg build's -ss (as either an input or
+// output option) combined with -c copy is unreliable well beyond the
+// original wrong-duration-metadata symptom — it was observed to silently
+// drop several seconds of content from either end of the kept range, and in
+// one case even seek to a completely different timestamp than the one
+// requested, with no consistent relationship to the seek offset. The concat
+// demuxer's own inpoint/outpoint handling against the untouched source, by
+// contrast, was confirmed by direct reproduction (exact frame counts,
+// correctly rebased timestamps starting at zero) to always produce exactly
+// the requested slice, with no measurable slowdown (concat with -c copy
+// never decodes, same as a plain copy would).
+func concatSegments(ctx context.Context, ffmpegPath string, entries []concatEntry, outPath string) error {
 	listPath := outPath + ".concat-list.txt"
 	var sb strings.Builder
-	for _, seg := range segments {
-		escaped := strings.ReplaceAll(filepath.ToSlash(seg), "'", `'\''`)
+	for _, e := range entries {
+		escaped := strings.ReplaceAll(filepath.ToSlash(e.path), "'", `'\''`)
 		sb.WriteString(fmt.Sprintf("file '%s'\n", escaped))
+		if e.inpoint != nil {
+			sb.WriteString(fmt.Sprintf("inpoint %s\n", formatSeconds(*e.inpoint)))
+		}
+		if e.outpoint != nil {
+			sb.WriteString(fmt.Sprintf("outpoint %s\n", formatSeconds(*e.outpoint)))
+		}
 	}
 	if err := os.WriteFile(listPath, []byte(sb.String()), 0o644); err != nil {
 		return fmt.Errorf("writing concat list: %w", err)
@@ -414,57 +494,61 @@ func (s *YtDlpService) BuildTrimPreview(ctx context.Context, ffprobePath, mediaA
 		}
 	}
 
-	var segments []string
+	var tempFiles []string
 	cleanup := func() {
-		for _, seg := range segments {
-			os.Remove(seg)
+		for _, f := range tempFiles {
+			os.Remove(f)
 		}
 	}
 
 	if !splitOK {
-		if err := runTrimSegment(ctx, s.FFmpegPath, mediaAbsPath, previewAbsPath, effectiveStart, trimEnd, false, info); err != nil {
+		if err := runTrimSegment(ctx, s.FFmpegPath, mediaAbsPath, previewAbsPath, effectiveStart, trimEnd, info); err != nil {
 			return "", 0, 0, err
 		}
 	} else {
+		var entries []concatEntry
+
 		if createHeadSeg {
 			segA := filepath.Join(dir, fmt.Sprintf("%s.trim-seg-a-%s%s", base, uid, ext))
 			kf := segStart
-			if err := runTrimSegment(ctx, s.FFmpegPath, mediaAbsPath, segA, effectiveStart, &kf, false, info); err != nil {
+			if err := runTrimSegment(ctx, s.FFmpegPath, mediaAbsPath, segA, effectiveStart, &kf, info); err != nil {
 				cleanup()
 				return "", 0, 0, err
 			}
-			segments = append(segments, segA)
+			tempFiles = append(tempFiles, segA)
+			entries = append(entries, concatEntry{path: segA})
 		}
 
-		segB := filepath.Join(dir, fmt.Sprintf("%s.trim-seg-b-%s%s", base, uid, ext))
-		if err := runTrimSegment(ctx, s.FFmpegPath, mediaAbsPath, segB, segStart, segEnd, true, info); err != nil {
-			cleanup()
-			return "", 0, 0, err
+		// The bulk of the kept range is never re-encoded or pre-cut into its
+		// own file — it's referenced directly from the original source via
+		// inpoint/outpoint. See concatSegments's doc comment for why.
+		copyEntry := concatEntry{path: mediaAbsPath}
+		if segStart > 0 {
+			start := segStart
+			copyEntry.inpoint = &start
 		}
-		segments = append(segments, segB)
+		if segEnd != nil {
+			end := *segEnd
+			copyEntry.outpoint = &end
+		}
+		entries = append(entries, copyEntry)
 
 		if createTailSeg {
 			segC := filepath.Join(dir, fmt.Sprintf("%s.trim-seg-c-%s%s", base, uid, ext))
 			tailStart := *segEnd
-			if err := runTrimSegment(ctx, s.FFmpegPath, mediaAbsPath, segC, tailStart, trimEnd, false, info); err != nil {
+			if err := runTrimSegment(ctx, s.FFmpegPath, mediaAbsPath, segC, tailStart, trimEnd, info); err != nil {
 				cleanup()
 				return "", 0, 0, err
 			}
-			segments = append(segments, segC)
+			tempFiles = append(tempFiles, segC)
+			entries = append(entries, concatEntry{path: segC})
 		}
 
-		if len(segments) == 1 {
-			if err := os.Rename(segments[0], previewAbsPath); err != nil {
-				cleanup()
-				return "", 0, 0, fmt.Errorf("finalizing trim preview: %w", err)
-			}
-		} else {
-			if err := concatSegments(ctx, s.FFmpegPath, segments, previewAbsPath); err != nil {
-				cleanup()
-				return "", 0, 0, err
-			}
+		if err := concatSegments(ctx, s.FFmpegPath, entries, previewAbsPath); err != nil {
 			cleanup()
+			return "", 0, 0, err
 		}
+		cleanup()
 	}
 
 	probe := importer.Probe(ctx, ffprobePath, previewAbsPath)

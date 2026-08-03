@@ -34,6 +34,7 @@ import type {
   LibraryItemMetadataPreview,
   LibraryItemProbeResult,
   LibraryGrowthPoint,
+  ResolutionBreakdownPoint,
   LibraryListResponse,
   LibraryQueryParams,
   LoginRequest,
@@ -465,6 +466,10 @@ export function fetchStats(): Promise<Stats> {
 
 export function fetchLibraryGrowth(): Promise<LibraryGrowthPoint[]> {
   return request<LibraryGrowthPoint[]>("/stats/library-growth")
+}
+
+export function fetchResolutionBreakdown(): Promise<ResolutionBreakdownPoint[]> {
+  return request<ResolutionBreakdownPoint[]>("/stats/resolution-breakdown")
 }
 
 export function exportSettingsBackup(password: string): Promise<BackupEnvelope> {
