@@ -361,8 +361,15 @@ export function quickGrabLibraryThumbnail(id: number): Promise<LibraryItem> {
   return request<LibraryItem>(`/library/${id}/thumbnail/quick-grab`, { method: "POST" })
 }
 
-export function fetchLibraryThumbnailCandidates(id: number): Promise<{ candidates: ThumbnailCandidate[] }> {
-  return request<{ candidates: ThumbnailCandidate[] }>(`/library/${id}/thumbnail/candidates`)
+export function fetchLibraryThumbnailCandidates(
+  id: number,
+  params?: { timestamps?: number[]; exclude?: number[] },
+): Promise<{ candidates: ThumbnailCandidate[] }> {
+  const search = new URLSearchParams()
+  if (params?.timestamps?.length) search.set("timestamps", params.timestamps.join(","))
+  if (params?.exclude?.length) search.set("exclude", params.exclude.join(","))
+  const qs = search.toString()
+  return request<{ candidates: ThumbnailCandidate[] }>(`/library/${id}/thumbnail/candidates${qs ? `?${qs}` : ""}`)
 }
 
 export function fetchLibraryItemMetadataPreview(id: number): Promise<LibraryItemMetadataPreview> {

@@ -148,11 +148,13 @@ function GeneralTab() {
   const updateSettings = useUpdateSettings()
 
   const [maxConcurrent, setMaxConcurrent] = useState("")
+  const [maxConcurrentTranscodes, setMaxConcurrentTranscodes] = useState("")
   const [downloadTimeout, setDownloadTimeout] = useState("")
 
   useEffect(() => {
     if (!settings) return
     setMaxConcurrent(String(settings.maxConcurrentDownloads))
+    setMaxConcurrentTranscodes(String(settings.maxConcurrentTranscodes))
     setDownloadTimeout(String(settings.downloadTimeoutMinutes))
   }, [settings])
 
@@ -161,6 +163,8 @@ function GeneralTab() {
   const payload: UpdateSettingsRequest = {}
   const n = Number(maxConcurrent)
   if (n > 0 && n !== settings.maxConcurrentDownloads) payload.maxConcurrentDownloads = n
+  const nTranscodes = Number(maxConcurrentTranscodes)
+  if (nTranscodes > 0 && nTranscodes !== settings.maxConcurrentTranscodes) payload.maxConcurrentTranscodes = nTranscodes
   const timeout = Number(downloadTimeout)
   if (timeout >= 0 && timeout !== settings.downloadTimeoutMinutes) payload.downloadTimeoutMinutes = timeout
   const dirty = Object.keys(payload).length > 0
@@ -185,6 +189,22 @@ function GeneralTab() {
           min="1"
           value={maxConcurrent}
           onChange={(e) => setMaxConcurrent(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <FieldLabel
+          htmlFor="max-concurrent-transcodes"
+          info="Caps how many trim previews can be generated (ffmpeg re-encodes) at the same time — separate from the download limit above, since trimming is triggered on demand rather than queued."
+        >
+          Max Concurrent Transcodes
+        </FieldLabel>
+        <Input
+          id="max-concurrent-transcodes"
+          type="number"
+          min="1"
+          value={maxConcurrentTranscodes}
+          onChange={(e) => setMaxConcurrentTranscodes(e.target.value)}
         />
       </div>
 
@@ -413,7 +433,7 @@ function DownloadsTab() {
   )
 }
 
-const FRAME_COUNT_OPTIONS = [2, 4, 6, 8]
+const FRAME_COUNT_OPTIONS = [2, 4, 6, 8, 12]
 
 function LibraryTab() {
   const { data: settings, isLoading } = useSettings()

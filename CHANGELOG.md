@@ -14,6 +14,22 @@ Maintenance notes:
 
 ## 2026-08-06
 
+- **"Choose from Video" thumbnail picker: 12-frame option + batch history**
+  — the frame-count setting now goes up to 12 (was capped at 8), and the
+  dialog remembers every batch of frames generated this session. A "Frame
+  set N" dropdown appears once you've clicked "Get new frames" more than
+  once, letting you re-extract and preview any earlier batch without losing
+  it — picking from the dropdown never auto-commits, only clicking an
+  actual frame does. New batches also never re-pick a timestamp already
+  seen this session (within ~1s), and the pick range now spans 5%–100% of
+  the video instead of 10%–90%.
+- **Configurable max concurrent ffmpeg transcodes** — trim preview generation
+  (the only ffmpeg call site that actually re-encodes video, as opposed to
+  the cheap stream-copy/single-frame operations) is now gated by its own
+  concurrency limit, separate from the download worker count, so mass-firing
+  trim previews can't spike CPU unbounded. New "Max Concurrent Transcodes"
+  field in Settings → General, next to Max Concurrent Downloads; applies live
+  and survives a restart the same way.
 - **Self-update checker for Packrat itself** — the sidebar now shows an
   "Update available" indicator (same amber-dot treatment as the existing
   yt-dlp checker) when a newer Packrat release exists on GitHub, linking out

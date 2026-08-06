@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/backup"
+	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/queue"
@@ -98,7 +99,7 @@ func writeBackupOpenError(c *gin.Context, err error) {
 	}
 }
 
-func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadManager) gin.HandlerFunc {
+func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BackupImportRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -135,6 +136,11 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 		if raw, ok := bundle[models.SettingMaxConcurrentDownloads]; ok {
 			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
 				mgr.SetWorkerCount(n)
+			}
+		}
+		if raw, ok := bundle[models.SettingMaxConcurrentTranscodes]; ok {
+			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+				ytdlp.SetMaxConcurrentTranscodes(n)
 			}
 		}
 		c.JSON(http.StatusOK, BackupImportSettingsResponse{Applied: applied})

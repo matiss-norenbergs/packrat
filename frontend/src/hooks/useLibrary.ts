@@ -369,13 +369,16 @@ export function useQuickGrabLibraryThumbnail() {
   })
 }
 
-export function useLibraryThumbnailCandidates(id: number, enabled: boolean) {
-  return useQuery({
-    queryKey: ["library", id, "thumbnail-candidates"],
-    queryFn: () => fetchLibraryThumbnailCandidates(id),
-    enabled,
-    staleTime: 0,
-    gcTime: 0,
+// On-demand, not a query — the "choose from video" dialog needs to trigger
+// two distinct kinds of fetch (a fresh random batch, or re-extracting a
+// specific past batch's timestamps from its history), neither of which is a
+// stable cache key worth keying a useQuery on (same precedent as
+// useLibraryItemTrimFrames).
+export function useFetchLibraryThumbnailCandidates() {
+  return useMutation({
+    mutationFn: ({ id, timestamps, exclude }: { id: number; timestamps?: number[]; exclude?: number[] }) =>
+      fetchLibraryThumbnailCandidates(id, { timestamps, exclude }),
+    onError: (err: Error) => toast.error(`Failed to grab frames: ${err.message}`),
   })
 }
 

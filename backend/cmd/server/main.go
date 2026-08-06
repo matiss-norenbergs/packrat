@@ -110,7 +110,7 @@ func run() error {
 	compareListRepo := repository.NewCompareListRepo(conn)
 	usersRepo := repository.NewUsersRepo(conn)
 	backupHistoryRepo := repository.NewBackupHistoryRepo(conn)
-	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath, settingsRepo)
+	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath, settingsRepo, cfg.MaxConcurrentTranscodes)
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
 
@@ -145,6 +145,15 @@ func run() error {
 		}
 	}
 	mgr.Start(ctx, workerCount)
+
+	// Same survives-a-restart treatment as the download worker count above.
+	transcodeLimit := cfg.MaxConcurrentTranscodes
+	if saved, err := settingsRepo.Get(ctx, models.SettingMaxConcurrentTranscodes); err == nil {
+		if n, err := strconv.Atoi(saved); err == nil && n > 0 {
+			transcodeLimit = n
+		}
+	}
+	ytdlpSvc.SetMaxConcurrentTranscodes(transcodeLimit)
 
 	runDeps := backup.RunDeps{
 		BackupsRoot:       cfg.BackupsRoot,

@@ -427,6 +427,7 @@ export interface MoveLibraryItemRequest {
 export interface Settings {
   downloadDirectory: string
   maxConcurrentDownloads: number
+  maxConcurrentTranscodes: number
   downloadTimeoutMinutes: number
   defaultQuality: string
   defaultDownloadType: DownloadType
@@ -553,6 +554,7 @@ export interface EnqueueResult {
 
 export interface UpdateSettingsRequest {
   maxConcurrentDownloads?: number
+  maxConcurrentTranscodes?: number
   downloadTimeoutMinutes?: number
   defaultQuality?: string
   defaultDownloadType?: DownloadType

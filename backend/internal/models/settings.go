@@ -5,6 +5,7 @@ package models
 const (
 	SettingDownloadDirectory        = "download_directory"
 	SettingMaxConcurrentDownloads   = "max_concurrent_downloads"
+	SettingMaxConcurrentTranscodes  = "max_concurrent_ffmpeg_transcodes"
 	SettingDownloadTimeoutMinutes   = "download_timeout_minutes" // minutes; 0 = no timeout (default)
 	SettingDefaultQuality           = "default_quality"
 	SettingDefaultDownloadType      = "default_download_type"

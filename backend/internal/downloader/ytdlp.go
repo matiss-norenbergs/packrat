@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"packrat/backend/internal/repository"
@@ -21,10 +22,80 @@ type YtDlpService struct {
 	FFmpegPath   string
 	PipPath      string
 	SettingsRepo *repository.SettingsRepo
+
+	transcodes *transcodeLimiter
 }
 
-func NewYtDlpService(binPath, ffmpegPath, pipPath string, settingsRepo *repository.SettingsRepo) *YtDlpService {
-	return &YtDlpService{BinPath: binPath, FFmpegPath: ffmpegPath, PipPath: pipPath, SettingsRepo: settingsRepo}
+func NewYtDlpService(binPath, ffmpegPath, pipPath string, settingsRepo *repository.SettingsRepo, maxConcurrentTranscodes int) *YtDlpService {
+	return &YtDlpService{
+		BinPath:      binPath,
+		FFmpegPath:   ffmpegPath,
+		PipPath:      pipPath,
+		SettingsRepo: settingsRepo,
+		transcodes:   newTranscodeLimiter(maxConcurrentTranscodes),
+	}
+}
+
+// transcodeLimiter bounds how many ffmpeg transcodes (currently: trim
+// preview generation, the only re-encoding ffmpeg call site — metadata
+// embed and frame extraction are cheap stream-copy/single-frame operations
+// and aren't gated) run at once. Separate from the download worker pool
+// (config.MaxConcurrentDownloads / SetWorkerCount), since a transcode is
+// triggered by an on-demand HTTP request rather than a queued job.
+type transcodeLimiter struct {
+	mu  sync.Mutex
+	sem chan struct{}
+}
+
+func newTranscodeLimiter(n int) *transcodeLimiter {
+	if n < 1 {
+		n = 1
+	}
+	return &transcodeLimiter{sem: make(chan struct{}, n)}
+}
+
+// acquire blocks until a slot is free or ctx is done. The returned release
+// func must be called exactly once (typically via defer) to free the slot.
+func (l *transcodeLimiter) acquire(ctx context.Context) (release func(), err error) {
+	l.mu.Lock()
+	sem := l.sem
+	l.mu.Unlock()
+
+	select {
+	case sem <- struct{}{}:
+		return func() { <-sem }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// setLimit resizes the pool for future acquires. Like SetWorkerCount,
+// in-flight transcodes acquired under the old limit run to completion
+// unaffected — this only changes what new callers see.
+func (l *transcodeLimiter) setLimit(n int) {
+	if n < 1 {
+		n = 1
+	}
+	l.mu.Lock()
+	l.sem = make(chan struct{}, n)
+	l.mu.Unlock()
+}
+
+func (l *transcodeLimiter) limit() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return cap(l.sem)
+}
+
+// SetMaxConcurrentTranscodes resizes the ffmpeg transcode concurrency
+// limit — the live source of truth for GET /api/settings, mirroring
+// DownloadManager.SetWorkerCount/WorkerCount.
+func (s *YtDlpService) SetMaxConcurrentTranscodes(n int) {
+	s.transcodes.setLimit(n)
+}
+
+func (s *YtDlpService) MaxConcurrentTranscodes() int {
+	return s.transcodes.limit()
 }
 
 // processTreeKillGrace bounds how long Wait() waits for killProcessTree's
