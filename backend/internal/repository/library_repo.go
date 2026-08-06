@@ -36,12 +36,12 @@ func (r *LibraryRepo) WithTx(tx *sql.Tx) *LibraryRepo {
 func (r *LibraryRepo) Create(ctx context.Context, item *models.LibraryItem) (int64, error) {
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO library (download_id, title, filename, path, collection_id, folder, original_url,
-		                      video_id, uploader, duration, resolution, thumbnail, thumbnail_small_path, thumbnail_medium_path,
+		                      video_id, uploader, duration, resolution, media_type, thumbnail, thumbnail_small_path, thumbnail_medium_path,
 		                      description, artist_id, release_year,
 		                      sequence_number, season_number, generate_nfo, status, file_size_bytes)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		item.DownloadID, item.Title, item.Filename, item.Path, item.CollectionID, item.Folder, item.OriginalURL,
-		item.VideoID, item.Uploader, item.Duration, item.Resolution, item.Thumbnail, item.ThumbnailSmallPath, item.ThumbnailMediumPath,
+		item.VideoID, item.Uploader, item.Duration, item.Resolution, item.MediaType, item.Thumbnail, item.ThumbnailSmallPath, item.ThumbnailMediumPath,
 		item.Description, item.ArtistID, item.ReleaseYear,
 		item.SequenceNumber, item.SeasonNumber, item.GenerateNFO, item.Status, item.FileSizeBytes,
 	)
@@ -198,6 +198,7 @@ type LibraryQuery struct {
 	Year               *int     // exact match on release_year; nil = no filter
 	Tags               []string // AND semantics — an item must have every tag
 	InProgress         bool     // true = filter to items eligible for "Continue Watching": a position tracked, past the barely-started floor, and short of the credits-rolled ceiling (see continueWatching* constants)
+	HideGhosts         bool     // true = exclude ghost (no-file placeholder) items; false = no filter (ghosts show inline like any other item, the default)
 	SortKey            string   // downloadedAt|title|filename|year|duration|sequenceNumber|lastWatchedAt
 	SortDir            string   // asc|desc
 	Page               int      // 1-based; 0 means "no pagination", return every matching row
@@ -276,6 +277,9 @@ func (r *LibraryRepo) Query(ctx context.Context, q LibraryQuery) ([]models.Libra
 		conditions = append(conditions,
 			`l.playback_position_seconds IS NOT NULL AND l.playback_position_seconds >= ? AND (l.duration IS NULL OR l.playback_position_seconds < l.duration * ?) AND l.last_watched_at IS NOT NULL`)
 		args = append(args, continueWatchingMinSeconds, continueWatchingMaxFraction)
+	}
+	if q.HideGhosts {
+		conditions = append(conditions, `l.status != 'ghost'`)
 	}
 	for _, tag := range q.Tags {
 		conditions = append(conditions, `EXISTS (SELECT 1 FROM library_tags lt JOIN tags t ON t.id = lt.tag_id WHERE lt.library_id = l.id AND t.name = ?)`)
@@ -688,10 +692,13 @@ type ApplyRedownloadParams struct {
 // completeRedownload). Deliberately never touches tags, artist, year,
 // season/sequence number, generate_nfo, or thumbnail (thumbnail is handled
 // by UpdateThumbnail/UpdateThumbnailTiers separately, only when checked).
+// status is unconditionally set to 'completed' — a successful redownload
+// always means a real file now exists, including the ghost-item-fill-in
+// case (see ClearFile, the inverse operation).
 func (r *LibraryRepo) ApplyRedownload(ctx context.Context, id int64, p ApplyRedownloadParams) error {
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE library
-		SET filename = ?, path = ?, file_size_bytes = ?, original_url = ?, video_id = ?,
+		SET filename = ?, path = ?, file_size_bytes = ?, original_url = ?, video_id = ?, status = 'completed',
 		    duration = COALESCE(?, duration), resolution = COALESCE(?, resolution),
 		    title = COALESCE(?, title), uploader = COALESCE(?, uploader), description = COALESCE(?, description)
 		WHERE id = ?`,
@@ -700,6 +707,29 @@ func (r *LibraryRepo) ApplyRedownload(ctx context.Context, id int64, p ApplyRedo
 	)
 	if err != nil {
 		return fmt.Errorf("applying redownload: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// ClearFile detaches an item's media file — used both by the "delete file
+// only" action on a real item and, structurally, produces the same state a
+// ghost item is created in directly (see ApplyRedownload, the inverse
+// operation, for filling one back in). filename/path go back to "" (the
+// same empty-string sentinel a freshly-created ghost item uses — the
+// library.filename/path columns are NOT NULL but otherwise unconstrained,
+// so this needs no schema change) and status flips to 'ghost'. When
+// clearThumbnail is true, the thumbnail fields are cleared too; otherwise
+// they're left untouched so the item keeps showing its existing thumbnail.
+func (r *LibraryRepo) ClearFile(ctx context.Context, id int64, clearThumbnail bool) error {
+	query := `UPDATE library SET filename = '', path = '', file_size_bytes = NULL, status = 'ghost'`
+	if clearThumbnail {
+		query += `, thumbnail = NULL, thumbnail_small_path = NULL, thumbnail_medium_path = NULL`
+	}
+	query += ` WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("clearing library item file: %w", err)
 	}
 	return checkRowsAffected(res)
 }
@@ -750,19 +780,28 @@ func (r *LibraryRepo) ListPaths(ctx context.Context) (map[string]bool, error) {
 // originating download's download_type when the item came from a real
 // download (LEFT JOIN downloads), falling back to "has a resolution ->
 // video, else audio" for imported files with no linked download.
-func (r *LibraryRepo) Stats(ctx context.Context) (videoCount, audioCount int, totalBytes int64, err error) {
+func (r *LibraryRepo) Stats(ctx context.Context) (videoCount, audioCount, videoGhostCount, audioGhostCount int, totalBytes int64, err error) {
 	row := r.db.QueryRowContext(ctx, `
+		WITH typed AS (
+			SELECT
+				l.status,
+				l.file_size_bytes,
+				COALESCE(l.media_type, d.download_type, CASE WHEN l.resolution IS NOT NULL THEN 'video' ELSE 'audio' END) AS media_type
+			FROM library l
+			LEFT JOIN downloads d ON d.id = l.download_id
+		)
 		SELECT
-			COALESCE(SUM(CASE WHEN COALESCE(d.download_type, CASE WHEN l.resolution IS NOT NULL THEN 'video' ELSE 'audio' END) = 'video' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN COALESCE(d.download_type, CASE WHEN l.resolution IS NOT NULL THEN 'video' ELSE 'audio' END) = 'audio' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(l.file_size_bytes), 0)
-		FROM library l
-		LEFT JOIN downloads d ON d.id = l.download_id`,
+			COALESCE(SUM(CASE WHEN media_type = 'video' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN media_type = 'audio' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN media_type = 'video' AND status = 'ghost' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN media_type = 'audio' AND status = 'ghost' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(file_size_bytes), 0)
+		FROM typed`,
 	)
-	if err = row.Scan(&videoCount, &audioCount, &totalBytes); err != nil {
-		return 0, 0, 0, fmt.Errorf("computing library stats: %w", err)
+	if err = row.Scan(&videoCount, &audioCount, &videoGhostCount, &audioGhostCount, &totalBytes); err != nil {
+		return 0, 0, 0, 0, 0, fmt.Errorf("computing library stats: %w", err)
 	}
-	return videoCount, audioCount, totalBytes, nil
+	return videoCount, audioCount, videoGhostCount, audioGhostCount, totalBytes, nil
 }
 
 // LibraryGrowthPoint is one calendar day's new-item tally for the
@@ -887,7 +926,7 @@ func checkRowsAffected(res sql.Result) error {
 
 const librarySelectPrefix = `
 	SELECT l.id, l.download_id, l.title, l.filename, l.path, l.collection_id, c.name, l.folder, l.original_url, l.video_id,
-	       l.uploader, l.duration, l.resolution, l.thumbnail, l.thumbnail_small_path, l.thumbnail_medium_path, l.description, l.artist_id, a.name, l.release_year, l.sequence_number, l.season_number, l.generate_nfo, l.downloaded_at, l.status, l.file_size_bytes,
+	       l.uploader, l.duration, l.resolution, l.media_type, l.thumbnail, l.thumbnail_small_path, l.thumbnail_medium_path, l.description, l.artist_id, a.name, l.release_year, l.sequence_number, l.season_number, l.generate_nfo, l.downloaded_at, l.status, l.file_size_bytes,
 	       l.playback_position_seconds, l.last_watched_at`
 
 const libraryFromClause = `
@@ -904,7 +943,7 @@ func scanLibraryItem(row rowScanner) (*models.LibraryItem, error) {
 
 	err := row.Scan(
 		&item.ID, &item.DownloadID, &item.Title, &item.Filename, &item.Path, &item.CollectionID, &item.CollectionName, &item.Folder,
-		&item.OriginalURL, &item.VideoID, &item.Uploader, &item.Duration, &item.Resolution, &item.Thumbnail, &item.ThumbnailSmallPath, &item.ThumbnailMediumPath,
+		&item.OriginalURL, &item.VideoID, &item.Uploader, &item.Duration, &item.Resolution, &item.MediaType, &item.Thumbnail, &item.ThumbnailSmallPath, &item.ThumbnailMediumPath,
 		&item.Description, &item.ArtistID, &item.ArtistName, &item.ReleaseYear, &item.SequenceNumber, &item.SeasonNumber, &item.GenerateNFO, &downloadedAt, &item.Status, &item.FileSizeBytes,
 		&item.PlaybackPositionSeconds, &lastWatchedAt,
 	)

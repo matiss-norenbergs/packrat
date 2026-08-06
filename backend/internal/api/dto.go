@@ -285,6 +285,7 @@ type LibraryItemResponse struct {
 	Uploader                *string  `json:"uploader"`
 	Duration                *int     `json:"duration"`
 	Resolution              *string  `json:"resolution"`
+	MediaType               *string  `json:"mediaType"`
 	Thumbnail               *string  `json:"thumbnail"`
 	ThumbnailSmallPath      *string  `json:"thumbnailSmallPath"`
 	ThumbnailMediumPath     *string  `json:"thumbnailMediumPath"`
@@ -358,6 +359,7 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 		Uploader:                item.Uploader,
 		Duration:                item.Duration,
 		Resolution:              item.Resolution,
+		MediaType:               item.MediaType,
 		Thumbnail:               item.Thumbnail,
 		ThumbnailSmallPath:      item.ThumbnailSmallPath,
 		ThumbnailMediumPath:     item.ThumbnailMediumPath,
@@ -437,6 +439,45 @@ type BulkDeleteResponse struct {
 type BulkDeleteLibraryItemsRequest struct {
 	ItemIDs     []int64 `json:"itemIds" binding:"required,min=1"`
 	DeleteFiles bool    `json:"deleteFiles"`
+}
+
+// BulkDeleteLibraryItemFilesRequest mirrors DeleteLibraryItemFile's
+// per-item semantics applied to a batch — see BulkDeleteLibraryItemFiles.
+type BulkDeleteLibraryItemFilesRequest struct {
+	ItemIDs         []int64 `json:"itemIds" binding:"required,min=1"`
+	DeleteThumbnail bool    `json:"deleteThumbnail"`
+}
+
+// BulkRedownloadLibraryItemsRequest is the "Download file(s)" bulk
+// operation's body — one enqueueRedownload call per item, from each item's
+// own OriginalURL. Items with no URL at all are silently skipped, same
+// convention as every other bulk operation here.
+type BulkRedownloadLibraryItemsRequest struct {
+	ItemIDs []int64 `json:"itemIds" binding:"required,min=1"`
+}
+
+// BulkFetchLibraryThumbnailsRequest is the "Download thumbnail(s)" bulk
+// operation's body — same URL-required, silently-skip-the-rest semantics as
+// BulkRedownloadLibraryItemsRequest.
+type BulkFetchLibraryThumbnailsRequest struct {
+	ItemIDs []int64 `json:"itemIds" binding:"required,min=1"`
+}
+
+// BulkRedownloadResponse reports how many items were actually queued for
+// download vs silently skipped (no source URL, item gone, or the queue
+// itself rejected the job).
+type BulkRedownloadResponse struct {
+	Queued  int `json:"queued"`
+	Skipped int `json:"skipped"`
+}
+
+// BulkFetchThumbnailsResponse reports how many items actually got a new
+// thumbnail vs silently skipped (no source URL, item gone, or the fetch
+// itself failed — thumbnail fetch is already best-effort per-item, see
+// fetchGhostThumbnail).
+type BulkFetchThumbnailsResponse struct {
+	Fetched int `json:"fetched"`
+	Skipped int `json:"skipped"`
 }
 
 // ThumbnailCandidateResponse is one of the 4 candidate frames returned by
@@ -562,6 +603,11 @@ type CollectionResponse struct {
 	// holds no items directly and its items live in unmarked children.
 	EffectiveIsPrivate bool `json:"effectiveIsPrivate"`
 	TotalItemCount     int  `json:"totalItemCount"`
+	// GhostItemCount/TotalGhostItemCount are the ghost (no-file placeholder)
+	// subset of ItemCount/TotalItemCount respectively — always <= their
+	// counterpart, same direct-vs-rolled-up scoping.
+	GhostItemCount      int `json:"ghostItemCount"`
+	TotalGhostItemCount int `json:"totalGhostItemCount"`
 	// SequenceGaps summarizes gaps in this collection's own items' sequence
 	// numbers (same direct-only scope as ItemCount). Nil when there's
 	// nothing to report — see LibraryRepo.SequenceGapsByCollection.
@@ -761,7 +807,7 @@ type UpdateSettingsRequest struct {
 	ResolutionThresholdHigh     *int      `json:"resolutionThresholdHigh" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
 }
 
-func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int, latestItemThumbnailPath *string, sequenceGap *SequenceGapResponse) CollectionResponse {
+func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int, ghostItemCount int, totalGhostItemCount int, latestItemThumbnailPath *string, sequenceGap *SequenceGapResponse) CollectionResponse {
 	return CollectionResponse{
 		ID:                      c.ID,
 		Name:                    c.Name,
@@ -784,6 +830,8 @@ func toCollectionResponse(c models.Collection, path string, itemCount int, effec
 		ItemCount:               itemCount,
 		EffectiveIsPrivate:      effectiveIsPrivate,
 		TotalItemCount:          totalItemCount,
+		GhostItemCount:          ghostItemCount,
+		TotalGhostItemCount:     totalGhostItemCount,
 		SequenceGaps:            sequenceGap,
 		LatestItemThumbnailPath: latestItemThumbnailPath,
 		JellyfinLibraryID:       c.JellyfinLibrary,
@@ -1014,6 +1062,23 @@ type ImportRequest struct {
 	OriginalURL *string `json:"originalUrl"`
 }
 
+// CreateGhostLibraryItemRequest creates a library item with no file yet —
+// see CreateGhostLibraryItem (ghost_handler.go). FetchThumbnail is only
+// honored when OriginalURL is also set.
+type CreateGhostLibraryItemRequest struct {
+	Title           string   `json:"title" binding:"required"`
+	MediaType       string   `json:"mediaType" binding:"required,oneof=video audio"`
+	OriginalURL     *string  `json:"originalUrl"`
+	CollectionID    *int64   `json:"collectionId"`
+	ArtistID        *int64   `json:"artistId"`
+	Year            *int     `json:"year"`
+	SeasonNumber    *int     `json:"seasonNumber"`
+	SequenceNumber  *int     `json:"sequenceNumber"`
+	GenerateNFO     bool     `json:"generateNfo"`
+	Tags            []string `json:"tags"`
+	FetchThumbnail  bool     `json:"fetchThumbnail"`
+}
+
 type BackupExportRequest struct {
 	Password *string `json:"password"` // empty/absent = unencrypted export
 }
@@ -1032,6 +1097,7 @@ type BackupImportLibraryResponse struct {
 	TagsCreated        int `json:"tagsCreated"`
 	ArtistsCreated     int `json:"artistsCreated"`
 	DownloadsQueued    int `json:"downloadsQueued"`
+	GhostsCreated      int `json:"ghostsCreated"`
 }
 
 type BackupHistoryResponse struct {
@@ -1095,7 +1161,12 @@ type StatsResponse struct {
 	CompletedToday    int   `json:"completedToday"`
 	LibraryVideoCount int   `json:"libraryVideoCount"`
 	LibraryAudioCount int   `json:"libraryAudioCount"`
-	TotalStorageBytes int64 `json:"totalStorageBytes"`
+	// Ghost (no-file placeholder) subset of the two counts above — always
+	// <= their counterpart. Lets the dashboard split each bar/legend entry
+	// by ghost vs real without a separate chart.
+	LibraryVideoGhostCount int   `json:"libraryVideoGhostCount"`
+	LibraryAudioGhostCount int   `json:"libraryAudioGhostCount"`
+	TotalStorageBytes      int64 `json:"totalStorageBytes"`
 	// DiskTotalBytes/DiskFreeBytes describe the filesystem underlying
 	// MediaRoot, not the whole host — 0 if the disk-usage lookup failed
 	// (unsupported filesystem, permissions, etc).

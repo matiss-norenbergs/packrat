@@ -65,6 +65,10 @@ func GenerateLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRep
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Generate NFO is not enabled for this item"})
 			return
 		}
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
+			return
+		}
 
 		if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, item); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

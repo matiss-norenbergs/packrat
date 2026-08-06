@@ -16,7 +16,7 @@ func GetStats(downloadsRepo *repository.DownloadsRepo, libraryRepo *repository.L
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		videoCount, audioCount, totalBytes, err := libraryRepo.Stats(c.Request.Context())
+		videoCount, audioCount, videoGhostCount, audioGhostCount, totalBytes, err := libraryRepo.Stats(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -35,9 +35,11 @@ func GetStats(downloadsRepo *repository.DownloadsRepo, libraryRepo *repository.L
 			ActiveDownloads:   active,
 			QueuedDownloads:   queued,
 			CompletedToday:    completedToday,
-			LibraryVideoCount: videoCount,
-			LibraryAudioCount: audioCount,
-			TotalStorageBytes: totalBytes,
+			LibraryVideoCount:      videoCount,
+			LibraryAudioCount:      audioCount,
+			LibraryVideoGhostCount: videoGhostCount,
+			LibraryAudioGhostCount: audioGhostCount,
+			TotalStorageBytes:      totalBytes,
 			DiskTotalBytes:    diskTotal,
 			DiskFreeBytes:     diskFree,
 		})

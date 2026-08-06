@@ -17,9 +17,10 @@ export function LibraryGrid() {
   const collectionId = searchParams.get("collection")
   const year = searchParams.get("year")
   const tagNames = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
+  const hideGhosts = searchParams.get("hideGhosts") === "true"
   const paginationEnabled = settings?.libraryPaginationEnabled ?? false
   const pageSize = settings?.libraryPageSize || 48
-  const hasFilters = Boolean(search || collectionId || year || tagNames.length > 0)
+  const hasFilters = Boolean(search || collectionId || year || tagNames.length > 0 || hideGhosts)
 
   // Reset to page 1 whenever a filter/search/sort changes underneath the
   // current page — otherwise "page 3" could point at nothing once the
@@ -27,13 +28,14 @@ export function LibraryGrid() {
   const tagsKey = tagNames.join(",")
   useEffect(() => {
     setPage(1)
-  }, [search, collectionId, year, tagsKey, sortKey, sortDir])
+  }, [search, collectionId, year, tagsKey, hideGhosts, sortKey, sortDir])
 
   const { data, isLoading, isError, error } = useLibraryQuery({
     q: search || undefined,
     collectionId: collectionId ? Number(collectionId) : undefined,
     year: year ? Number(year) : undefined,
     tags: tagNames.length > 0 ? tagNames : undefined,
+    hideGhosts: hideGhosts || undefined,
     sortKey,
     sortDir,
     page: paginationEnabled ? page : undefined,

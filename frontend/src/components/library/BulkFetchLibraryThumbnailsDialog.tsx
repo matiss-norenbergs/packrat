@@ -1,0 +1,112 @@
+import { useMemo } from "react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useCollections } from "@/hooks/useCollections"
+import { useBulkFetchLibraryThumbnails, useLibraryQuery } from "@/hooks/useLibrary"
+import { buildCollectionTree, collectDescendantIds, findNodeById } from "@/lib/collectionTree"
+import { LibraryItemPreviewRow } from "./LibraryItemPreviewRow"
+import { useSelection } from "./SelectionContext"
+import type { LibraryItem } from "@/types/api"
+
+// Mirrors BulkDeleteLibraryItemFilesDialog's file-preview cap.
+const MAX_VISIBLE_ITEMS = 20
+
+interface BulkFetchLibraryThumbnailsDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+// Fetches (and overwrites) a thumbnail from each selected item's source URL —
+// works the same whether the item has a downloaded file or is still a ghost,
+// since it only ever writes the ImagesRoot-relative tiers. Items without a
+// URL are filtered out of the affected list rather than blocking the batch;
+// the triggering menu item stays enabled regardless of selection.
+export function BulkFetchLibraryThumbnailsDialog({ open, onOpenChange }: BulkFetchLibraryThumbnailsDialogProps) {
+  const { selectedItems, selectedCollectionIds, clear } = useSelection()
+  const { data: collections } = useCollections()
+  const bulkFetchThumbnails = useBulkFetchLibraryThumbnails()
+
+  const collectionIdsToResolve = useMemo(() => {
+    if (selectedCollectionIds.size === 0 || !collections) return []
+    const tree = buildCollectionTree(collections)
+    const ids = new Set<number>()
+    for (const id of selectedCollectionIds) {
+      const node = findNodeById(tree, id)
+      if (node) for (const d of collectDescendantIds(node)) ids.add(d)
+    }
+    return [...ids]
+  }, [selectedCollectionIds, collections])
+
+  const { data: resolvedFromCollections, isLoading: resolving } = useLibraryQuery(
+    { collectionIds: collectionIdsToResolve },
+    open && collectionIdsToResolve.length > 0,
+  )
+
+  const affectedItems = useMemo(() => {
+    const byId = new Map<number, LibraryItem>(selectedItems)
+    for (const item of resolvedFromCollections?.items ?? []) byId.set(item.id, item)
+    return [...byId.values()].filter((item) => item.originalUrl)
+  }, [selectedItems, resolvedFromCollections])
+
+  const visibleItems = affectedItems.slice(0, MAX_VISIBLE_ITEMS)
+  const hiddenCount = affectedItems.length - visibleItems.length
+  const isLoading = collectionIdsToResolve.length > 0 && resolving
+
+  const handleFetch = () => {
+    bulkFetchThumbnails.mutate(
+      { itemIds: affectedItems.map((item) => item.id) },
+      {
+        onSuccess: () => {
+          clear()
+          onOpenChange(false)
+        },
+      },
+    )
+  }
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="sm:max-w-xl!">
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Download {isLoading ? "…" : affectedItems.length} thumbnail{affectedItems.length === 1 ? "" : "s"}?
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Fetches a fresh thumbnail from each item's saved source URL, overwriting its existing thumbnail if it has
+            one. Items in the selection with no source URL are excluded below and left untouched.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
+          {visibleItems.map((item) => (
+            <LibraryItemPreviewRow key={item.id} item={item} />
+          ))}
+          {hiddenCount > 0 && <p className="px-1 py-1 text-xs text-muted-foreground">+{hiddenCount} more</p>}
+          {!isLoading && affectedItems.length === 0 && (
+            <p className="px-1 py-1 text-xs text-muted-foreground">
+              No items with a source URL in this selection.
+            </p>
+          )}
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleFetch}
+            disabled={bulkFetchThumbnails.isPending || isLoading || affectedItems.length === 0}
+          >
+            {bulkFetchThumbnails.isPending ? "Fetching…" : "Download thumbnails"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}

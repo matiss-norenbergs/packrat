@@ -95,6 +95,10 @@ func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no source URL set for this item"})
 			return
 		}
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
+			return
+		}
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		dir := filepath.Dir(mediaAbs)
@@ -128,6 +132,11 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
 			return
 		}
 
@@ -180,6 +189,11 @@ func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.Lib
 			return
 		}
 
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
+			return
+		}
+
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		duration := resolveDuration(ctx, item.Duration, mediaAbs, ffprobePath)
 		timestamps := pickFrameTimestamps(duration, frameCount)
@@ -228,6 +242,11 @@ func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
 			return
 		}
 

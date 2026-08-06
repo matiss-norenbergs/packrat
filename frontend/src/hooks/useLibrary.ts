@@ -3,8 +3,13 @@ import { toast } from "sonner"
 import {
   acceptLibraryItemTrim,
   bulkAssignTags,
+  bulkDeleteLibraryItemFiles,
   bulkDeleteLibraryItems,
+  bulkFetchLibraryThumbnails,
+  bulkRedownloadLibraryItems,
+  createGhostLibraryItem,
   deleteLibraryItem,
+  deleteLibraryItemFile,
   deleteLibraryItemNFO,
   discardLibraryItemTrim,
   fetchLibrary,
@@ -30,7 +35,11 @@ import {
 } from "@/lib/api"
 import type {
   BulkAssignTagsRequest,
+  BulkDeleteLibraryItemFilesRequest,
   BulkDeleteLibraryItemsRequest,
+  BulkFetchLibraryThumbnailsRequest,
+  BulkRedownloadLibraryItemsRequest,
+  CreateGhostLibraryItemRequest,
   LibraryItem,
   LibraryListResponse,
   LibraryQueryParams,
@@ -89,6 +98,30 @@ export function useDeleteLibraryItem() {
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to delete: ${err.message}`),
+  })
+}
+
+export function useCreateGhostLibraryItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: CreateGhostLibraryItemRequest) => createGhostLibraryItem(payload),
+    onSuccess: () => {
+      toast.success("Item added")
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to add item: ${err.message}`),
+  })
+}
+
+export function useDeleteLibraryItemFile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, deleteThumbnail }: { id: number; deleteThumbnail: boolean }) => deleteLibraryItemFile(id, deleteThumbnail),
+    onSuccess: () => {
+      toast.success("File deleted")
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to delete file: ${err.message}`),
   })
 }
 
@@ -161,6 +194,42 @@ export function useBulkDeleteLibraryItems() {
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to delete: ${err.message}`),
+  })
+}
+
+export function useBulkDeleteLibraryItemFiles() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: BulkDeleteLibraryItemFilesRequest) => bulkDeleteLibraryItemFiles(payload),
+    onSuccess: (result) => {
+      toast.success(`Deleted ${result.deleted} ${result.deleted === 1 ? "file" : "files"}`)
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to delete: ${err.message}`),
+  })
+}
+
+export function useBulkRedownloadLibraryItems() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: BulkRedownloadLibraryItemsRequest) => bulkRedownloadLibraryItems(payload),
+    onSuccess: (result) => {
+      toast.success(`Queued ${result.queued} ${result.queued === 1 ? "download" : "downloads"}`)
+      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to queue downloads: ${err.message}`),
+  })
+}
+
+export function useBulkFetchLibraryThumbnails() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: BulkFetchLibraryThumbnailsRequest) => bulkFetchLibraryThumbnails(payload),
+    onSuccess: (result) => {
+      toast.success(`Fetched ${result.fetched} ${result.fetched === 1 ? "thumbnail" : "thumbnails"}`)
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to fetch thumbnails: ${err.message}`),
   })
 }
 

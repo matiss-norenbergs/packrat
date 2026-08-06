@@ -49,6 +49,12 @@ export function DashboardPage() {
                 <Stat label="Storage Used" value={formatBytes(stats.totalStorageBytes)} />
               </div>
             )}
+            {stats && stats.libraryVideoGhostCount + stats.libraryAudioGhostCount > 0 && (
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                {stats.libraryVideoGhostCount + stats.libraryAudioGhostCount} ghost{" "}
+                {stats.libraryVideoGhostCount + stats.libraryAudioGhostCount === 1 ? "item" : "items"}
+              </p>
+            )}
             <p className="mt-3 text-sm text-muted-foreground">
               See the <a href="/library" className="underline">Library</a> page for completed downloads.
             </p>

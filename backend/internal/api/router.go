@@ -96,11 +96,16 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.SettingsRepo, deps.MediaRoot))
 		api.GET("/library/facets", GetLibraryFacets(deps.LibraryRepo))
+		api.POST("/library/ghost", CreateGhostLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.ImagesRoot, deps.YtDlp, deps.TagsRepo))
+		api.DELETE("/library/:id/file", DeleteLibraryItemFile(deps.LibraryRepo, deps.MediaRoot))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
 		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo, deps.ArtistsRepo))
 		api.POST("/library/:id/progress", UpdateLibraryItemProgress(deps.LibraryRepo))
 		api.POST("/library/bulk-tags", BulkAssignTags(deps.LibraryRepo, deps.TagsRepo, deps.MediaRoot))
 		api.POST("/library/bulk-delete", BulkDeleteLibraryItems(deps.DB, deps.LibraryRepo, deps.MediaRoot))
+		api.POST("/library/bulk-delete-file", BulkDeleteLibraryItemFiles(deps.DB, deps.LibraryRepo, deps.MediaRoot))
+		api.POST("/library/bulk-redownload", BulkRedownloadLibraryItems(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
+		api.POST("/library/bulk-fetch-thumbnails", BulkFetchLibraryThumbnails(deps.LibraryRepo, deps.ImagesRoot, deps.YtDlp))
 		api.POST("/library/:id/move", MoveLibraryItem(deps.LibraryRepo, deps.Manager, deps.MediaRoot))
 		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.SettingsRepo, deps.MediaRoot))
 		api.GET("/library/:id/metadata-preview", CompareLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp))
@@ -161,7 +166,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/backup/export/library", ExportLibrary(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.DownloadsRepo))
 		api.POST("/backup/import/settings", ImportSettings(deps.SettingsRepo, deps.Manager))
 		api.POST("/backup/preview/library", PreviewLibraryImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
-		api.POST("/backup/import/library", ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.Manager, deps.SettingsRepo))
+		api.POST("/backup/import/library", ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.SettingsRepo))
 		api.GET("/backup/history", ListBackupHistory(deps.BackupHistoryRepo))
 		api.POST("/backup/run", RunManualBackup(backup.RunDeps{
 			BackupsRoot:       deps.BackupsRoot,

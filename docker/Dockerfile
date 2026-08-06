@@ -10,13 +10,16 @@ RUN npm run build
 
 # ---- Stage 2: backend build ----
 FROM golang:1-alpine AS backend-builder
+ARG VERSION=dev
 WORKDIR /app/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
 # CGO_ENABLED=0 works because modernc.org/sqlite is pure Go — no C toolchain
 # needed in this stage, and the resulting binary is statically linked.
-RUN CGO_ENABLED=0 GOOS=linux go build -o /packrat ./cmd/server
+# VERSION is passed from the release workflow's git tag; local `docker build`
+# without --build-arg VERSION leaves the binary reporting "dev".
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X packrat/backend/internal/version.Version=${VERSION}" -o /packrat ./cmd/server
 
 # ---- Stage 3: runtime ----
 FROM python:3.12-alpine AS runtime

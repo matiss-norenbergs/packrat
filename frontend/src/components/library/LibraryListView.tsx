@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { librarySmallThumbnailUrl } from "@/lib/api"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import type { LibrarySortKey } from "@/lib/libraryFilters"
@@ -41,20 +42,22 @@ export function LibraryListView() {
   const collectionId = searchParams.get("collection")
   const year = searchParams.get("year")
   const tagNames = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
+  const hideGhosts = searchParams.get("hideGhosts") === "true"
   const paginationEnabled = settings?.libraryPaginationEnabled ?? false
   const pageSize = settings?.libraryPageSize || 48
-  const hasFilters = Boolean(search || collectionId || year || tagNames.length > 0)
+  const hasFilters = Boolean(search || collectionId || year || tagNames.length > 0 || hideGhosts)
 
   const tagsKey = tagNames.join(",")
   useEffect(() => {
     setPage(1)
-  }, [search, collectionId, year, tagsKey, sortKey, sortDir])
+  }, [search, collectionId, year, tagsKey, hideGhosts, sortKey, sortDir])
 
   const { data, isLoading, isError, error } = useLibraryQuery({
     q: search || undefined,
     collectionId: collectionId ? Number(collectionId) : undefined,
     year: year ? Number(year) : undefined,
     tags: tagNames.length > 0 ? tagNames : undefined,
+    hideGhosts: hideGhosts || undefined,
     sortKey,
     sortDir,
     page: paginationEnabled ? page : undefined,
@@ -287,7 +290,7 @@ function LibraryListRow({
       )}
       <TableCell>
         <div className="relative aspect-video w-14 overflow-hidden rounded bg-muted">
-          {thumbUrl && (
+          {thumbUrl ? (
             <BlurredThumbnail
               src={thumbUrl}
               className="absolute inset-0 h-full w-full object-cover"
@@ -296,6 +299,8 @@ function LibraryListRow({
               onToggleReveal={selectionActive ? () => {} : onToggleReveal}
               interactive={!selectionActive}
             />
+          ) : (
+            <MediaTypePlaceholder mediaType={item.mediaType} iconClassName="h-4 w-4" />
           )}
         </div>
       </TableCell>

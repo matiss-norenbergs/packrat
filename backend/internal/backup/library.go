@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 
@@ -50,6 +51,17 @@ type LibraryItemEntry struct {
 	SequenceNumber *int     `json:"sequenceNumber,omitempty"`
 	SeasonNumber   *int     `json:"seasonNumber,omitempty"`
 	Tags           []string `json:"tags,omitempty"`
+	// Status is "ghost" for a placeholder item with no downloaded file, or
+	// omitted for a normal completed item — recreated as a ghost row
+	// directly on import instead of always being re-downloaded. Absent in
+	// bundles exported before this field existed, which ApplyLibraryBundle
+	// treats the same as "" (completed) — those older exports still import
+	// exactly as they always did.
+	Status string `json:"status,omitempty"`
+	// MediaType records a ghost item's video/audio type, since a ghost has
+	// no resolution/download-type signal to infer it from otherwise (see
+	// models.LibraryItem.MediaType). Only meaningful when Status is "ghost".
+	MediaType string `json:"mediaType,omitempty"`
 }
 
 type LibraryBundle struct {
@@ -149,7 +161,10 @@ func BuildLibraryBundle(
 	var filtered []models.LibraryItem
 	var ids []int64
 	for _, it := range items {
-		if it.OriginalURL != nil {
+		// A ghost item has no OriginalURL at all if it was never seeded from
+		// one — still worth exporting so it round-trips as a ghost, even
+		// though it can't be matched/redownloaded by URL like a normal item.
+		if it.OriginalURL != nil || it.Status == "ghost" {
 			filtered = append(filtered, it)
 			ids = append(ids, it.ID)
 		}
@@ -173,13 +188,21 @@ func BuildLibraryBundle(
 	for _, it := range filtered {
 		entry := LibraryItemEntry{
 			Title:          it.Title,
-			OriginalURL:    *it.OriginalURL,
 			Folder:         it.Folder,
 			Filename:       it.Filename,
 			Year:           it.ReleaseYear,
 			SequenceNumber: it.SequenceNumber,
 			SeasonNumber:   it.SeasonNumber,
 			Tags:           tagsByItem[it.ID],
+		}
+		if it.OriginalURL != nil {
+			entry.OriginalURL = *it.OriginalURL
+		}
+		if it.Status == "ghost" {
+			entry.Status = "ghost"
+			if it.MediaType != nil {
+				entry.MediaType = *it.MediaType
+			}
 		}
 		if it.ArtistName != nil {
 			entry.ArtistName = *it.ArtistName
@@ -227,6 +250,9 @@ type PreviewLibraryItem struct {
 	Quality          string   `json:"quality,omitempty"`
 	Year             *int     `json:"year,omitempty"`
 	AlreadyInLibrary bool     `json:"alreadyInLibrary"`
+	// IsGhost mirrors LibraryItemEntry.Status — true means this entry will be
+	// recreated as a placeholder (no download queued), not filled in.
+	IsGhost bool `json:"isGhost,omitempty"`
 }
 
 // LibraryBundlePreview is a read-only summary of what ApplyLibraryBundle
@@ -342,6 +368,7 @@ func PreviewLibraryBundle(
 			Quality:          item.Quality,
 			Year:             item.Year,
 			AlreadyInLibrary: alreadyInLibrary,
+			IsGhost:          item.Status == "ghost",
 		}
 		if alreadyInLibrary {
 			preview.AlreadyInLibrary++
@@ -375,6 +402,10 @@ type ApplyResult struct {
 	CollectionsEnsured int `json:"collectionsEnsured"`
 	TagsCreated        int `json:"tagsCreated"`
 	ArtistsCreated     int `json:"artistsCreated"`
+	// GhostsCreated counts entries with Status "ghost" — created directly as
+	// placeholder rows (see ApplyLibraryBundle), not included in the
+	// returned []ResolvedDownload since there's nothing to download for them.
+	GhostsCreated int `json:"ghostsCreated"`
 }
 
 // audioFormatFromExtension infers a download type/audio format from a
@@ -408,6 +439,7 @@ func ApplyLibraryBundle(
 	collectionsRepo *repository.CollectionsRepo,
 	tagsRepo *repository.TagsRepo,
 	artistsRepo *repository.ArtistsRepo,
+	libraryRepo *repository.LibraryRepo,
 	bundle LibraryBundle,
 ) ([]ResolvedDownload, ApplyResult, error) {
 	var result ApplyResult
@@ -421,6 +453,7 @@ func ApplyLibraryBundle(
 	collectionsRepo = collectionsRepo.WithTx(tx)
 	tagsRepo = tagsRepo.WithTx(tx)
 	artistsRepo = artistsRepo.WithTx(tx)
+	libraryRepo = libraryRepo.WithTx(tx)
 
 	if len(bundle.Tags) > 0 {
 		before, err := tagsRepo.List(ctx)
@@ -526,8 +559,59 @@ func ApplyLibraryBundle(
 		ensureCollection(bundle.Collections[i].Path, &bundle.Collections[i])
 	}
 
+	// Tag assignment for freshly created ghosts happens after commit, below
+	// — TagsRepo.SetForLibraryItem always opens its own subordinate
+	// transaction against the real *sql.DB (SQLite doesn't support nesting
+	// one inside another), so it can't run against this function's still-open tx.
+	type ghostTagAssignment struct {
+		id     int64
+		tagIDs []int64
+	}
+	var ghostTagAssignments []ghostTagAssignment
+
 	resolved := make([]ResolvedDownload, 0, len(bundle.LibraryItems))
 	for _, item := range bundle.LibraryItems {
+		if item.Status == "ghost" {
+			mediaType := item.MediaType
+			if mediaType == "" {
+				mediaType = "video" // defensive default — every ghost this app itself creates always sets one
+			}
+			ghost := models.LibraryItem{
+				Title:          item.Title,
+				Filename:       "",
+				Path:           "",
+				Status:         "ghost",
+				MediaType:      &mediaType,
+				CollectionID:   ensureCollection(item.CollectionPath, nil),
+				ReleaseYear:    item.Year,
+				SequenceNumber: item.SequenceNumber,
+				SeasonNumber:   item.SeasonNumber,
+			}
+			if item.OriginalURL != "" {
+				url := item.OriginalURL
+				ghost.OriginalURL = &url
+			}
+			if item.ArtistName != "" {
+				if id, ok := artistIDs[item.ArtistName]; ok {
+					ghost.ArtistID = &id
+				}
+			}
+			id, err := libraryRepo.Create(ctx, &ghost)
+			if err != nil {
+				log.Printf("backup import: creating ghost item %q: %v", item.Title, err)
+				continue
+			}
+			result.GhostsCreated++
+			if len(item.Tags) > 0 {
+				tagIDs, err := tagsRepo.GetOrCreateByNames(ctx, item.Tags)
+				if err != nil {
+					log.Printf("backup import: resolving tags for ghost item %q: %v", item.Title, err)
+				} else if len(tagIDs) > 0 {
+					ghostTagAssignments = append(ghostTagAssignments, ghostTagAssignment{id: id, tagIDs: tagIDs})
+				}
+			}
+			continue
+		}
 		if item.OriginalURL == "" {
 			continue
 		}
@@ -570,5 +654,16 @@ func ApplyLibraryBundle(
 	if err := tx.Commit(); err != nil {
 		return nil, result, fmt.Errorf("committing import transaction: %w", err)
 	}
+
+	// Only reachable after the ghost rows themselves are durably committed —
+	// SetForLibraryItem needs a real *sql.DB (see ghostTagAssignment's doc
+	// comment above), so this couldn't run any earlier. Best-effort: a
+	// failure here leaves the ghost item itself intact, just without tags.
+	for _, g := range ghostTagAssignments {
+		if err := tagsRepo.SetForLibraryItem(ctx, g.id, g.tagIDs); err != nil {
+			log.Printf("backup import: assigning tags to ghost item %d: %v", g.id, err)
+		}
+	}
+
 	return resolved, result, nil
 }

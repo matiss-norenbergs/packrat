@@ -78,8 +78,9 @@ export function useImportLibrary() {
     mutationFn: ({ data, password }: { data: string; password: string }) => importLibraryBackup(data, password),
     onSuccess: (result) => {
       toast.success(
-        `Queued ${result.downloadsQueued} download${result.downloadsQueued === 1 ? "" : "s"} — ` +
-          `${result.collectionsEnsured} collection${result.collectionsEnsured === 1 ? "" : "s"}, ` +
+        `Queued ${result.downloadsQueued} download${result.downloadsQueued === 1 ? "" : "s"}` +
+          (result.ghostsCreated > 0 ? `, restored ${result.ghostsCreated} ghost item${result.ghostsCreated === 1 ? "" : "s"}` : "") +
+          ` — ${result.collectionsEnsured} collection${result.collectionsEnsured === 1 ? "" : "s"}, ` +
           `${result.tagsCreated} new tag${result.tagsCreated === 1 ? "" : "s"}, ` +
           `${result.artistsCreated} new artist${result.artistsCreated === 1 ? "" : "s"}`,
       )

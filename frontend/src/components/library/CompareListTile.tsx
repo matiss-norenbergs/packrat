@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { cn, formatDuration, hashText } from "@/lib/utils"
 import { useRevealAll } from "./RevealAllContext"
@@ -46,7 +47,9 @@ export function CompareListTile({ item, selected, canSelect, onToggle, onRemove 
             onToggleReveal={() => {}}
             interactive={false}
           />
-        ) : null}
+        ) : (
+          <MediaTypePlaceholder mediaType={item.mediaType} />
+        )}
         <Checkbox
           checked={selected}
           disabled={disabled}

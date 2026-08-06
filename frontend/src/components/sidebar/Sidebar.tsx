@@ -22,6 +22,10 @@ import { useLogout } from "@/hooks/useAuth"
 import { useAppVersion, useYtDlpVersion } from "@/hooks/useSettings"
 import { NavItem } from "./NavItem"
 
+// Matches the backend's version.Repo (backend/internal/version/latest.go) —
+// only used here to build the "view release" link, not to query GitHub.
+const GITHUB_REPO = "matiss-norenbergs/packrat"
+
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/downloads", label: "Downloads", icon: Download },
@@ -81,7 +85,34 @@ function AppVersionLine() {
   const { data } = useAppVersion()
   if (!data) return null
 
-  return <div className="px-4 py-1 text-xs text-muted-foreground">Packrat v{data.version}</div>
+  const content = (
+    <>
+      <span>Packrat v{data.version}</span>
+      {data.updateAvailable && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          </TooltipTrigger>
+          <TooltipContent>Update available: v{data.latestVersion}</TooltipContent>
+        </Tooltip>
+      )}
+    </>
+  )
+
+  if (!data.updateAvailable) {
+    return <div className="flex items-center gap-1.5 px-4 py-1 text-xs text-muted-foreground">{content}</div>
+  }
+
+  return (
+    <a
+      href={`https://github.com/${GITHUB_REPO}/releases/latest`}
+      target="_blank"
+      rel="noreferrer"
+      className="flex items-center gap-1.5 px-4 py-1 text-xs text-muted-foreground hover:text-sidebar-foreground"
+    >
+      {content}
+    </a>
+  )
 }
 
 function VersionLine() {

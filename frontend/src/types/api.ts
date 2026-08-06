@@ -108,6 +108,10 @@ export interface Collection {
   // its own actually has any blurred content in its children.
   effectiveIsPrivate: boolean
   totalItemCount: number
+  // Ghost (no-file placeholder) subset of itemCount/totalItemCount — always
+  // <= its counterpart, same direct-vs-rolled-up scoping.
+  ghostItemCount: number
+  totalGhostItemCount: number
   // Gaps in this collection's own items' sequence numbers (same direct-only
   // scope as itemCount) — null when there are fewer than two sequence-
   // numbered items, or none at all missing between the smallest and largest.
@@ -166,6 +170,8 @@ export interface LibraryQueryParams {
   tags?: string[]
   /** true = only items eligible for "Continue Watching" (tracked position, past the barely-started floor, short of the credits-rolled ceiling) */
   inProgress?: boolean
+  /** true = exclude ghost (no-file placeholder) items; default/undefined = show everything, including ghosts */
+  hideGhosts?: boolean
   sortKey?: string
   sortDir?: string
   page?: number
@@ -194,6 +200,7 @@ export interface LibraryItem {
   uploader: string | null
   duration: number | null
   resolution: string | null
+  mediaType: "video" | "audio" | null
   thumbnail: string | null
   thumbnailSmallPath: string | null
   thumbnailMediumPath: string | null
@@ -294,6 +301,29 @@ export interface BulkDeleteLibraryItemsRequest {
   deleteFiles: boolean
 }
 
+export interface BulkDeleteLibraryItemFilesRequest {
+  itemIds: number[]
+  deleteThumbnail: boolean
+}
+
+export interface BulkRedownloadLibraryItemsRequest {
+  itemIds: number[]
+}
+
+export interface BulkRedownloadResponse {
+  queued: number
+  skipped: number
+}
+
+export interface BulkFetchLibraryThumbnailsRequest {
+  itemIds: number[]
+}
+
+export interface BulkFetchThumbnailsResponse {
+  fetched: number
+  skipped: number
+}
+
 export interface UpdateLibraryItemRequest {
   title?: string
   filename?: string
@@ -308,6 +338,23 @@ export interface UpdateLibraryItemRequest {
   generateNfo?: boolean
   originalUrl?: string
   tags?: string[]
+}
+
+// Creates a library item with no downloaded file yet — see
+// POST /library/ghost. fetchThumbnail is only honored when originalUrl is
+// also set.
+export interface CreateGhostLibraryItemRequest {
+  title: string
+  mediaType: "video" | "audio"
+  originalUrl?: string
+  collectionId?: number
+  artistId?: number
+  year?: number
+  seasonNumber?: number
+  sequenceNumber?: number
+  generateNfo?: boolean
+  tags?: string[]
+  fetchThumbnail?: boolean
 }
 
 export interface Tag {
@@ -423,6 +470,8 @@ export interface YtDlpVersionInfo {
 
 export interface AppVersion {
   version: string
+  latestVersion: string | null
+  updateAvailable: boolean
 }
 
 // Progress snapshot for the background image-derivative backfill (small/
@@ -634,6 +683,7 @@ export interface BackupImportLibraryResult {
   tagsCreated: number
   artistsCreated: number
   downloadsQueued: number
+  ghostsCreated: number
 }
 
 export interface PreviewCollectionEntry {
@@ -652,6 +702,7 @@ export interface PreviewLibraryItem {
   quality?: string
   year?: number
   alreadyInLibrary: boolean
+  isGhost?: boolean
 }
 
 export interface LibraryImportPreview {
@@ -671,6 +722,9 @@ export interface Stats {
   completedToday: number
   libraryVideoCount: number
   libraryAudioCount: number
+  // Ghost (no-file placeholder) subset of the two counts above.
+  libraryVideoGhostCount: number
+  libraryAudioGhostCount: number
   totalStorageBytes: number
   // Describe the filesystem underlying the server's media root, not the
   // whole host — 0/0 if the disk-usage lookup failed server-side.

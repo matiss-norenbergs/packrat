@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { librarySmallThumbnailUrl } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import type { LibraryItem } from "@/types/api"
@@ -20,7 +21,13 @@ export function BlurredItemThumbnail({ item, className }: BlurredItemThumbnailPr
   const [revealed, setRevealed] = useState(false)
   const thumbUrl = librarySmallThumbnailUrl(item)
 
-  if (!thumbUrl) return <div className={cn("shrink-0 rounded bg-muted", className)} />
+  if (!thumbUrl) {
+    return (
+      <div className={cn("shrink-0 overflow-hidden rounded bg-muted", className)}>
+        <MediaTypePlaceholder mediaType={item.mediaType} iconClassName="h-5 w-5" />
+      </div>
+    )
+  }
 
   return (
     <div className={cn("shrink-0 overflow-hidden rounded", className)}>

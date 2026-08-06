@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { ResolutionValue } from "@/components/ResolutionValue"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { useSettings } from "@/hooks/useSettings"
@@ -50,7 +51,9 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             onToggleReveal={selectionActive ? () => {} : toggleRevealItem}
             interactive={!selectionActive}
           />
-        ) : null}
+        ) : (
+          <MediaTypePlaceholder mediaType={item.mediaType} />
+        )}
         {mode === "manage" && (
           <Checkbox
             checked={selected}

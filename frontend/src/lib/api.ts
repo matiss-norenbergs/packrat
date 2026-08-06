@@ -11,9 +11,14 @@ import type {
   BackupImportLibraryResult,
   BackupImportSettingsResult,
   BulkAssignTagsRequest,
+  BulkDeleteLibraryItemFilesRequest,
   BulkDeleteLibraryItemsRequest,
   BulkDeleteRequest,
   BulkDeleteResponse,
+  BulkFetchLibraryThumbnailsRequest,
+  BulkFetchThumbnailsResponse,
+  BulkRedownloadLibraryItemsRequest,
+  BulkRedownloadResponse,
   ChangePasswordRequest,
   Collection,
   CollectionCoverCandidate,
@@ -21,6 +26,7 @@ import type {
   CreateBatchDownloadRequest,
   CreateCollectionRequest,
   CreateDownloadRequest,
+  CreateGhostLibraryItemRequest,
   CreatePlaylistDownloadRequest,
   Download,
   DownloadPreview,
@@ -171,6 +177,7 @@ export function fetchLibraryQuery(params: LibraryQueryParams): Promise<LibraryLi
   if (params.year != null) search.set("year", String(params.year))
   if (params.tags && params.tags.length > 0) search.set("tags", params.tags.join(","))
   if (params.inProgress) search.set("inProgress", "true")
+  if (params.hideGhosts) search.set("hideGhosts", "true")
   if (params.sortKey) search.set("sortKey", params.sortKey)
   if (params.sortDir) search.set("sortDir", params.sortDir)
   if (params.page != null) search.set("page", String(params.page))
@@ -228,6 +235,14 @@ export function deleteLibraryItem(id: number, deleteFiles: boolean): Promise<voi
   return request<void>(`/library/${id}?deleteFiles=${deleteFiles}`, { method: "DELETE" })
 }
 
+export function createGhostLibraryItem(payload: CreateGhostLibraryItemRequest): Promise<LibraryItem> {
+  return request<LibraryItem>("/library/ghost", { method: "POST", body: JSON.stringify(payload) })
+}
+
+export function deleteLibraryItemFile(id: number, deleteThumbnail: boolean): Promise<void> {
+  return request<void>(`/library/${id}/file?deleteThumbnail=${deleteThumbnail}`, { method: "DELETE" })
+}
+
 export function updateLibraryItem(id: number, payload: UpdateLibraryItemRequest): Promise<void> {
   return request<void>(`/library/${id}`, {
     method: "PATCH",
@@ -244,6 +259,29 @@ export function bulkAssignTags(payload: BulkAssignTagsRequest): Promise<void> {
 
 export function bulkDeleteLibraryItems(payload: BulkDeleteLibraryItemsRequest): Promise<BulkDeleteResponse> {
   return request<BulkDeleteResponse>("/library/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function bulkDeleteLibraryItemFiles(payload: BulkDeleteLibraryItemFilesRequest): Promise<BulkDeleteResponse> {
+  return request<BulkDeleteResponse>("/library/bulk-delete-file", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function bulkRedownloadLibraryItems(payload: BulkRedownloadLibraryItemsRequest): Promise<BulkRedownloadResponse> {
+  return request<BulkRedownloadResponse>("/library/bulk-redownload", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function bulkFetchLibraryThumbnails(
+  payload: BulkFetchLibraryThumbnailsRequest,
+): Promise<BulkFetchThumbnailsResponse> {
+  return request<BulkFetchThumbnailsResponse>("/library/bulk-fetch-thumbnails", {
     method: "POST",
     body: JSON.stringify(payload),
   })

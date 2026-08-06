@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
-import { Music, X } from "lucide-react"
+import { X } from "lucide-react"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useRevealAll } from "@/components/library/RevealAllContext"
@@ -47,9 +48,7 @@ export function BrowseTile({
             onToggleReveal={toggleReveal}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Music className="h-8 w-8 text-muted-foreground/40" />
-          </div>
+          <MediaTypePlaceholder mediaType={item.mediaType} />
         )}
         {unlocked && <Link to={`/browse/${item.id}`} className="absolute inset-0" aria-label={item.title} />}
         {onRemove && unlocked && (

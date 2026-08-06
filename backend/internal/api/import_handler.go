@@ -175,6 +175,10 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 		}
 
 		title := strings.TrimSuffix(filepath.Base(absPath), filepath.Ext(absPath))
+		mediaType := "audio"
+		if probe.Resolution != nil {
+			mediaType = "video"
+		}
 		item := models.LibraryItem{
 			Title:         title,
 			Filename:      filepath.Base(absPath),
@@ -184,6 +188,7 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 			OriginalURL:   req.OriginalURL,
 			Duration:      probe.DurationSeconds,
 			Resolution:    probe.Resolution,
+			MediaType:     &mediaType,
 			Thumbnail:     thumbRelPtr,
 			FileSizeBytes: &sizeBytes,
 			Status:        "completed",

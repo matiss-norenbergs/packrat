@@ -61,6 +61,7 @@ export function CollectionFolderTile({ node, onClick }: { node: CollectionTreeNo
           <div className="flex items-center gap-1">
             <p className="text-xs text-muted-foreground">
               {node.itemCount} {node.itemCount === 1 ? "file" : "files"}
+              {node.ghostItemCount > 0 && ` (${node.ghostItemCount} ghost)`}
             </p>
             {node.sequenceGaps && (
               <Popover open={gapPopoverOpen} onOpenChange={setGapPopoverOpen}>

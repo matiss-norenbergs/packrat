@@ -12,7 +12,22 @@ export function MediaTypeBreakdownChart() {
   const { data: stats, isLoading } = useStats()
 
   const total = stats ? stats.libraryVideoCount + stats.libraryAudioCount : 0
-  const data = stats ? [{ name: "Library", video: stats.libraryVideoCount, audio: stats.libraryAudioCount }] : []
+  // Ghost (no-file placeholder) items fold into the same Video/Audio bar
+  // segments rather than a separate series — a lighter shade of the same
+  // hue (not a new color) marks the ghost sub-portion, per the dataviz
+  // convention of secondary encoding for a sub-dimension split.
+  const hasGhosts = stats ? stats.libraryVideoGhostCount + stats.libraryAudioGhostCount > 0 : false
+  const data = stats
+    ? [
+        {
+          name: "Library",
+          videoReal: stats.libraryVideoCount - stats.libraryVideoGhostCount,
+          videoGhost: stats.libraryVideoGhostCount,
+          audioReal: stats.libraryAudioCount - stats.libraryAudioGhostCount,
+          audioGhost: stats.libraryAudioGhostCount,
+        },
+      ]
+    : []
 
   return (
     <Card>
@@ -32,7 +47,7 @@ export function MediaTypeBreakdownChart() {
                 <YAxis type="category" dataKey="name" hide />
                 <Tooltip content={<ChartTooltipContent />} cursor={{ fill: "var(--muted)" }} />
                 <Bar
-                  dataKey="video"
+                  dataKey="videoReal"
                   name="Video"
                   stackId="a"
                   fill="var(--chart-1)"
@@ -41,21 +56,54 @@ export function MediaTypeBreakdownChart() {
                   radius={[4, 0, 0, 4]}
                   barSize={28}
                 />
+                {hasGhosts && (
+                  <Bar
+                    dataKey="videoGhost"
+                    name="Video (ghost)"
+                    stackId="a"
+                    fill="var(--chart-1)"
+                    fillOpacity={0.35}
+                    stroke="var(--card)"
+                    strokeWidth={2}
+                    barSize={28}
+                  />
+                )}
                 <Bar
-                  dataKey="audio"
+                  dataKey="audioReal"
                   name="Audio"
                   stackId="a"
                   fill="var(--chart-2)"
                   stroke="var(--card)"
                   strokeWidth={2}
-                  radius={[0, 4, 4, 0]}
+                  radius={hasGhosts ? [0, 0, 0, 0] : [0, 4, 4, 0]}
                   barSize={28}
                 />
+                {hasGhosts && (
+                  <Bar
+                    dataKey="audioGhost"
+                    name="Audio (ghost)"
+                    stackId="a"
+                    fill="var(--chart-2)"
+                    fillOpacity={0.35}
+                    stroke="var(--card)"
+                    strokeWidth={2}
+                    radius={[0, 4, 4, 0]}
+                    barSize={28}
+                  />
+                )}
               </BarChart>
             </ResponsiveContainer>
-            <div className="flex items-center justify-center gap-6 text-sm">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm">
               <LegendEntry color="var(--chart-1)" label="Video" value={stats.libraryVideoCount} />
               <LegendEntry color="var(--chart-2)" label="Audio" value={stats.libraryAudioCount} />
+              {hasGhosts && (
+                <LegendEntry
+                  color="var(--muted-foreground)"
+                  opacity={0.35}
+                  label="Ghost items"
+                  value={stats.libraryVideoGhostCount + stats.libraryAudioGhostCount}
+                />
+              )}
             </div>
           </div>
         )}
@@ -64,10 +112,20 @@ export function MediaTypeBreakdownChart() {
   )
 }
 
-function LegendEntry({ color, label, value }: { color: string; label: string; value: number }) {
+function LegendEntry({
+  color,
+  label,
+  value,
+  opacity = 1,
+}: {
+  color: string
+  label: string
+  value: number
+  opacity?: number
+}) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color, opacity }} />
       <span className="text-muted-foreground">{label}</span>
       <span className="font-medium">{value}</span>
     </div>

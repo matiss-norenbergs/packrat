@@ -15,6 +15,7 @@ function makeItem(overrides: Partial<LibraryItem> & { id: number }): LibraryItem
     uploader: null,
     duration: null,
     resolution: null,
+    mediaType: null,
     thumbnail: null,
     thumbnailSmallPath: null,
     thumbnailMediumPath: null,

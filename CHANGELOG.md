@@ -12,8 +12,86 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-06
+
+- **Self-update checker for Packrat itself** — the sidebar now shows an
+  "Update available" indicator (same amber-dot treatment as the existing
+  yt-dlp checker) when a newer Packrat release exists on GitHub, linking out
+  to the release page. The running version is now embedded at build time
+  from the git tag instead of hand-edited, so it stays accurate automatically
+  once releases are tagged.
+- **Release pipeline**: a new `release.yml` CI workflow builds a multi-arch
+  (amd64 + arm64) Docker image and publishes it to GHCR plus a GitHub
+  Release whenever a `vX.Y.Z` tag is pushed.
+- **CI now builds the Docker image and runs `oxlint`** on every push/PR,
+  catching Dockerfile and lint regressions that `go build`/`tsc` alone
+  wouldn't.
+- **First-run setup screen**: added the legal disclaimer ("Only download
+  content you have the right to download.") and a password length hint
+  ("Must be at least 8 characters") so the 8-character minimum isn't a
+  surprise only discovered after submitting.
+
+## 2026-08-05
+
+- **Ghost items now survive a Backup export/import round trip** — previously
+  a placeholder item with no source URL was silently dropped from every
+  export (nothing to redownload it from), and one that did have a URL came
+  back from an import as a real downloaded item instead of the placeholder
+  it actually was. Both are now preserved as ghosts: the export carries a
+  status/media-type marker, and importing recreates the ghost row directly
+  (tags included) instead of queuing a download for it. Existing backup
+  files from before this change still import exactly as they always did —
+  the new fields are additive, so their absence just means "not a ghost,"
+  the only behavior those files ever had.
+- **Library toolbar: "Hide ghost items" filter** — a checkbox in Filters &
+  Sort excludes placeholder items from the grid/list/folder views, for
+  browsing a library the same way it'll look in Jellyfin (which never sees
+  ghosts). Off by default — ghosts still show inline like today unless
+  explicitly hidden. Folder/collection ghost counts are unaffected by this
+  filter, since they come from a separate endpoint.
+
 ## 2026-08-03
 
+- **Bulk "Download file(s)…" and "Download thumbnail(s)…"** — two more
+  Library toolbar bulk operations, alongside the existing bulk delete-file:
+  the first queues a redownload (same mechanism as the single-item "Download
+  now"/"Redownload") from each selected item's saved source URL; the second
+  fetches and overwrites each selected item's thumbnail from that same URL,
+  independent of whether the item has a file. Both work identically for
+  ghost and real items. Items without a source URL never disable the menu
+  option itself — they're just excluded from the confirm dialog's affected
+  list and left untouched, so a mixed selection doesn't need to be split by
+  hand first.
+- **Ghost item counts surfaced in the folder view and dashboard chart** — a
+  collection tile now reads "7 files (3 ghost)" when it has any placeholder
+  items directly in it (Library's folder view and the Collections page's
+  tree both show this); the Dashboard's Video vs Audio chart splits each
+  bar into a lighter-shade sub-segment for the ghost portion of that media
+  type instead of a separate chart, with a matching legend entry and a
+  "N ghost items" note under the Library stat card.
+- **Ghost (placeholder) library items + delete-file-only** — a new "Add
+  item" button on the Library page creates a placeholder entry with no
+  downloaded file yet, optionally seeded from a URL (fetches title/metadata
+  and, if checked, a thumbnail — never the actual video/audio). Ghost items
+  show a type-appropriate icon (film for video, note for audio) everywhere
+  a thumbnail would normally appear, and their actions menu hides
+  file-dependent actions (Move, Trim, NFO generation, frame-grab
+  thumbnails) while relabeling Redownload to "Download now" — the same
+  mechanism that fills in the real file once a URL is available, and that
+  also grabs a thumbnail automatically if the item didn't already have one
+  (a ghost created without "Fetch thumbnail" checked, for example) — yt-dlp
+  fetches one on every download regardless, so there's nothing to preserve
+  by discarding it. The reverse direction also shipped: an existing item's
+  actions menu gained
+  "Delete file…", which removes just the media file (optionally the
+  thumbnail too) to reclaim disk space while keeping the library entry,
+  tags, collection membership, and all other metadata — putting the item
+  into the same placeholder state a ghost item starts in. The Library
+  toolbar's bulk operations menu also gained a matching "Delete file…" for
+  applying this to a whole selection (or an entire selected
+  collection/folder) at once — one batched request server-side, same as
+  every other bulk action here, not one request per item; items already
+  without a file are silently skipped rather than failing the batch.
 - **Dashboard: resolution breakdown and storage charts** — a new bar chart
   shows how many library items fall into each standard resolution step
   (480p/720p/1080p/1440p/4K/8K, each item bucketed to its nearest step), and

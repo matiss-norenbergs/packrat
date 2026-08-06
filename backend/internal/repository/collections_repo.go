@@ -154,6 +154,29 @@ func (r *CollectionsRepo) ItemCounts(ctx context.Context) (map[int64]int, error)
 	return counts, rows.Err()
 }
 
+// GhostItemCounts mirrors ItemCounts but scoped to ghost (no-file
+// placeholder) items only — used to render "N files (M ghost)" alongside
+// the plain ItemCounts total.
+func (r *CollectionsRepo) GhostItemCounts(ctx context.Context) (map[int64]int, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT collection_id, COUNT(*) FROM library WHERE collection_id IS NOT NULL AND status = 'ghost' GROUP BY collection_id`)
+	if err != nil {
+		return nil, fmt.Errorf("counting collection ghost items: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[int64]int)
+	for rows.Next() {
+		var id int64
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, fmt.Errorf("scanning collection ghost item count: %w", err)
+		}
+		counts[id] = n
+	}
+	return counts, rows.Err()
+}
+
 // Update overwrites name/root_path/default_quality/default_download_type/
 // filename_template/is_private/jellyfin_library/season_number/artist_id/
 // browse_as_show for id. Callers apply partial-update semantics before

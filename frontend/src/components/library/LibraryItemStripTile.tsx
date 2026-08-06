@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { librarySmallThumbnailUrl } from "@/lib/api"
 import { formatDuration, hashText } from "@/lib/utils"
 import { useRevealAll } from "./RevealAllContext"
@@ -41,7 +42,9 @@ export function LibraryItemStripTile({
             revealed={revealed}
             onToggleReveal={toggleReveal}
           />
-        ) : null}
+        ) : (
+          <MediaTypePlaceholder mediaType={item.mediaType} />
+        )}
         {!effectiveBlurred || revealed ? (
           <Link to={`${basePath}/${item.id}`} state={{ from: backTo }} className="absolute inset-0" aria-label={item.title} />
         ) : null}

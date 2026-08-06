@@ -38,6 +38,7 @@ export function LibraryFolderView() {
   const sortKey = settings?.librarySortKey || "downloadedAt"
   const sortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
   const tagNames = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
+  const hideGhosts = searchParams.get("hideGhosts") === "true"
   const paginationEnabled = settings?.libraryPaginationEnabled ?? false
   const pageSize = settings?.libraryPageSize || 48
 
@@ -46,7 +47,7 @@ export function LibraryFolderView() {
   const tagsKey = tagNames.join(",")
   useEffect(() => {
     setPage(1)
-  }, [currentId, search, tagsKey, sortKey, sortDir])
+  }, [currentId, search, tagsKey, hideGhosts, sortKey, sortDir])
 
   const {
     data,
@@ -57,6 +58,7 @@ export function LibraryFolderView() {
     collectionId: currentId, // null = uncategorized-only (root); number = this folder only
     q: search || undefined,
     tags: tagNames.length > 0 ? tagNames : undefined,
+    hideGhosts: hideGhosts || undefined,
     sortKey,
     sortDir,
     page: paginationEnabled ? page : undefined,

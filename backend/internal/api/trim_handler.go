@@ -48,6 +48,11 @@ func GetLibraryItemTrimFrames(repo *repository.LibraryRepo, mediaRoot string, yt
 			return
 		}
 
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
+			return
+		}
+
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		frames, err := ytdlp.ExtractFrameRange(c.Request.Context(), ffprobePath, mediaAbs, start, end)
 		if err != nil {
@@ -93,6 +98,11 @@ func PreviewLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot string, ytdl
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
 			return
 		}
 
@@ -156,6 +166,11 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
 			return
 		}
 

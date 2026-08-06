@@ -38,7 +38,8 @@ export function LibraryImportPreviewDialog({
 
   if (!preview) return null
 
-  const newDownloads = preview.items.length - preview.alreadyInLibrary
+  const ghostCount = preview.items.filter((item) => item.isGhost).length
+  const newDownloads = preview.items.length - preview.alreadyInLibrary - ghostCount
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -64,6 +65,7 @@ export function LibraryImportPreviewDialog({
           <span>
             <span className="font-medium text-foreground">{preview.items.length}</span> items —{" "}
             <span className="font-medium text-foreground">{newDownloads}</span> will be queued
+            {ghostCount > 0 && `, ${ghostCount} restored as ghost items`}
             {preview.alreadyInLibrary > 0 && `, ${preview.alreadyInLibrary} already in your library`}
           </span>
         </div>
@@ -107,7 +109,7 @@ function PreviewItemRow({ item }: { item: PreviewLibraryItem }) {
     <div className="flex items-start justify-between gap-3 rounded-md border p-2">
       <div className="min-w-0 flex-1 space-y-1">
         <p className="truncate text-sm font-medium">{item.title || item.originalUrl}</p>
-        <p className="truncate text-xs text-muted-foreground">{item.originalUrl}</p>
+        {item.originalUrl && <p className="truncate text-xs text-muted-foreground">{item.originalUrl}</p>}
         <div className="flex flex-wrap items-center gap-1">
           <Badge variant="outline">
             {item.collectionPath && item.collectionPath.length > 0 ? item.collectionPath.join(" / ") : "Uncategorized"}
@@ -120,11 +122,10 @@ function PreviewItemRow({ item }: { item: PreviewLibraryItem }) {
           ))}
         </div>
       </div>
-      {item.alreadyInLibrary && (
-        <Badge variant="secondary" className="shrink-0">
-          Already in library
-        </Badge>
-      )}
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        {item.isGhost && <Badge variant="outline">Ghost</Badge>}
+        {item.alreadyInLibrary && <Badge variant="secondary">Already in library</Badge>}
+      </div>
     </div>
   )
 }

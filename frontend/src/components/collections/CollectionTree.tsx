@@ -154,7 +154,10 @@ function CollectionNode({
             )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <Badge variant="outline">{node.itemCount} {node.itemCount === 1 ? "file" : "files"}</Badge>
+            <Badge variant="outline">
+              {node.itemCount} {node.itemCount === 1 ? "file" : "files"}
+              {node.ghostItemCount > 0 && ` (${node.ghostItemCount} ghost)`}
+            </Badge>
           </div>
         </div>
 

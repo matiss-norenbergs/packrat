@@ -192,21 +192,22 @@ func PreviewLibraryImport(collectionsRepo *repository.CollectionsRepo, tagsRepo 
 }
 
 // ImportLibrary merges a previously-exported library bundle into the local
-// database (see backup.ApplyLibraryBundle) and re-queues a download for
-// every resolved item — the same enqueueDownload helper CreateDownload and
-// RedownloadLibraryItem use, applying the same default-download-type
-// fallback RetryHistoryItem/RedownloadLibraryItem already use when the
-// export didn't carry a type (its originating Download row was gone).
-// Each item is enqueued independently and best-effort — one bad URL/folder
-// doesn't abort the rest of the import.
-func ImportLibrary(db *sql.DB, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, mgr *queue.DownloadManager, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
+// database (see backup.ApplyLibraryBundle). Ghost (placeholder, no-file)
+// entries are recreated directly as ghosts, nothing queued for them; every
+// other resolved item gets a redownload queued — the same enqueueDownload
+// helper CreateDownload and RedownloadLibraryItem use, applying the same
+// default-download-type fallback RetryHistoryItem/RedownloadLibraryItem
+// already use when the export didn't carry a type (its originating Download
+// row was gone). Each item is enqueued independently and best-effort — one
+// bad URL/folder doesn't abort the rest of the import.
+func ImportLibrary(db *sql.DB, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, libraryRepo *repository.LibraryRepo, mgr *queue.DownloadManager, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		bundle, ok := decodeLibraryBundle(c)
 		if !ok {
 			return
 		}
 
-		resolved, result, err := backup.ApplyLibraryBundle(c.Request.Context(), db, collectionsRepo, tagsRepo, artistsRepo, bundle)
+		resolved, result, err := backup.ApplyLibraryBundle(c.Request.Context(), db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, bundle)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -221,6 +222,7 @@ func ImportLibrary(db *sql.DB, collectionsRepo *repository.CollectionsRepo, tags
 			CollectionsEnsured: result.CollectionsEnsured,
 			TagsCreated:        result.TagsCreated,
 			ArtistsCreated:     result.ArtistsCreated,
+			GhostsCreated:      result.GhostsCreated,
 		}
 		for _, r := range resolved {
 			downloadType := r.DownloadType

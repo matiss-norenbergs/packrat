@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   List,
   Pencil,
+  Plus,
   Search,
   Settings,
   SlidersHorizontal,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -45,10 +47,14 @@ import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import { sortCollectionsByPath } from "@/lib/collectionTree"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
+import { AddGhostLibraryItemDialog } from "./AddGhostLibraryItemDialog"
 import { AddToCompareListDialog } from "./AddToCompareListDialog"
 import { BulkAssignTagsDialog } from "./BulkAssignTagsDialog"
+import { BulkDeleteLibraryItemFilesDialog } from "./BulkDeleteLibraryItemFilesDialog"
 import { BulkDeleteLibraryItemsDialog } from "./BulkDeleteLibraryItemsDialog"
 import { BulkEditLibraryItemsDialog } from "./BulkEditLibraryItemsDialog"
+import { BulkFetchLibraryThumbnailsDialog } from "./BulkFetchLibraryThumbnailsDialog"
+import { BulkRedownloadLibraryItemsDialog } from "./BulkRedownloadLibraryItemsDialog"
 import { BulkSetArtistDialog } from "./BulkSetArtistDialog"
 import { BulkSetGenerateNfoDialog } from "./BulkSetGenerateNfoDialog"
 import { BulkSetYearDialog } from "./BulkSetYearDialog"
@@ -93,8 +99,12 @@ export function LibraryToolbar() {
   const [bulkYearOpen, setBulkYearOpen] = useState(false)
   const [bulkNfoOpen, setBulkNfoOpen] = useState(false)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [bulkDeleteFileOpen, setBulkDeleteFileOpen] = useState(false)
+  const [bulkRedownloadOpen, setBulkRedownloadOpen] = useState(false)
+  const [bulkFetchThumbnailsOpen, setBulkFetchThumbnailsOpen] = useState(false)
   const [editSequenceOpen, setEditSequenceOpen] = useState(false)
   const [addToCompareOpen, setAddToCompareOpen] = useState(false)
+  const [addGhostOpen, setAddGhostOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
   // Draft copies of Mode/View/Pagination — same draft-then-Apply idiom as
@@ -112,6 +122,7 @@ export function LibraryToolbar() {
   const [draftCollectionId, setDraftCollectionId] = useState(NONE)
   const [draftYear, setDraftYear] = useState(NONE)
   const [draftTags, setDraftTags] = useState<string[]>([])
+  const [draftHideGhosts, setDraftHideGhosts] = useState(false)
 
   const view =
     settings?.libraryView === "folders" ? "folders" : settings?.libraryView === "list" ? "list" : "grid"
@@ -139,13 +150,15 @@ export function LibraryToolbar() {
   const collectionId = searchParams.get("collection") ?? NONE
   const year = searchParams.get("year") ?? NONE
   const selectedTags = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
+  const hideGhosts = searchParams.get("hideGhosts") === "true"
   const paginationEnabled = settings?.libraryPaginationEnabled ?? false
   const pageSize = settings?.libraryPageSize || 48
 
   const years = facets?.years ?? []
   // Sort isn't counted here — it always has a value, so it wouldn't make a
   // meaningful "N active" indicator the way an unset-by-default filter does.
-  const activeFilterCount = (collectionId !== NONE ? 1 : 0) + (year !== NONE ? 1 : 0) + selectedTags.length
+  const activeFilterCount =
+    (collectionId !== NONE ? 1 : 0) + (year !== NONE ? 1 : 0) + selectedTags.length + (hideGhosts ? 1 : 0)
 
   const update = (key: string, value: string | null) => {
     const next = new URLSearchParams(searchParams)
@@ -213,6 +226,7 @@ export function LibraryToolbar() {
     setDraftCollectionId(collectionId)
     setDraftYear(year)
     setDraftTags(selectedTags)
+    setDraftHideGhosts(hideGhosts)
     setFiltersOpen(true)
   }
 
@@ -229,6 +243,7 @@ export function LibraryToolbar() {
       ["collection", draftCollectionId],
       ["year", draftYear],
       ["tags", draftTags.join(",")],
+      ["hideGhosts", draftHideGhosts ? "true" : ""],
     ] as const) {
       if (value === "" || value === NONE) next.delete(key)
       else next.set(key, value)
@@ -278,6 +293,12 @@ export function LibraryToolbar() {
           </span>
         )}
       </Button>
+
+      <Button variant="outline" onClick={() => setAddGhostOpen(true)}>
+        <Plus className="h-4 w-4" />
+        Add item
+      </Button>
+      <AddGhostLibraryItemDialog open={addGhostOpen} onOpenChange={setAddGhostOpen} />
 
       {settings?.privacyEnabled && (
         <Tooltip>
@@ -421,6 +442,14 @@ export function LibraryToolbar() {
             <DropdownMenuItem onSelect={() => setEditSequenceOpen(true)}>Edit sequence…</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setAddToCompareOpen(true)}>Add to compare list…</DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setBulkRedownloadOpen(true)}>Download file(s)…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkFetchThumbnailsOpen(true)}>
+              Download thumbnail(s)…
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => setBulkDeleteFileOpen(true)}>
+              Delete file…
+            </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onSelect={() => setBulkDeleteOpen(true)}>
               Delete selected…
             </DropdownMenuItem>
@@ -431,6 +460,9 @@ export function LibraryToolbar() {
         <BulkSetArtistDialog open={bulkArtistOpen} onOpenChange={setBulkArtistOpen} />
         <BulkSetYearDialog open={bulkYearOpen} onOpenChange={setBulkYearOpen} />
         <BulkSetGenerateNfoDialog open={bulkNfoOpen} onOpenChange={setBulkNfoOpen} />
+        <BulkRedownloadLibraryItemsDialog open={bulkRedownloadOpen} onOpenChange={setBulkRedownloadOpen} />
+        <BulkFetchLibraryThumbnailsDialog open={bulkFetchThumbnailsOpen} onOpenChange={setBulkFetchThumbnailsOpen} />
+        <BulkDeleteLibraryItemFilesDialog open={bulkDeleteFileOpen} onOpenChange={setBulkDeleteFileOpen} />
         <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
         <EditSequenceDialog open={editSequenceOpen} onOpenChange={setEditSequenceOpen} />
         <AddToCompareListDialog open={addToCompareOpen} onOpenChange={setAddToCompareOpen} />
@@ -563,6 +595,17 @@ export function LibraryToolbar() {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Checkbox
+              id="library-filters-hide-ghosts"
+              checked={draftHideGhosts}
+              onCheckedChange={(v) => setDraftHideGhosts(v === true)}
+            />
+            <Label htmlFor="library-filters-hide-ghosts" className="font-normal">
+              Hide ghost items
+            </Label>
           </div>
         </div>
         <DialogFooter>

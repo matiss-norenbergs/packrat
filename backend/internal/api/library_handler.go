@@ -103,6 +103,7 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 			q.Tags = strings.Split(v, ",")
 		}
 		q.InProgress = c.Query("inProgress") == "true"
+		q.HideGhosts = c.Query("hideGhosts") == "true"
 		if v := c.Query("page"); v != "" {
 			page, err := strconv.Atoi(v)
 			if err != nil || page < 1 {
@@ -386,6 +387,10 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 		}
 
 		if req.Filename != nil {
+			if item.Path == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file to rename"})
+				return
+			}
 			newBase := fsutil.SanitizeFilename(*req.Filename)
 			if newBase == "" {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid filename"})
@@ -454,7 +459,7 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			}
 		}
 
-		if req.Title != nil || req.ArtistID != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil {
+		if (req.Title != nil || req.ArtistID != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil) && item.Path != "" {
 			title := item.Title
 			if req.Title != nil {
 				title = *req.Title
@@ -527,7 +532,7 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 		// save itself already succeeded.
 		nfoRelevant := req.Title != nil || req.Description != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil || req.Tags != nil ||
 			(req.GenerateNFO != nil && *req.GenerateNFO)
-		if nfoRelevant {
+		if nfoRelevant && item.Path != "" {
 			if updated, err := repo.Get(c.Request.Context(), id); err == nil && updated.GenerateNFO {
 				if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, updated); err != nil {
 					log.Printf("library: writing nfo for %d failed: %v", id, err)
@@ -566,7 +571,7 @@ func BulkAssignTags(repo *repository.LibraryRepo, tagsRepo *repository.TagsRepo,
 		// UpdateLibraryItem's nfoRelevant block — best effort, log-only.
 		for _, id := range req.ItemIDs {
 			item, err := repo.Get(c.Request.Context(), id)
-			if err != nil || !item.GenerateNFO {
+			if err != nil || !item.GenerateNFO || item.Path == "" {
 				continue
 			}
 			if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, item); err != nil {
@@ -601,6 +606,11 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file to move"})
 			return
 		}
 
@@ -732,7 +742,7 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 			}
 		}
 
-		if updated.GenerateNFO {
+		if updated.GenerateNFO && updated.Path != "" {
 			if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, updated); err != nil {
 				log.Printf("library: writing nfo for %d failed: %v", id, err)
 			}
@@ -772,6 +782,11 @@ func ProbeLibraryItemMetadata(repo *repository.LibraryRepo, mediaRoot, ffprobePa
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
 			return
 		}
 
@@ -861,6 +876,51 @@ func RedownloadLibraryItem(libraryRepo *repository.LibraryRepo, downloadsRepo *r
 			return
 		}
 		c.JSON(http.StatusCreated, gin.H{"id": newID})
+	}
+}
+
+// BulkRedownloadLibraryItems is the Library toolbar's bulk "Download
+// file(s)" operation — one enqueueRedownload call per selected item, from
+// each item's own OriginalURL, at the same resolution/duration-only
+// overwrite scope as the single-item RedownloadLibraryItem. Items with no
+// URL at all (never had one, e.g. a ghost created without one) are silently
+// skipped rather than failing the batch, matching this app's other bulk
+// operations — and so is any item whose enqueue attempt itself fails (e.g.
+// a duplicate-URL conflict), since the whole point of a bulk action is that
+// one bad item shouldn't block the rest.
+func BulkRedownloadLibraryItems(libraryRepo *repository.LibraryRepo, downloadsRepo *repository.DownloadsRepo, mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		var req BulkRedownloadLibraryItemsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var resp BulkRedownloadResponse
+		for _, id := range req.ItemIDs {
+			item, err := libraryRepo.Get(ctx, id)
+			if err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					resp.Skipped++
+					continue
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			if item.OriginalURL == nil {
+				resp.Skipped++
+				continue
+			}
+
+			if _, err := enqueueRedownload(ctx, mgr, downloadsRepo, collectionsRepo, settingsRepo, item, *item.OriginalURL, []string{"resolution", "duration"}); err != nil {
+				log.Printf("bulk redownload: item %d: %v", id, err)
+				resp.Skipped++
+				continue
+			}
+			resp.Queued++
+		}
+		c.JSON(http.StatusOK, resp)
 	}
 }
 

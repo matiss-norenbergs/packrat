@@ -575,6 +575,7 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 	uploader := meta.Uploader
 	videoID := meta.ID
 	description := meta.Description
+	mediaType := d.DownloadType
 
 	return &models.LibraryItem{
 		DownloadID:     &downloadID,
@@ -588,6 +589,7 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 		Uploader:       &uploader,
 		Duration:       &duration,
 		Resolution:     resolution,
+		MediaType:      &mediaType,
 		Thumbnail:      thumbRelPtr,
 		Description:    &description,
 		ArtistID:       d.OverrideArtistID,
@@ -643,8 +645,15 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 	}
 
 	newExt := filepath.Ext(result.FinalPath)
-	oldExt := filepath.Ext(target.Filename)
-	newFilename := fsutil.SanitizeFilename(strings.TrimSuffix(target.Filename, oldExt) + newExt)
+	// target.Filename is "" for a ghost item being filled in for the first
+	// time (no prior file to derive a base name from) — fall back to the
+	// effective title, same source a fresh download's own filename would
+	// come from.
+	base := effectiveTitle
+	if target.Filename != "" {
+		base = strings.TrimSuffix(target.Filename, filepath.Ext(target.Filename))
+	}
+	newFilename := fsutil.SanitizeFilename(base + newExt)
 	newPath := filepath.Join(destDir, newFilename)
 	tmpThumbPath := thumbnailPathFor(result.FinalPath)
 
@@ -656,7 +665,9 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 	// Extension changed (source now merges to a different container) —
 	// the old file is now orphaned at its old name; best-effort cleanup,
 	// same convention as the thumbnail-derivative error handling below.
-	if newFilename != target.Filename {
+	// target.Path == "" means there was no prior file to begin with (the
+	// ghost-fill-in case) — nothing to clean up.
+	if newFilename != target.Filename && target.Path != "" {
 		oldAbsPath := filepath.Join(m.mediaRoot, filepath.FromSlash(target.Path))
 		if err := os.Remove(oldAbsPath); err != nil && !os.IsNotExist(err) {
 			log.Printf("queue: removing stale redownloaded file %s failed: %v", oldAbsPath, err)
@@ -712,11 +723,14 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 		log.Printf("queue: applying redownload for library item %d failed: %v", targetID, err)
 	}
 
-	// Thumbnail: only swap + regenerate derivative tiers if explicitly
-	// requested — yt-dlp fetches one unconditionally (--write-thumbnail is
-	// always on, see BuildArgs), but it's discarded unused otherwise, and
+	// Thumbnail: swap + regenerate derivative tiers if explicitly requested,
+	// or if the item has no thumbnail at all yet (most commonly a ghost item
+	// being filled in for the first time — nothing to preserve, so there's
+	// no reason to discard the one yt-dlp already fetched unconditionally,
+	// see BuildArgs' --write-thumbnail). Otherwise it's discarded unused and
 	// the item's existing thumbnail/tiers are left completely alone.
-	if overwrite["thumbnail"] {
+	hasExistingThumbnail := target.Thumbnail != nil || target.ThumbnailSmallPath != nil
+	if overwrite["thumbnail"] || !hasExistingThumbnail {
 		if _, err := os.Stat(tmpThumbPath); err == nil {
 			newThumbPath := thumbnailPathFor(newPath)
 			var oldThumbAbs string

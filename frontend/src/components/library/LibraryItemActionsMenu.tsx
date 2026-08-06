@@ -2,6 +2,8 @@ import { useState } from "react"
 import { MoreVertical } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
+  useDeleteLibraryItemFile,
   useDeleteLibraryItemNFO,
   useGenerateLibraryItemNFO,
   useQuickGrabLibraryThumbnail,
@@ -54,6 +57,8 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [thumbnailPickerOpen, setThumbnailPickerOpen] = useState(false)
   const [nfoContentOpen, setNfoContentOpen] = useState(false)
   const [deleteNfoWarningOpen, setDeleteNfoWarningOpen] = useState(false)
+  const [deleteFileWarningOpen, setDeleteFileWarningOpen] = useState(false)
+  const [deleteFileAlsoThumbnail, setDeleteFileAlsoThumbnail] = useState(false)
 
   const refreshMetadata = useRefreshLibraryItemMetadata()
   const redownload = useRedownloadLibraryItem()
@@ -61,8 +66,14 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const quickGrabThumbnail = useQuickGrabLibraryThumbnail()
   const generateNfo = useGenerateLibraryItemNFO()
   const deleteNfo = useDeleteLibraryItemNFO()
+  const deleteFile = useDeleteLibraryItemFile()
 
   const hasUrl = !!item.originalUrl
+  // A ghost item has no downloaded file yet — file-dependent actions (Move,
+  // Trim, NFO generation, frame-grab thumbnails) are hidden rather than
+  // disabled, since there's nothing to explain via a tooltip; "Redownload"
+  // doubles as the "fill this in" action, so it's relabeled instead.
+  const isGhost = item.status === "ghost"
 
   const handleCopyUrl = () => {
     if (!item.originalUrl) return
@@ -82,8 +93,8 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => setEditOpen(true)}>Edit</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setMoveOpen(true)}>Move</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setTrimOpen(true)}>Trim…</DropdownMenuItem>
+          {!isGhost && <DropdownMenuItem onClick={() => setMoveOpen(true)}>Move</DropdownMenuItem>}
+          {!isGhost && <DropdownMenuItem onClick={() => setTrimOpen(true)}>Trim…</DropdownMenuItem>}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleCopyUrl} disabled={!hasUrl}>
             Copy URL
@@ -103,7 +114,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
             <DropdownMenuSubTrigger>Redownload</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuItem onClick={() => setRedownloadWarningOpen(true)} disabled={!hasUrl}>
-                From Current URL
+                {isGhost ? "Download now" : "From Current URL"}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setRedownloadFromUrlOpen(true)}>From Different URL…</DropdownMenuItem>
             </DropdownMenuSubContent>
@@ -112,9 +123,11 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>NFO</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => generateNfo.mutate(item.id)} disabled={!item.generateNfo}>
-                Generate Now
-              </DropdownMenuItem>
+              {!isGhost && (
+                <DropdownMenuItem onClick={() => generateNfo.mutate(item.id)} disabled={!item.generateNfo}>
+                  Generate Now
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => setNfoContentOpen(true)} disabled={!item.nfoExists}>
                 View Contents
               </DropdownMenuItem>
@@ -129,11 +142,20 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
               <DropdownMenuItem onClick={() => setRedownloadThumbWarningOpen(true)} disabled={!hasUrl}>
                 Redownload from URL
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setQuickGrabWarningOpen(true)}>Quick Grab</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setThumbnailPickerOpen(true)}>Choose from Video…</DropdownMenuItem>
+              {!isGhost && (
+                <DropdownMenuItem onClick={() => setQuickGrabWarningOpen(true)}>Quick Grab</DropdownMenuItem>
+              )}
+              {!isGhost && (
+                <DropdownMenuItem onClick={() => setThumbnailPickerOpen(true)}>Choose from Video…</DropdownMenuItem>
+              )}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
+          {!isGhost && (
+            <DropdownMenuItem variant="destructive" onClick={() => setDeleteFileWarningOpen(true)}>
+              Delete file…
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
             Delete
           </DropdownMenuItem>
@@ -169,16 +191,18 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
       <AlertDialog open={redownloadWarningOpen} onOpenChange={setRedownloadWarningOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Redownload this file?</AlertDialogTitle>
+            <AlertDialogTitle>{isGhost ? "Download this item's file?" : "Redownload this file?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              This re-fetches the file from its original URL and replaces it. Only resolution and
-              duration are updated here — title, tags, season/sequence, year, artist, and thumbnail
-              are left exactly as they are.
+              {isGhost
+                ? "This fetches the file from the item's source URL for the first time. Resolution and duration get filled in — title, tags, season/sequence, year, and artist are left exactly as they are."
+                : "This re-fetches the file from its original URL and replaces it. Only resolution and duration are updated here — title, tags, season/sequence, year, artist, and thumbnail are left exactly as they are."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => redownload.mutate(item.id)}>Redownload</AlertDialogAction>
+            <AlertDialogAction onClick={() => redownload.mutate(item.id)}>
+              {isGhost ? "Download" : "Redownload"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -227,6 +251,43 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => deleteNfo.mutate(item.id)}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={deleteFileWarningOpen}
+        onOpenChange={(open) => {
+          setDeleteFileWarningOpen(open)
+          if (!open) setDeleteFileAlsoThumbnail(false)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this item's file?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the media file from disk to reclaim space. The library entry, tags,
+              collection membership, and all other metadata stay — the item shows a placeholder
+              until you download it again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center gap-1.5">
+            <Checkbox
+              id="delete-file-also-thumbnail"
+              checked={deleteFileAlsoThumbnail}
+              onCheckedChange={(v) => setDeleteFileAlsoThumbnail(v === true)}
+            />
+            <Label htmlFor="delete-file-also-thumbnail" className="font-normal">
+              Also delete thumbnail
+            </Label>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteFile.mutate({ id: item.id, deleteThumbnail: deleteFileAlsoThumbnail })}
+            >
+              Delete file
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

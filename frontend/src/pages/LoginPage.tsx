@@ -29,11 +29,12 @@ export function LoginPage() {
   const isSetup = status.setupRequired
   const pending = setupAccount.isPending || login.isPending
   const passwordsMismatch = isSetup && password.length > 0 && password !== confirmPassword
+  const passwordTooShort = isSetup && password.length > 0 && password.length < 8
 
   const handleSubmit = () => {
     if (!username.trim() || !password) return
     if (isSetup) {
-      if (passwordsMismatch) return
+      if (passwordsMismatch || passwordTooShort) return
       setupAccount.mutate({ username: username.trim(), password })
     } else {
       login.mutate({ username: username.trim(), password })
@@ -79,6 +80,11 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleKeyDown}
             />
+            {isSetup && (
+              <p className={`text-xs ${passwordTooShort ? "text-destructive" : "text-muted-foreground"}`}>
+                Must be at least 8 characters
+              </p>
+            )}
           </div>
           {isSetup && (
             <div className="space-y-2">
@@ -93,10 +99,15 @@ export function LoginPage() {
               {passwordsMismatch && <p className="text-xs text-destructive">Passwords don't match</p>}
             </div>
           )}
+          {isSetup && (
+            <p className="text-xs text-muted-foreground">
+              Only download content you have the right to download.
+            </p>
+          )}
           <Button
             className="w-full"
             onClick={handleSubmit}
-            disabled={pending || !username.trim() || !password || passwordsMismatch}
+            disabled={pending || !username.trim() || !password || passwordsMismatch || passwordTooShort}
           >
             {pending ? "Please wait…" : isSetup ? "Create account" : "Log in"}
           </Button>
