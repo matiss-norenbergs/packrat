@@ -12,6 +12,25 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-07
+
+- **Fixed: downloaded library items stored the wrong resolution/duration**
+  — both were taken from yt-dlp's pre-download metadata probe (its
+  default/"best" format info), not from the file that was actually
+  downloaded, so a lower-quality download could still show up in the
+  library tagged with a higher resolution than what's really on disk.
+  Fixed by re-probing the actual downloaded file with ffprobe right after
+  the download completes, same as `FileSizeBytes` already did.
+- **Release pipeline: multi-arch build split into parallel per-platform
+  jobs** — the previous single-job `linux/amd64,linux/arm64` build ran the
+  emulated arm64 leg sequentially after amd64, slow enough that the
+  `v0.1.0` release build got cancelled before ever pushing an image or
+  creating the GitHub Release. Each platform now builds on its own runner
+  in parallel and pushes by digest; a final job merges the digests into
+  one multi-arch manifest and creates the release — same total work, much
+  less wall-clock time, and one slow architecture can no longer starve the
+  other.
+
 ## 2026-08-06
 
 - **"Choose from Video" thumbnail picker: 12-frame option + batch history**
