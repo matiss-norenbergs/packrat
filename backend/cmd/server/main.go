@@ -120,7 +120,7 @@ func run() error {
 	hub := ws.NewHub()
 	go hub.Run(ctx)
 
-	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, jellyfinClient, progressStore, hub)
+	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFProbePath, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, jellyfinClient, progressStore, hub)
 	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)

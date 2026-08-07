@@ -16,6 +16,7 @@ import (
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/imageproc"
+	"packrat/backend/internal/importer"
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/nametemplate"
@@ -48,6 +49,7 @@ var libraryThumbnailTiers = []imageproc.Tier{
 type DownloadManager struct {
 	mediaRoot        string
 	imagesRoot       string
+	ffprobePath      string
 	ytdlp            *downloader.YtDlpService
 	downloadsRepo    *repository.DownloadsRepo
 	libraryRepo      *repository.LibraryRepo
@@ -84,7 +86,7 @@ type DownloadManager struct {
 }
 
 func NewDownloadManager(
-	mediaRoot, imagesRoot string,
+	mediaRoot, imagesRoot, ffprobePath string,
 	ytdlp *downloader.YtDlpService,
 	downloadsRepo *repository.DownloadsRepo,
 	libraryRepo *repository.LibraryRepo,
@@ -100,6 +102,7 @@ func NewDownloadManager(
 	m := &DownloadManager{
 		mediaRoot:       mediaRoot,
 		imagesRoot:      imagesRoot,
+		ffprobePath:     ffprobePath,
 		ytdlp:           ytdlp,
 		downloadsRepo:   downloadsRepo,
 		libraryRepo:     libraryRepo,
@@ -387,10 +390,22 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	if err := m.downloadsRepo.SetCommand(parentCtx, id, result.Command); err != nil {
 		log.Printf("queue: set command failed for %d: %v", id, err)
 	}
-	var resolution *string
-	if meta.Width > 0 && meta.Height > 0 {
+
+	// Resolution/duration are re-derived from the actual downloaded file,
+	// not carried forward from the pre-download metadata fetch above (meta
+	// reflects yt-dlp's default/"best" format, which isn't guaranteed to
+	// match whatever the quality selector actually picked — and duration in
+	// particular can genuinely change, e.g. a trimmed live stream). Falls
+	// back to the metadata values only if ffprobe can't read the file.
+	probe := importer.Probe(runCtx, m.ffprobePath, result.FinalPath)
+	resolution := probe.Resolution
+	if resolution == nil && meta.Width > 0 && meta.Height > 0 {
 		r := fmt.Sprintf("%dx%d", meta.Width, meta.Height)
 		resolution = &r
+	}
+	finalDuration := int(meta.Duration)
+	if probe.DurationSeconds != nil {
+		finalDuration = *probe.DurationSeconds
 	}
 
 	var sizeBytes *int64
@@ -405,7 +420,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		// download row never claims "completed" for a redownload whose
 		// file was never actually swapped into place, and no duplicate
 		// history entry results.
-		m.completeRedownload(parentCtx, runCtx, id, d, effectiveTitle, meta, result, resolution, sizeBytes, effectiveRoot)
+		m.completeRedownload(parentCtx, runCtx, id, d, effectiveTitle, meta, result, resolution, finalDuration, sizeBytes, effectiveRoot)
 		return
 	}
 
@@ -416,7 +431,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		log.Printf("queue: recording history for %d failed: %v", id, err)
 	}
 
-	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, sizeBytes)
+	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, finalDuration, sizeBytes)
 	libItem.GenerateNFO = d.GenerateNFO
 	libID, err := m.libraryRepo.Create(parentCtx, libItem)
 	if err != nil {
@@ -552,7 +567,7 @@ func optionalIntString(n *int) string {
 	return strconv.Itoa(*n)
 }
 
-func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download, title string, meta *downloader.Metadata, finalPath string, resolution *string, sizeBytes *int64) *models.LibraryItem {
+func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download, title string, meta *downloader.Metadata, finalPath string, resolution *string, duration int, sizeBytes *int64) *models.LibraryItem {
 	// Stored as forward-slash paths regardless of host OS, since these are
 	// read back purely to build URLs for the /media-files static route (the
 	// frontend splits on "/") — filepath.Rel on Windows returns
@@ -571,7 +586,6 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 		}
 	}
 
-	duration := int(meta.Duration)
 	uploader := meta.Uploader
 	videoID := meta.ID
 	description := meta.Description
@@ -623,7 +637,7 @@ var redownloadOverwritableFields = map[string]bool{
 // download row never claims "completed" for a redownload whose file was
 // never actually swapped into place, and no duplicate "completed" +
 // "failed" history pair results.
-func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, downloadID int64, d *models.Download, effectiveTitle string, meta *downloader.Metadata, result downloader.RunResult, resolution *string, sizeBytes *int64, effectiveRoot string) {
+func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, downloadID int64, d *models.Download, effectiveTitle string, meta *downloader.Metadata, result downloader.RunResult, resolution *string, duration int, sizeBytes *int64, effectiveRoot string) {
 	targetID := *d.TargetLibraryItemID
 
 	fail := func(msg string) {
@@ -701,7 +715,6 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 	if sizeBytes != nil {
 		params.FileSizeBytes = *sizeBytes
 	}
-	duration := int(meta.Duration)
 	if overwrite["duration"] {
 		params.Duration = &duration
 	}
