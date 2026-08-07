@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { History, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react"
+import { AlertTriangle, History, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -22,6 +23,36 @@ import { KnownItemsDialog } from "@/components/subscriptions/KnownItemsDialog"
 import { cn } from "@/lib/utils"
 import { useCheckSubscriptionNow, useDeleteSubscription, useSubscriptions, useUpdateSubscription } from "@/hooks/useSubscriptions"
 import type { Subscription } from "@/types/api"
+
+// Mirrors CollectionFolderTile's gap-warning popover (same controlled-hover
+// pattern, same amber styling) for a subscription's last check failure.
+function LastCheckErrorBadge({ error }: { error: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-amber-600 dark:text-amber-500"
+          aria-label="Last check failed"
+          onClick={(e) => e.stopPropagation()}
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="text-xs text-muted-foreground"
+        onClick={(e) => e.stopPropagation()}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+      >
+        {error}
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 export function SubscriptionsPage() {
   const { data: subscriptions, isLoading } = useSubscriptions()
@@ -155,9 +186,17 @@ export function SubscriptionsPage() {
                     <p className="truncate text-xs text-muted-foreground">{sub.url}</p>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{sub.collectionName ?? "Uncategorized"}</TableCell>
-                  <TableCell className="text-sm">{sub.knownEntryCount}</TableCell>
+                  <TableCell className="text-sm">
+                    <span className="flex items-center gap-1.5">
+                      {sub.knownEntryCount}
+                      {sub.unseenEntryCount > 0 && <Badge variant="secondary">+{sub.unseenEntryCount} new</Badge>}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {sub.lastCheckedAt ? new Date(sub.lastCheckedAt).toLocaleString() : "Never"}
+                    <div className="flex items-center gap-1.5">
+                      {sub.lastCheckedAt ? new Date(sub.lastCheckedAt).toLocaleString() : "Never"}
+                      {sub.lastCheckError && <LastCheckErrorBadge error={sub.lastCheckError} />}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {sub.autoDownload ? <Badge variant="secondary">On</Badge> : <span className="text-sm text-muted-foreground">Off</span>}

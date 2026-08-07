@@ -732,3 +732,7 @@ export function addSubscriptionEntry(id: number, sourceId: string, mode: AddSubs
     body: JSON.stringify({ mode }),
   })
 }
+
+export function markSubscriptionEntrySeen(id: number, sourceId: string): Promise<void> {
+  return request<void>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/seen`, { method: "POST" })
+}

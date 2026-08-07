@@ -1235,11 +1235,13 @@ type SubscriptionResponse struct {
 	CheckIntervalHours int      `json:"checkIntervalHours"`
 	Enabled            bool     `json:"enabled"`
 	LastCheckedAt      *string  `json:"lastCheckedAt"`
+	LastCheckError     *string  `json:"lastCheckError"`
 	KnownEntryCount    int      `json:"knownEntryCount"`
+	UnseenEntryCount   int      `json:"unseenEntryCount"`
 	CreatedAt          string   `json:"createdAt"`
 }
 
-func toSubscriptionResponse(s models.Subscription, collectionName *string, knownEntryCount int) SubscriptionResponse {
+func toSubscriptionResponse(s models.Subscription, collectionName *string, knownEntryCount, unseenCount int) SubscriptionResponse {
 	resp := SubscriptionResponse{
 		ID:                 s.ID,
 		URL:                s.URL,
@@ -1252,7 +1254,9 @@ func toSubscriptionResponse(s models.Subscription, collectionName *string, known
 		GenerateNFO:        s.GenerateNFO,
 		CheckIntervalHours: s.CheckIntervalHours,
 		Enabled:            s.Enabled,
+		LastCheckError:     s.LastCheckError,
 		KnownEntryCount:    knownEntryCount,
+		UnseenEntryCount:   unseenCount,
 		CreatedAt:          s.CreatedAt.Format(time.RFC3339),
 	}
 	if s.LastCheckedAt != nil {
@@ -1275,11 +1279,12 @@ type SubscriptionEntryResponse struct {
 	URL             string   `json:"url"`
 	DurationSeconds *float64 `json:"durationSeconds"`
 	LibraryItemID   *int64   `json:"libraryItemId"`
+	SeenAt          *string  `json:"seenAt"`
 	FirstSeenAt     string   `json:"firstSeenAt"`
 }
 
 func toSubscriptionEntryResponse(e models.SubscriptionSeenEntry) SubscriptionEntryResponse {
-	return SubscriptionEntryResponse{
+	resp := SubscriptionEntryResponse{
 		SourceID:        e.SourceID,
 		Title:           e.Title,
 		URL:             e.URL,
@@ -1287,6 +1292,11 @@ func toSubscriptionEntryResponse(e models.SubscriptionSeenEntry) SubscriptionEnt
 		LibraryItemID:   e.LibraryItemID,
 		FirstSeenAt:     e.FirstSeenAt.Format(time.RFC3339),
 	}
+	if e.SeenAt != nil {
+		t := e.SeenAt.Format(time.RFC3339)
+		resp.SeenAt = &t
+	}
+	return resp
 }
 
 // AddSubscriptionEntryRequest drives a single "Known items" row action —

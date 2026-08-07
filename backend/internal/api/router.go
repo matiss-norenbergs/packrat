@@ -202,6 +202,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/subscriptions/:id/check", CheckSubscriptionNow(subCheckDeps))
 		api.GET("/subscriptions/:id/entries", ListSubscriptionEntries(subCheckDeps))
 		api.POST("/subscriptions/:id/entries/:sourceId/add", AddSubscriptionEntry(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/:sourceId/seen", MarkSubscriptionEntrySeen(subCheckDeps))
 
 		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
 		api.POST("/import", CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))

@@ -20,7 +20,7 @@ func NewSubscriptionsRepo(db *sql.DB) *SubscriptionsRepo {
 
 const subscriptionSelectColumns = `
 	SELECT id, url, title, media_type, collection_id, tags, auto_download,
-		generate_nfo, check_interval_hours, enabled, last_checked_at, created_at
+		generate_nfo, check_interval_hours, enabled, last_checked_at, last_check_error, created_at
 	FROM subscriptions`
 
 func scanSubscription(row rowScanner) (*models.Subscription, error) {
@@ -31,7 +31,7 @@ func scanSubscription(row rowScanner) (*models.Subscription, error) {
 
 	err := row.Scan(
 		&s.ID, &s.URL, &s.Title, &s.MediaType, &s.CollectionID, &tags, &s.AutoDownload,
-		&s.GenerateNFO, &s.CheckIntervalHours, &s.Enabled, &lastCheckedAt, &createdAt,
+		&s.GenerateNFO, &s.CheckIntervalHours, &s.Enabled, &lastCheckedAt, &s.LastCheckError, &createdAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -149,10 +149,14 @@ func (r *SubscriptionsRepo) Delete(ctx context.Context, id int64) error {
 	return checkRowsAffected(res)
 }
 
-func (r *SubscriptionsRepo) MarkChecked(ctx context.Context, id int64, checkedAt time.Time) error {
+// MarkChecked records that id was just checked and, via checkError, whether
+// that check succeeded — nil clears any prior error, a non-nil message
+// (e.g. from a dead/private URL) is what the "Last checked" column's
+// warning badge surfaces.
+func (r *SubscriptionsRepo) MarkChecked(ctx context.Context, id int64, checkedAt time.Time, checkError *string) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE subscriptions SET last_checked_at = ? WHERE id = ?`,
-		checkedAt.UTC().Format("2006-01-02 15:04:05"), id,
+		`UPDATE subscriptions SET last_checked_at = ?, last_check_error = ? WHERE id = ?`,
+		checkedAt.UTC().Format("2006-01-02 15:04:05"), checkError, id,
 	)
 	if err != nil {
 		return fmt.Errorf("marking subscription checked: %w", err)
@@ -215,7 +219,7 @@ func (r *SubscriptionsRepo) RecordSeenEntry(ctx context.Context, subscriptionID 
 // most recently seen first — the "Known items" dialog's data source.
 func (r *SubscriptionsRepo) ListSeenEntries(ctx context.Context, subscriptionID int64) ([]models.SubscriptionSeenEntry, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT source_id, title, source_url, duration_seconds, library_item_id, first_seen_at
+		`SELECT source_id, title, source_url, duration_seconds, library_item_id, seen_at, first_seen_at
 			FROM subscription_seen_entries WHERE subscription_id = ? ORDER BY first_seen_at DESC`,
 		subscriptionID,
 	)
@@ -239,7 +243,7 @@ func (r *SubscriptionsRepo) ListSeenEntries(ctx context.Context, subscriptionID 
 // resolve the one row it's acting on.
 func (r *SubscriptionsRepo) GetSeenEntry(ctx context.Context, subscriptionID int64, sourceID string) (*models.SubscriptionSeenEntry, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT source_id, title, source_url, duration_seconds, library_item_id, first_seen_at
+		`SELECT source_id, title, source_url, duration_seconds, library_item_id, seen_at, first_seen_at
 			FROM subscription_seen_entries WHERE subscription_id = ? AND source_id = ?`,
 		subscriptionID, sourceID,
 	)
@@ -252,14 +256,24 @@ func (r *SubscriptionsRepo) GetSeenEntry(ctx context.Context, subscriptionID int
 
 func scanSeenEntry(row rowScanner) (*models.SubscriptionSeenEntry, error) {
 	var e models.SubscriptionSeenEntry
+	var seenAt sql.NullString
 	var firstSeenAt string
-	err := row.Scan(&e.SourceID, &e.Title, &e.URL, &e.DurationSeconds, &e.LibraryItemID, &firstSeenAt)
+	err := row.Scan(&e.SourceID, &e.Title, &e.URL, &e.DurationSeconds, &e.LibraryItemID, &seenAt, &firstSeenAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, err
 		}
 		return nil, fmt.Errorf("scanning seen subscription entry: %w", err)
 	}
+
+	if seenAt.Valid {
+		t, err := parseSQLiteTime(seenAt.String)
+		if err != nil {
+			return nil, err
+		}
+		e.SeenAt = &t
+	}
+
 	e.FirstSeenAt, err = parseSQLiteTime(firstSeenAt)
 	if err != nil {
 		return nil, err
@@ -294,4 +308,34 @@ func (r *SubscriptionsRepo) CountSeenEntries(ctx context.Context, subscriptionID
 		return 0, fmt.Errorf("counting seen subscription entries: %w", err)
 	}
 	return count, nil
+}
+
+// CountUnseenEntries returns how many of subscriptionID's entries have
+// never been dismissed (seen_at IS NULL) — the "+N new" figure the
+// Subscriptions table and Known Items dialog both show.
+func (r *SubscriptionsRepo) CountUnseenEntries(ctx context.Context, subscriptionID int64) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM subscription_seen_entries WHERE subscription_id = ? AND seen_at IS NULL`, subscriptionID,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("counting unseen subscription entries: %w", err)
+	}
+	return count, nil
+}
+
+// MarkSeenEntry dismisses a single entry — called both by the Known Items
+// dialog's own "Mark seen" button and, implicitly, whenever the user acts
+// on an entry via "Add as ghost"/"Queue download" (see AddKnownEntryAsGhost/
+// AddKnownEntryAsDownload) since acting on it is itself proof it's been
+// seen.
+func (r *SubscriptionsRepo) MarkSeenEntry(ctx context.Context, subscriptionID int64, sourceID string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE subscription_seen_entries SET seen_at = ? WHERE subscription_id = ? AND source_id = ?`,
+		time.Now().UTC().Format("2006-01-02 15:04:05"), subscriptionID, sourceID,
+	)
+	if err != nil {
+		return fmt.Errorf("marking subscription entry seen: %w", err)
+	}
+	return checkRowsAffected(res)
 }

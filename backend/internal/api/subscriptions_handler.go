@@ -90,7 +90,12 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusCreated, toSubscriptionResponse(*created, collectionName, knownCount))
+		unseenCount, err := deps.SubscriptionsRepo.CountUnseenEntries(ctx, id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusCreated, toSubscriptionResponse(*created, collectionName, knownCount, unseenCount))
 	}
 }
 
@@ -126,7 +131,12 @@ func ListSubscriptions(deps subscriptions.CheckDeps) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			out = append(out, toSubscriptionResponse(sub, collectionName, count))
+			unseenCount, err := deps.SubscriptionsRepo.CountUnseenEntries(ctx, sub.ID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			out = append(out, toSubscriptionResponse(sub, collectionName, count, unseenCount))
 		}
 		c.JSON(http.StatusOK, out)
 	}
@@ -178,7 +188,12 @@ func UpdateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, toSubscriptionResponse(*sub, collectionName, count))
+		unseenCount, err := deps.SubscriptionsRepo.CountUnseenEntries(ctx, id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, toSubscriptionResponse(*sub, collectionName, count, unseenCount))
 	}
 }
 
@@ -328,6 +343,40 @@ func AddSubscriptionEntry(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			resp.DownloadID = &downloadID
 		}
 		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// MarkSubscriptionEntrySeen is the Known Items dialog's "Mark seen" button
+// — a manual dismiss for an entry the user has noticed but doesn't want to
+// act on right now.
+func MarkSubscriptionEntrySeen(deps subscriptions.CheckDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+		sourceID := c.Param("sourceId")
+
+		if _, err := deps.SubscriptionsRepo.Get(ctx, id); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if err := deps.SubscriptionsRepo.MarkSeenEntry(ctx, id, sourceID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "entry not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
 	}
 }
 

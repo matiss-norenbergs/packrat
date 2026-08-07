@@ -74,8 +74,11 @@ func CheckOne(ctx context.Context, deps CheckDeps, sub models.Subscription) (int
 	if err != nil {
 		// Still mark checked — a subscription whose URL has started failing
 		// shouldn't be retried every single tick indefinitely; it gets
-		// retried on its next normal interval instead.
-		_ = deps.SubscriptionsRepo.MarkChecked(ctx, sub.ID, time.Now())
+		// retried on its next normal interval instead. The error message
+		// itself is recorded too, so the "Last checked" column's warning
+		// badge has something to show.
+		errMsg := err.Error()
+		_ = deps.SubscriptionsRepo.MarkChecked(ctx, sub.ID, time.Now(), &errMsg)
 		return 0, err
 	}
 
@@ -83,7 +86,7 @@ func CheckOne(ctx context.Context, deps CheckDeps, sub models.Subscription) (int
 	if err != nil {
 		return newCount, err
 	}
-	if err := deps.SubscriptionsRepo.MarkChecked(ctx, sub.ID, time.Now()); err != nil {
+	if err := deps.SubscriptionsRepo.MarkChecked(ctx, sub.ID, time.Now(), nil); err != nil {
 		return newCount, err
 	}
 	return newCount, nil
@@ -98,7 +101,7 @@ func BaselineOnCreate(ctx context.Context, deps CheckDeps, sub models.Subscripti
 	if _, err := processEntries(ctx, deps, sub, entries, true); err != nil {
 		return err
 	}
-	return deps.SubscriptionsRepo.MarkChecked(ctx, sub.ID, time.Now())
+	return deps.SubscriptionsRepo.MarkChecked(ctx, sub.ID, time.Now(), nil)
 }
 
 // fetchEntries normalizes FetchMetadata's result to a flat entry list — a
@@ -196,16 +199,19 @@ func enqueueSubscriptionDownload(ctx context.Context, deps CheckDeps, sub models
 // dialog's per-row actions — a manual, explicit version of what a normal
 // check does automatically for a new entry, reusing the exact same
 // creation helpers so behavior (tags, thumbnail fetch, quality resolution)
-// stays identical either way.
+// stays identical either way. Both also mark the entry seen — acting on it
+// is a stronger signal than the dialog's own "Mark seen" button, and doing
+// so here means the unseen count only ever reflects entries nobody has
+// looked at or touched, not ones just still lacking a library_item_id.
 //
 // AddKnownEntryAsDownload has no library row to link back to at enqueue
 // time (one is only created once the download completes), so — same as the
 // existing auto-download path in processEntries — the seen entry's
 // library_item_id is deliberately left unset. A downloaded entry keeps
-// showing as actionable in the dialog afterward; re-clicking would queue a
-// duplicate download. Fixing that would need the download queue to report
-// completion back into subscription_seen_entries, which is out of scope
-// here.
+// showing as actionable in the dialog afterward (though no longer flagged
+// "New"); re-clicking would queue a duplicate download. Fixing that would
+// need the download queue to report completion back into
+// subscription_seen_entries, which is out of scope here.
 func AddKnownEntryAsGhost(ctx context.Context, deps CheckDeps, sub models.Subscription, entry models.SubscriptionSeenEntry) (int64, error) {
 	id, err := createGhostForEntry(ctx, deps, sub, toPlaylistEntry(entry))
 	if err != nil {
@@ -214,11 +220,21 @@ func AddKnownEntryAsGhost(ctx context.Context, deps CheckDeps, sub models.Subscr
 	if err := deps.SubscriptionsRepo.SetSeenEntryLibraryItemID(ctx, sub.ID, entry.SourceID, id); err != nil {
 		log.Printf("subscription %d: linking ghost item %d to entry %q failed: %v", sub.ID, id, entry.SourceID, err)
 	}
+	if err := deps.SubscriptionsRepo.MarkSeenEntry(ctx, sub.ID, entry.SourceID); err != nil {
+		log.Printf("subscription %d: marking entry %q seen failed: %v", sub.ID, entry.SourceID, err)
+	}
 	return id, nil
 }
 
 func AddKnownEntryAsDownload(ctx context.Context, deps CheckDeps, sub models.Subscription, entry models.SubscriptionSeenEntry) (int64, error) {
-	return enqueueSubscriptionDownload(ctx, deps, sub, toPlaylistEntry(entry))
+	id, err := enqueueSubscriptionDownload(ctx, deps, sub, toPlaylistEntry(entry))
+	if err != nil {
+		return 0, err
+	}
+	if err := deps.SubscriptionsRepo.MarkSeenEntry(ctx, sub.ID, entry.SourceID); err != nil {
+		log.Printf("subscription %d: marking entry %q seen failed: %v", sub.ID, entry.SourceID, err)
+	}
+	return id, nil
 }
 
 func toPlaylistEntry(entry models.SubscriptionSeenEntry) downloader.PlaylistEntry {

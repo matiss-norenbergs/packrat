@@ -7,6 +7,7 @@ import {
   deleteSubscription,
   listSubscriptionEntries,
   listSubscriptions,
+  markSubscriptionEntrySeen,
   updateSubscription,
 } from "@/lib/api"
 import { libraryQueryKey } from "./useLibrary"
@@ -85,10 +86,30 @@ export function useAddSubscriptionEntry() {
       addSubscriptionEntry(subscriptionId, sourceId, mode),
     onSuccess: (result, { subscriptionId }) => {
       toast.success(result.mode === "ghost" ? "Added as ghost item" : "Download queued")
+      // Acting on an entry also marks it seen server-side, so the
+      // Subscriptions table's unseen count needs to refresh too, not just
+      // the entries list.
+      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
       queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
       queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to add item: ${err.message}`),
+  })
+}
+
+// No success toast, deliberately — dismissing several entries back-to-back
+// in the Known Items dialog shouldn't spam toasts the way a one-off action
+// like "Check now" does.
+export function useMarkSubscriptionEntrySeen() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ subscriptionId, sourceId }: { subscriptionId: number; sourceId: string }) =>
+      markSubscriptionEntrySeen(subscriptionId, sourceId),
+    onSuccess: (_data, { subscriptionId }) => {
+      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
+      queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
+    },
+    onError: (err: Error) => toast.error(`Failed to mark seen: ${err.message}`),
   })
 }

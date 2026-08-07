@@ -777,7 +777,9 @@ export interface Subscription {
   checkIntervalHours: number
   enabled: boolean
   lastCheckedAt: string | null
+  lastCheckError: string | null
   knownEntryCount: number
+  unseenEntryCount: number
   createdAt: string
 }
 
@@ -814,6 +816,7 @@ export interface SubscriptionEntry {
   url: string
   durationSeconds: number | null
   libraryItemId: number | null
+  seenAt: string | null
   firstSeenAt: string
 }
 

@@ -20,6 +20,7 @@ type Subscription struct {
 	CheckIntervalHours int
 	Enabled            bool
 	LastCheckedAt      *time.Time
+	LastCheckError     *string
 	CreatedAt          time.Time
 }
 
@@ -27,12 +28,16 @@ type Subscription struct {
 // video/entry a subscription has ever encountered, whether or not it ended
 // up creating a ghost item or download. Title/URL/DurationSeconds are only
 // populated for entries recorded after migration 000033; earlier rows have
-// them blank.
+// them blank. SeenAt is nil until the user dismisses the entry (or acts on
+// it) in the "Known items" dialog — migration 000035 backfills it to
+// FirstSeenAt for every pre-existing row so old entries don't suddenly show
+// up as unseen.
 type SubscriptionSeenEntry struct {
 	SourceID        string
 	Title           string
 	URL             string
 	DurationSeconds *float64
 	LibraryItemID   *int64
+	SeenAt          *time.Time
 	FirstSeenAt     time.Time
 }

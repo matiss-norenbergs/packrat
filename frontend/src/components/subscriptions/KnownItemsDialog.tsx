@@ -1,10 +1,10 @@
 import { useState } from "react"
-import { Download, Ghost } from "lucide-react"
+import { Download, Eye, Ghost } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useAddSubscriptionEntry, useSubscriptionEntries } from "@/hooks/useSubscriptions"
+import { useAddSubscriptionEntry, useMarkSubscriptionEntrySeen, useSubscriptionEntries } from "@/hooks/useSubscriptions"
 import { formatDuration } from "@/lib/utils"
 import type { AddSubscriptionEntryMode, Subscription } from "@/types/api"
 
@@ -17,12 +17,21 @@ interface KnownItemsDialogProps {
 export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItemsDialogProps) {
   const { data: entries, isLoading } = useSubscriptionEntries(subscription.id, open)
   const addEntry = useAddSubscriptionEntry()
+  const markSeen = useMarkSubscriptionEntrySeen()
   const [pendingKey, setPendingKey] = useState<string | null>(null)
 
   const handleAdd = (sourceId: string, mode: AddSubscriptionEntryMode) => {
     setPendingKey(`${sourceId}:${mode}`)
     addEntry.mutate(
       { subscriptionId: subscription.id, sourceId, mode },
+      { onSettled: () => setPendingKey(null) },
+    )
+  }
+
+  const handleMarkSeen = (sourceId: string) => {
+    setPendingKey(`${sourceId}:seen`)
+    markSeen.mutate(
+      { subscriptionId: subscription.id, sourceId },
       { onSettled: () => setPendingKey(null) },
     )
   }
@@ -46,42 +55,60 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
           ) : (
             entries.map((entry) => {
               const isKnownEntry = entry.url !== ""
+              const isUnseen = entry.seenAt == null && isKnownEntry
               const isPendingGhost = pendingKey === `${entry.sourceId}:ghost`
               const isPendingDownload = pendingKey === `${entry.sourceId}:download`
+              const isPendingSeen = pendingKey === `${entry.sourceId}:seen`
               return (
                 <div key={entry.sourceId} className="flex items-center gap-3 rounded-md border px-3 py-2">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{isKnownEntry ? entry.title : "Unknown"}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-medium">{isKnownEntry ? entry.title : "Unknown"}</p>
+                      {isUnseen && <Badge variant="secondary">New</Badge>}
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       {formatDuration(entry.durationSeconds)} · first seen {new Date(entry.firstSeenAt).toLocaleDateString()}
                     </p>
                   </div>
-                  {entry.libraryItemId != null ? (
-                    <Badge variant="secondary">In library</Badge>
-                  ) : !isKnownEntry ? (
-                    <span className="text-xs text-muted-foreground">No details recorded</span>
-                  ) : (
-                    <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2">
+                    {entry.libraryItemId != null ? (
+                      <Badge variant="secondary">In library</Badge>
+                    ) : !isKnownEntry ? (
+                      <span className="text-xs text-muted-foreground">No details recorded</span>
+                    ) : (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={addEntry.isPending}
+                          onClick={() => handleAdd(entry.sourceId, "ghost")}
+                        >
+                          <Ghost className="h-4 w-4" />
+                          {isPendingGhost ? "Adding…" : "Add as ghost"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={addEntry.isPending}
+                          onClick={() => handleAdd(entry.sourceId, "download")}
+                        >
+                          <Download className="h-4 w-4" />
+                          {isPendingDownload ? "Queuing…" : "Queue download"}
+                        </Button>
+                      </>
+                    )}
+                    {isUnseen && (
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={addEntry.isPending}
-                        onClick={() => handleAdd(entry.sourceId, "ghost")}
+                        disabled={markSeen.isPending}
+                        onClick={() => handleMarkSeen(entry.sourceId)}
                       >
-                        <Ghost className="h-4 w-4" />
-                        {isPendingGhost ? "Adding…" : "Add as ghost"}
+                        <Eye className="h-4 w-4" />
+                        {isPendingSeen ? "Marking…" : "Mark seen"}
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={addEntry.isPending}
-                        onClick={() => handleAdd(entry.sourceId, "download")}
-                      >
-                        <Download className="h-4 w-4" />
-                        {isPendingDownload ? "Queuing…" : "Queue download"}
-                      </Button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               )
             })

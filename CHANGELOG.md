@@ -14,6 +14,17 @@ Maintenance notes:
 
 ## 2026-08-07
 
+- **New: subscription check-failure warning + "New"/mark-as-seen for Known
+  items** — a subscription whose URL starts failing (dead/private video,
+  network error) now shows an amber warning icon next to "Last checked,"
+  with the actual error on hover, instead of failing silently in the
+  server log. Separately, every entry in the Known Items dialog now tracks
+  whether it's been seen: unseen entries get a "New" badge (and a "+N new"
+  count on the Subscriptions table) plus a "Mark seen" button to dismiss
+  them; adding an entry as a ghost or download also marks it seen
+  automatically, since acting on it is proof enough you've noticed it.
+  Existing entries were backfilled as seen so this doesn't flood
+  already-known videos with "New" badges on first load.
 - **New: subscriptions "Known items" dialog** — browse every video a
   subscription has ever seen (not just the ones that became ghosts or
   downloads) and manually add any of them to the library as a ghost item
