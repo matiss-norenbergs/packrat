@@ -14,6 +14,7 @@ import {
   Archive,
   LogOut,
   MonitorPlay,
+  Rss,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
@@ -37,6 +38,7 @@ const navItems = [
   { to: "/import", label: "File Import", icon: Import },
   { to: "/history", label: "History", icon: History },
   { to: "/backup", label: "Backup", icon: Archive },
+  { to: "/subscriptions", label: "Subscriptions", icon: Rss },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/logs", label: "Logs", icon: ScrollText },
 ]

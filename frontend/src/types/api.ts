@@ -419,6 +419,16 @@ export interface ThumbnailCandidate {
   imageBase64: string
 }
 
+export interface MissingLibraryFile {
+  id: number
+  title: string
+}
+
+export interface ScanMissingLibraryFilesResult {
+  scanned: number
+  missing: MissingLibraryFile[]
+}
+
 export interface MoveLibraryItemRequest {
   collectionId?: number | null
   folder: string
@@ -749,4 +759,71 @@ export interface LibraryGrowthPoint {
 export interface ResolutionBreakdownPoint {
   step: number
   count: number
+}
+
+// A saved channel/playlist URL, periodically re-checked for new uploads —
+// see internal/subscriptions on the backend. knownEntryCount is how many
+// entries have ever been seen (baseline + every new one found since).
+export interface Subscription {
+  id: number
+  url: string
+  title: string
+  mediaType: "video" | "audio"
+  collectionId: number | null
+  collectionName: string | null
+  tags: string[]
+  autoDownload: boolean
+  generateNfo: boolean
+  checkIntervalHours: number
+  enabled: boolean
+  lastCheckedAt: string | null
+  lastCheckError: string | null
+  knownEntryCount: number
+  unseenEntryCount: number
+  createdAt: string
+}
+
+// url/mediaType are immutable after creation — see UpdateSubscriptionRequest.
+export interface CreateSubscriptionRequest {
+  url: string
+  mediaType: "video" | "audio"
+  collectionId?: number
+  tags?: string[]
+  autoDownload: boolean
+  generateNfo: boolean
+  checkIntervalHours: number
+}
+
+export interface UpdateSubscriptionRequest {
+  collectionId?: number | null
+  tags: string[]
+  autoDownload: boolean
+  generateNfo: boolean
+  checkIntervalHours: number
+  enabled: boolean
+}
+
+export interface CheckSubscriptionResult {
+  newItemsFound: number
+}
+
+// One row of a subscription's "Known items" dialog. Entries recorded before
+// the metadata migration have title/url as "" and durationSeconds as null —
+// there's nothing to act on for those, they just render as "Unknown."
+export interface SubscriptionEntry {
+  sourceId: string
+  title: string
+  url: string
+  durationSeconds: number | null
+  libraryItemId: number | null
+  seenAt: string | null
+  firstSeenAt: string
+}
+
+export type AddSubscriptionEntryMode = "ghost" | "download"
+
+export interface AddSubscriptionEntryResult {
+  mode: AddSubscriptionEntryMode
+  libraryItemId?: number
+  downloadId?: number
 }

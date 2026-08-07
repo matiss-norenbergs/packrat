@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom"
-import { Play } from "lucide-react"
+import { Ghost, Play } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -54,6 +54,12 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
         ) : (
           <MediaTypePlaceholder mediaType={item.mediaType} />
         )}
+        {item.status === "ghost" && (
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-background/80 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">
+            Ghost item
+            <Ghost className="h-3 w-3" />
+          </div>
+        )}
         {mode === "manage" && (
           <Checkbox
             checked={selected}
@@ -71,7 +77,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             <LibraryItemActionsMenu item={item} />
           </div>
         )}
-        {!selectionActive && (
+        {!selectionActive && item.status !== "ghost" && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <Tooltip>
               <TooltipTrigger asChild>

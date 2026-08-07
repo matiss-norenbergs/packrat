@@ -12,6 +12,7 @@ import (
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/subscriptions"
 )
 
 // Deps holds everything the router needs to wire up routes. Fields are added
@@ -29,6 +30,7 @@ type Deps struct {
 	CompareListRepo      *repository.CompareListRepo
 	UsersRepo            *repository.UsersRepo
 	BackupHistoryRepo    *repository.BackupHistoryRepo
+	SubscriptionsRepo    *repository.SubscriptionsRepo
 	YtDlp                *downloader.YtDlpService
 	JellyfinClient       *jellyfin.Client
 	ImageBackfillManager *imagebackfill.Manager
@@ -98,6 +100,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/library/facets", GetLibraryFacets(deps.LibraryRepo))
 		api.POST("/library/ghost", CreateGhostLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.ImagesRoot, deps.YtDlp, deps.TagsRepo))
 		api.DELETE("/library/:id/file", DeleteLibraryItemFile(deps.LibraryRepo, deps.MediaRoot))
+		api.POST("/library/scan-missing", ScanMissingLibraryFiles(deps.MediaRoot, deps.LibraryRepo))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot))
 		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo, deps.ArtistsRepo))
 		api.POST("/library/:id/progress", UpdateLibraryItemProgress(deps.LibraryRepo))
@@ -121,6 +124,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.CollectionsRepo, deps.TagsRepo))
 		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo))
 		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo))
+		api.DELETE("/library/:id/thumbnail", DeleteLibraryItemThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo))
 		api.POST("/library/:id/nfo", GenerateLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo, deps.TagsRepo))
 		api.GET("/library/:id/nfo", GetLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
 		api.DELETE("/library/:id/nfo", DeleteLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
@@ -181,6 +185,24 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/backup/history/:id/download", DownloadBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.DELETE("/backup/history/:id", DeleteBackupHistoryEntry(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.GET("/backup/history/:id/preview", PreviewBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
+
+		subCheckDeps := subscriptions.CheckDeps{
+			SubscriptionsRepo: deps.SubscriptionsRepo,
+			LibraryRepo:       deps.LibraryRepo,
+			TagsRepo:          deps.TagsRepo,
+			CollectionsRepo:   deps.CollectionsRepo,
+			Manager:           deps.Manager,
+			YtDlp:             deps.YtDlp,
+			ImagesRoot:        deps.ImagesRoot,
+		}
+		api.POST("/subscriptions", CreateSubscription(subCheckDeps))
+		api.GET("/subscriptions", ListSubscriptions(subCheckDeps))
+		api.PATCH("/subscriptions/:id", UpdateSubscription(subCheckDeps))
+		api.DELETE("/subscriptions/:id", DeleteSubscription(subCheckDeps))
+		api.POST("/subscriptions/:id/check", CheckSubscriptionNow(subCheckDeps))
+		api.GET("/subscriptions/:id/entries", ListSubscriptionEntries(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/:sourceId/add", AddSubscriptionEntry(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/:sourceId/seen", MarkSubscriptionEntrySeen(subCheckDeps))
 
 		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
 		api.POST("/import", CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))

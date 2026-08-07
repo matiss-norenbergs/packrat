@@ -14,6 +14,36 @@ Maintenance notes:
 
 ## 2026-08-07
 
+- **New: subscription check-failure warning + "New"/mark-as-seen for Known
+  items** — a subscription whose URL starts failing (dead/private video,
+  network error) now shows an amber warning icon next to "Last checked,"
+  with the actual error on hover, instead of failing silently in the
+  server log. Separately, every entry in the Known Items dialog now tracks
+  whether it's been seen: unseen entries get a "New" badge (and a "+N new"
+  count on the Subscriptions table) plus a "Mark seen" button to dismiss
+  them; adding an entry as a ghost or download also marks it seen
+  automatically, since acting on it is proof enough you've noticed it.
+  Existing entries were backfilled as seen so this doesn't flood
+  already-known videos with "New" badges on first load.
+- **New: subscriptions "Known items" dialog** — browse every video a
+  subscription has ever seen (not just the ones that became ghosts or
+  downloads) and manually add any of them to the library as a ghost item
+  or a queued download, per-row. Mainly useful for a video that was
+  recorded during a subscription's baseline fetch — which deliberately
+  doesn't create anything — but that you've since decided you do want
+  after all.
+- **New: channel/playlist subscriptions** — save a channel or playlist URL
+  once and Packrat periodically re-checks it for new uploads (default every
+  6h, configurable per subscription), diffing against what it's already
+  seen. New uploads either become ghost placeholders to review and
+  download manually, or — with "Auto-download" turned on for that
+  subscription — go straight into the download queue. Subscribing baselines
+  against the channel's current catalog immediately (no ghosts/downloads
+  created for existing videos) so only genuinely new uploads trigger
+  afterward. New "Subscriptions" page (sidebar, under Backup) lists every
+  subscription with its known-item count, last-checked time, a manual
+  "Check now," and edit/delete/enable controls.
+
 - **Fixed: downloaded library items stored the wrong resolution/duration**
   — both were taken from yt-dlp's pre-download metadata probe (its
   default/"best" format info), not from the file that was actually
@@ -30,6 +60,31 @@ Maintenance notes:
   one multi-arch manifest and creates the release — same total work, much
   less wall-clock time, and one slow architecture can no longer starve the
   other.
+- **New: "Scan for Missing Files" library maintenance action** — checks
+  every library item's on-record file against disk and converts any that
+  are missing (deleted, moved, or renamed outside Packrat) into ghost
+  placeholders, keeping the DB row, tags, and metadata intact so
+  "Download now" can fill it back in later. Available from Settings →
+  Library; runs on demand only, not on a schedule.
+- **New: "Ghost item" banner on library cards** — a small status strip
+  ("Ghost item" + icon) floats over the bottom of the thumbnail on every
+  card-style surface (Library grid, Compare list, sibling strips), making
+  a file-less placeholder item obvious at a glance instead of only being
+  distinguishable by its type-icon thumbnail.
+- **Fixed: ghost items could still be opened in the player, added to
+  Browse rows, or selected onto the compare list** — none of those make
+  sense for an item with no file. Ghost items are now excluded from
+  Browse's queries and from what a compare-list dialog will add; their
+  card's Play button and detail-page links are hidden so navigating to a
+  ghost's player page isn't possible from the UI (a direct URL still lands
+  on a plain "no file" message instead of a broken player); and a
+  compare-list tile whose item later gets ghosted becomes permanently
+  unselectable rather than just quietly failing to play.
+- **New: "Delete" option for an item's thumbnail** — under the Thumbnail
+  submenu, removes just the thumbnail image (raw file and both derivative
+  sizes) from disk and falls back to the type-placeholder icon, leaving
+  the media file and everything else about the item untouched. Disabled
+  when there's no thumbnail to delete.
 
 ## 2026-08-06
 

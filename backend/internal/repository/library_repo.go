@@ -734,6 +734,22 @@ func (r *LibraryRepo) ClearFile(ctx context.Context, id int64, clearThumbnail bo
 	return checkRowsAffected(res)
 }
 
+// ClearThumbnail wipes just an item's thumbnail fields — the raw sidecar
+// path and both derivative tiers — leaving filename/path/status (and
+// therefore the media file itself) untouched. The counterpart to
+// writeThumbnailAndRespond (thumbnail_handler.go), which writes all three
+// fields whenever a thumbnail is (re)generated.
+func (r *LibraryRepo) ClearThumbnail(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE library SET thumbnail = NULL, thumbnail_small_path = NULL, thumbnail_medium_path = NULL WHERE id = ?`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("clearing library item thumbnail: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // DistinctYears returns every distinct release_year present in the library,
 // descending — backs the year filter dropdown, which needs every possible
 // value regardless of whatever search/filter/page is currently active.
@@ -751,6 +767,37 @@ func (r *LibraryRepo) DistinctYears(ctx context.Context) ([]int, error) {
 			return nil, fmt.Errorf("scanning year: %w", err)
 		}
 		out = append(out, y)
+	}
+	return out, rows.Err()
+}
+
+// LibraryFileRef is the minimal per-item info a missing-file scan needs —
+// enough to check disk and report back which title was affected, without
+// loading a full LibraryItem for every row.
+type LibraryFileRef struct {
+	ID    int64
+	Title string
+	Path  string
+}
+
+// ListNonGhostFiles returns id/title/path for every item that currently
+// claims to have a file — the working set for the missing-file scan
+// (ScanMissingLibraryFiles). Ghosts are excluded since they have no file by
+// definition, not because one might be missing.
+func (r *LibraryRepo) ListNonGhostFiles(ctx context.Context) ([]LibraryFileRef, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, title, path FROM library WHERE status != 'ghost' AND path != ''`)
+	if err != nil {
+		return nil, fmt.Errorf("listing library files: %w", err)
+	}
+	defer rows.Close()
+
+	out := []LibraryFileRef{}
+	for rows.Next() {
+		var ref LibraryFileRef
+		if err := rows.Scan(&ref.ID, &ref.Title, &ref.Path); err != nil {
+			return nil, fmt.Errorf("scanning library file ref: %w", err)
+		}
+		out = append(out, ref)
 	}
 	return out, rows.Err()
 }

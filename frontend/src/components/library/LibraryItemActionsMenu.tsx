@@ -27,6 +27,7 @@ import {
 import {
   useDeleteLibraryItemFile,
   useDeleteLibraryItemNFO,
+  useDeleteLibraryItemThumbnail,
   useGenerateLibraryItemNFO,
   useQuickGrabLibraryThumbnail,
   useRedownloadLibraryItem,
@@ -59,6 +60,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [deleteNfoWarningOpen, setDeleteNfoWarningOpen] = useState(false)
   const [deleteFileWarningOpen, setDeleteFileWarningOpen] = useState(false)
   const [deleteFileAlsoThumbnail, setDeleteFileAlsoThumbnail] = useState(false)
+  const [deleteThumbnailWarningOpen, setDeleteThumbnailWarningOpen] = useState(false)
 
   const refreshMetadata = useRefreshLibraryItemMetadata()
   const redownload = useRedownloadLibraryItem()
@@ -67,8 +69,10 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const generateNfo = useGenerateLibraryItemNFO()
   const deleteNfo = useDeleteLibraryItemNFO()
   const deleteFile = useDeleteLibraryItemFile()
+  const deleteThumbnail = useDeleteLibraryItemThumbnail()
 
   const hasUrl = !!item.originalUrl
+  const hasThumbnail = !!(item.thumbnail || item.thumbnailSmallPath || item.thumbnailMediumPath)
   // A ghost item has no downloaded file yet — file-dependent actions (Move,
   // Trim, NFO generation, frame-grab thumbnails) are hidden rather than
   // disabled, since there's nothing to explain via a tooltip; "Redownload"
@@ -148,6 +152,14 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
               {!isGhost && (
                 <DropdownMenuItem onClick={() => setThumbnailPickerOpen(true)}>Choose from Video…</DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={!hasThumbnail}
+                onClick={() => setDeleteThumbnailWarningOpen(true)}
+              >
+                Delete
+              </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
@@ -234,6 +246,22 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => quickGrabThumbnail.mutate(item.id)}>Grab</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteThumbnailWarningOpen} onOpenChange={setDeleteThumbnailWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this item's thumbnail?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the thumbnail image from disk. The media file and everything else about
+              this item are untouched — it shows a placeholder icon until a new thumbnail is set.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteThumbnail.mutate(item.id)}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

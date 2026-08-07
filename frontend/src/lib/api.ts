@@ -18,8 +18,11 @@ import type {
   BulkFetchLibraryThumbnailsRequest,
   BulkFetchThumbnailsResponse,
   BulkRedownloadLibraryItemsRequest,
+  AddSubscriptionEntryMode,
+  AddSubscriptionEntryResult,
   BulkRedownloadResponse,
   ChangePasswordRequest,
+  CheckSubscriptionResult,
   Collection,
   CollectionCoverCandidate,
   CreateArtistRequest,
@@ -46,12 +49,17 @@ import type {
   LoginRequest,
   LogEntry,
   MoveLibraryItemRequest,
+  ScanMissingLibraryFilesResult,
   ScannedFile,
   Settings,
   SetArtistImageRequest,
   SetCollectionCoverRequest,
   SetupRequest,
   Stats,
+  Subscription,
+  SubscriptionEntry,
+  CreateSubscriptionRequest,
+  UpdateSubscriptionRequest,
   Tag,
   ThumbnailCandidate,
   CreateTagRequest,
@@ -241,6 +249,14 @@ export function createGhostLibraryItem(payload: CreateGhostLibraryItemRequest): 
 
 export function deleteLibraryItemFile(id: number, deleteThumbnail: boolean): Promise<void> {
   return request<void>(`/library/${id}/file?deleteThumbnail=${deleteThumbnail}`, { method: "DELETE" })
+}
+
+export function deleteLibraryItemThumbnail(id: number): Promise<void> {
+  return request<void>(`/library/${id}/thumbnail`, { method: "DELETE" })
+}
+
+export function scanMissingLibraryFiles(): Promise<ScanMissingLibraryFilesResult> {
+  return request<ScanMissingLibraryFilesResult>("/library/scan-missing", { method: "POST" })
 }
 
 export function updateLibraryItem(id: number, payload: UpdateLibraryItemRequest): Promise<void> {
@@ -678,4 +694,45 @@ export function selectArtistImage(artistId: number, imageId: number): Promise<vo
 
 export function clearArtistSelectedImage(artistId: number): Promise<void> {
   return request<void>(`/artists/${artistId}/selected-image`, { method: "DELETE" })
+}
+
+export function listSubscriptions(): Promise<Subscription[]> {
+  return request<Subscription[]>("/subscriptions")
+}
+
+export function createSubscription(payload: CreateSubscriptionRequest): Promise<Subscription> {
+  return request<Subscription>("/subscriptions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateSubscription(id: number, payload: UpdateSubscriptionRequest): Promise<Subscription> {
+  return request<Subscription>(`/subscriptions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteSubscription(id: number): Promise<void> {
+  return request<void>(`/subscriptions/${id}`, { method: "DELETE" })
+}
+
+export function checkSubscriptionNow(id: number): Promise<CheckSubscriptionResult> {
+  return request<CheckSubscriptionResult>(`/subscriptions/${id}/check`, { method: "POST" })
+}
+
+export function listSubscriptionEntries(id: number): Promise<SubscriptionEntry[]> {
+  return request<SubscriptionEntry[]>(`/subscriptions/${id}/entries`)
+}
+
+export function addSubscriptionEntry(id: number, sourceId: string, mode: AddSubscriptionEntryMode): Promise<AddSubscriptionEntryResult> {
+  return request<AddSubscriptionEntryResult>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/add`, {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  })
+}
+
+export function markSubscriptionEntrySeen(id: number, sourceId: string): Promise<void> {
+  return request<void>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/seen`, { method: "POST" })
 }

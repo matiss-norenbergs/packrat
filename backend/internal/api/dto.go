@@ -480,6 +480,20 @@ type BulkFetchThumbnailsResponse struct {
 	Skipped int `json:"skipped"`
 }
 
+// MissingLibraryFileResponse is one item ScanMissingLibraryFiles found and
+// converted to a ghost — just enough for the frontend's summary toast.
+type MissingLibraryFileResponse struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+}
+
+// ScanMissingLibraryFilesResponse reports how many items were checked and
+// which ones (if any) had their file missing and got converted to ghosts.
+type ScanMissingLibraryFilesResponse struct {
+	Scanned int                          `json:"scanned"`
+	Missing []MissingLibraryFileResponse `json:"missing"`
+}
+
 // ThumbnailCandidateResponse is one of the candidate frames returned by
 // GET /api/library/:id/thumbnail/candidates for the "choose from video"
 // flow — the frontend shows all of them and POSTs back whichever
@@ -1068,17 +1082,17 @@ type ImportRequest struct {
 // see CreateGhostLibraryItem (ghost_handler.go). FetchThumbnail is only
 // honored when OriginalURL is also set.
 type CreateGhostLibraryItemRequest struct {
-	Title           string   `json:"title" binding:"required"`
-	MediaType       string   `json:"mediaType" binding:"required,oneof=video audio"`
-	OriginalURL     *string  `json:"originalUrl"`
-	CollectionID    *int64   `json:"collectionId"`
-	ArtistID        *int64   `json:"artistId"`
-	Year            *int     `json:"year"`
-	SeasonNumber    *int     `json:"seasonNumber"`
-	SequenceNumber  *int     `json:"sequenceNumber"`
-	GenerateNFO     bool     `json:"generateNfo"`
-	Tags            []string `json:"tags"`
-	FetchThumbnail  bool     `json:"fetchThumbnail"`
+	Title          string   `json:"title" binding:"required"`
+	MediaType      string   `json:"mediaType" binding:"required,oneof=video audio"`
+	OriginalURL    *string  `json:"originalUrl"`
+	CollectionID   *int64   `json:"collectionId"`
+	ArtistID       *int64   `json:"artistId"`
+	Year           *int     `json:"year"`
+	SeasonNumber   *int     `json:"seasonNumber"`
+	SequenceNumber *int     `json:"sequenceNumber"`
+	GenerateNFO    bool     `json:"generateNfo"`
+	Tags           []string `json:"tags"`
+	FetchThumbnail bool     `json:"fetchThumbnail"`
 }
 
 type BackupExportRequest struct {
@@ -1158,11 +1172,11 @@ type BackupPreviewItem struct {
 }
 
 type StatsResponse struct {
-	ActiveDownloads   int   `json:"activeDownloads"`
-	QueuedDownloads   int   `json:"queuedDownloads"`
-	CompletedToday    int   `json:"completedToday"`
-	LibraryVideoCount int   `json:"libraryVideoCount"`
-	LibraryAudioCount int   `json:"libraryAudioCount"`
+	ActiveDownloads   int `json:"activeDownloads"`
+	QueuedDownloads   int `json:"queuedDownloads"`
+	CompletedToday    int `json:"completedToday"`
+	LibraryVideoCount int `json:"libraryVideoCount"`
+	LibraryAudioCount int `json:"libraryAudioCount"`
 	// Ghost (no-file placeholder) subset of the two counts above — always
 	// <= their counterpart. Lets the dashboard split each bar/legend entry
 	// by ghost vs real without a separate chart.
@@ -1174,4 +1188,125 @@ type StatsResponse struct {
 	// (unsupported filesystem, permissions, etc).
 	DiskTotalBytes int64 `json:"diskTotalBytes"`
 	DiskFreeBytes  int64 `json:"diskFreeBytes"`
+}
+
+// CreateSubscriptionRequest saves a channel/playlist URL to be periodically
+// re-checked for new uploads — see CreateSubscription (subscriptions_handler.go).
+// Title is resolved server-side from a metadata fetch, not taken from the
+// request. CheckIntervalHours defaults to 6 when omitted/zero.
+type CreateSubscriptionRequest struct {
+	URL                string   `json:"url" binding:"required,url"`
+	MediaType          string   `json:"mediaType" binding:"required,oneof=video audio"`
+	CollectionID       *int64   `json:"collectionId"`
+	Tags               []string `json:"tags"`
+	AutoDownload       bool     `json:"autoDownload"`
+	GenerateNFO        bool     `json:"generateNfo"`
+	CheckIntervalHours int      `json:"checkIntervalHours"`
+}
+
+// UpdateSubscriptionRequest — URL/MediaType are immutable after creation
+// (changing the source is really "delete and re-add"). Unlike
+// UpdateSettingsRequest's per-field-independent PATCH, EditSubscriptionDialog
+// is a single buffered-save form that always submits its full current
+// state, so CollectionID/Tags apply as given (nil CollectionID means "no
+// collection," same as MoveLibraryItemRequest) — only AutoDownload/
+// GenerateNFO/CheckIntervalHours/Enabled are pointers, purely so the zero
+// value can't be mistaken for "not sent" by a caller other than the one
+// dialog this is built for.
+type UpdateSubscriptionRequest struct {
+	CollectionID       *int64   `json:"collectionId"`
+	Tags               []string `json:"tags"`
+	AutoDownload       *bool    `json:"autoDownload" binding:"required"`
+	GenerateNFO        *bool    `json:"generateNfo" binding:"required"`
+	CheckIntervalHours *int     `json:"checkIntervalHours" binding:"required"`
+	Enabled            *bool    `json:"enabled" binding:"required"`
+}
+
+type SubscriptionResponse struct {
+	ID                 int64    `json:"id"`
+	URL                string   `json:"url"`
+	Title              string   `json:"title"`
+	MediaType          string   `json:"mediaType"`
+	CollectionID       *int64   `json:"collectionId"`
+	CollectionName     *string  `json:"collectionName"`
+	Tags               []string `json:"tags"`
+	AutoDownload       bool     `json:"autoDownload"`
+	GenerateNFO        bool     `json:"generateNfo"`
+	CheckIntervalHours int      `json:"checkIntervalHours"`
+	Enabled            bool     `json:"enabled"`
+	LastCheckedAt      *string  `json:"lastCheckedAt"`
+	LastCheckError     *string  `json:"lastCheckError"`
+	KnownEntryCount    int      `json:"knownEntryCount"`
+	UnseenEntryCount   int      `json:"unseenEntryCount"`
+	CreatedAt          string   `json:"createdAt"`
+}
+
+func toSubscriptionResponse(s models.Subscription, collectionName *string, knownEntryCount, unseenCount int) SubscriptionResponse {
+	resp := SubscriptionResponse{
+		ID:                 s.ID,
+		URL:                s.URL,
+		Title:              s.Title,
+		MediaType:          s.MediaType,
+		CollectionID:       s.CollectionID,
+		CollectionName:     collectionName,
+		Tags:               s.Tags,
+		AutoDownload:       s.AutoDownload,
+		GenerateNFO:        s.GenerateNFO,
+		CheckIntervalHours: s.CheckIntervalHours,
+		Enabled:            s.Enabled,
+		LastCheckError:     s.LastCheckError,
+		KnownEntryCount:    knownEntryCount,
+		UnseenEntryCount:   unseenCount,
+		CreatedAt:          s.CreatedAt.Format(time.RFC3339),
+	}
+	if s.LastCheckedAt != nil {
+		t := s.LastCheckedAt.Format(time.RFC3339)
+		resp.LastCheckedAt = &t
+	}
+	return resp
+}
+
+type CheckSubscriptionResponse struct {
+	NewItemsFound int `json:"newItemsFound"`
+}
+
+// SubscriptionEntryResponse is one row of the "Known items" dialog — see
+// ListSubscriptionEntries (subscriptions_handler.go). Entries recorded
+// before migration 000033 have empty Title/URL and nil DurationSeconds.
+type SubscriptionEntryResponse struct {
+	SourceID        string   `json:"sourceId"`
+	Title           string   `json:"title"`
+	URL             string   `json:"url"`
+	DurationSeconds *float64 `json:"durationSeconds"`
+	LibraryItemID   *int64   `json:"libraryItemId"`
+	SeenAt          *string  `json:"seenAt"`
+	FirstSeenAt     string   `json:"firstSeenAt"`
+}
+
+func toSubscriptionEntryResponse(e models.SubscriptionSeenEntry) SubscriptionEntryResponse {
+	resp := SubscriptionEntryResponse{
+		SourceID:        e.SourceID,
+		Title:           e.Title,
+		URL:             e.URL,
+		DurationSeconds: e.DurationSeconds,
+		LibraryItemID:   e.LibraryItemID,
+		FirstSeenAt:     e.FirstSeenAt.Format(time.RFC3339),
+	}
+	if e.SeenAt != nil {
+		t := e.SeenAt.Format(time.RFC3339)
+		resp.SeenAt = &t
+	}
+	return resp
+}
+
+// AddSubscriptionEntryRequest drives a single "Known items" row action —
+// see AddSubscriptionEntry (subscriptions_handler.go).
+type AddSubscriptionEntryRequest struct {
+	Mode string `json:"mode" binding:"required,oneof=ghost download"`
+}
+
+type AddSubscriptionEntryResponse struct {
+	Mode          string `json:"mode"`
+	LibraryItemID *int64 `json:"libraryItemId,omitempty"`
+	DownloadID    *int64 `json:"downloadId,omitempty"`
 }
