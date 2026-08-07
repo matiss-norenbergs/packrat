@@ -38,7 +38,7 @@ export function BrowsePage() {
   const { data: collections, isLoading: collectionsLoading } = useCollections()
   const { data: settings } = useSettings()
   const ignorePrivacy = settings?.browseIgnorePrivacy ?? false
-  const searchResults = useLibraryQuery({ q: search, pageSize: 100 }, search.length > 0)
+  const searchResults = useLibraryQuery({ q: search, pageSize: 100, hideGhosts: true }, search.length > 0)
   const updateProgress = useUpdateLibraryProgress()
   // Resetting position to 0 both drops the item out of the Continue
   // Watching filter (below the min-seconds threshold) and makes the next
@@ -47,11 +47,18 @@ export function BrowsePage() {
   const removeFromContinueWatching = (id: number) => updateProgress.mutate({ id, positionSeconds: 0 })
 
   const recentlyAddedQuery = useLibraryQuery(
-    { sortKey: "downloadedAt", sortDir: "desc", page: 1, pageSize: RECENTLY_ADDED_COUNT },
+    { sortKey: "downloadedAt", sortDir: "desc", page: 1, pageSize: RECENTLY_ADDED_COUNT, hideGhosts: true },
     !search,
   )
   const continueWatchingQuery = useLibraryQuery(
-    { inProgress: true, sortKey: "lastWatchedAt", sortDir: "desc", page: 1, pageSize: CONTINUE_WATCHING_COUNT },
+    {
+      inProgress: true,
+      sortKey: "lastWatchedAt",
+      sortDir: "desc",
+      page: 1,
+      pageSize: CONTINUE_WATCHING_COUNT,
+      hideGhosts: true,
+    },
     !search,
   )
 
@@ -75,7 +82,7 @@ export function BrowsePage() {
   const fallbackRoots = tree.filter((root) => !subtreeHasFlagged(root) && root.totalItemCount > 0)
   const fallbackDescendantIds = fallbackRoots.flatMap((root) => collectDescendantIds(root))
   const fallbackItemsQuery = useLibraryQuery(
-    { collectionIds: fallbackDescendantIds, sortKey: "downloadedAt", sortDir: "desc" },
+    { collectionIds: fallbackDescendantIds, sortKey: "downloadedAt", sortDir: "desc", hideGhosts: true },
     !search && fallbackDescendantIds.length > 0,
   )
 

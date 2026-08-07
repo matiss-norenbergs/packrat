@@ -63,6 +63,22 @@ export function BrowseItemPage() {
     )
   }
 
+  // Ghost items have no file to play — Browse's own queries already
+  // exclude them, so this page is reachable only via a direct URL; land the
+  // same way as the "doesn't exist" case above rather than a player.
+  if (item.status === "ghost") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center">
+        <p className="text-sm text-muted-foreground">
+          This item has no downloaded file — use "Download now" from its actions menu on the Library page.
+        </p>
+        <Button asChild variant="outline">
+          <Link to={backTo}>Back to Browse</Link>
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <RevealAllProvider>
       <div className="p-4 md:p-6">

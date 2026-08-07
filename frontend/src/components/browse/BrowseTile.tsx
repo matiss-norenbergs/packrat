@@ -50,7 +50,9 @@ export function BrowseTile({
         ) : (
           <MediaTypePlaceholder mediaType={item.mediaType} />
         )}
-        {unlocked && <Link to={`/browse/${item.id}`} className="absolute inset-0" aria-label={item.title} />}
+        {unlocked && item.status !== "ghost" && (
+          <Link to={`/browse/${item.id}`} className="absolute inset-0" aria-label={item.title} />
+        )}
         {onRemove && unlocked && (
           <Tooltip>
             <TooltipTrigger asChild>

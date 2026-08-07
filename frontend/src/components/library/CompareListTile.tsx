@@ -1,4 +1,4 @@
-import { X } from "lucide-react"
+import { Ghost, X } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
@@ -30,7 +30,11 @@ export function CompareListTile({ item, selected, canSelect, onToggle, onRemove 
   const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
   const revealed = isRevealed(item.id)
   const thumbUrl = libraryMediumThumbnailUrl(item)
-  const disabled = !selected && !canSelect
+  const isGhost = item.status === "ghost"
+  // A ghost item has no file to play — it can still sit in the list (added
+  // before its file was deleted) but can never be selected into a play
+  // session, regardless of the 6-item cap.
+  const disabled = isGhost || (!selected && !canSelect)
 
   return (
     <Card
@@ -49,6 +53,12 @@ export function CompareListTile({ item, selected, canSelect, onToggle, onRemove 
           />
         ) : (
           <MediaTypePlaceholder mediaType={item.mediaType} />
+        )}
+        {isGhost && (
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-background/80 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">
+            Ghost item
+            <Ghost className="h-3 w-3" />
+          </div>
         )}
         <Checkbox
           checked={selected}

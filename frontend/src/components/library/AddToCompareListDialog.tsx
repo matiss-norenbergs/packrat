@@ -47,14 +47,17 @@ export function AddToCompareListDialog({ open, onOpenChange }: AddToCompareListD
   }, [selectedCollectionIds, collections])
 
   const { data: resolvedFromCollections, isLoading: resolving } = useLibraryQuery(
-    { collectionIds: collectionIdsToResolve },
+    { collectionIds: collectionIdsToResolve, hideGhosts: true },
     open && collectionIdsToResolve.length > 0,
   )
 
+  // Ghost items have no file to play, so they can't go on the compare
+  // list — filtered out here rather than upstream since selectedItems can
+  // include ghosts picked individually on the Library page.
   const affectedItems = useMemo(() => {
     const byId = new Map<number, LibraryItem>(selectedItems)
     for (const item of resolvedFromCollections?.items ?? []) byId.set(item.id, item)
-    return [...byId.values()]
+    return [...byId.values()].filter((item) => item.status !== "ghost")
   }, [selectedItems, resolvedFromCollections])
 
   const visibleItems = affectedItems.slice(0, MAX_VISIBLE_FILES)

@@ -215,6 +215,43 @@ func removeLibraryItemFile(mediaRoot string, item *models.LibraryItem, clearThum
 	}
 }
 
+// ScanMissingLibraryFiles checks every non-ghost item's on-record file
+// against disk and converts any that are missing into ghost items — same
+// end state, same ClearFile call, as the existing "Delete file…" action —
+// so a file removed or moved outside the app entirely (by hand, by
+// Jellyfin, a disk issue) doesn't just keep 404ing forever with no
+// indication in the UI. On-demand only (triggered by a Settings button, not
+// scheduled), since converting library rows is a mutation someone should
+// opt into rather than have happen silently on a timer. Thumbnails are left
+// untouched (ClearFile's clearThumbnail: false) — only the media file has
+// been confirmed missing here, the thumbnail may well still be fine.
+func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		refs, err := libraryRepo.ListNonGhostFiles(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		missing := make([]MissingLibraryFileResponse, 0)
+		for _, ref := range refs {
+			abs := filepath.Join(mediaRoot, filepath.FromSlash(ref.Path))
+			if _, err := os.Stat(abs); err == nil {
+				continue // file present — nothing to do
+			}
+			if err := libraryRepo.ClearFile(ctx, ref.ID, false); err != nil {
+				log.Printf("scan missing files: clearing item %d failed: %v", ref.ID, err)
+				continue
+			}
+			missing = append(missing, MissingLibraryFileResponse{ID: ref.ID, Title: ref.Title})
+		}
+
+		c.JSON(http.StatusOK, ScanMissingLibraryFilesResponse{Scanned: len(refs), Missing: missing})
+	}
+}
+
 // BulkDeleteLibraryItemFiles mirrors DeleteLibraryItemFile applied to a
 // batch — one shared deleteThumbnail flag for the whole request, not per
 // item, matching BulkDeleteLibraryItems' shape (library_handler.go). An id

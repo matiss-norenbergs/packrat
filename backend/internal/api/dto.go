@@ -480,6 +480,20 @@ type BulkFetchThumbnailsResponse struct {
 	Skipped int `json:"skipped"`
 }
 
+// MissingLibraryFileResponse is one item ScanMissingLibraryFiles found and
+// converted to a ghost — just enough for the frontend's summary toast.
+type MissingLibraryFileResponse struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+}
+
+// ScanMissingLibraryFilesResponse reports how many items were checked and
+// which ones (if any) had their file missing and got converted to ghosts.
+type ScanMissingLibraryFilesResponse struct {
+	Scanned int                          `json:"scanned"`
+	Missing []MissingLibraryFileResponse `json:"missing"`
+}
+
 // ThumbnailCandidateResponse is one of the candidate frames returned by
 // GET /api/library/:id/thumbnail/candidates for the "choose from video"
 // flow — the frontend shows all of them and POSTs back whichever
@@ -1068,17 +1082,17 @@ type ImportRequest struct {
 // see CreateGhostLibraryItem (ghost_handler.go). FetchThumbnail is only
 // honored when OriginalURL is also set.
 type CreateGhostLibraryItemRequest struct {
-	Title           string   `json:"title" binding:"required"`
-	MediaType       string   `json:"mediaType" binding:"required,oneof=video audio"`
-	OriginalURL     *string  `json:"originalUrl"`
-	CollectionID    *int64   `json:"collectionId"`
-	ArtistID        *int64   `json:"artistId"`
-	Year            *int     `json:"year"`
-	SeasonNumber    *int     `json:"seasonNumber"`
-	SequenceNumber  *int     `json:"sequenceNumber"`
-	GenerateNFO     bool     `json:"generateNfo"`
-	Tags            []string `json:"tags"`
-	FetchThumbnail  bool     `json:"fetchThumbnail"`
+	Title          string   `json:"title" binding:"required"`
+	MediaType      string   `json:"mediaType" binding:"required,oneof=video audio"`
+	OriginalURL    *string  `json:"originalUrl"`
+	CollectionID   *int64   `json:"collectionId"`
+	ArtistID       *int64   `json:"artistId"`
+	Year           *int     `json:"year"`
+	SeasonNumber   *int     `json:"seasonNumber"`
+	SequenceNumber *int     `json:"sequenceNumber"`
+	GenerateNFO    bool     `json:"generateNfo"`
+	Tags           []string `json:"tags"`
+	FetchThumbnail bool     `json:"fetchThumbnail"`
 }
 
 type BackupExportRequest struct {
@@ -1158,11 +1172,11 @@ type BackupPreviewItem struct {
 }
 
 type StatsResponse struct {
-	ActiveDownloads   int   `json:"activeDownloads"`
-	QueuedDownloads   int   `json:"queuedDownloads"`
-	CompletedToday    int   `json:"completedToday"`
-	LibraryVideoCount int   `json:"libraryVideoCount"`
-	LibraryAudioCount int   `json:"libraryAudioCount"`
+	ActiveDownloads   int `json:"activeDownloads"`
+	QueuedDownloads   int `json:"queuedDownloads"`
+	CompletedToday    int `json:"completedToday"`
+	LibraryVideoCount int `json:"libraryVideoCount"`
+	LibraryAudioCount int `json:"libraryAudioCount"`
 	// Ghost (no-file placeholder) subset of the two counts above — always
 	// <= their counterpart. Lets the dashboard split each bar/legend entry
 	// by ghost vs real without a separate chart.

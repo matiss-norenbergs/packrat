@@ -349,6 +349,59 @@ func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *
 	}
 }
 
+// DeleteLibraryItemThumbnail removes an item's thumbnail — the raw sidecar
+// file (if any — a ghost's fetched thumbnail has no MediaRoot-relative
+// Thumbnail, only the ImagesRoot derivatives, see fetchGhostThumbnail) and
+// both small/medium derivatives — leaving the media file, filename/path,
+// and status untouched. The item falls back to MediaTypePlaceholder
+// everywhere a thumbnail would've shown.
+func DeleteLibraryItemThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+
+		item, err := libraryRepo.Get(ctx, id)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if item.Thumbnail == nil && item.ThumbnailSmallPath == nil && item.ThumbnailMediumPath == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no thumbnail"})
+			return
+		}
+
+		if item.Thumbnail != nil {
+			abs := filepath.Join(mediaRoot, filepath.FromSlash(*item.Thumbnail))
+			if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+				log.Printf("library thumbnail: failed to delete %s: %v", abs, err)
+			}
+		}
+		for _, p := range []*string{item.ThumbnailSmallPath, item.ThumbnailMediumPath} {
+			if p == nil {
+				continue
+			}
+			abs := filepath.Join(imagesRoot, filepath.FromSlash(*p))
+			if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+				log.Printf("library thumbnail: failed to delete derivative %s: %v", abs, err)
+			}
+		}
+
+		if err := libraryRepo.ClearThumbnail(ctx, id); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
 func writeThumbnailAndRespond(c *gin.Context, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, id int64, mediaRoot, imagesRoot, ffmpegPath, thumbAbs string) {
 	ctx := c.Request.Context()
 

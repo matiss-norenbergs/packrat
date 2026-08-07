@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ComparePlayerCell } from "@/components/library/ComparePlayerCell"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { useLibrary } from "@/hooks/useLibrary"
+import type { LibraryItem } from "@/types/api"
 
 // Zoom-style gallery sizing — as square a grid as possible (columns first,
 // so a lone leftover item lands on its own row rather than stretching
@@ -91,10 +92,14 @@ export function ComparePlayPage() {
     [searchParams],
   )
 
+  // Ghost items have no file to play — filtered out here rather than
+  // trusted from the URL, since a ghost could still be sitting in a
+  // persisted compare list (added before its file was deleted) even though
+  // CompareListPage no longer lets one be selected.
   const items = useMemo(() => {
     if (!allItems) return []
     const byId = new Map(allItems.map((i) => [i.id, i]))
-    return ids.map((id) => byId.get(id)).filter((i) => i != null)
+    return ids.map((id) => byId.get(id)).filter((i): i is LibraryItem => i != null && i.status !== "ghost")
   }, [allItems, ids])
 
   const registerMedia = (id: number) => (el: HTMLMediaElement | null) => {

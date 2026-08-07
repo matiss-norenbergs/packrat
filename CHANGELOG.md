@@ -30,6 +30,31 @@ Maintenance notes:
   one multi-arch manifest and creates the release — same total work, much
   less wall-clock time, and one slow architecture can no longer starve the
   other.
+- **New: "Scan for Missing Files" library maintenance action** — checks
+  every library item's on-record file against disk and converts any that
+  are missing (deleted, moved, or renamed outside Packrat) into ghost
+  placeholders, keeping the DB row, tags, and metadata intact so
+  "Download now" can fill it back in later. Available from Settings →
+  Library; runs on demand only, not on a schedule.
+- **New: "Ghost item" banner on library cards** — a small status strip
+  ("Ghost item" + icon) floats over the bottom of the thumbnail on every
+  card-style surface (Library grid, Compare list, sibling strips), making
+  a file-less placeholder item obvious at a glance instead of only being
+  distinguishable by its type-icon thumbnail.
+- **Fixed: ghost items could still be opened in the player, added to
+  Browse rows, or selected onto the compare list** — none of those make
+  sense for an item with no file. Ghost items are now excluded from
+  Browse's queries and from what a compare-list dialog will add; their
+  card's Play button and detail-page links are hidden so navigating to a
+  ghost's player page isn't possible from the UI (a direct URL still lands
+  on a plain "no file" message instead of a broken player); and a
+  compare-list tile whose item later gets ghosted becomes permanently
+  unselectable rather than just quietly failing to play.
+- **New: "Delete" option for an item's thumbnail** — under the Thumbnail
+  submenu, removes just the thumbnail image (raw file and both derivative
+  sizes) from disk and falls back to the type-placeholder icon, leaving
+  the media file and everything else about the item untouched. Disabled
+  when there's no thumbnail to delete.
 
 ## 2026-08-06
 

@@ -46,6 +46,7 @@ import type {
   LoginRequest,
   LogEntry,
   MoveLibraryItemRequest,
+  ScanMissingLibraryFilesResult,
   ScannedFile,
   Settings,
   SetArtistImageRequest,
@@ -241,6 +242,14 @@ export function createGhostLibraryItem(payload: CreateGhostLibraryItemRequest): 
 
 export function deleteLibraryItemFile(id: number, deleteThumbnail: boolean): Promise<void> {
   return request<void>(`/library/${id}/file?deleteThumbnail=${deleteThumbnail}`, { method: "DELETE" })
+}
+
+export function deleteLibraryItemThumbnail(id: number): Promise<void> {
+  return request<void>(`/library/${id}/thumbnail`, { method: "DELETE" })
+}
+
+export function scanMissingLibraryFiles(): Promise<ScanMissingLibraryFilesResult> {
+  return request<ScanMissingLibraryFilesResult>("/library/scan-missing", { method: "POST" })
 }
 
 export function updateLibraryItem(id: number, payload: UpdateLibraryItemRequest): Promise<void> {

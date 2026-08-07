@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { Ghost } from "lucide-react"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { librarySmallThumbnailUrl } from "@/lib/api"
@@ -30,6 +31,7 @@ export function LibraryItemStripTile({
   const toggleReveal = () => toggleItem(item.id)
   const effectiveBlurred = item.blurred && !ignorePrivacy
   const thumbUrl = librarySmallThumbnailUrl(item)
+  const isGhost = item.status === "ghost"
 
   return (
     <div className="w-40 shrink-0 space-y-1.5">
@@ -45,7 +47,13 @@ export function LibraryItemStripTile({
         ) : (
           <MediaTypePlaceholder mediaType={item.mediaType} />
         )}
-        {!effectiveBlurred || revealed ? (
+        {isGhost && (
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-background/80 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">
+            Ghost item
+            <Ghost className="h-3 w-3" />
+          </div>
+        )}
+        {!isGhost && (!effectiveBlurred || revealed) ? (
           <Link to={`${basePath}/${item.id}`} state={{ from: backTo }} className="absolute inset-0" aria-label={item.title} />
         ) : null}
         {item.duration != null && (
@@ -56,6 +64,8 @@ export function LibraryItemStripTile({
       </div>
       {effectiveBlurred && !revealed ? (
         <p className="line-clamp-2 text-xs font-medium">{hashText(item.title)}</p>
+      ) : isGhost ? (
+        <p className="line-clamp-2 text-xs font-medium">{item.title}</p>
       ) : (
         <Link
           to={`${basePath}/${item.id}`}

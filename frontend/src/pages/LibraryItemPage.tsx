@@ -41,6 +41,23 @@ export function LibraryItemPage() {
     )
   }
 
+  // Ghost items have no file to play — this page is reachable only via a
+  // direct URL (its own card never links here, see LibraryCard's Play
+  // button), so land the same way as the "doesn't exist" case above rather
+  // than trying to render a player.
+  if (item.status === "ghost") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center">
+        <p className="text-sm text-muted-foreground">
+          This item has no downloaded file — use "Download now" from its actions menu.
+        </p>
+        <Button asChild variant="outline">
+          <Link to={backTo}>Back to Library</Link>
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <RevealAllProvider>
       <LibraryItemDetail

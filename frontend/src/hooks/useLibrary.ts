@@ -11,6 +11,7 @@ import {
   deleteLibraryItem,
   deleteLibraryItemFile,
   deleteLibraryItemNFO,
+  deleteLibraryItemThumbnail,
   discardLibraryItemTrim,
   fetchLibrary,
   fetchLibraryFacets,
@@ -29,6 +30,7 @@ import {
   redownloadLibraryItemFromUrl,
   redownloadLibraryThumbnail,
   refreshLibraryItemMetadata,
+  scanMissingLibraryFiles,
   setLibraryThumbnail,
   updateLibraryItem,
   updateLibraryItemProgress,
@@ -122,6 +124,34 @@ export function useDeleteLibraryItemFile() {
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to delete file: ${err.message}`),
+  })
+}
+
+export function useDeleteLibraryItemThumbnail() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => deleteLibraryItemThumbnail(id),
+    onSuccess: () => {
+      toast.success("Thumbnail deleted")
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to delete thumbnail: ${err.message}`),
+  })
+}
+
+export function useScanMissingLibraryFiles() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => scanMissingLibraryFiles(),
+    onSuccess: (result) => {
+      toast.success(
+        result.missing.length > 0
+          ? `Found ${result.missing.length} missing file(s), marked as ghosts`
+          : `No missing files found (${result.scanned} checked)`,
+      )
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Scan failed: ${err.message}`),
   })
 }
 

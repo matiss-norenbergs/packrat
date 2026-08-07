@@ -419,6 +419,16 @@ export interface ThumbnailCandidate {
   imageBase64: string
 }
 
+export interface MissingLibraryFile {
+  id: number
+  title: string
+}
+
+export interface ScanMissingLibraryFilesResult {
+  scanned: number
+  missing: MissingLibraryFile[]
+}
+
 export interface MoveLibraryItemRequest {
   collectionId?: number | null
   folder: string
