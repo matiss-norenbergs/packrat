@@ -15,6 +15,7 @@ import { ComparePlayPage } from "@/pages/ComparePlayPage"
 import { ImportPage } from "@/pages/ImportPage"
 import { HistoryPage } from "@/pages/HistoryPage"
 import { BackupPage } from "@/pages/BackupPage"
+import { SubscriptionsPage } from "@/pages/SubscriptionsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { LogsPage } from "@/pages/LogsPage"
 import { BrowsePage } from "@/pages/BrowsePage"
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
       { path: "/import", element: <ImportPage /> },
       { path: "/history", element: <HistoryPage /> },
       { path: "/backup", element: <BackupPage /> },
+      { path: "/subscriptions", element: <SubscriptionsPage /> },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/logs", element: <LogsPage /> },
     ],

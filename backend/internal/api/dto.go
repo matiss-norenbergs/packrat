@@ -1189,3 +1189,114 @@ type StatsResponse struct {
 	DiskTotalBytes int64 `json:"diskTotalBytes"`
 	DiskFreeBytes  int64 `json:"diskFreeBytes"`
 }
+
+// CreateSubscriptionRequest saves a channel/playlist URL to be periodically
+// re-checked for new uploads — see CreateSubscription (subscriptions_handler.go).
+// Title is resolved server-side from a metadata fetch, not taken from the
+// request. CheckIntervalHours defaults to 6 when omitted/zero.
+type CreateSubscriptionRequest struct {
+	URL                string   `json:"url" binding:"required,url"`
+	MediaType          string   `json:"mediaType" binding:"required,oneof=video audio"`
+	CollectionID       *int64   `json:"collectionId"`
+	Tags               []string `json:"tags"`
+	AutoDownload       bool     `json:"autoDownload"`
+	GenerateNFO        bool     `json:"generateNfo"`
+	CheckIntervalHours int      `json:"checkIntervalHours"`
+}
+
+// UpdateSubscriptionRequest — URL/MediaType are immutable after creation
+// (changing the source is really "delete and re-add"). Unlike
+// UpdateSettingsRequest's per-field-independent PATCH, EditSubscriptionDialog
+// is a single buffered-save form that always submits its full current
+// state, so CollectionID/Tags apply as given (nil CollectionID means "no
+// collection," same as MoveLibraryItemRequest) — only AutoDownload/
+// GenerateNFO/CheckIntervalHours/Enabled are pointers, purely so the zero
+// value can't be mistaken for "not sent" by a caller other than the one
+// dialog this is built for.
+type UpdateSubscriptionRequest struct {
+	CollectionID       *int64   `json:"collectionId"`
+	Tags               []string `json:"tags"`
+	AutoDownload       *bool    `json:"autoDownload" binding:"required"`
+	GenerateNFO        *bool    `json:"generateNfo" binding:"required"`
+	CheckIntervalHours *int     `json:"checkIntervalHours" binding:"required"`
+	Enabled            *bool    `json:"enabled" binding:"required"`
+}
+
+type SubscriptionResponse struct {
+	ID                 int64    `json:"id"`
+	URL                string   `json:"url"`
+	Title              string   `json:"title"`
+	MediaType          string   `json:"mediaType"`
+	CollectionID       *int64   `json:"collectionId"`
+	CollectionName     *string  `json:"collectionName"`
+	Tags               []string `json:"tags"`
+	AutoDownload       bool     `json:"autoDownload"`
+	GenerateNFO        bool     `json:"generateNfo"`
+	CheckIntervalHours int      `json:"checkIntervalHours"`
+	Enabled            bool     `json:"enabled"`
+	LastCheckedAt      *string  `json:"lastCheckedAt"`
+	KnownEntryCount    int      `json:"knownEntryCount"`
+	CreatedAt          string   `json:"createdAt"`
+}
+
+func toSubscriptionResponse(s models.Subscription, collectionName *string, knownEntryCount int) SubscriptionResponse {
+	resp := SubscriptionResponse{
+		ID:                 s.ID,
+		URL:                s.URL,
+		Title:              s.Title,
+		MediaType:          s.MediaType,
+		CollectionID:       s.CollectionID,
+		CollectionName:     collectionName,
+		Tags:               s.Tags,
+		AutoDownload:       s.AutoDownload,
+		GenerateNFO:        s.GenerateNFO,
+		CheckIntervalHours: s.CheckIntervalHours,
+		Enabled:            s.Enabled,
+		KnownEntryCount:    knownEntryCount,
+		CreatedAt:          s.CreatedAt.Format(time.RFC3339),
+	}
+	if s.LastCheckedAt != nil {
+		t := s.LastCheckedAt.Format(time.RFC3339)
+		resp.LastCheckedAt = &t
+	}
+	return resp
+}
+
+type CheckSubscriptionResponse struct {
+	NewItemsFound int `json:"newItemsFound"`
+}
+
+// SubscriptionEntryResponse is one row of the "Known items" dialog — see
+// ListSubscriptionEntries (subscriptions_handler.go). Entries recorded
+// before migration 000033 have empty Title/URL and nil DurationSeconds.
+type SubscriptionEntryResponse struct {
+	SourceID        string   `json:"sourceId"`
+	Title           string   `json:"title"`
+	URL             string   `json:"url"`
+	DurationSeconds *float64 `json:"durationSeconds"`
+	LibraryItemID   *int64   `json:"libraryItemId"`
+	FirstSeenAt     string   `json:"firstSeenAt"`
+}
+
+func toSubscriptionEntryResponse(e models.SubscriptionSeenEntry) SubscriptionEntryResponse {
+	return SubscriptionEntryResponse{
+		SourceID:        e.SourceID,
+		Title:           e.Title,
+		URL:             e.URL,
+		DurationSeconds: e.DurationSeconds,
+		LibraryItemID:   e.LibraryItemID,
+		FirstSeenAt:     e.FirstSeenAt.Format(time.RFC3339),
+	}
+}
+
+// AddSubscriptionEntryRequest drives a single "Known items" row action —
+// see AddSubscriptionEntry (subscriptions_handler.go).
+type AddSubscriptionEntryRequest struct {
+	Mode string `json:"mode" binding:"required,oneof=ghost download"`
+}
+
+type AddSubscriptionEntryResponse struct {
+	Mode          string `json:"mode"`
+	LibraryItemID *int64 `json:"libraryItemId,omitempty"`
+	DownloadID    *int64 `json:"downloadId,omitempty"`
+}

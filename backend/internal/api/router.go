@@ -12,6 +12,7 @@ import (
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/subscriptions"
 )
 
 // Deps holds everything the router needs to wire up routes. Fields are added
@@ -29,6 +30,7 @@ type Deps struct {
 	CompareListRepo      *repository.CompareListRepo
 	UsersRepo            *repository.UsersRepo
 	BackupHistoryRepo    *repository.BackupHistoryRepo
+	SubscriptionsRepo    *repository.SubscriptionsRepo
 	YtDlp                *downloader.YtDlpService
 	JellyfinClient       *jellyfin.Client
 	ImageBackfillManager *imagebackfill.Manager
@@ -183,6 +185,23 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/backup/history/:id/download", DownloadBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.DELETE("/backup/history/:id", DeleteBackupHistoryEntry(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.GET("/backup/history/:id/preview", PreviewBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
+
+		subCheckDeps := subscriptions.CheckDeps{
+			SubscriptionsRepo: deps.SubscriptionsRepo,
+			LibraryRepo:       deps.LibraryRepo,
+			TagsRepo:          deps.TagsRepo,
+			CollectionsRepo:   deps.CollectionsRepo,
+			Manager:           deps.Manager,
+			YtDlp:             deps.YtDlp,
+			ImagesRoot:        deps.ImagesRoot,
+		}
+		api.POST("/subscriptions", CreateSubscription(subCheckDeps))
+		api.GET("/subscriptions", ListSubscriptions(subCheckDeps))
+		api.PATCH("/subscriptions/:id", UpdateSubscription(subCheckDeps))
+		api.DELETE("/subscriptions/:id", DeleteSubscription(subCheckDeps))
+		api.POST("/subscriptions/:id/check", CheckSubscriptionNow(subCheckDeps))
+		api.GET("/subscriptions/:id/entries", ListSubscriptionEntries(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/:sourceId/add", AddSubscriptionEntry(subCheckDeps))
 
 		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
 		api.POST("/import", CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))

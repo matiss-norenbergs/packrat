@@ -14,6 +14,25 @@ Maintenance notes:
 
 ## 2026-08-07
 
+- **New: subscriptions "Known items" dialog** — browse every video a
+  subscription has ever seen (not just the ones that became ghosts or
+  downloads) and manually add any of them to the library as a ghost item
+  or a queued download, per-row. Mainly useful for a video that was
+  recorded during a subscription's baseline fetch — which deliberately
+  doesn't create anything — but that you've since decided you do want
+  after all.
+- **New: channel/playlist subscriptions** — save a channel or playlist URL
+  once and Packrat periodically re-checks it for new uploads (default every
+  6h, configurable per subscription), diffing against what it's already
+  seen. New uploads either become ghost placeholders to review and
+  download manually, or — with "Auto-download" turned on for that
+  subscription — go straight into the download queue. Subscribing baselines
+  against the channel's current catalog immediately (no ghosts/downloads
+  created for existing videos) so only genuinely new uploads trigger
+  afterward. New "Subscriptions" page (sidebar, under Backup) lists every
+  subscription with its known-item count, last-checked time, a manual
+  "Check now," and edit/delete/enable controls.
+
 - **Fixed: downloaded library items stored the wrong resolution/duration**
   — both were taken from yt-dlp's pre-download metadata probe (its
   default/"best" format info), not from the file that was actually

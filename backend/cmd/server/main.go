@@ -21,6 +21,7 @@ import (
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/subscriptions"
 	"packrat/backend/internal/ws"
 )
 
@@ -110,6 +111,7 @@ func run() error {
 	compareListRepo := repository.NewCompareListRepo(conn)
 	usersRepo := repository.NewUsersRepo(conn)
 	backupHistoryRepo := repository.NewBackupHistoryRepo(conn)
+	subscriptionsRepo := repository.NewSubscriptionsRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath, settingsRepo, cfg.MaxConcurrentTranscodes)
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
@@ -166,14 +168,26 @@ func run() error {
 		BackupHistoryRepo: backupHistoryRepo,
 	}
 
+	subCheckDeps := subscriptions.CheckDeps{
+		SubscriptionsRepo: subscriptionsRepo,
+		LibraryRepo:       libraryRepo,
+		TagsRepo:          tagsRepo,
+		CollectionsRepo:   collectionsRepo,
+		Manager:           mgr,
+		YtDlp:             ytdlpSvc,
+		ImagesRoot:        cfg.ImagesRoot,
+	}
+
 	go func() {
-		// All three sweeps share one ticker — they run on the same cadence
+		// All four sweeps share one ticker — they run on the same cadence
 		// and each is already a no-op when its own setting is unset/not due.
-		// The smallest auto-backup interval option is 6h, so hourly-
-		// granularity checking is more than sufficient.
+		// The smallest auto-backup interval option is 6h, and subscriptions
+		// default to 6h too, so hourly-granularity checking is more than
+		// sufficient.
 		cleanupHistory(ctx, historyRepo, settingsRepo) // once immediately, so a just-raised retention takes effect right away
 		cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
 		backup.RunScheduledBackupIfDue(ctx, runDeps)
+		subscriptions.RunDueChecks(ctx, subCheckDeps)
 		ticker := time.NewTicker(historyCleanupInterval)
 		defer ticker.Stop()
 		for {
@@ -184,6 +198,7 @@ func run() error {
 				cleanupHistory(ctx, historyRepo, settingsRepo)
 				cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
 				backup.RunScheduledBackupIfDue(ctx, runDeps)
+				subscriptions.RunDueChecks(ctx, subCheckDeps)
 			}
 		}
 	}()
@@ -201,6 +216,7 @@ func run() error {
 		CompareListRepo:      compareListRepo,
 		UsersRepo:            usersRepo,
 		BackupHistoryRepo:    backupHistoryRepo,
+		SubscriptionsRepo:    subscriptionsRepo,
 		YtDlp:                ytdlpSvc,
 		JellyfinClient:       jellyfinClient,
 		ImageBackfillManager: imageBackfillMgr,
