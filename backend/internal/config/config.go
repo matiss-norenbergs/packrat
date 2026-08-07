@@ -8,30 +8,32 @@ import (
 )
 
 type Config struct {
-	Port                   string
-	DBPath                 string
-	MediaRoot              string
-	ImagesRoot             string
-	BackupsRoot            string
-	MaxConcurrentDownloads int
-	YtDlpPath              string
-	FFmpegPath             string
-	FFProbePath            string
-	PipPath                string
+	Port                    string
+	DBPath                  string
+	MediaRoot               string
+	ImagesRoot              string
+	BackupsRoot             string
+	MaxConcurrentDownloads  int
+	MaxConcurrentTranscodes int
+	YtDlpPath               string
+	FFmpegPath              string
+	FFProbePath             string
+	PipPath                 string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		Port:                   getEnv("PORT", "50505"),
-		DBPath:                 getEnv("DB_PATH", "./data/db/packrat.db"),
-		MediaRoot:              getEnv("MEDIA_ROOT", "./data/media"),
-		ImagesRoot:             getEnv("IMAGES_ROOT", "./data/images"),
-		BackupsRoot:            getEnv("BACKUPS_ROOT", "./data/backups"),
-		MaxConcurrentDownloads: 2,
-		YtDlpPath:              getEnv("YTDLP_PATH", "yt-dlp"),
-		FFmpegPath:             getEnv("FFMPEG_PATH", "ffmpeg"),
-		FFProbePath:            getEnv("FFPROBE_PATH", "ffprobe"),
-		PipPath:                getEnv("PIP_PATH", "pip"),
+		Port:                    getEnv("PORT", "50505"),
+		DBPath:                  getEnv("DB_PATH", "./data/db/packrat.db"),
+		MediaRoot:               getEnv("MEDIA_ROOT", "./data/media"),
+		ImagesRoot:              getEnv("IMAGES_ROOT", "./data/images"),
+		BackupsRoot:             getEnv("BACKUPS_ROOT", "./data/backups"),
+		MaxConcurrentDownloads:  2,
+		MaxConcurrentTranscodes: 2,
+		YtDlpPath:               getEnv("YTDLP_PATH", "yt-dlp"),
+		FFmpegPath:              getEnv("FFMPEG_PATH", "ffmpeg"),
+		FFProbePath:             getEnv("FFPROBE_PATH", "ffprobe"),
+		PipPath:                 getEnv("PIP_PATH", "pip"),
 	}
 
 	if raw := os.Getenv("MAX_CONCURRENT_DOWNLOADS"); raw != "" {
@@ -40,6 +42,14 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("invalid MAX_CONCURRENT_DOWNLOADS %q: must be a positive integer", raw)
 		}
 		cfg.MaxConcurrentDownloads = n
+	}
+
+	if raw := os.Getenv("MAX_CONCURRENT_FFMPEG_TRANSCODES"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			return Config{}, fmt.Errorf("invalid MAX_CONCURRENT_FFMPEG_TRANSCODES %q: must be a positive integer", raw)
+		}
+		cfg.MaxConcurrentTranscodes = n
 	}
 
 	mediaRoot, err := filepath.Abs(cfg.MediaRoot)

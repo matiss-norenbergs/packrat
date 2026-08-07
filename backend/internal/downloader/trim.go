@@ -449,6 +449,14 @@ func (s *YtDlpService) BuildTrimPreview(ctx context.Context, ffprobePath, mediaA
 		return "", 0, 0, fmt.Errorf("nothing to trim")
 	}
 
+	// Gate on the configurable transcode limit only once the request is
+	// known-valid — a bad request shouldn't wait in line behind real work.
+	release, err := s.transcodes.acquire(ctx)
+	if err != nil {
+		return "", 0, 0, fmt.Errorf("waiting for a free transcode slot: %w", err)
+	}
+	defer release()
+
 	dir := TrimTmpDir(mediaRoot)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", 0, 0, fmt.Errorf("creating trim tmp dir: %w", err)

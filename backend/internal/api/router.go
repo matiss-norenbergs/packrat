@@ -157,14 +157,14 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/artists/:id/images/:imageId/select", SelectArtistImage(deps.ArtistsRepo))
 		api.DELETE("/artists/:id/selected-image", ClearArtistSelectedImage(deps.ArtistsRepo))
 
-		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.MediaRoot))
-		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager))
+		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp, deps.MediaRoot))
+		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp))
 		api.POST("/settings/backfill-images", StartImageBackfill(deps.ImageBackfillManager))
 		api.GET("/settings/backfill-images", GetImageBackfillStatus(deps.ImageBackfillManager))
 
 		api.POST("/backup/export/settings", ExportSettings(deps.SettingsRepo))
 		api.POST("/backup/export/library", ExportLibrary(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.DownloadsRepo))
-		api.POST("/backup/import/settings", ImportSettings(deps.SettingsRepo, deps.Manager))
+		api.POST("/backup/import/settings", ImportSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp))
 		api.POST("/backup/preview/library", PreviewLibraryImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
 		api.POST("/backup/import/library", ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.SettingsRepo))
 		api.GET("/backup/history", ListBackupHistory(deps.BackupHistoryRepo))

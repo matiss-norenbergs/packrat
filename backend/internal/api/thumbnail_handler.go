@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -25,12 +26,30 @@ var libraryThumbnailTiers = []imageproc.Tier{
 	{Name: "medium", MaxWidth: imageproc.ThumbnailMediumWidth},
 }
 
-// pickFrameTimestamps splits the middle 10%-90% of durationSeconds into n
+// endOfVideoGraceSeconds keeps the upper end of the pick range a fraction of
+// a second short of the true duration — an ffmpeg -ss seek to (or past)
+// exact EOF has no frame to return, so "100%" here means "right up to the
+// last extractable frame," not the literal boundary.
+const endOfVideoGraceSeconds = 0.5
+
+// frameExcludeMinGapSeconds is how close a newly-picked timestamp is allowed
+// to land to an already-seen one before it's rejected — two timestamps a
+// fraction of a second apart extract the same visual frame anyway, so exact
+// float equality isn't the right test for "the same frame."
+const frameExcludeMinGapSeconds = 1.0
+
+// pickFrameTimestamps splits the middle 5%-100% of durationSeconds into n
 // equal buckets and picks a random point within each — avoids the
-// likely-blank intro/outro frames, and repeated calls (e.g. Quick Grab used
-// twice) don't keep returning the same frame. Falls back to small fixed
-// offsets when duration is unknown (<= 0).
-func pickFrameTimestamps(durationSeconds float64, n int) []float64 {
+// likely-blank intro frame while allowing right up to the end, and repeated
+// calls (e.g. Quick Grab used twice) don't keep returning the same frame.
+// exclude holds timestamps already returned earlier this session (e.g. from
+// previous "get new frames" batches in the choose-thumbnail dialog) — each
+// pick retries a bounded number of times to land at least
+// frameExcludeMinGapSeconds away from every excluded timestamp; if it can't
+// find a clean spot it just keeps its last attempt rather than failing the
+// whole batch. Falls back to small fixed offsets when duration is unknown
+// (<= 0).
+func pickFrameTimestamps(durationSeconds float64, n int, exclude []float64) []float64 {
 	out := make([]float64, n)
 	if durationSeconds <= 0 {
 		for i := range out {
@@ -39,12 +58,48 @@ func pickFrameTimestamps(durationSeconds float64, n int) []float64 {
 		return out
 	}
 
-	lo, hi := durationSeconds*0.1, durationSeconds*0.9
+	lo := durationSeconds * 0.05
+	hi := durationSeconds - endOfVideoGraceSeconds
+	if hi < lo {
+		hi = lo
+	}
 	bucket := (hi - lo) / float64(n)
 	for i := 0; i < n; i++ {
-		out[i] = lo + bucket*float64(i) + rand.Float64()*bucket
+		candidate := lo + bucket*float64(i) + rand.Float64()*bucket
+		for attempt := 0; attempt < 10 && tooCloseToAny(candidate, exclude); attempt++ {
+			candidate = lo + bucket*float64(i) + rand.Float64()*bucket
+		}
+		out[i] = candidate
 	}
 	return out
+}
+
+func tooCloseToAny(ts float64, exclude []float64) bool {
+	for _, e := range exclude {
+		if math.Abs(ts-e) < frameExcludeMinGapSeconds {
+			return true
+		}
+	}
+	return false
+}
+
+// parseFloatList splits a comma-separated query param into float64s —
+// shared by the timestamps/exclude params on GET .../thumbnail/candidates.
+func parseFloatList(raw string) ([]float64, error) {
+	parts := strings.Split(raw, ",")
+	out := make([]float64, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		v, err := strconv.ParseFloat(p, 64)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, nil
 }
 
 // thumbnailAbsPathFor returns the sidecar thumbnail path for a media file —
@@ -142,7 +197,7 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		duration := resolveDuration(ctx, item.Duration, mediaAbs, ffprobePath)
-		ts := pickFrameTimestamps(duration, 1)[0]
+		ts := pickFrameTimestamps(duration, 1, nil)[0]
 
 		frame, err := ytdlp.ExtractFrame(ctx, mediaAbs, ts)
 		if err != nil {
@@ -160,10 +215,20 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 	}
 }
 
-// GetLibraryThumbnailCandidates extracts 4 candidate frames spread across
-// the video and returns them as base64 JPEGs — read-only, doesn't touch the
-// DB or the current thumbnail. The frontend shows all 4 and the user's pick
+// GetLibraryThumbnailCandidates extracts candidate frames spread across the
+// video and returns them as base64 JPEGs — read-only, doesn't touch the DB
+// or the current thumbnail. The frontend shows them all and the user's pick
 // is sent to SetLibraryThumbnail unchanged.
+//
+// Two modes, both sharing the same response shape:
+//   - Default (no "timestamps" param): picks thumbnailFrameCount random
+//     timestamps via pickFrameTimestamps. An optional comma-separated
+//     "exclude" param carries timestamps already seen in earlier batches
+//     this dialog session, so "get new frames" doesn't re-surface the same
+//     frame.
+//   - Explicit ("timestamps" param set): re-extracts exactly the given
+//     comma-separated timestamps instead of picking new ones — how the
+//     frontend re-displays a previously-generated batch from its history.
 func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, ffprobePath string, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -183,20 +248,37 @@ func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.Lib
 			return
 		}
 
-		frameCount, err := ThumbnailFrameCount(ctx, settingsRepo)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
 		if item.Path == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
 			return
 		}
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-		duration := resolveDuration(ctx, item.Duration, mediaAbs, ffprobePath)
-		timestamps := pickFrameTimestamps(duration, frameCount)
+
+		var timestamps []float64
+		if raw := c.Query("timestamps"); raw != "" {
+			timestamps, err = parseFloatList(raw)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timestamps: " + err.Error()})
+				return
+			}
+		} else {
+			frameCount, err := ThumbnailFrameCount(ctx, settingsRepo)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			var exclude []float64
+			if raw := c.Query("exclude"); raw != "" {
+				exclude, err = parseFloatList(raw)
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid exclude: " + err.Error()})
+					return
+				}
+			}
+			duration := resolveDuration(ctx, item.Duration, mediaAbs, ffprobePath)
+			timestamps = pickFrameTimestamps(duration, frameCount, exclude)
+		}
 
 		candidates := make([]ThumbnailCandidateResponse, 0, len(timestamps))
 		for _, ts := range timestamps {

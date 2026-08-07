@@ -480,10 +480,10 @@ type BulkFetchThumbnailsResponse struct {
 	Skipped int `json:"skipped"`
 }
 
-// ThumbnailCandidateResponse is one of the 4 candidate frames returned by
+// ThumbnailCandidateResponse is one of the candidate frames returned by
 // GET /api/library/:id/thumbnail/candidates for the "choose from video"
-// flow — the frontend shows all 4 and POSTs back whichever imageBase64 the
-// user picked, unchanged.
+// flow — the frontend shows all of them and POSTs back whichever
+// imageBase64 the user picked, unchanged.
 type ThumbnailCandidateResponse struct {
 	TimestampSeconds float64 `json:"timestampSeconds"`
 	ImageBase64      string  `json:"imageBase64"`
@@ -735,6 +735,7 @@ type SetCollectionCoverRequest struct {
 type SettingsResponse struct {
 	DownloadDirectory           string   `json:"downloadDirectory"`
 	MaxConcurrentDownloads      int      `json:"maxConcurrentDownloads"`
+	MaxConcurrentTranscodes     int      `json:"maxConcurrentTranscodes"`
 	DownloadTimeoutMinutes      int      `json:"downloadTimeoutMinutes"`
 	DefaultQuality              string   `json:"defaultQuality"`
 	DefaultDownloadType         string   `json:"defaultDownloadType"`
@@ -772,6 +773,7 @@ type SettingsResponse struct {
 
 type UpdateSettingsRequest struct {
 	MaxConcurrentDownloads      *int      `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
+	MaxConcurrentTranscodes     *int      `json:"maxConcurrentTranscodes" binding:"omitempty,min=1"`
 	DownloadTimeoutMinutes      *int      `json:"downloadTimeoutMinutes" binding:"omitempty,min=0"`
 	DefaultQuality              *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
 	DefaultDownloadType         *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
@@ -785,7 +787,7 @@ type UpdateSettingsRequest struct {
 	LibraryMode                 *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
 	LibraryPaginationEnabled    *bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize             *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
-	ThumbnailFrameCount         *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8"`
+	ThumbnailFrameCount         *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8 12"`
 	PrivacyEnabled              *bool     `json:"privacyEnabled"`
 	PrivacyBlurStrength         *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
 	BrowseIgnorePrivacy         *bool     `json:"browseIgnorePrivacy"`
