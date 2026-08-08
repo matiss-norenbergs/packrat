@@ -383,8 +383,26 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		return
 	}
 	if result.ExitCode != 0 {
-		m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
-		return
+		// A non-zero exit doesn't necessarily mean the video itself failed —
+		// --write-thumbnail/--convert-thumbnails runs as a postprocessing
+		// step inside the same yt-dlp invocation (args.go), and a thumbnail
+		// yt-dlp can't convert (e.g. an AVIF thumbnail on a minimal ffmpeg
+		// build with no AVIF decoder) makes yt-dlp exit non-zero even though
+		// the video already finished downloading and moving into place.
+		// result.FinalPath is only ever populated from the "after_move:"
+		// print hook, which only fires once that move has actually
+		// happened — trust that signal (and confirm the file is really
+		// there) instead of discarding a good download.
+		if result.FinalPath == "" {
+			m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
+			return
+		}
+		if _, statErr := os.Stat(result.FinalPath); statErr != nil {
+			m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
+			return
+		}
+		log.Printf("queue: download %d: yt-dlp exited with code %d but %s was written successfully — continuing, likely a postprocessing failure (e.g. thumbnail conversion)", id, result.ExitCode, result.FinalPath)
+		cleanupOrphanedThumbnailArtifacts(result.FinalPath)
 	}
 
 	if err := m.downloadsRepo.SetCommand(parentCtx, id, result.Command); err != nil {
@@ -579,6 +597,18 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 
 	var thumbRelPtr *string
 	thumbAbs := thumbnailPathFor(finalPath)
+	if thumbAbs != "" {
+		// thumbnailPathFor only computes where yt-dlp's --convert-thumbnails
+		// step *should* have written the jpg — confirm it's actually there
+		// before storing the path, so a failed conversion (see the
+		// exit-code leniency in runOne) never leaves the item pointing at a
+		// thumbnail that doesn't exist. Falls back to no thumbnail; a later
+		// manual "grab thumbnail" edit still works normally since that path
+		// (FetchThumbnail) already checks for this itself.
+		if _, err := os.Stat(thumbAbs); err != nil {
+			thumbAbs = ""
+		}
+	}
 	if thumbAbs != "" {
 		if rel, err := filepath.Rel(m.mediaRoot, thumbAbs); err == nil {
 			relSlash := filepath.ToSlash(rel)
@@ -888,6 +918,35 @@ func thumbnailPathFor(finalPath string) string {
 	ext := filepath.Ext(finalPath)
 	base := strings.TrimSuffix(finalPath, ext)
 	return base + ".jpg"
+}
+
+// cleanupOrphanedThumbnailArtifacts removes leftover sibling files next to
+// finalPath that aren't the video itself — specifically the original-format
+// thumbnail (e.g. .avif/.webp) yt-dlp's --write-thumbnail step downloaded
+// but --convert-thumbnails then failed to turn into the .jpg Packrat
+// actually uses (see the exit-code leniency in runOne). Without this, that
+// file just sits in the media folder forever: nothing references it, and
+// it's in a completely different location from where a later manual
+// "grab thumbnail" writes (imagesRoot, not next to the video), so it would
+// never get cleaned up or reused on its own. Best-effort — only called from
+// the already-non-fatal non-zero-exit path, and a failure here doesn't
+// affect the download's own success.
+func cleanupOrphanedThumbnailArtifacts(finalPath string) {
+	dir := filepath.Dir(finalPath)
+	base := strings.TrimSuffix(filepath.Base(finalPath), filepath.Ext(finalPath))
+	matches, err := filepath.Glob(filepath.Join(dir, base+".*"))
+	if err != nil {
+		log.Printf("queue: globbing for orphaned thumbnail artifacts of %s failed: %v", finalPath, err)
+		return
+	}
+	for _, match := range matches {
+		if match == finalPath || strings.HasSuffix(match, ".jpg") {
+			continue
+		}
+		if err := os.Remove(match); err != nil {
+			log.Printf("queue: removing orphaned thumbnail artifact %s failed: %v", match, err)
+		}
+	}
 }
 
 // classifyRunCtxErr distinguishes why runCtx ended, so finishError can record the real cause

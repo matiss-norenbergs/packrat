@@ -14,6 +14,21 @@ Maintenance notes:
 
 ## 2026-08-07
 
+- **Fixed: a successful download could still end up missing from the
+  library** — `--write-thumbnail`/`--convert-thumbnails jpg` runs as a
+  postprocessing step inside the same yt-dlp invocation as the video
+  download; if that conversion fails (e.g. an AVIF thumbnail on a minimal
+  ffmpeg build with no AVIF decoder — the Docker image's Alpine `ffmpeg`
+  package is exactly this case), yt-dlp exits non-zero even though the
+  video itself downloaded and moved into place fine. The queue treated any
+  non-zero exit as a hard failure, discarding the already-successful
+  download and never creating the library item — recoverable only by
+  manually re-adding the file via File Import. Now a non-zero exit is only
+  fatal if the video file genuinely isn't on disk; if it is, the item is
+  still created (falling back to no thumbnail rather than pointing at a
+  `.jpg` that was never produced), and the leftover unconverted thumbnail
+  file yt-dlp left behind is cleaned up instead of sitting in the media
+  folder unused forever.
 - **New: subscription check-failure warning + "New"/mark-as-seen for Known
   items** — a subscription whose URL starts failing (dead/private video,
   network error) now shows an amber warning icon next to "Last checked,"
