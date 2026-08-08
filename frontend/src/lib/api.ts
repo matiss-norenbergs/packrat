@@ -62,6 +62,10 @@ import type {
   UpdateSubscriptionRequest,
   Tag,
   ThumbnailCandidate,
+  ThumbnailEnhancementHistoryEntry,
+  RunThumbnailEnhancementResult,
+  ThumbnailEnhancementStatus,
+  ThumbnailEnhancementEligibleItem,
   CreateTagRequest,
   RedownloadOverwriteField,
   RedownloadPreview,
@@ -735,4 +739,52 @@ export function addSubscriptionEntry(id: number, sourceId: string, mode: AddSubs
 
 export function markSubscriptionEntrySeen(id: number, sourceId: string): Promise<void> {
   return request<void>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/seen`, { method: "POST" })
+}
+
+export function listThumbnailEnhancementHistory(): Promise<ThumbnailEnhancementHistoryEntry[]> {
+  return request<ThumbnailEnhancementHistoryEntry[]>("/thumbnail-enhancement/history")
+}
+
+export function runThumbnailEnhancementNow(): Promise<RunThumbnailEnhancementResult> {
+  return request<RunThumbnailEnhancementResult>("/thumbnail-enhancement/run", { method: "POST" })
+}
+
+// listThumbnailUpscalers tests against whatever URL/username/password are
+// passed in — not necessarily saved yet — so the Settings tab's "Load
+// models" button works before the form has been saved.
+export function listThumbnailUpscalers(url: string, username: string, password: string): Promise<string[]> {
+  const search = new URLSearchParams({ url })
+  if (username) search.set("username", username)
+  if (password) search.set("password", password)
+  return request<{ upscalers: string[] }>(`/thumbnail-enhancement/upscalers?${search.toString()}`).then(
+    (r) => r.upscalers,
+  )
+}
+
+export function getThumbnailEnhancementStatus(): Promise<ThumbnailEnhancementStatus> {
+  return request<ThumbnailEnhancementStatus>("/thumbnail-enhancement/status")
+}
+
+export function listThumbnailEnhancementEligible(): Promise<ThumbnailEnhancementEligibleItem[]> {
+  return request<ThumbnailEnhancementEligibleItem[]>("/thumbnail-enhancement/eligible")
+}
+
+export function enhanceThumbnailItem(id: number): Promise<void> {
+  return request<void>(`/thumbnail-enhancement/items/${id}/run`, { method: "POST" })
+}
+
+export function revertThumbnailOriginal(id: number): Promise<void> {
+  return request<void>(`/thumbnail-enhancement/items/${id}/revert`, { method: "POST" })
+}
+
+export function deleteThumbnailOriginal(id: number): Promise<void> {
+  return request<void>(`/thumbnail-enhancement/items/${id}/original`, { method: "DELETE" })
+}
+
+export function deleteThumbnailEnhancementHistoryEntry(id: number): Promise<void> {
+  return request<void>(`/thumbnail-enhancement/history/${id}`, { method: "DELETE" })
+}
+
+export function clearThumbnailEnhancementHistory(): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/thumbnail-enhancement/history/clear", { method: "POST" })
 }

@@ -23,6 +23,7 @@ import (
 	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/thumbnailenhance"
 	"packrat/backend/internal/ws"
 )
 
@@ -47,21 +48,23 @@ var libraryThumbnailTiers = []imageproc.Tier{
 }
 
 type DownloadManager struct {
-	mediaRoot        string
-	imagesRoot       string
-	ffprobePath      string
-	ytdlp            *downloader.YtDlpService
-	downloadsRepo    *repository.DownloadsRepo
-	libraryRepo      *repository.LibraryRepo
-	collectionsRepo  *repository.CollectionsRepo
-	historyRepo      *repository.HistoryRepo
-	artistsRepo      *repository.ArtistsRepo
-	tagsRepo         *repository.TagsRepo
-	settingsRepo     *repository.SettingsRepo
-	jellyfinClient   *jellyfin.Client
-	jellyfinDebounce *jellyfin.Debouncer
-	progress         *ProgressStore
-	broadcaster      ws.Broadcaster
+	mediaRoot                         string
+	imagesRoot                        string
+	ffprobePath                       string
+	ytdlp                             *downloader.YtDlpService
+	downloadsRepo                     *repository.DownloadsRepo
+	libraryRepo                       *repository.LibraryRepo
+	collectionsRepo                   *repository.CollectionsRepo
+	historyRepo                       *repository.HistoryRepo
+	artistsRepo                       *repository.ArtistsRepo
+	tagsRepo                          *repository.TagsRepo
+	settingsRepo                      *repository.SettingsRepo
+	thumbnailEnhancementHistoryRepo   *repository.ThumbnailEnhancementHistoryRepo
+	thumbnailEnhancementOriginalsRepo *repository.ThumbnailEnhancementOriginalsRepo
+	jellyfinClient                    *jellyfin.Client
+	jellyfinDebounce                  *jellyfin.Debouncer
+	progress                          *ProgressStore
+	broadcaster                       ws.Broadcaster
 
 	jobs chan int64
 
@@ -95,28 +98,32 @@ func NewDownloadManager(
 	artistsRepo *repository.ArtistsRepo,
 	tagsRepo *repository.TagsRepo,
 	settingsRepo *repository.SettingsRepo,
+	thumbnailEnhancementHistoryRepo *repository.ThumbnailEnhancementHistoryRepo,
+	thumbnailEnhancementOriginalsRepo *repository.ThumbnailEnhancementOriginalsRepo,
 	jellyfinClient *jellyfin.Client,
 	progress *ProgressStore,
 	broadcaster ws.Broadcaster,
 ) *DownloadManager {
 	m := &DownloadManager{
-		mediaRoot:       mediaRoot,
-		imagesRoot:      imagesRoot,
-		ffprobePath:     ffprobePath,
-		ytdlp:           ytdlp,
-		downloadsRepo:   downloadsRepo,
-		libraryRepo:     libraryRepo,
-		collectionsRepo: collectionsRepo,
-		historyRepo:     historyRepo,
-		artistsRepo:     artistsRepo,
-		tagsRepo:        tagsRepo,
-		settingsRepo:    settingsRepo,
-		jellyfinClient:  jellyfinClient,
-		progress:        progress,
-		broadcaster:     broadcaster,
-		jobs:            make(chan int64, 100),
-		cancels:         make(map[int64]context.CancelFunc),
-		lastBroadcastAt: make(map[int64]time.Time),
+		mediaRoot:                         mediaRoot,
+		imagesRoot:                        imagesRoot,
+		ffprobePath:                       ffprobePath,
+		ytdlp:                             ytdlp,
+		downloadsRepo:                     downloadsRepo,
+		libraryRepo:                       libraryRepo,
+		collectionsRepo:                   collectionsRepo,
+		historyRepo:                       historyRepo,
+		artistsRepo:                       artistsRepo,
+		tagsRepo:                          tagsRepo,
+		settingsRepo:                      settingsRepo,
+		thumbnailEnhancementHistoryRepo:   thumbnailEnhancementHistoryRepo,
+		thumbnailEnhancementOriginalsRepo: thumbnailEnhancementOriginalsRepo,
+		jellyfinClient:                    jellyfinClient,
+		progress:                          progress,
+		broadcaster:                       broadcaster,
+		jobs:                              make(chan int64, 100),
+		cancels:                           make(map[int64]context.CancelFunc),
+		lastBroadcastAt:                   make(map[int64]time.Time),
 	}
 	m.jellyfinDebounce = jellyfin.NewDebouncer(jellyfinRefreshDebounce, m.doJellyfinRefresh)
 	return m
@@ -467,6 +474,14 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		} else if err := m.libraryRepo.UpdateThumbnailTiers(parentCtx, libID, &tiers[0], &tiers[1]); err != nil {
 			log.Printf("queue: saving thumbnail derivatives for library item %d failed: %v", libID, err)
 		}
+
+		// Best-effort, fire-and-forget: if auto-on-download is enabled and
+		// this thumbnail is still under the configured minDim, enhance it
+		// now rather than waiting for the next scheduled sweep. Runs in its
+		// own goroutine so a slow/unreachable upscaler never blocks this
+		// download worker — same pattern as the metadata-embedding goroutine
+		// below.
+		go m.maybeAutoEnhanceThumbnail(libID)
 	}
 
 	// Best-effort: attach any tag override (currently only set by the
@@ -516,6 +531,26 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	}
 
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: id, LibraryID: libID, Title: libItem.Title}})
+}
+
+// maybeAutoEnhanceThumbnail is the best-effort background hook fired after
+// every fresh (non-redownload) completion — no-ops quietly unless the
+// auto-on-download setting is on and the item's thumbnail is currently
+// eligible under the configured minDim. Errors are logged, never surfaced:
+// this runs detached from the request/download lifecycle that triggered it.
+func (m *DownloadManager) maybeAutoEnhanceThumbnail(libraryItemID int64) {
+	deps := thumbnailenhance.Deps{
+		SettingsRepo:  m.settingsRepo,
+		LibraryRepo:   m.libraryRepo,
+		HistoryRepo:   m.thumbnailEnhancementHistoryRepo,
+		OriginalsRepo: m.thumbnailEnhancementOriginalsRepo,
+		MediaRoot:     m.mediaRoot,
+		ImagesRoot:    m.imagesRoot,
+		FFmpegPath:    m.ytdlp.FFmpegPath,
+	}
+	if err := thumbnailenhance.MaybeAutoEnhanceOnDownload(context.Background(), deps, libraryItemID); err != nil {
+		log.Printf("queue: auto-enhancing thumbnail for library item %d failed: %v", libraryItemID, err)
+	}
 }
 
 // resolveFilename decides the final base filename for a download — and, if

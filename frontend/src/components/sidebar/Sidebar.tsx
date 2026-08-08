@@ -15,12 +15,13 @@ import {
   LogOut,
   MonitorPlay,
   Rss,
+  ImageUp,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLogout } from "@/hooks/useAuth"
-import { useAppVersion, useYtDlpVersion } from "@/hooks/useSettings"
+import { useAppVersion, useSettings, useYtDlpVersion } from "@/hooks/useSettings"
 import { NavItem } from "./NavItem"
 
 // Matches the backend's version.Repo (backend/internal/version/latest.go) —
@@ -39,12 +40,20 @@ const navItems = [
   { to: "/history", label: "History", icon: History },
   { to: "/backup", label: "Backup", icon: Archive },
   { to: "/subscriptions", label: "Subscriptions", icon: Rss },
+  { to: "/thumbnail-enhancement", label: "AI Enhancement", icon: ImageUp, requiresSetting: "thumbnailEnhancementEnabled" as const },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/logs", label: "Logs", icon: ScrollText },
 ]
 
 export function SidebarContent() {
   const logout = useLogout()
+  const { data: settings } = useSettings()
+
+  // A nav item tagged requiresSetting only shows once that setting is known
+  // to be on — hidden both while settings are still loading and once
+  // they're confirmed off, so a feature nobody's enabled doesn't clutter
+  // the nav with a page that'll just tell them to go enable it.
+  const visibleNavItems = navItems.filter((item) => !item.requiresSetting || settings?.[item.requiresSetting])
 
   return (
     <>
@@ -62,7 +71,7 @@ export function SidebarContent() {
         </Link>
       </div>
       <nav className="flex flex-1 flex-col gap-1 px-2">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavItem key={item.to} {...item} />
         ))}
       </nav>

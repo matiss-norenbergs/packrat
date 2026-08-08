@@ -13,6 +13,7 @@ import (
 	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/thumbnailenhance"
 )
 
 // isHTTPURL reports whether raw parses as an absolute http(s) URL with a
@@ -783,6 +784,20 @@ type SettingsResponse struct {
 	ResolutionTierMediumEnabled bool     `json:"resolutionTierMediumEnabled"`
 	ResolutionThresholdLow      int      `json:"resolutionThresholdLow"`
 	ResolutionThresholdHigh     int      `json:"resolutionThresholdHigh"`
+
+	ThumbnailEnhancementEnabled         bool   `json:"thumbnailEnhancementEnabled"`
+	ThumbnailEnhancementURL             string `json:"thumbnailEnhancementUrl"`
+	ThumbnailEnhancementUsername        string `json:"thumbnailEnhancementUsername"`
+	ThumbnailEnhancementPassword        string `json:"thumbnailEnhancementPassword"`
+	ThumbnailEnhancementUpscaler        string `json:"thumbnailEnhancementUpscaler"`
+	ThumbnailEnhancementMinDim          int    `json:"thumbnailEnhancementMinDim"`
+	ThumbnailEnhancementFactor          int    `json:"thumbnailEnhancementFactor"`
+	ThumbnailEnhancementTargetMode      string `json:"thumbnailEnhancementTargetMode"`
+	ThumbnailEnhancementTargetDim       int    `json:"thumbnailEnhancementTargetDim"`
+	ThumbnailEnhancementScheduleEnabled bool   `json:"thumbnailEnhancementScheduleEnabled"`
+	ThumbnailEnhancementRetentionDays   int    `json:"thumbnailEnhancementRetentionDays"`
+	ThumbnailEnhancementAutoApprove     bool   `json:"thumbnailEnhancementAutoApprove"`
+	ThumbnailEnhancementAutoOnDownload  bool   `json:"thumbnailEnhancementAutoOnDownload"`
 }
 
 type UpdateSettingsRequest struct {
@@ -821,6 +836,20 @@ type UpdateSettingsRequest struct {
 	ResolutionTierMediumEnabled *bool     `json:"resolutionTierMediumEnabled"`
 	ResolutionThresholdLow      *int      `json:"resolutionThresholdLow" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
 	ResolutionThresholdHigh     *int      `json:"resolutionThresholdHigh" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
+
+	ThumbnailEnhancementEnabled         *bool   `json:"thumbnailEnhancementEnabled"`
+	ThumbnailEnhancementURL             *string `json:"thumbnailEnhancementUrl"`
+	ThumbnailEnhancementUsername        *string `json:"thumbnailEnhancementUsername"`
+	ThumbnailEnhancementPassword        *string `json:"thumbnailEnhancementPassword"`
+	ThumbnailEnhancementUpscaler        *string `json:"thumbnailEnhancementUpscaler"`
+	ThumbnailEnhancementMinDim          *int    `json:"thumbnailEnhancementMinDim" binding:"omitempty,min=1"`
+	ThumbnailEnhancementFactor          *int    `json:"thumbnailEnhancementFactor" binding:"omitempty,min=1"`
+	ThumbnailEnhancementTargetMode      *string `json:"thumbnailEnhancementTargetMode" binding:"omitempty,oneof=factor resolution"`
+	ThumbnailEnhancementTargetDim       *int    `json:"thumbnailEnhancementTargetDim" binding:"omitempty,min=1"`
+	ThumbnailEnhancementScheduleEnabled *bool   `json:"thumbnailEnhancementScheduleEnabled"`
+	ThumbnailEnhancementRetentionDays   *int    `json:"thumbnailEnhancementRetentionDays" binding:"omitempty,min=0"`
+	ThumbnailEnhancementAutoApprove     *bool   `json:"thumbnailEnhancementAutoApprove"`
+	ThumbnailEnhancementAutoOnDownload  *bool   `json:"thumbnailEnhancementAutoOnDownload"`
 }
 
 func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int, ghostItemCount int, totalGhostItemCount int, latestItemThumbnailPath *string, sequenceGap *SequenceGapResponse) CollectionResponse {
@@ -1309,4 +1338,110 @@ type AddSubscriptionEntryResponse struct {
 	Mode          string `json:"mode"`
 	LibraryItemID *int64 `json:"libraryItemId,omitempty"`
 	DownloadID    *int64 `json:"downloadId,omitempty"`
+}
+
+// ThumbnailEnhancementHistoryResponse is the camelCase mirror of
+// models.ThumbnailEnhancementHistoryEntry — see thumbnailenhance_handler.go.
+type ThumbnailEnhancementHistoryResponse struct {
+	ID                int64   `json:"id"`
+	LibraryItemID     *int64  `json:"libraryItemId"`
+	ItemTitle         string  `json:"itemTitle"`
+	Status            string  `json:"status"`
+	OriginalWidth     *int    `json:"originalWidth"`
+	OriginalHeight    *int    `json:"originalHeight"`
+	EnhancedWidth     *int    `json:"enhancedWidth"`
+	EnhancedHeight    *int    `json:"enhancedHeight"`
+	OriginalSizeBytes *int64  `json:"originalSizeBytes"`
+	EnhancedSizeBytes *int64  `json:"enhancedSizeBytes"`
+	Error             *string `json:"error"`
+	CreatedAt         string  `json:"createdAt"`
+	// HasOriginalBackup/OriginalThumbnailPath/EnhancedThumbnailPath reflect
+	// the item's *current* live state (whether a pre-enhancement backup
+	// still exists), not this specific historical attempt — every row for
+	// the same item shows the same values, and they change together once
+	// the item is reverted or its backup explicitly deleted.
+	HasOriginalBackup bool `json:"hasOriginalBackup"`
+	// OriginalThumbnailPath is relative to ImagesRoot (servable via
+	// /local-images/*) — the backup lives there, same convention as the
+	// WebP derivative tiers.
+	OriginalThumbnailPath *string `json:"originalThumbnailPath"`
+	// EnhancedThumbnailPath is relative to MediaRoot (servable via
+	// /media-files/*), unlike OriginalThumbnailPath above — it points at
+	// the raw sidecar file, not a WebP tier, so Compare shows the
+	// enhancement at its actual output resolution.
+	EnhancedThumbnailPath *string `json:"enhancedThumbnailPath"`
+	// RevertedAt is set once this specific row's enhancement was undone via
+	// a later revert — unlike HasOriginalBackup above, this IS per-row
+	// historical fact, not live item state. See models.ThumbnailEnhancementHistoryEntry.
+	RevertedAt *string `json:"revertedAt"`
+	// TriggerType is per-row historical fact — "manual" | "scheduled" | "auto".
+	TriggerType string `json:"triggerType"`
+}
+
+func toThumbnailEnhancementHistoryResponse(e models.ThumbnailEnhancementHistoryEntry, hasBackup bool, originalPath, enhancedPath *string) ThumbnailEnhancementHistoryResponse {
+	var revertedAt *string
+	if e.RevertedAt != nil {
+		s := e.RevertedAt.Format(time.RFC3339)
+		revertedAt = &s
+	}
+	return ThumbnailEnhancementHistoryResponse{
+		ID:                    e.ID,
+		LibraryItemID:         e.LibraryItemID,
+		ItemTitle:             e.ItemTitle,
+		Status:                e.Status,
+		OriginalWidth:         e.OriginalWidth,
+		OriginalHeight:        e.OriginalHeight,
+		EnhancedWidth:         e.EnhancedWidth,
+		EnhancedHeight:        e.EnhancedHeight,
+		OriginalSizeBytes:     e.OriginalSizeBytes,
+		EnhancedSizeBytes:     e.EnhancedSizeBytes,
+		Error:                 e.Error,
+		CreatedAt:             e.CreatedAt.Format(time.RFC3339),
+		HasOriginalBackup:     hasBackup,
+		OriginalThumbnailPath: originalPath,
+		EnhancedThumbnailPath: enhancedPath,
+		RevertedAt:            revertedAt,
+		TriggerType:           e.TriggerType,
+	}
+}
+
+type RunThumbnailEnhancementResponse struct {
+	Enhanced int `json:"enhanced"`
+}
+
+// ThumbnailEnhancementEligibleItemResponse backs the "preview eligible
+// items" dialog — a live snapshot of what the next "Enhance now" (or
+// scheduled sweep) would consider, not a completed-attempt audit row like
+// ThumbnailEnhancementHistoryResponse.
+type ThumbnailEnhancementEligibleItemResponse struct {
+	LibraryItemID int64  `json:"libraryItemId"`
+	ItemTitle     string `json:"itemTitle"`
+	Width         int    `json:"width"`
+	Height        int    `json:"height"`
+}
+
+func toThumbnailEnhancementEligibleItemResponse(e thumbnailenhance.EligibleItem) ThumbnailEnhancementEligibleItemResponse {
+	return ThumbnailEnhancementEligibleItemResponse{
+		LibraryItemID: e.LibraryItemID,
+		ItemTitle:     e.ItemTitle,
+		Width:         e.Width,
+		Height:        e.Height,
+	}
+}
+
+// ThumbnailUpscalersResponse backs the Settings tab's "Load models" button —
+// queried against whatever URL/credentials are currently typed in the form,
+// not necessarily what's saved yet.
+type ThumbnailUpscalersResponse struct {
+	Upscalers []string `json:"upscalers"`
+}
+
+// ThumbnailEnhancementStatusResponse backs the AI Enhancement page's status
+// badge. Configured is false whenever the feature is disabled or has no URL
+// saved yet, in which case Reachable/Error are meaningless (both left
+// zero-valued) — there's nothing to probe.
+type ThumbnailEnhancementStatusResponse struct {
+	Configured bool    `json:"configured"`
+	Reachable  bool    `json:"reachable"`
+	Error      *string `json:"error"`
 }

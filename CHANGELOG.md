@@ -12,6 +12,97 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-08
+
+- **AI thumbnail enhancement: fullscreen before/after compare slider** —
+  clicking either image in the Compare dialog now opens a fullscreen,
+  backdrop-less overlay with the original and enhanced thumbnails stacked
+  exactly on top of each other; drag the center divider left/right to wipe
+  between them.
+- **AI thumbnail enhancement: clear-all history, auto-approve, and
+  auto-run-on-download** — a "Clear All History" button on the Settings tab
+  wipes the entire AI Enhancement log (and frees every stored original
+  backup along with it, same as a manual per-item delete but at full
+  scope). Two new opt-in settings: "Auto-approve enhanced thumbnails"
+  skips saving the pre-enhancement backup entirely (no Compare/Revert
+  afterward, applies to every trigger); "Enhance new downloads
+  automatically" enhances a fresh download's thumbnail right after it
+  completes, without waiting for the hourly sweep, if it's still under the
+  configured minimum dimension. The history table gained a "Trigger"
+  column (Manual/Scheduled/Auto). Every enhancement attempt, regardless of
+  what triggered it, is now serialized behind a lock with a re-check right
+  before upscaling, closing a race where two triggers landing on the same
+  item back-to-back could double-upscale it.
+- **New: AI thumbnail enhancement** — opt-in (off by default) upscaling of
+  low-resolution library thumbnails via a self-hosted Stable Diffusion
+  WebUI (AUTOMATIC1111-compatible) instance's upscale-only API. Configure
+  the instance URL/credentials and a minimum-dimension threshold in
+  Settings → AI Enhancement; a new dedicated AI Enhancement page runs
+  enhancements on demand (also swept hourly alongside the other background
+  checks) and shows a history of every attempted item — before/after
+  dimensions and file size, and the failure reason for anything that
+  didn't go through.
+- **AI thumbnail enhancement: model picker, preset dimensions, status
+  badge, and nav gating** — the Settings tab's upscaler field can now
+  query the configured instance's actual available models ("Load models")
+  instead of requiring the exact name typed by hand, with a "Custom…"
+  fallback for anything not in the list; minimum dimension gets the same
+  treatment (a handful of common presets plus a free-entry custom option).
+  The AI Enhancement page now shows a live status badge (Active / Not
+  reachable / Not configured) next to its title, and both the page and its
+  sidebar link are hidden while the feature is disabled instead of just
+  showing an inert "Enhance now" button.
+- **AI thumbnail enhancement: scale to a target size, not just a fixed
+  factor** — Settings → AI Enhancement now has a "Scaling" choice: "Multiply
+  by a factor" (the original behavior, still 4x by default) or "Scale to a
+  target size" (e.g. 1920 for 1080p on a 16:9 thumbnail), which computes a
+  per-image multiplier so every enhanced thumbnail lands at the same
+  longest-side pixel count regardless of how small the original was.
+- **AI thumbnail enhancement: schedule toggle + preview eligible items** —
+  the hourly automatic sweep can now be turned off independently of the
+  feature itself ("Run automatically every hour" in Settings), so it can be
+  used purely on-demand via manual "Enhance Now" clicks. The AI Enhancement
+  page also gained a "Preview Eligible Items" button showing every item
+  currently below the configured minimum dimension, since only the first 5
+  are processed per run and a larger backlog previously had no way to be
+  inspected ahead of time.
+- **AI thumbnail enhancement: per-item trigger + before/after compare with
+  revert** — the "Preview Eligible Items" dialog now has an "Enhance"
+  button on each row to upscale just that one item, bypassing the 5-item
+  batch cap. Every successful enhancement also backs up the pre-enhancement
+  thumbnail (the first time an item is enhanced only, so re-enhancing never
+  overwrites the true original); history rows for an item with a backup get
+  a "Compare" action showing both images side by side, with the option to
+  revert to the original (discarding the enhanced result) or delete the
+  stored original outright (keeping the enhancement, freeing the backup).
+- **AI thumbnail enhancement: delete history entries** — the history table
+  now has a delete action per row. If the row being deleted is the last one
+  left for its item and that item still has a stored original, deleting it
+  also frees that original (equivalent to "Delete Original") — since
+  Compare is only reachable from a history row, clearing the last one would
+  otherwise leave an orphaned, unreachable backup on disk. Deleting any
+  other row leaves the item's backup untouched.
+- **AI thumbnail enhancement: history retention setting** — Settings → AI
+  Enhancement gained a "Keep history for" option (7/30/90/365 days or
+  forever, default forever), mirroring the existing History/Backup
+  retention settings. The hourly sweep now also prunes old AI Enhancement
+  history rows, cascading into the same last-row backup cleanup a manual
+  delete does.
+- **AI thumbnail enhancement: bigger Compare dialog + clearer action
+  names** — the before/after Compare dialog now uses most of the viewport
+  instead of a fixed max-width, so both thumbnails render larger. Its two
+  actions are renamed for clarity: "Keep Enhanced" (was "Delete Original")
+  keeps the AI-upscaled result permanently and frees the stored backup;
+  "Keep Original" (was "Revert to Original") discards the enhancement and
+  restores the pre-enhancement thumbnail.
+- **AI thumbnail enhancement: "Reverted" badge on history rows** —
+  choosing "Keep Original" no longer leaves history rows silently
+  describing a thumbnail that isn't live anymore. Rows undone by that
+  revert now show a "Reverted" badge (hover for when), while their
+  before/after numbers stay exactly as recorded — an accurate log of what
+  that run produced, not a claim about the item's current thumbnail. A
+  later re-enhancement starts a fresh, unmarked row.
+
 ## 2026-08-07
 
 - **Fixed: a successful download could still end up missing from the

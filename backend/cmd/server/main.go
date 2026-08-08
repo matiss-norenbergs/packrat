@@ -22,6 +22,7 @@ import (
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
+	"packrat/backend/internal/thumbnailenhance"
 	"packrat/backend/internal/ws"
 )
 
@@ -78,6 +79,27 @@ func cleanupDownloadLog(ctx context.Context, downloadsRepo *repository.Downloads
 	}
 }
 
+// cleanupThumbnailEnhancementHistory deletes AI Enhancement history entries
+// older than the configured retention window, mirroring cleanupHistory/
+// cleanupDownloadLog. deps already bundles the settings repo it reads the
+// retention setting from.
+func cleanupThumbnailEnhancementHistory(ctx context.Context, deps thumbnailenhance.Deps) {
+	raw, err := deps.SettingsRepo.Get(ctx, models.SettingThumbnailEnhancementRetentionDays)
+	days, convErr := strconv.Atoi(raw)
+	if err != nil || convErr != nil || days <= 0 {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -days)
+	n, err := thumbnailenhance.CleanupOldHistory(ctx, deps, cutoff)
+	if err != nil {
+		log.Printf("thumbnail enhancement history cleanup failed: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("thumbnail enhancement history cleanup: removed %d entries older than %d days", n, days)
+	}
+}
+
 func run() error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -112,6 +134,8 @@ func run() error {
 	usersRepo := repository.NewUsersRepo(conn)
 	backupHistoryRepo := repository.NewBackupHistoryRepo(conn)
 	subscriptionsRepo := repository.NewSubscriptionsRepo(conn)
+	thumbnailEnhancementHistoryRepo := repository.NewThumbnailEnhancementHistoryRepo(conn)
+	thumbnailEnhancementOriginalsRepo := repository.NewThumbnailEnhancementOriginalsRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath, settingsRepo, cfg.MaxConcurrentTranscodes)
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
@@ -122,7 +146,7 @@ func run() error {
 	hub := ws.NewHub()
 	go hub.Run(ctx)
 
-	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFProbePath, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, jellyfinClient, progressStore, hub)
+	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFProbePath, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, thumbnailEnhancementHistoryRepo, thumbnailEnhancementOriginalsRepo, jellyfinClient, progressStore, hub)
 	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)
@@ -178,16 +202,28 @@ func run() error {
 		ImagesRoot:        cfg.ImagesRoot,
 	}
 
+	enhanceDeps := thumbnailenhance.Deps{
+		SettingsRepo:  settingsRepo,
+		LibraryRepo:   libraryRepo,
+		HistoryRepo:   thumbnailEnhancementHistoryRepo,
+		OriginalsRepo: thumbnailEnhancementOriginalsRepo,
+		MediaRoot:     cfg.MediaRoot,
+		ImagesRoot:    cfg.ImagesRoot,
+		FFmpegPath:    cfg.FFmpegPath,
+	}
+
 	go func() {
-		// All four sweeps share one ticker — they run on the same cadence
+		// All five sweeps share one ticker — they run on the same cadence
 		// and each is already a no-op when its own setting is unset/not due.
 		// The smallest auto-backup interval option is 6h, and subscriptions
 		// default to 6h too, so hourly-granularity checking is more than
 		// sufficient.
 		cleanupHistory(ctx, historyRepo, settingsRepo) // once immediately, so a just-raised retention takes effect right away
 		cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
+		cleanupThumbnailEnhancementHistory(ctx, enhanceDeps)
 		backup.RunScheduledBackupIfDue(ctx, runDeps)
 		subscriptions.RunDueChecks(ctx, subCheckDeps)
+		thumbnailenhance.RunDueEnhancements(ctx, enhanceDeps)
 		ticker := time.NewTicker(historyCleanupInterval)
 		defer ticker.Stop()
 		for {
@@ -197,35 +233,39 @@ func run() error {
 			case <-ticker.C:
 				cleanupHistory(ctx, historyRepo, settingsRepo)
 				cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
+				cleanupThumbnailEnhancementHistory(ctx, enhanceDeps)
 				backup.RunScheduledBackupIfDue(ctx, runDeps)
 				subscriptions.RunDueChecks(ctx, subCheckDeps)
+				thumbnailenhance.RunDueEnhancements(ctx, enhanceDeps)
 			}
 		}
 	}()
 
 	router := api.SetupRouter(api.Deps{
-		DB:                   conn,
-		Manager:              mgr,
-		DownloadsRepo:        downloadsRepo,
-		LibraryRepo:          libraryRepo,
-		CollectionsRepo:      collectionsRepo,
-		SettingsRepo:         settingsRepo,
-		HistoryRepo:          historyRepo,
-		TagsRepo:             tagsRepo,
-		ArtistsRepo:          artistsRepo,
-		CompareListRepo:      compareListRepo,
-		UsersRepo:            usersRepo,
-		BackupHistoryRepo:    backupHistoryRepo,
-		SubscriptionsRepo:    subscriptionsRepo,
-		YtDlp:                ytdlpSvc,
-		JellyfinClient:       jellyfinClient,
-		ImageBackfillManager: imageBackfillMgr,
-		MediaRoot:            cfg.MediaRoot,
-		ImagesRoot:           cfg.ImagesRoot,
-		BackupsRoot:          cfg.BackupsRoot,
-		FFProbePath:          cfg.FFProbePath,
-		WSHandler:            hub.GinHandler(),
-		StaticDir:            os.Getenv("STATIC_DIR"),
+		DB:                                conn,
+		Manager:                           mgr,
+		DownloadsRepo:                     downloadsRepo,
+		LibraryRepo:                       libraryRepo,
+		CollectionsRepo:                   collectionsRepo,
+		SettingsRepo:                      settingsRepo,
+		HistoryRepo:                       historyRepo,
+		TagsRepo:                          tagsRepo,
+		ArtistsRepo:                       artistsRepo,
+		CompareListRepo:                   compareListRepo,
+		UsersRepo:                         usersRepo,
+		BackupHistoryRepo:                 backupHistoryRepo,
+		SubscriptionsRepo:                 subscriptionsRepo,
+		ThumbnailEnhancementHistoryRepo:   thumbnailEnhancementHistoryRepo,
+		ThumbnailEnhancementOriginalsRepo: thumbnailEnhancementOriginalsRepo,
+		YtDlp:                             ytdlpSvc,
+		JellyfinClient:                    jellyfinClient,
+		ImageBackfillManager:              imageBackfillMgr,
+		MediaRoot:                         cfg.MediaRoot,
+		ImagesRoot:                        cfg.ImagesRoot,
+		BackupsRoot:                       cfg.BackupsRoot,
+		FFProbePath:                       cfg.FFProbePath,
+		WSHandler:                         hub.GinHandler(),
+		StaticDir:                         os.Getenv("STATIC_DIR"),
 	})
 
 	srv := &http.Server{

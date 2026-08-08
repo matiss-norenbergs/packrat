@@ -16,6 +16,7 @@ import { ImportPage } from "@/pages/ImportPage"
 import { HistoryPage } from "@/pages/HistoryPage"
 import { BackupPage } from "@/pages/BackupPage"
 import { SubscriptionsPage } from "@/pages/SubscriptionsPage"
+import { ThumbnailEnhancementPage } from "@/pages/ThumbnailEnhancementPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { LogsPage } from "@/pages/LogsPage"
 import { BrowsePage } from "@/pages/BrowsePage"
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
       { path: "/history", element: <HistoryPage /> },
       { path: "/backup", element: <BackupPage /> },
       { path: "/subscriptions", element: <SubscriptionsPage /> },
+      { path: "/thumbnail-enhancement", element: <ThumbnailEnhancementPage /> },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/logs", element: <LogsPage /> },
     ],

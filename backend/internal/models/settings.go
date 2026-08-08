@@ -39,4 +39,48 @@ const (
 	SettingResolutionTierMediumEnabled = "resolution_tier_medium_enabled" // bool, default true
 	SettingResolutionThresholdLow      = "resolution_threshold_low"       // height in px; default 720 — at/below is "low"
 	SettingResolutionThresholdHigh     = "resolution_threshold_high"      // height in px; default 2160 — at/above is "high"
+
+	// AI thumbnail enhancement — opt-in, off by default. Upscales library
+	// thumbnails via a user-supplied local Stable Diffusion WebUI
+	// (AUTOMATIC1111-compatible) instance's /sdapi/v1/extra-single-image
+	// endpoint. Username/Password are only meaningful if that instance was
+	// launched with --api-auth.
+	SettingThumbnailEnhancementEnabled  = "thumbnail_enhancement_enabled"
+	SettingThumbnailEnhancementURL      = "thumbnail_enhancement_url"
+	SettingThumbnailEnhancementUsername = "thumbnail_enhancement_username"
+	SettingThumbnailEnhancementPassword = "thumbnail_enhancement_password"
+	SettingThumbnailEnhancementUpscaler = "thumbnail_enhancement_upscaler" // default "R-ESRGAN 4x+"
+	SettingThumbnailEnhancementMinDim   = "thumbnail_enhancement_min_dim"  // int as string; default "720"
+	SettingThumbnailEnhancementFactor   = "thumbnail_enhancement_factor"   // int as string; default "4"
+	// SettingThumbnailEnhancementTargetMode picks what Factor above means:
+	// "factor" (default) multiplies the original dimensions by
+	// SettingThumbnailEnhancementFactor; "resolution" instead scales each
+	// thumbnail so its longest side lands at SettingThumbnailEnhancementTargetDim,
+	// computing a per-image multiplier on the fly (A1111's upscaling_resize
+	// accepts a fractional multiplier, so this doesn't require a different
+	// API call — just a different number).
+	SettingThumbnailEnhancementTargetMode = "thumbnail_enhancement_target_mode" // "factor" | "resolution"; default "factor"
+	SettingThumbnailEnhancementTargetDim  = "thumbnail_enhancement_target_dim"  // int as string; default "1920" (1080p on a 16:9 thumbnail)
+	// SettingThumbnailEnhancementScheduleEnabled controls only the hourly
+	// automatic sweep (RunDueEnhancements) — the manual "Enhance now"
+	// trigger (RunOnce) ignores it and only checks the master Enabled flag
+	// above, so turning this off lets the feature stay usable purely
+	// on-demand without the background sweep ever running.
+	SettingThumbnailEnhancementScheduleEnabled = "thumbnail_enhancement_schedule_enabled" // bool, default true
+	// SettingThumbnailEnhancementRetentionDays mirrors SettingHistoryRetentionDays/
+	// SettingDownloadLogRetentionDays — how long completed history rows (and, for
+	// the last row referencing a given item, its original-thumbnail backup) are
+	// kept before the hourly sweep deletes them.
+	SettingThumbnailEnhancementRetentionDays = "thumbnail_enhancement_retention_days" // days; 0 = keep forever (default)
+	// SettingThumbnailEnhancementAutoApprove, when true, skips backing up the
+	// pre-enhancement thumbnail entirely — the enhanced result just commits,
+	// with no Compare/Revert available for that item. Applies globally,
+	// across every trigger (manual, scheduled, auto-on-download), not just
+	// the auto-on-download one below.
+	SettingThumbnailEnhancementAutoApprove = "thumbnail_enhancement_auto_approve" // bool, default false
+	// SettingThumbnailEnhancementAutoOnDownload, when true, enhances a
+	// freshly-downloaded item's thumbnail immediately after the download
+	// completes (if it's under the configured minDim), rather than waiting
+	// for the next scheduled sweep. Fresh downloads only, not redownloads.
+	SettingThumbnailEnhancementAutoOnDownload = "thumbnail_enhancement_auto_on_download" // bool, default false
 )

@@ -1,0 +1,1 @@
+DROP TABLE thumbnail_enhancement_originals;

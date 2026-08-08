@@ -216,6 +216,31 @@ or just as a safety net.
 - Both exports can optionally be **encrypted with a password** — the exported file is unreadable
   without it, and importing an encrypted file prompts for the same password.
 
+## AI Enhancement
+
+Upscales low-resolution library thumbnails by calling a self-hosted Stable Diffusion WebUI
+(AUTOMATIC1111-compatible) instance's upscale-only API — nothing leaves your own network. Off by
+default; configured entirely in Settings → AI Enhancement (instance URL/credentials, upscaler
+model, scaling mode, minimum-dimension threshold below which a thumbnail is considered eligible).
+
+- **Manual runs** — "Enhance Now" processes up to 5 eligible items per click; "Preview Eligible
+  Items" lists everything currently under the minimum-dimension threshold (uncapped) with a
+  per-row Enhance button to upscale just that one item.
+- **Scheduled sweeps** — when "Run automatically every hour" is on, the same eligibility check
+  runs alongside the other hourly background sweeps, independent of the manual trigger.
+- **Auto-run on new downloads** — when enabled, a freshly-downloaded item's thumbnail is enhanced
+  immediately after the download completes (if eligible), without waiting for the next sweep.
+  Fresh downloads only, not redownloads.
+- **History** — every attempted item (success or failure) is logged with before/after dimensions
+  and file size, the failure reason if any, and which of the three triggers above caused it. "Clear
+  All History" (Settings → AI Enhancement) wipes the whole log at once.
+- **Compare / Revert** — a successful enhancement keeps the pre-enhancement thumbnail as a backup
+  (unless "Auto-approve enhanced thumbnails" is on, which skips the backup entirely — no
+  Compare/Revert for that item afterward). From the history table's Compare action: "Keep Original"
+  reverts to the backup and discards the enhanced version; "Keep Enhanced" keeps the upscaled
+  result and frees the backup. Clicking either image opens a fullscreen before/after slider —
+  drag the divider to wipe between the two at full resolution.
+
 ## Settings
 
 Two columns: **App Settings** (General, Account, yt-dlp, Appearance) on the left, **Content
