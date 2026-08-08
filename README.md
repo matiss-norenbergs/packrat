@@ -19,7 +19,8 @@ any site you point it at.
 Well past the original ["working skeleton"](../docker-app-plan.md) starting point — the core
 download → library flow, plus collections, tags, artists, playlist/batch downloads, full-text
 search, private-content blurring, NFO sidecars, Jellyfin auto-refresh, encrypted backup/restore,
-and session auth with CSRF protection are all implemented. See [`docs/FEATURES.md`](docs/FEATURES.md)
+AI-powered thumbnail upscaling via a self-hosted Stable Diffusion instance, and session auth with
+CSRF protection are all implemented. See [`docs/FEATURES.md`](docs/FEATURES.md)
 for a page-by-page guide to everything that's implemented, [`docs/api.md`](docs/api.md) for the
 full REST/WebSocket surface, and [`docs/architecture.md`](docs/architecture.md) for how it's built
 and what's still deliberately out of scope.
@@ -63,3 +64,18 @@ forward Windows/mDNS name resolution the way your host's own resolver does. If a
 a `dial tcp: lookup ... no such host` error, either point the URL at your Jellyfin server's LAN IP
 or a real FQDN instead of a bare hostname, or add it via `extra_hosts` in
 [`docker/docker-compose.yml`](docker/docker-compose.yml) (see the commented example there).
+
+## AI Thumbnail Enhancement
+
+Optional, off by default (Settings → AI Enhancement). Upscales low-resolution library thumbnails
+by calling a self-hosted Stable Diffusion WebUI (AUTOMATIC1111-compatible) instance's upscale-only
+API — nothing is sent to any third-party service, and Packrat never bundles or runs Stable
+Diffusion itself.
+
+The same container-networking caveat as Jellyfin applies: if Packrat is running in Docker and the
+Stable Diffusion instance is running directly on the host (not itself containerized), point
+Settings → AI Enhancement → URL at `http://host.docker.internal:<port>` rather than
+`http://127.0.0.1:<port>` or `http://localhost:<port>`, which resolve to the *container* from
+inside it. `host.docker.internal` works out of the box on Docker Desktop (Windows/Mac); on Linux
+hosts, add an `extra_hosts` entry to [`docker/docker-compose.yml`](docker/docker-compose.yml)
+(same pattern as the commented Jellyfin example there).

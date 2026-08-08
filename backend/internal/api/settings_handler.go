@@ -416,6 +416,202 @@ func JellyfinRefreshMode(ctx context.Context, repo *repository.SettingsRepo) (st
 	return raw, nil
 }
 
+// defaultThumbnailEnhancementUpscaler/MinDim/Factor are the AI thumbnail
+// enhancement defaults used whenever their setting has never been set (or
+// is corrupt) — R-ESRGAN 4x+ is A1111's standard general-purpose upscaler,
+// 720 keeps anything already HD from being needlessly reprocessed, and 4x
+// matches R-ESRGAN's own native scale factor.
+const (
+	defaultThumbnailEnhancementUpscaler   = "R-ESRGAN 4x+"
+	defaultThumbnailEnhancementMinDim     = 720
+	defaultThumbnailEnhancementFactor     = 4
+	defaultThumbnailEnhancementTargetMode = "factor"
+	defaultThumbnailEnhancementTargetDim  = 1920
+)
+
+// ThumbnailEnhancementEnabled reads the thumbnail_enhancement_enabled
+// setting, defaulting to false (opt-in) if it's never been set. Shared by
+// GetSettings.
+func ThumbnailEnhancementEnabled(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementEnabled)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
+}
+
+// ThumbnailEnhancementUpscaler reads the thumbnail_enhancement_upscaler
+// setting, defaulting to defaultThumbnailEnhancementUpscaler if it's never
+// been set. Shared by GetSettings.
+func ThumbnailEnhancementUpscaler(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementUpscaler)
+	if errors.Is(err, repository.ErrNotFound) || raw == "" {
+		return defaultThumbnailEnhancementUpscaler, nil
+	}
+	if err != nil {
+		return defaultThumbnailEnhancementUpscaler, err
+	}
+	return raw, nil
+}
+
+// ThumbnailEnhancementMinDim reads the thumbnail_enhancement_min_dim
+// setting, defaulting to defaultThumbnailEnhancementMinDim if it's never
+// been set or is corrupt. Shared by GetSettings.
+func ThumbnailEnhancementMinDim(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementMinDim)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultThumbnailEnhancementMinDim, nil
+	}
+	if err != nil {
+		return defaultThumbnailEnhancementMinDim, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return defaultThumbnailEnhancementMinDim, nil
+	}
+	return n, nil
+}
+
+// ThumbnailEnhancementFactor reads the thumbnail_enhancement_factor
+// setting, defaulting to defaultThumbnailEnhancementFactor if it's never
+// been set or is corrupt. Shared by GetSettings.
+func ThumbnailEnhancementFactor(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementFactor)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultThumbnailEnhancementFactor, nil
+	}
+	if err != nil {
+		return defaultThumbnailEnhancementFactor, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return defaultThumbnailEnhancementFactor, nil
+	}
+	return n, nil
+}
+
+// ThumbnailEnhancementTargetMode reads the thumbnail_enhancement_target_mode
+// setting ("factor" or "resolution"), defaulting to
+// defaultThumbnailEnhancementTargetMode if it's never been set or is
+// corrupt. Shared by GetSettings.
+func ThumbnailEnhancementTargetMode(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementTargetMode)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultThumbnailEnhancementTargetMode, nil
+	}
+	if err != nil {
+		return defaultThumbnailEnhancementTargetMode, err
+	}
+	if raw != "factor" && raw != "resolution" {
+		return defaultThumbnailEnhancementTargetMode, nil
+	}
+	return raw, nil
+}
+
+// ThumbnailEnhancementTargetDim reads the thumbnail_enhancement_target_dim
+// setting, defaulting to defaultThumbnailEnhancementTargetDim if it's never
+// been set or is corrupt. Shared by GetSettings.
+func ThumbnailEnhancementTargetDim(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementTargetDim)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultThumbnailEnhancementTargetDim, nil
+	}
+	if err != nil {
+		return defaultThumbnailEnhancementTargetDim, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return defaultThumbnailEnhancementTargetDim, nil
+	}
+	return n, nil
+}
+
+// ThumbnailEnhancementScheduleEnabled reads the
+// thumbnail_enhancement_schedule_enabled setting, defaulting to true (the
+// pre-existing behavior — the hourly sweep ran whenever the feature itself
+// was enabled) if it's never been set or is corrupt. Independent of
+// ThumbnailEnhancementEnabled: turning this off keeps the feature usable
+// purely on-demand via the manual "Enhance now" trigger without the
+// background sweep ever running. Shared by GetSettings.
+func ThumbnailEnhancementScheduleEnabled(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementScheduleEnabled)
+	if errors.Is(err, repository.ErrNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		return true, nil
+	}
+	return b, nil
+}
+
+// ThumbnailEnhancementRetentionDays reads the
+// thumbnail_enhancement_retention_days setting, defaulting to 0 — keep
+// forever — if it's never been set (or is somehow corrupt). Mirrors
+// HistoryRetentionDays/DownloadLogRetentionDays exactly. Shared by
+// GetSettings; the cleanup sweep in cmd/server/main.go reads this same key
+// directly via deps.SettingsRepo.Get rather than calling this helper, to
+// avoid an import cycle (see HistoryRetentionDays for precedent).
+func ThumbnailEnhancementRetentionDays(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementRetentionDays)
+	if errors.Is(err, repository.ErrNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0, nil
+	}
+	return n, nil
+}
+
+// ThumbnailEnhancementAutoApprove reads the thumbnail_enhancement_auto_approve
+// setting, defaulting to false — when true, enhancements skip backing up
+// the pre-enhancement thumbnail (see thumbnailenhance.config.autoApprove).
+// Shared by GetSettings.
+func ThumbnailEnhancementAutoApprove(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementAutoApprove)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, nil
+	}
+	return b, nil
+}
+
+// ThumbnailEnhancementAutoOnDownload reads the
+// thumbnail_enhancement_auto_on_download setting, defaulting to false —
+// when true, a fresh download's thumbnail is enhanced right after the
+// download completes if it's eligible (see
+// thumbnailenhance.MaybeAutoEnhanceOnDownload). Shared by GetSettings.
+func ThumbnailEnhancementAutoOnDownload(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementAutoOnDownload)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, nil
+	}
+	return b, nil
+}
+
 // LibraryAutoplay reads the library_autoplay setting, defaulting to true if
 // it's never been set — the player already always autoplayed before this
 // setting existed, so upgrading shouldn't silently change that. Shared by
@@ -657,6 +853,71 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		thumbnailEnhancementEnabled, err := ThumbnailEnhancementEnabled(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementURL, err := repo.Get(c.Request.Context(), models.SettingThumbnailEnhancementURL)
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementUsername, err := repo.Get(c.Request.Context(), models.SettingThumbnailEnhancementUsername)
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementPassword, err := repo.Get(c.Request.Context(), models.SettingThumbnailEnhancementPassword)
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementUpscaler, err := ThumbnailEnhancementUpscaler(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementMinDim, err := ThumbnailEnhancementMinDim(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementFactor, err := ThumbnailEnhancementFactor(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementTargetMode, err := ThumbnailEnhancementTargetMode(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementTargetDim, err := ThumbnailEnhancementTargetDim(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementScheduleEnabled, err := ThumbnailEnhancementScheduleEnabled(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementRetentionDays, err := ThumbnailEnhancementRetentionDays(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementAutoApprove, err := ThumbnailEnhancementAutoApprove(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailEnhancementAutoOnDownload, err := ThumbnailEnhancementAutoOnDownload(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, SettingsResponse{
 			DownloadDirectory:           mediaRoot,
 			MaxConcurrentDownloads:      mgr.WorkerCount(),
@@ -694,6 +955,20 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			ResolutionTierMediumEnabled: resolutionTierMediumEnabled,
 			ResolutionThresholdLow:      resolutionThresholdLow,
 			ResolutionThresholdHigh:     resolutionThresholdHigh,
+
+			ThumbnailEnhancementEnabled:         thumbnailEnhancementEnabled,
+			ThumbnailEnhancementURL:             thumbnailEnhancementURL,
+			ThumbnailEnhancementUsername:        thumbnailEnhancementUsername,
+			ThumbnailEnhancementPassword:        thumbnailEnhancementPassword,
+			ThumbnailEnhancementUpscaler:        thumbnailEnhancementUpscaler,
+			ThumbnailEnhancementMinDim:          thumbnailEnhancementMinDim,
+			ThumbnailEnhancementFactor:          thumbnailEnhancementFactor,
+			ThumbnailEnhancementTargetMode:      thumbnailEnhancementTargetMode,
+			ThumbnailEnhancementTargetDim:       thumbnailEnhancementTargetDim,
+			ThumbnailEnhancementScheduleEnabled: thumbnailEnhancementScheduleEnabled,
+			ThumbnailEnhancementRetentionDays:   thumbnailEnhancementRetentionDays,
+			ThumbnailEnhancementAutoApprove:     thumbnailEnhancementAutoApprove,
+			ThumbnailEnhancementAutoOnDownload:  thumbnailEnhancementAutoOnDownload,
 		})
 	}
 }
@@ -962,6 +1237,84 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		}
 		if req.YtdlpRetries != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingYtdlpRetries, strconv.Itoa(*req.YtdlpRetries)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementEnabled != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementEnabled, strconv.FormatBool(*req.ThumbnailEnhancementEnabled)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementURL != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementURL, *req.ThumbnailEnhancementURL); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementUsername != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementUsername, *req.ThumbnailEnhancementUsername); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementPassword != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementPassword, *req.ThumbnailEnhancementPassword); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementUpscaler != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementUpscaler, *req.ThumbnailEnhancementUpscaler); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementMinDim != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementMinDim, strconv.Itoa(*req.ThumbnailEnhancementMinDim)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementFactor != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementFactor, strconv.Itoa(*req.ThumbnailEnhancementFactor)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementTargetMode != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementTargetMode, *req.ThumbnailEnhancementTargetMode); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementTargetDim != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementTargetDim, strconv.Itoa(*req.ThumbnailEnhancementTargetDim)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementScheduleEnabled != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementScheduleEnabled, strconv.FormatBool(*req.ThumbnailEnhancementScheduleEnabled)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementRetentionDays != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementRetentionDays, strconv.Itoa(*req.ThumbnailEnhancementRetentionDays)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementAutoApprove != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementAutoApprove, strconv.FormatBool(*req.ThumbnailEnhancementAutoApprove)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementAutoOnDownload != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementAutoOnDownload, strconv.FormatBool(*req.ThumbnailEnhancementAutoOnDownload)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

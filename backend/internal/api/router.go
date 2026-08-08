@@ -13,33 +13,36 @@ import (
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
+	"packrat/backend/internal/thumbnailenhance"
 )
 
 // Deps holds everything the router needs to wire up routes. Fields are added
 // incrementally as the corresponding subsystems (queue, library, ws) land.
 type Deps struct {
-	DB                   *sql.DB
-	Manager              *queue.DownloadManager
-	DownloadsRepo        *repository.DownloadsRepo
-	LibraryRepo          *repository.LibraryRepo
-	CollectionsRepo      *repository.CollectionsRepo
-	SettingsRepo         *repository.SettingsRepo
-	HistoryRepo          *repository.HistoryRepo
-	TagsRepo             *repository.TagsRepo
-	ArtistsRepo          *repository.ArtistsRepo
-	CompareListRepo      *repository.CompareListRepo
-	UsersRepo            *repository.UsersRepo
-	BackupHistoryRepo    *repository.BackupHistoryRepo
-	SubscriptionsRepo    *repository.SubscriptionsRepo
-	YtDlp                *downloader.YtDlpService
-	JellyfinClient       *jellyfin.Client
-	ImageBackfillManager *imagebackfill.Manager
-	MediaRoot            string
-	ImagesRoot           string
-	BackupsRoot          string
-	FFProbePath          string
-	WSHandler            gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
-	StaticDir            string          // built frontend assets; empty in dev (Vite serves it)
+	DB                                *sql.DB
+	Manager                           *queue.DownloadManager
+	DownloadsRepo                     *repository.DownloadsRepo
+	LibraryRepo                       *repository.LibraryRepo
+	CollectionsRepo                   *repository.CollectionsRepo
+	SettingsRepo                      *repository.SettingsRepo
+	HistoryRepo                       *repository.HistoryRepo
+	TagsRepo                          *repository.TagsRepo
+	ArtistsRepo                       *repository.ArtistsRepo
+	CompareListRepo                   *repository.CompareListRepo
+	UsersRepo                         *repository.UsersRepo
+	BackupHistoryRepo                 *repository.BackupHistoryRepo
+	SubscriptionsRepo                 *repository.SubscriptionsRepo
+	ThumbnailEnhancementHistoryRepo   *repository.ThumbnailEnhancementHistoryRepo
+	ThumbnailEnhancementOriginalsRepo *repository.ThumbnailEnhancementOriginalsRepo
+	YtDlp                             *downloader.YtDlpService
+	JellyfinClient                    *jellyfin.Client
+	ImageBackfillManager              *imagebackfill.Manager
+	MediaRoot                         string
+	ImagesRoot                        string
+	BackupsRoot                       string
+	FFProbePath                       string
+	WSHandler                         gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
+	StaticDir                         string          // built frontend assets; empty in dev (Vite serves it)
 }
 
 // noCacheHeaders forces revalidation on every request instead of letting the
@@ -203,6 +206,26 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/subscriptions/:id/entries", ListSubscriptionEntries(subCheckDeps))
 		api.POST("/subscriptions/:id/entries/:sourceId/add", AddSubscriptionEntry(subCheckDeps))
 		api.POST("/subscriptions/:id/entries/:sourceId/seen", MarkSubscriptionEntrySeen(subCheckDeps))
+
+		enhanceDeps := thumbnailenhance.Deps{
+			SettingsRepo:  deps.SettingsRepo,
+			LibraryRepo:   deps.LibraryRepo,
+			HistoryRepo:   deps.ThumbnailEnhancementHistoryRepo,
+			OriginalsRepo: deps.ThumbnailEnhancementOriginalsRepo,
+			MediaRoot:     deps.MediaRoot,
+			ImagesRoot:    deps.ImagesRoot,
+			FFmpegPath:    deps.YtDlp.FFmpegPath,
+		}
+		api.GET("/thumbnail-enhancement/history", ListThumbnailEnhancementHistory(enhanceDeps))
+		api.DELETE("/thumbnail-enhancement/history/:id", DeleteThumbnailEnhancementHistoryEntry(enhanceDeps))
+		api.POST("/thumbnail-enhancement/history/clear", ClearThumbnailEnhancementHistory(enhanceDeps))
+		api.POST("/thumbnail-enhancement/run", RunThumbnailEnhancementNow(enhanceDeps))
+		api.GET("/thumbnail-enhancement/upscalers", ListThumbnailUpscalers())
+		api.GET("/thumbnail-enhancement/status", GetThumbnailEnhancementStatus(enhanceDeps))
+		api.GET("/thumbnail-enhancement/eligible", ListThumbnailEnhancementEligible(enhanceDeps))
+		api.POST("/thumbnail-enhancement/items/:id/run", EnhanceThumbnailItemNow(enhanceDeps))
+		api.POST("/thumbnail-enhancement/items/:id/revert", RevertThumbnailOriginal(enhanceDeps))
+		api.DELETE("/thumbnail-enhancement/items/:id/original", DeleteThumbnailOriginal(enhanceDeps))
 
 		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
 		api.POST("/import", CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))

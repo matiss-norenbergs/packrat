@@ -471,6 +471,19 @@ export interface Settings {
   resolutionTierMediumEnabled: boolean
   resolutionThresholdLow: number
   resolutionThresholdHigh: number
+  thumbnailEnhancementEnabled: boolean
+  thumbnailEnhancementUrl: string
+  thumbnailEnhancementUsername: string
+  thumbnailEnhancementPassword: string
+  thumbnailEnhancementUpscaler: string
+  thumbnailEnhancementMinDim: number
+  thumbnailEnhancementFactor: number
+  thumbnailEnhancementTargetMode: "factor" | "resolution"
+  thumbnailEnhancementTargetDim: number
+  thumbnailEnhancementScheduleEnabled: boolean
+  thumbnailEnhancementRetentionDays: number
+  thumbnailEnhancementAutoApprove: boolean
+  thumbnailEnhancementAutoOnDownload: boolean
 }
 
 export interface YtDlpVersionInfo {
@@ -598,6 +611,19 @@ export interface UpdateSettingsRequest {
   resolutionTierMediumEnabled?: boolean
   resolutionThresholdLow?: number
   resolutionThresholdHigh?: number
+  thumbnailEnhancementEnabled?: boolean
+  thumbnailEnhancementUrl?: string
+  thumbnailEnhancementUsername?: string
+  thumbnailEnhancementPassword?: string
+  thumbnailEnhancementUpscaler?: string
+  thumbnailEnhancementMinDim?: number
+  thumbnailEnhancementFactor?: number
+  thumbnailEnhancementTargetMode?: "factor" | "resolution"
+  thumbnailEnhancementTargetDim?: number
+  thumbnailEnhancementScheduleEnabled?: boolean
+  thumbnailEnhancementRetentionDays?: number
+  thumbnailEnhancementAutoApprove?: boolean
+  thumbnailEnhancementAutoOnDownload?: boolean
 }
 
 export interface BackupHistoryEntry {
@@ -818,6 +844,65 @@ export interface SubscriptionEntry {
   libraryItemId: number | null
   seenAt: string | null
   firstSeenAt: string
+}
+
+// One row of the AI Enhancement page's history table — one attempted item,
+// success or failed. The dimension/size fields are null when the
+// corresponding step never completed (e.g. a connection failure leaves
+// enhancedWidth/Height/SizeBytes null but originalWidth/Height/SizeBytes
+// set).
+export interface ThumbnailEnhancementHistoryEntry {
+  id: number
+  libraryItemId: number | null
+  itemTitle: string
+  status: "success" | "failed"
+  originalWidth: number | null
+  originalHeight: number | null
+  enhancedWidth: number | null
+  enhancedHeight: number | null
+  originalSizeBytes: number | null
+  enhancedSizeBytes: number | null
+  error: string | null
+  createdAt: string
+  // Reflect the item's *current* live state (whether a pre-enhancement
+  // backup still exists), not this specific historical attempt — every
+  // row for the same item shows the same values.
+  hasOriginalBackup: boolean
+  // Relative to ImagesRoot — serve via imageUrl(). The backup, at its
+  // original (pre-enhancement) resolution.
+  originalThumbnailPath: string | null
+  // Relative to MediaRoot — serve via mediaFileUrl(), NOT imageUrl(). The
+  // raw sidecar file at its actual enhanced resolution, not a downscaled
+  // WebP tier, so it's a fair visual comparison against originalThumbnailPath.
+  enhancedThumbnailPath: string | null
+  // Set once this row's own enhancement was undone by a later revert — a
+  // real historical fact about this specific row, unlike hasOriginalBackup
+  // above which reflects current item state.
+  revertedAt: string | null
+  triggerType: "manual" | "scheduled" | "auto"
+}
+
+export interface RunThumbnailEnhancementResult {
+  enhanced: number
+}
+
+// Configured is false whenever the feature is disabled or has no URL saved
+// yet — reachable/error are meaningless in that case, there's nothing to
+// probe.
+export interface ThumbnailEnhancementStatus {
+  configured: boolean
+  reachable: boolean
+  error: string | null
+}
+
+// One row of the "Preview eligible items" dialog — a live snapshot of what
+// the next "Enhance now" click (or scheduled sweep) would consider, not a
+// completed attempt like ThumbnailEnhancementHistoryEntry.
+export interface ThumbnailEnhancementEligibleItem {
+  libraryItemId: number
+  itemTitle: string
+  width: number
+  height: number
 }
 
 export type AddSubscriptionEntryMode = "ghost" | "download"
