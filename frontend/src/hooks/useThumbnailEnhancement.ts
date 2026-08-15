@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   bulkDeleteThumbnailEnhancementHistoryEntries,
+  bulkDeleteThumbnailOriginals,
+  bulkFetchLibraryThumbnails,
+  bulkRevertThumbnailOriginals,
   clearThumbnailEnhancementHistory,
   deleteThumbnailEnhancementHistoryEntry,
   deleteThumbnailOriginal,
@@ -135,6 +138,66 @@ export function useDeleteThumbnailOriginal() {
       queryClient.invalidateQueries({ queryKey: thumbnailEnhancementHistoryQueryKey })
     },
     onError: (err: Error) => toast.error(`Delete failed: ${err.message}`),
+  })
+}
+
+// useBulkDeleteThumbnailOriginals backs the AI Enhancement page's bulk
+// "Keep Enhanced" action — takes deduped library-item ids (the page filters
+// the selection down to rows with hasOriginalBackup first).
+export function useBulkDeleteThumbnailOriginals() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: bulkDeleteThumbnailOriginals,
+    onSuccess: (result) => {
+      toast.success(
+        result.skipped > 0
+          ? `Kept ${result.updated} enhanced thumbnail(s), skipped ${result.skipped} with nothing to keep`
+          : `Kept ${result.updated} enhanced thumbnail(s)`,
+      )
+      queryClient.invalidateQueries({ queryKey: thumbnailEnhancementHistoryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Keep enhanced failed: ${err.message}`),
+  })
+}
+
+// useBulkRevertThumbnailOriginals backs the AI Enhancement page's bulk
+// "Keep Original" action — same input shape as useBulkDeleteThumbnailOriginals.
+export function useBulkRevertThumbnailOriginals() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: bulkRevertThumbnailOriginals,
+    onSuccess: (result) => {
+      toast.success(
+        result.skipped > 0
+          ? `Restored ${result.updated} original thumbnail(s), skipped ${result.skipped} with nothing to restore`
+          : `Restored ${result.updated} original thumbnail(s)`,
+      )
+      queryClient.invalidateQueries({ queryKey: thumbnailEnhancementHistoryQueryKey })
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Keep original failed: ${err.message}`),
+  })
+}
+
+// useRedownloadThumbnailsFromOriginal backs the AI Enhancement page's bulk
+// "Redownload thumb from original" action — reuses the library page's
+// existing bulk-fetch-thumbnails endpoint (it already silently skips items
+// with no saved source URL), just also invalidating this page's history
+// query since a successful fetch clears hasOriginalBackup as a side effect.
+export function useRedownloadThumbnailsFromOriginal() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (itemIds: number[]) => bulkFetchLibraryThumbnails({ itemIds }),
+    onSuccess: (result) => {
+      toast.success(
+        result.skipped > 0
+          ? `Redownloaded ${result.fetched} thumbnail(s), skipped ${result.skipped} with no source URL`
+          : `Redownloaded ${result.fetched} thumbnail(s)`,
+      )
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      queryClient.invalidateQueries({ queryKey: thumbnailEnhancementHistoryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Redownload failed: ${err.message}`),
   })
 }
 

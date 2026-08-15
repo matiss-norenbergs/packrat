@@ -324,6 +324,14 @@ export interface BulkFetchThumbnailsResponse {
   skipped: number
 }
 
+// Response shape for the AI Enhancement page's bulk "Keep Enhanced"/"Keep
+// Original" actions — Skipped covers items with no stored original backup
+// (already committed/reverted, or never enhanced).
+export interface BulkThumbnailOriginalsResponse {
+  updated: number
+  skipped: number
+}
+
 export interface UpdateLibraryItemRequest {
   title?: string
   filename?: string

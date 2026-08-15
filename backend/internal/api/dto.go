@@ -1464,6 +1464,22 @@ type EnhanceItemsRequest struct {
 	ItemIds []int64 `json:"itemIds" binding:"required,min=1"`
 }
 
+// BulkThumbnailOriginalsRequest backs the AI Enhancement page's bulk "Keep
+// Enhanced"/"Keep Original" actions — a plain library-item-id list (the
+// page dedupes selected history rows down to distinct library item ids
+// before calling either).
+type BulkThumbnailOriginalsRequest struct {
+	ItemIds []int64 `json:"itemIds" binding:"required,min=1"`
+}
+
+// BulkThumbnailOriginalsResponse reports how many items were actually
+// updated vs skipped (no backup — already committed/reverted, or never
+// enhanced).
+type BulkThumbnailOriginalsResponse struct {
+	Updated int `json:"updated"`
+	Skipped int `json:"skipped"`
+}
+
 // ThumbnailEnhancementEligibleItemResponse backs the "preview eligible
 // items" dialog — a live snapshot of what the next "Enhance now" (or
 // scheduled sweep) would consider, not a completed-attempt audit row like

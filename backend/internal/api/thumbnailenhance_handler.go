@@ -344,3 +344,59 @@ func DeleteThumbnailOriginal(deps thumbnailenhance.Deps) gin.HandlerFunc {
 		c.Status(http.StatusNoContent)
 	}
 }
+
+// BulkDeleteThumbnailOriginals backs the AI Enhancement page's bulk "Keep
+// Enhanced" action — commits every listed item's enhanced thumbnail
+// permanently, freeing its stored original. Best-effort, same shape as
+// BulkDeleteThumbnailEnhancementHistoryEntries: an item with no backup
+// (already committed/reverted, or never enhanced) is skipped rather than
+// failing the whole batch.
+func BulkDeleteThumbnailOriginals(deps thumbnailenhance.Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkThumbnailOriginalsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		var resp BulkThumbnailOriginalsResponse
+		for _, id := range req.ItemIds {
+			if err := thumbnailenhance.DeleteOriginal(c.Request.Context(), deps, id); err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					resp.Skipped++
+					continue
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			resp.Updated++
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// BulkRevertThumbnailOriginals backs the AI Enhancement page's bulk "Keep
+// Original" action — restores every listed item's pre-enhancement
+// thumbnail, discarding the enhanced version. Same best-effort skip
+// behavior as BulkDeleteThumbnailOriginals.
+func BulkRevertThumbnailOriginals(deps thumbnailenhance.Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkThumbnailOriginalsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		var resp BulkThumbnailOriginalsResponse
+		for _, id := range req.ItemIds {
+			if err := thumbnailenhance.RevertOriginal(c.Request.Context(), deps, id); err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					resp.Skipped++
+					continue
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			resp.Updated++
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}

@@ -14,6 +14,15 @@ Maintenance notes:
 
 ## 2026-08-15
 
+- **New: AI Enhancement page bulk actions** — a "more actions" menu next to
+  Delete adds three bulk operations for the selected history rows: Keep
+  Enhanced (permanently commits to the enhanced thumbnail and discards the
+  stored original, for every selected item that hasn't been reviewed yet),
+  Keep Original (same eligibility, but discards the enhancement instead),
+  and Redownload Original (re-fetches each selected item's thumbnail from
+  its saved source URL, silently skipping any item with none saved).
+  Selections are deduped by library item first, since one item can have
+  multiple history rows.
 - **Collections page reworked to match Tags/Artists** — replaced the old
   plain tree with a toolbar (New/Edit/Delete/Expand-Collapse/Search),
   tree-aware pagination (top-level collections are paged 25 at a time, each

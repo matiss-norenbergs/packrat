@@ -24,6 +24,7 @@ import type {
   AddSubscriptionEntryMode,
   AddSubscriptionEntryResult,
   BulkRedownloadResponse,
+  BulkThumbnailOriginalsResponse,
   ChangePasswordRequest,
   CheckSubscriptionResult,
   Collection,
@@ -831,6 +832,20 @@ export function revertThumbnailOriginal(id: number): Promise<void> {
 
 export function deleteThumbnailOriginal(id: number): Promise<void> {
   return request<void>(`/thumbnail-enhancement/items/${id}/original`, { method: "DELETE" })
+}
+
+export function bulkDeleteThumbnailOriginals(itemIds: number[]): Promise<BulkThumbnailOriginalsResponse> {
+  return request<BulkThumbnailOriginalsResponse>("/thumbnail-enhancement/items/bulk-keep-enhanced", {
+    method: "POST",
+    body: JSON.stringify({ itemIds }),
+  })
+}
+
+export function bulkRevertThumbnailOriginals(itemIds: number[]): Promise<BulkThumbnailOriginalsResponse> {
+  return request<BulkThumbnailOriginalsResponse>("/thumbnail-enhancement/items/bulk-keep-original", {
+    method: "POST",
+    body: JSON.stringify({ itemIds }),
+  })
 }
 
 export function deleteThumbnailEnhancementHistoryEntry(id: number): Promise<void> {

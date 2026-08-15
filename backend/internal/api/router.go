@@ -233,6 +233,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/thumbnail-enhancement/items/bulk-run", EnhanceThumbnailItemsNow(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/:id/revert", RevertThumbnailOriginal(enhanceDeps))
 		api.DELETE("/thumbnail-enhancement/items/:id/original", DeleteThumbnailOriginal(enhanceDeps))
+		api.POST("/thumbnail-enhancement/items/bulk-keep-enhanced", BulkDeleteThumbnailOriginals(enhanceDeps))
+		api.POST("/thumbnail-enhancement/items/bulk-keep-original", BulkRevertThumbnailOriginals(enhanceDeps))
 
 		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
 		api.POST("/import", CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))

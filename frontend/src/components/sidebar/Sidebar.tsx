@@ -22,6 +22,9 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLogout } from "@/hooks/useAuth"
 import { useAppVersion, useSettings, useYtDlpVersion } from "@/hooks/useSettings"
+import { useThumbnailEnhancementStatus } from "@/hooks/useThumbnailEnhancement"
+import { enhancementStatusColor } from "@/lib/enhancementStatus"
+import { cn } from "@/lib/utils"
 import { NavItem } from "./NavItem"
 
 // Matches the backend's version.Repo (backend/internal/version/latest.go) —
@@ -40,7 +43,13 @@ const navItems = [
   { to: "/history", label: "History", icon: History },
   { to: "/backup", label: "Backup", icon: Archive },
   { to: "/subscriptions", label: "Subscriptions", icon: Rss },
-  { to: "/thumbnail-enhancement", label: "AI Enhancement", icon: ImageUp, requiresSetting: "thumbnailEnhancementEnabled" as const },
+  {
+    to: "/thumbnail-enhancement",
+    label: "AI Enhancement",
+    icon: ImageUp,
+    requiresSetting: "thumbnailEnhancementEnabled" as const,
+    endAdornment: <AiEnhancementStatusDot />,
+  },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/logs", label: "Logs", icon: ScrollText },
 ]
@@ -89,6 +98,37 @@ export function SidebarContent() {
         </Button>
       </div>
     </>
+  )
+}
+
+const STATUS_DOT_CLASSNAME: Record<ReturnType<typeof enhancementStatusColor>, string> = {
+  green: "bg-emerald-500",
+  red: "bg-destructive",
+  grey: "bg-muted-foreground/40",
+}
+
+const STATUS_DOT_LABEL: Record<ReturnType<typeof enhancementStatusColor>, string> = {
+  green: "Stable Diffusion instance is active and reachable",
+  red: "Stable Diffusion instance is configured but not reachable",
+  grey: "Stable Diffusion instance is not configured",
+}
+
+// Mirrors the AI Enhancement page's own status badge (see
+// lib/enhancementStatus) — this nav item is only ever rendered once the
+// thumbnailEnhancementEnabled setting is on, so the status query always
+// runs while it's visible, giving the sidebar a live indicator without
+// requiring the page itself to be open.
+function AiEnhancementStatusDot() {
+  const { data: status, isLoading } = useThumbnailEnhancementStatus(true)
+  const color = enhancementStatusColor(status, isLoading)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT_CLASSNAME[color])} />
+      </TooltipTrigger>
+      <TooltipContent>{STATUS_DOT_LABEL[color]}</TooltipContent>
+    </Tooltip>
   )
 }
 
