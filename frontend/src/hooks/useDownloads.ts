@@ -103,6 +103,24 @@ export function useDeleteDownload() {
   })
 }
 
+// No bulk-delete route exists on the backend — loops the same per-id DELETE
+// the single-item action already uses, one call per selected id, and
+// invalidates once at the end. Callers are expected to filter out
+// still-active downloads first (the backend rejects those with a 409).
+export function useBulkDeleteDownloads() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => deleteDownload(id))),
+    onSuccess: (_result, ids) => {
+      toast.success(`Removed ${ids.length} download${ids.length === 1 ? "" : "s"}`)
+      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to delete: ${err.message}`)
+    },
+  })
+}
+
 export function useClearDownloadLog() {
   const queryClient = useQueryClient()
   return useMutation({

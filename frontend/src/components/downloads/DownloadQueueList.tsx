@@ -1,10 +1,28 @@
-import { useDownloads } from "@/hooks/useDownloads"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DownloadQueueItem } from "./DownloadQueueItem"
+import type { Download } from "@/types/api"
 
-export function DownloadQueueList() {
-  const { data, isLoading, isError, error } = useDownloads()
-
+export function DownloadQueueList({
+  downloads,
+  isLoading,
+  isError,
+  error,
+  isEmpty,
+  isSelected,
+  onToggle,
+  onItemMouseDown,
+  onItemMouseEnter,
+}: {
+  downloads: Download[]
+  isLoading: boolean
+  isError: boolean
+  error: unknown
+  isEmpty: boolean
+  isSelected: (id: number) => boolean
+  onToggle: (id: number) => void
+  onItemMouseDown: (e: React.MouseEvent, id: number) => void
+  onItemMouseEnter: (id: number) => void
+}) {
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -18,14 +36,25 @@ export function DownloadQueueList() {
     return <p className="text-sm text-destructive">Failed to load downloads: {(error as Error).message}</p>
   }
 
-  if (!data || data.length === 0) {
+  if (isEmpty) {
     return <p className="text-sm text-muted-foreground">No downloads yet. Click "New Download" to get started.</p>
+  }
+
+  if (downloads.length === 0) {
+    return <p className="text-sm text-muted-foreground">No downloads match your search.</p>
   }
 
   return (
     <div className="space-y-3">
-      {data.map((d) => (
-        <DownloadQueueItem key={d.id} download={d} />
+      {downloads.map((d) => (
+        <DownloadQueueItem
+          key={d.id}
+          download={d}
+          selected={isSelected(d.id)}
+          onSelectedChange={() => onToggle(d.id)}
+          onMouseDown={(e) => onItemMouseDown(e, d.id)}
+          onMouseEnter={() => onItemMouseEnter(d.id)}
+        />
       ))}
     </div>
   )

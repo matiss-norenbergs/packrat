@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { format, parseISO } from "date-fns"
-import { ChevronLeft, ChevronRight, ImageIcon, Pencil, Plus, Search, Trash2, X } from "lucide-react"
+import { ImageIcon, Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -19,7 +19,9 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ArtistDialog } from "@/components/artists/ArtistDialog"
+import { CollapsiblePanel } from "@/components/CollapsiblePanel"
 import { useIdSelection } from "@/hooks/useIdSelection"
+import { usePersistedOpen } from "@/hooks/usePersistedOpen"
 import { useArtistImages, useArtists, useBulkDeleteArtists } from "@/hooks/useArtists"
 import { imageUrl } from "@/lib/api"
 import { getPageNumbers } from "@/lib/pagination"
@@ -27,13 +29,6 @@ import { calculateAge, cn } from "@/lib/utils"
 import type { Artist } from "@/types/api"
 
 const PAGE_SIZE = 50
-
-const PANEL_OPEN_STORAGE_KEY = "packrat:artists-panel-open"
-
-function readPanelOpenSetting(): boolean {
-  const raw = localStorage.getItem(PANEL_OPEN_STORAGE_KEY)
-  return raw === null ? true : raw === "true"
-}
 
 export function ArtistsPage() {
   const { data, isLoading, isError, error } = useArtists()
@@ -44,12 +39,8 @@ export function ArtistsPage() {
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState("")
   const [search, setSearch] = useState("")
-  const [panelOpen, setPanelOpen] = useState(readPanelOpenSetting)
+  const [panelOpen, setPanelOpen] = usePersistedOpen("packrat:artists-panel-open", true)
   const bulkDeleteArtists = useBulkDeleteArtists()
-
-  useEffect(() => {
-    localStorage.setItem(PANEL_OPEN_STORAGE_KEY, String(panelOpen))
-  }, [panelOpen])
 
   // Drag-to-select: mousedown on a row starts the drag and anchors the
   // range; mouseenter on subsequent rows while the button is held extends
@@ -357,43 +348,9 @@ export function ArtistsPage() {
           )}
         </div>
 
-        <div className="relative min-h-0 shrink-0">
-          {/* A small notch handle rather than a full-height strip. Open: sits
-              on the panel's outer left side (right edge of the notch flush
-              with the panel's left edge, sticking out into the gap — not
-              overlapping the panel's own bordered content). Collapsed: the
-              wrapper it's anchored to has shrunk to zero width, so its
-              left/right edge is wherever main's own right padding starts —
-              offsetting by that exact padding (-right-4 / md:-right-6,
-              matching AppLayout's p-4/md:p-6) pushes the notch the rest of
-              the way to sit flush against the actual viewport edge instead
-              of floating mid-gap. */}
-          <button
-            type="button"
-            onClick={() => setPanelOpen((v) => !v)}
-            aria-label={panelOpen ? "Collapse artist images panel" : "Expand artist images panel"}
-            className={cn(
-              "absolute top-1/2 z-10 flex h-14 w-5 -translate-y-1/2 items-center justify-center rounded-l-md border border-r-0 bg-background text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground",
-              panelOpen ? "-left-5" : "-right-4 md:-right-6",
-            )}
-          >
-            {panelOpen ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-          </button>
-
-          <div
-            className={cn(
-              "h-full min-h-0 overflow-hidden transition-[width] duration-300 ease-in-out",
-              panelOpen ? "w-80" : "w-0",
-            )}
-          >
-            {/* No right padding — main's own page-level p-4/md:p-6 already
-                provides that margin out to the viewport edge, so adding the
-                panel's own would double it up. */}
-            <div className="h-full w-80 min-h-0 overflow-y-auto border-l py-4 pl-4 md:py-6 md:pl-6">
-              <ArtistImagesPanel artist={editTarget} selectedCount={size} panelOpen={panelOpen} />
-            </div>
-          </div>
-        </div>
+        <CollapsiblePanel open={panelOpen} onOpenChange={setPanelOpen} label="artist images panel">
+          <ArtistImagesPanel artist={editTarget} selectedCount={size} panelOpen={panelOpen} />
+        </CollapsiblePanel>
       </div>
     </div>
   )

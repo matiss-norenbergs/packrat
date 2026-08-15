@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { createBatchDownload } from "@/lib/api"
 import { downloadsQueryKey } from "@/hooks/useDownloads"
 import { historyQueryKey } from "@/hooks/useHistory"
@@ -256,12 +257,16 @@ export function BulkDownloadDialog() {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <ListPlus className="h-4 w-4" />
-          Bulk Download
-        </Button>
-      </DialogTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="icon" className="rounded-l-none border-l-0" aria-label="Bulk Download">
+              <ListPlus className="h-4 w-4" />
+            </Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Bulk Download</TooltipContent>
+      </Tooltip>
       <DialogContent className="sm:max-w-[90vw]">
         <DialogHeader>
           <DialogTitle>Bulk Download</DialogTitle>

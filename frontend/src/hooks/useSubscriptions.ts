@@ -59,12 +59,43 @@ export function useDeleteSubscription() {
   })
 }
 
+// No bulk-delete route exists on the backend — loops the same per-id DELETE
+// the single-row action uses (mirrors useBulkDeleteHistoryItems), one call
+// per selected id, and invalidates once at the end.
+export function useBulkDeleteSubscriptions() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => deleteSubscription(id))),
+    onSuccess: (_result, ids) => {
+      toast.success(`Removed ${ids.length} subscription${ids.length === 1 ? "" : "s"}`)
+      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to remove: ${err.message}`),
+  })
+}
+
 export function useCheckSubscriptionNow() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => checkSubscriptionNow(id),
     onSuccess: (result) => {
       toast.success(result.newItemsFound > 0 ? `Found ${result.newItemsFound} new item(s)` : "Up to date — nothing new")
+      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Check failed: ${err.message}`),
+  })
+}
+
+// Same aggregation approach as useBulkDeleteSubscriptions — no bulk-check
+// route exists, so this fires the per-id check concurrently for every
+// selected subscription and sums the new-item counts into one toast.
+export function useBulkCheckSubscriptionsNow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => checkSubscriptionNow(id))),
+    onSuccess: (results) => {
+      const total = results.reduce((sum, r) => sum + r.newItemsFound, 0)
+      toast.success(total > 0 ? `Found ${total} new item(s)` : "Up to date — nothing new")
       queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
     },
     onError: (err: Error) => toast.error(`Check failed: ${err.message}`),

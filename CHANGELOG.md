@@ -12,6 +12,55 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-15
+
+- **Collections page reworked to match Tags/Artists** — replaced the old
+  plain tree with a toolbar (New/Edit/Delete/Expand-Collapse/Search),
+  tree-aware pagination (top-level collections are paged 25 at a time, each
+  page showing full sub-trees rather than splitting a parent from its
+  children), and a sticky header/toolbar/footer layout so controls stay on
+  screen while the list scrolls. The expand/collapse-all state is now
+  remembered across reloads, and the pagination footer shows both the
+  top-level and total collection counts.
+- **New: Collection details side panel** — selecting a collection shows its
+  cover art and full metadata (path, folder, type, quality, privacy,
+  sequence range, gaps, item counts, etc.) in a collapsible right-side
+  panel, mirroring the Artists page's image panel. Every field renders even
+  when empty (dash fallback), and Private/"Show as single item in Browse"
+  are shown as colored Yes/No badges. The panel's open/collapsed state is
+  remembered across reloads independently of the expand/collapse toggle.
+- **Collection row selection** — clicking a row selects it (ctrl/cmd-click
+  toggles it in or out of the selection), matching the click-to-select
+  convention used elsewhere in the app; the per-row details popover now
+  opens on hover instead of requiring a click.
+- **Fixed: per-row "Add sub-collection"/Edit dialogs not registering
+  clicks** — selecting a row could swallow mousedown events from inside
+  those dialogs' portaled content, breaking focus and typing in their
+  fields. Row selection now only intercepts clicks that land on the row's
+  own DOM, not on dialogs it renders as children.
+- **History, Logs, and Subscriptions pages reworked to match Tags** — all
+  three switched to the shared multi-select Table pattern (drag-select,
+  shift/ctrl-click, header select-all, right-click context menu), debounced
+  search, and paginated sticky-header layout. History gained working bulk
+  Retry and bulk Delete; Subscriptions gained bulk Delete and bulk Check
+  now (each fires the existing single-item endpoint once per selected
+  subscription and reports one aggregate "Found N new item(s)" toast, since
+  no bulk backend route exists for either page). Logs intentionally has no
+  selection column — there's no delete capability for logs at all.
+- **Downloads page gained multi-select, bulk Delete, search, and
+  pagination** — kept its existing card layout (not converted to a table)
+  but added the same drag-select, shift/ctrl-click, right-click context
+  menu, debounced search, and sticky header/toolbar/pagination-footer
+  conventions as Tags/Collections, plus a checkbox per item. The per-item
+  Delete button was removed in favor of a single toolbar/context-menu
+  Delete that acts on the whole selection; still-active (in-progress)
+  downloads in a selection are skipped since the backend refuses to delete
+  those until cancelled. The per-item Cancel button for in-progress
+  downloads is unchanged. New Download and Bulk Download are now a single
+  grouped control on the toolbar's left side (Bulk Download collapsed to
+  an icon with a tooltip) instead of two separate buttons in the page
+  header.
+
 ## 2026-08-14
 
 - **Artists page reworked to match Tags** — replaced the old plain list with

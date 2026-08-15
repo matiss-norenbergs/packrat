@@ -76,6 +76,38 @@ export function sortCollectionsByPath<T extends { path: string }>(collections: T
   return [...collections].sort((a, b) => a.path.localeCompare(b.path))
 }
 
+export interface CollectionTreeFilterResult {
+  tree: CollectionTreeNode[]
+  // Ids of nodes kept only because a descendant matched — the caller force-
+  // expands these while a search is active so a nested match isn't hidden
+  // behind a collapsed ancestor, without touching the persisted expand state
+  // a plain Expand all/Collapse all toggle relies on.
+  matchAncestorIds: Set<number>
+}
+
+// Prunes the tree down to nodes whose name matches the query plus the
+// ancestor chain needed to reach them — siblings and descendants that don't
+// themselves match are dropped, the same "show the path to a hit, nothing
+// else" behavior a file-search tree uses. An empty/whitespace-only query is
+// a no-op (returns the tree unchanged, no forced expansion).
+export function filterCollectionTree(nodes: CollectionTreeNode[], query: string): CollectionTreeFilterResult {
+  const q = query.trim().toLowerCase()
+  if (!q) return { tree: nodes, matchAncestorIds: new Set() }
+
+  const matchAncestorIds = new Set<number>()
+
+  const filterNode = (node: CollectionTreeNode): CollectionTreeNode | null => {
+    const children = node.children.map(filterNode).filter((n): n is CollectionTreeNode => n !== null)
+    const selfMatches = node.name.toLowerCase().includes(q)
+    if (!selfMatches && children.length === 0) return null
+    if (children.length > 0) matchAncestorIds.add(node.id)
+    return { ...node, children }
+  }
+
+  const tree = nodes.map(filterNode).filter((n): n is CollectionTreeNode => n !== null)
+  return { tree, matchAncestorIds }
+}
+
 // Walks up parentId to the collection with no parent (or whose parent isn't
 // in the list) — used to bucket flagged "show" collections into one Browse
 // row per top-level ancestor, so e.g. several artists/albums nested under

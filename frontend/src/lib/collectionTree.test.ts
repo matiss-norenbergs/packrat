@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   buildCollectionTree,
   collectDescendantIds,
+  filterCollectionTree,
   findNodeById,
   resolveInheritedArtistId,
   topLevelAncestor,
@@ -123,6 +124,75 @@ describe("resolveInheritedArtistId", () => {
 
   it("returns null for a null collectionId", () => {
     expect(resolveInheritedArtistId(collections, null)).toBeNull()
+  })
+})
+
+describe("filterCollectionTree", () => {
+  const tree = buildCollectionTree([
+    makeCollection({ id: 1, name: "Music" }),
+    makeCollection({ id: 2, name: "Rock", parentId: 1 }),
+    makeCollection({ id: 3, name: "Jazz", parentId: 1 }),
+    makeCollection({ id: 4, name: "Movies" }),
+    makeCollection({ id: 5, name: "Comedy", parentId: 4 }),
+  ])
+
+  it("returns the tree unchanged and no forced expansion for an empty query", () => {
+    const result = filterCollectionTree(tree, "")
+    expect(result.tree).toBe(tree)
+    expect(result.matchAncestorIds.size).toBe(0)
+  })
+
+  it("returns the tree unchanged for a whitespace-only query", () => {
+    expect(filterCollectionTree(tree, "   ").tree).toBe(tree)
+  })
+
+  it("keeps a matching leaf and prunes non-matching siblings", () => {
+    const result = filterCollectionTree(tree, "rock")
+    expect(result.tree.map((n) => n.name)).toEqual(["Music"])
+    expect(result.tree[0].children.map((n) => n.name)).toEqual(["Rock"])
+  })
+
+  it("marks the matched leaf's ancestors for forced expansion, not the leaf itself", () => {
+    const result = filterCollectionTree(tree, "rock")
+    expect(result.matchAncestorIds.has(1)).toBe(true)
+    expect(result.matchAncestorIds.has(2)).toBe(false)
+  })
+
+  it("drops a whole branch when neither it nor any descendant matches", () => {
+    const result = filterCollectionTree(tree, "ck")
+    // Only "Rock" contains "ck" — Jazz is pruned from Music, and Movies (no
+    // matching descendant at all) is dropped entirely.
+    expect(result.tree.map((n) => n.name)).toEqual(["Music"])
+    expect(result.tree[0].children.map((n) => n.name)).toEqual(["Rock"])
+  })
+
+  it("keeps multiple separate top-level branches when each has its own match", () => {
+    const multiTree = buildCollectionTree([
+      makeCollection({ id: 1, name: "Alpha" }),
+      makeCollection({ id: 2, name: "Alpha Target", parentId: 1 }),
+      makeCollection({ id: 3, name: "Beta" }),
+      makeCollection({ id: 4, name: "Beta Target", parentId: 3 }),
+      makeCollection({ id: 5, name: "Gamma" }),
+      makeCollection({ id: 6, name: "Gamma Nope", parentId: 5 }),
+    ])
+    const result = filterCollectionTree(multiTree, "target")
+    expect(result.tree.map((n) => n.name)).toEqual(["Alpha", "Beta"])
+  })
+
+  it("matches case-insensitively", () => {
+    expect(filterCollectionTree(tree, "MUSIC").tree.map((n) => n.name)).toEqual(["Music"])
+  })
+
+  it("returns an empty tree when nothing matches", () => {
+    const result = filterCollectionTree(tree, "nonexistent")
+    expect(result.tree).toEqual([])
+    expect(result.matchAncestorIds.size).toBe(0)
+  })
+
+  it("keeps a matching parent's own match without requiring its children to match too", () => {
+    const result = filterCollectionTree(tree, "movies")
+    expect(result.tree.map((n) => n.name)).toEqual(["Movies"])
+    expect(result.tree[0].children).toEqual([])
   })
 })
 
