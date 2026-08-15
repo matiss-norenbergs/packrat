@@ -1,26 +1,46 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  bulkDeleteThumbnailEnhancementHistoryEntries,
   clearThumbnailEnhancementHistory,
   deleteThumbnailEnhancementHistoryEntry,
   deleteThumbnailOriginal,
-  enhanceThumbnailItem,
+  enhanceThumbnailItems,
   getThumbnailEnhancementStatus,
   listThumbnailEnhancementEligible,
   listThumbnailEnhancementHistory,
   listThumbnailUpscalers,
   revertThumbnailOriginal,
   runThumbnailEnhancementNow,
+  type ThumbnailEnhancementHistoryParams,
 } from "@/lib/api"
 import { libraryQueryKey } from "./useLibrary"
+import type { EnhanceProgressPayload } from "@/types/ws"
 
 export const thumbnailEnhancementHistoryQueryKey = ["thumbnail-enhancement-history"] as const
 export const thumbnailEnhancementEligibleQueryKey = ["thumbnail-enhancement-eligible"] as const
+// Seeded by useDownloadsSocket's enhance_progress handler, never fetched —
+// the "query cache as pub/sub channel" trick, so the page can reactively
+// read the currently-processing item without a dedicated state store.
+export const thumbnailEnhancementActiveItemQueryKey = ["thumbnail-enhancement-active-item"] as const
 
-export function useThumbnailEnhancementHistory() {
+export function useThumbnailEnhancementHistory(params: ThumbnailEnhancementHistoryParams = {}) {
   return useQuery({
-    queryKey: thumbnailEnhancementHistoryQueryKey,
-    queryFn: listThumbnailEnhancementHistory,
+    queryKey: [...thumbnailEnhancementHistoryQueryKey, params],
+    queryFn: () => listThumbnailEnhancementHistory(params),
+  })
+}
+
+// useThumbnailEnhancementActiveItem is a passive read of the "currently
+// processing" cache entry — its queryFn never actually runs, since
+// useDownloadsSocket always seeds the cache before this could ever be
+// asked to fetch.
+export function useThumbnailEnhancementActiveItem() {
+  return useQuery<EnhanceProgressPayload | null>({
+    queryKey: thumbnailEnhancementActiveItemQueryKey,
+    queryFn: () => null,
+    initialData: null,
+    staleTime: Infinity,
   })
 }
 
@@ -29,10 +49,8 @@ export function useRunThumbnailEnhancementNow() {
   return useMutation({
     mutationFn: runThumbnailEnhancementNow,
     onSuccess: (result) => {
-      toast.success(result.enhanced > 0 ? `Enhanced ${result.enhanced} thumbnail(s)` : "Nothing to enhance right now")
-      queryClient.invalidateQueries({ queryKey: thumbnailEnhancementHistoryQueryKey })
+      toast.success(result.queued > 0 ? `Queued ${result.queued} item(s) for enhancement` : "Nothing to enhance right now")
       queryClient.invalidateQueries({ queryKey: thumbnailEnhancementEligibleQueryKey })
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
     onError: (err: Error) => toast.error(`Enhancement run failed: ${err.message}`),
   })
@@ -76,20 +94,22 @@ export function useThumbnailEnhancementEligible(enabled: boolean) {
   })
 }
 
-// useEnhanceThumbnailItem backs the eligible-items dialog's per-row
-// "Enhance" button — the item leaves the eligible list once enhanced, so
-// that query is invalidated too, not just history/library.
-export function useEnhanceThumbnailItem() {
+// useEnhanceThumbnailItems backs the eligible-items dialog's toolbar
+// "Enhance Selected" button — fire-and-forget, like the "Enhance Now"
+// button; live status streams over the enhance_progress WebSocket event
+// (see useDownloadsSocket) rather than this mutation's own completion.
+export function useEnhanceThumbnailItems() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: enhanceThumbnailItem,
-    onSuccess: () => {
-      toast.success("Thumbnail enhanced")
-      queryClient.invalidateQueries({ queryKey: thumbnailEnhancementHistoryQueryKey })
+    mutationFn: enhanceThumbnailItems,
+    onSuccess: (result) => {
+      toast.success(`Queued ${result.queued} item(s) for enhancement`)
+    },
+    onError: (err: Error) => toast.error(`Enhancement failed: ${err.message}`),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: thumbnailEnhancementEligibleQueryKey })
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
-    onError: (err: Error) => toast.error(`Enhancement failed: ${err.message}`),
   })
 }
 
@@ -129,6 +149,20 @@ export function useDeleteThumbnailEnhancementHistoryEntry() {
     mutationFn: deleteThumbnailEnhancementHistoryEntry,
     onSuccess: () => {
       toast.success("History entry deleted")
+      queryClient.invalidateQueries({ queryKey: thumbnailEnhancementHistoryQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Delete failed: ${err.message}`),
+  })
+}
+
+// useBulkDeleteThumbnailEnhancementHistoryEntries backs the history table's
+// toolbar "Delete Selected" action.
+export function useBulkDeleteThumbnailEnhancementHistoryEntries() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: bulkDeleteThumbnailEnhancementHistoryEntries,
+    onSuccess: (result) => {
+      toast.success(`Deleted ${result.deleted} history ${result.deleted === 1 ? "entry" : "entries"}`)
       queryClient.invalidateQueries({ queryKey: thumbnailEnhancementHistoryQueryKey })
     },
     onError: (err: Error) => toast.error(`Delete failed: ${err.message}`),

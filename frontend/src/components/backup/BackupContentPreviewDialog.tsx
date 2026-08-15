@@ -80,7 +80,7 @@ function PreviewItemRow({ item }: { item: BackupPreviewItem }) {
     <div className="flex items-start justify-between gap-3 rounded-md border p-2">
       <div className="min-w-0 flex-1 space-y-1">
         <p className="truncate text-sm font-medium">{item.title || item.originalUrl}</p>
-        <p className="truncate text-xs text-muted-foreground">{item.originalUrl}</p>
+        {item.originalUrl && <p className="truncate text-xs text-muted-foreground">{item.originalUrl}</p>}
         <div className="flex flex-wrap items-center gap-1">
           <Badge variant="outline">
             {item.collectionPath && item.collectionPath.length > 0 ? item.collectionPath.join(" / ") : "Uncategorized"}
@@ -93,6 +93,11 @@ function PreviewItemRow({ item }: { item: BackupPreviewItem }) {
           ))}
         </div>
       </div>
+      {item.isGhost && (
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Badge variant="outline">Ghost</Badge>
+        </div>
+      )}
     </div>
   )
 }

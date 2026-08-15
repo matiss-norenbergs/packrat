@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,20 +20,41 @@ import (
 // unreachable URL fails fast instead of hanging the request.
 const thumbnailEnhancementProbeTimeout = 10 * time.Second
 
+// thumbnailEnhancementHistoryPageSize is the fixed page size for
+// ListThumbnailEnhancementHistory — no size selector, matches the plan's
+// "keep it simple" call for a log this shape.
+const thumbnailEnhancementHistoryPageSize = 25
+
 // ListThumbnailEnhancementHistory backs the AI Enhancement page's history
-// table — every attempted item, most recent first. Enriches each row with
-// the item's *current* backup state (has one? what are the compare-dialog
-// image paths?) via one extra bulk query each, rather than an N+1 lookup
-// per row.
+// table — a searched/filtered/paginated page of attempted items, most
+// recent first. Enriches each returned row with the item's *current* backup
+// state (has one? what are the compare-dialog image paths?) via one extra
+// bulk query each, rather than an N+1 lookup per row.
 func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		entries, err := deps.HistoryRepo.List(ctx)
+
+		page, _ := strconv.Atoi(c.Query("page"))
+		if page <= 0 {
+			page = 1
+		}
+		entries, total, err := deps.HistoryRepo.Query(ctx, repository.ThumbnailEnhancementHistoryQuery{
+			Search:      c.Query("q"),
+			Status:      c.Query("status"),
+			TriggerType: c.Query("trigger"),
+			Page:        page,
+			PageSize:    thumbnailEnhancementHistoryPageSize,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		withBackup, err := deps.OriginalsRepo.ListItemIDsWithBackup(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		latestSuccessID, err := deps.HistoryRepo.LatestSuccessRowIDs(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -53,7 +75,12 @@ func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFunc
 			var hasBackup bool
 			var originalPath, enhancedPath *string
 			if e.LibraryItemID != nil {
-				hasBackup = withBackup[*e.LibraryItemID]
+				// Only the single most recent success row for this item gets
+				// to offer Compare/Revert — older rows share the exact same
+				// backup (captured once, at first enhancement) but their own
+				// output has since been superseded by a later enhancement,
+				// so diffing the backup against them would be misleading.
+				hasBackup = withBackup[*e.LibraryItemID] && latestSuccessID[*e.LibraryItemID] == e.ID
 				if item, ok := itemsByID[*e.LibraryItemID]; ok {
 					// The raw sidecar file, not a downscaled WebP tier — the
 					// whole point of Compare is judging the actual
@@ -79,7 +106,7 @@ func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFunc
 			}
 			out = append(out, toThumbnailEnhancementHistoryResponse(e, hasBackup, originalPath, enhancedPath))
 		}
-		c.JSON(http.StatusOK, out)
+		c.JSON(http.StatusOK, ThumbnailEnhancementHistoryListResponse{Entries: out, Total: total})
 	}
 }
 
@@ -105,6 +132,33 @@ func DeleteThumbnailEnhancementHistoryEntry(deps thumbnailenhance.Deps) gin.Hand
 	}
 }
 
+// BulkDeleteThumbnailEnhancementHistoryEntries backs the history table's
+// toolbar "Delete Selected" action — removes every listed row, best-effort
+// (an id that's already gone is skipped rather than failing the whole
+// batch), cascading into each item's backup cleanup the same way a single
+// delete does (see thumbnailenhance.DeleteHistoryEntry).
+func BulkDeleteThumbnailEnhancementHistoryEntries(deps thumbnailenhance.Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkDeleteRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		var resp BulkDeleteResponse
+		for _, id := range req.IDs {
+			if err := thumbnailenhance.DeleteHistoryEntry(c.Request.Context(), deps, id); err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					continue
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			resp.Deleted++
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
 // ClearThumbnailEnhancementHistory backs the AI Enhancement settings tab's
 // "Clear All History" button — mirrors ClearHistory's shape exactly.
 func ClearThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFunc {
@@ -118,16 +172,24 @@ func ClearThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFun
 	}
 }
 
-// RunThumbnailEnhancementNow backs the "Enhance now" button — mirrors
-// CheckSubscriptionNow's shape.
+// RunThumbnailEnhancementNow backs the "Enhance now" button — fire-and-
+// forget: computes how many items would run (synchronously, cheap), spawns
+// the actual sweep detached from this request's context (so closing the tab
+// mid-run no longer cancels it), and responds immediately. Progress streams
+// live over the enhance_progress WebSocket event instead of blocking here.
 func RunThumbnailEnhancementNow(deps thumbnailenhance.Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		enhanced, err := thumbnailenhance.RunOnce(c.Request.Context(), deps)
+		queued, err := thumbnailenhance.WouldRunCount(c.Request.Context(), deps)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "enhancing thumbnails failed: " + err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, RunThumbnailEnhancementResponse{Enhanced: enhanced})
+		go func() {
+			if _, err := thumbnailenhance.RunOnce(context.Background(), deps); err != nil {
+				log.Printf("thumbnailenhance: manual run failed: %v", err)
+			}
+		}()
+		c.JSON(http.StatusAccepted, RunThumbnailEnhancementResponse{Queued: queued})
 	}
 }
 
@@ -217,20 +279,26 @@ func ListThumbnailEnhancementEligible(deps thumbnailenhance.Deps) gin.HandlerFun
 	}
 }
 
-// EnhanceThumbnailItemNow backs the eligible-items dialog's per-row
-// "Enhance" button — enhances exactly one item, bypassing the batch cap.
-func EnhanceThumbnailItemNow(deps thumbnailenhance.Deps) gin.HandlerFunc {
+// EnhanceThumbnailItemsNow backs the eligible-items dialog's toolbar
+// "Enhance Selected" button — fire-and-forget, same pattern as
+// RunThumbnailEnhancementNow: spawns the batch detached from this request
+// and responds immediately, with progress streaming live over
+// enhance_progress. Bypasses the sweep cap entirely and ignores the failure
+// cooldown, since this is an explicit, bounded selection the user made by
+// hand.
+func EnhanceThumbnailItemsNow(deps thumbnailenhance.Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		var req EnhanceItemsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if err := thumbnailenhance.EnhanceItem(c.Request.Context(), deps, id); err != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-			return
-		}
-		c.Status(http.StatusNoContent)
+		go func() {
+			if err := thumbnailenhance.EnhanceItems(context.Background(), deps, req.ItemIds); err != nil {
+				log.Printf("thumbnailenhance: bulk enhance failed: %v", err)
+			}
+		}()
+		c.JSON(http.StatusAccepted, RunThumbnailEnhancementResponse{Queued: len(req.ItemIds)})
 	}
 }
 

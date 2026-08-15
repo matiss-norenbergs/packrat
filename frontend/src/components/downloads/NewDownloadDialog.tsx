@@ -406,7 +406,7 @@ export function NewDownloadDialog() {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button>
+        <Button className="rounded-r-none">
           <Plus className="h-4 w-4" />
           New Download
         </Button>

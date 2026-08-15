@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -57,8 +59,8 @@ func ExportSettings(settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	}
 }
 
-// ExportLibrary dumps collections/tags/artists/URL-having library items into
-// a downloadable (optionally encrypted) file — see backup.BuildLibraryBundle
+// ExportLibrary dumps collections/tags/artists/every library item into a
+// downloadable (optionally encrypted) file — see backup.BuildLibraryBundle
 // for exactly what's included and why.
 func ExportLibrary(collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, libraryRepo *repository.LibraryRepo, downloadsRepo *repository.DownloadsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -112,14 +114,23 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		plaintext, err := backup.Open(env, "settings", passwordFrom(req.Password))
+		// Accepts a plain settings export or the settings half of a full
+		// backup — a full file's library half is simply ignored here.
+		plaintext, kind, err := backup.OpenAny(env, []string{"settings", "full"}, passwordFrom(req.Password))
 		if err != nil {
 			writeBackupOpenError(c, err)
 			return
 		}
 
 		var bundle map[string]string
-		if err := json.Unmarshal(plaintext, &bundle); err != nil {
+		if kind == "full" {
+			var full backup.FullBundle
+			if err := json.Unmarshal(plaintext, &full); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt backup file: " + err.Error()})
+				return
+			}
+			bundle = full.Settings
+		} else if err := json.Unmarshal(plaintext, &bundle); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt settings export: " + err.Error()})
 			return
 		}
@@ -149,32 +160,42 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 
 // decodeLibraryBundle binds a BackupImportRequest from the request body,
 // then parses/decrypts/unmarshals it into a LibraryBundle — the shared first
-// steps of ImportLibrary and PreviewLibraryImport. On any failure it writes
-// the appropriate error response itself and returns ok=false, so callers can
-// just check ok and return.
-func decodeLibraryBundle(c *gin.Context) (bundle backup.LibraryBundle, ok bool) {
+// steps of ImportLibrary and PreviewLibraryImport. Accepts either a plain
+// library export or the library half of a full backup (its settings half is
+// simply ignored here). On any failure it writes the appropriate error
+// response itself and returns ok=false, so callers can just check ok and
+// return. mode is the request's raw Mode field ("" or "download" means
+// download, "ghostOnly" skips every redownload).
+func decodeLibraryBundle(c *gin.Context) (bundle backup.LibraryBundle, mode string, ok bool) {
 	var req BackupImportRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return bundle, false
+		return bundle, "", false
 	}
 
 	env, err := backup.ParseEnvelope(req.Data)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return bundle, false
+		return bundle, "", false
 	}
-	plaintext, err := backup.Open(env, "library", passwordFrom(req.Password))
+	plaintext, kind, err := backup.OpenAny(env, []string{"library", "full"}, passwordFrom(req.Password))
 	if err != nil {
 		writeBackupOpenError(c, err)
-		return bundle, false
+		return bundle, "", false
 	}
 
-	if err := json.Unmarshal(plaintext, &bundle); err != nil {
+	if kind == "full" {
+		var full backup.FullBundle
+		if err := json.Unmarshal(plaintext, &full); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt backup file: " + err.Error()})
+			return bundle, "", false
+		}
+		bundle = full.Library
+	} else if err := json.Unmarshal(plaintext, &bundle); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt library export: " + err.Error()})
-		return bundle, false
+		return bundle, "", false
 	}
-	return bundle, true
+	return bundle, req.Mode, true
 }
 
 // PreviewLibraryImport decrypts/parses a library export the same way
@@ -183,7 +204,7 @@ func decodeLibraryBundle(c *gin.Context) (bundle backup.LibraryBundle, ok bool) 
 // commits to it. See backup.PreviewLibraryBundle for the diffing logic.
 func PreviewLibraryImport(collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		bundle, ok := decodeLibraryBundle(c)
+		bundle, _, ok := decodeLibraryBundle(c)
 		if !ok {
 			return
 		}
@@ -197,61 +218,85 @@ func PreviewLibraryImport(collectionsRepo *repository.CollectionsRepo, tagsRepo 
 	}
 }
 
+// applyLibraryBundleAndEnqueue runs backup.ApplyLibraryBundle and then
+// queues a redownload for every resolved (non-ghost) item it returns — the
+// shared second half of ImportLibrary and RestoreFullBackup. Ghost
+// (placeholder, no-file) entries are recreated directly as ghosts, nothing
+// queued for them; every other resolved item gets a redownload queued —
+// the same enqueueDownload helper CreateDownload and RedownloadLibraryItem
+// use, applying the same default-download-type fallback
+// RetryHistoryItem/RedownloadLibraryItem already use when the export didn't
+// carry a type (its originating Download row was gone). Each item is
+// enqueued independently and best-effort — one bad URL/folder doesn't abort
+// the rest of the import.
+func applyLibraryBundleAndEnqueue(
+	ctx context.Context,
+	db *sql.DB,
+	collectionsRepo *repository.CollectionsRepo,
+	tagsRepo *repository.TagsRepo,
+	artistsRepo *repository.ArtistsRepo,
+	libraryRepo *repository.LibraryRepo,
+	mgr *queue.DownloadManager,
+	settingsRepo *repository.SettingsRepo,
+	bundle backup.LibraryBundle,
+	ghostOnly bool,
+) (BackupImportLibraryResponse, error) {
+	resolved, result, err := backup.ApplyLibraryBundle(ctx, db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, bundle, ghostOnly)
+	if err != nil {
+		return BackupImportLibraryResponse{}, err
+	}
+
+	defaultType := "video"
+	if def, err := settingsRepo.Get(ctx, models.SettingDefaultDownloadType); err == nil && def != "" {
+		defaultType = def
+	}
+
+	resp := BackupImportLibraryResponse{
+		CollectionsEnsured: result.CollectionsEnsured,
+		TagsCreated:        result.TagsCreated,
+		ArtistsCreated:     result.ArtistsCreated,
+		GhostsCreated:      result.GhostsCreated,
+	}
+	for _, r := range resolved {
+		downloadType := r.DownloadType
+		if downloadType == "" {
+			downloadType = defaultType
+		}
+		req := CreateDownloadRequest{
+			URL:            r.URL,
+			CollectionID:   r.CollectionID,
+			Folder:         r.Folder,
+			Filename:       r.Filename,
+			DownloadType:   downloadType,
+			Quality:        r.Quality,
+			AudioFormat:    r.AudioFormat,
+			ArtistID:       r.ArtistID,
+			Year:           r.Year,
+			SeasonNumber:   r.SeasonNumber,
+			SequenceNumber: r.SequenceNumber,
+			Tags:           r.Tags,
+		}
+		if _, err := enqueueDownload(ctx, mgr, collectionsRepo, settingsRepo, req); err == nil {
+			resp.DownloadsQueued++
+		}
+	}
+	return resp, nil
+}
+
 // ImportLibrary merges a previously-exported library bundle into the local
-// database (see backup.ApplyLibraryBundle). Ghost (placeholder, no-file)
-// entries are recreated directly as ghosts, nothing queued for them; every
-// other resolved item gets a redownload queued — the same enqueueDownload
-// helper CreateDownload and RedownloadLibraryItem use, applying the same
-// default-download-type fallback RetryHistoryItem/RedownloadLibraryItem
-// already use when the export didn't carry a type (its originating Download
-// row was gone). Each item is enqueued independently and best-effort — one
-// bad URL/folder doesn't abort the rest of the import.
+// database — see applyLibraryBundleAndEnqueue for what happens to each
+// entry.
 func ImportLibrary(db *sql.DB, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, libraryRepo *repository.LibraryRepo, mgr *queue.DownloadManager, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		bundle, ok := decodeLibraryBundle(c)
+		bundle, mode, ok := decodeLibraryBundle(c)
 		if !ok {
 			return
 		}
 
-		resolved, result, err := backup.ApplyLibraryBundle(c.Request.Context(), db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, bundle)
+		resp, err := applyLibraryBundleAndEnqueue(c.Request.Context(), db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, settingsRepo, bundle, mode == "ghostOnly")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
-		}
-
-		defaultType := "video"
-		if def, err := settingsRepo.Get(c.Request.Context(), models.SettingDefaultDownloadType); err == nil && def != "" {
-			defaultType = def
-		}
-
-		resp := BackupImportLibraryResponse{
-			CollectionsEnsured: result.CollectionsEnsured,
-			TagsCreated:        result.TagsCreated,
-			ArtistsCreated:     result.ArtistsCreated,
-			GhostsCreated:      result.GhostsCreated,
-		}
-		for _, r := range resolved {
-			downloadType := r.DownloadType
-			if downloadType == "" {
-				downloadType = defaultType
-			}
-			req := CreateDownloadRequest{
-				URL:            r.URL,
-				CollectionID:   r.CollectionID,
-				Folder:         r.Folder,
-				Filename:       r.Filename,
-				DownloadType:   downloadType,
-				Quality:        r.Quality,
-				AudioFormat:    r.AudioFormat,
-				ArtistID:       r.ArtistID,
-				Year:           r.Year,
-				SeasonNumber:   r.SeasonNumber,
-				SequenceNumber: r.SequenceNumber,
-				Tags:           r.Tags,
-			}
-			if _, err := enqueueDownload(c.Request.Context(), mgr, collectionsRepo, settingsRepo, req); err == nil {
-				resp.DownloadsQueued++
-			}
 		}
 		c.JSON(http.StatusOK, resp)
 	}
@@ -420,6 +465,186 @@ func PreviewBackupFile(backupsRoot string, repo *repository.BackupHistoryRepo) g
 	}
 }
 
+// RestoreFullBackup applies a full backup already sitting in backup history
+// back into the local database — both the settings half (backup.ApplySettingsBundle)
+// and the library half (backup.ApplyLibraryBundle), in one action. This is
+// the only way to actually restore what "Run Backup Now"/the scheduler
+// produces: PreviewBackupFile can already read a "full" envelope, but
+// ImportSettings/ImportLibrary only ever accept their own single-purpose
+// "settings"/"library" kind, so a full backup previously had no restore path
+// at all.
+func RestoreFullBackup(
+	backupsRoot string,
+	repo *repository.BackupHistoryRepo,
+	db *sql.DB,
+	settingsRepo *repository.SettingsRepo,
+	collectionsRepo *repository.CollectionsRepo,
+	tagsRepo *repository.TagsRepo,
+	artistsRepo *repository.ArtistsRepo,
+	libraryRepo *repository.LibraryRepo,
+	mgr *queue.DownloadManager,
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+		var req RestoreBackupRequest
+		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		_, fullPath, ok := resolveBackupFile(c, backupsRoot, repo, id)
+		if !ok {
+			return
+		}
+
+		raw, err := os.ReadFile(fullPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		env, err := backup.ParseEnvelope(string(raw))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		plaintext, err := backup.Open(env, "full", "")
+		if err != nil {
+			writeBackupOpenError(c, err)
+			return
+		}
+		var bundle backup.FullBundle
+		if err := json.Unmarshal(plaintext, &bundle); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "corrupt backup file: " + err.Error()})
+			return
+		}
+
+		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, bundle, req.Mode == "ghostOnly")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// applyFullBundle applies both halves of a full backup bundle — settings
+// (backup.ApplySettingsBundle) then library (applyLibraryBundleAndEnqueue) —
+// shared by RestoreFullBackup (bundle read off a backup_history file) and
+// ImportFullBackup (bundle decoded from an ad-hoc uploaded file); the only
+// difference between those two callers is where bundle came from.
+func applyFullBundle(
+	ctx context.Context,
+	db *sql.DB,
+	settingsRepo *repository.SettingsRepo,
+	collectionsRepo *repository.CollectionsRepo,
+	tagsRepo *repository.TagsRepo,
+	artistsRepo *repository.ArtistsRepo,
+	libraryRepo *repository.LibraryRepo,
+	mgr *queue.DownloadManager,
+	bundle backup.FullBundle,
+	ghostOnly bool,
+) (BackupRestoreFullResponse, error) {
+	settingsApplied, err := backup.ApplySettingsBundle(ctx, settingsRepo, bundle.Settings)
+	if err != nil {
+		return BackupRestoreFullResponse{}, err
+	}
+	libResp, err := applyLibraryBundleAndEnqueue(ctx, db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, settingsRepo, bundle.Library, ghostOnly)
+	if err != nil {
+		return BackupRestoreFullResponse{}, err
+	}
+	return BackupRestoreFullResponse{SettingsApplied: settingsApplied, Library: libResp}, nil
+}
+
+// ImportFullBackup applies an ad-hoc uploaded full backup file — same as
+// RestoreFullBackup, but for a file the user picked (downloaded from another
+// install's backup history, received from someone else, or a history file
+// re-applied after its row was deleted) rather than one already sitting in
+// this install's backup_history.
+func ImportFullBackup(
+	db *sql.DB,
+	settingsRepo *repository.SettingsRepo,
+	collectionsRepo *repository.CollectionsRepo,
+	tagsRepo *repository.TagsRepo,
+	artistsRepo *repository.ArtistsRepo,
+	libraryRepo *repository.LibraryRepo,
+	mgr *queue.DownloadManager,
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BackupImportRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		env, err := backup.ParseEnvelope(req.Data)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		plaintext, err := backup.Open(env, "full", passwordFrom(req.Password))
+		if err != nil {
+			writeBackupOpenError(c, err)
+			return
+		}
+		var bundle backup.FullBundle
+		if err := json.Unmarshal(plaintext, &bundle); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt backup file: " + err.Error()})
+			return
+		}
+
+		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, bundle, req.Mode == "ghostOnly")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// PreviewFullImport decrypts/parses an ad-hoc uploaded full backup file the
+// same way ImportFullBackup does, but only reads (via
+// backup.PreviewLibraryBundle) — never writes — so the Full Backup card can
+// show what an import would do before committing to it. Settings have
+// nothing to diff (an import always overwrites every key), so they're
+// reported as a plain count.
+func PreviewFullImport(collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BackupImportRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		env, err := backup.ParseEnvelope(req.Data)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		plaintext, err := backup.Open(env, "full", passwordFrom(req.Password))
+		if err != nil {
+			writeBackupOpenError(c, err)
+			return
+		}
+		var bundle backup.FullBundle
+		if err := json.Unmarshal(plaintext, &bundle); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt backup file: " + err.Error()})
+			return
+		}
+
+		libPreview, err := backup.PreviewLibraryBundle(c.Request.Context(), collectionsRepo, tagsRepo, artistsRepo, libraryRepo, bundle.Library)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, FullImportPreviewResponse{
+			SettingsCount: len(bundle.Settings),
+			Library:       libPreview,
+		})
+	}
+}
+
 func toBackupContentPreviewResponse(bundle backup.FullBundle) BackupContentPreviewResponse {
 	collections := make([]BackupPreviewCollection, 0, len(bundle.Library.Collections))
 	for _, col := range bundle.Library.Collections {
@@ -437,6 +662,7 @@ func toBackupContentPreviewResponse(bundle backup.FullBundle) BackupContentPrevi
 			CollectionPath: it.CollectionPath,
 			ArtistName:     it.ArtistName,
 			Tags:           it.Tags,
+			IsGhost:        it.Status == "ghost" || it.OriginalURL == "",
 		})
 	}
 	return BackupContentPreviewResponse{

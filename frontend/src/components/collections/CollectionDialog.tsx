@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Eye, EyeOff, ImageIcon, Plus, X } from "lucide-react"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { Button } from "@/components/ui/button"
@@ -40,11 +40,26 @@ interface CollectionDialogProps {
    * collection's parent is fixed at creation time and cannot be changed. */
   parentId?: number
   trigger?: ReactNode
+  /** Controlled open state, for a caller (e.g. a toolbar button) that opens
+   * this dialog itself rather than via its own trigger — when provided,
+   * `trigger` is ignored and no DialogTrigger is rendered. Omit both to keep
+   * the self-contained trigger-based behavior existing call sites rely on. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export function CollectionDialog({ collection, parentId, trigger }: CollectionDialogProps) {
+export function CollectionDialog({
+  collection,
+  parentId,
+  trigger,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
+}: CollectionDialogProps) {
   const isEdit = collection != null
-  const [open, setOpen] = useState(false)
+  const isControlled = controlledOpen !== undefined
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = isControlled ? setControlledOpen! : setInternalOpen
   const [name, setName] = useState(collection?.name ?? "")
   const [rootPath, setRootPath] = useState(collection?.rootPath ?? "")
   const [defaultQuality, setDefaultQuality] = useState<VideoQuality>((collection?.defaultQuality as VideoQuality) ?? "best")
@@ -69,10 +84,12 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
   const deleteCover = useDeleteCollectionCover(collection?.id ?? 0)
   const pending = createCollection.isPending || updateCollection.isPending
 
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
-      // Reset fields from the current collection (or blank, for create) each
-      // time the dialog opens, so stale edits from a previous open don't linger.
+  // The controlled (toolbar-driven) case flips `open` directly as a prop,
+  // not through Dialog's own onOpenChange, so resetting only in a handler
+  // passed to Dialog would leave stale edits from a previous open behind on
+  // next open — see TagDialog/ArtistDialog for the same fix.
+  useEffect(() => {
+    if (open) {
       setName(collection?.name ?? "")
       setRootPath(collection?.rootPath ?? "")
       setDefaultQuality((collection?.defaultQuality as VideoQuality) ?? "best")
@@ -88,8 +105,8 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
       setBrowseAsShow(collection?.browseAsShow ?? false)
       setCoverRevealed(false)
     }
-    setOpen(next)
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, collection])
 
   const handleSubmit = () => {
     if (!name.trim() || !rootPath.trim()) return
@@ -125,15 +142,17 @@ export function CollectionDialog({ collection, parentId, trigger }: CollectionDi
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button>
-            <Plus className="h-4 w-4" />
-            New Collection
-          </Button>
-        )}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={setOpen}>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button>
+              <Plus className="h-4 w-4" />
+              New Collection
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Collection" : "New Collection"}</DialogTitle>

@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { ChevronDown, ChevronRight, FolderPlus, Info, Lock, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -24,6 +25,11 @@ import type { CollectionTreeNode } from "@/lib/collectionTree"
 interface SelectionProps {
   isSelected: (id: number) => boolean
   onToggle: (id: number) => void
+  // Plain click anywhere on the row (outside the checkbox/expand toggle/
+  // action buttons) selects just that row; ctrl/cmd+click toggles it in or
+  // out of the current selection — same two conventions Tags/Artists use,
+  // minus drag-select and shift-click range (not asked for here).
+  onRowMouseDown: (e: React.MouseEvent, id: number) => void
 }
 
 // Expand/collapse state is lifted to the caller (CollectionsPage) rather
@@ -42,6 +48,7 @@ export function CollectionTree({
   nodes,
   isSelected,
   onToggle,
+  onRowMouseDown,
   isExpanded,
   onToggleExpanded,
 }: { nodes: CollectionTreeNode[] } & SelectionProps & ExpansionProps) {
@@ -56,6 +63,7 @@ export function CollectionTree({
           node={node}
           isSelected={isSelected}
           onToggle={onToggle}
+          onRowMouseDown={onRowMouseDown}
           isExpanded={isExpanded}
           onToggleExpanded={onToggleExpanded}
           artistNameById={artistNameById}
@@ -69,6 +77,7 @@ function CollectionNode({
   node,
   isSelected,
   onToggle,
+  onRowMouseDown,
   isExpanded,
   onToggleExpanded,
   artistNameById,
@@ -77,11 +86,22 @@ function CollectionNode({
   const deleteCollection = useDeleteCollection()
   const { data: settings } = useSettings()
   const hasChildren = node.children.length > 0
+  const selected = isSelected(node.id)
+  // Controlled instead of Radix's default click/focus trigger — Popover has
+  // no built-in hover mode, so open/close is driven manually here. Both the
+  // trigger and the content itself need the enter/leave handlers, or moving
+  // the mouse off the small icon and onto the content would immediately
+  // close it.
+  const [infoOpen, setInfoOpen] = useState(false)
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2 rounded-md border p-3">
-        <Checkbox checked={isSelected(node.id)} onCheckedChange={() => onToggle(node.id)} />
+      <div
+        data-state={selected ? "selected" : undefined}
+        onMouseDown={(e) => onRowMouseDown(e, node.id)}
+        className="flex flex-wrap items-center gap-2 rounded-md border p-3 cursor-default select-none transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+      >
+        <Checkbox checked={selected} onCheckedChange={() => onToggle(node.id)} />
 
         {hasChildren ? (
           <Button
@@ -99,19 +119,24 @@ function CollectionNode({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate font-medium">{node.name}</span>
-            <Tooltip>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="inline-flex items-center text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    >
-                      <Info className="h-3.5 w-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                </PopoverTrigger>
-                <PopoverContent className="w-72" align="start">
+            <Popover open={infoOpen} onOpenChange={setInfoOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Collection details"
+                  className="inline-flex items-center text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  onMouseEnter={() => setInfoOpen(true)}
+                  onMouseLeave={() => setInfoOpen(false)}
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-72"
+                align="start"
+                onMouseEnter={() => setInfoOpen(true)}
+                onMouseLeave={() => setInfoOpen(false)}
+              >
                 <dl className="space-y-1.5 text-sm">
                   <div className="flex gap-2">
                     <dt className="w-16 shrink-0 text-muted-foreground">Folder</dt>
@@ -138,10 +163,8 @@ function CollectionNode({
                     </div>
                   )}
                 </dl>
-                </PopoverContent>
-              </Popover>
-              <TooltipContent>Collection details</TooltipContent>
-            </Tooltip>
+              </PopoverContent>
+            </Popover>
             {settings?.privacyEnabled && node.isPrivate && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -226,6 +249,7 @@ function CollectionNode({
               node={child}
               isSelected={isSelected}
               onToggle={onToggle}
+              onRowMouseDown={onRowMouseDown}
               isExpanded={isExpanded}
               onToggleExpanded={onToggleExpanded}
               artistNameById={artistNameById}

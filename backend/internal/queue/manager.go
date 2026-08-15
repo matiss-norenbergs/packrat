@@ -547,6 +547,7 @@ func (m *DownloadManager) maybeAutoEnhanceThumbnail(libraryItemID int64) {
 		MediaRoot:     m.mediaRoot,
 		ImagesRoot:    m.imagesRoot,
 		FFmpegPath:    m.ytdlp.FFmpegPath,
+		Broadcaster:   m.broadcaster,
 	}
 	if err := thumbnailenhance.MaybeAutoEnhanceOnDownload(context.Background(), deps, libraryItemID); err != nil {
 		log.Printf("queue: auto-enhancing thumbnail for library item %d failed: %v", libraryItemID, err)
@@ -822,6 +823,14 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 					if err := os.Remove(oldThumbAbs); err != nil && !os.IsNotExist(err) {
 						log.Printf("queue: removing stale thumbnail %s failed: %v", oldThumbAbs, err)
 					}
+				}
+				// The redownloaded thumbnail just overwrote whatever was
+				// there — any AI-enhancement backup on file now describes a
+				// "before" image unrelated to this new thumbnail. Clear it
+				// so Compare/Revert don't act on stale data (best-effort;
+				// ErrNotFound just means this item was never enhanced).
+				if err := thumbnailenhance.DeleteOriginal(parentCtx, thumbnailenhance.Deps{OriginalsRepo: m.thumbnailEnhancementOriginalsRepo, ImagesRoot: m.imagesRoot}, targetID); err != nil && !errors.Is(err, repository.ErrNotFound) {
+					log.Printf("queue: clearing stale AI-enhancement backup for library item %d failed: %v", targetID, err)
 				}
 				thumbRel := filepath.ToSlash(newThumbPath)
 				if rel, err := filepath.Rel(m.mediaRoot, newThumbPath); err == nil {

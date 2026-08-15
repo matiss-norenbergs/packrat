@@ -19,12 +19,23 @@ import (
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/ws"
 )
 
-// maxEnhancementsPerSweep bounds how many items one sweep — scheduled or a
-// manual "Enhance now" click — processes, so a large backlog can't run
-// unboundedly long against a local, often slow, upscaler.
-const maxEnhancementsPerSweep = 5
+// defaultMaxEnhancementsPerSweep is the fallback for
+// SettingThumbnailEnhancementMaxPerSweep when it's never been set — bounds
+// how many items one sweep (scheduled or a manual "Enhance now" click)
+// processes, so a large backlog can't run unboundedly long against a local,
+// often slow, upscaler. User-configurable in Settings → AI Enhancement.
+const defaultMaxEnhancementsPerSweep = 5
+
+// failureCooldown is how long an item that just failed is skipped by
+// automatic triggers (scheduled sweep, auto-on-download) — matches the
+// scheduled sweep's own hourly cadence, giving a natural "try again next
+// sweep" window without adding another setting. Manual triggers (the
+// eligible-items dialog, bulk-select) ignore this entirely — a user
+// deliberately retrying a specific item should always be able to.
+const failureCooldown = time.Hour
 
 // enhanceMu serializes every call to enhanceOne, regardless of which
 // trigger (scheduled sweep, manual "Enhance now"/per-item click, or
@@ -49,6 +60,7 @@ type Deps struct {
 	MediaRoot     string
 	ImagesRoot    string
 	FFmpegPath    string
+	Broadcaster   ws.Broadcaster
 }
 
 type config struct {
@@ -67,6 +79,9 @@ type config struct {
 	autoApprove bool
 	// autoOnDownload gates MaybeAutoEnhanceOnDownload.
 	autoOnDownload bool
+	// maxPerSweep bounds runSweep's batch size — see
+	// SettingThumbnailEnhancementMaxPerSweep.
+	maxPerSweep int
 }
 
 // effectiveFactor returns the multiplier to actually request from A1111
@@ -121,6 +136,10 @@ func loadConfig(ctx context.Context, settingsRepo *repository.SettingsRepo) conf
 	if targetDim <= 0 {
 		targetDim = 1920
 	}
+	maxPerSweep, _ := strconv.Atoi(get(models.SettingThumbnailEnhancementMaxPerSweep, strconv.Itoa(defaultMaxEnhancementsPerSweep)))
+	if maxPerSweep <= 0 {
+		maxPerSweep = defaultMaxEnhancementsPerSweep
+	}
 	return config{
 		enabled:         get(models.SettingThumbnailEnhancementEnabled, "false") == "true",
 		scheduleEnabled: get(models.SettingThumbnailEnhancementScheduleEnabled, "true") == "true",
@@ -134,6 +153,7 @@ func loadConfig(ctx context.Context, settingsRepo *repository.SettingsRepo) conf
 		targetDim:       targetDim,
 		autoApprove:     get(models.SettingThumbnailEnhancementAutoApprove, "false") == "true",
 		autoOnDownload:  get(models.SettingThumbnailEnhancementAutoOnDownload, "false") == "true",
+		maxPerSweep:     maxPerSweep,
 	}
 }
 
@@ -153,8 +173,8 @@ func RunDueEnhancements(ctx context.Context, deps Deps) {
 	}
 }
 
-// RunOnce processes up to maxEnhancementsPerSweep eligible items and
-// returns how many were attempted — also the manual "Enhance now" button's
+// RunOnce processes up to cfg.maxPerSweep eligible items and returns how
+// many were attempted — also the manual "Enhance now" button's
 // handler. Unlike RunDueEnhancements, this ignores scheduleEnabled — a
 // manual click should always work as long as the feature itself is
 // configured, regardless of whether the automatic sweep is turned off.
@@ -166,10 +186,29 @@ func RunOnce(ctx context.Context, deps Deps) (int, error) {
 	return runSweep(ctx, deps, cfg, "manual")
 }
 
+// WouldRunCount reports how many items a RunOnce call would process right
+// now (findEligible's count, capped at cfg.maxPerSweep, recent failures
+// excluded) — used by the "Enhance Now" handler to answer synchronously
+// with a queued count before spawning the actual run in the background.
+func WouldRunCount(ctx context.Context, deps Deps) (int, error) {
+	cfg := loadConfig(ctx, deps.SettingsRepo)
+	if !cfg.enabled || cfg.url == "" {
+		return 0, nil
+	}
+	candidates, err := findEligible(ctx, deps, cfg, true)
+	if err != nil {
+		return 0, err
+	}
+	if len(candidates) > cfg.maxPerSweep {
+		return cfg.maxPerSweep, nil
+	}
+	return len(candidates), nil
+}
+
 // runSweep is RunOnce/RunDueEnhancements' shared body once each has decided
 // (via its own gating) that a sweep should actually happen.
 func runSweep(ctx context.Context, deps Deps, cfg config, triggerType string) (int, error) {
-	candidates, err := findEligible(ctx, deps, cfg)
+	candidates, err := findEligible(ctx, deps, cfg, true)
 	if err != nil {
 		return 0, err
 	}
@@ -178,7 +217,7 @@ func runSweep(ctx context.Context, deps Deps, cfg config, triggerType string) (i
 
 	enhanced := 0
 	for _, c := range candidates {
-		if enhanced >= maxEnhancementsPerSweep {
+		if enhanced >= cfg.maxPerSweep {
 			break
 		}
 		if err := enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, triggerType); err != nil {
@@ -193,21 +232,34 @@ func runSweep(ctx context.Context, deps Deps, cfg config, triggerType string) (i
 // minDim threshold, with its thumbnail already probed so callers don't
 // re-read the file.
 type eligibleCandidate struct {
-	item     models.LibraryItem
-	thumbAbs string
-	width    int
-	height   int
-	size     int64
+	item             models.LibraryItem
+	thumbAbs         string
+	width            int
+	height           int
+	size             int64
+	artistName       *string
+	collectionName   *string
+	recentlyFailedAt *time.Time
 }
 
 // findEligible scans the whole library for items whose sidecar thumbnail's
 // longest side is under cfg.minDim — shared by runSweep (which then caps
-// and processes the first maxEnhancementsPerSweep) and ListEligible (which
-// reports the full set for the "preview eligible items" dialog, uncapped).
-func findEligible(ctx context.Context, deps Deps, cfg config) ([]eligibleCandidate, error) {
+// and processes the first cfg.maxPerSweep), ListEligible (which reports
+// the full set for the "preview eligible items" dialog, uncapped), and
+// EnhanceItems/MaybeAutoEnhanceOnDownload. Every candidate is annotated with
+// its most recent failure time (if any, within failureCooldown) regardless
+// of skipRecentFailures — only whether it's *filtered out* depends on that
+// flag, so a manual trigger can still see and act on it while an automatic
+// one skips it.
+func findEligible(ctx context.Context, deps Deps, cfg config, skipRecentFailures bool) ([]eligibleCandidate, error) {
 	items, err := deps.LibraryRepo.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing library: %w", err)
+	}
+
+	recentFailures, err := deps.HistoryRepo.RecentlyFailedItemIDs(ctx, time.Now().Add(-failureCooldown))
+	if err != nil {
+		return nil, fmt.Errorf("loading recent failures: %w", err)
 	}
 
 	var out []eligibleCandidate
@@ -232,7 +284,25 @@ func findEligible(ctx context.Context, deps Deps, cfg config) ([]eligibleCandida
 			continue // already good enough
 		}
 
-		out = append(out, eligibleCandidate{item: item, thumbAbs: thumbAbs, width: width, height: height, size: size})
+		var recentlyFailedAt *time.Time
+		if failedAt, ok := recentFailures[item.ID]; ok {
+			if skipRecentFailures {
+				continue
+			}
+			t := failedAt
+			recentlyFailedAt = &t
+		}
+
+		out = append(out, eligibleCandidate{
+			item:             item,
+			thumbAbs:         thumbAbs,
+			width:            width,
+			height:           height,
+			size:             size,
+			artistName:       item.ArtistName,
+			collectionName:   item.CollectionName,
+			recentlyFailedAt: recentlyFailedAt,
+		})
 	}
 	return out, nil
 }
@@ -242,60 +312,82 @@ func findEligible(ctx context.Context, deps Deps, cfg config) ([]eligibleCandida
 // dialog, distinct from a completed attempt's audit row in the history
 // table.
 type EligibleItem struct {
-	LibraryItemID int64
-	ItemTitle     string
-	Width         int
-	Height        int
+	LibraryItemID    int64
+	ItemTitle        string
+	Width            int
+	Height           int
+	ArtistName       *string
+	CollectionName   *string
+	RecentlyFailedAt *time.Time
 }
 
 // ListEligible reports every item findEligible would currently pick up —
-// unlike RunOnce/RunDueEnhancements, not capped at maxEnhancementsPerSweep,
-// so the dialog can show the full backlog even though only the first 5
-// would actually be processed on the next "Enhance now" click. Returns an
-// empty list (not an error) when the feature is disabled or unconfigured,
-// same as a sweep would silently no-op.
+// unlike RunOnce/RunDueEnhancements, not capped at cfg.maxPerSweep, so the
+// dialog can show the full backlog even though only the first batch would
+// actually be processed on the next "Enhance now" click. Includes recently-
+// failed items (unfiltered) so a user can deliberately retry one by hand.
+// Returns an empty list (not an error) when the feature is disabled or
+// unconfigured, same as a sweep would silently no-op.
 func ListEligible(ctx context.Context, deps Deps) ([]EligibleItem, error) {
 	cfg := loadConfig(ctx, deps.SettingsRepo)
 	if !cfg.enabled {
 		return nil, nil
 	}
-	candidates, err := findEligible(ctx, deps, cfg)
+	candidates, err := findEligible(ctx, deps, cfg, false)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]EligibleItem, 0, len(candidates))
 	for _, c := range candidates {
-		out = append(out, EligibleItem{LibraryItemID: c.item.ID, ItemTitle: c.item.Title, Width: c.width, Height: c.height})
+		out = append(out, EligibleItem{
+			LibraryItemID:    c.item.ID,
+			ItemTitle:        c.item.Title,
+			Width:            c.width,
+			Height:           c.height,
+			ArtistName:       c.artistName,
+			CollectionName:   c.collectionName,
+			RecentlyFailedAt: c.recentlyFailedAt,
+		})
 	}
 	return out, nil
 }
 
-// EnhanceItem enhances exactly one specific library item — the eligible-
-// items dialog's per-row "Enhance" action. Unlike RunOnce/RunDueEnhancements
-// this bypasses maxEnhancementsPerSweep entirely: a user explicitly
-// picking one item shouldn't be capped by a limit that exists to bound
-// bulk/background runs. Re-derives eligibility rather than trusting the
-// caller, protecting against stale dialog state (e.g. a scheduled sweep
-// already enhanced this item moments ago) — returns an error rather than
-// silently no-op'ing, since this is a direct user action expecting
-// visible feedback.
-func EnhanceItem(ctx context.Context, deps Deps, libraryItemID int64) error {
+// EnhanceItems enhances a specific set of library items — the eligible-
+// items dialog's "Enhance Selected" bulk action. Unlike RunOnce/
+// RunDueEnhancements this bypasses cfg.maxPerSweep entirely: a user
+// explicitly picking items shouldn't be capped by a limit that exists to
+// bound bulk/background runs. Re-derives eligibility rather than trusting
+// the caller, protecting against stale dialog state (e.g. a scheduled
+// sweep already enhanced one of these moments ago); ids no longer eligible
+// are silently skipped rather than erroring, since a bulk action shouldn't
+// abort the rest of the batch over one stale row. Ignores the failure
+// cooldown (skipRecentFailures=false) — a deliberate manual selection must
+// always be retryable.
+func EnhanceItems(ctx context.Context, deps Deps, libraryItemIDs []int64) error {
 	cfg := loadConfig(ctx, deps.SettingsRepo)
 	if !cfg.enabled || cfg.url == "" {
 		return fmt.Errorf("thumbnail enhancement is not enabled/configured")
 	}
-	candidates, err := findEligible(ctx, deps, cfg)
+	candidates, err := findEligible(ctx, deps, cfg, false)
 	if err != nil {
 		return err
 	}
+	byID := make(map[int64]eligibleCandidate, len(candidates))
 	for _, c := range candidates {
-		if c.item.ID != libraryItemID {
+		byID[c.item.ID] = c
+	}
+
+	client := NewClient(cfg.url, cfg.username, cfg.password)
+	for _, id := range libraryItemIDs {
+		c, ok := byID[id]
+		if !ok {
 			continue
 		}
-		client := NewClient(cfg.url, cfg.username, cfg.password)
-		return enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, "manual")
+		if err := enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, "manual"); err != nil {
+			log.Printf("thumbnailenhance: item %d (%s): %v", c.item.ID, c.item.Title, err)
+		}
 	}
-	return fmt.Errorf("item %d is not currently eligible for enhancement", libraryItemID)
+	return nil
 }
 
 // MaybeAutoEnhanceOnDownload is called from a best-effort background
@@ -310,7 +402,7 @@ func MaybeAutoEnhanceOnDownload(ctx context.Context, deps Deps, libraryItemID in
 	if !cfg.enabled || !cfg.autoOnDownload || cfg.url == "" {
 		return nil
 	}
-	candidates, err := findEligible(ctx, deps, cfg)
+	candidates, err := findEligible(ctx, deps, cfg, true)
 	if err != nil {
 		return err
 	}
@@ -476,6 +568,22 @@ func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item
 		}
 	}
 
+	broadcast := func(status string, errMsg *string) {
+		if deps.Broadcaster == nil {
+			return
+		}
+		deps.Broadcaster.Broadcast(ws.Event{
+			Type: ws.EventEnhanceProgress,
+			Payload: ws.EnhanceProgressPayload{
+				LibraryItemID: item.ID,
+				ItemTitle:     item.Title,
+				Status:        status,
+				Error:         errMsg,
+			},
+		})
+	}
+	broadcast("processing", nil)
+
 	entry := &models.ThumbnailEnhancementHistoryEntry{
 		LibraryItemID:     &item.ID,
 		ItemTitle:         item.Title,
@@ -487,12 +595,12 @@ func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item
 
 	original, err := os.ReadFile(thumbAbs)
 	if err != nil {
-		return recordFailure(ctx, deps, entry, fmt.Errorf("reading original thumbnail: %w", err))
+		return recordFailure(ctx, deps, entry, broadcast, fmt.Errorf("reading original thumbnail: %w", err))
 	}
 
 	upscaled, err := client.Upscale(ctx, original, cfg.upscaler, cfg.effectiveFactor(origW, origH))
 	if err != nil {
-		return recordFailure(ctx, deps, entry, fmt.Errorf("upscaling: %w", err))
+		return recordFailure(ctx, deps, entry, broadcast, fmt.Errorf("upscaling: %w", err))
 	}
 
 	if !cfg.autoApprove {
@@ -508,7 +616,7 @@ func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item
 
 	newW, newH, newSize, err := writeThumbnailFile(ctx, deps, item.ID, thumbAbs, upscaled)
 	if err != nil {
-		return recordFailure(ctx, deps, entry, fmt.Errorf("writing enhanced thumbnail: %w", err))
+		return recordFailure(ctx, deps, entry, broadcast, fmt.Errorf("writing enhanced thumbnail: %w", err))
 	}
 
 	entry.Status = "success"
@@ -518,16 +626,18 @@ func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item
 	if _, err := deps.HistoryRepo.Create(ctx, entry); err != nil {
 		log.Printf("thumbnailenhance: item %d: recording success history failed: %v", item.ID, err)
 	}
+	broadcast("success", nil)
 	return nil
 }
 
-func recordFailure(ctx context.Context, deps Deps, entry *models.ThumbnailEnhancementHistoryEntry, cause error) error {
+func recordFailure(ctx context.Context, deps Deps, entry *models.ThumbnailEnhancementHistoryEntry, broadcast func(status string, errMsg *string), cause error) error {
 	entry.Status = "failed"
 	msg := cause.Error()
 	entry.Error = &msg
 	if _, err := deps.HistoryRepo.Create(ctx, entry); err != nil {
 		log.Printf("thumbnailenhance: item %d: recording failure history failed: %v", *entry.LibraryItemID, err)
 	}
+	broadcast("failed", &msg)
 	return cause
 }
 

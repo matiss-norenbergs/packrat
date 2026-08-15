@@ -3,10 +3,11 @@ package ws
 type EventType string
 
 const (
-	EventProgress    EventType = "progress"
-	EventCompleted   EventType = "completed"
-	EventFailed      EventType = "failed"
-	EventQueueUpdate EventType = "queue_update"
+	EventProgress        EventType = "progress"
+	EventCompleted       EventType = "completed"
+	EventFailed          EventType = "failed"
+	EventQueueUpdate     EventType = "queue_update"
+	EventEnhanceProgress EventType = "enhance_progress"
 )
 
 type Event struct {
@@ -39,6 +40,17 @@ type FailedPayload struct {
 type QueueUpdatePayload struct {
 	Active int `json:"active"`
 	Queued int `json:"queued"`
+}
+
+// EnhanceProgressPayload reports one library item's AI-enhancement status,
+// regardless of which trigger (scheduled sweep, manual "Enhance Now",
+// bulk-selected, or auto-on-download) caused it — see
+// thumbnailenhance.enhanceOne, the single place all of them funnel through.
+type EnhanceProgressPayload struct {
+	LibraryItemID int64   `json:"libraryItemId"`
+	ItemTitle     string  `json:"itemTitle"`
+	Status        string  `json:"status"` // "processing" | "success" | "failed"
+	Error         *string `json:"error,omitempty"`
 }
 
 // Broadcaster is satisfied by Hub. It is defined here (rather than in the

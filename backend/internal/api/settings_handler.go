@@ -427,6 +427,10 @@ const (
 	defaultThumbnailEnhancementFactor     = 4
 	defaultThumbnailEnhancementTargetMode = "factor"
 	defaultThumbnailEnhancementTargetDim  = 1920
+	// defaultThumbnailEnhancementMaxPerSweep mirrors
+	// thumbnailenhance.defaultMaxEnhancementsPerSweep — kept as a separate
+	// constant since this package can't import that one's unexported value.
+	defaultThumbnailEnhancementMaxPerSweep = 5
 )
 
 // ThumbnailEnhancementEnabled reads the thumbnail_enhancement_enabled
@@ -569,6 +573,28 @@ func ThumbnailEnhancementRetentionDays(ctx context.Context, repo *repository.Set
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 0 {
 		return 0, nil
+	}
+	return n, nil
+}
+
+// ThumbnailEnhancementMaxPerSweep reads the
+// thumbnail_enhancement_max_per_sweep setting, defaulting to
+// defaultThumbnailEnhancementMaxPerSweep if it's never been set (or is
+// corrupt/non-positive). Bounds how many items one batch run (a scheduled
+// sweep or "Enhance now") processes — a direct per-item Enhance click
+// always ignores this and processes just the one item picked. Shared by
+// GetSettings.
+func ThumbnailEnhancementMaxPerSweep(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailEnhancementMaxPerSweep)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultThumbnailEnhancementMaxPerSweep, nil
+	}
+	if err != nil {
+		return defaultThumbnailEnhancementMaxPerSweep, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return defaultThumbnailEnhancementMaxPerSweep, nil
 	}
 	return n, nil
 }
@@ -918,6 +944,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		thumbnailEnhancementMaxPerSweep, err := ThumbnailEnhancementMaxPerSweep(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, SettingsResponse{
 			DownloadDirectory:           mediaRoot,
 			MaxConcurrentDownloads:      mgr.WorkerCount(),
@@ -969,6 +1000,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			ThumbnailEnhancementRetentionDays:   thumbnailEnhancementRetentionDays,
 			ThumbnailEnhancementAutoApprove:     thumbnailEnhancementAutoApprove,
 			ThumbnailEnhancementAutoOnDownload:  thumbnailEnhancementAutoOnDownload,
+			ThumbnailEnhancementMaxPerSweep:     thumbnailEnhancementMaxPerSweep,
 		})
 	}
 }
@@ -1315,6 +1347,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		}
 		if req.ThumbnailEnhancementAutoOnDownload != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementAutoOnDownload, strconv.FormatBool(*req.ThumbnailEnhancementAutoOnDownload)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ThumbnailEnhancementMaxPerSweep != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementMaxPerSweep, strconv.Itoa(*req.ThumbnailEnhancementMaxPerSweep)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

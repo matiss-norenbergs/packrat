@@ -1,77 +1,150 @@
 import { useState } from "react"
-import { Sparkles } from "lucide-react"
+import { Loader2, Sparkles } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Link } from "react-router-dom"
-import { useEnhanceThumbnailItem, useThumbnailEnhancementEligible } from "@/hooks/useThumbnailEnhancement"
-
-// maxEnhancementsPerSweep mirrors the backend's fixed constant of the same
-// name (backend/internal/thumbnailenhance/enhance.go) — not fetched from
-// the API, just used here to explain why only some of a longer list would
-// actually be touched by the next click.
-const MAX_ENHANCEMENTS_PER_SWEEP = 5
+import { useEnhanceThumbnailItems, useThumbnailEnhancementEligible } from "@/hooks/useThumbnailEnhancement"
 
 interface EligibleItemsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
+function timeAgo(iso: string): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
+  if (seconds < 60) return "just now"
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ago`
+}
+
 export function EligibleItemsDialog({ open, onOpenChange }: EligibleItemsDialogProps) {
   const { data: items, isLoading } = useThumbnailEnhancementEligible(open)
-  const enhanceItem = useEnhanceThumbnailItem()
-  const [pendingId, setPendingId] = useState<number | null>(null)
+  const enhanceItems = useEnhanceThumbnailItems()
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
-  const handleEnhance = (libraryItemId: number) => {
-    setPendingId(libraryItemId)
-    enhanceItem.mutate(libraryItemId, { onSettled: () => setPendingId(null) })
+  const toggleOne = (id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
   }
+
+  const toggleAll = (checked: boolean) => {
+    setSelectedIds(checked ? new Set((items ?? []).map((i) => i.libraryItemId)) : new Set())
+  }
+
+  const handleEnhanceSelected = () => {
+    const ids = Array.from(selectedIds)
+    enhanceItems.mutate(ids, { onSuccess: () => setSelectedIds(new Set()) })
+  }
+
+  const allSelected = !!items && items.length > 0 && selectedIds.size === items.length
+  const someSelected = selectedIds.size > 0 && !allSelected
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg min-w-0">
+      <DialogContent className="sm:max-w-4xl min-w-0">
         <DialogHeader>
           <DialogTitle>Items eligible for enhancement</DialogTitle>
           <DialogDescription>
-            Every item whose thumbnail is currently below the configured minimum dimension.
-            {items && items.length > MAX_ENHANCEMENTS_PER_SWEEP && (
-              <> Only the first {MAX_ENHANCEMENTS_PER_SWEEP} are processed per "Enhance Now" click or
-              scheduled run — the rest wait for a later one.</>
-            )}
+            Every item whose thumbnail is currently below the configured minimum dimension. Select items and enhance
+            them together, or enhance the whole backlog from the AI Enhancement page.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[60vh] space-y-1 overflow-y-auto">
+        <div className="flex items-center justify-between gap-3">
+          <Button size="sm" disabled={selectedIds.size === 0 || enhanceItems.isPending} onClick={handleEnhanceSelected}>
+            <Sparkles className="h-4 w-4" />
+            Enhance Selected
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Nothing selected"}
+          </span>
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto rounded-md border">
           {isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-md" />)
+            <div className="space-y-1 p-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full rounded-md" />
+              ))}
+            </div>
           ) : !items || items.length === 0 ? (
-            <p className="px-1 py-2 text-sm text-muted-foreground">Nothing eligible right now.</p>
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">Nothing eligible right now.</p>
           ) : (
-            items.map((item, i) => (
-              <div key={item.libraryItemId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-                <Link
-                  to={`/library/${item.libraryItemId}`}
-                  className="min-w-0 flex-1 truncate text-sm font-medium underline-offset-2 hover:underline"
-                >
-                  {item.itemTitle}
-                </Link>
-                <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                  <span>
-                    {item.width}×{item.height}
-                  </span>
-                  {i >= MAX_ENHANCEMENTS_PER_SWEEP && <span>Waiting</span>}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pendingId != null}
-                    onClick={() => handleEnhance(item.libraryItemId)}
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    {pendingId === item.libraryItemId ? "Enhancing…" : "Enhance"}
-                  </Button>
-                </div>
-              </div>
-            ))
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8">
+                    <Checkbox
+                      checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                      onCheckedChange={(checked) => toggleAll(checked === true)}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Artist</TableHead>
+                  <TableHead>Collection</TableHead>
+                  <TableHead>Dimensions</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.libraryItemId}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(item.libraryItemId)}
+                        onCheckedChange={(checked) => toggleOne(item.libraryItemId, checked === true)}
+                        aria-label={`Select ${item.itemTitle}`}
+                      />
+                    </TableCell>
+                    <TableCell className="max-w-[280px] truncate">
+                      <Link
+                        to={`/library/${item.libraryItemId}`}
+                        className="font-medium underline-offset-2 hover:underline"
+                      >
+                        {item.itemTitle}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{item.artistName ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{item.collectionName ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {item.width}×{item.height}
+                    </TableCell>
+                    <TableCell>
+                      {item.isProcessing ? (
+                        <Badge variant="secondary" className="gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Enhancing…
+                        </Badge>
+                      ) : item.recentlyFailedAt ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge variant="destructive" className="cursor-default">
+                              Recently failed
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Failed {timeAgo(item.recentlyFailedAt)} — skipped from automatic runs, still retryable
+                            here.
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </div>
       </DialogContent>

@@ -484,6 +484,7 @@ export interface Settings {
   thumbnailEnhancementRetentionDays: number
   thumbnailEnhancementAutoApprove: boolean
   thumbnailEnhancementAutoOnDownload: boolean
+  thumbnailEnhancementMaxPerSweep: number
 }
 
 export interface YtDlpVersionInfo {
@@ -624,6 +625,7 @@ export interface UpdateSettingsRequest {
   thumbnailEnhancementRetentionDays?: number
   thumbnailEnhancementAutoApprove?: boolean
   thumbnailEnhancementAutoOnDownload?: boolean
+  thumbnailEnhancementMaxPerSweep?: number
 }
 
 export interface BackupHistoryEntry {
@@ -651,6 +653,7 @@ export interface BackupPreviewItem {
   collectionPath?: string[]
   artistName?: string
   tags?: string[]
+  isGhost?: boolean
 }
 
 export interface BackupContentPreview {
@@ -722,6 +725,22 @@ export interface BackupImportLibraryResult {
   artistsCreated: number
   downloadsQueued: number
   ghostsCreated: number
+}
+
+// LibraryImportMode picks what an import does with an item that has a saved
+// URL — "download" (default) queues a redownload, "ghostOnly" recreates
+// every item as a placeholder instead. Items with no URL (or already
+// ghost-status) become ghosts either way.
+export type LibraryImportMode = "download" | "ghostOnly"
+
+export interface BackupRestoreFullResult {
+  settingsApplied: number
+  library: BackupImportLibraryResult
+}
+
+export interface FullImportPreview {
+  settingsCount: number
+  library: LibraryImportPreview
 }
 
 export interface PreviewCollectionEntry {
@@ -882,8 +901,20 @@ export interface ThumbnailEnhancementHistoryEntry {
   triggerType: "manual" | "scheduled" | "auto"
 }
 
+// ThumbnailEnhancementHistoryListResponse is the paginated wrapper around
+// ThumbnailEnhancementHistoryEntry rows — {entries,total} convention, same
+// as the Library page's list response.
+export interface ThumbnailEnhancementHistoryListResponse {
+  entries: ThumbnailEnhancementHistoryEntry[]
+  total: number
+}
+
+// Queued (not "enhanced") — the run is fire-and-forget: this is how many
+// items were handed off to the background sweep, not how many have
+// finished. Live per-item progress arrives separately over the
+// enhance_progress WebSocket event.
 export interface RunThumbnailEnhancementResult {
-  enhanced: number
+  queued: number
 }
 
 // Configured is false whenever the feature is disabled or has no URL saved
@@ -903,6 +934,15 @@ export interface ThumbnailEnhancementEligibleItem {
   itemTitle: string
   width: number
   height: number
+  artistName: string | null
+  collectionName: string | null
+  // Set when this item's most recent attempt failed within the last hour —
+  // automatic runs skip it, but it still appears here so it stays manually
+  // retryable.
+  recentlyFailedAt: string | null
+  // Client-only — patched in live by useDownloadsSocket from the
+  // enhance_progress WebSocket event, not part of the initial fetch.
+  isProcessing?: boolean
 }
 
 export type AddSubscriptionEntryMode = "ghost" | "download"

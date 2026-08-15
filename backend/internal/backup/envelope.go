@@ -58,27 +58,45 @@ var (
 // password if the envelope is encrypted. Pass wantKind to enforce that a
 // settings file can't be fed into a library import or vice versa.
 func Open(env Envelope, wantKind, password string) ([]byte, error) {
+	plaintext, _, err := OpenAny(env, []string{wantKind}, password)
+	return plaintext, err
+}
+
+// OpenAny is like Open but accepts any kind in wantKinds — for import
+// handlers willing to extract just their own section out of a combined
+// "full" backup file, not only their single-purpose kind. Returns the
+// matched kind alongside the plaintext so the caller knows which shape to
+// unmarshal into.
+func OpenAny(env Envelope, wantKinds []string, password string) (plaintext []byte, kind string, err error) {
 	if !env.Packrat {
-		return nil, ErrNotPackratExport
+		return nil, "", ErrNotPackratExport
 	}
-	if env.Kind != wantKind {
-		return nil, fmt.Errorf("%w: file is %q, expected %q", ErrWrongKind, env.Kind, wantKind)
+	matched := false
+	for _, k := range wantKinds {
+		if env.Kind == k {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return nil, "", fmt.Errorf("%w: file is %q, expected one of %q", ErrWrongKind, env.Kind, wantKinds)
 	}
 
 	data, err := base64.StdEncoding.DecodeString(env.Data)
 	if err != nil {
-		return nil, fmt.Errorf("decoding export data: %w", err)
+		return nil, "", fmt.Errorf("decoding export data: %w", err)
 	}
 
 	if !env.Encrypted {
-		return data, nil
+		return data, env.Kind, nil
 	}
 
 	salt, err := base64.StdEncoding.DecodeString(env.Salt)
 	if err != nil {
-		return nil, fmt.Errorf("decoding salt: %w", err)
+		return nil, "", fmt.Errorf("decoding salt: %w", err)
 	}
-	return decrypt(salt, data, password)
+	plaintext, err = decrypt(salt, data, password)
+	return plaintext, env.Kind, err
 }
 
 // ParseEnvelope is a small convenience for handlers that receive the raw

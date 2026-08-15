@@ -294,12 +294,6 @@ export function LibraryToolbar() {
         )}
       </Button>
 
-      <Button variant="outline" onClick={() => setAddGhostOpen(true)}>
-        <Plus className="h-4 w-4" />
-        Add item
-      </Button>
-      <AddGhostLibraryItemDialog open={addGhostOpen} onOpenChange={setAddGhostOpen} />
-
       {settings?.privacyEnabled && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -419,14 +413,12 @@ export function LibraryToolbar() {
 
     {mode === "manage" && (
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">
-          {selectionActive ? `${approxCount} selected` : "Select files or collections to bulk edit"}
-        </span>
-        {selectionActive && (
-          <Button variant="ghost" size="sm" onClick={clear}>
-            Clear
-          </Button>
-        )}
+        <Button variant="outline" size="sm" onClick={() => setAddGhostOpen(true)}>
+          <Plus className="h-4 w-4" />
+          Add item
+        </Button>
+        <AddGhostLibraryItemDialog open={addGhostOpen} onOpenChange={setAddGhostOpen} />
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" disabled={!selectionActive}>
@@ -466,6 +458,15 @@ export function LibraryToolbar() {
         <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
         <EditSequenceDialog open={editSequenceOpen} onOpenChange={setEditSequenceOpen} />
         <AddToCompareListDialog open={addToCompareOpen} onOpenChange={setAddToCompareOpen} />
+
+        {selectionActive && (
+          <Button variant="ghost" size="sm" onClick={clear}>
+            Clear
+          </Button>
+        )}
+        <span className="text-sm text-muted-foreground">
+          {selectionActive ? `${approxCount} selected` : "Select files or collections to bulk edit"}
+        </span>
 
         {view === "list" && (
           <DropdownMenu>

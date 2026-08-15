@@ -10,6 +10,7 @@ frontend/dist/
 
 # Runtime data (media, database, logs)
 data/
+docker/data-dev/
 *.db
 *.db-shm
 *.db-wal

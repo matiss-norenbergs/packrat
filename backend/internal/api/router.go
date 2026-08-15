@@ -14,6 +14,7 @@ import (
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
 	"packrat/backend/internal/thumbnailenhance"
+	"packrat/backend/internal/ws"
 )
 
 // Deps holds everything the router needs to wire up routes. Fields are added
@@ -42,7 +43,8 @@ type Deps struct {
 	BackupsRoot                       string
 	FFProbePath                       string
 	WSHandler                         gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
-	StaticDir                         string          // built frontend assets; empty in dev (Vite serves it)
+	Broadcaster                       ws.Broadcaster
+	StaticDir                         string // built frontend assets; empty in dev (Vite serves it)
 }
 
 // noCacheHeaders forces revalidation on every request instead of letting the
@@ -123,10 +125,10 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/:id/redownload", RedownloadLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.GET("/library/:id/redownload/preview-url", PreviewRedownloadURL(deps.LibraryRepo, deps.YtDlp))
 		api.POST("/library/:id/redownload/from-url", RedownloadLibraryItemFromURL(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
-		api.POST("/library/:id/thumbnail/redownload", RedownloadLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo))
-		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.CollectionsRepo, deps.TagsRepo))
+		api.POST("/library/:id/thumbnail/redownload", RedownloadLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
+		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
 		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo))
-		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo))
+		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
 		api.DELETE("/library/:id/thumbnail", DeleteLibraryItemThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo))
 		api.POST("/library/:id/nfo", GenerateLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo, deps.TagsRepo))
 		api.GET("/library/:id/nfo", GetLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
@@ -174,6 +176,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/backup/import/settings", ImportSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp))
 		api.POST("/backup/preview/library", PreviewLibraryImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
 		api.POST("/backup/import/library", ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.SettingsRepo))
+		api.POST("/backup/preview/full", PreviewFullImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
+		api.POST("/backup/import/full", ImportFullBackup(deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager))
 		api.GET("/backup/history", ListBackupHistory(deps.BackupHistoryRepo))
 		api.POST("/backup/run", RunManualBackup(backup.RunDeps{
 			BackupsRoot:       deps.BackupsRoot,
@@ -188,6 +192,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/backup/history/:id/download", DownloadBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.DELETE("/backup/history/:id", DeleteBackupHistoryEntry(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.GET("/backup/history/:id/preview", PreviewBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
+		api.POST("/backup/history/:id/restore", RestoreFullBackup(deps.BackupsRoot, deps.BackupHistoryRepo, deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager))
 
 		subCheckDeps := subscriptions.CheckDeps{
 			SubscriptionsRepo: deps.SubscriptionsRepo,
@@ -215,15 +220,17 @@ func SetupRouter(deps Deps) *gin.Engine {
 			MediaRoot:     deps.MediaRoot,
 			ImagesRoot:    deps.ImagesRoot,
 			FFmpegPath:    deps.YtDlp.FFmpegPath,
+			Broadcaster:   deps.Broadcaster,
 		}
 		api.GET("/thumbnail-enhancement/history", ListThumbnailEnhancementHistory(enhanceDeps))
 		api.DELETE("/thumbnail-enhancement/history/:id", DeleteThumbnailEnhancementHistoryEntry(enhanceDeps))
+		api.POST("/thumbnail-enhancement/history/bulk-delete", BulkDeleteThumbnailEnhancementHistoryEntries(enhanceDeps))
 		api.POST("/thumbnail-enhancement/history/clear", ClearThumbnailEnhancementHistory(enhanceDeps))
 		api.POST("/thumbnail-enhancement/run", RunThumbnailEnhancementNow(enhanceDeps))
 		api.GET("/thumbnail-enhancement/upscalers", ListThumbnailUpscalers())
 		api.GET("/thumbnail-enhancement/status", GetThumbnailEnhancementStatus(enhanceDeps))
 		api.GET("/thumbnail-enhancement/eligible", ListThumbnailEnhancementEligible(enhanceDeps))
-		api.POST("/thumbnail-enhancement/items/:id/run", EnhanceThumbnailItemNow(enhanceDeps))
+		api.POST("/thumbnail-enhancement/items/bulk-run", EnhanceThumbnailItemsNow(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/:id/revert", RevertThumbnailOriginal(enhanceDeps))
 		api.DELETE("/thumbnail-enhancement/items/:id/original", DeleteThumbnailOriginal(enhanceDeps))
 

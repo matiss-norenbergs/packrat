@@ -83,4 +83,10 @@ const (
 	// completes (if it's under the configured minDim), rather than waiting
 	// for the next scheduled sweep. Fresh downloads only, not redownloads.
 	SettingThumbnailEnhancementAutoOnDownload = "thumbnail_enhancement_auto_on_download" // bool, default false
+	// SettingThumbnailEnhancementMaxPerSweep bounds how many items one batch
+	// run (a scheduled sweep or a manual "Enhance now" click) processes, so
+	// a large backlog can't run unboundedly long against a local, often
+	// slow, upscaler. Doesn't apply to a direct per-item Enhance click,
+	// which always processes exactly the one item picked.
+	SettingThumbnailEnhancementMaxPerSweep = "thumbnail_enhancement_max_per_sweep" // int as string; default "5"
 )

@@ -25,8 +25,19 @@ export interface QueueUpdatePayload {
   queued: number
 }
 
+// EnhanceProgressPayload reports one library item's AI-enhancement status,
+// regardless of which trigger (scheduled sweep, manual "Enhance Now",
+// bulk-selected, or auto-on-download) caused it.
+export interface EnhanceProgressPayload {
+  libraryItemId: number
+  itemTitle: string
+  status: "processing" | "success" | "failed"
+  error?: string
+}
+
 export type WSEvent =
   | { type: "progress"; payload: ProgressPayload }
   | { type: "completed"; payload: CompletedPayload }
   | { type: "failed"; payload: FailedPayload }
   | { type: "queue_update"; payload: QueueUpdatePayload }
+  | { type: "enhance_progress"; payload: EnhanceProgressPayload }

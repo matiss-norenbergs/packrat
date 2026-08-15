@@ -5,7 +5,6 @@ import {
   bulkDeleteArtists,
   clearArtistSelectedImage,
   createArtist,
-  deleteArtist,
   deleteArtistImage,
   fetchArtistImageCandidates,
   fetchArtistImages,
@@ -53,22 +52,6 @@ export function useUpdateArtist() {
     },
     onError: (err: Error) => {
       toast.error(`Failed to rename artist: ${err.message}`)
-    },
-  })
-}
-
-export function useDeleteArtist() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => deleteArtist(id),
-    onSuccess: () => {
-      toast.success("Artist deleted")
-      queryClient.invalidateQueries({ queryKey: artistsQueryKey })
-      // Deleting clears the artist from every library item that had it.
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
-    },
-    onError: (err: Error) => {
-      toast.error(`Failed to delete artist: ${err.message}`)
     },
   })
 }

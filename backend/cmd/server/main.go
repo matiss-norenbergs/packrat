@@ -210,6 +210,7 @@ func run() error {
 		MediaRoot:     cfg.MediaRoot,
 		ImagesRoot:    cfg.ImagesRoot,
 		FFmpegPath:    cfg.FFmpegPath,
+		Broadcaster:   hub,
 	}
 
 	go func() {
@@ -265,6 +266,7 @@ func run() error {
 		BackupsRoot:                       cfg.BackupsRoot,
 		FFProbePath:                       cfg.FFProbePath,
 		WSHandler:                         hub.GinHandler(),
+		Broadcaster:                       hub,
 		StaticDir:                         os.Getenv("STATIC_DIR"),
 	})
 

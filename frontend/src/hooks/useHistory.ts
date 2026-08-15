@@ -41,6 +41,40 @@ export function useDeleteHistoryItem() {
   })
 }
 
+// No bulk-delete route exists on the backend (unlike Tags/Artists/Collections)
+// — this fires the same per-id DELETE the single-row action already uses,
+// once per selected id, and invalidates once at the end.
+export function useBulkDeleteHistoryItems() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => deleteHistoryItem(id))),
+    onSuccess: (_result, ids) => {
+      toast.success(`Deleted ${ids.length} history ${ids.length === 1 ? "entry" : "entries"}`)
+      queryClient.invalidateQueries({ queryKey: historyQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to delete: ${err.message}`)
+    },
+  })
+}
+
+// Same aggregation approach as useBulkDeleteHistoryItems — no bulk-retry
+// route exists, so this loops the existing per-id retry endpoint.
+export function useBulkRetryHistoryItems() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => retryHistoryItem(id))),
+    onSuccess: (_result, ids) => {
+      toast.success(`${ids.length} ${ids.length === 1 ? "retry" : "retries"} queued`)
+      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+      queryClient.invalidateQueries({ queryKey: historyQueryKey })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to retry: ${err.message}`)
+    },
+  })
+}
+
 export function useClearHistory() {
   const queryClient = useQueryClient()
   return useMutation({

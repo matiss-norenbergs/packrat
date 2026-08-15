@@ -1,25 +1,16 @@
 import { useState } from "react"
-import { Trash2, X } from "lucide-react"
+import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useCancelDownload, useDeleteDownload } from "@/hooks/useDownloads"
+import { useCancelDownload } from "@/hooks/useDownloads"
 import { formatDownloadStatus, formatEta, formatSpeed, hashText } from "@/lib/utils"
 import type { Download } from "@/types/api"
 
-const CANCELLABLE_STATUSES = new Set(["queued", "fetching_metadata", "downloading", "processing"])
+export const CANCELLABLE_STATUSES = new Set(["queued", "fetching_metadata", "downloading", "processing"])
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   queued: "outline",
@@ -32,17 +23,35 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   interrupted: "destructive",
 }
 
-export function DownloadQueueItem({ download }: { download: Download }) {
+export function DownloadQueueItem({
+  download,
+  selected,
+  onSelectedChange,
+  onMouseDown,
+  onMouseEnter,
+}: {
+  download: Download
+  selected: boolean
+  onSelectedChange: () => void
+  onMouseDown: (e: React.MouseEvent) => void
+  onMouseEnter: () => void
+}) {
   const cancelDownload = useCancelDownload()
-  const deleteDownload = useDeleteDownload()
-  const [deleteOpen, setDeleteOpen] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const toggleReveal = () => setRevealed((v) => !v)
   const cancellable = CANCELLABLE_STATUSES.has(download.status)
   const displayName = download.title ?? download.url
 
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-border p-3">
+    <div
+      data-download-id={download.id}
+      data-state={selected ? "selected" : undefined}
+      onMouseDown={onMouseDown}
+      onMouseEnter={onMouseEnter}
+      className="flex cursor-default select-none items-center gap-4 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+    >
+      <Checkbox checked={selected} onCheckedChange={onSelectedChange} aria-label={`Select ${displayName}`} />
+
       <div className="h-14 w-24 flex-shrink-0 overflow-hidden rounded bg-muted">
         {download.thumbnail ? (
           <BlurredThumbnail
@@ -87,7 +96,7 @@ export function DownloadQueueItem({ download }: { download: Download }) {
         )}
       </div>
 
-      {cancellable ? (
+      {cancellable && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -101,31 +110,7 @@ export function DownloadQueueItem({ download }: { download: Download }) {
           </TooltipTrigger>
           <TooltipContent>Cancel</TooltipContent>
         </Tooltip>
-      ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" onClick={() => setDeleteOpen(true)}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Delete</TooltipContent>
-        </Tooltip>
       )}
-
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove this from the downloads list?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The downloaded file isn't affected — only this history entry is removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteDownload.mutate(download.id)}>Remove</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

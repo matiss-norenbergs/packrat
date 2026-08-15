@@ -17,6 +17,17 @@ export function useIdSelection() {
 
   const clear = () => setSelected(new Set())
   const isSelected = (id: number) => selected.has(id)
+  const selectAll = (ids: number[]) => setSelected(new Set(ids))
+  const selectOnly = (id: number) => setSelected(new Set([id]))
 
-  return { selected, isSelected, toggle, clear, size: selected.size, active: selected.size > 0 }
+  return {
+    selected,
+    isSelected,
+    toggle,
+    clear,
+    selectAll,
+    selectOnly,
+    size: selected.size,
+    active: selected.size > 0,
+  }
 }

@@ -12,6 +12,167 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-15
+
+- **Collections page reworked to match Tags/Artists** — replaced the old
+  plain tree with a toolbar (New/Edit/Delete/Expand-Collapse/Search),
+  tree-aware pagination (top-level collections are paged 25 at a time, each
+  page showing full sub-trees rather than splitting a parent from its
+  children), and a sticky header/toolbar/footer layout so controls stay on
+  screen while the list scrolls. The expand/collapse-all state is now
+  remembered across reloads, and the pagination footer shows both the
+  top-level and total collection counts.
+- **New: Collection details side panel** — selecting a collection shows its
+  cover art and full metadata (path, folder, type, quality, privacy,
+  sequence range, gaps, item counts, etc.) in a collapsible right-side
+  panel, mirroring the Artists page's image panel. Every field renders even
+  when empty (dash fallback), and Private/"Show as single item in Browse"
+  are shown as colored Yes/No badges. The panel's open/collapsed state is
+  remembered across reloads independently of the expand/collapse toggle.
+- **Collection row selection** — clicking a row selects it (ctrl/cmd-click
+  toggles it in or out of the selection), matching the click-to-select
+  convention used elsewhere in the app; the per-row details popover now
+  opens on hover instead of requiring a click.
+- **Fixed: per-row "Add sub-collection"/Edit dialogs not registering
+  clicks** — selecting a row could swallow mousedown events from inside
+  those dialogs' portaled content, breaking focus and typing in their
+  fields. Row selection now only intercepts clicks that land on the row's
+  own DOM, not on dialogs it renders as children.
+- **History, Logs, and Subscriptions pages reworked to match Tags** — all
+  three switched to the shared multi-select Table pattern (drag-select,
+  shift/ctrl-click, header select-all, right-click context menu), debounced
+  search, and paginated sticky-header layout. History gained working bulk
+  Retry and bulk Delete; Subscriptions gained bulk Delete and bulk Check
+  now (each fires the existing single-item endpoint once per selected
+  subscription and reports one aggregate "Found N new item(s)" toast, since
+  no bulk backend route exists for either page). Logs intentionally has no
+  selection column — there's no delete capability for logs at all.
+- **Downloads page gained multi-select, bulk Delete, search, and
+  pagination** — kept its existing card layout (not converted to a table)
+  but added the same drag-select, shift/ctrl-click, right-click context
+  menu, debounced search, and sticky header/toolbar/pagination-footer
+  conventions as Tags/Collections, plus a checkbox per item. The per-item
+  Delete button was removed in favor of a single toolbar/context-menu
+  Delete that acts on the whole selection; still-active (in-progress)
+  downloads in a selection are skipped since the backend refuses to delete
+  those until cancelled. The per-item Cancel button for in-progress
+  downloads is unchanged. New Download and Bulk Download are now a single
+  grouped control on the toolbar's left side (Bulk Download collapsed to
+  an icon with a tooltip) instead of two separate buttons in the page
+  header.
+
+## 2026-08-14
+
+- **Artists page reworked to match Tags** — replaced the old plain list with
+  the same table experience the Tags page already had: instant client-side
+  search, numbered pagination, full row selection (click, ctrl/cmd-click,
+  shift-click range, and click-drag), and a right-click context menu for
+  New/Edit/Delete. Also added a Birthday column (with computed age).
+- **New: Artist Images side panel** — selecting a single artist on the
+  Artists page now shows its current image plus every other uploaded or
+  downloaded image in a collapsible right-side panel, instead of only being
+  visible from inside the Edit dialog. The panel's collapsed/expanded state
+  is remembered across reloads, and its images aren't fetched in the
+  background while it's collapsed.
+
+## 2026-08-13
+
+- **Fixed: Backup import's "download" mode ignored ghost items that had a
+  saved URL** — a ghost placeholder with a source URL is just as
+  downloadable as any other item, but download mode previously left it as a
+  ghost regardless of the mode picked; it's now correctly resolved into a
+  real queued download, matching what the mode's own description already
+  promised. The import confirmation dialogs' copy was corrected to describe
+  this accurately too.
+
+## 2026-08-12
+
+- **Backup: every library item is now included, not just ones with a saved
+  URL** — a locally-imported file with no source URL (e.g. via File Import)
+  used to be silently dropped from both ad-hoc library exports and full
+  (Run Backup Now / scheduled) backups. It's now always exported, and round-
+  trips as a ghost placeholder on import since there's nothing to
+  redownload it from.
+- **Backup import: choose "download" vs "ghost placeholders only"** — both
+  the Library Data import card and the new full-backup Restore action now
+  have a mode selector. "Ghost placeholders only" recreates every item as a
+  metadata-only placeholder instead of queuing any redownloads — useful for
+  restoring onto a fresh install before you're ready to redownload
+  everything, or intentionally deferring it.
+- **New: Restore action for full (Run Backup Now / scheduled) backups** —
+  previously, a full backup listed in Backup History could only be
+  previewed (read-only) or downloaded; there was no way to actually apply
+  it back, since the existing Import Settings/Import Library flows only
+  ever accepted their own single-purpose file kind. A new Restore button on
+  each history row applies both the settings and library halves in one
+  action.
+- **New: Full Backup card for importing an ad-hoc full backup file** — a
+  full backup previously could only be restored via a Backup History row on
+  the same install that created it. A new Full Backup card on the Backup
+  page accepts any full backup file (downloaded from this or another
+  install) and applies both halves in one action, with a Preview step
+  first. The existing Settings and Library cards now also accept a full
+  backup file for their import, extracting and applying only their own
+  section — so a single full backup file works with whichever card matches
+  what you want to restore. The download-vs-ghost-only mode picker moved
+  out of the page body and into the confirmation dialogs (the direct-import
+  prompt and the preview dialog's "Import Now" step) across all three
+  cards, so it reads as part of committing to the import rather than a
+  standing setting. Also fixes two bugs in the import preview surfaced
+  while building this: a crash when a library had zero tags/collections/
+  artists (the backend sends `null`, not `[]`, for an empty list), and a
+  "will be queued" count that could go negative when an item was both a
+  ghost and already a duplicate.
+
+## 2026-08-09
+
+- **AI Enhancement history: bulk delete + numbered pagination** — the
+  per-row delete button is gone; each row now has a checkbox (plus a
+  header "select all"), and a "Delete Selected" button in the toolbar
+  removes every checked row in one request. The pagination footer now
+  shows numbered page buttons (with an ellipsis for long histories)
+  instead of just "Page X of Y", so jumping to a specific page no longer
+  requires clicking Next repeatedly.
+- **Fix: AI Enhancement history's Compare icon appeared on every row for an
+  item enhanced more than once** — an item re-enhanced without an
+  in-between revert got a Compare/Revert action on *every* success row,
+  even though they all shared the same original-thumbnail backup and only
+  the most recent row's output was actually still live. Now only the
+  single latest successful row per item shows it. Also, a reverted row's
+  status column now shows just "Reverted" instead of "Success" and
+  "Reverted" side by side.
+- **Fix: redownloading/quick-grabbing/hand-picking a thumbnail no longer
+  leaves a stale AI-enhancement backup behind** — previously, replacing an
+  enhanced item's thumbnail via "Redownload thumbnail," "Quick Grab," or
+  "Choose from Video" (and a full item redownload that swaps the
+  thumbnail) left the old pre-enhancement backup and its Compare/Revert
+  entry pointing at an image with no relation to the new thumbnail;
+  clicking "Revert to Original" afterward would silently overwrite the new
+  thumbnail with that stale backup. All four paths now clear the backup
+  as part of the thumbnail swap.
+- **AI thumbnail enhancement: live progress, failure cooldown, bulk-select,
+  and searchable/paginated history** — "Enhance Now" and the eligible-items
+  dialog's bulk action now return immediately and stream per-item status
+  live over WebSocket, so the AI Enhancement page shows "Enhancing:
+  `<title>`" in real time instead of the page blocking until a whole batch
+  finishes (closing the tab mid-run no longer cancels it either, since the
+  run is detached from the request). An item that just failed is skipped by
+  the scheduled sweep and "Enhance Now" for an hour, but still shows up
+  (with a "Recently failed" badge) in the eligible-items dialog for a
+  deliberate manual retry. That dialog is now a wider table — Item / Artist
+  / Collection / Dimensions / Status — with checkboxes and a single toolbar
+  "Enhance Selected" button, replacing the old one-button-per-row list. The
+  history table gained a search box plus Status/Trigger filters and
+  Previous/Next pagination, now that it's fetched a page at a time from the
+  backend instead of all at once.
+- **AI thumbnail enhancement: configurable batch size, per-item loading
+  state** — the "max items per batch run" cap (previously a fixed 5) is now
+  a Settings → AI Enhancement field, applying to both the hourly scheduled
+  sweep and manual "Enhance Now" clicks. The "Preview Eligible Items"
+  dialog's per-row Enhance button no longer disables every other row while
+  one item is enhancing — each row now tracks its own loading state
+  independently, so unrelated items stay clickable.
+
 ## 2026-08-08
 
 - **AI thumbnail enhancement: fullscreen before/after compare slider** —
