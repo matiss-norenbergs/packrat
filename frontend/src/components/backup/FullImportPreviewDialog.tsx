@@ -9,14 +9,14 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useImportLibrary } from "@/hooks/useBackup"
-import type { LibraryImportMode, LibraryImportPreview } from "@/types/api"
+import { useImportFullBackup } from "@/hooks/useBackup"
+import type { FullImportPreview, LibraryImportMode } from "@/types/api"
 import { PreviewItemList } from "./PreviewItemList"
 
-interface LibraryImportPreviewDialogProps {
+interface FullImportPreviewDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  preview: LibraryImportPreview | null
+  preview: FullImportPreview | null
   data: string
   password: string
   mode: LibraryImportMode
@@ -24,13 +24,11 @@ interface LibraryImportPreviewDialogProps {
   onImported: () => void
 }
 
-// Shown after clicking "Preview" on the Backup page's Library import card —
-// decrypts/parses the selected file server-side (see backup.PreviewLibraryBundle)
-// without writing anything, so the user can see what an import would do
-// before committing to it. The download-vs-ghost-only mode picker lives here
-// (not on the page) since "Import Now" is the actual commit — this preview
-// *is* the confirmation prompt.
-export function LibraryImportPreviewDialog({
+// Full-backup sibling to LibraryImportPreviewDialog — same shape, plus a
+// settings-entry count above the library diff (settings always overwrite
+// every key, so there's nothing to diff there). The mode picker lives here,
+// not on the page — "Import Now" is the actual commit.
+export function FullImportPreviewDialog({
   open,
   onOpenChange,
   preview,
@@ -39,8 +37,8 @@ export function LibraryImportPreviewDialog({
   mode,
   onModeChange,
   onImported,
-}: LibraryImportPreviewDialogProps) {
-  const importMutation = useImportLibrary()
+}: FullImportPreviewDialogProps) {
+  const importMutation = useImportFullBackup()
 
   if (!preview) return null
 
@@ -53,9 +51,9 @@ export function LibraryImportPreviewDialog({
         </DialogHeader>
 
         <div className="space-y-2">
-          <Label htmlFor="library-preview-mode">Items with a saved URL</Label>
+          <Label htmlFor="full-preview-mode">Library items with a saved URL</Label>
           <Select value={mode} onValueChange={(v) => onModeChange(v as LibraryImportMode)}>
-            <SelectTrigger id="library-preview-mode" className="w-full">
+            <SelectTrigger id="full-preview-mode" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -65,7 +63,12 @@ export function LibraryImportPreviewDialog({
           </Select>
         </div>
 
-        <PreviewItemList preview={preview} mode={mode} />
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{preview.settingsCount}</span> settings entries — always
+          overwrite the current values.
+        </p>
+
+        <PreviewItemList preview={preview.library} mode={mode} />
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

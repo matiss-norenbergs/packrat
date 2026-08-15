@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Download, Eye, Trash2 } from "lucide-react"
+import { Download, Eye, RotateCcw, Trash2 } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,13 +12,15 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useBackupHistory, useDeleteBackupHistoryEntry, useRunManualBackup } from "@/hooks/useBackup"
+import { useBackupHistory, useDeleteBackupHistoryEntry, useRestoreFullBackup, useRunManualBackup } from "@/hooks/useBackup"
 import { backupDownloadUrl } from "@/lib/api"
 import { formatBytes } from "@/lib/utils"
-import type { BackupHistoryEntry } from "@/types/api"
+import type { BackupHistoryEntry, LibraryImportMode } from "@/types/api"
 import { BackupContentPreviewDialog } from "./BackupContentPreviewDialog"
 
 function itemsSummary(entry: BackupHistoryEntry): string {
@@ -36,8 +38,11 @@ export function BackupHistoryTable() {
   const { data, isLoading } = useBackupHistory()
   const runBackup = useRunManualBackup()
   const deleteEntry = useDeleteBackupHistoryEntry()
+  const restoreEntry = useRestoreFullBackup()
   const [previewId, setPreviewId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [restoreId, setRestoreId] = useState<number | null>(null)
+  const [restoreMode, setRestoreMode] = useState<LibraryImportMode>("download")
 
   return (
     <div className="space-y-4">
@@ -110,6 +115,14 @@ export function BackupHistoryTable() {
                           </TooltipTrigger>
                           <TooltipContent>Download</TooltipContent>
                         </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" onClick={() => setRestoreId(entry.id)}>
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Restore</TooltipContent>
+                        </Tooltip>
                       </>
                     )}
                     <Tooltip>
@@ -151,6 +164,46 @@ export function BackupHistoryTable() {
               }}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={restoreId != null} onOpenChange={(open) => !open && setRestoreId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore this backup?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Applies both halves of this backup: settings are overwritten with the backed-up
+                  values, and any missing collections, tags, artists, and library items are
+                  created. Nothing existing is ever deleted.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="restore-mode">Library items with a saved URL</Label>
+                  <Select value={restoreMode} onValueChange={(v) => setRestoreMode(v as LibraryImportMode)}>
+                    <SelectTrigger id="restore-mode" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="download">Import and download</SelectItem>
+                      <SelectItem value="ghostOnly">Import as ghost items</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (restoreId != null) restoreEntry.mutate({ id: restoreId, mode: restoreMode })
+                setRestoreId(null)
+              }}
+            >
+              Restore
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

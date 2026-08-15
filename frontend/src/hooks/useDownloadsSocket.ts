@@ -1,14 +1,52 @@
 import { useEffect, useRef } from "react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { connectDownloadsSocket } from "@/lib/ws"
 import { downloadsQueryKey } from "./useDownloads"
 import { libraryQueryKey } from "./useLibrary"
-import type { Download } from "@/types/api"
-import type { WSEvent } from "@/types/ws"
+import {
+  thumbnailEnhancementActiveItemQueryKey,
+  thumbnailEnhancementEligibleQueryKey,
+  thumbnailEnhancementHistoryQueryKey,
+} from "./useThumbnailEnhancement"
+import type { Download, ThumbnailEnhancementEligibleItem } from "@/types/api"
+import type { EnhanceProgressPayload, WSEvent } from "@/types/ws"
 
 const RECONNECT_BASE_DELAY_MS = 1000
 const RECONNECT_MAX_DELAY_MS = 15000
+
+// handleEnhanceProgress patches the eligible-items dialog's cached list live
+// (so open dialogs update without a refetch), seeds the "currently active
+// item" cache entry the AI Enhancement page reads for its live indicator,
+// and invalidates the history list on a terminal event so new rows appear.
+// Covers every trigger (scheduled sweep, manual, bulk-selected,
+// auto-on-download) since the backend broadcasts from one shared place.
+function handleEnhanceProgress(queryClient: QueryClient, payload: EnhanceProgressPayload) {
+  queryClient.setQueryData<ThumbnailEnhancementEligibleItem[]>(thumbnailEnhancementEligibleQueryKey, (prev) => {
+    if (!prev) return prev
+    if (payload.status === "success") {
+      return prev.filter((item) => item.libraryItemId !== payload.libraryItemId)
+    }
+    return prev.map((item) =>
+      item.libraryItemId === payload.libraryItemId
+        ? {
+            ...item,
+            isProcessing: payload.status === "processing",
+            recentlyFailedAt: payload.status === "failed" ? new Date().toISOString() : item.recentlyFailedAt,
+          }
+        : item,
+    )
+  })
+
+  queryClient.setQueryData(
+    thumbnailEnhancementActiveItemQueryKey,
+    payload.status === "processing" ? payload : null,
+  )
+
+  if (payload.status !== "processing") {
+    queryClient.invalidateQueries({ queryKey: thumbnailEnhancementHistoryQueryKey })
+  }
+}
 
 /**
  * Opens one shared WebSocket connection for the whole app and patches live
@@ -64,6 +102,10 @@ export function useDownloadsSocket() {
         }
         case "queue_update": {
           queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+          break
+        }
+        case "enhance_progress": {
+          handleEnhanceProgress(queryClient, event.payload)
           break
         }
       }

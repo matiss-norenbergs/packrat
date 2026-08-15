@@ -89,10 +89,9 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 		t.Fatalf("setting tags: %v", err)
 	}
 
-	// A second, non-ghost item with no originalUrl must still be excluded
-	// from the export — there'd be nothing to redownload it from, and it's
-	// not a ghost either. Ghost items without a URL are the one exception —
-	// see TestBuildApplyLibraryBundle_GhostRoundTrip.
+	// A second, non-ghost item with no originalUrl must still be exported —
+	// just without a URL, so ApplyLibraryBundle round-trips it as a ghost
+	// instead of a redownload (nothing to redownload it from).
 	if _, err := repos.library.Create(ctx, &models.LibraryItem{
 		Title: "No URL", Filename: "nourl.mp3", Path: "nourl.mp3", Status: "completed",
 	}); err != nil {
@@ -103,8 +102,8 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildLibraryBundle: %v", err)
 	}
-	if len(bundle.LibraryItems) != 1 {
-		t.Fatalf("expected exactly 1 exported library item (URL-having only), got %d", len(bundle.LibraryItems))
+	if len(bundle.LibraryItems) != 2 {
+		t.Fatalf("expected both items exported (URL-less items aren't dropped), got %d: %+v", len(bundle.LibraryItems), bundle.LibraryItems)
 	}
 	item := bundle.LibraryItems[0]
 	if item.OriginalURL != url || item.ArtistName != "Test Artist" || len(item.CollectionPath) != 1 || item.CollectionPath[0] != "Music" {
@@ -129,12 +128,15 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 	// Applying the very same bundle back against the SAME database must not
 	// create duplicate collections/tags/artists — everything should already
 	// match by name/path.
-	resolved, result, err := ApplyLibraryBundle(ctx, repos.db, repos.collections, repos.tags, repos.artists, repos.library, bundle)
+	resolved, result, err := ApplyLibraryBundle(ctx, repos.db, repos.collections, repos.tags, repos.artists, repos.library, bundle, false)
 	if err != nil {
 		t.Fatalf("ApplyLibraryBundle: %v", err)
 	}
 	if result.CollectionsEnsured != 1 || result.TagsCreated != 0 || result.ArtistsCreated != 0 {
 		t.Fatalf("expected a no-op merge (nothing new), got %+v", result)
+	}
+	if result.GhostsCreated != 1 {
+		t.Fatalf("expected the URL-less item to be created as a ghost, got %+v", result)
 	}
 	if len(resolved) != 1 {
 		t.Fatalf("expected exactly 1 resolved download, got %d", len(resolved))
@@ -149,12 +151,15 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 
 	// Applying into a FRESH database must create everything from scratch.
 	fresh := openTestRepos(t)
-	resolved2, result2, err := ApplyLibraryBundle(ctx, fresh.db, fresh.collections, fresh.tags, fresh.artists, fresh.library, bundle)
+	resolved2, result2, err := ApplyLibraryBundle(ctx, fresh.db, fresh.collections, fresh.tags, fresh.artists, fresh.library, bundle, false)
 	if err != nil {
 		t.Fatalf("ApplyLibraryBundle (fresh db): %v", err)
 	}
 	if result2.CollectionsEnsured != 1 || result2.TagsCreated != 1 || result2.ArtistsCreated != 1 {
 		t.Fatalf("expected everything freshly created, got %+v", result2)
+	}
+	if result2.GhostsCreated != 1 {
+		t.Fatalf("expected the URL-less item to be created as a ghost, got %+v", result2)
 	}
 	if len(resolved2) != 1 || resolved2[0].CollectionID == nil || resolved2[0].ArtistID == nil {
 		t.Fatalf("expected the resolved download to reference newly created ids, got %+v", resolved2)
@@ -228,27 +233,65 @@ func TestBuildApplyLibraryBundle_GhostRoundTrip(t *testing.T) {
 		}
 	}
 
+	// Download mode (ghostOnly=false): a ghost with a saved URL is
+	// downloadable, so it resolves into a real download instead of staying
+	// a ghost — only the URL-less ghost is recreated directly.
 	fresh := openTestRepos(t)
-	resolved, result, err := ApplyLibraryBundle(ctx, fresh.db, fresh.collections, fresh.tags, fresh.artists, fresh.library, bundle)
+	resolved, result, err := ApplyLibraryBundle(ctx, fresh.db, fresh.collections, fresh.tags, fresh.artists, fresh.library, bundle, false)
 	if err != nil {
 		t.Fatalf("ApplyLibraryBundle: %v", err)
 	}
-	if len(resolved) != 0 {
-		t.Fatalf("expected no resolved downloads for ghost entries (nothing to queue), got %+v", resolved)
+	if len(resolved) != 1 {
+		t.Fatalf("expected 1 resolved download (the ghost with a saved URL), got %+v", resolved)
 	}
-	if result.GhostsCreated != 2 {
-		t.Fatalf("expected 2 ghosts created, got %+v", result)
+	if resolved[0].URL != url {
+		t.Fatalf("expected the resolved download's URL to match the ghost's saved URL, got %+v", resolved[0])
+	}
+	if len(resolved[0].Tags) != 1 || resolved[0].Tags[0] != "ghost-tag" {
+		t.Fatalf("expected the ghost's tag to carry over to the resolved download, got %+v", resolved[0].Tags)
+	}
+	if result.GhostsCreated != 1 {
+		t.Fatalf("expected only the URL-less ghost to be created directly, got %+v", result)
 	}
 
 	imported, err := fresh.library.List(ctx)
 	if err != nil {
 		t.Fatalf("listing imported library: %v", err)
 	}
-	if len(imported) != 2 {
-		t.Fatalf("expected 2 imported items, got %d", len(imported))
+	if len(imported) != 1 {
+		t.Fatalf("expected only the URL-less ghost row to exist (the other is a pending resolved download, not yet a library row), got %d: %+v", len(imported), imported)
 	}
-	byTitle := make(map[string]models.LibraryItem, len(imported))
-	for _, it := range imported {
+	noURL := imported[0]
+	if noURL.Title != "Ghost No URL" || noURL.Status != "ghost" || noURL.OriginalURL != nil {
+		t.Fatalf("expected the URL-less ghost to import as a ghost with no URL, got %+v", noURL)
+	}
+	if noURL.MediaType == nil || *noURL.MediaType != "audio" {
+		t.Fatalf("expected the media type to be preserved, got %+v", noURL.MediaType)
+	}
+
+	// ghostOnly mode: every item is recreated as a ghost, even the one with
+	// a saved URL — nothing gets queued for download.
+	freshGhostOnly := openTestRepos(t)
+	resolvedGhostOnly, resultGhostOnly, err := ApplyLibraryBundle(ctx, freshGhostOnly.db, freshGhostOnly.collections, freshGhostOnly.tags, freshGhostOnly.artists, freshGhostOnly.library, bundle, true)
+	if err != nil {
+		t.Fatalf("ApplyLibraryBundle (ghostOnly): %v", err)
+	}
+	if len(resolvedGhostOnly) != 0 {
+		t.Fatalf("expected no resolved downloads in ghostOnly mode, got %+v", resolvedGhostOnly)
+	}
+	if resultGhostOnly.GhostsCreated != 2 {
+		t.Fatalf("expected both items created as ghosts in ghostOnly mode, got %+v", resultGhostOnly)
+	}
+
+	importedGhostOnly, err := freshGhostOnly.library.List(ctx)
+	if err != nil {
+		t.Fatalf("listing imported library (ghostOnly): %v", err)
+	}
+	if len(importedGhostOnly) != 2 {
+		t.Fatalf("expected 2 imported items in ghostOnly mode, got %d", len(importedGhostOnly))
+	}
+	byTitle := make(map[string]models.LibraryItem, len(importedGhostOnly))
+	for _, it := range importedGhostOnly {
 		byTitle[it.Title] = it
 	}
 
@@ -265,7 +308,7 @@ func TestBuildApplyLibraryBundle_GhostRoundTrip(t *testing.T) {
 	if withURL.MediaType == nil || *withURL.MediaType != "video" {
 		t.Fatalf("expected the media type to be preserved, got %+v", withURL.MediaType)
 	}
-	importedTags, err := fresh.tags.TagsByLibraryIDs(ctx, []int64{withURL.ID})
+	importedTags, err := freshGhostOnly.tags.TagsByLibraryIDs(ctx, []int64{withURL.ID})
 	if err != nil {
 		t.Fatalf("fetching imported ghost tags: %v", err)
 	}
@@ -273,15 +316,15 @@ func TestBuildApplyLibraryBundle_GhostRoundTrip(t *testing.T) {
 		t.Fatalf("expected the ghost's tag to survive the round trip, got %+v", importedTags[withURL.ID])
 	}
 
-	noURL, ok := byTitle["Ghost No URL"]
+	noURLGhostOnly, ok := byTitle["Ghost No URL"]
 	if !ok {
 		t.Fatalf("expected 'Ghost No URL' to be imported despite having no source URL, got %+v", byTitle)
 	}
-	if noURL.Status != "ghost" || noURL.OriginalURL != nil {
-		t.Fatalf("expected the URL-less ghost to import as a ghost with no URL, got %+v", noURL)
+	if noURLGhostOnly.Status != "ghost" || noURLGhostOnly.OriginalURL != nil {
+		t.Fatalf("expected the URL-less ghost to import as a ghost with no URL, got %+v", noURLGhostOnly)
 	}
-	if noURL.MediaType == nil || *noURL.MediaType != "audio" {
-		t.Fatalf("expected the media type to be preserved, got %+v", noURL.MediaType)
+	if noURLGhostOnly.MediaType == nil || *noURLGhostOnly.MediaType != "audio" {
+		t.Fatalf("expected the media type to be preserved, got %+v", noURLGhostOnly.MediaType)
 	}
 }
 
@@ -302,7 +345,7 @@ func TestApplyLibraryBundle_InfersAudioTypeFromMissingDownloadType(t *testing.T)
 		},
 	}
 
-	resolved, _, err := ApplyLibraryBundle(ctx, repos.db, repos.collections, repos.tags, repos.artists, repos.library, bundle)
+	resolved, _, err := ApplyLibraryBundle(ctx, repos.db, repos.collections, repos.tags, repos.artists, repos.library, bundle, false)
 	if err != nil {
 		t.Fatalf("ApplyLibraryBundle: %v", err)
 	}

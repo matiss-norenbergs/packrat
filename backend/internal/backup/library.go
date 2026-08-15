@@ -52,11 +52,11 @@ type LibraryItemEntry struct {
 	SeasonNumber   *int     `json:"seasonNumber,omitempty"`
 	Tags           []string `json:"tags,omitempty"`
 	// Status is "ghost" for a placeholder item with no downloaded file, or
-	// omitted for a normal completed item — recreated as a ghost row
-	// directly on import instead of always being re-downloaded. Absent in
-	// bundles exported before this field existed, which ApplyLibraryBundle
-	// treats the same as "" (completed) — those older exports still import
-	// exactly as they always did.
+	// omitted for a normal completed item — informational only on import
+	// (see ApplyLibraryBundle): what actually decides ghost-vs-download
+	// there is whether OriginalURL is empty and the caller's ghostOnly
+	// flag, not this field, since a ghost with a saved URL is just as
+	// downloadable as any other item.
 	Status string `json:"status,omitempty"`
 	// MediaType records a ghost item's video/audio type, since a ghost has
 	// no resolution/download-type signal to infer it from otherwise (see
@@ -102,9 +102,12 @@ func collectionPaths(cols []models.Collection) map[int64][]string {
 }
 
 // BuildLibraryBundle collects tags, collections, artists, and every library
-// item that has a saved originalUrl — everything needed to reconstruct the
-// library elsewhere by re-queueing downloads, without shipping any actual
-// media file bytes.
+// item — everything needed to reconstruct the library elsewhere, without
+// shipping any actual media file bytes. Items with a saved originalUrl
+// round-trip by re-queueing a download; items without one (an already-ghost
+// row, or a real file that was locally imported without ever having a
+// source URL) round-trip as a ghost placeholder instead, since there's no
+// URL to redownload from.
 func BuildLibraryBundle(
 	ctx context.Context,
 	collectionsRepo *repository.CollectionsRepo,
@@ -158,16 +161,14 @@ func BuildLibraryBundle(
 	if err != nil {
 		return bundle, err
 	}
-	var filtered []models.LibraryItem
-	var ids []int64
-	for _, it := range items {
-		// A ghost item has no OriginalURL at all if it was never seeded from
-		// one — still worth exporting so it round-trips as a ghost, even
-		// though it can't be matched/redownloaded by URL like a normal item.
-		if it.OriginalURL != nil || it.Status == "ghost" {
-			filtered = append(filtered, it)
-			ids = append(ids, it.ID)
-		}
+	// Every item is exported, not just ones with a saved URL — one with
+	// neither a URL nor ghost status (e.g. a locally-imported file) still
+	// round-trips, just as a ghost placeholder on import (see
+	// ApplyLibraryBundle) rather than a redownload.
+	filtered := items
+	ids := make([]int64, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
 	}
 	tagsByItem, err := tagsRepo.TagsByLibraryIDs(ctx, ids)
 	if err != nil {
@@ -368,7 +369,12 @@ func PreviewLibraryBundle(
 			Quality:          item.Quality,
 			Year:             item.Year,
 			AlreadyInLibrary: alreadyInLibrary,
-			IsGhost:          item.Status == "ghost",
+			// IsGhost means "will be a ghost regardless of import mode" — only
+			// true when there's no URL to download from at all. A ghost that
+			// does have a URL is downloadable, so it's not flagged here; it's
+			// still recreated as a ghost when the caller picks ghostOnly mode
+			// (handled purely on the frontend via the mode toggle).
+			IsGhost: item.OriginalURL == "",
 		}
 		if alreadyInLibrary {
 			preview.AlreadyInLibrary++
@@ -433,6 +439,10 @@ func audioFormatFromExtension(filename string) (downloadType, audioFormat string
 // the reconciliation as a whole runs inside one transaction, so a crash or
 // cancellation partway through rolls back cleanly instead of leaving the
 // bundle half-applied with no record of where it stopped.
+//
+// ghostOnly, when true, recreates every item as a ghost placeholder instead
+// of enqueueing a download for entries that have a URL — for restoring onto
+// a system where redownloading isn't wanted (yet).
 func ApplyLibraryBundle(
 	ctx context.Context,
 	db *sql.DB,
@@ -441,6 +451,7 @@ func ApplyLibraryBundle(
 	artistsRepo *repository.ArtistsRepo,
 	libraryRepo *repository.LibraryRepo,
 	bundle LibraryBundle,
+	ghostOnly bool,
 ) ([]ResolvedDownload, ApplyResult, error) {
 	var result ApplyResult
 
@@ -571,7 +582,11 @@ func ApplyLibraryBundle(
 
 	resolved := make([]ResolvedDownload, 0, len(bundle.LibraryItems))
 	for _, item := range bundle.LibraryItems {
-		if item.Status == "ghost" {
+		// A ghost with a saved URL is downloadable, so it's only kept as a
+		// ghost when ghostOnly is set — same as any other item. Only a
+		// missing URL forces the ghost path unconditionally, since there's
+		// nothing to queue a download from.
+		if item.OriginalURL == "" || ghostOnly {
 			mediaType := item.MediaType
 			if mediaType == "" {
 				mediaType = "video" // defensive default — every ghost this app itself creates always sets one
@@ -610,9 +625,6 @@ func ApplyLibraryBundle(
 					ghostTagAssignments = append(ghostTagAssignments, ghostTagAssignment{id: id, tagIDs: tagIDs})
 				}
 			}
-			continue
-		}
-		if item.OriginalURL == "" {
 			continue
 		}
 		r := ResolvedDownload{

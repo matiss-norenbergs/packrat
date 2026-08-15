@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"packrat/backend/internal/backup"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/nfo"
@@ -798,6 +799,7 @@ type SettingsResponse struct {
 	ThumbnailEnhancementRetentionDays   int    `json:"thumbnailEnhancementRetentionDays"`
 	ThumbnailEnhancementAutoApprove     bool   `json:"thumbnailEnhancementAutoApprove"`
 	ThumbnailEnhancementAutoOnDownload  bool   `json:"thumbnailEnhancementAutoOnDownload"`
+	ThumbnailEnhancementMaxPerSweep     int    `json:"thumbnailEnhancementMaxPerSweep"`
 }
 
 type UpdateSettingsRequest struct {
@@ -850,6 +852,7 @@ type UpdateSettingsRequest struct {
 	ThumbnailEnhancementRetentionDays   *int    `json:"thumbnailEnhancementRetentionDays" binding:"omitempty,min=0"`
 	ThumbnailEnhancementAutoApprove     *bool   `json:"thumbnailEnhancementAutoApprove"`
 	ThumbnailEnhancementAutoOnDownload  *bool   `json:"thumbnailEnhancementAutoOnDownload"`
+	ThumbnailEnhancementMaxPerSweep     *int    `json:"thumbnailEnhancementMaxPerSweep" binding:"omitempty,min=1"`
 }
 
 func toCollectionResponse(c models.Collection, path string, itemCount int, effectiveIsPrivate bool, totalItemCount int, ghostItemCount int, totalGhostItemCount int, latestItemThumbnailPath *string, sequenceGap *SequenceGapResponse) CollectionResponse {
@@ -1131,6 +1134,37 @@ type BackupExportRequest struct {
 type BackupImportRequest struct {
 	Data     string  `json:"data" binding:"required"` // raw text of a previously-exported file
 	Password *string `json:"password"`
+	// Mode is "download" (default, empty also means download) or
+	// "ghostOnly" — ghostOnly recreates every library item as a ghost
+	// placeholder instead of enqueueing a redownload for ones that have a
+	// saved URL.
+	Mode string `json:"mode,omitempty"`
+}
+
+// RestoreBackupRequest is the body for restoring a full backup already
+// sitting in backup history (see RestoreFullBackup) — no Data/Password,
+// since the file is read directly off disk and auto-backups are always
+// unencrypted.
+type RestoreBackupRequest struct {
+	Mode string `json:"mode,omitempty"`
+}
+
+// BackupRestoreFullResponse reports what a full-backup restore did across
+// both halves of the bundle it applied.
+type BackupRestoreFullResponse struct {
+	SettingsApplied int                        `json:"settingsApplied"`
+	Library         BackupImportLibraryResponse `json:"library"`
+}
+
+// FullImportPreviewResponse previews an ad-hoc uploaded full-kind backup
+// file before committing to ImportFullBackup — settings are summarized as a
+// plain count (an import always overwrites every key, nothing to diff),
+// while the library half reuses backup.PreviewLibraryBundle's existing
+// new/duplicate diffing, serialized as-is (same pattern PreviewLibraryImport
+// already uses for backup.LibraryBundlePreview).
+type FullImportPreviewResponse struct {
+	SettingsCount int                       `json:"settingsCount"`
+	Library       backup.LibraryBundlePreview `json:"library"`
 }
 
 type BackupImportSettingsResponse struct {
@@ -1198,6 +1232,10 @@ type BackupPreviewItem struct {
 	CollectionPath []string `json:"collectionPath,omitempty"`
 	ArtistName     string   `json:"artistName,omitempty"`
 	Tags           []string `json:"tags,omitempty"`
+	// IsGhost mirrors backup.PreviewLibraryItem.IsGhost — true means this
+	// entry has no URL to redownload from, so a restore recreates it as a
+	// placeholder rather than queuing anything.
+	IsGhost bool `json:"isGhost,omitempty"`
 }
 
 type StatsResponse struct {
@@ -1405,8 +1443,25 @@ func toThumbnailEnhancementHistoryResponse(e models.ThumbnailEnhancementHistoryE
 	}
 }
 
+// ThumbnailEnhancementHistoryListResponse is the paginated wrapper for
+// ListThumbnailEnhancementHistory — mirrors LibraryListResponse's
+// {items,total} convention.
+type ThumbnailEnhancementHistoryListResponse struct {
+	Entries []ThumbnailEnhancementHistoryResponse `json:"entries"`
+	Total   int                                   `json:"total"`
+}
+
+// RunThumbnailEnhancementResponse is returned immediately after "Enhance
+// Now"/a bulk-select spawns its background run — Queued is how many items
+// were handed off, not how many have finished yet (live progress arrives
+// separately over the enhance_progress WebSocket event).
 type RunThumbnailEnhancementResponse struct {
-	Enhanced int `json:"enhanced"`
+	Queued int `json:"queued"`
+}
+
+// EnhanceItemsRequest backs the bulk "Enhance Selected" endpoint.
+type EnhanceItemsRequest struct {
+	ItemIds []int64 `json:"itemIds" binding:"required,min=1"`
 }
 
 // ThumbnailEnhancementEligibleItemResponse backs the "preview eligible
@@ -1414,18 +1469,32 @@ type RunThumbnailEnhancementResponse struct {
 // scheduled sweep) would consider, not a completed-attempt audit row like
 // ThumbnailEnhancementHistoryResponse.
 type ThumbnailEnhancementEligibleItemResponse struct {
-	LibraryItemID int64  `json:"libraryItemId"`
-	ItemTitle     string `json:"itemTitle"`
-	Width         int    `json:"width"`
-	Height        int    `json:"height"`
+	LibraryItemID int64   `json:"libraryItemId"`
+	ItemTitle     string  `json:"itemTitle"`
+	Width         int     `json:"width"`
+	Height        int     `json:"height"`
+	ArtistName    *string `json:"artistName"`
+	CollectionName *string `json:"collectionName"`
+	// RecentlyFailedAt (RFC3339) is set when this item's most recent
+	// attempt failed within the last hour — automatic runs skip it, but it
+	// still appears here so it stays manually retryable.
+	RecentlyFailedAt *string `json:"recentlyFailedAt"`
 }
 
 func toThumbnailEnhancementEligibleItemResponse(e thumbnailenhance.EligibleItem) ThumbnailEnhancementEligibleItemResponse {
+	var recentlyFailedAt *string
+	if e.RecentlyFailedAt != nil {
+		s := e.RecentlyFailedAt.Format(time.RFC3339)
+		recentlyFailedAt = &s
+	}
 	return ThumbnailEnhancementEligibleItemResponse{
-		LibraryItemID: e.LibraryItemID,
-		ItemTitle:     e.ItemTitle,
-		Width:         e.Width,
-		Height:        e.Height,
+		LibraryItemID:     e.LibraryItemID,
+		ItemTitle:         e.ItemTitle,
+		Width:             e.Width,
+		Height:            e.Height,
+		ArtistName:        e.ArtistName,
+		CollectionName:    e.CollectionName,
+		RecentlyFailedAt:  recentlyFailedAt,
 	}
 }
 

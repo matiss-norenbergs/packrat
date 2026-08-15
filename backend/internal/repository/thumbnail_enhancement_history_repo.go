@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"packrat/backend/internal/models"
@@ -34,16 +35,66 @@ func (r *ThumbnailEnhancementHistoryRepo) Create(ctx context.Context, e *models.
 	return res.LastInsertId()
 }
 
-// List returns every history entry, most recent first — no pagination at
-// this volume (capped at 5 items per sweep, hourly at most).
-func (r *ThumbnailEnhancementHistoryRepo) List(ctx context.Context) ([]models.ThumbnailEnhancementHistoryEntry, error) {
-	rows, err := r.db.QueryContext(ctx, `
+// ThumbnailEnhancementHistoryQuery describes a filtered, searched,
+// optionally-paginated fetch of the history log — mirrors LibraryQuery's
+// shape/pattern (backend/internal/repository/library_repo.go).
+type ThumbnailEnhancementHistoryQuery struct {
+	Search      string // substring match against item_title; empty = no filter
+	Status      string // exact match on status ("success"|"failed"); empty = no filter
+	TriggerType string // exact match on trigger_type ("manual"|"scheduled"|"auto"); empty = no filter
+	Page        int    // 1-based; 0 means "no pagination", return every matching row
+	PageSize    int    // only used when Page > 0; defaults to 25 if <= 0
+}
+
+// Query builds one parameterized statement covering search + filters +
+// optional pagination, most recent first, returning the matching page (or
+// everything, when Page is 0) along with the total match count.
+func (r *ThumbnailEnhancementHistoryRepo) Query(ctx context.Context, q ThumbnailEnhancementHistoryQuery) ([]models.ThumbnailEnhancementHistoryEntry, int, error) {
+	var conditions []string
+	var args []any
+
+	if q.Search != "" {
+		conditions = append(conditions, `item_title LIKE ? ESCAPE '\'`)
+		escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q.Search)
+		args = append(args, "%"+escaped+"%")
+	}
+	if q.Status != "" {
+		conditions = append(conditions, `status = ?`)
+		args = append(args, q.Status)
+	}
+	if q.TriggerType != "" {
+		conditions = append(conditions, `trigger_type = ?`)
+		args = append(args, q.TriggerType)
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	countQuery := `SELECT COUNT(*) FROM thumbnail_enhancement_history` + where
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("counting thumbnail enhancement history: %w", err)
+	}
+
+	listQuery := `
 		SELECT id, library_item_id, item_title, status, original_width, original_height,
 			enhanced_width, enhanced_height, original_size_bytes, enhanced_size_bytes, error, created_at, reverted_at, trigger_type
-		FROM thumbnail_enhancement_history ORDER BY created_at DESC`,
-	)
+		FROM thumbnail_enhancement_history` + where + ` ORDER BY created_at DESC`
+	listArgs := append([]any{}, args...)
+	if q.Page > 0 {
+		pageSize := q.PageSize
+		if pageSize <= 0 {
+			pageSize = 25
+		}
+		listQuery += " LIMIT ? OFFSET ?"
+		listArgs = append(listArgs, pageSize, (q.Page-1)*pageSize)
+	}
+
+	rows, err := r.db.QueryContext(ctx, listQuery, listArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("listing thumbnail enhancement history: %w", err)
+		return nil, 0, fmt.Errorf("querying thumbnail enhancement history: %w", err)
 	}
 	defer rows.Close()
 
@@ -56,20 +107,97 @@ func (r *ThumbnailEnhancementHistoryRepo) List(ctx context.Context) ([]models.Th
 			&e.ID, &e.LibraryItemID, &e.ItemTitle, &e.Status, &e.OriginalWidth, &e.OriginalHeight,
 			&e.EnhancedWidth, &e.EnhancedHeight, &e.OriginalSizeBytes, &e.EnhancedSizeBytes, &e.Error, &createdAt, &revertedAt, &e.TriggerType,
 		); err != nil {
-			return nil, fmt.Errorf("scanning thumbnail enhancement history entry: %w", err)
+			return nil, 0, fmt.Errorf("scanning thumbnail enhancement history entry: %w", err)
 		}
 		e.CreatedAt, err = parseSQLiteTime(createdAt)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if revertedAt.Valid {
 			t, err := parseSQLiteTime(revertedAt.String)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 			e.RevertedAt = &t
 		}
 		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
+}
+
+// RecentlyFailedItemIDs returns, for every library item whose most recent
+// history row is a failure created at or after since, that failure's
+// timestamp — used by findEligible to skip (automatic triggers) or just
+// annotate (manual triggers) an item still inside its failure cooldown.
+// Only the latest attempt matters: an item that failed and was then
+// successfully retried is not "recently failed" even if an old failure row
+// is still within the window.
+func (r *ThumbnailEnhancementHistoryRepo) RecentlyFailedItemIDs(ctx context.Context, since time.Time) (map[int64]time.Time, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT h.library_item_id, h.created_at
+		FROM thumbnail_enhancement_history h
+		JOIN (
+			SELECT library_item_id, MAX(created_at) AS max_created_at
+			FROM thumbnail_enhancement_history
+			WHERE library_item_id IS NOT NULL
+			GROUP BY library_item_id
+		) latest ON latest.library_item_id = h.library_item_id AND latest.max_created_at = h.created_at
+		WHERE h.status = 'failed' AND h.created_at >= ?`,
+		since.UTC().Format("2006-01-02 15:04:05"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying recently-failed thumbnail enhancement items: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int64]time.Time)
+	for rows.Next() {
+		var id int64
+		var createdAt string
+		if err := rows.Scan(&id, &createdAt); err != nil {
+			return nil, fmt.Errorf("scanning recently-failed thumbnail enhancement item: %w", err)
+		}
+		t, err := parseSQLiteTime(createdAt)
+		if err != nil {
+			return nil, err
+		}
+		out[id] = t
+	}
+	return out, rows.Err()
+}
+
+// LatestSuccessRowIDs returns, for every library item with at least one
+// 'success' history row, the id of its most recent one (MAX(id), since id is
+// monotonically increasing with created_at) — used to show the Compare/
+// Revert action on exactly one row per item, even when it's been enhanced
+// more than once. Older success rows for the same item share the exact same
+// original-thumbnail backup (backupOriginalIfAbsent only ever captures it
+// once), but only the *latest* success row's output is still what's
+// actually live at item.Thumbnail — an older row offering the same Compare
+// action would misleadingly diff the backup against an enhancement result
+// that's since been superseded.
+func (r *ThumbnailEnhancementHistoryRepo) LatestSuccessRowIDs(ctx context.Context) (map[int64]int64, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT library_item_id, MAX(id)
+		FROM thumbnail_enhancement_history
+		WHERE status = 'success' AND library_item_id IS NOT NULL
+		GROUP BY library_item_id`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying latest successful thumbnail enhancement rows: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int64]int64)
+	for rows.Next() {
+		var itemID, rowID int64
+		if err := rows.Scan(&itemID, &rowID); err != nil {
+			return nil, fmt.Errorf("scanning latest successful thumbnail enhancement row: %w", err)
+		}
+		out[itemID] = rowID
 	}
 	return out, rows.Err()
 }

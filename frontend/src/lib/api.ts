@@ -10,6 +10,9 @@ import type {
   BackupHistoryEntry,
   BackupImportLibraryResult,
   BackupImportSettingsResult,
+  BackupRestoreFullResult,
+  FullImportPreview,
+  LibraryImportMode,
   BulkAssignTagsRequest,
   BulkDeleteLibraryItemFilesRequest,
   BulkDeleteLibraryItemsRequest,
@@ -62,7 +65,7 @@ import type {
   UpdateSubscriptionRequest,
   Tag,
   ThumbnailCandidate,
-  ThumbnailEnhancementHistoryEntry,
+  ThumbnailEnhancementHistoryListResponse,
   RunThumbnailEnhancementResult,
   ThumbnailEnhancementStatus,
   ThumbnailEnhancementEligibleItem,
@@ -558,10 +561,14 @@ export function importSettingsBackup(data: string, password: string): Promise<Ba
   })
 }
 
-export function importLibraryBackup(data: string, password: string): Promise<BackupImportLibraryResult> {
+export function importLibraryBackup(
+  data: string,
+  password: string,
+  mode?: LibraryImportMode,
+): Promise<BackupImportLibraryResult> {
   return request<BackupImportLibraryResult>("/backup/import/library", {
     method: "POST",
-    body: JSON.stringify({ data, password: password || undefined }),
+    body: JSON.stringify({ data, password: password || undefined, mode }),
   })
 }
 
@@ -594,6 +601,31 @@ export function backupDownloadUrl(id: number): string {
 
 export function fetchBackupPreview(id: number): Promise<BackupContentPreview> {
   return request<BackupContentPreview>(`/backup/history/${id}/preview`)
+}
+
+export function restoreFullBackup(id: number, mode: LibraryImportMode): Promise<BackupRestoreFullResult> {
+  return request<BackupRestoreFullResult>(`/backup/history/${id}/restore`, {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  })
+}
+
+export function previewFullImport(data: string, password: string): Promise<FullImportPreview> {
+  return request<FullImportPreview>("/backup/preview/full", {
+    method: "POST",
+    body: JSON.stringify({ data, password: password || undefined }),
+  })
+}
+
+export function importFullBackup(
+  data: string,
+  password: string,
+  mode: LibraryImportMode,
+): Promise<BackupRestoreFullResult> {
+  return request<BackupRestoreFullResult>("/backup/import/full", {
+    method: "POST",
+    body: JSON.stringify({ data, password: password || undefined, mode }),
+  })
 }
 
 export function fetchTags(): Promise<Tag[]> {
@@ -741,8 +773,25 @@ export function markSubscriptionEntrySeen(id: number, sourceId: string): Promise
   return request<void>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/seen`, { method: "POST" })
 }
 
-export function listThumbnailEnhancementHistory(): Promise<ThumbnailEnhancementHistoryEntry[]> {
-  return request<ThumbnailEnhancementHistoryEntry[]>("/thumbnail-enhancement/history")
+export interface ThumbnailEnhancementHistoryParams {
+  q?: string
+  status?: string
+  trigger?: string
+  page?: number
+}
+
+export function listThumbnailEnhancementHistory(
+  params: ThumbnailEnhancementHistoryParams = {},
+): Promise<ThumbnailEnhancementHistoryListResponse> {
+  const search = new URLSearchParams()
+  if (params.q) search.set("q", params.q)
+  if (params.status) search.set("status", params.status)
+  if (params.trigger) search.set("trigger", params.trigger)
+  if (params.page) search.set("page", String(params.page))
+  const qs = search.toString()
+  return request<ThumbnailEnhancementHistoryListResponse>(
+    `/thumbnail-enhancement/history${qs ? `?${qs}` : ""}`,
+  )
 }
 
 export function runThumbnailEnhancementNow(): Promise<RunThumbnailEnhancementResult> {
@@ -769,8 +818,11 @@ export function listThumbnailEnhancementEligible(): Promise<ThumbnailEnhancement
   return request<ThumbnailEnhancementEligibleItem[]>("/thumbnail-enhancement/eligible")
 }
 
-export function enhanceThumbnailItem(id: number): Promise<void> {
-  return request<void>(`/thumbnail-enhancement/items/${id}/run`, { method: "POST" })
+export function enhanceThumbnailItems(itemIds: number[]): Promise<RunThumbnailEnhancementResult> {
+  return request<RunThumbnailEnhancementResult>("/thumbnail-enhancement/items/bulk-run", {
+    method: "POST",
+    body: JSON.stringify({ itemIds }),
+  })
 }
 
 export function revertThumbnailOriginal(id: number): Promise<void> {
@@ -783,6 +835,13 @@ export function deleteThumbnailOriginal(id: number): Promise<void> {
 
 export function deleteThumbnailEnhancementHistoryEntry(id: number): Promise<void> {
   return request<void>(`/thumbnail-enhancement/history/${id}`, { method: "DELETE" })
+}
+
+export function bulkDeleteThumbnailEnhancementHistoryEntries(ids: number[]): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/thumbnail-enhancement/history/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  })
 }
 
 export function clearThumbnailEnhancementHistory(): Promise<{ deleted: number }> {

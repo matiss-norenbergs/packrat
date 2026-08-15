@@ -1106,6 +1106,7 @@ function ThumbnailEnhancementTab() {
   const [retentionDays, setRetentionDays] = useState("0")
   const [autoApprove, setAutoApprove] = useState(false)
   const [autoOnDownload, setAutoOnDownload] = useState(false)
+  const [maxPerSweep, setMaxPerSweep] = useState(5)
 
   useEffect(() => {
     if (!settings) return
@@ -1122,6 +1123,7 @@ function ThumbnailEnhancementTab() {
     setRetentionDays(String(settings.thumbnailEnhancementRetentionDays))
     setAutoApprove(settings.thumbnailEnhancementAutoApprove)
     setAutoOnDownload(settings.thumbnailEnhancementAutoOnDownload)
+    setMaxPerSweep(settings.thumbnailEnhancementMaxPerSweep)
   }, [settings])
 
   if (isLoading || !settings) return <Skeleton className="h-40 w-full max-w-lg" />
@@ -1148,6 +1150,9 @@ function ThumbnailEnhancementTab() {
   if (autoApprove !== settings.thumbnailEnhancementAutoApprove) payload.thumbnailEnhancementAutoApprove = autoApprove
   if (autoOnDownload !== settings.thumbnailEnhancementAutoOnDownload) {
     payload.thumbnailEnhancementAutoOnDownload = autoOnDownload
+  }
+  if (maxPerSweep !== settings.thumbnailEnhancementMaxPerSweep) {
+    payload.thumbnailEnhancementMaxPerSweep = maxPerSweep
   }
   const dirty = Object.keys(payload).length > 0
 
@@ -1306,6 +1311,23 @@ function ThumbnailEnhancementTab() {
           value={minDimNum || 0}
           onChange={(v) => setMinDim(String(v))}
           presets={[480, 720, 1080, 1440, 2160]}
+          min={1}
+          disabled={!enabled}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <FieldLabel
+          htmlFor="thumb-enhance-max-per-sweep"
+          info="Caps how many thumbnails one batch run (a scheduled sweep or 'Enhance Now') processes at once, so a large backlog can't tie up a slow local upscaler indefinitely. Doesn't limit enhancing one specific item directly from the eligible-items dialog."
+        >
+          Max per batch run
+        </FieldLabel>
+        <PresetOrCustomNumberField
+          id="thumb-enhance-max-per-sweep"
+          value={maxPerSweep}
+          onChange={setMaxPerSweep}
+          presets={[5, 10, 20, 50]}
           min={1}
           disabled={!enabled}
         />

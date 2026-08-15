@@ -1,15 +1,6 @@
-import { useState, type ReactNode } from "react"
-import { Plus } from "lucide-react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,13 +9,15 @@ import { useCreateTag, useUpdateTag } from "@/hooks/useTags"
 import type { Tag } from "@/types/api"
 
 interface TagDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   tag?: Tag
-  trigger?: ReactNode
 }
 
-export function TagDialog({ tag, trigger }: TagDialogProps) {
+// Fully controlled — opened from a toolbar button (New Tag / Edit) rather
+// than a per-row trigger, so open state lives in the caller.
+export function TagDialog({ open, onOpenChange, tag }: TagDialogProps) {
   const isEdit = tag != null
-  const [open, setOpen] = useState(false)
   const [name, setName] = useState(tag?.name ?? "")
   const [isPrivate, setIsPrivate] = useState(tag?.isPrivate ?? false)
 
@@ -33,35 +26,33 @@ export function TagDialog({ tag, trigger }: TagDialogProps) {
   const updateTag = useUpdateTag()
   const pending = createTag.isPending || updateTag.isPending
 
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
+  // Reset the form fields whenever the dialog opens — the parent flips
+  // `open` directly from a toolbar button (not through Dialog's own
+  // onOpenChange), so resetting only there would leave stale values from
+  // the previous open behind on next open.
+  useEffect(() => {
+    if (open) {
       setName(tag?.name ?? "")
       setIsPrivate(tag?.isPrivate ?? false)
     }
-    setOpen(next)
-  }
+  }, [open, tag])
 
   const handleSubmit = () => {
     const trimmed = name.trim()
     if (!trimmed) return
 
     if (isEdit) {
-      updateTag.mutate({ id: tag.id, payload: { name: trimmed, isPrivate } }, { onSuccess: () => setOpen(false) })
+      updateTag.mutate(
+        { id: tag.id, payload: { name: trimmed, isPrivate } },
+        { onSuccess: () => onOpenChange(false) },
+      )
     } else {
-      createTag.mutate({ name: trimmed, isPrivate }, { onSuccess: () => setOpen(false) })
+      createTag.mutate({ name: trimmed, isPrivate }, { onSuccess: () => onOpenChange(false) })
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button>
-            <Plus className="h-4 w-4" />
-            New Tag
-          </Button>
-        )}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Rename Tag" : "New Tag"}</DialogTitle>

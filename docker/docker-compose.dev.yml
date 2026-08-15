@@ -1,0 +1,11 @@
+services:
+  packrat:
+    container_name: packrat-dev
+    ports:
+      - "51200:50505"
+    volumes:
+      - ./data-dev/media:/app/data/media
+      - ./data-dev/db:/app/data/db
+      - ./data-dev/images:/app/data/images
+      - ./data-dev/backups:/app/data/backups
+      - ./data-dev/ytdlp-venv:/app/data/ytdlp-venv

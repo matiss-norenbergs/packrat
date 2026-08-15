@@ -1,6 +1,6 @@
-import { useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState } from "react"
 import { format, parseISO } from "date-fns"
-import { CalendarIcon, ImageIcon, Plus, X } from "lucide-react"
+import { CalendarIcon, ImageIcon, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,13 +31,13 @@ import { calculateAge, cn } from "@/lib/utils"
 import type { Artist } from "@/types/api"
 
 interface ArtistDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   artist?: Artist
-  trigger?: ReactNode
 }
 
-export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
+export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) {
   const isEdit = artist != null
-  const [open, setOpen] = useState(false)
   const [name, setName] = useState(artist?.name ?? "")
   const [birthday, setBirthday] = useState(artist?.birthday ?? "")
   const [birthdayOpen, setBirthdayOpen] = useState(false)
@@ -57,14 +56,18 @@ export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
   const selectImage = useSelectArtistImage(artistId)
   const clearSelectedImage = useClearArtistSelectedImage(artistId)
 
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
+  // The parent opens this dialog by flipping `open` directly from a toolbar
+  // button (not through Dialog's own onOpenChange), so resetting only in a
+  // handler passed to Dialog would leave stale values from the previous
+  // open behind on next open — see TagDialog for the same fix.
+  useEffect(() => {
+    if (open) {
       setName(artist?.name ?? "")
       setBirthday(artist?.birthday ?? "")
       setShowCandidates(false)
     }
-    setOpen(next)
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, artist])
 
   const handleSubmit = () => {
     const trimmed = name.trim()
@@ -72,9 +75,9 @@ export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
     const payload = { name: trimmed, birthday: birthday || null }
 
     if (isEdit) {
-      updateArtist.mutate({ id: artist.id, payload }, { onSuccess: () => setOpen(false) })
+      updateArtist.mutate({ id: artist.id, payload }, { onSuccess: () => onOpenChange(false) })
     } else {
-      createArtist.mutate(payload, { onSuccess: () => setOpen(false) })
+      createArtist.mutate(payload, { onSuccess: () => onOpenChange(false) })
     }
   }
 
@@ -107,15 +110,7 @@ export function ArtistDialog({ artist, trigger }: ArtistDialogProps) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button>
-            <Plus className="h-4 w-4" />
-            New Artist
-          </Button>
-        )}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn("flex max-h-[94vh] flex-col overflow-hidden", isEdit ? "sm:max-w-xl" : "sm:max-w-sm")}>
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Artist" : "New Artist"}</DialogTitle>
