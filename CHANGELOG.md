@@ -14,6 +14,20 @@ Maintenance notes:
 
 ## 2026-08-15
 
+- **New: Frame matching for thumbnails** — under a library item's Thumbnail
+  menu, two new actions ("Match from URL Thumbnail…" and "Match from
+  Current Thumbnail…") scan the video itself to find the frame the
+  thumbnail was likely taken from. A coarse 1fps sweep of the whole video
+  narrows down candidates by perceptual hash, then a fine pass re-extracts
+  frames around the best matches to pinpoint the closest one. The result
+  dialog shows both images side by side with a confidence score, and
+  clicking either opens the same fullscreen compare slider used in AI
+  Enhancement to eyeball the match before committing. "Match from URL"
+  re-fetches the source thumbnail fresh (bypassing yt-dlp's thumbnail
+  conversion step) rather than relying on the possibly-broken stored copy —
+  useful for recovering from AVIF thumbnail download failures. "Match from
+  Current" compares against whatever thumbnail is currently set, including
+  an AI-enhanced one.
 - **New: AI Enhancement page bulk actions** — a "more actions" menu next to
   Delete adds three bulk operations for the selected history rows: Keep
   Enhanced (permanently commits to the enhanced thumbnail and discards the

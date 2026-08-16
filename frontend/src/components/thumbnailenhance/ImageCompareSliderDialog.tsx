@@ -8,6 +8,11 @@ interface ImageCompareSliderDialogProps {
   originalUrl: string
   enhancedUrl: string
   itemTitle: string
+  // Corner labels — default to the AI Enhancement compare dialog's own
+  // wording so that call site's props don't need updating; other reuses
+  // (e.g. the frame-match dialog) pass their own.
+  leftLabel?: string
+  rightLabel?: string
 }
 
 // ImageCompareSliderDialog is a fullscreen, backdrop-less before/after
@@ -23,6 +28,8 @@ export function ImageCompareSliderDialog({
   originalUrl,
   enhancedUrl,
   itemTitle,
+  leftLabel = "Original",
+  rightLabel = "Enhanced",
 }: ImageCompareSliderDialogProps) {
   const [dividerPercent, setDividerPercent] = useState(50)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -126,10 +133,10 @@ export function ImageCompareSliderDialog({
               </div>
 
               <span className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white">
-                Original
+                {leftLabel}
               </span>
               <span className="pointer-events-none absolute right-2 bottom-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white">
-                Enhanced
+                {rightLabel}
               </span>
             </div>
           </div>

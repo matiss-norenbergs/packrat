@@ -39,10 +39,11 @@ import { MoveLibraryItemDialog } from "./MoveLibraryItemDialog"
 import { DeleteLibraryItemDialog } from "./DeleteLibraryItemDialog"
 import { NfoContentDialog } from "./NfoContentDialog"
 import { ThumbnailPickerDialog } from "./ThumbnailPickerDialog"
+import { FrameMatchDialog } from "./FrameMatchDialog"
 import { CompareMetadataDialog } from "./CompareMetadataDialog"
 import { RedownloadFromUrlDialog } from "./RedownloadFromUrlDialog"
 import { TrimLibraryItemDialog } from "./TrimLibraryItemDialog"
-import type { LibraryItem } from "@/types/api"
+import type { FrameMatchMode, LibraryItem } from "@/types/api"
 
 export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [editOpen, setEditOpen] = useState(false)
@@ -61,6 +62,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [deleteFileWarningOpen, setDeleteFileWarningOpen] = useState(false)
   const [deleteFileAlsoThumbnail, setDeleteFileAlsoThumbnail] = useState(false)
   const [deleteThumbnailWarningOpen, setDeleteThumbnailWarningOpen] = useState(false)
+  const [frameMatchMode, setFrameMatchMode] = useState<FrameMatchMode | null>(null)
 
   const refreshMetadata = useRefreshLibraryItemMetadata()
   const redownload = useRedownloadLibraryItem()
@@ -152,6 +154,16 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
               {!isGhost && (
                 <DropdownMenuItem onClick={() => setThumbnailPickerOpen(true)}>Choose from Video…</DropdownMenuItem>
               )}
+              {!isGhost && (
+                <DropdownMenuItem onClick={() => setFrameMatchMode("url")} disabled={!hasUrl}>
+                  Match from URL Thumbnail…
+                </DropdownMenuItem>
+              )}
+              {!isGhost && (
+                <DropdownMenuItem onClick={() => setFrameMatchMode("current")} disabled={!hasThumbnail}>
+                  Match from Current Thumbnail…
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
@@ -182,6 +194,14 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
       <DeleteLibraryItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
       <ThumbnailPickerDialog item={item} open={thumbnailPickerOpen} onOpenChange={setThumbnailPickerOpen} />
       <NfoContentDialog item={item} open={nfoContentOpen} onOpenChange={setNfoContentOpen} />
+      {frameMatchMode && (
+        <FrameMatchDialog
+          item={item}
+          mode={frameMatchMode}
+          open={frameMatchMode != null}
+          onOpenChange={(open) => !open && setFrameMatchMode(null)}
+        />
+      )}
 
       <AlertDialog open={refreshWarningOpen} onOpenChange={setRefreshWarningOpen}>
         <AlertDialogContent>

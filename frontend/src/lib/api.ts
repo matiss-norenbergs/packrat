@@ -41,6 +41,9 @@ import type {
   HistoryItem,
   ImageBackfillStatus,
   ImportRequest,
+  FrameMatchMode,
+  FrameMatchStatus,
+  StartFrameMatchResponse,
   LibraryFacets,
   LibraryItem,
   LibraryImportPreview,
@@ -405,6 +408,17 @@ export function setLibraryThumbnail(id: number, imageBase64: string): Promise<Li
     method: "POST",
     body: JSON.stringify({ imageBase64 }),
   })
+}
+
+export function startFrameMatch(id: number, mode: FrameMatchMode): Promise<StartFrameMatchResponse> {
+  return request<StartFrameMatchResponse>(`/library/${id}/thumbnail/match`, {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  })
+}
+
+export function getFrameMatchStatus(jobId: string): Promise<FrameMatchStatus> {
+  return request<FrameMatchStatus>(`/thumbnail-match/${jobId}`)
 }
 
 export function generateLibraryItemNFO(id: number): Promise<void> {

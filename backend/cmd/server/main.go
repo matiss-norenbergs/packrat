@@ -16,6 +16,7 @@ import (
 	"packrat/backend/internal/config"
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/framematch"
 	"packrat/backend/internal/imagebackfill"
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
@@ -148,6 +149,7 @@ func run() error {
 
 	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFProbePath, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, thumbnailEnhancementHistoryRepo, thumbnailEnhancementOriginalsRepo, jellyfinClient, progressStore, hub)
 	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)
+	frameMatchJobs := framematch.NewJobStore()
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)
 	if err != nil {
@@ -261,6 +263,7 @@ func run() error {
 		YtDlp:                             ytdlpSvc,
 		JellyfinClient:                    jellyfinClient,
 		ImageBackfillManager:              imageBackfillMgr,
+		FrameMatchJobs:                    frameMatchJobs,
 		MediaRoot:                         cfg.MediaRoot,
 		ImagesRoot:                        cfg.ImagesRoot,
 		BackupsRoot:                       cfg.BackupsRoot,

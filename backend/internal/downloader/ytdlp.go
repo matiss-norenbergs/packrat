@@ -185,6 +185,44 @@ func (s *YtDlpService) FetchThumbnail(ctx context.Context, url, destDir, baseFil
 	return thumbPath, nil
 }
 
+// FetchThumbnailRaw downloads the thumbnail image for url into destDir as
+// baseFilename.<ext>, in whatever format the source actually serves — simply
+// omitting --convert-thumbnails (there's no yt-dlp flag to explicitly negate
+// it) leaves the file in its original format. This exists to get an honest
+// decode error out
+// of a format ffmpeg can't handle (an AVIF thumbnail, say): FetchThumbnail's
+// --convert-thumbnails runs as a yt-dlp postprocessor whose failure is easy
+// to miss (see the exit-code leniency in queue/manager.go's runOne), where
+// callers here can hand the raw bytes to DecodeImageToJPEG themselves and
+// see the real ffmpeg error if decoding fails. The extension isn't known
+// ahead of time, so the written file is found by globbing baseFilename.*
+// after the download completes.
+func (s *YtDlpService) FetchThumbnailRaw(ctx context.Context, url, destDir, baseFilename string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, metadataFetchTimeout)
+	defer cancel()
+
+	outputTemplate := filepath.Join(destDir, baseFilename+".%(ext)s")
+	args := []string{
+		"--skip-download", "--write-thumbnail",
+		"--no-playlist", "--no-warnings",
+		"--ffmpeg-location", resolveFFmpegLocation(s.FFmpegPath),
+		"-o", outputTemplate,
+	}
+	args = append(args, s.globalArgs(ctx)...)
+	args = append(args, url)
+
+	cmd := newTreeKillCmd(ctx, s.BinPath, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("yt-dlp thumbnail fetch failed: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	matches, err := filepath.Glob(filepath.Join(destDir, baseFilename+".*"))
+	if err != nil || len(matches) == 0 {
+		return "", fmt.Errorf("thumbnail not written")
+	}
+	return matches[0], nil
+}
+
 const metadataEmbedTimeout = 5 * time.Minute
 
 // EmbedMetadata rewrites mediaPath in place — via a temp file in the same

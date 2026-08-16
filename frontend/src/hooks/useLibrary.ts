@@ -21,6 +21,7 @@ import {
   fetchLibraryQuery,
   fetchLibraryThumbnailCandidates,
   generateLibraryItemNFO,
+  getFrameMatchStatus,
   moveLibraryItem,
   previewLibraryItemTrim,
   probeLibraryItemMetadata,
@@ -32,6 +33,7 @@ import {
   refreshLibraryItemMetadata,
   scanMissingLibraryFiles,
   setLibraryThumbnail,
+  startFrameMatch,
   updateLibraryItem,
   updateLibraryItemProgress,
 } from "@/lib/api"
@@ -42,6 +44,7 @@ import type {
   BulkFetchLibraryThumbnailsRequest,
   BulkRedownloadLibraryItemsRequest,
   CreateGhostLibraryItemRequest,
+  FrameMatchMode,
   LibraryItem,
   LibraryListResponse,
   LibraryQueryParams,
@@ -472,5 +475,28 @@ export function useSetLibraryThumbnail() {
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to set thumbnail: ${err.message}`),
+  })
+}
+
+// useStartFrameMatch kicks off the background scan and hands back a job ID
+// — the actual matching (useFrameMatchStatus) is a separate poll, since a
+// single match routinely takes tens of seconds to a couple of minutes, far
+// too long for a normal request/response mutation.
+export function useStartFrameMatch() {
+  return useMutation({
+    mutationFn: ({ id, mode }: { id: number; mode: FrameMatchMode }) => startFrameMatch(id, mode),
+    onError: (err: Error) => toast.error(`Couldn't start matching: ${err.message}`),
+  })
+}
+
+// useFrameMatchStatus polls a running match job every 2s until it reaches a
+// terminal state — jobId is null before a match has been started (and the
+// query stays disabled), so callers can unconditionally call this hook.
+export function useFrameMatchStatus(jobId: string | null) {
+  return useQuery({
+    queryKey: ["frame-match", jobId],
+    queryFn: () => getFrameMatchStatus(jobId!),
+    enabled: jobId != null,
+    refetchInterval: (query) => (query.state.data?.state === "running" ? 2000 : false),
   })
 }

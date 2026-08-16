@@ -8,6 +8,7 @@ import (
 
 	"packrat/backend/internal/backup"
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/framematch"
 	"packrat/backend/internal/imagebackfill"
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/queue"
@@ -38,6 +39,7 @@ type Deps struct {
 	YtDlp                             *downloader.YtDlpService
 	JellyfinClient                    *jellyfin.Client
 	ImageBackfillManager              *imagebackfill.Manager
+	FrameMatchJobs                    *framematch.JobStore
 	MediaRoot                         string
 	ImagesRoot                        string
 	BackupsRoot                       string
@@ -130,6 +132,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo))
 		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
 		api.DELETE("/library/:id/thumbnail", DeleteLibraryItemThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo))
+		api.POST("/library/:id/thumbnail/match", StartFrameMatch(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.FrameMatchJobs))
+		api.GET("/thumbnail-match/:jobId", GetFrameMatchStatus(deps.FrameMatchJobs))
 		api.POST("/library/:id/nfo", GenerateLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo, deps.TagsRepo))
 		api.GET("/library/:id/nfo", GetLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
 		api.DELETE("/library/:id/nfo", DeleteLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))

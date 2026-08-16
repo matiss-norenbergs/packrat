@@ -509,6 +509,35 @@ type SetLibraryThumbnailRequest struct {
 	ImageBase64 string `json:"imageBase64" binding:"required"`
 }
 
+// StartFrameMatchRequest is POST /library/:id/thumbnail/match's body. Mode
+// selects which image the video is scanned against: "url" re-fetches the
+// item's source thumbnail fresh (not the possibly-missing stored copy —
+// see StartFrameMatch's AVIF handling), "current" reads whatever thumbnail
+// file the item has right now (including an enhanced one, since enhancement
+// overwrites the same file in place).
+type StartFrameMatchRequest struct {
+	Mode string `json:"mode" binding:"required,oneof=url current"`
+}
+
+type StartFrameMatchResponse struct {
+	JobID string `json:"jobId"`
+}
+
+// FrameMatchStatusResponse is GET /thumbnail-match/:jobId's body. State is
+// "running", "done", or "error" — the result/score/image fields are only
+// populated once State is "done", and Error only once State is "error".
+type FrameMatchStatusResponse struct {
+	State                string   `json:"state"`
+	TimestampSeconds     *float64 `json:"timestampSeconds,omitempty"`
+	Score                *float64 `json:"score,omitempty"`
+	ImageBase64          *string  `json:"imageBase64,omitempty"`
+	// ReferenceImageBase64 is what the found frame was judged against — for
+	// mode "url" this is the only copy of that image the frontend ever
+	// sees, since the fetched-fresh source thumbnail is never persisted.
+	ReferenceImageBase64 *string `json:"referenceImageBase64,omitempty"`
+	Error                *string `json:"error,omitempty"`
+}
+
 type MoveLibraryItemRequest struct {
 	CollectionID *int64 `json:"collectionId"`
 	Folder       string `json:"folder"`

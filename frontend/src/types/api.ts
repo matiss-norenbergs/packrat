@@ -427,6 +427,21 @@ export interface ThumbnailCandidate {
   imageBase64: string
 }
 
+export type FrameMatchMode = "url" | "current"
+
+export interface StartFrameMatchResponse {
+  jobId: string
+}
+
+export interface FrameMatchStatus {
+  state: "running" | "done" | "error"
+  timestampSeconds?: number
+  score?: number
+  imageBase64?: string
+  referenceImageBase64?: string
+  error?: string
+}
+
 export interface MissingLibraryFile {
   id: number
   title: string
