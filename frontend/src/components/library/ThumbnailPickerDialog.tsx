@@ -1,10 +1,12 @@
 import { useLayoutEffect, useState } from "react"
-import { RefreshCw } from "lucide-react"
+import { Bookmark, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useFetchLibraryThumbnailCandidates, useSetLibraryThumbnail } from "@/hooks/useLibrary"
+import { useSaveThumbnailToGallery } from "@/hooks/useThumbnailGallery"
 import { useSettings } from "@/hooks/useSettings"
 import { formatDuration } from "@/lib/utils"
 import type { LibraryItem, ThumbnailCandidate } from "@/types/api"
@@ -36,6 +38,7 @@ const GRID_COLS_COUNT: Record<number, number> = {
 export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPickerDialogProps) {
   const fetchCandidates = useFetchLibraryThumbnailCandidates()
   const setThumbnail = useSetLibraryThumbnail()
+  const saveToGallery = useSaveThumbnailToGallery()
   const { data: settings } = useSettings()
 
   // Every timestamp ever returned this dialog session, grouped by the
@@ -47,6 +50,12 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
   const [batches, setBatches] = useState<number[][]>([])
   const [selectedBatch, setSelectedBatch] = useState(0)
   const [displayed, setDisplayed] = useState<ThumbnailCandidate[]>([])
+  // Index into `displayed` the user has clicked — null until they pick one.
+  // Clicking a frame only selects it now; applying it is a separate step via
+  // the Select button, so a user who just wants to save a frame to the
+  // gallery (via the floating icon) never risks also changing the thumbnail
+  // by mis-clicking the tile itself.
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 
   // Layout effect, not a plain effect — resets state synchronously before
   // paint so a reopened dialog never flashes the previous session's stale
@@ -56,6 +65,7 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
     setBatches([])
     setDisplayed([])
     setSelectedBatch(0)
+    setSelectedIndex(null)
     fetchCandidates.mutate(
       { id: item.id },
       {
@@ -75,11 +85,15 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
   const rows = Math.ceil(frameCount / cols)
   // Fixed per-row height (not aspect-ratio-derived) so total grid height —
   // rows * rowHeight + gaps — always stays within the dialog's max-h-[90vh],
-  // no matter the frame count. 9.5rem reserves space for the header,
-  // toolbar, and dialog padding above the grid; object-cover crops each
-  // frame to fill its cell instead of letting width dictate height, which
-  // is what caused a scrollbar to appear with fewer/wider columns before.
-  const budgetHeight = `calc((90vh - 9.5rem - ${(rows - 1) * 0.75}rem) / ${rows})`
+  // no matter the frame count. 13rem reserves space for the header, toolbar,
+  // the footer's own bar (border/background/padding make it taller than a
+  // plain button row), and dialog padding around the grid — measured via the
+  // actual rendered chrome height (~12.6rem) plus a little slack, since the
+  // previous 11.5rem budget undershot it and left a scrollbar at some
+  // viewport heights. object-cover crops each frame to fill its cell instead
+  // of letting width dictate height, which is what caused a scrollbar to
+  // appear with fewer/wider columns before.
+  const budgetHeight = `calc((90vh - 13rem - ${(rows - 1) * 0.75}rem) / ${rows})`
   // With few rows (e.g. 1 row for 2 frames), the budget above can exceed a
   // real video frame's proportions, cropping tiles into near-squares. Cap
   // each cell at the height a true 16:9 frame would be for its column's
@@ -99,6 +113,7 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
           setBatches((prev) => [...prev, data.candidates.map((c) => c.timestampSeconds)])
           setDisplayed(data.candidates)
           setSelectedBatch(batchIndex)
+          setSelectedIndex(null)
         },
       },
     )
@@ -114,14 +129,17 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
         onSuccess: (data) => {
           setDisplayed(data.candidates)
           setSelectedBatch(index)
+          setSelectedIndex(null)
         },
       },
     )
   }
 
-  const handlePick = (imageBase64: string) => {
+  const handleSelectConfirm = () => {
+    if (selectedIndex == null) return
+    const candidate = displayed[selectedIndex]
     setThumbnail.mutate(
-      { id: item.id, imageBase64 },
+      { id: item.id, imageBase64: candidate.imageBase64 },
       { onSuccess: () => onOpenChange(false) },
     )
   }
@@ -137,7 +155,10 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
       <DialogContent className="sm:max-w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Choose a thumbnail</DialogTitle>
-          <DialogDescription>{frameCount} frames pulled from across the video — pick one to use as the thumbnail.</DialogDescription>
+          <DialogDescription>
+            {frameCount} frames pulled from across the video — pick one to use as the thumbnail, or save any frame
+            straight to the gallery.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center justify-end gap-2">
@@ -176,8 +197,10 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
                 key={i}
                 type="button"
                 disabled={setThumbnail.isPending}
-                onClick={() => handlePick(candidate.imageBase64)}
-                className="group relative h-full w-full overflow-hidden rounded-md border transition hover:ring-2 hover:ring-primary disabled:opacity-50"
+                onClick={() => setSelectedIndex(i)}
+                className={`group relative h-full w-full overflow-hidden rounded-md border transition disabled:opacity-50 ${
+                  selectedIndex === i ? "ring-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
+                }`}
               >
                 <img
                   src={`data:image/jpeg;base64,${candidate.imageBase64}`}
@@ -187,10 +210,42 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
                 <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-xs text-white">
                   {formatDuration(candidate.timestampSeconds)}
                 </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Save this frame to the gallery"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        saveToGallery.mutate({ id: item.id, imageBase64: candidate.imageBase64 })
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter" && e.key !== " ") return
+                        e.stopPropagation()
+                        e.preventDefault()
+                        saveToGallery.mutate({ id: item.id, imageBase64: candidate.imageBase64 })
+                      }}
+                      className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1.5 text-white opacity-0 transition hover:bg-black/80 group-hover:opacity-100"
+                    >
+                      <Bookmark className="h-3.5 w-3.5" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>Save this frame to the gallery</TooltipContent>
+                </Tooltip>
               </button>
             ))}
           </div>
         )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSelectConfirm} disabled={selectedIndex == null || setThumbnail.isPending}>
+            Select
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

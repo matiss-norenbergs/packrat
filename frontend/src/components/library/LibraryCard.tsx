@@ -8,7 +8,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { ResolutionValue } from "@/components/ResolutionValue"
-import { libraryMediumThumbnailUrl } from "@/lib/api"
+import { ThumbnailResolutionValue } from "@/components/ThumbnailResolutionValue"
+import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { useSettings } from "@/hooks/useSettings"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
@@ -60,18 +61,20 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             <Ghost className="h-3 w-3" />
           </div>
         )}
-        {mode === "manage" && (
-          <Checkbox
-            checked={selected}
-            onCheckedChange={() => toggleSelected(item)}
-            onClick={(e) => e.stopPropagation()}
-            className={cn(
-              "absolute top-2 left-2 z-10 size-5 rounded-full transition-opacity",
-              selectionActive || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-            )}
-            aria-label="Select"
-          />
-        )}
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => toggleSelected(item)}
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            // Plain border-input is nearly invisible sitting on top of an
+            // arbitrary video thumbnail — a white ring plus a dark outer
+            // ring gives a duotone edge that reads against both light and
+            // dark frames, unlike a single-color border.
+            "absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)] transition-opacity",
+            selectionActive || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
+          aria-label="Select"
+        />
         {!selectionActive && (
           <div className="absolute top-1 right-1 rounded-md bg-background/80 backdrop-blur-sm">
             <LibraryItemActionsMenu item={item} />
@@ -148,6 +151,13 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             <div className="flex justify-between gap-2">
               <span>Resolution</span>
               <ResolutionValue resolution={item.resolution} className="truncate text-foreground" />
+            </div>
+            <div className="flex justify-between gap-2">
+              <span>Thumbnail resolution</span>
+              <ThumbnailResolutionValue
+                src={item.thumbnail ? mediaFileUrl(item.thumbnail) : null}
+                className="truncate text-foreground"
+              />
             </div>
             <div className="flex justify-between gap-2">
               <span>Artist</span>

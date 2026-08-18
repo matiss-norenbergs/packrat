@@ -453,6 +453,9 @@ function LibraryTab() {
   const [mediumEnabled, setMediumEnabled] = useState(true)
   const [low, setLow] = useState(720)
   const [high, setHigh] = useState(2160)
+  const [thumbMediumEnabled, setThumbMediumEnabled] = useState(true)
+  const [thumbLow, setThumbLow] = useState(480)
+  const [thumbHigh, setThumbHigh] = useState(1080)
   const [frameCount, setFrameCount] = useState(4)
   const [autoplay, setAutoplay] = useState(false)
 
@@ -461,6 +464,9 @@ function LibraryTab() {
     setMediumEnabled(settings.resolutionTierMediumEnabled)
     setLow(settings.resolutionThresholdLow)
     setHigh(settings.resolutionThresholdHigh)
+    setThumbMediumEnabled(settings.thumbnailResolutionTierMediumEnabled)
+    setThumbLow(settings.thumbnailResolutionThresholdLow)
+    setThumbHigh(settings.thumbnailResolutionThresholdHigh)
     setFrameCount(settings.thumbnailFrameCount)
     setAutoplay(settings.libraryAutoplay)
   }, [settings])
@@ -471,12 +477,18 @@ function LibraryTab() {
   if (mediumEnabled !== settings.resolutionTierMediumEnabled) payload.resolutionTierMediumEnabled = mediumEnabled
   if (low !== settings.resolutionThresholdLow) payload.resolutionThresholdLow = low
   if (high !== settings.resolutionThresholdHigh) payload.resolutionThresholdHigh = high
+  if (thumbMediumEnabled !== settings.thumbnailResolutionTierMediumEnabled)
+    payload.thumbnailResolutionTierMediumEnabled = thumbMediumEnabled
+  if (thumbLow !== settings.thumbnailResolutionThresholdLow) payload.thumbnailResolutionThresholdLow = thumbLow
+  if (thumbHigh !== settings.thumbnailResolutionThresholdHigh) payload.thumbnailResolutionThresholdHigh = thumbHigh
   if (frameCount !== settings.thumbnailFrameCount) payload.thumbnailFrameCount = frameCount
   if (autoplay !== settings.libraryAutoplay) payload.libraryAutoplay = autoplay
   const dirty = Object.keys(payload).length > 0
 
   const lowLabel = RESOLUTION_STEP_LABELS[low] ?? `${low}p`
   const highLabel = RESOLUTION_STEP_LABELS[high] ?? `${high}p`
+  const thumbLowLabel = RESOLUTION_STEP_LABELS[thumbLow] ?? `${thumbLow}p`
+  const thumbHighLabel = RESOLUTION_STEP_LABELS[thumbHigh] ?? `${thumbHigh}p`
 
   return (
     <div className="max-w-lg space-y-6">
@@ -569,26 +581,68 @@ function LibraryTab() {
         </div>
       </div>
 
-      <div className="space-y-2 border-t pt-4">
+      <div className="space-y-4 border-t pt-4">
         <h3 className="text-sm font-medium">Thumbnails</h3>
-        <FieldLabel
-          htmlFor="thumbnail-frame-count"
-          info="How many frame options to offer when picking a thumbnail from a video."
-        >
-          "Choose from Video" frame count
-        </FieldLabel>
-        <Select value={String(frameCount)} onValueChange={(v) => setFrameCount(Number(v))}>
-          <SelectTrigger id="thumbnail-frame-count" className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {FRAME_COUNT_OPTIONS.map((n) => (
-              <SelectItem key={n} value={String(n)}>
-                {n}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-2">
+          <FieldLabel
+            htmlFor="thumbnail-frame-count"
+            info="How many frame options to offer when picking a thumbnail from a video."
+          >
+            "Choose from Video" frame count
+          </FieldLabel>
+          <Select value={String(frameCount)} onValueChange={(v) => setFrameCount(Number(v))}>
+            <SelectTrigger id="thumbnail-frame-count" className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FRAME_COUNT_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <Checkbox
+              id="thumbnail-resolution-medium-enabled"
+              checked={thumbMediumEnabled}
+              onCheckedChange={(v) => setThumbMediumEnabled(v === true)}
+            />
+            <Label htmlFor="thumbnail-resolution-medium-enabled" className="font-normal">
+              Use medium tier
+            </Label>
+            <InfoPopover>
+              When off, thumbnail resolution is split into just low/high. The medium threshold
+              is kept (not discarded) so turning this back on restores it.
+            </InfoPopover>
+          </div>
+
+          <div className="space-y-1.5">
+            <FieldLabel
+              htmlFor="thumbnail-resolution-tier-slider"
+              info="Colors the Thumbnail resolution value in Library's Details mode according to which tier a thumbnail's resolution falls into. Separate from the video tiers above — thumbnails rarely exceed 1080p, so the defaults are lower."
+            >
+              Thumbnail quality tiers
+            </FieldLabel>
+            <ResolutionTierSlider
+              mediumEnabled={thumbMediumEnabled}
+              low={thumbLow}
+              high={thumbHigh}
+              onCommit={(newLow, newHigh) => {
+                setThumbLow(newLow)
+                setThumbHigh(newHigh)
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              {thumbMediumEnabled
+                ? `Low: ≤${thumbLowLabel} · Medium: ${thumbLowLabel}–${thumbHighLabel} · High: ≥${thumbHighLabel}`
+                : `Low: <${thumbHighLabel} · High: ≥${thumbHighLabel}`}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-2 border-t pt-4">

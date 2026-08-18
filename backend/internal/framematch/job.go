@@ -16,6 +16,13 @@ import (
 // job runs on its own background context, not the request's).
 const matchTimeout = 5 * time.Minute
 
+// matchMu serializes every call to Match, regardless of trigger (an ad-hoc
+// single-item request here, or RunQueue's bulk background worker) — ffmpeg
+// decode is CPU-bound and the container's CPU budget is capped, so two
+// matches running at once would just fight over the same limited CPU
+// instead of finishing any faster.
+var matchMu sync.Mutex
+
 // JobStatus is a snapshot of one match job.
 type JobStatus struct {
 	State    string // "running", "done", "error"
@@ -53,7 +60,9 @@ func (s *JobStore) Start(ytdlp *downloader.YtDlpService, ffprobePath, videoAbsPa
 		ctx, cancel := context.WithTimeout(context.Background(), matchTimeout)
 		defer cancel()
 
+		matchMu.Lock()
 		result, err := Match(ctx, ytdlp, ffprobePath, videoAbsPath, referenceJPEG)
+		matchMu.Unlock()
 
 		s.mu.Lock()
 		defer s.mu.Unlock()

@@ -442,6 +442,39 @@ export interface FrameMatchStatus {
   error?: string
 }
 
+export interface BulkFrameMatchResponse {
+  queued: number
+  skipped: number
+  alreadyQueued: number
+}
+
+// FrameMatchQueueItem is one row of the "Frame Matching" bulk queue —
+// unlike FrameMatchStatus (the single-item dialog's ephemeral job, carrying
+// images inline as base64), this is a durable row: found/reference images
+// live on disk and are resolved via imageUrl().
+export interface FrameMatchQueueItem {
+  id: number
+  libraryItemId: number
+  itemTitle: string
+  mode: FrameMatchMode
+  state: "queued" | "running" | "done" | "error"
+  timestampSeconds?: number
+  score?: number
+  foundFramePath?: string
+  referenceImagePath?: string
+  error?: string
+}
+
+// ThumbnailGalleryImage is one saved image in a library item's thumbnail
+// gallery — imagePath is relative to ImagesRoot, resolved via imageUrl().
+export interface ThumbnailGalleryImage {
+  id: number
+  imagePath: string
+  width: number | null
+  height: number | null
+  createdAt: string
+}
+
 export interface MissingLibraryFile {
   id: number
   title: string
@@ -494,6 +527,9 @@ export interface Settings {
   resolutionTierMediumEnabled: boolean
   resolutionThresholdLow: number
   resolutionThresholdHigh: number
+  thumbnailResolutionTierMediumEnabled: boolean
+  thumbnailResolutionThresholdLow: number
+  thumbnailResolutionThresholdHigh: number
   thumbnailEnhancementEnabled: boolean
   thumbnailEnhancementUrl: string
   thumbnailEnhancementUsername: string
@@ -635,6 +671,9 @@ export interface UpdateSettingsRequest {
   resolutionTierMediumEnabled?: boolean
   resolutionThresholdLow?: number
   resolutionThresholdHigh?: number
+  thumbnailResolutionTierMediumEnabled?: boolean
+  thumbnailResolutionThresholdLow?: number
+  thumbnailResolutionThresholdHigh?: number
   thumbnailEnhancementEnabled?: boolean
   thumbnailEnhancementUrl?: string
   thumbnailEnhancementUsername?: string
@@ -922,6 +961,10 @@ export interface ThumbnailEnhancementHistoryEntry {
   // above which reflects current item state.
   revertedAt: string | null
   triggerType: "manual" | "scheduled" | "auto"
+  // "upscale" (the original feature, resized per the factor/target-size
+  // setting) or "sharpen" (denoise/detail pass only, output stays the same
+  // size — manual-only, from the Library toolbar or an item's Thumbnail menu).
+  mode: "upscale" | "sharpen"
 }
 
 // ThumbnailEnhancementHistoryListResponse is the paginated wrapper around

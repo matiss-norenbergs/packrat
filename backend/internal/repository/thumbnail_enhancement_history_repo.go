@@ -24,10 +24,10 @@ func (r *ThumbnailEnhancementHistoryRepo) Create(ctx context.Context, e *models.
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO thumbnail_enhancement_history (
 			library_item_id, item_title, status, original_width, original_height,
-			enhanced_width, enhanced_height, original_size_bytes, enhanced_size_bytes, error, trigger_type
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			enhanced_width, enhanced_height, original_size_bytes, enhanced_size_bytes, error, trigger_type, mode
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		e.LibraryItemID, e.ItemTitle, e.Status, e.OriginalWidth, e.OriginalHeight,
-		e.EnhancedWidth, e.EnhancedHeight, e.OriginalSizeBytes, e.EnhancedSizeBytes, e.Error, e.TriggerType,
+		e.EnhancedWidth, e.EnhancedHeight, e.OriginalSizeBytes, e.EnhancedSizeBytes, e.Error, e.TriggerType, e.Mode,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting thumbnail enhancement history entry: %w", err)
@@ -42,6 +42,7 @@ type ThumbnailEnhancementHistoryQuery struct {
 	Search      string // substring match against item_title; empty = no filter
 	Status      string // exact match on status ("success"|"failed"); empty = no filter
 	TriggerType string // exact match on trigger_type ("manual"|"scheduled"|"auto"); empty = no filter
+	Mode        string // exact match on mode ("upscale"|"sharpen"); empty = no filter
 	Page        int    // 1-based; 0 means "no pagination", return every matching row
 	PageSize    int    // only used when Page > 0; defaults to 25 if <= 0
 }
@@ -66,6 +67,10 @@ func (r *ThumbnailEnhancementHistoryRepo) Query(ctx context.Context, q Thumbnail
 		conditions = append(conditions, `trigger_type = ?`)
 		args = append(args, q.TriggerType)
 	}
+	if q.Mode != "" {
+		conditions = append(conditions, `mode = ?`)
+		args = append(args, q.Mode)
+	}
 
 	where := ""
 	if len(conditions) > 0 {
@@ -80,7 +85,7 @@ func (r *ThumbnailEnhancementHistoryRepo) Query(ctx context.Context, q Thumbnail
 
 	listQuery := `
 		SELECT id, library_item_id, item_title, status, original_width, original_height,
-			enhanced_width, enhanced_height, original_size_bytes, enhanced_size_bytes, error, created_at, reverted_at, trigger_type
+			enhanced_width, enhanced_height, original_size_bytes, enhanced_size_bytes, error, created_at, reverted_at, trigger_type, mode
 		FROM thumbnail_enhancement_history` + where + ` ORDER BY created_at DESC`
 	listArgs := append([]any{}, args...)
 	if q.Page > 0 {
@@ -105,7 +110,7 @@ func (r *ThumbnailEnhancementHistoryRepo) Query(ctx context.Context, q Thumbnail
 		var revertedAt sql.NullString
 		if err := rows.Scan(
 			&e.ID, &e.LibraryItemID, &e.ItemTitle, &e.Status, &e.OriginalWidth, &e.OriginalHeight,
-			&e.EnhancedWidth, &e.EnhancedHeight, &e.OriginalSizeBytes, &e.EnhancedSizeBytes, &e.Error, &createdAt, &revertedAt, &e.TriggerType,
+			&e.EnhancedWidth, &e.EnhancedHeight, &e.OriginalSizeBytes, &e.EnhancedSizeBytes, &e.Error, &createdAt, &revertedAt, &e.TriggerType, &e.Mode,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scanning thumbnail enhancement history entry: %w", err)
 		}

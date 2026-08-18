@@ -40,6 +40,14 @@ const (
 	SettingResolutionThresholdLow      = "resolution_threshold_low"       // height in px; default 720 — at/below is "low"
 	SettingResolutionThresholdHigh     = "resolution_threshold_high"      // height in px; default 2160 — at/above is "high"
 
+	// Thumbnail resolution tiers — separate from the tiers above, since a
+	// thumbnail is a small preview image with a much narrower practical
+	// range than a video (rarely exceeds 1080p), so it needs lower defaults
+	// rather than sharing the video thresholds.
+	SettingThumbnailResolutionTierMediumEnabled = "thumbnail_resolution_tier_medium_enabled" // bool, default true
+	SettingThumbnailResolutionThresholdLow      = "thumbnail_resolution_threshold_low"        // height in px; default 480 — at/below is "low"
+	SettingThumbnailResolutionThresholdHigh     = "thumbnail_resolution_threshold_high"       // height in px; default 1080 — at/above is "high"
+
 	// AI thumbnail enhancement — opt-in, off by default. Upscales library
 	// thumbnails via a user-supplied local Stable Diffusion WebUI
 	// (AUTOMATIC1111-compatible) instance's /sdapi/v1/extra-single-image

@@ -42,6 +42,7 @@ func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFunc
 			Search:      c.Query("q"),
 			Status:      c.Query("status"),
 			TriggerType: c.Query("trigger"),
+			Mode:        c.Query("mode"),
 			Page:        page,
 			PageSize:    thumbnailEnhancementHistoryPageSize,
 		})
@@ -296,6 +297,27 @@ func EnhanceThumbnailItemsNow(deps thumbnailenhance.Deps) gin.HandlerFunc {
 		go func() {
 			if err := thumbnailenhance.EnhanceItems(context.Background(), deps, req.ItemIds); err != nil {
 				log.Printf("thumbnailenhance: bulk enhance failed: %v", err)
+			}
+		}()
+		c.JSON(http.StatusAccepted, RunThumbnailEnhancementResponse{Queued: len(req.ItemIds)})
+	}
+}
+
+// SharpenThumbnailItemsNow backs the Library toolbar's "Sharpen
+// Thumbnail(s)…" bulk action and the single-item "Sharpen Thumbnail" menu
+// entry — same fire-and-forget shape as EnhanceThumbnailItemsNow, but runs a
+// denoise/detail-only pass (no resize) via thumbnailenhance.SharpenItems.
+// Reuses EnhanceItemsRequest since the body shape is identical.
+func SharpenThumbnailItemsNow(deps thumbnailenhance.Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req EnhanceItemsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		go func() {
+			if err := thumbnailenhance.SharpenItems(context.Background(), deps, req.ItemIds); err != nil {
+				log.Printf("thumbnailenhance: bulk sharpen failed: %v", err)
 			}
 		}()
 		c.JSON(http.StatusAccepted, RunThumbnailEnhancementResponse{Queued: len(req.ItemIds)})

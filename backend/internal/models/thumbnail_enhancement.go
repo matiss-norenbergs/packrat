@@ -28,6 +28,13 @@ type ThumbnailEnhancementHistoryEntry struct {
 	// (MaybeAutoEnhanceOnDownload) — surfaced as a badge column in the
 	// history table, same pattern as models.BackupHistory.TriggerType.
 	TriggerType string
+	// Mode records what kind of operation this attempt was — "upscale" (the
+	// original feature, gated on minDim eligibility, resizes per the
+	// factor/target-size setting) or "sharpen" (denoise/detail pass only,
+	// requested at factor 1.0 so the output stays the same size — manual-only,
+	// never reachable from the scheduled sweep or auto-on-download). See
+	// thumbnailenhance.enhanceOne's mode parameter.
+	Mode string
 	// RevertedAt is set once RevertOriginal undoes the enhancement this
 	// row's backup cycle produced — nil for rows that were never reverted
 	// (including ones from an earlier cycle later locked in via

@@ -16,6 +16,7 @@ import {
   MonitorPlay,
   Rss,
   ImageUp,
+  ScanSearch,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
@@ -50,6 +51,7 @@ const navItems = [
     requiresSetting: "thumbnailEnhancementEnabled" as const,
     endAdornment: <AiEnhancementStatusDot />,
   },
+  { to: "/frame-matching", label: "Frame Matching", icon: ScanSearch },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/logs", label: "Logs", icon: ScrollText },
 ]

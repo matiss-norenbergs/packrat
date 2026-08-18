@@ -172,6 +172,7 @@ function InstanceStatusBadge({ enabled }: { enabled: boolean }) {
 
 const STATUS_ALL = "all"
 const TRIGGER_ALL = "all"
+const MODE_ALL = "all"
 
 export function ThumbnailEnhancementPage() {
   const { data: settings } = useSettings()
@@ -179,6 +180,7 @@ export function ThumbnailEnhancementPage() {
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState(STATUS_ALL)
   const [trigger, setTrigger] = useState(TRIGGER_ALL)
+  const [mode, setMode] = useState(MODE_ALL)
   const [page, setPage] = useState(1)
 
   // Debounce free-text search the same way LibraryToolbar does — filtering
@@ -197,6 +199,7 @@ export function ThumbnailEnhancementPage() {
     q: search || undefined,
     status: status === STATUS_ALL ? undefined : status,
     trigger: trigger === TRIGGER_ALL ? undefined : trigger,
+    mode: mode === MODE_ALL ? undefined : mode,
     page,
   })
   const history = historyResult?.entries
@@ -237,7 +240,7 @@ export function ThumbnailEnhancementPage() {
   useEffect(() => {
     clear()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, search, status, trigger])
+  }, [page, search, status, trigger, mode])
 
   useEffect(() => {
     if (!isDragging) return
@@ -449,6 +452,22 @@ export function ThumbnailEnhancementPage() {
               <SelectItem value="auto">Auto</SelectItem>
             </SelectContent>
           </Select>
+          <Select
+            value={mode}
+            onValueChange={(v) => {
+              setMode(v)
+              setPage(1)
+            }}
+          >
+            <SelectTrigger className="w-32 shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={MODE_ALL}>All types</SelectItem>
+              <SelectItem value="upscale">Upscale</SelectItem>
+              <SelectItem value="sharpen">Sharpen</SelectItem>
+            </SelectContent>
+          </Select>
           <Input
             placeholder="Search by item title…"
             value={searchInput}
@@ -466,7 +485,7 @@ export function ThumbnailEnhancementPage() {
           </div>
         ) : !history || history.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {search || status !== STATUS_ALL || trigger !== TRIGGER_ALL
+            {search || status !== STATUS_ALL || trigger !== TRIGGER_ALL || mode !== MODE_ALL
               ? "No history entries match these filters."
               : "Nothing enhanced yet."}
           </p>
@@ -490,6 +509,7 @@ export function ThumbnailEnhancementPage() {
                     <TableHead>Item</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Trigger</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead>Dimensions</TableHead>
                     <TableHead>Size</TableHead>
                     <TableHead>Date</TableHead>
@@ -534,6 +554,9 @@ export function ThumbnailEnhancementPage() {
                         <Badge variant="secondary">
                           {entry.triggerType === "manual" ? "Manual" : entry.triggerType === "scheduled" ? "Scheduled" : "Auto"}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{entry.mode === "sharpen" ? "Sharpen" : "Upscale"}</Badge>
                       </TableCell>
                       <TableCell>
                         {dimensions(entry.originalWidth, entry.originalHeight)} → {dimensions(entry.enhancedWidth, entry.enhancedHeight)}

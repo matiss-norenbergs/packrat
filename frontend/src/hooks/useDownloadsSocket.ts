@@ -9,6 +9,7 @@ import {
   thumbnailEnhancementEligibleQueryKey,
   thumbnailEnhancementHistoryQueryKey,
 } from "./useThumbnailEnhancement"
+import { frameMatchQueueQueryKey } from "./useFrameMatchQueue"
 import type { Download, ThumbnailEnhancementEligibleItem } from "@/types/api"
 import type { EnhanceProgressPayload, WSEvent } from "@/types/ws"
 
@@ -106,6 +107,10 @@ export function useDownloadsSocket() {
         }
         case "enhance_progress": {
           handleEnhanceProgress(queryClient, event.payload)
+          break
+        }
+        case "frame_match_progress": {
+          queryClient.invalidateQueries({ queryKey: frameMatchQueueQueryKey })
           break
         }
       }

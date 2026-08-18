@@ -15,6 +15,7 @@ import {
   listThumbnailUpscalers,
   revertThumbnailOriginal,
   runThumbnailEnhancementNow,
+  sharpenThumbnailItems,
   type ThumbnailEnhancementHistoryParams,
 } from "@/lib/api"
 import { libraryQueryKey } from "./useLibrary"
@@ -111,6 +112,26 @@ export function useEnhanceThumbnailItems() {
     onError: (err: Error) => toast.error(`Enhancement failed: ${err.message}`),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: thumbnailEnhancementEligibleQueryKey })
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+    },
+  })
+}
+
+// useSharpenThumbnailItems backs the Library toolbar's "Sharpen
+// Thumbnail(s)…" bulk action and an item's single-item "Sharpen Thumbnail"
+// menu entry — fire-and-forget, same shape as useEnhanceThumbnailItems.
+// Unlike that hook, there's no minDim-gated eligibility list to invalidate
+// here — just the library query, since a completed sharpen changes the
+// item's thumbnail file (progress itself streams over enhance_progress).
+export function useSharpenThumbnailItems() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: sharpenThumbnailItems,
+    onSuccess: (result) => {
+      toast.success(`Queued ${result.queued} item(s) for sharpening`)
+    },
+    onError: (err: Error) => toast.error(`Sharpening failed: ${err.message}`),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
   })

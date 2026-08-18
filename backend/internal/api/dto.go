@@ -509,6 +509,36 @@ type SetLibraryThumbnailRequest struct {
 	ImageBase64 string `json:"imageBase64" binding:"required"`
 }
 
+// SaveThumbnailToGalleryRequest is POST /library/:id/thumbnail/gallery's
+// optional body — ImageBase64 empty (or the body omitted entirely) means
+// "save a copy of the item's current active thumbnail"; a non-empty
+// ImageBase64 saves those exact bytes instead, the "Choose from Video"
+// dialog's per-frame save icon.
+type SaveThumbnailToGalleryRequest struct {
+	ImageBase64 string `json:"imageBase64"`
+}
+
+// ThumbnailGalleryImageResponse is one saved gallery image. ImagePath is
+// relative to ImagesRoot — resolve via the frontend's imageUrl() helper,
+// same convention as FrameMatchQueueItemResponse's FoundFramePath.
+type ThumbnailGalleryImageResponse struct {
+	ID        int64  `json:"id"`
+	ImagePath string `json:"imagePath"`
+	Width     *int   `json:"width"`
+	Height    *int   `json:"height"`
+	CreatedAt string `json:"createdAt"`
+}
+
+func toThumbnailGalleryImageResponse(img models.ThumbnailGalleryImage) ThumbnailGalleryImageResponse {
+	return ThumbnailGalleryImageResponse{
+		ID:        img.ID,
+		ImagePath: img.ImagePath,
+		Width:     img.Width,
+		Height:    img.Height,
+		CreatedAt: img.CreatedAt.Format(time.RFC3339),
+	}
+}
+
 // StartFrameMatchRequest is POST /library/:id/thumbnail/match's body. Mode
 // selects which image the video is scanned against: "url" re-fetches the
 // item's source thumbnail fresh (not the possibly-missing stored copy —
@@ -536,6 +566,44 @@ type FrameMatchStatusResponse struct {
 	// sees, since the fetched-fresh source thumbnail is never persisted.
 	ReferenceImageBase64 *string `json:"referenceImageBase64,omitempty"`
 	Error                *string `json:"error,omitempty"`
+}
+
+// BulkFrameMatchRequest is the "Match from URL/Current Thumbnail" bulk
+// action's body — the same two modes as StartFrameMatchRequest, applied to
+// a set of items rather than one, processed as a background queue rather
+// than a single held-open request.
+type BulkFrameMatchRequest struct {
+	ItemIds []int64 `json:"itemIds" binding:"required"`
+	Mode    string  `json:"mode" binding:"required,oneof=url current"`
+}
+
+// BulkFrameMatchResponse reports how many of the requested items were
+// actually enqueued — an item is skipped (not an error) if it's ineligible
+// for the requested mode (no source URL, no current thumbnail) or is a
+// ghost item with no video file. AlreadyQueued is a distinct reason: the
+// item already has a row (any state) sitting in the queue, so re-enqueuing
+// it would just waste a redundant scan.
+type BulkFrameMatchResponse struct {
+	Queued        int `json:"queued"`
+	Skipped       int `json:"skipped"`
+	AlreadyQueued int `json:"alreadyQueued"`
+}
+
+// FrameMatchQueueItemResponse is one row of GET /frame-match/queue — the
+// "Frame Matching" page's working-queue view. FoundFramePath/
+// ReferenceImagePath are relative to ImagesRoot (resolve via the frontend's
+// imageUrl()), populated once State is "done".
+type FrameMatchQueueItemResponse struct {
+	ID                 int64    `json:"id"`
+	LibraryItemID      int64    `json:"libraryItemId"`
+	ItemTitle          string   `json:"itemTitle"`
+	Mode               string   `json:"mode"`
+	State              string   `json:"state"` // "queued" | "running" | "done" | "error"
+	TimestampSeconds   *float64 `json:"timestampSeconds,omitempty"`
+	Score              *float64 `json:"score,omitempty"`
+	FoundFramePath     *string  `json:"foundFramePath,omitempty"`
+	ReferenceImagePath *string  `json:"referenceImagePath,omitempty"`
+	Error              *string  `json:"error,omitempty"`
 }
 
 type MoveLibraryItemRequest struct {
@@ -815,6 +883,10 @@ type SettingsResponse struct {
 	ResolutionThresholdLow      int      `json:"resolutionThresholdLow"`
 	ResolutionThresholdHigh     int      `json:"resolutionThresholdHigh"`
 
+	ThumbnailResolutionTierMediumEnabled bool `json:"thumbnailResolutionTierMediumEnabled"`
+	ThumbnailResolutionThresholdLow      int  `json:"thumbnailResolutionThresholdLow"`
+	ThumbnailResolutionThresholdHigh     int  `json:"thumbnailResolutionThresholdHigh"`
+
 	ThumbnailEnhancementEnabled         bool   `json:"thumbnailEnhancementEnabled"`
 	ThumbnailEnhancementURL             string `json:"thumbnailEnhancementUrl"`
 	ThumbnailEnhancementUsername        string `json:"thumbnailEnhancementUsername"`
@@ -867,6 +939,10 @@ type UpdateSettingsRequest struct {
 	ResolutionTierMediumEnabled *bool     `json:"resolutionTierMediumEnabled"`
 	ResolutionThresholdLow      *int      `json:"resolutionThresholdLow" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
 	ResolutionThresholdHigh     *int      `json:"resolutionThresholdHigh" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
+
+	ThumbnailResolutionTierMediumEnabled *bool `json:"thumbnailResolutionTierMediumEnabled"`
+	ThumbnailResolutionThresholdLow      *int  `json:"thumbnailResolutionThresholdLow" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
+	ThumbnailResolutionThresholdHigh     *int  `json:"thumbnailResolutionThresholdHigh" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
 
 	ThumbnailEnhancementEnabled         *bool   `json:"thumbnailEnhancementEnabled"`
 	ThumbnailEnhancementURL             *string `json:"thumbnailEnhancementUrl"`
@@ -1443,6 +1519,9 @@ type ThumbnailEnhancementHistoryResponse struct {
 	RevertedAt *string `json:"revertedAt"`
 	// TriggerType is per-row historical fact — "manual" | "scheduled" | "auto".
 	TriggerType string `json:"triggerType"`
+	// Mode is per-row historical fact — "upscale" | "sharpen". See
+	// models.ThumbnailEnhancementHistoryEntry.Mode.
+	Mode string `json:"mode"`
 }
 
 func toThumbnailEnhancementHistoryResponse(e models.ThumbnailEnhancementHistoryEntry, hasBackup bool, originalPath, enhancedPath *string) ThumbnailEnhancementHistoryResponse {
@@ -1469,6 +1548,7 @@ func toThumbnailEnhancementHistoryResponse(e models.ThumbnailEnhancementHistoryE
 		EnhancedThumbnailPath: enhancedPath,
 		RevertedAt:            revertedAt,
 		TriggerType:           e.TriggerType,
+		Mode:                  e.Mode,
 	}
 }
 

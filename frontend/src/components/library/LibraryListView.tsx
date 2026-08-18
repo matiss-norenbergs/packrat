@@ -34,7 +34,6 @@ export function LibraryListView() {
   const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
   const { selectionActive, isItemSelected, toggleItem: toggleSelected, selectItems, deselectItems } = useSelection()
   const { visibleColumns } = useLibraryColumns()
-  const mode = (settings?.libraryMode as "manage" | "details") || "manage"
 
   const search = searchParams.get("q") ?? ""
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
@@ -117,15 +116,13 @@ export function LibraryListView() {
       <Table containerClassName="relative max-h-[calc(100vh-239px)] w-full overflow-auto rounded-md border">
         <TableHeader>
           <TableRow>
-            {mode === "manage" && (
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={pageSelectedCount === 0 ? false : allOnPageSelected ? true : "indeterminate"}
-                  onCheckedChange={toggleSelectAll}
-                  aria-label="Select all"
-                />
-              </TableHead>
-            )}
+            <TableHead className="w-10">
+              <Checkbox
+                checked={pageSelectedCount === 0 ? false : allOnPageSelected ? true : "indeterminate"}
+                onCheckedChange={toggleSelectAll}
+                aria-label="Select all"
+              />
+            </TableHead>
             <TableHead className="w-16">Thumb</TableHead>
             <TableHead className="min-w-48">
               <button
@@ -155,7 +152,7 @@ export function LibraryListView() {
                 )}
               </TableHead>
             ))}
-            {mode === "manage" && <TableHead className="w-10" />}
+            <TableHead className="w-10" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -163,7 +160,6 @@ export function LibraryListView() {
             <LibraryListRow
               key={item.id}
               item={item}
-              mode={mode}
               columns={columns.map((c) => c.key)}
               revealed={isRevealed(item.id)}
               onToggleReveal={() => toggleReveal(item.id)}
@@ -248,7 +244,6 @@ function renderColumnCell(key: LibraryColumnKey, item: LibraryItem, visibleTags:
 
 function LibraryListRow({
   item,
-  mode,
   columns,
   revealed,
   onToggleReveal,
@@ -258,7 +253,6 @@ function LibraryListRow({
   backTo,
 }: {
   item: LibraryItem
-  mode: "manage" | "details"
   columns: LibraryColumnKey[]
   revealed: boolean
   onToggleReveal: () => void
@@ -278,16 +272,14 @@ function LibraryListRow({
       onClick={selectionActive ? onToggleSelected : undefined}
       data-state={selected ? "selected" : undefined}
     >
-      {mode === "manage" && (
-        <TableCell>
-          <Checkbox
-            checked={selected}
-            onCheckedChange={onToggleSelected}
-            onClick={(e) => e.stopPropagation()}
-            aria-label="Select"
-          />
-        </TableCell>
-      )}
+      <TableCell>
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onToggleSelected}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Select"
+        />
+      </TableCell>
       <TableCell>
         <div className="relative aspect-video w-14 overflow-hidden rounded bg-muted">
           {thumbUrl ? (
@@ -319,9 +311,7 @@ function LibraryListRow({
           {renderColumnCell(key, item, visibleTags, hiddenTags)}
         </TableCell>
       ))}
-      {mode === "manage" && (
-        <TableCell onClick={(e) => e.stopPropagation()}>{!selectionActive && <LibraryItemActionsMenu item={item} />}</TableCell>
-      )}
+      <TableCell onClick={(e) => e.stopPropagation()}>{!selectionActive && <LibraryItemActionsMenu item={item} />}</TableCell>
     </TableRow>
   )
 }

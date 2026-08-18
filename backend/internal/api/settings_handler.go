@@ -201,6 +201,71 @@ func ResolutionThresholdHigh(ctx context.Context, repo *repository.SettingsRepo)
 	return n, nil
 }
 
+// defaultThumbnailResolutionThresholdLow/High mirror
+// defaultResolutionThresholdLow/High's role but for the separate thumbnail
+// tier — lower, since a thumbnail is a small preview image that rarely
+// exceeds 1080p, unlike a video's much wider practical range.
+const (
+	defaultThumbnailResolutionThresholdLow  = 480
+	defaultThumbnailResolutionThresholdHigh = 1080
+)
+
+// ThumbnailResolutionTierMediumEnabled reads the
+// thumbnail_resolution_tier_medium_enabled setting, defaulting to true if
+// it's never been set (or is corrupt). Shared by GetSettings.
+func ThumbnailResolutionTierMediumEnabled(ctx context.Context, repo *repository.SettingsRepo) (bool, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailResolutionTierMediumEnabled)
+	if errors.Is(err, repository.ErrNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		return true, nil
+	}
+	return b, nil
+}
+
+// ThumbnailResolutionThresholdLow reads the
+// thumbnail_resolution_threshold_low setting (heights at or below this are
+// "low" quality), defaulting to defaultThumbnailResolutionThresholdLow if
+// it's never been set or is corrupt. Shared by GetSettings.
+func ThumbnailResolutionThresholdLow(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailResolutionThresholdLow)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultThumbnailResolutionThresholdLow, nil
+	}
+	if err != nil {
+		return defaultThumbnailResolutionThresholdLow, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return defaultThumbnailResolutionThresholdLow, nil
+	}
+	return n, nil
+}
+
+// ThumbnailResolutionThresholdHigh reads the
+// thumbnail_resolution_threshold_high setting (heights at or above this are
+// "high" quality), defaulting to defaultThumbnailResolutionThresholdHigh if
+// it's never been set or is corrupt. Shared by GetSettings.
+func ThumbnailResolutionThresholdHigh(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailResolutionThresholdHigh)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultThumbnailResolutionThresholdHigh, nil
+	}
+	if err != nil {
+		return defaultThumbnailResolutionThresholdHigh, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return defaultThumbnailResolutionThresholdHigh, nil
+	}
+	return n, nil
+}
+
 // LibraryView reads the library_view setting, defaulting to "grid" if it's
 // never been set. Shared by GetSettings.
 func LibraryView(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
@@ -879,6 +944,21 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		thumbnailResolutionTierMediumEnabled, err := ThumbnailResolutionTierMediumEnabled(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailResolutionThresholdLow, err := ThumbnailResolutionThresholdLow(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailResolutionThresholdHigh, err := ThumbnailResolutionThresholdHigh(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		thumbnailEnhancementEnabled, err := ThumbnailEnhancementEnabled(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -986,6 +1066,10 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			ResolutionTierMediumEnabled: resolutionTierMediumEnabled,
 			ResolutionThresholdLow:      resolutionThresholdLow,
 			ResolutionThresholdHigh:     resolutionThresholdHigh,
+
+			ThumbnailResolutionTierMediumEnabled: thumbnailResolutionTierMediumEnabled,
+			ThumbnailResolutionThresholdLow:      thumbnailResolutionThresholdLow,
+			ThumbnailResolutionThresholdHigh:     thumbnailResolutionThresholdHigh,
 
 			ThumbnailEnhancementEnabled:         thumbnailEnhancementEnabled,
 			ThumbnailEnhancementURL:             thumbnailEnhancementURL,
@@ -1134,6 +1218,55 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 			}
 			if req.ResolutionThresholdHigh != nil {
 				if err := repo.Set(c.Request.Context(), models.SettingResolutionThresholdHigh, strconv.Itoa(*req.ResolutionThresholdHigh)); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+		}
+		if req.ThumbnailResolutionTierMediumEnabled != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingThumbnailResolutionTierMediumEnabled, strconv.FormatBool(*req.ThumbnailResolutionTierMediumEnabled)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		// Mirrors the video resolution threshold pair above — resolve
+		// whichever side isn't in this request from what's currently stored
+		// so a lone update can't invert the pair.
+		if req.ThumbnailResolutionThresholdLow != nil || req.ThumbnailResolutionThresholdHigh != nil {
+			effectiveLow := 0
+			if req.ThumbnailResolutionThresholdLow != nil {
+				effectiveLow = *req.ThumbnailResolutionThresholdLow
+			} else {
+				var err error
+				effectiveLow, err = ThumbnailResolutionThresholdLow(c.Request.Context(), repo)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			effectiveHigh := 0
+			if req.ThumbnailResolutionThresholdHigh != nil {
+				effectiveHigh = *req.ThumbnailResolutionThresholdHigh
+			} else {
+				var err error
+				effectiveHigh, err = ThumbnailResolutionThresholdHigh(c.Request.Context(), repo)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			if effectiveLow >= effectiveHigh {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "thumbnail resolution low threshold must be less than the high threshold"})
+				return
+			}
+			if req.ThumbnailResolutionThresholdLow != nil {
+				if err := repo.Set(c.Request.Context(), models.SettingThumbnailResolutionThresholdLow, strconv.Itoa(*req.ThumbnailResolutionThresholdLow)); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			if req.ThumbnailResolutionThresholdHigh != nil {
+				if err := repo.Set(c.Request.Context(), models.SettingThumbnailResolutionThresholdHigh, strconv.Itoa(*req.ThumbnailResolutionThresholdHigh)); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 					return
 				}

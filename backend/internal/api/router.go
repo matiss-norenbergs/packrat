@@ -36,10 +36,12 @@ type Deps struct {
 	SubscriptionsRepo                 *repository.SubscriptionsRepo
 	ThumbnailEnhancementHistoryRepo   *repository.ThumbnailEnhancementHistoryRepo
 	ThumbnailEnhancementOriginalsRepo *repository.ThumbnailEnhancementOriginalsRepo
+	ThumbnailGalleryRepo              *repository.ThumbnailGalleryRepo
 	YtDlp                             *downloader.YtDlpService
 	JellyfinClient                    *jellyfin.Client
 	ImageBackfillManager              *imagebackfill.Manager
 	FrameMatchJobs                    *framematch.JobStore
+	FrameMatchQueueRepo               *repository.FrameMatchQueueRepo
 	MediaRoot                         string
 	ImagesRoot                        string
 	BackupsRoot                       string
@@ -132,8 +134,16 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo))
 		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
 		api.DELETE("/library/:id/thumbnail", DeleteLibraryItemThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo))
-		api.POST("/library/:id/thumbnail/match", StartFrameMatch(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.FrameMatchJobs))
+		api.POST("/library/:id/thumbnail/gallery", SaveLibraryThumbnailToGallery(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.ThumbnailGalleryRepo))
+		api.GET("/library/:id/thumbnail/gallery", ListLibraryThumbnailGallery(deps.LibraryRepo, deps.ThumbnailGalleryRepo))
+		api.POST("/library/:id/thumbnail/gallery/:galleryId/apply", ApplyLibraryThumbnailFromGallery(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.ThumbnailGalleryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
+		api.DELETE("/library/:id/thumbnail/gallery/:galleryId", DeleteLibraryThumbnailGalleryImage(deps.ImagesRoot, deps.ThumbnailGalleryRepo))
+		api.POST("/library/:id/thumbnail/match", StartFrameMatch(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.FrameMatchJobs, deps.FrameMatchQueueRepo))
 		api.GET("/thumbnail-match/:jobId", GetFrameMatchStatus(deps.FrameMatchJobs))
+		api.POST("/library/thumbnail/match/bulk", BulkStartFrameMatch(deps.LibraryRepo, deps.FrameMatchQueueRepo))
+		api.GET("/frame-match/queue", ListFrameMatchQueue(deps.FrameMatchQueueRepo))
+		api.POST("/frame-match/queue/:id/accept", AcceptFrameMatchQueueItem(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.FrameMatchQueueRepo, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
+		api.DELETE("/frame-match/queue/:id", DiscardFrameMatchQueueItem(deps.ImagesRoot, deps.FrameMatchQueueRepo))
 		api.POST("/library/:id/nfo", GenerateLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo, deps.TagsRepo))
 		api.GET("/library/:id/nfo", GetLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
 		api.DELETE("/library/:id/nfo", DeleteLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
@@ -235,6 +245,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/thumbnail-enhancement/status", GetThumbnailEnhancementStatus(enhanceDeps))
 		api.GET("/thumbnail-enhancement/eligible", ListThumbnailEnhancementEligible(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/bulk-run", EnhanceThumbnailItemsNow(enhanceDeps))
+		api.POST("/thumbnail-enhancement/items/bulk-sharpen", SharpenThumbnailItemsNow(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/:id/revert", RevertThumbnailOriginal(enhanceDeps))
 		api.DELETE("/thumbnail-enhancement/items/:id/original", DeleteThumbnailOriginal(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/bulk-keep-enhanced", BulkDeleteThumbnailOriginals(enhanceDeps))

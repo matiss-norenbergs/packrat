@@ -10,7 +10,6 @@ import { useSelection } from "./SelectionContext"
 
 export function CollectionFolderTile({ node, onClick }: { node: CollectionTreeNode; onClick: () => void }) {
   const { data: settings } = useSettings()
-  const mode = (settings?.libraryMode as "manage" | "details") || "manage"
   const { selectionActive, isCollectionSelected, toggleCollection } = useSelection()
   const selected = isCollectionSelected(node.id)
   // Controlled instead of Radix's default click/focus trigger — Popover has
@@ -36,18 +35,19 @@ export function CollectionFolderTile({ node, onClick }: { node: CollectionTreeNo
       onKeyDown={(e) => (e.key === "Enter" ? handleActivate() : undefined)}
       className="group relative cursor-pointer transition hover:ring-2 hover:ring-primary"
     >
-      {mode === "manage" && (
-        <Checkbox
-          checked={selected}
-          onCheckedChange={() => toggleCollection(node.id, node.totalItemCount)}
-          onClick={(e) => e.stopPropagation()}
-          className={cn(
-            "absolute top-2 left-2 z-10 size-5 rounded-full transition-opacity",
-            selectionActive || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-          )}
-          aria-label="Select collection"
-        />
-      )}
+      <Checkbox
+        checked={selected}
+        onCheckedChange={() => toggleCollection(node.id, node.totalItemCount)}
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          // Duotone edge (white ring + dark outer shadow) so the checkbox
+          // stays legible regardless of the card's background — mirrors
+          // LibraryCard's/CompareListTile's fix for the same issue.
+          "absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)] transition-opacity",
+          selectionActive || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+        )}
+        aria-label="Select collection"
+      />
       <CardContent className="flex items-center gap-3 p-4">
         <Folder className="h-8 w-8 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">

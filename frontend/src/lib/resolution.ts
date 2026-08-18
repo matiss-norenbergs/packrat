@@ -49,3 +49,25 @@ export function getResolutionTier(
   if (height <= settings.resolutionThresholdLow) return "low"
   return "medium"
 }
+
+type ThumbnailTierSettings = Pick<
+  Settings,
+  "thumbnailResolutionTierMediumEnabled" | "thumbnailResolutionThresholdLow" | "thumbnailResolutionThresholdHigh"
+>
+
+// Separate from getResolutionTier — a thumbnail is a small preview image
+// with a much narrower practical range than a video (rarely exceeds
+// 1080p), so it has its own lower-default settings rather than sharing the
+// video thresholds (which would put nearly every thumbnail in "low").
+export function getThumbnailResolutionTier(
+  resolution: string | null | undefined,
+  settings: ThumbnailTierSettings | null | undefined,
+): ResolutionTier | null {
+  const height = parseResolutionHeight(resolution)
+  if (height == null || !settings) return null
+
+  if (height >= settings.thumbnailResolutionThresholdHigh) return "high"
+  if (!settings.thumbnailResolutionTierMediumEnabled) return "low"
+  if (height <= settings.thumbnailResolutionThresholdLow) return "low"
+  return "medium"
+}

@@ -29,6 +29,21 @@ import (
 // often slow, upscaler. User-configurable in Settings → AI Enhancement.
 const defaultMaxEnhancementsPerSweep = 5
 
+// modeUpscale and modeSharpen are the two kinds of enhanceOne can run.
+// Upscale is the original feature: gated on the minDim eligibility check,
+// resized per the configured factor/target-size. Sharpen requests factor
+// 1.0 from A1111 — the upscaler network still runs its full denoise/detail
+// pass internally, A1111 just resizes the result back down to match, so the
+// output stays the same size as the input (see Client.Upscale's doc
+// comment). Sharpen is manual-only: it's never reached from runSweep
+// (scheduled/"Enhance Now") or MaybeAutoEnhanceOnDownload — only SharpenItems
+// calls enhanceOne with it, and that function is only ever invoked from a
+// direct user action.
+const (
+	modeUpscale = "upscale"
+	modeSharpen = "sharpen"
+)
+
 // failureCooldown is how long an item that just failed is skipped by
 // automatic triggers (scheduled sweep, auto-on-download) — matches the
 // scheduled sweep's own hourly cadence, giving a natural "try again next
@@ -220,7 +235,7 @@ func runSweep(ctx context.Context, deps Deps, cfg config, triggerType string) (i
 		if enhanced >= cfg.maxPerSweep {
 			break
 		}
-		if err := enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, triggerType); err != nil {
+		if err := enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, triggerType, modeUpscale); err != nil {
 			log.Printf("thumbnailenhance: item %d (%s): %v", c.item.ID, c.item.Title, err)
 		}
 		enhanced++
@@ -383,8 +398,40 @@ func EnhanceItems(ctx context.Context, deps Deps, libraryItemIDs []int64) error 
 		if !ok {
 			continue
 		}
-		if err := enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, "manual"); err != nil {
+		if err := enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, "manual", modeUpscale); err != nil {
 			log.Printf("thumbnailenhance: item %d (%s): %v", c.item.ID, c.item.Title, err)
+		}
+	}
+	return nil
+}
+
+// SharpenItems runs a denoise/detail-only pass (no resize) against a
+// specific set of library items — the Library toolbar's "Sharpen
+// Thumbnail(s)…" bulk action and the single-item "Sharpen Thumbnail" menu
+// entry, both manual-only triggers. Unlike EnhanceItems, eligibility here
+// isn't findEligible's minDim gate (sharpening a thumbnail that's already a
+// good size is exactly the point) — any item with a video file and a
+// thumbnail qualifies, mirroring BulkStartFrameMatch's per-id tolerance: an
+// ineligible id is silently skipped rather than failing the whole batch.
+func SharpenItems(ctx context.Context, deps Deps, libraryItemIDs []int64) error {
+	cfg := loadConfig(ctx, deps.SettingsRepo)
+	if !cfg.enabled || cfg.url == "" {
+		return fmt.Errorf("thumbnail enhancement is not enabled/configured")
+	}
+
+	client := NewClient(cfg.url, cfg.username, cfg.password)
+	for _, id := range libraryItemIDs {
+		item, err := deps.LibraryRepo.Get(ctx, id)
+		if err != nil || item.Path == "" || item.Thumbnail == nil {
+			continue
+		}
+		thumbAbs := filepath.Join(deps.MediaRoot, filepath.FromSlash(*item.Thumbnail))
+		width, height, size, err := probeImage(thumbAbs)
+		if err != nil {
+			continue
+		}
+		if err := enhanceOne(ctx, deps, client, cfg, *item, thumbAbs, width, height, size, "manual", modeSharpen); err != nil {
+			log.Printf("thumbnailenhance: item %d (%s): sharpen: %v", item.ID, item.Title, err)
 		}
 	}
 	return nil
@@ -411,7 +458,7 @@ func MaybeAutoEnhanceOnDownload(ctx context.Context, deps Deps, libraryItemID in
 			continue
 		}
 		client := NewClient(cfg.url, cfg.username, cfg.password)
-		return enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, "auto")
+		return enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, "auto", modeUpscale)
 	}
 	return nil
 }
@@ -554,17 +601,26 @@ func ClearAllHistory(ctx context.Context, deps Deps) (int64, error) {
 // (both having passed eligibility before either acquired the lock) finds
 // the item already enhanced and quietly no-ops instead of compounding the
 // upscale.
-func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item models.LibraryItem, thumbAbs string, origW, origH int, origSize int64, triggerType string) error {
+func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item models.LibraryItem, thumbAbs string, origW, origH int, origSize int64, triggerType, mode string) error {
 	enhanceMu.Lock()
 	defer enhanceMu.Unlock()
 
-	if w, h, _, err := probeImage(thumbAbs); err == nil {
-		longest := w
-		if h > longest {
-			longest = h
-		}
-		if longest >= cfg.minDim {
-			return nil
+	// The re-probe race guard only applies to upscale: it exists so a second
+	// trigger that raced in behind another (both passing eligibility before
+	// either acquired enhanceMu) finds the item already grown past minDim and
+	// quietly no-ops instead of compounding the upscale. Sharpen has no such
+	// eligibility to re-check — it's requested at whatever size the
+	// thumbnail currently is, and running it twice in a row just re-sharpens
+	// rather than compounding anything harmful.
+	if mode == modeUpscale {
+		if w, h, _, err := probeImage(thumbAbs); err == nil {
+			longest := w
+			if h > longest {
+				longest = h
+			}
+			if longest >= cfg.minDim {
+				return nil
+			}
 		}
 	}
 
@@ -591,6 +647,7 @@ func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item
 		OriginalHeight:    &origH,
 		OriginalSizeBytes: &origSize,
 		TriggerType:       triggerType,
+		Mode:              mode,
 	}
 
 	original, err := os.ReadFile(thumbAbs)
@@ -598,7 +655,16 @@ func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item
 		return recordFailure(ctx, deps, entry, broadcast, fmt.Errorf("reading original thumbnail: %w", err))
 	}
 
-	upscaled, err := client.Upscale(ctx, original, cfg.upscaler, cfg.effectiveFactor(origW, origH))
+	// Sharpen always requests factor 1.0, ignoring the configured
+	// factor/target-size setting entirely — the upscaler network still runs
+	// its full denoise/detail pass at its own native scale, A1111 just
+	// resizes the result back down to match (see Client.Upscale's doc
+	// comment), so the output stays the same size as the input.
+	factor := cfg.effectiveFactor(origW, origH)
+	if mode == modeSharpen {
+		factor = 1.0
+	}
+	upscaled, err := client.Upscale(ctx, original, cfg.upscaler, factor)
 	if err != nil {
 		return recordFailure(ctx, deps, entry, broadcast, fmt.Errorf("upscaling: %w", err))
 	}
