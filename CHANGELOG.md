@@ -12,6 +12,122 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-20
+
+- **Library Details mode: Gallery field + Thumbnail resolution fix** — the
+  Details-mode field list on library cards now shows a "Gallery" row with the
+  item's saved gallery image count (computed server-side via a single batched
+  query per page, no extra per-item requests). When an item has no saved
+  gallery images, video items show "0" and everything else (audio, unknown
+  media type) shows "-". Also fixed "Thumbnail resolution" on the same card:
+  it now reports the *original* sidecar thumbnail's true pixel dimensions
+  (previously it read whatever derivative the `<img>` happened to point at —
+  first the full-size original via an extra client-side image load, then
+  briefly the downscaled medium tier). Dimensions are now probed once
+  server-side (header-only, no full decode) whenever a thumbnail is written —
+  set, redownloaded, imported, enhanced, etc. — and persisted on the library
+  row, so the card just reads two numbers off the API response with zero
+  extra image fetches. Existing items get backfilled via the Settings →
+  Library → "Backfill Images" tool. The stored dimensions are intentionally
+  left out of library backups/exports, since they're a disposable derived
+  value that gets regenerated the next time the thumbnail changes.
+
+## 2026-08-18
+
+- **Thumbnail Gallery: save from Frame Matching and AI Enhancement compare views** —
+  both images in the Frame Matching result (Reference / Frame at timestamp) and both
+  images in the AI Enhancement compare dialog (Original / Enhanced) now have a
+  floating "Save to gallery" icon, matching the one already on "Choose from Video"
+  frames. Fixed a side effect: these dialogs' first focusable element used to grab
+  the initial focus, which silently popped its tooltip open on load — the dialogs
+  now start with no auto-focused element, like other list/grid dialogs in the app.
+
+## 2026-08-17
+
+- **New: Thumbnail Gallery** — save frames/images for a library item without
+  making them the active thumbnail. Library item → Thumbnail → "Save in
+  Thumbnail Gallery" saves a copy of the item's current active thumbnail
+  straight to the gallery (works for ghost items too, as long as they have
+  a fetched thumbnail); "View Gallery…" opens a
+  dialog listing everything saved, each tile with floating "set as
+  thumbnail" and delete icons on hover. Clicking a tile opens a fullscreen
+  carousel viewer for a closer look, with arrow-key/on-screen navigation
+  between saved images and the same set/delete actions available from
+  there. The "Choose from Video" picker also changed: clicking a frame now
+  just selects it (highlighted ring) instead of applying it immediately —
+  a footer "Select" button, disabled until you've picked one, is what
+  actually confirms — and each frame now has a floating save icon that
+  sends it to the gallery independently of selecting it. Saved images and
+  their DB rows cascade-delete with their library item.
+- **New: separate resolution tiers for thumbnails** — the Library page's
+  "Thumbnail resolution" field (Details mode) is now colored by its own
+  low/medium/high tier, independent from the existing video Resolution
+  tier. Configurable in Settings → Library → Thumbnails, with its own
+  medium-tier toggle and quality-tier slider, defaulting to a lower
+  480p/1080p split (vs. the video tier's 720p/2160p) since a thumbnail is a
+  small preview image that rarely exceeds 1080p. The same tier now also
+  colors the resolution text shown in the Frame Matching compare view and
+  the AI Enhancement/Sharpen Compare dialog, so it's easy to spot at a
+  glance whether a candidate frame or enhanced thumbnail is actually higher
+  resolution than what it's replacing.
+- **Library: brighter, duotone selection checkboxes** — the hover/select
+  checkbox on Library grid cards, folder-view collection tiles, and Compare
+  List tiles now renders with a white ring plus a dark outer shadow instead
+  of the default single-color border, so it stays visible regardless of
+  what's underneath it (thumbnails vary too widely in brightness for a flat
+  border to reliably show up).
+- **Library: Details mode no longer blocks selection/bulk operations** —
+  the Library toolbar's "Add item"/"Bulk operations" controls and every
+  view's (Grid, List, Folders) selection checkboxes and per-item action
+  menus now render regardless of Manage vs. Details mode. Details mode is
+  now purely additive (extra info panel/row on cards), matching how the
+  rest of the app already expected it to behave.
+- **Library toolbar: single-row layout** — "Add item"/"Bulk operations"
+  moved onto the same row as Search/Filters & Sort/the privacy eye/Settings
+  icons (previously two rows), with Filters & Sort placed directly before
+  Search and a vertical divider separating the search/filter controls from
+  the display-setting icons. The bulk-operations menu also gained a
+  "Thumbnail" submenu grouping "Download thumbnail(s)…", "Match from
+  URL/current thumbnail…", and "Sharpen thumbnail(s)…" instead of listing
+  them flat.
+
+## 2026-08-16
+
+- **New: "Sharpen Thumbnail" AI Enhancement mode** — a manual-only
+  denoise/detail pass for the Stable Diffusion WebUI integration that
+  improves a thumbnail's quality without resizing it (unlike the existing
+  "Upscale" mode). Reachable from the Library toolbar's bulk operations
+  menu ("Sharpen thumbnail(s)…") and from an item's Thumbnail submenu
+  ("Sharpen Thumbnail…"); both only appear when AI Enhancement is enabled
+  in Settings. Ignores the usual minimum-dimension eligibility gate (the
+  point is to sharpen thumbnails that are already a decent size) and is
+  never run by the scheduled sweep or auto-on-download. The AI Enhancement
+  page's history table gains a "Type" column and filter (Upscale/Sharpen)
+  to distinguish the two.
+- **New: Bulk frame matching + "Frame Matching" page** — the Library
+  toolbar's bulk operations menu gains "Match from URL Thumbnail…" and
+  "Match from Current Thumbnail…", queuing frame matching for every eligible
+  selected item (skipping ghosts and items missing what the mode needs) and
+  processing them one at a time in the background. A new "Frame Matching"
+  nav page shows the queue as a table — item, mode, and live state (queued,
+  running, done with a confidence score, or error with a hover-for-details
+  badge) — with checkbox multi-select, pagination, and a toolbar (Review,
+  Discard). Review opens the same side-by-side compare view as the
+  single-item dialog, backed by both images persisted to disk at match time
+  rather than re-fetched later. Progress streams over WebSocket, so the page
+  updates live with no polling. It's a working queue, not a history:
+  accepting, discarding, or dismissing an item removes it from the list.
+- **Frame Matching: skip items already in the queue** — both the bulk
+  "Match from URL/Current Thumbnail…" action and the single-item dialog
+  (from a library item's Thumbnail menu) now check for an existing queue row
+  (any state) for that item before starting a new scan, since matching is
+  CPU-heavy and re-running it on something already pending or awaiting
+  review is wasted work. The bulk dialog excludes already-queued items from
+  its preview count up front; the toast after queuing breaks out how many
+  were skipped for being ineligible vs. already queued. The single-item
+  dialog surfaces a clear inline error (and a toast) instead of silently
+  kicking off a redundant scan.
+
 ## 2026-08-15
 
 - **New: Frame matching for thumbnails** — under a library item's Thumbnail

@@ -13,7 +13,7 @@ import (
 // ListCompareList returns every item currently on the compare list, oldest
 // added first — the same tag/privacy resolution ListLibrary does, so a
 // private item shows blurred here exactly like everywhere else.
-func ListCompareList(repo *repository.CompareListRepo, tagsRepo *repository.TagsRepo, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
+func ListCompareList(repo *repository.CompareListRepo, tagsRepo *repository.TagsRepo, collectionsRepo *repository.CollectionsRepo, galleryRepo *repository.ThumbnailGalleryRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
@@ -47,6 +47,11 @@ func ListCompareList(repo *repository.CompareListRepo, tagsRepo *repository.Tags
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		galleryCountByID, err := galleryRepo.CountsByLibraryItemIDs(c.Request.Context(), ids)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 
 		out := make([]LibraryItemResponse, 0, len(rows))
 		for _, item := range rows {
@@ -59,7 +64,7 @@ func ListCompareList(repo *repository.CompareListRepo, tagsRepo *repository.Tags
 					}
 				}
 			}
-			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID], mediaRoot))
+			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID], galleryCountByID[item.ID], mediaRoot))
 		}
 		c.JSON(http.StatusOK, out)
 	}

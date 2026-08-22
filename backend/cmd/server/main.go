@@ -137,6 +137,7 @@ func run() error {
 	subscriptionsRepo := repository.NewSubscriptionsRepo(conn)
 	thumbnailEnhancementHistoryRepo := repository.NewThumbnailEnhancementHistoryRepo(conn)
 	thumbnailEnhancementOriginalsRepo := repository.NewThumbnailEnhancementOriginalsRepo(conn)
+	thumbnailGalleryRepo := repository.NewThumbnailGalleryRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath, settingsRepo, cfg.MaxConcurrentTranscodes)
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
@@ -150,6 +151,7 @@ func run() error {
 	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFProbePath, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, thumbnailEnhancementHistoryRepo, thumbnailEnhancementOriginalsRepo, jellyfinClient, progressStore, hub)
 	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)
 	frameMatchJobs := framematch.NewJobStore()
+	frameMatchQueueRepo := repository.NewFrameMatchQueueRepo(conn)
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)
 	if err != nil {
@@ -244,6 +246,16 @@ func run() error {
 		}
 	}()
 
+	go framematch.RunQueue(ctx, framematch.QueueDeps{
+		QueueRepo:   frameMatchQueueRepo,
+		LibraryRepo: libraryRepo,
+		YtDlp:       ytdlpSvc,
+		FFProbePath: cfg.FFProbePath,
+		MediaRoot:   cfg.MediaRoot,
+		ImagesRoot:  cfg.ImagesRoot,
+		Broadcaster: hub,
+	})
+
 	router := api.SetupRouter(api.Deps{
 		DB:                                conn,
 		Manager:                           mgr,
@@ -260,10 +272,12 @@ func run() error {
 		SubscriptionsRepo:                 subscriptionsRepo,
 		ThumbnailEnhancementHistoryRepo:   thumbnailEnhancementHistoryRepo,
 		ThumbnailEnhancementOriginalsRepo: thumbnailEnhancementOriginalsRepo,
+		ThumbnailGalleryRepo:              thumbnailGalleryRepo,
 		YtDlp:                             ytdlpSvc,
 		JellyfinClient:                    jellyfinClient,
 		ImageBackfillManager:              imageBackfillMgr,
 		FrameMatchJobs:                    frameMatchJobs,
+		FrameMatchQueueRepo:               frameMatchQueueRepo,
 		MediaRoot:                         cfg.MediaRoot,
 		ImagesRoot:                        cfg.ImagesRoot,
 		BackupsRoot:                       cfg.BackupsRoot,

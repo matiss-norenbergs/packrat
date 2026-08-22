@@ -40,6 +40,9 @@ function makeItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
     tags: ["a", "b"],
     playbackPositionSeconds: null,
     lastWatchedAt: null,
+    galleryCount: 0,
+    thumbnailWidth: null,
+    thumbnailHeight: null,
     ...overrides,
   }
 }

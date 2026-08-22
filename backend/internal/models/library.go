@@ -24,6 +24,13 @@ type LibraryItem struct {
 	Thumbnail           *string
 	ThumbnailSmallPath  *string // WebP derivative, relative to ImagesRoot
 	ThumbnailMediumPath *string // WebP derivative, relative to ImagesRoot
+	// ThumbnailWidth/Height are the ORIGINAL sidecar thumbnail's pixel
+	// dimensions (not the small/medium derivative's) — probed once,
+	// header-only, whenever the original is (re)written, so the frontend
+	// never has to load an image client-side just to read its size.
+	// Deliberately excluded from LibraryItemEntry (backup export).
+	ThumbnailWidth      *int
+	ThumbnailHeight     *int
 	Description         *string
 	ArtistID            *int64
 	ArtistName          *string

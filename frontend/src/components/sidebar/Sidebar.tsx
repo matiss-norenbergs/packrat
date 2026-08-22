@@ -16,6 +16,7 @@ import {
   MonitorPlay,
   Rss,
   ImageUp,
+  ScanSearch,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
@@ -50,6 +51,7 @@ const navItems = [
     requiresSetting: "thumbnailEnhancementEnabled" as const,
     endAdornment: <AiEnhancementStatusDot />,
   },
+  { to: "/frame-matching", label: "Frame Matching", icon: ScanSearch },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/logs", label: "Logs", icon: ScrollText },
 ]
@@ -138,20 +140,23 @@ function AppVersionLine() {
 
   const content = (
     <>
-      <span>Packrat v{data.version}</span>
-      {data.updateAvailable && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-          </TooltipTrigger>
-          <TooltipContent>Update available: v{data.latestVersion}</TooltipContent>
-        </Tooltip>
-      )}
+      <span>Packrat</span>
+      <span className="flex items-center gap-1.5">
+        v{data.version}
+        {data.updateAvailable && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+            </TooltipTrigger>
+            <TooltipContent>Update available: v{data.latestVersion}</TooltipContent>
+          </Tooltip>
+        )}
+      </span>
     </>
   )
 
   if (!data.updateAvailable) {
-    return <div className="flex items-center gap-1.5 px-4 py-1 text-xs text-muted-foreground">{content}</div>
+    return <div className="flex items-center justify-between px-4 py-1 text-xs text-muted-foreground">{content}</div>
   }
 
   return (
@@ -159,7 +164,7 @@ function AppVersionLine() {
       href={`https://github.com/${GITHUB_REPO}/releases/latest`}
       target="_blank"
       rel="noreferrer"
-      className="flex items-center gap-1.5 px-4 py-1 text-xs text-muted-foreground hover:text-sidebar-foreground"
+      className="flex items-center justify-between px-4 py-1 text-xs text-muted-foreground hover:text-sidebar-foreground"
     >
       {content}
     </a>
@@ -173,17 +178,20 @@ function VersionLine() {
   return (
     <Link
       to="/settings"
-      className="flex items-center gap-1.5 px-4 py-1 text-xs text-muted-foreground hover:text-sidebar-foreground"
+      className="flex items-center justify-between px-4 py-1 text-xs text-muted-foreground hover:text-sidebar-foreground"
     >
-      <span>yt-dlp v{data.currentVersion}</span>
-      {data.updateAvailable && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-          </TooltipTrigger>
-          <TooltipContent>Update available</TooltipContent>
-        </Tooltip>
-      )}
+      <span>yt-dlp</span>
+      <span className="flex items-center gap-1.5">
+        v{data.currentVersion}
+        {data.updateAvailable && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+            </TooltipTrigger>
+            <TooltipContent>Update available</TooltipContent>
+          </Tooltip>
+        )}
+      </span>
     </Link>
   )
 }

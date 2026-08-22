@@ -52,7 +52,7 @@ func writeRenamePairError(c *gin.Context, err error) {
 // the "pagination is opt-in, default off" behavior in Settings. collectionIds
 // is a separate IN-match filter (used to resolve a bulk-selected folder plus
 // its nested subcollections) that takes precedence over collectionId.
-func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
+func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, galleryRepo *repository.ThumbnailGalleryRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		q := repository.LibraryQuery{
 			Search:  c.Query("q"),
@@ -146,6 +146,11 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		galleryCountByID, err := galleryRepo.CountsByLibraryItemIDs(c.Request.Context(), ids)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 
 		out := make([]LibraryItemResponse, 0, len(rows))
 		for _, item := range rows {
@@ -158,7 +163,7 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 					}
 				}
 			}
-			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID], mediaRoot))
+			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID], galleryCountByID[item.ID], mediaRoot))
 		}
 		c.JSON(http.StatusOK, LibraryListResponse{Items: out, Total: total})
 	}
@@ -665,7 +670,7 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 // RefreshLibraryItemMetadata re-fetches yt-dlp metadata for the item's
 // original URL and updates the display fields — it never touches the
 // media file or thumbnail already on disk.
-func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
+func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, galleryRepo *repository.ThumbnailGalleryRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -748,7 +753,12 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 			}
 		}
 
-		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, mediaRoot))
+		galleryCount, err := galleryRepo.CountByLibraryItemID(c.Request.Context(), id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, galleryCount, mediaRoot))
 	}
 }
 

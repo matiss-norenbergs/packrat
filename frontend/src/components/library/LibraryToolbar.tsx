@@ -39,6 +39,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useCollections } from "@/hooks/useCollections"
@@ -54,10 +57,13 @@ import { BulkDeleteLibraryItemFilesDialog } from "./BulkDeleteLibraryItemFilesDi
 import { BulkDeleteLibraryItemsDialog } from "./BulkDeleteLibraryItemsDialog"
 import { BulkEditLibraryItemsDialog } from "./BulkEditLibraryItemsDialog"
 import { BulkFetchLibraryThumbnailsDialog } from "./BulkFetchLibraryThumbnailsDialog"
+import { BulkFrameMatchDialog } from "./BulkFrameMatchDialog"
+import type { FrameMatchMode } from "@/types/api"
 import { BulkRedownloadLibraryItemsDialog } from "./BulkRedownloadLibraryItemsDialog"
 import { BulkSetArtistDialog } from "./BulkSetArtistDialog"
 import { BulkSetGenerateNfoDialog } from "./BulkSetGenerateNfoDialog"
 import { BulkSetYearDialog } from "./BulkSetYearDialog"
+import { BulkSharpenThumbnailsDialog } from "./BulkSharpenThumbnailsDialog"
 import { EditSequenceDialog } from "./EditSequenceDialog"
 import { LIBRARY_COLUMNS, useLibraryColumns } from "./LibraryColumnsContext"
 import { useRevealAll } from "./RevealAllContext"
@@ -102,6 +108,8 @@ export function LibraryToolbar() {
   const [bulkDeleteFileOpen, setBulkDeleteFileOpen] = useState(false)
   const [bulkRedownloadOpen, setBulkRedownloadOpen] = useState(false)
   const [bulkFetchThumbnailsOpen, setBulkFetchThumbnailsOpen] = useState(false)
+  const [bulkFrameMatchMode, setBulkFrameMatchMode] = useState<FrameMatchMode | null>(null)
+  const [bulkSharpenOpen, setBulkSharpenOpen] = useState(false)
   const [editSequenceOpen, setEditSequenceOpen] = useState(false)
   const [addToCompareOpen, setAddToCompareOpen] = useState(false)
   const [addGhostOpen, setAddGhostOpen] = useState(false)
@@ -255,10 +263,124 @@ export function LibraryToolbar() {
   return (
     <div className="space-y-2">
     <div className="flex flex-wrap items-center gap-2">
-      <div className="relative min-w-[140px] max-w-[280px] flex-1 sm:min-w-[200px] sm:max-w-[400px]">
+        <Button variant="outline" size="sm" onClick={() => setAddGhostOpen(true)}>
+          <Plus className="h-4 w-4" />
+          Add item
+        </Button>
+        <AddGhostLibraryItemDialog open={addGhostOpen} onOpenChange={setAddGhostOpen} />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" disabled={!selectionActive}>
+              Bulk operations
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-48">
+            <DropdownMenuItem onSelect={() => setBulkEditOpen(true)}>Edit…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkTagsOpen(true)}>Assign tags…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkArtistOpen(true)}>Set artist…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkYearOpen(true)}>Set year…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkNfoOpen(true)}>Generate NFO…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setEditSequenceOpen(true)}>Edit sequence…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setAddToCompareOpen(true)}>Add to compare list…</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setBulkRedownloadOpen(true)}>Download file(s)…</DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>Thumbnail</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem onSelect={() => setBulkFetchThumbnailsOpen(true)}>
+                  Download thumbnail(s)…
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setBulkFrameMatchMode("url")}>
+                  Match from URL thumbnail…
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setBulkFrameMatchMode("current")}>
+                  Match from current thumbnail…
+                </DropdownMenuItem>
+                {settings?.thumbnailEnhancementEnabled && (
+                  <DropdownMenuItem onSelect={() => setBulkSharpenOpen(true)}>
+                    Sharpen thumbnail(s)…
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => setBulkDeleteFileOpen(true)}>
+              Delete file…
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={() => setBulkDeleteOpen(true)}>
+              Delete selected…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <BulkEditLibraryItemsDialog open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
+        <BulkAssignTagsDialog open={bulkTagsOpen} onOpenChange={setBulkTagsOpen} />
+        <BulkSetArtistDialog open={bulkArtistOpen} onOpenChange={setBulkArtistOpen} />
+        <BulkSetYearDialog open={bulkYearOpen} onOpenChange={setBulkYearOpen} />
+        <BulkSetGenerateNfoDialog open={bulkNfoOpen} onOpenChange={setBulkNfoOpen} />
+        <BulkRedownloadLibraryItemsDialog open={bulkRedownloadOpen} onOpenChange={setBulkRedownloadOpen} />
+        <BulkFetchLibraryThumbnailsDialog open={bulkFetchThumbnailsOpen} onOpenChange={setBulkFetchThumbnailsOpen} />
+        {bulkFrameMatchMode && (
+          <BulkFrameMatchDialog
+            mode={bulkFrameMatchMode}
+            open={bulkFrameMatchMode != null}
+            onOpenChange={(open) => !open && setBulkFrameMatchMode(null)}
+          />
+        )}
+        <BulkSharpenThumbnailsDialog open={bulkSharpenOpen} onOpenChange={setBulkSharpenOpen} />
+        <BulkDeleteLibraryItemFilesDialog open={bulkDeleteFileOpen} onOpenChange={setBulkDeleteFileOpen} />
+        <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
+        <EditSequenceDialog open={editSequenceOpen} onOpenChange={setEditSequenceOpen} />
+        <AddToCompareListDialog open={addToCompareOpen} onOpenChange={setAddToCompareOpen} />
+
+        {selectionActive && (
+          <Button variant="ghost" size="sm" onClick={clear}>
+            Clear
+          </Button>
+        )}
+        <span className="text-sm text-muted-foreground">
+          {selectionActive ? `${approxCount} selected` : "Select files or collections to bulk edit"}
+        </span>
+
+        {view === "list" && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Columns3 className="h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              {LIBRARY_COLUMNS.map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col.key}
+                  checked={visibleColumns.has(col.key)}
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    toggleColumn(col.key)
+                  }}
+                >
+                  {col.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+      <Button variant="outline" className="ml-auto" onClick={openFilters}>
+        <SlidersHorizontal className="h-4 w-4" />
+        Filters &amp; Sort
+        {activeFilterCount > 0 && (
+          <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
+            {activeFilterCount}
+          </span>
+        )}
+      </Button>
+
+      <div className="relative min-w-[160px] max-w-[280px] flex-1 sm:min-w-[200px]">
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search title, uploader, artist, description…"
+          placeholder="Search library…"
           className="pl-8 pr-7"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
@@ -284,15 +406,7 @@ export function LibraryToolbar() {
         )}
       </div>
 
-      <Button variant="outline" onClick={openFilters}>
-        <SlidersHorizontal className="h-4 w-4" />
-        Filters &amp; Sort
-        {activeFilterCount > 0 && (
-          <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-            {activeFilterCount}
-          </span>
-        )}
-      </Button>
+      <div className="h-6 w-px bg-border" />
 
       {settings?.privacyEnabled && (
         <Tooltip>
@@ -300,7 +414,6 @@ export function LibraryToolbar() {
             <Button
               variant={revealAll ? "secondary" : "outline"}
               size="icon"
-              className="ml-auto"
               disabled={!hasBlurred}
               onClick={toggleRevealAll}
             >
@@ -316,7 +429,6 @@ export function LibraryToolbar() {
           <Button
             variant="outline"
             size="icon"
-            className={!settings?.privacyEnabled ? "ml-auto" : undefined}
             aria-label="Library display settings"
           >
             <Settings className="h-4 w-4" />
@@ -410,90 +522,6 @@ export function LibraryToolbar() {
         </PopoverContent>
       </Popover>
     </div>
-
-    {mode === "manage" && (
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => setAddGhostOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Add item
-        </Button>
-        <AddGhostLibraryItemDialog open={addGhostOpen} onOpenChange={setAddGhostOpen} />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" disabled={!selectionActive}>
-              Bulk operations
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-48">
-            <DropdownMenuItem onSelect={() => setBulkEditOpen(true)}>Edit…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setBulkTagsOpen(true)}>Assign tags…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setBulkArtistOpen(true)}>Set artist…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setBulkYearOpen(true)}>Set year…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setBulkNfoOpen(true)}>Generate NFO…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setEditSequenceOpen(true)}>Edit sequence…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setAddToCompareOpen(true)}>Add to compare list…</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => setBulkRedownloadOpen(true)}>Download file(s)…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setBulkFetchThumbnailsOpen(true)}>
-              Download thumbnail(s)…
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={() => setBulkDeleteFileOpen(true)}>
-              Delete file…
-            </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onSelect={() => setBulkDeleteOpen(true)}>
-              Delete selected…
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <BulkEditLibraryItemsDialog open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
-        <BulkAssignTagsDialog open={bulkTagsOpen} onOpenChange={setBulkTagsOpen} />
-        <BulkSetArtistDialog open={bulkArtistOpen} onOpenChange={setBulkArtistOpen} />
-        <BulkSetYearDialog open={bulkYearOpen} onOpenChange={setBulkYearOpen} />
-        <BulkSetGenerateNfoDialog open={bulkNfoOpen} onOpenChange={setBulkNfoOpen} />
-        <BulkRedownloadLibraryItemsDialog open={bulkRedownloadOpen} onOpenChange={setBulkRedownloadOpen} />
-        <BulkFetchLibraryThumbnailsDialog open={bulkFetchThumbnailsOpen} onOpenChange={setBulkFetchThumbnailsOpen} />
-        <BulkDeleteLibraryItemFilesDialog open={bulkDeleteFileOpen} onOpenChange={setBulkDeleteFileOpen} />
-        <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
-        <EditSequenceDialog open={editSequenceOpen} onOpenChange={setEditSequenceOpen} />
-        <AddToCompareListDialog open={addToCompareOpen} onOpenChange={setAddToCompareOpen} />
-
-        {selectionActive && (
-          <Button variant="ghost" size="sm" onClick={clear}>
-            Clear
-          </Button>
-        )}
-        <span className="text-sm text-muted-foreground">
-          {selectionActive ? `${approxCount} selected` : "Select files or collections to bulk edit"}
-        </span>
-
-        {view === "list" && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="ml-auto">
-                <Columns3 className="h-4 w-4" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-48">
-              {LIBRARY_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.key}
-                  checked={visibleColumns.has(col.key)}
-                  onSelect={(e) => {
-                    e.preventDefault()
-                    toggleColumn(col.key)
-                  }}
-                >
-                  {col.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-    )}
 
     <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
       <DialogContent className="sm:max-w-md">

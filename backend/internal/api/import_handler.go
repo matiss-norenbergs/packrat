@@ -206,8 +206,16 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 			thumbAbs := filepath.Join(mediaRoot, filepath.FromSlash(*thumbRelPtr))
 			if tiers, err := imageproc.GenerateTiersFromPath(ctx, ytdlp.FFmpegPath, imagesRoot, "library", id, thumbAbs, libraryThumbnailTiers); err != nil {
 				log.Printf("import: generating thumbnail derivatives for library item %d failed: %v", id, err)
-			} else if err := libraryRepo.UpdateThumbnailTiers(ctx, id, &tiers[0], &tiers[1]); err != nil {
-				log.Printf("import: saving thumbnail derivatives for library item %d failed: %v", id, err)
+			} else {
+				var width, height *int
+				if w, h, err := imageproc.ProbeDimensions(thumbAbs); err != nil {
+					log.Printf("import: probing thumbnail dimensions for library item %d failed: %v", id, err)
+				} else {
+					width, height = &w, &h
+				}
+				if err := libraryRepo.UpdateThumbnailTiers(ctx, id, &tiers[0], &tiers[1], width, height); err != nil {
+					log.Printf("import: saving thumbnail derivatives for library item %d failed: %v", id, err)
+				}
 			}
 		}
 
@@ -225,7 +233,9 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 				return
 			}
 		}
-		c.JSON(http.StatusCreated, toLibraryItemResponse(*created, blurred, []string{}, mediaRoot))
+		// galleryCount is always 0 here — this item was just created above,
+		// so no gallery row could possibly reference its id yet.
+		c.JSON(http.StatusCreated, toLibraryItemResponse(*created, blurred, []string{}, 0, mediaRoot))
 	}
 }
 

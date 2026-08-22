@@ -65,7 +65,7 @@ export function CompareListTile({ item, selected, canSelect, onToggle, onRemove 
           disabled={disabled}
           onCheckedChange={onToggle}
           onClick={(e) => e.stopPropagation()}
-          className="absolute top-2 left-2 z-10 size-5 rounded-full"
+          className="absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)]"
           aria-label="Select for playback"
         />
         <Tooltip>

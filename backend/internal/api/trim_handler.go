@@ -145,7 +145,7 @@ func resolveTrimPreviewPath(mediaRoot, previewPath string) (string, error) {
 
 // AcceptLibraryItemTrim overwrites the item's media file with the
 // already-generated preview and updates the stored duration/size to match.
-func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath string, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
+func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath string, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, galleryRepo *repository.ThumbnailGalleryRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -228,7 +228,12 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 			}
 		}
 
-		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, mediaRoot))
+		galleryCount, err := galleryRepo.CountByLibraryItemID(c.Request.Context(), id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, galleryCount, mediaRoot))
 	}
 }
 

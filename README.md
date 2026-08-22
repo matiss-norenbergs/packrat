@@ -55,6 +55,24 @@ docker compose -f docker/docker-compose.yml up --build
 
 The app listens on `http://localhost:50505`.
 
+### Docker dev container
+
+`docker/docker-compose.dev.yml` is a Compose override for iterating without a native Go/Node
+toolchain (or when one is blocked locally — e.g. Windows Application Control rejecting freshly
+built, unsigned binaries): same image, but named `packrat-dev`, mapped to host port `51200`
+instead of `50505`, and backed by its own `docker/data-dev/*` volumes so it never touches your
+regular `docker/data/*` library. Rebuild-and-run:
+
+```
+cd docker
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+Point the frontend dev server at it by setting `BACKEND_PORT=51200` in `frontend/.env.local` (see
+`frontend/vite.config.ts`) instead of running the backend natively, then `npm run dev` as usual.
+Since the image bakes in a full `npm run build` of the frontend too, this container is also a
+quick way to sanity-check a production build without going through the full release flow.
+
 ## Jellyfin
 
 The Jellyfin URL (Settings → Jellyfin) must be reachable **from inside the container's network**,

@@ -34,11 +34,15 @@ import {
   useRedownloadLibraryThumbnail,
   useRefreshLibraryItemMetadata,
 } from "@/hooks/useLibrary"
+import { useSettings } from "@/hooks/useSettings"
+import { useSharpenThumbnailItems } from "@/hooks/useThumbnailEnhancement"
+import { useSaveThumbnailToGallery } from "@/hooks/useThumbnailGallery"
 import { EditLibraryItemDialog } from "./EditLibraryItemDialog"
 import { MoveLibraryItemDialog } from "./MoveLibraryItemDialog"
 import { DeleteLibraryItemDialog } from "./DeleteLibraryItemDialog"
 import { NfoContentDialog } from "./NfoContentDialog"
 import { ThumbnailPickerDialog } from "./ThumbnailPickerDialog"
+import { ThumbnailGalleryDialog } from "./ThumbnailGalleryDialog"
 import { FrameMatchDialog } from "./FrameMatchDialog"
 import { CompareMetadataDialog } from "./CompareMetadataDialog"
 import { RedownloadFromUrlDialog } from "./RedownloadFromUrlDialog"
@@ -57,13 +61,16 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [redownloadThumbWarningOpen, setRedownloadThumbWarningOpen] = useState(false)
   const [quickGrabWarningOpen, setQuickGrabWarningOpen] = useState(false)
   const [thumbnailPickerOpen, setThumbnailPickerOpen] = useState(false)
+  const [thumbnailGalleryOpen, setThumbnailGalleryOpen] = useState(false)
   const [nfoContentOpen, setNfoContentOpen] = useState(false)
   const [deleteNfoWarningOpen, setDeleteNfoWarningOpen] = useState(false)
   const [deleteFileWarningOpen, setDeleteFileWarningOpen] = useState(false)
   const [deleteFileAlsoThumbnail, setDeleteFileAlsoThumbnail] = useState(false)
   const [deleteThumbnailWarningOpen, setDeleteThumbnailWarningOpen] = useState(false)
   const [frameMatchMode, setFrameMatchMode] = useState<FrameMatchMode | null>(null)
+  const [sharpenWarningOpen, setSharpenWarningOpen] = useState(false)
 
+  const { data: settings } = useSettings()
   const refreshMetadata = useRefreshLibraryItemMetadata()
   const redownload = useRedownloadLibraryItem()
   const redownloadThumbnail = useRedownloadLibraryThumbnail()
@@ -72,6 +79,8 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const deleteNfo = useDeleteLibraryItemNFO()
   const deleteFile = useDeleteLibraryItemFile()
   const deleteThumbnail = useDeleteLibraryItemThumbnail()
+  const sharpenThumbnail = useSharpenThumbnailItems()
+  const saveThumbnailToGallery = useSaveThumbnailToGallery()
 
   const hasUrl = !!item.originalUrl
   const hasThumbnail = !!(item.thumbnail || item.thumbnailSmallPath || item.thumbnailMediumPath)
@@ -164,6 +173,16 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
                   Match from Current Thumbnail…
                 </DropdownMenuItem>
               )}
+              {!isGhost && settings?.thumbnailEnhancementEnabled && (
+                <DropdownMenuItem onClick={() => setSharpenWarningOpen(true)} disabled={!hasThumbnail}>
+                  Sharpen Thumbnail…
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={!hasThumbnail} onClick={() => saveThumbnailToGallery.mutate({ id: item.id })}>
+                Save in Thumbnail Gallery
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setThumbnailGalleryOpen(true)}>View Gallery…</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
@@ -193,6 +212,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
       <TrimLibraryItemDialog item={item} open={trimOpen} onOpenChange={setTrimOpen} />
       <DeleteLibraryItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
       <ThumbnailPickerDialog item={item} open={thumbnailPickerOpen} onOpenChange={setThumbnailPickerOpen} />
+      <ThumbnailGalleryDialog item={item} open={thumbnailGalleryOpen} onOpenChange={setThumbnailGalleryOpen} />
       <NfoContentDialog item={item} open={nfoContentOpen} onOpenChange={setNfoContentOpen} />
       {frameMatchMode && (
         <FrameMatchDialog
@@ -266,6 +286,23 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => quickGrabThumbnail.mutate(item.id)}>Grab</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={sharpenWarningOpen} onOpenChange={setSharpenWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sharpen this item's thumbnail?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Runs the current thumbnail through your configured Stable Diffusion WebUI instance for
+              a denoise/detail pass only — the output stays the same size, it's not upscaled. This
+              runs in the background; check the AI Enhancement page for progress.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => sharpenThumbnail.mutate([item.id])}>Sharpen</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

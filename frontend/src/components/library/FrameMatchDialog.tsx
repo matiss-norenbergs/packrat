@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react"
 import { Loader2Icon } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ImageCompareSliderDialog } from "@/components/thumbnailenhance/ImageCompareSliderDialog"
+import { FrameMatchResult } from "./FrameMatchResult"
 import { useFrameMatchStatus, useSetLibraryThumbnail, useStartFrameMatch } from "@/hooks/useLibrary"
 import { formatDuration } from "@/lib/utils"
 import type { FrameMatchMode, LibraryItem } from "@/types/api"
@@ -15,21 +14,10 @@ interface FrameMatchDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-// scoreVariant maps the 0-100 confidence score to a badge severity —
-// benchmarking (cmd/framematch-bench) showed misses can still score in the
-// 70-80s, so this is a rough steer rather than a hard cutoff; the actual
-// side-by-side images are what the user judges by.
-function scoreVariant(score: number): "default" | "secondary" | "destructive" {
-  if (score >= 85) return "default"
-  if (score >= 65) return "secondary"
-  return "destructive"
-}
-
 export function FrameMatchDialog({ item, mode, open, onOpenChange }: FrameMatchDialogProps) {
   const startMatch = useStartFrameMatch()
   const setThumbnail = useSetLibraryThumbnail()
   const [jobId, setJobId] = useState<string | null>(null)
-  const [overlayOpen, setOverlayOpen] = useState(false)
   const { data: status } = useFrameMatchStatus(jobId)
 
   // Kick off a fresh match every time the dialog opens — jobId resets
@@ -61,88 +49,52 @@ export function FrameMatchDialog({ item, mode, open, onOpenChange }: FrameMatchD
   }
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[80vw] max-h-[90vh] min-w-0 overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{isDone ? "Match found" : "Finding matching frame"}</DialogTitle>
-            <DialogDescription>
-              {isDone
-                ? `Found at ${formatDuration(status.timestampSeconds ?? null)}. Compare against the reference before using it.`
-                : "Scanning the video for a frame close to this thumbnail. This can take a minute or two for longer videos."}
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[80vw] max-h-[90vh] min-w-0 overflow-y-auto" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>{isDone ? "Match found" : "Finding matching frame"}</DialogTitle>
+          <DialogDescription>
+            {isDone
+              ? `Found at ${formatDuration(status.timestampSeconds ?? null)}. Compare against the reference before using it.`
+              : "Scanning the video for a frame close to this thumbnail. This can take a minute or two for longer videos."}
+          </DialogDescription>
+        </DialogHeader>
 
-          {isRunning && !isError && (
-            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2Icon className="h-4 w-4 animate-spin" />
-              Checking candidate frames…
-            </div>
-          )}
+        {isRunning && !isError && (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+            <Loader2Icon className="h-4 w-4 animate-spin" />
+            Checking candidate frames…
+          </div>
+        )}
 
-          {isError && (
-            <p className="py-4 text-sm text-destructive">
-              {status?.error ?? startMatch.error?.message ?? "Matching failed."}
-            </p>
-          )}
+        {isError && (
+          <p className="py-4 text-sm text-destructive">
+            {status?.error ?? startMatch.error?.message ?? "Matching failed."}
+          </p>
+        )}
 
+        {isDone && (
+          <FrameMatchResult
+            libraryItemId={item.id}
+            referenceUrl={referenceUrl}
+            foundUrl={foundUrl}
+            timestampSeconds={status.timestampSeconds ?? null}
+            score={status.score ?? 0}
+            itemTitle={item.title}
+          />
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           {isDone && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <p className="text-sm font-medium">Reference</p>
-                  <img
-                    src={referenceUrl}
-                    alt="Reference thumbnail"
-                    onClick={() => setOverlayOpen(true)}
-                    title="Click to compare"
-                    className="h-[60vh] w-full cursor-zoom-in rounded-md border object-contain"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <p className="text-sm font-medium">Frame at {formatDuration(status.timestampSeconds ?? null)}</p>
-                  <img
-                    src={foundUrl}
-                    alt="Matched frame"
-                    onClick={() => setOverlayOpen(true)}
-                    title="Click to compare"
-                    className="h-[60vh] w-full cursor-zoom-in rounded-md border object-contain"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={scoreVariant(status.score ?? 0)}>{Math.round(status.score ?? 0)}% confidence</Badge>
-                {(status.score ?? 0) < 65 && (
-                  <span className="text-xs text-muted-foreground">This may not be the source frame</span>
-                )}
-              </div>
-            </>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+            <Button onClick={handleUse} disabled={setThumbnail.isPending}>
+              Use this frame
             </Button>
-            {isDone && (
-              <Button onClick={handleUse} disabled={setThumbnail.isPending}>
-                Use this frame
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {isDone && (
-        <ImageCompareSliderDialog
-          open={overlayOpen}
-          onOpenChange={setOverlayOpen}
-          originalUrl={referenceUrl}
-          enhancedUrl={foundUrl}
-          itemTitle={item.title}
-          leftLabel="Reference"
-          rightLabel="Found frame"
-        />
-      )}
-    </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

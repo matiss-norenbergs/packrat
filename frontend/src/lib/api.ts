@@ -41,7 +41,9 @@ import type {
   HistoryItem,
   ImageBackfillStatus,
   ImportRequest,
+  BulkFrameMatchResponse,
   FrameMatchMode,
+  FrameMatchQueueItem,
   FrameMatchStatus,
   StartFrameMatchResponse,
   LibraryFacets,
@@ -69,6 +71,7 @@ import type {
   UpdateSubscriptionRequest,
   Tag,
   ThumbnailCandidate,
+  ThumbnailGalleryImage,
   ThumbnailEnhancementHistoryListResponse,
   RunThumbnailEnhancementResult,
   ThumbnailEnhancementStatus,
@@ -217,6 +220,24 @@ export function mediaFileUrl(relativePath: string): string {
 // pictures Packrat itself copied in) into a URL — mirrors mediaFileUrl().
 export function imageUrl(relativePath: string): string {
   return `/local-images/${relativePath.split("/").map(encodeURIComponent).join("/")}`
+}
+
+// Fetches whatever's already showing at an <img>'s src — a mediaFileUrl()/
+// imageUrl() path or a data: URI alike — and returns it as bare base64, for
+// call sites that only have a rendered image's URL but need the bytes to
+// hand to an endpoint like saveThumbnailToGallery.
+export async function urlToBase64(url: string): Promise<string> {
+  const res = await fetch(url)
+  const blob = await res.blob()
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      resolve(dataUrl.slice(dataUrl.indexOf(",") + 1))
+    }
+    reader.onerror = () => reject(reader.error ?? new Error("failed to read image"))
+    reader.readAsDataURL(blob)
+  })
 }
 
 // Small/medium-tier URL builders with a fallback to the original — items
@@ -410,6 +431,29 @@ export function setLibraryThumbnail(id: number, imageBase64: string): Promise<Li
   })
 }
 
+// saveThumbnailToGallery saves an image to a library item's thumbnail
+// gallery without touching its active thumbnail. Omit imageBase64 to save a
+// copy of the item's current active thumbnail; pass it to save exact bytes
+// already on hand instead (a picker candidate frame).
+export function saveThumbnailToGallery(id: number, imageBase64?: string): Promise<ThumbnailGalleryImage> {
+  return request<ThumbnailGalleryImage>(`/library/${id}/thumbnail/gallery`, {
+    method: "POST",
+    body: imageBase64 ? JSON.stringify({ imageBase64 }) : undefined,
+  })
+}
+
+export function fetchThumbnailGallery(id: number): Promise<{ images: ThumbnailGalleryImage[] }> {
+  return request<{ images: ThumbnailGalleryImage[] }>(`/library/${id}/thumbnail/gallery`)
+}
+
+export function applyThumbnailFromGallery(id: number, galleryId: number): Promise<LibraryItem> {
+  return request<LibraryItem>(`/library/${id}/thumbnail/gallery/${galleryId}/apply`, { method: "POST" })
+}
+
+export function deleteThumbnailGalleryImage(id: number, galleryId: number): Promise<void> {
+  return request<void>(`/library/${id}/thumbnail/gallery/${galleryId}`, { method: "DELETE" })
+}
+
 export function startFrameMatch(id: number, mode: FrameMatchMode): Promise<StartFrameMatchResponse> {
   return request<StartFrameMatchResponse>(`/library/${id}/thumbnail/match`, {
     method: "POST",
@@ -419,6 +463,25 @@ export function startFrameMatch(id: number, mode: FrameMatchMode): Promise<Start
 
 export function getFrameMatchStatus(jobId: string): Promise<FrameMatchStatus> {
   return request<FrameMatchStatus>(`/thumbnail-match/${jobId}`)
+}
+
+export function bulkStartFrameMatch(itemIds: number[], mode: FrameMatchMode): Promise<BulkFrameMatchResponse> {
+  return request<BulkFrameMatchResponse>("/library/thumbnail/match/bulk", {
+    method: "POST",
+    body: JSON.stringify({ itemIds, mode }),
+  })
+}
+
+export function fetchFrameMatchQueue(): Promise<FrameMatchQueueItem[]> {
+  return request<FrameMatchQueueItem[]>("/frame-match/queue")
+}
+
+export function acceptFrameMatchQueueItem(id: number): Promise<LibraryItem> {
+  return request<LibraryItem>(`/frame-match/queue/${id}/accept`, { method: "POST" })
+}
+
+export function discardFrameMatchQueueItem(id: number): Promise<void> {
+  return request<void>(`/frame-match/queue/${id}`, { method: "DELETE" })
 }
 
 export function generateLibraryItemNFO(id: number): Promise<void> {
@@ -792,6 +855,7 @@ export interface ThumbnailEnhancementHistoryParams {
   q?: string
   status?: string
   trigger?: string
+  mode?: string
   page?: number
 }
 
@@ -802,6 +866,7 @@ export function listThumbnailEnhancementHistory(
   if (params.q) search.set("q", params.q)
   if (params.status) search.set("status", params.status)
   if (params.trigger) search.set("trigger", params.trigger)
+  if (params.mode) search.set("mode", params.mode)
   if (params.page) search.set("page", String(params.page))
   const qs = search.toString()
   return request<ThumbnailEnhancementHistoryListResponse>(
@@ -835,6 +900,16 @@ export function listThumbnailEnhancementEligible(): Promise<ThumbnailEnhancement
 
 export function enhanceThumbnailItems(itemIds: number[]): Promise<RunThumbnailEnhancementResult> {
   return request<RunThumbnailEnhancementResult>("/thumbnail-enhancement/items/bulk-run", {
+    method: "POST",
+    body: JSON.stringify({ itemIds }),
+  })
+}
+
+// sharpenThumbnailItems runs a denoise/detail-only pass (no resize) — the
+// Library toolbar's "Sharpen Thumbnail(s)…" bulk action and an item's
+// single-item "Sharpen Thumbnail" menu entry both call this.
+export function sharpenThumbnailItems(itemIds: number[]): Promise<RunThumbnailEnhancementResult> {
+  return request<RunThumbnailEnhancementResult>("/thumbnail-enhancement/items/bulk-sharpen", {
     method: "POST",
     body: JSON.stringify({ itemIds }),
   })

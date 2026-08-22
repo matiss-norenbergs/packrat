@@ -126,7 +126,9 @@ func (m *Manager) run() {
 }
 
 // backfillLibraryThumbnails generates small/medium derivatives for every
-// item that has an original thumbnail but no small-tier derivative yet.
+// item that has an original thumbnail but no small-tier derivative yet, and
+// separately backfills thumbnail_width/height (probed from the original) for
+// items that already have derivatives but predate that column.
 func (m *Manager) backfillLibraryThumbnails(ctx context.Context) (processed, failed int) {
 	items, _, err := m.libraryRepo.Query(ctx, repository.LibraryQuery{})
 	if err != nil {
@@ -134,22 +136,47 @@ func (m *Manager) backfillLibraryThumbnails(ctx context.Context) (processed, fai
 		return 0, 0
 	}
 	for _, item := range items {
-		if item.Thumbnail == nil || item.ThumbnailSmallPath != nil {
+		if item.Thumbnail == nil {
 			continue
 		}
 		thumbAbs := filepath.Join(m.mediaRoot, filepath.FromSlash(*item.Thumbnail))
-		tiers, err := imageproc.GenerateTiersFromPath(ctx, m.ffmpegPath, m.imagesRoot, "library", item.ID, thumbAbs, libraryThumbnailTiers)
-		if err != nil {
-			log.Printf("image backfill: library item %d: generating derivatives: %v", item.ID, err)
-			failed++
+
+		if item.ThumbnailSmallPath == nil {
+			tiers, err := imageproc.GenerateTiersFromPath(ctx, m.ffmpegPath, m.imagesRoot, "library", item.ID, thumbAbs, libraryThumbnailTiers)
+			if err != nil {
+				log.Printf("image backfill: library item %d: generating derivatives: %v", item.ID, err)
+				failed++
+				continue
+			}
+			var width, height *int
+			if w, h, err := imageproc.ProbeDimensions(thumbAbs); err != nil {
+				log.Printf("image backfill: library item %d: probing thumbnail dimensions: %v", item.ID, err)
+			} else {
+				width, height = &w, &h
+			}
+			if err := m.libraryRepo.UpdateThumbnailTiers(ctx, item.ID, &tiers[0], &tiers[1], width, height); err != nil {
+				log.Printf("image backfill: library item %d: saving derivative paths: %v", item.ID, err)
+				failed++
+				continue
+			}
+			processed++
 			continue
 		}
-		if err := m.libraryRepo.UpdateThumbnailTiers(ctx, item.ID, &tiers[0], &tiers[1]); err != nil {
-			log.Printf("image backfill: library item %d: saving derivative paths: %v", item.ID, err)
-			failed++
-			continue
+
+		if item.ThumbnailWidth == nil || item.ThumbnailHeight == nil {
+			width, height, err := imageproc.ProbeDimensions(thumbAbs)
+			if err != nil {
+				log.Printf("image backfill: library item %d: probing thumbnail dimensions: %v", item.ID, err)
+				failed++
+				continue
+			}
+			if err := m.libraryRepo.UpdateThumbnailDimensions(ctx, item.ID, &width, &height); err != nil {
+				log.Printf("image backfill: library item %d: saving thumbnail dimensions: %v", item.ID, err)
+				failed++
+				continue
+			}
+			processed++
 		}
-		processed++
 	}
 	return processed, failed
 }

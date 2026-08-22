@@ -10,6 +10,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
+	_ "image/jpeg"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -110,6 +112,25 @@ func GenerateTiersFromPath(ctx context.Context, ffmpegPath, imagesRoot, kind str
 		paths[i] = filepath.ToSlash(rel)
 	}
 	return paths, nil
+}
+
+// ProbeDimensions reads an image file's pixel width/height from its header
+// only (image.DecodeConfig — no full pixel decode), so it's cheap enough to
+// call on every original-thumbnail write. The source is always a JPEG by
+// convention (yt-dlp's --convert-thumbnails jpg, frame-grabs, manual sets),
+// hence the blank image/jpeg import above rather than pulling in WebP/AVIF
+// decode support this call site never needs.
+func ProbeDimensions(srcAbs string) (width, height int, err error) {
+	f, err := os.Open(srcAbs)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return 0, 0, fmt.Errorf("decoding image header: %w", err)
+	}
+	return cfg.Width, cfg.Height, nil
 }
 
 // extFor returns a safe, lowercased image extension derived from name,

@@ -17,6 +17,7 @@ import { HistoryPage } from "@/pages/HistoryPage"
 import { BackupPage } from "@/pages/BackupPage"
 import { SubscriptionsPage } from "@/pages/SubscriptionsPage"
 import { ThumbnailEnhancementPage } from "@/pages/ThumbnailEnhancementPage"
+import { FrameMatchingPage } from "@/pages/FrameMatchingPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { LogsPage } from "@/pages/LogsPage"
 import { BrowsePage } from "@/pages/BrowsePage"
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
       { path: "/backup", element: <BackupPage /> },
       { path: "/subscriptions", element: <SubscriptionsPage /> },
       { path: "/thumbnail-enhancement", element: <ThumbnailEnhancementPage /> },
+      { path: "/frame-matching", element: <FrameMatchingPage /> },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/logs", element: <LogsPage /> },
     ],

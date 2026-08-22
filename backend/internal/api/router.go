@@ -36,10 +36,12 @@ type Deps struct {
 	SubscriptionsRepo                 *repository.SubscriptionsRepo
 	ThumbnailEnhancementHistoryRepo   *repository.ThumbnailEnhancementHistoryRepo
 	ThumbnailEnhancementOriginalsRepo *repository.ThumbnailEnhancementOriginalsRepo
+	ThumbnailGalleryRepo              *repository.ThumbnailGalleryRepo
 	YtDlp                             *downloader.YtDlpService
 	JellyfinClient                    *jellyfin.Client
 	ImageBackfillManager              *imagebackfill.Manager
 	FrameMatchJobs                    *framematch.JobStore
+	FrameMatchQueueRepo               *repository.FrameMatchQueueRepo
 	MediaRoot                         string
 	ImagesRoot                        string
 	BackupsRoot                       string
@@ -103,7 +105,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/downloads/:id", DeleteDownload(deps.DownloadsRepo))
 		api.POST("/downloads/clear-log", ClearDownloadLog(deps.DownloadsRepo))
 
-		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.SettingsRepo, deps.MediaRoot))
+		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo, deps.MediaRoot))
 		api.GET("/library/facets", GetLibraryFacets(deps.LibraryRepo))
 		api.POST("/library/ghost", CreateGhostLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.ImagesRoot, deps.YtDlp, deps.TagsRepo))
 		api.DELETE("/library/:id/file", DeleteLibraryItemFile(deps.LibraryRepo, deps.MediaRoot))
@@ -117,23 +119,31 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/bulk-redownload", BulkRedownloadLibraryItems(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.POST("/library/bulk-fetch-thumbnails", BulkFetchLibraryThumbnails(deps.LibraryRepo, deps.ImagesRoot, deps.YtDlp))
 		api.POST("/library/:id/move", MoveLibraryItem(deps.LibraryRepo, deps.Manager, deps.MediaRoot))
-		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.SettingsRepo, deps.MediaRoot))
+		api.POST("/library/:id/refresh-metadata", RefreshLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo, deps.MediaRoot))
 		api.GET("/library/:id/metadata-preview", CompareLibraryItemMetadata(deps.LibraryRepo, deps.YtDlp))
 		api.GET("/library/:id/probe-metadata", ProbeLibraryItemMetadata(deps.LibraryRepo, deps.MediaRoot, deps.FFProbePath, deps.YtDlp))
 		api.POST("/library/:id/trim/preview", PreviewLibraryItemTrim(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.FFProbePath))
-		api.POST("/library/:id/trim/accept", AcceptLibraryItemTrim(deps.LibraryRepo, deps.MediaRoot, deps.FFProbePath, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.SettingsRepo))
+		api.POST("/library/:id/trim/accept", AcceptLibraryItemTrim(deps.LibraryRepo, deps.MediaRoot, deps.FFProbePath, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo))
 		api.POST("/library/:id/trim/discard", DiscardLibraryItemTrim(deps.MediaRoot, deps.YtDlp))
 		api.GET("/library/:id/trim/frames", GetLibraryItemTrimFrames(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.FFProbePath))
 		api.POST("/library/:id/redownload", RedownloadLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.GET("/library/:id/redownload/preview-url", PreviewRedownloadURL(deps.LibraryRepo, deps.YtDlp))
 		api.POST("/library/:id/redownload/from-url", RedownloadLibraryItemFromURL(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
-		api.POST("/library/:id/thumbnail/redownload", RedownloadLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
-		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
+		api.POST("/library/:id/thumbnail/redownload", RedownloadLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.ThumbnailGalleryRepo))
+		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.ThumbnailGalleryRepo))
 		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo))
-		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
+		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.ThumbnailGalleryRepo))
 		api.DELETE("/library/:id/thumbnail", DeleteLibraryItemThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo))
-		api.POST("/library/:id/thumbnail/match", StartFrameMatch(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.FrameMatchJobs))
+		api.POST("/library/:id/thumbnail/gallery", SaveLibraryThumbnailToGallery(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.ThumbnailGalleryRepo))
+		api.GET("/library/:id/thumbnail/gallery", ListLibraryThumbnailGallery(deps.LibraryRepo, deps.ThumbnailGalleryRepo))
+		api.POST("/library/:id/thumbnail/gallery/:galleryId/apply", ApplyLibraryThumbnailFromGallery(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.ThumbnailGalleryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
+		api.DELETE("/library/:id/thumbnail/gallery/:galleryId", DeleteLibraryThumbnailGalleryImage(deps.ImagesRoot, deps.ThumbnailGalleryRepo))
+		api.POST("/library/:id/thumbnail/match", StartFrameMatch(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.FrameMatchJobs, deps.FrameMatchQueueRepo))
 		api.GET("/thumbnail-match/:jobId", GetFrameMatchStatus(deps.FrameMatchJobs))
+		api.POST("/library/thumbnail/match/bulk", BulkStartFrameMatch(deps.LibraryRepo, deps.FrameMatchQueueRepo))
+		api.GET("/frame-match/queue", ListFrameMatchQueue(deps.FrameMatchQueueRepo))
+		api.POST("/frame-match/queue/:id/accept", AcceptFrameMatchQueueItem(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.FrameMatchQueueRepo, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.ThumbnailGalleryRepo))
+		api.DELETE("/frame-match/queue/:id", DiscardFrameMatchQueueItem(deps.ImagesRoot, deps.FrameMatchQueueRepo))
 		api.POST("/library/:id/nfo", GenerateLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo, deps.TagsRepo))
 		api.GET("/library/:id/nfo", GetLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
 		api.DELETE("/library/:id/nfo", DeleteLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
@@ -153,7 +163,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/tags/:id", DeleteTag(deps.TagsRepo))
 		api.POST("/tags/bulk-delete", BulkDeleteTags(deps.DB, deps.TagsRepo))
 
-		api.GET("/compare-list", ListCompareList(deps.CompareListRepo, deps.TagsRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.MediaRoot))
+		api.GET("/compare-list", ListCompareList(deps.CompareListRepo, deps.TagsRepo, deps.CollectionsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo, deps.MediaRoot))
 		api.POST("/compare-list", AddToCompareList(deps.CompareListRepo))
 		api.DELETE("/compare-list/:id", RemoveFromCompareList(deps.CompareListRepo))
 		api.DELETE("/compare-list", ClearCompareList(deps.CompareListRepo))
@@ -235,6 +245,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/thumbnail-enhancement/status", GetThumbnailEnhancementStatus(enhanceDeps))
 		api.GET("/thumbnail-enhancement/eligible", ListThumbnailEnhancementEligible(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/bulk-run", EnhanceThumbnailItemsNow(enhanceDeps))
+		api.POST("/thumbnail-enhancement/items/bulk-sharpen", SharpenThumbnailItemsNow(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/:id/revert", RevertThumbnailOriginal(enhanceDeps))
 		api.DELETE("/thumbnail-enhancement/items/:id/original", DeleteThumbnailOriginal(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/bulk-keep-enhanced", BulkDeleteThumbnailOriginals(enhanceDeps))

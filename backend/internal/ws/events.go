@@ -3,11 +3,12 @@ package ws
 type EventType string
 
 const (
-	EventProgress        EventType = "progress"
-	EventCompleted       EventType = "completed"
-	EventFailed          EventType = "failed"
-	EventQueueUpdate     EventType = "queue_update"
-	EventEnhanceProgress EventType = "enhance_progress"
+	EventProgress           EventType = "progress"
+	EventCompleted          EventType = "completed"
+	EventFailed             EventType = "failed"
+	EventQueueUpdate        EventType = "queue_update"
+	EventEnhanceProgress    EventType = "enhance_progress"
+	EventFrameMatchProgress EventType = "frame_match_progress"
 )
 
 type Event struct {
@@ -50,6 +51,17 @@ type EnhanceProgressPayload struct {
 	LibraryItemID int64   `json:"libraryItemId"`
 	ItemTitle     string  `json:"itemTitle"`
 	Status        string  `json:"status"` // "processing" | "success" | "failed"
+	Error         *string `json:"error,omitempty"`
+}
+
+// FrameMatchProgressPayload reports one frame_match_queue row's state
+// change, regardless of trigger — see framematch.RunQueue, the single place
+// every bulk queue item funnels through.
+type FrameMatchProgressPayload struct {
+	QueueID       int64   `json:"queueId"`
+	LibraryItemID int64   `json:"libraryItemId"`
+	ItemTitle     string  `json:"itemTitle"`
+	State         string  `json:"state"` // "running" | "done" | "error"
 	Error         *string `json:"error,omitempty"`
 }
 

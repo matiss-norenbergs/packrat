@@ -471,8 +471,16 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		thumbAbs := filepath.Join(m.mediaRoot, filepath.FromSlash(*libItem.Thumbnail))
 		if tiers, err := imageproc.GenerateTiersFromPath(parentCtx, m.ytdlp.FFmpegPath, m.imagesRoot, "library", libID, thumbAbs, libraryThumbnailTiers); err != nil {
 			log.Printf("queue: generating thumbnail derivatives for library item %d failed: %v", libID, err)
-		} else if err := m.libraryRepo.UpdateThumbnailTiers(parentCtx, libID, &tiers[0], &tiers[1]); err != nil {
-			log.Printf("queue: saving thumbnail derivatives for library item %d failed: %v", libID, err)
+		} else {
+			var width, height *int
+			if w, h, err := imageproc.ProbeDimensions(thumbAbs); err != nil {
+				log.Printf("queue: probing thumbnail dimensions for library item %d failed: %v", libID, err)
+			} else {
+				width, height = &w, &h
+			}
+			if err := m.libraryRepo.UpdateThumbnailTiers(parentCtx, libID, &tiers[0], &tiers[1], width, height); err != nil {
+				log.Printf("queue: saving thumbnail derivatives for library item %d failed: %v", libID, err)
+			}
 		}
 
 		// Best-effort, fire-and-forget: if auto-on-download is enabled and
@@ -841,8 +849,16 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 				}
 				if tiers, err := imageproc.GenerateTiersFromPath(parentCtx, m.ytdlp.FFmpegPath, m.imagesRoot, "library", targetID, newThumbPath, libraryThumbnailTiers); err != nil {
 					log.Printf("queue: generating thumbnail derivatives for library item %d failed: %v", targetID, err)
-				} else if err := m.libraryRepo.UpdateThumbnailTiers(parentCtx, targetID, &tiers[0], &tiers[1]); err != nil {
-					log.Printf("queue: saving thumbnail derivatives for library item %d failed: %v", targetID, err)
+				} else {
+					var width, height *int
+					if w, h, err := imageproc.ProbeDimensions(newThumbPath); err != nil {
+						log.Printf("queue: probing thumbnail dimensions for library item %d failed: %v", targetID, err)
+					} else {
+						width, height = &w, &h
+					}
+					if err := m.libraryRepo.UpdateThumbnailTiers(parentCtx, targetID, &tiers[0], &tiers[1], width, height); err != nil {
+						log.Printf("queue: saving thumbnail derivatives for library item %d failed: %v", targetID, err)
+					}
 				}
 			}
 		}
