@@ -218,7 +218,7 @@ func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, 
 			return
 		}
 
-		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, originalsRepo, id, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
+		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, originalsRepo, galleryRepo, id, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
 	}
 }
 

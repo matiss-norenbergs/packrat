@@ -204,6 +204,8 @@ export interface LibraryItem {
   thumbnail: string | null
   thumbnailSmallPath: string | null
   thumbnailMediumPath: string | null
+  thumbnailWidth: number | null
+  thumbnailHeight: number | null
   description: string | null
   artistId: number | null
   artistName: string | null
@@ -219,6 +221,7 @@ export interface LibraryItem {
   tags: string[]
   playbackPositionSeconds: number | null
   lastWatchedAt: string | null
+  galleryCount: number
 }
 
 export interface UpdateLibraryProgressRequest {

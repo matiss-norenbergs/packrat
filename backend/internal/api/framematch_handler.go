@@ -196,7 +196,7 @@ func ListFrameMatchQueue(queueRepo *repository.FrameMatchQueueRepo) gin.HandlerF
 // SetLibraryThumbnail uses) and, once that succeeds, removes the row and
 // its snapshot image files: this is a working queue, not a permanent
 // history, so a resolved row has nothing left to keep.
-func AcceptFrameMatchQueueItem(mediaRoot, imagesRoot, ffmpegPath string, queueRepo *repository.FrameMatchQueueRepo, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
+func AcceptFrameMatchQueueItem(mediaRoot, imagesRoot, ffmpegPath string, queueRepo *repository.FrameMatchQueueRepo, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, galleryRepo *repository.ThumbnailGalleryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -247,7 +247,7 @@ func AcceptFrameMatchQueueItem(mediaRoot, imagesRoot, ffmpegPath string, queueRe
 			return
 		}
 
-		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, originalsRepo, row.LibraryItemID, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
+		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, originalsRepo, galleryRepo, row.LibraryItemID, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
 		if c.Writer.Status() != http.StatusOK {
 			// writeThumbnailAndRespond already sent its own error response —
 			// leave the queue row in place so the user can retry Accept.

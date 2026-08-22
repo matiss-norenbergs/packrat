@@ -12,6 +12,26 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-20
+
+- **Library Details mode: Gallery field + Thumbnail resolution fix** — the
+  Details-mode field list on library cards now shows a "Gallery" row with the
+  item's saved gallery image count (computed server-side via a single batched
+  query per page, no extra per-item requests). When an item has no saved
+  gallery images, video items show "0" and everything else (audio, unknown
+  media type) shows "-". Also fixed "Thumbnail resolution" on the same card:
+  it now reports the *original* sidecar thumbnail's true pixel dimensions
+  (previously it read whatever derivative the `<img>` happened to point at —
+  first the full-size original via an extra client-side image load, then
+  briefly the downscaled medium tier). Dimensions are now probed once
+  server-side (header-only, no full decode) whenever a thumbnail is written —
+  set, redownloaded, imported, enhanced, etc. — and persisted on the library
+  row, so the card just reads two numbers off the API response with zero
+  extra image fetches. Existing items get backfilled via the Settings →
+  Library → "Backfill Images" tool. The stored dimensions are intentionally
+  left out of library backups/exports, since they're a disposable derived
+  value that gets regenerated the next time the thumbnail changes.
+
 ## 2026-08-18
 
 - **Thumbnail Gallery: save from Frame Matching and AI Enhancement compare views** —

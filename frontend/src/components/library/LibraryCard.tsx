@@ -8,8 +8,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { ResolutionValue } from "@/components/ResolutionValue"
-import { ThumbnailResolutionValue } from "@/components/ThumbnailResolutionValue"
-import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
+import { ThumbnailDimensionsValue } from "@/components/ThumbnailDimensionsValue"
+import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { useSettings } from "@/hooks/useSettings"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
@@ -154,10 +154,19 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             </div>
             <div className="flex justify-between gap-2">
               <span>Thumbnail resolution</span>
-              <ThumbnailResolutionValue
-                src={item.thumbnail ? mediaFileUrl(item.thumbnail) : null}
+              <ThumbnailDimensionsValue
+                width={item.thumbnailWidth}
+                height={item.thumbnailHeight}
                 className="truncate text-foreground"
               />
+            </div>
+            <div className="flex justify-between gap-2">
+              <span>Gallery</span>
+              <span className="text-foreground">
+                {item.galleryCount > 0
+                  ? `${item.galleryCount} image${item.galleryCount === 1 ? "" : "s"}`
+                  : "-"}
+              </span>
             </div>
             <div className="flex justify-between gap-2">
               <span>Artist</span>

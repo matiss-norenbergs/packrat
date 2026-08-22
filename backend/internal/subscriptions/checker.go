@@ -300,7 +300,13 @@ func fetchThumbnailForEntry(ctx context.Context, deps CheckDeps, id int64, url s
 		log.Printf("subscription ghost item %d: generating thumbnail derivatives failed: %v", id, err)
 		return
 	}
-	if err := deps.LibraryRepo.UpdateThumbnailTiers(ctx, id, &tiers[0], &tiers[1]); err != nil {
+	var width, height *int
+	if w, h, err := imageproc.ProbeDimensions(thumbAbs); err != nil {
+		log.Printf("subscription ghost item %d: probing thumbnail dimensions failed: %v", id, err)
+	} else {
+		width, height = &w, &h
+	}
+	if err := deps.LibraryRepo.UpdateThumbnailTiers(ctx, id, &tiers[0], &tiers[1], width, height); err != nil {
 		log.Printf("subscription ghost item %d: saving thumbnail derivatives failed: %v", id, err)
 	}
 }

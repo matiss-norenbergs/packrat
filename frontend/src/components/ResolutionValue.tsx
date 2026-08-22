@@ -15,5 +15,5 @@ export function ResolutionValue({
 }) {
   const { data: settings } = useSettings()
   const tier = getResolutionTier(resolution, settings)
-  return <span className={cn(className, tier && RESOLUTION_TIER_CLASS[tier])}>{resolution ?? "—"}</span>
+  return <span className={cn(className, tier && RESOLUTION_TIER_CLASS[tier])}>{resolution ?? "-"}</span>
 }

@@ -69,6 +69,11 @@ export function ThumbnailGalleryViewerDialog({
         <DialogPrimitive.Content
           className="fixed inset-0 z-50 flex flex-col bg-background outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
           onOpenAutoFocus={(e) => e.preventDefault()}
+          // Clicking inside the delete-confirm AlertDialog it triggers
+          // (rendered by the parent ThumbnailGalleryDialog, portaled
+          // outside this Content's DOM subtree) would otherwise read as
+          // an outside click and close this viewer too.
+          onPointerDownOutside={(e) => e.preventDefault()}
         >
           <DialogPrimitive.Title className="sr-only">Thumbnail gallery — {itemTitle}</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">

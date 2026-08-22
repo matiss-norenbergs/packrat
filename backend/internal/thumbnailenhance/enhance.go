@@ -769,14 +769,15 @@ func writeThumbnailFile(ctx context.Context, deps Deps, id int64, thumbAbs strin
 		}
 	}
 
-	if err := deps.LibraryRepo.UpdateThumbnailTiers(ctx, id, &small, &medium); err != nil {
-		return 0, 0, 0, fmt.Errorf("updating thumbnail tiers: %w", err)
-	}
-
 	w, h, s, err := probeImage(thumbAbs)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("probing enhanced thumbnail: %w", err)
 	}
+
+	if err := deps.LibraryRepo.UpdateThumbnailTiers(ctx, id, &small, &medium, &w, &h); err != nil {
+		return 0, 0, 0, fmt.Errorf("updating thumbnail tiers: %w", err)
+	}
+
 	return w, h, s, nil
 }
 

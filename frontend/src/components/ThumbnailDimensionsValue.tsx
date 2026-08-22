@@ -20,7 +20,7 @@ export function ThumbnailDimensionsValue({
   const tier = getThumbnailResolutionTier(resolution, settings)
   return (
     <span className={cn(className, tier && RESOLUTION_TIER_CLASS[tier])}>
-      {width != null && height != null ? `${width}×${height}` : "—"}
+      {width != null && height != null ? `${width}×${height}` : "-"}
     </span>
   )
 }

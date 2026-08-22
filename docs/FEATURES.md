@@ -8,6 +8,14 @@ Packrat requires signing in — the first time you open it, a one-time setup wiz
 single admin account (there's no multi-user support). See "Auth and CSRF" in
 [`architecture.md`](architecture.md) for the session/CSRF mechanics.
 
+## Browse
+
+A Netflix-style homepage for your library, distinct from the Library page's flat grid/folder
+browsing below — a hero banner plus horizontally-scrolling rows: **Continue Watching** (videos
+with saved playback progress — see the Library player below), **Recently Added**, and rows grouped
+by show/collection and by artist. Meant for casual "what do I watch next" browsing rather than
+searching/filtering, which is what the Library page is for.
+
 ## Dashboard
 
 The landing page. Two cards summarize current state at a glance:
@@ -70,18 +78,34 @@ not per-browser):
 key (date downloaded, title, filename, year, duration, sequence #) + ascending/descending toggle
 (also remembered server-side), a collection filter (Grid view only), and a year filter.
 
-**Multi-select**: check items (Grid or Folder view) to bulk-assign tags or bulk-delete a whole
-selection at once, instead of one at a time.
+**Multi-select** (Grid or Folder view): check items, then use the **Bulk operations** menu to apply
+an action to the whole selection at once — Edit fields, Assign tags, Set artist, Set year, Generate
+NFO, Edit sequence, add to the [compare list](#compare-list), Download file(s) (re-queues each
+selected item's own source URL — items with none are silently skipped), a Thumbnail submenu
+(Download thumbnail(s), [frame-matching](#frame-matching), sharpening — see AI Enhancement),
+Delete file (removes just the media file for every selected item, keeping the entries as
+placeholders — see Ghost items below), or Delete selected (remove the items entirely, optionally
+deleting their files).
 
 **Per-item actions** (the "⋮" menu on each card), in order:
 - **Edit** — title, filename (renames the file on disk), uploader, duration, resolution, artist,
   year, season #, sequence #, description, tags, and the original source URL are all editable.
   Editing title/artist/year/season #/sequence # also re-embeds those tags into the actual media
   file's container metadata in the background (an `ffmpeg -c copy` remux) — the Save action itself
-  returns immediately rather than waiting for that to finish.
+  returns immediately rather than waiting for that to finish. A **Rescan** button next to
+  Resolution/Duration re-probes the actual file on disk with ffprobe and, if it differs from the
+  saved values, offers to pull the probed values into the form — useful after the file was replaced
+  outside the app, or to double-check after a Trim.
 - **Move** — relocate the file to a different collection and/or folder.
 - **Copy URL** — copies the item's original source URL to the clipboard (disabled if it has none,
   e.g. items imported without a source URL).
+- **Trim…** — cut a precise portion off the start and/or end of the file. Set Start/End by number
+  entry, ±1s/±0.1s/±1-frame nudge buttons, "Use current" (grabs the player's current playback
+  time), or "Pick exact frame…" (a grid of every decoded frame in a short window, for
+  frame-accurate seeking the browser's own scrubber can't guarantee). "Generate preview" produces a
+  trimmed copy without touching the original — toggle Original/Preview to A-B compare, then
+  "Accept" (with a confirmation; overwriting the original isn't reversible) or discard the preview.
+  Not offered for ghost items.
 - **Compare Metadata** — side-by-side diff of what's currently saved versus what a fresh fetch of
   the source URL would return right now (title, uploader, duration, description, thumbnail,
   resolution) — read-only, changes nothing. Useful for spotting an upstream title/description edit
@@ -91,20 +115,67 @@ selection at once, instead of one at a time.
   to those edits). Never touches the file or thumbnail.
 - **Redownload** — re-queues a fresh download using the item's original URL and its original
   type/quality/format if that download record still exists, falling back to app defaults
-  otherwise.
+  otherwise. For a ghost item this is relabeled **"Download now"** — the fill-in action that turns
+  a placeholder into a real item.
+- **Redownload → From Different URL…** — replaces the file with one fetched from a different link
+  entirely (the original source went down, or a re-upload exists elsewhere), rather than the
+  item's saved URL. Paste a URL and Fetch to preview it side-by-side against what's currently saved
+  (thumbnail, title, uploader, duration, resolution, description), with a duplicate warning if that
+  URL already matches another library item. Check which fields to overwrite — Resolution and
+  Duration are checked by default, the rest are opt-in. The item's saved source URL always switches
+  to the new one regardless of which fields you check.
 - **Thumbnail** submenu:
   - **Redownload from URL** — re-fetches the thumbnail image from the source.
   - **Quick Grab** — grabs one random frame from the video file itself.
   - **Choose from Video…** — extracts several candidate frames spread across the video (2/4/6/8,
     configurable in Settings) and lets you pick one.
+  - **Match from URL/Current Thumbnail…** — see [Frame Matching](#frame-matching).
+  - **Save in Thumbnail Gallery** / **View Gallery…** — see Thumbnail gallery below.
 - **NFO** submenu (when Generate NFO is enabled on the item) — generate/regenerate, view the raw
   XML, or delete just the sidecar file (leaves the toggle itself alone, so it's rewritten again on
   the next relevant edit).
+- **Delete file…** — removes just the media file from disk (optionally the thumbnail too, via a
+  checkbox) to reclaim space, while keeping the library entry — tags, collection membership, and
+  all other metadata are untouched. The item becomes a ghost placeholder (see below) until you
+  redownload it. Distinct from **Delete**, below, which is permanent.
 - **Delete** — "Remove from library" deletes only the database entry (file stays on disk);
-  "Delete files too" also removes the media file and thumbnail from disk.
+  "Delete files too" also removes the media file and thumbnail from disk. Unlike "Delete file…"
+  above, there's no entry left to redownload into afterward.
 
 An item is blurred (thumbnail obscured until clicked/hovered) if its collection — or any tag
 assigned to it — is marked private. See Collections and Tags below.
+
+### Ghost items
+
+A **ghost item** is a library entry with metadata saved but no file downloaded yet — shown with a
+type-appropriate placeholder icon and a "Ghost item" badge instead of a thumbnail. A ghost's
+actions menu hides file-dependent actions (Move, Trim, NFO, frame-grab thumbnails, Delete file)
+since there's nothing to act on yet.
+
+- **Add item** (Library toolbar) creates one directly: paste a source URL to prefill the title from
+  a live preview and optionally fetch the thumbnail up front, or just type a title with no URL for
+  a pure placeholder. Collection, artist, year, season/sequence #, tags, and Generate NFO can all
+  be set immediately, same as a real item.
+- Any real item can become a ghost via **Delete file…** (see above) — frees disk space, keeps the
+  catalog entry.
+- Settings → Library → **Scan for Missing Files** checks every item's file against disk and
+  converts anything gone (deleted, moved, or renamed outside the app) into a ghost automatically.
+  Manual only, never runs on a schedule.
+- Subscriptions (below) also create ghosts for new uploads when auto-download is off.
+
+### Thumbnail gallery
+
+Every library item can keep a small gallery of saved candidate thumbnail images — separate from
+its one *active* thumbnail — so you can stash a few good options and switch between them later
+without re-extracting or re-fetching anything.
+
+- **Save in Thumbnail Gallery** (Thumbnail submenu) saves a copy of the current thumbnail as-is;
+  "Choose from Video…"'s frame picker and Frame Matching's review screen each have their own save
+  icon to stash a specific frame without making it the active thumbnail.
+- **View Gallery…** opens a grid of everything saved. Hover a tile for "Set as thumbnail" (applies
+  it immediately) or "Remove from gallery"; click to open a fullscreen viewer with next/prev
+  arrow-key navigation.
+- Removing an image from the gallery never affects the item's current thumbnail, and vice versa.
 
 ## Collections
 
@@ -128,6 +199,12 @@ selectable from the New Download dialog so you don't have to re-pick them every 
 - Deleting a collection does not delete the files inside it — downloads/library items just lose
   their collection association.
 
+**Cover image (optional)** — pick a custom cover image for a collection, shown instead of the
+automatic fallback (the most-recently-downloaded item's thumbnail in that collection's subtree) on
+Browse/folder tiles. Choose from an image file already sitting in the collection's own folder on
+disk, or upload one directly. Packrat generates its own resized copies rather than serving your
+original file — removing the cover reverts the tile to the automatic fallback.
+
 ## Tags
 
 Freeform labels, independent of collections, assignable to any library item (and set up-front on a
@@ -149,6 +226,23 @@ collection's Artist default — see Collections above).
 - Create/rename/delete from the Artists page; usage count shown per artist; deleting one clears it
   from every item that had it (items themselves are untouched, they just lose the artist link).
 - Select multiple artists to bulk-delete.
+
+**Image gallery (optional)** — build a gallery of images for an artist and pick one as their
+display picture (shown wherever the artist is represented, e.g. Browse). Add images from suggested
+candidates (thumbnails already used by that artist's own library items) or by uploading directly.
+Removing the currently-selected image automatically clears the selection (falls back to an
+auto-picked image); removing any other gallery image is unaffected.
+
+## Compare list
+
+A scratch list for lining files up to play back side by side. Add files from the Library page
+(select one or more items, or whole collections) via "Add to compare list" — the list persists
+server-side across sessions until you remove items or clear it. From the Compare list page, check
+up to 6 files and hit **Play selected** to open a synced playback grid: one cell per file, each
+with its own native seek bar, plus a bottom bar that can play/pause/set volume across every cell at
+once and toggle fullscreen. Two playback options (remembered per-browser): **Preload** buffers
+every file aggressively as soon as the page opens rather than waiting for Play, and **Wait for
+ready** disables "Play all" until every file has buffered enough to play without stalling.
 
 ## Import
 
@@ -210,11 +304,52 @@ or just as a safety net.
 - **Library Data** card — exports collections, tags, artists, and every library item that has a
   saved source URL. **No media files are included** — it's a recipe, not an archive. Importing
   creates any missing collections/tags/artists (matched by name/path, never overwriting existing
-  ones) and re-queues a fresh download for every item in the file, deduplicated against what's
-  already in the library. Tags on redownloaded items aren't automatically reapplied — retag them
-  once the redownload finishes.
-- Both exports can optionally be **encrypted with a password** — the exported file is unreadable
-  without it, and importing an encrypted file prompts for the same password.
+  ones); a **Preview** step shows what's new versus already-in-library before you commit. Choose
+  **"Import and download"** to queue a fresh download for every item with a saved URL (items
+  without one are always created as [ghosts](#ghost-items)), or **"Import as ghost items"** to
+  recreate everything as a placeholder instead of downloading anything. Tags on redownloaded items
+  aren't automatically reapplied — retag them once the redownload finishes.
+- **Full Backup** card — imports a combined settings + library file in one action (get one from a
+  Backup History row's Download button, on this install or another). Same Preview and
+  download-vs-ghost-placeholder choice as Library Data, applied to both halves at once. Plain
+  Settings-only or Library-only files can also be dropped onto the Settings/Library cards
+  respectively — each just extracts its own half.
+- Both plain exports can optionally be **encrypted with a password** — the exported file is
+  unreadable without it, and importing an encrypted file prompts for the same password.
+
+**Backup History** — Packrat can back itself up automatically: turn on "Auto Backup" (Settings →
+Backup) and pick an interval (6h/12h/24h/3 days/weekly) and it periodically writes a full
+settings+library snapshot to disk in the background, no action needed. Every attempt — scheduled or
+from **"Run Backup Now"** — is logged in a history table (including failures, so it doubles as a
+health check), each row showing when it ran, what triggered it, and counts of what it captured.
+From a row you can **Download** the file, **Preview** its contents without downloading, or
+**Restore** it directly back into this install (same download-vs-ghost-placeholder choice as a
+manual import). Old backups are pruned automatically past a configurable retention count (default
+14; set to unlimited to keep everything). Scheduled/automatic backups are always unencrypted —
+there's nowhere to type a password unattended — use the plain Export cards above if you need a
+password-protected file to store off-site.
+
+## Subscriptions
+
+Watches a channel or playlist URL and tells you about new uploads, without you having to check
+back manually.
+
+- **Add subscription** — paste a channel/playlist URL; a live preview confirms what it resolves to
+  (playlist title/count, or a note if it looks like a single video — still allowed, e.g. a channel
+  with one upload so far). Set Type (video/audio), Collection (optional), check frequency
+  (1h/6h/12h/24h), Tags, **Auto-download new items** (off by default — off means new uploads become
+  library placeholders to review; on means straight to the download queue), and Generate NFO.
+  Subscribing baselines every upload that already exists at the URL as "known" — it never queues
+  the whole back catalog, only uploads from that point forward.
+- The subscriptions table shows known-item count (with a "+N new" badge when there's anything
+  unseen), last-checked time (with the error, if the last check failed), auto-download status, and
+  an Enabled toggle — disabling only pauses the scheduled checks, "Check now" still works.
+- **Known items** (per subscription) lists every upload ever seen, newest first, each tagged "New"
+  if unseen. Per-entry actions: **Add as ghost** (creates a library placeholder for later review),
+  **Queue download** (downloads it now), or **Mark seen** (dismiss without acting on it — for
+  uploads you don't want).
+- **Check now** re-checks immediately instead of waiting for the next scheduled pass; **Edit**
+  changes everything except the source URL/Type (changing those is really delete-and-re-add).
 
 ## AI Enhancement
 
@@ -240,6 +375,35 @@ model, scaling mode, minimum-dimension threshold below which a thumbnail is cons
   reverts to the backup and discards the enhanced version; "Keep Enhanced" keeps the upscaled
   result and frees the backup. Clicking either image opens a fullscreen before/after slider —
   drag the divider to wipe between the two at full resolution.
+- **Sharpen** — a separate denoise/detail pass (no resize), distinct from upscaling. Trigger it
+  per-item ("Sharpen Thumbnail" in the actions menu) or in bulk ("Sharpen Thumbnail(s)…" from the
+  Library toolbar) — shares the same history log and Compare/Revert/Keep-Enhanced/Keep-Original
+  mechanics as upscale enhancements.
+
+## Frame Matching
+
+Finds the exact video frame a thumbnail was likely taken from, so a thumbnail that's a degraded,
+cropped, or re-encoded copy can be relocated back to the clean, full-quality frame it came from.
+This compares images (perceptual hashing across the whole video, refined around the best matches)
+— it does not detect duplicate videos.
+
+- **Per-item** (actions menu → Thumbnail → "Match from URL Thumbnail…" / "Match from Current
+  Thumbnail…") runs immediately: a dialog shows a spinner while it scans (can take a minute or two
+  for longer videos), then a side-by-side compare of the reference image against the found frame,
+  with the found frame's timestamp and a confidence score. "Use this frame" sets it as the
+  thumbnail right away; the dialog also lets you save it to the item's thumbnail gallery instead of
+  committing immediately.
+- **Bulk** (Library toolbar → Thumbnail submenu, on a selection) queues every eligible item onto a
+  durable, one-at-a-time background queue instead of holding a request open — items with no source
+  URL (for "from URL" mode), no current thumbnail (for "from current" mode), or no downloaded file
+  (ghost items) are silently skipped, and an item already in the queue isn't re-queued.
+- The **Frame Matching** page (sidebar) is where bulk-queued matches get reviewed — a working
+  queue, not a permanent history: select a finished row and **Review** to see the side-by-side
+  compare, then **Use this frame** (applies it and removes the row) or **Discard**. Rows still
+  running or errored can also be discarded/dismissed directly from the table. Live state changes
+  stream in over WebSocket rather than polling.
+- Confidence scores are shown even when low — a correct match can still score in the 70s–80s, so a
+  low score is a hint to look closely, not a sign the match is wrong.
 
 ## Settings
 
@@ -261,9 +425,19 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   / strong) until clicked to reveal.
 - **History** — "Anonymize History Links" toggle (see History above); how long to keep history
   entries before automatic pruning, plus a "Clear all now" button.
-- **Thumbnails** — how many candidate frames "Choose from Video" offers (2/4/6/8).
-- **Player** — autoplay on opening a library item (including a private one, right after you reveal
-  it); playback volume is remembered automatically between plays.
+- **Library** — resolution and thumbnail quality tiers (the color-coded low/medium/high thresholds
+  shown on library cards); how many candidate frames "Choose from Video" offers (2/4/6/8) and
+  whether the medium derivative tier is used; autoplay on opening a library item (including a
+  private one, right after you reveal it — playback volume is remembered automatically between
+  plays); **Backfill Images** — a one-click background job that generates missing thumbnail/artist
+  image/collection-cover derivatives for anything that predates them, and backfills stored
+  thumbnail width/height for older items so the "Thumbnail resolution" field is accurate without a
+  live image fetch (safe to re-run, a progress readout updates while it's running); **Scan for
+  Missing Files** — checks every item's file against disk and converts anything gone into a
+  [ghost placeholder](#ghost-items) (manual only, never scheduled).
+- **Backup** — turn on **Auto Backup** and pick an interval (6h/12h/24h/3 days/weekly) for
+  automatic full backups (see Backup above), and how many to keep before old ones are pruned
+  (default 14, or unlimited).
 - **Jellyfin** — enable/disable the integration, server URL + API key, and what happens after a
   download completes: nothing, rescan the entire library, or rescan only the specific Jellyfin
   library linked to the download's collection (set per-collection in Collections → Edit). A burst

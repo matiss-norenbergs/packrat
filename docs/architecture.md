@@ -20,12 +20,20 @@ backend/
     queue/                  worker-pool DownloadManager + in-memory ProgressStore
     api/                    Gin router, handlers, DTOs
     ws/                     WebSocket hub/client, event types
-    backup/                 export/import envelopes, encryption, settings + library bundles
+    backup/                 export/import envelopes, encryption, settings + library + full bundles,
+                             scheduled/history-tracked backup runner
     importer/               media-root scanning + ffprobe-based file import
     jellyfin/                Jellyfin client + refresh debouncer
     nfo/                     .nfo sidecar XML generation
     pathsafe/                path traversal prevention (collections, folders, imports)
     fsutil/                  filename sanitization, atomic rename pairs, directory helpers
+    imageproc/               shared ffmpeg-based WebP derivative generation + dimension probing,
+                             used by library thumbnails, collection covers, and artist images
+    imagebackfill/           one-off background sweep: regenerates missing derivatives and
+                             backfills thumbnail dimensions for pre-existing rows
+    framematch/              perceptual-hash frame matching (ad-hoc job store + durable queue)
+    subscriptions/           periodic channel/playlist re-check + ghost/download creation
+    thumbnailenhance/        AI upscale/sharpen via a self-hosted Stable Diffusion instance
 ```
 
 ## API routes live under `/api`
@@ -114,7 +122,86 @@ privacy is inheritance-aware (`CollectionsRepo.IsPrivate`/`effectivePrivacyMap`,
 `parentId` chain); tag privacy has no hierarchy to walk — a tag is just private or not
 (`TagsRepo.HasPrivateTag`). Both are OR'd together at read time in `ListLibrary`,
 `RefreshLibraryItemMetadata`, and the thumbnail handlers, so blur status always reflects current
-collection/tag state rather than being cached on the item row.
+collection/tag state rather than being cached on the item row. The compare list endpoint
+(`ListCompareList`) reuses this exact same resolution, so a private item shows blurred in the
+compare grid too, gated by the same reveal-all mechanism.
+
+## Ghost items are not a separate table
+
+A ghost item is just a `library` row with `status="ghost"` and empty `filename`/`path` (the same
+empty-string sentinel `LibraryRepo.ClearFile` uses elsewhere) — no schema change was needed to
+support them. Three independent paths converge on this state: creating one directly
+(`CreateGhostLibraryItem`), deleting just a real item's file (`DeleteLibraryItemFile`/
+`ClearFile`), or the on-demand `scan-missing` sweep finding a file gone from disk.
+`fetchGhostThumbnail` (`ghost_handler.go`) is shared between ghost creation and the Library
+toolbar's bulk "Download thumbnail(s)" action — it always writes only the `ImagesRoot`-relative
+WebP tiers, never the `MediaRoot`-relative `thumbnail` field, since a ghost has no `MediaRoot`
+location to anchor a sidecar file to.
+
+## Thumbnail/image derivatives
+
+`imageproc.GenerateTiers`/`GenerateTiersFromPath` (ffmpeg shell-out, never a cgo image library) is
+the one shared pipeline behind every resized-image feature in the app: library thumbnails
+(small/medium), collection covers (small/medium/original), and artist images (a single 400px
+tier). Collection-cover and artist-image writes additionally share a common dual-source request
+pattern (`sourceRelPath` — an existing file under `MEDIA_ROOT` — or `imageBase64`+`filename`, a
+fresh upload) via `resolveImageSourceBytes` (`internal/api/image_source.go`). All of these
+derivatives live under a separate `ImagesRoot`/`/local-images/*` static tree, distinct from
+`MEDIA_ROOT`/`/media-files/*`.
+
+A library item's **original** sidecar thumbnail's pixel dimensions (`thumbnail_width`/
+`thumbnail_height` columns) are probed once, header-only (`image.DecodeConfig` — no full pixel
+decode), whenever the original file is (re)written — set, redownloaded, imported, enhanced, applied
+from the gallery or a frame match, etc. — and persisted alongside the small/medium derivative
+paths. This avoids the frontend ever loading an image client-side just to read its size. There's no
+single funnel every write path shares (`writeThumbnailAndRespond` only covers the four gin-routed
+thumbnail endpoints), so the probe is duplicated at each of the ~9 independent write sites rather
+than centralized. Pre-existing rows are backfilled via the `imagebackfill` sweep. These two columns
+are deliberately excluded from `backup.LibraryItemEntry` — a disposable derived value, not worth
+including in a portable export.
+
+The **thumbnail gallery** (`thumbnail_gallery` table, `ON DELETE CASCADE` with the library item) is
+a separate, per-item list of saved candidate images, independent of the one active thumbnail —
+populated from "Save in Thumbnail Gallery," a specific frame from "Choose from Video," or a Frame
+Matching result. `readCurrentThumbnail` (`thumbnail_gallery_handler.go`) falls back from the
+full-res `MediaRoot` original to the best available `ImagesRoot` derivative, so even a ghost item's
+URL-fetched thumbnail (which only ever gets derivative tiers) can be saved to its gallery. Applying
+a gallery image reuses the same `writeThumbnailAndRespond` finish path as `SetLibraryThumbnail` and
+Frame Matching's accept action, keeping derivatives and stale AI-enhancement backups consistent
+across all three thumbnail-setting entry points.
+
+## Frame matching
+
+`internal/framematch` finds the video frame that best perceptually matches a reference image
+(pHash: a coarse 1fps sweep, then a fine windowed pass around the top candidates) — not duplicate
+detection. Two independently-triggered paths share the same `Match()` core and a package-level
+mutex that serializes every match regardless of trigger, since the CPU-bound ffmpeg decode
+shouldn't run two-at-once on a resource-capped container:
+
+- An in-memory, non-persistent `framematch.JobStore` backs the single-item ad-hoc endpoint — a job
+  vanishes on server restart.
+- The `frame_match_queue` table plus `framematch.RunQueue`, a single long-lived background
+  goroutine started once at server boot, polls the table and processes rows one at a time — backs
+  the bulk action and the Frame Matching review page. Accepting or discarding a row deletes it
+  (a working queue, not a history).
+
+`ResolveReferenceImage` is shared by both paths so `"url"`/`"current"` mode resolves identically
+either way; it deliberately avoids `YtDlpService.FetchThumbnail`'s `--convert-thumbnails`
+postprocessor (known to fail silently on AVIF) in favor of an explicit fetch-raw-then-decode step.
+
+## Subscriptions
+
+`internal/subscriptions` periodically re-checks a saved channel/playlist URL and, for each
+genuinely new upload, either enqueues a real download (`AutoDownload` on) or creates a ghost
+placeholder (off) — reusing the ghost-creation and download-enqueue *logic*, but **not the code**:
+`checker.go`'s comment is explicit that this is a deliberate duplication to avoid an import cycle
+(package `api` already imports `subscriptions` to expose the "check now" endpoint, so the reverse
+import isn't possible). Downloads triggered this way go through the exact same
+`queue.DownloadManager.Enqueue` as every other download source — same live queue, same WebSocket
+progress events, same worker-pool concurrency limit. Subscribing baselines every currently-existing
+upload as already-seen (`BaselineOnCreate`) without creating anything, so a new subscription only
+ever surfaces uploads from that point forward. There is no per-subscription goroutine/ticker — see
+Retention sweeps below.
 
 ## Collection-level defaults for new downloads
 
@@ -139,14 +226,29 @@ for Artist, an ancestor) actually has a value — it never clears a value the us
 
 ## Backup and restore
 
-The `backup` package builds and applies two kinds of portable JSON bundles — settings and library
-— each wrapped in a shared envelope (`packrat`/`version`/`kind`/`exportedAt`/`encrypted`/`data`)
-optionally encrypted with a user-supplied passphrase (`backup/crypto.go`). The library bundle
-never ships media bytes: it references collections/artists/tags by name/path rather than local
-numeric ID (so it's portable across installs) and re-populates a library by **re-queuing
-downloads** from each item's saved `originalUrl` on import, not by copying files. Import is
-additive-only — it matches existing collections/tags/artists by name and creates only what's
-missing, and a name collision on one entry is skipped rather than aborting the whole import.
+The `backup` package builds and applies **three** kinds of portable JSON bundle — settings,
+library, and `full` (settings + library combined) — each wrapped in a shared envelope
+(`packrat`/`version`/`kind`/`exportedAt`/`encrypted`/`data`) optionally encrypted with a
+user-supplied passphrase (`backup/crypto.go`). `full` isn't a separate data model: `BuildFullBundle`
+just calls the existing `BuildSettingsBundle`/`BuildLibraryBundle` verbatim and wraps both under one
+envelope. The settings/library import endpoints were widened to accept `kind: "full"` in addition
+to their own (`OpenAny`, checking membership in an allowed-kinds list instead of one exact kind) and
+just pull out their own half — so a full-kind file can be fed into any of the three import entry
+points, not only the dedicated one. The library bundle never ships media bytes: it references
+collections/artists/tags by name/path rather than local numeric ID (so it's portable across
+installs) and re-populates a library by **re-queuing downloads** from each item's saved
+`originalUrl` on import (or recreating it as a ghost placeholder, in `ghostOnly` mode), not by
+copying files. Import is additive-only — it matches existing collections/tags/artists by name and
+creates only what's missing, and a name collision on one entry is skipped rather than aborting the
+whole import.
+
+`backup.RunBackup`/`RunScheduledBackupIfDue` (`backup/auto.go`) is a second, disk-resident path
+layered on top of the same bundle builders — it always writes an **unencrypted** `full` bundle to
+`BackupsRoot` (there's nowhere to prompt for a password unattended) and records a `backup_history`
+row for every attempt, success or failure, so the history table doubles as a health check. It isn't
+a dedicated cron: "due" is checked on the same shared hourly sweep described in Retention sweeps
+below, so worst-case drift from the configured interval is under an hour. Old backups are pruned to
+a configurable retention count after every run.
 
 ## Crash recovery
 
@@ -157,10 +259,16 @@ must manually retry from the Downloads or History page.
 
 ## Retention sweeps
 
-A background goroutine in `main.go` periodically deletes terminal (non-active) rows older than the
-configured retention window for two independently-configurable settings: `historyRetentionDays`
-(History page) and `downloadLogRetentionDays` (Downloads/Logs pages). `0` means keep forever for
-either. Both also have a manual "clear all now" action that ignores age entirely.
+A single shared hourly ticker in `main.go` (`historyCleanupInterval = time.Hour`) drives five
+independent, sequential, no-op-if-not-due sweeps per tick — one goroutine, not five separate
+tickers: history/download-log retention, thumbnail-enhancement history cleanup, due subscription
+checks (`subscriptions.RunDueChecks`), and due scheduled backups
+(`backup.RunScheduledBackupIfDue`). History/log retention deletes terminal (non-active) rows older
+than two independently-configurable settings — `historyRetentionDays` (History page) and
+`downloadLogRetentionDays` (Downloads/Logs pages), `0` meaning keep forever — each with a manual
+"clear all now" action that ignores age entirely. Hourly granularity is deliberate: the smallest
+configurable subscription/backup interval is 6h, so checking hourly is more than sufficient
+resolution without needing per-feature scheduling infrastructure.
 
 ## Deliberate scope cuts
 

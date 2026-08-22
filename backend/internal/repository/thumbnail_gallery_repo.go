@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"packrat/backend/internal/models"
 )
@@ -65,6 +66,56 @@ func (r *ThumbnailGalleryRepo) Get(ctx context.Context, id int64) (models.Thumbn
 		return models.ThumbnailGalleryImage{}, fmt.Errorf("loading thumbnail gallery image %d: %w", id, err)
 	}
 	return img, nil
+}
+
+// CountByLibraryItemID returns how many gallery images one item has —
+// for single-item response endpoints (see CountsByLibraryItemIDs for the
+// batched equivalent used by list endpoints).
+func (r *ThumbnailGalleryRepo) CountByLibraryItemID(ctx context.Context, libraryItemID int64) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM thumbnail_gallery WHERE library_item_id = ?`, libraryItemID,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("counting thumbnail gallery images for item %d: %w", libraryItemID, err)
+	}
+	return count, nil
+}
+
+// CountsByLibraryItemIDs batch-fetches gallery image counts for a page of
+// library items in one query — the same shape as TagsByLibraryIDs, so a
+// list endpoint never does a per-item query. ids not present in the
+// returned map have zero gallery images.
+func (r *ThumbnailGalleryRepo) CountsByLibraryItemIDs(ctx context.Context, ids []int64) (map[int64]int, error) {
+	out := make(map[int64]int, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT library_item_id, COUNT(*) FROM thumbnail_gallery
+		WHERE library_item_id IN (`+placeholders+`)
+		GROUP BY library_item_id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("batch-counting thumbnail gallery images: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var libraryItemID int64
+		var count int
+		if err := rows.Scan(&libraryItemID, &count); err != nil {
+			return nil, fmt.Errorf("scanning thumbnail gallery count: %w", err)
+		}
+		out[libraryItemID] = count
+	}
+	return out, rows.Err()
 }
 
 // Delete removes one gallery image row. Callers are responsible for

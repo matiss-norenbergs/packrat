@@ -76,7 +76,9 @@ func CreateGhostLibraryItem(libraryRepo *repository.LibraryRepo, mediaRoot, imag
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusCreated, toLibraryItemResponse(*created, false, req.Tags, mediaRoot))
+		// galleryCount is always 0 here — this item was just created above,
+		// so no gallery row could possibly reference its id yet.
+		c.JSON(http.StatusCreated, toLibraryItemResponse(*created, false, req.Tags, 0, mediaRoot))
 	}
 }
 
@@ -111,7 +113,13 @@ func fetchGhostThumbnail(ctx context.Context, libraryRepo *repository.LibraryRep
 		log.Printf("ghost item %d: generating thumbnail derivatives failed: %v", id, err)
 		return false
 	}
-	if err := libraryRepo.UpdateThumbnailTiers(ctx, id, &tiers[0], &tiers[1]); err != nil {
+	var width, height *int
+	if w, h, err := imageproc.ProbeDimensions(thumbAbs); err != nil {
+		log.Printf("ghost item %d: probing thumbnail dimensions failed: %v", id, err)
+	} else {
+		width, height = &w, &h
+	}
+	if err := libraryRepo.UpdateThumbnailTiers(ctx, id, &tiers[0], &tiers[1], width, height); err != nil {
 		log.Printf("ghost item %d: saving thumbnail derivatives failed: %v", id, err)
 		return false
 	}

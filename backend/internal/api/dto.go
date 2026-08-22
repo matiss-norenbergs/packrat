@@ -291,6 +291,8 @@ type LibraryItemResponse struct {
 	Thumbnail               *string  `json:"thumbnail"`
 	ThumbnailSmallPath      *string  `json:"thumbnailSmallPath"`
 	ThumbnailMediumPath     *string  `json:"thumbnailMediumPath"`
+	ThumbnailWidth          *int     `json:"thumbnailWidth"`
+	ThumbnailHeight         *int     `json:"thumbnailHeight"`
 	Description             *string  `json:"description"`
 	ArtistID                *int64   `json:"artistId"`
 	ArtistName              *string  `json:"artistName"`
@@ -306,6 +308,7 @@ type LibraryItemResponse struct {
 	Tags                    []string `json:"tags"`
 	PlaybackPositionSeconds *int     `json:"playbackPositionSeconds"`
 	LastWatchedAt           *string  `json:"lastWatchedAt"`
+	GalleryCount            int      `json:"galleryCount"`
 }
 
 // UpdateLibraryProgressRequest is POST /library/:id/progress's body — a
@@ -336,7 +339,7 @@ type LibraryFacetsResponse struct {
 // disk — GenerateNFO only reflects whether the toggle is on, not whether a
 // file is actually present (it can be turned off after generating, or
 // deleted independently via the "Delete File" action while still on).
-func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string, mediaRoot string) LibraryItemResponse {
+func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string, galleryCount int, mediaRoot string) LibraryItemResponse {
 	if tags == nil {
 		tags = []string{}
 	}
@@ -365,6 +368,8 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 		Thumbnail:               item.Thumbnail,
 		ThumbnailSmallPath:      item.ThumbnailSmallPath,
 		ThumbnailMediumPath:     item.ThumbnailMediumPath,
+		ThumbnailWidth:          item.ThumbnailWidth,
+		ThumbnailHeight:         item.ThumbnailHeight,
 		Description:             item.Description,
 		ArtistID:                item.ArtistID,
 		ArtistName:              item.ArtistName,
@@ -380,6 +385,7 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 		Tags:                    tags,
 		PlaybackPositionSeconds: item.PlaybackPositionSeconds,
 		LastWatchedAt:           lastWatchedAt,
+		GalleryCount:            galleryCount,
 	}
 }
 

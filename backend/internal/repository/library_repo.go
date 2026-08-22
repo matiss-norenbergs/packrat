@@ -433,16 +433,33 @@ func (r *LibraryRepo) UpdateThumbnail(ctx context.Context, id int64, thumbnail *
 	return checkRowsAffected(res)
 }
 
-// UpdateThumbnailTiers sets the item's small/medium WebP derivative paths —
-// called alongside UpdateThumbnail whenever the original thumbnail is
-// (re)generated, and by the one-off backfill tool for pre-existing items.
-func (r *LibraryRepo) UpdateThumbnailTiers(ctx context.Context, id int64, small, medium *string) error {
+// UpdateThumbnailTiers sets the item's small/medium WebP derivative paths
+// plus the ORIGINAL sidecar thumbnail's probed pixel dimensions — called
+// alongside UpdateThumbnail whenever the original thumbnail is (re)generated,
+// and by the one-off backfill tool for pre-existing items. width/height are
+// nil when the probe failed (best-effort at every call site).
+func (r *LibraryRepo) UpdateThumbnailTiers(ctx context.Context, id int64, small, medium *string, width, height *int) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE library SET thumbnail_small_path = ?, thumbnail_medium_path = ? WHERE id = ?`,
-		small, medium, id,
+		`UPDATE library SET thumbnail_small_path = ?, thumbnail_medium_path = ?, thumbnail_width = ?, thumbnail_height = ? WHERE id = ?`,
+		small, medium, width, height, id,
 	)
 	if err != nil {
 		return fmt.Errorf("updating library thumbnail tiers: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// UpdateThumbnailDimensions sets only the original thumbnail's probed pixel
+// dimensions, leaving the small/medium derivative paths untouched — used by
+// the backfill sweep for items that already have derivatives generated but
+// predate this column.
+func (r *LibraryRepo) UpdateThumbnailDimensions(ctx context.Context, id int64, width, height *int) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE library SET thumbnail_width = ?, thumbnail_height = ? WHERE id = ?`,
+		width, height, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating library thumbnail dimensions: %w", err)
 	}
 	return checkRowsAffected(res)
 }
@@ -741,7 +758,7 @@ func (r *LibraryRepo) ClearFile(ctx context.Context, id int64, clearThumbnail bo
 // fields whenever a thumbnail is (re)generated.
 func (r *LibraryRepo) ClearThumbnail(ctx context.Context, id int64) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE library SET thumbnail = NULL, thumbnail_small_path = NULL, thumbnail_medium_path = NULL WHERE id = ?`,
+		`UPDATE library SET thumbnail = NULL, thumbnail_small_path = NULL, thumbnail_medium_path = NULL, thumbnail_width = NULL, thumbnail_height = NULL WHERE id = ?`,
 		id,
 	)
 	if err != nil {
@@ -973,7 +990,7 @@ func checkRowsAffected(res sql.Result) error {
 
 const librarySelectPrefix = `
 	SELECT l.id, l.download_id, l.title, l.filename, l.path, l.collection_id, c.name, l.folder, l.original_url, l.video_id,
-	       l.uploader, l.duration, l.resolution, l.media_type, l.thumbnail, l.thumbnail_small_path, l.thumbnail_medium_path, l.description, l.artist_id, a.name, l.release_year, l.sequence_number, l.season_number, l.generate_nfo, l.downloaded_at, l.status, l.file_size_bytes,
+	       l.uploader, l.duration, l.resolution, l.media_type, l.thumbnail, l.thumbnail_small_path, l.thumbnail_medium_path, l.thumbnail_width, l.thumbnail_height, l.description, l.artist_id, a.name, l.release_year, l.sequence_number, l.season_number, l.generate_nfo, l.downloaded_at, l.status, l.file_size_bytes,
 	       l.playback_position_seconds, l.last_watched_at`
 
 const libraryFromClause = `
@@ -990,7 +1007,7 @@ func scanLibraryItem(row rowScanner) (*models.LibraryItem, error) {
 
 	err := row.Scan(
 		&item.ID, &item.DownloadID, &item.Title, &item.Filename, &item.Path, &item.CollectionID, &item.CollectionName, &item.Folder,
-		&item.OriginalURL, &item.VideoID, &item.Uploader, &item.Duration, &item.Resolution, &item.MediaType, &item.Thumbnail, &item.ThumbnailSmallPath, &item.ThumbnailMediumPath,
+		&item.OriginalURL, &item.VideoID, &item.Uploader, &item.Duration, &item.Resolution, &item.MediaType, &item.Thumbnail, &item.ThumbnailSmallPath, &item.ThumbnailMediumPath, &item.ThumbnailWidth, &item.ThumbnailHeight,
 		&item.Description, &item.ArtistID, &item.ArtistName, &item.ReleaseYear, &item.SequenceNumber, &item.SeasonNumber, &item.GenerateNFO, &downloadedAt, &item.Status, &item.FileSizeBytes,
 		&item.PlaybackPositionSeconds, &lastWatchedAt,
 	)

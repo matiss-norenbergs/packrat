@@ -42,6 +42,13 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
           <DialogPrimitive.Content
             className="fixed inset-0 z-50 flex flex-col bg-background outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
             onOpenAutoFocus={(e) => e.preventDefault()}
+            // Without this, clicking inside the nested delete-confirm
+            // AlertDialog (portaled outside this Content's DOM subtree)
+            // reads as an outside click and closes this dialog too — same
+            // nested-popup issue the shared DialogContent guards against
+            // by default, which this raw fullscreen variant doesn't get
+            // for free.
+            onPointerDownOutside={(e) => e.preventDefault()}
           >
             <div className="flex shrink-0 items-start justify-between gap-4 border-b p-4">
               <div className="flex flex-col gap-1">
