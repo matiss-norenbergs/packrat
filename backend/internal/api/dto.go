@@ -55,7 +55,7 @@ type CreateDownloadRequest struct {
 	CollectionID *int64 `json:"collectionId"`
 	Folder       string `json:"folder"`
 	Filename     string `json:"filename"`
-	DownloadType string `json:"downloadType" binding:"required,oneof=video audio"`
+	DownloadType string `json:"downloadType" binding:"required,oneof=video audio image"`
 	Quality      string `json:"quality"`
 	AudioFormat  string `json:"audioFormat"`
 
@@ -656,7 +656,7 @@ type CreateCollectionRequest struct {
 	ParentID            *int64  `json:"parentId"`
 	RootPath            string  `json:"rootPath" binding:"required"`
 	DefaultQuality      string  `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio image"`
 	FilenameTemplate    string  `json:"filenameTemplate"`
 	IsPrivate           bool    `json:"isPrivate"`
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
@@ -672,7 +672,7 @@ type UpdateCollectionRequest struct {
 	Name                string  `json:"name" binding:"required"`
 	RootPath            string  `json:"rootPath" binding:"required"`
 	DefaultQuality      string  `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio image"`
 	FilenameTemplate    string  `json:"filenameTemplate"`
 	IsPrivate           bool    `json:"isPrivate"`
 	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
@@ -869,6 +869,7 @@ type SettingsResponse struct {
 	LibraryPaginationEnabled    bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize             int      `json:"libraryPageSize"`
 	ThumbnailFrameCount         int      `json:"thumbnailFrameCount"`
+	ImageConvertFormat          string   `json:"imageConvertFormat"`
 	PrivacyEnabled              bool     `json:"privacyEnabled"`
 	PrivacyBlurStrength         string   `json:"privacyBlurStrength"`
 	BrowseIgnorePrivacy         bool     `json:"browseIgnorePrivacy"`
@@ -914,7 +915,7 @@ type UpdateSettingsRequest struct {
 	MaxConcurrentTranscodes     *int      `json:"maxConcurrentTranscodes" binding:"omitempty,min=1"`
 	DownloadTimeoutMinutes      *int      `json:"downloadTimeoutMinutes" binding:"omitempty,min=0"`
 	DefaultQuality              *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType         *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio"`
+	DefaultDownloadType         *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio image"`
 	ImportIgnoredFolders        *[]string `json:"importIgnoredFolders"`
 	HistoryAnonymizeURLs        *bool     `json:"historyAnonymizeUrls"`
 	HistoryRetentionDays        *int      `json:"historyRetentionDays" binding:"omitempty,min=0"`
@@ -926,6 +927,7 @@ type UpdateSettingsRequest struct {
 	LibraryPaginationEnabled    *bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize             *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
 	ThumbnailFrameCount         *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8 12"`
+	ImageConvertFormat          *string   `json:"imageConvertFormat" binding:"omitempty,oneof=original jpg png webp"`
 	PrivacyEnabled              *bool     `json:"privacyEnabled"`
 	PrivacyBlurStrength         *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
 	BrowseIgnorePrivacy         *bool     `json:"browseIgnorePrivacy"`
@@ -1355,11 +1357,13 @@ type StatsResponse struct {
 	CompletedToday    int `json:"completedToday"`
 	LibraryVideoCount int `json:"libraryVideoCount"`
 	LibraryAudioCount int `json:"libraryAudioCount"`
-	// Ghost (no-file placeholder) subset of the two counts above — always
+	LibraryImageCount int `json:"libraryImageCount"`
+	// Ghost (no-file placeholder) subset of the three counts above — always
 	// <= their counterpart. Lets the dashboard split each bar/legend entry
 	// by ghost vs real without a separate chart.
 	LibraryVideoGhostCount int   `json:"libraryVideoGhostCount"`
 	LibraryAudioGhostCount int   `json:"libraryAudioGhostCount"`
+	LibraryImageGhostCount int   `json:"libraryImageGhostCount"`
 	TotalStorageBytes      int64 `json:"totalStorageBytes"`
 	// DiskTotalBytes/DiskFreeBytes describe the filesystem underlying
 	// MediaRoot, not the whole host — 0 if the disk-usage lookup failed

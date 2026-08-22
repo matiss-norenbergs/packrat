@@ -28,7 +28,11 @@ backend/
     pathsafe/                path traversal prevention (collections, folders, imports)
     fsutil/                  filename sanitization, atomic rename pairs, directory helpers
     imageproc/               shared ffmpeg-based WebP derivative generation + dimension probing,
-                             used by library thumbnails, collection covers, and artist images
+                             used by library thumbnails, collection covers, and artist images;
+                             also full-resolution format conversion for downloadType=image
+    imagefetch/               plain-HTTP fetch for downloadType=image (no yt-dlp involved) and the
+                             New Download dialog's proxied preview passthrough — both proxy-aware
+                             via the same ytdlp_proxy setting yt-dlp itself reads
     imagebackfill/           one-off background sweep: regenerates missing derivatives and
                              backfills thumbnail dimensions for pre-existing rows
     framematch/              perceptual-hash frame matching (ad-hoc job store + durable queue)
@@ -106,6 +110,32 @@ failure rather than a generic error.
 Playlist (`POST /downloads/playlist`) and batch (`POST /downloads/batch`) submissions both funnel
 through the same per-item enqueue path (`enqueueDownload`), just with the entry list resolved
 server-side (playlist) or supplied as an array (batch) instead of one URL at a time.
+
+## `downloadType=image`: a direct-URL download with no `yt-dlp` involved
+
+`yt-dlp`'s extractors are built for video-hosting pages, not a bare link straight to an image file —
+rather than stretch it to fit, `imagefetch.Fetch` does a plain HTTP GET (Content-Type validated
+against an allowlist, written atomically via temp-file-then-rename). `queue.DownloadManager.runOne`
+forks on `d.DownloadType == "image"` at exactly two points: the metadata-fetch step (skipped
+entirely — `titleFromURL` derives a fallback title from the URL itself) and the actual
+fetch/download step (`runImageDownload` instead of `ytdlp.Run`). Everything after that — duplicate
+detection, thumbnail-tier generation (the image doubles as its own thumbnail), redownload, the
+queue's progress model — is unmodified, since both paths converge back onto the same
+`downloader.RunResult` shape.
+
+**Proxy routing.** yt-dlp reads the `ytdlp_proxy` setting via its own `--proxy` flag, but a plain
+`http.Client` fetch doesn't get that for free — `imagefetch.Fetch`/`imagefetch.Open` both take a
+`proxyURL` parameter and build an `http.Transport{Proxy: http.ProxyURL(...)}` from it, reusing the
+exact setting value/scheme convention (`socks5://`/`http://`/`https://`) yt-dlp already uses. This
+matters beyond just the real download: the New Download dialog's live preview `<img>` — for an
+image-type URL *and* for a regular video/audio URL's yt-dlp-reported thumbnail — used to be a raw
+client-side `<img src>` pointing straight at the external URL, which has no way to honor a
+backend-configured proxy at all. `GET /api/downloads/preview-image` (`imagefetch.Open`, streaming
+instead of writing to disk) fixes both at once: the frontend's `previewImageUrl()` helper rewrites
+every preview `<img src>` to go through this endpoint rather than the raw external URL, so a preview
+never leaks outside whatever network path the real download would use. `GET /api/proxy/status`
+(a short-timeout `HEAD` through the configured transport) backs the sidebar's live reachability dot,
+independent of any actual download or preview happening.
 
 ## Full-text search
 
@@ -285,3 +315,7 @@ Still intentionally out of scope, not forgotten:
   has no origin restriction (`CheckOrigin` always returns true) beyond the session-cookie gate.
 - **No automatic media byte transfer in backups.** By design — see "Backup and restore" above.
   A library bundle is a recipe for re-downloading, not an archive of the files themselves.
+- **No image galleries/site scraping.** `downloadType=image` is deliberately scoped to one direct
+  link → one file, no `gallery-dl`-style multi-image-per-post extraction. Ghost items and
+  subscriptions also don't gain image support — both stay `video`|`audio`-only by design, even
+  though `Collection.defaultDownloadType` itself now also accepts `image`.

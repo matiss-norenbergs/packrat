@@ -12,6 +12,30 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-22
+
+- **New: "Image" download type** — the New Download dialog (and Bulk Download, batch, and playlist
+  submissions) now accepts a third type alongside Video/Audio: a direct link to a single image
+  file. No `yt-dlp` involved (its extractors are built for video-hosting pages, not a bare image
+  URL) and deliberately no gallery/multi-image support — one URL, one file, same as any other
+  download. The image doubles as its own thumbnail and is re-encoded per a new Settings → Library
+  → "Image conversion format" setting (Original/JPEG/PNG/WebP, default JPEG, matching the existing
+  video-thumbnail-normalizes-to-JPEG convention). Ghost items and subscriptions intentionally stay
+  Video/Audio-only.
+- **Image downloads and previews now honor the configured proxy** — the `ytdlp_proxy` setting
+  (Settings → yt-dlp → Proxy) already routed `yt-dlp` itself; it now also routes the new Image
+  download type's fetch, and — for every download type — the New Download dialog's live preview
+  thumbnail, which used to be a raw client-side `<img>` request straight to the external URL with
+  no way to respect a backend-configured proxy. A new sidebar status dot next to **Downloads**
+  shows the proxy's live state at a glance (grey = not configured, green = reachable, red =
+  configured but not reachable).
+- **Fix: subscription-triggered audio downloads failing with "invalid audio format"** — downloads
+  queued from a subscription (automatic checks, or the "Known items" dialog's "Queue download"
+  action) never set an audio format, unlike every other download path, which defaults to `mp3` when
+  one isn't specified. `yt-dlp` was getting handed `--audio-format ""` and rejecting it outright.
+  Subscriptions now apply the same `mp3` default; the yt-dlp arg-building step also got a defensive
+  fallback so no future caller can reproduce this by forgetting to set one.
+
 ## 2026-08-20
 
 - **Library Details mode: Gallery field + Thumbnail resolution fix** — the

@@ -59,7 +59,16 @@ func (s *YtDlpService) BuildArgs(ctx context.Context, job DownloadJob) []string 
 	}
 
 	if job.DownloadType == "audio" {
-		args = append(args, "-f", "bestaudio/best", "-x", "--audio-format", job.AudioFormat, "--audio-quality", "0")
+		// Every caller is expected to have already resolved a real format
+		// (the app-wide default is "mp3" — see enqueueDownload/
+		// enqueueSubscriptionDownload), but falling back here too means a
+		// caller that forgets can't hand yt-dlp `--audio-format ""`, which
+		// it rejects outright with "invalid audio format \"\" given".
+		audioFormat := job.AudioFormat
+		if audioFormat == "" {
+			audioFormat = "mp3"
+		}
+		args = append(args, "-f", "bestaudio/best", "-x", "--audio-format", audioFormat, "--audio-quality", "0")
 	} else {
 		args = append(args, "-f", BuildFormatSelector(job.Quality))
 	}

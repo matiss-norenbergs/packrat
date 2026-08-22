@@ -8,7 +8,7 @@ type Collection struct {
 	ParentID             *int64
 	RootPath             string
 	DefaultQuality       string
-	DefaultDownloadType  string
+	DefaultDownloadType  string // "video" | "audio" | "image"
 	FilenameTemplate     string
 	JellyfinLibrary      *string
 	IsPrivate            bool

@@ -185,14 +185,23 @@ func enqueueSubscriptionDownload(ctx context.Context, deps CheckDeps, sub models
 			quality = collection.DefaultQuality
 		}
 	}
-	return deps.Manager.Enqueue(ctx, models.Download{
+	d := models.Download{
 		URL:          entry.URL,
 		CollectionID: sub.CollectionID,
 		DownloadType: sub.MediaType,
 		Quality:      quality,
 		OverrideTags: sub.Tags,
 		GenerateNFO:  sub.GenerateNFO,
-	})
+	}
+	// Mirrors enqueueDownload's (api.downloads_handler) own "mp3" default —
+	// unlike that HTTP path, nothing here ever prompts for a format, so an
+	// audio subscription must default one itself or yt-dlp gets handed
+	// --audio-format "" and rejects it outright.
+	if sub.MediaType == "audio" {
+		audioFormat := "mp3"
+		d.AudioFormat = &audioFormat
+	}
+	return deps.Manager.Enqueue(ctx, d)
 }
 
 // AddKnownEntryAsGhost and AddKnownEntryAsDownload back the "Known items"

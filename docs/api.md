@@ -63,6 +63,7 @@ since Gin matches registered routes before falling back to serving `index.html`.
 | POST | `/api/downloads` | Queue a single download |
 | GET | `/api/downloads` | List the live queue (all statuses, not paginated) |
 | POST | `/api/downloads/preview` | Fetch yt-dlp metadata without queuing anything |
+| GET | `/api/downloads/preview-image` | Proxy a single external image through the backend |
 | POST | `/api/downloads/playlist` | Queue a playlist URL — server expands entries |
 | POST | `/api/downloads/batch` | Queue many independent URLs in one call |
 | POST | `/api/downloads/:id/cancel` | Cancel a queued/in-flight download |
@@ -91,18 +92,28 @@ since Gin matches registered routes before falling back to serving `index.html`.
 }
 ```
 
-`url` (must be a URL) and `downloadType` (`video`|`audio`) are required; everything else is
+`url` (must be a URL) and `downloadType` (`video`|`audio`|`image`) are required; everything else is
 optional. Notes:
 
 - If `collectionId` is set and `quality` is omitted, the collection's `defaultQuality` is used;
   else the app-wide `defaultQuality` setting; else `"best"`.
-- `audioFormat` defaults to `"mp3"` when `downloadType=audio` and it's omitted.
+- `audioFormat` defaults to `"mp3"` when `downloadType=audio` and it's omitted. Every path that can
+  queue an audio download (this endpoint, batch/playlist, and subscriptions) applies this same
+  default — yt-dlp rejects an empty `--audio-format` outright.
 - `folder`/`collectionId` are validated with path-traversal protection *synchronously* — an
   invalid folder or unknown collection is a `400`, not a later async failure.
 - `title`/`artistId`/`year`/`seasonNumber`/`sequenceNumber`/`filenamePrefix` are **overrides
   applied once the download completes**, taking priority over whatever yt-dlp reports.
 - `tags` are applied to the resulting library item on completion (created if missing).
 - Response: `201 {"id": 42}`.
+- **`downloadType=image`**: for a direct link to a single image file — no yt-dlp involved at all,
+  no gallery/multi-image support. Skips the metadata-fetch step entirely (the title falls back to
+  the URL's last path segment, then the raw URL). The plain HTTP GET is routed through the
+  `ytdlp_proxy` setting exactly like yt-dlp itself (see Proxy, below). The downloaded file is
+  optionally re-encoded per the `imageConvertFormat` setting (Settings → Library; global only, no
+  per-download override) and doubles as its own thumbnail — no separate sidecar. Quality/audio
+  fields are ignored. A URL whose response isn't a recognized `image/*` Content-Type fails fast
+  instead of writing a misleadingly-named file.
 
 ### `GET /api/downloads` — no params
 
@@ -143,6 +154,16 @@ URL, also checks for a duplicate already in the library (by URL/video ID).
 ```
 
 For a playlist URL, `isPlaylist=true` and only `playlistTitle`/`playlistCount` are populated.
+
+### `GET /api/downloads/preview-image?url=...`
+
+Streams `url`'s response straight back through — same Content-Type allowlist and `ytdlp_proxy`
+routing as the `downloadType=image` fetch above. Backs the New Download dialog's live preview
+`<img>` for **both** an image-type URL and a regular video/audio URL's yt-dlp-reported thumbnail: a
+plain client-side `<img src>` pointing at the raw external URL can't honor a backend-configured
+proxy, so both preview paths go through this endpoint instead of loading the external image
+directly. `422` if the fetch fails or the Content-Type isn't a recognized image type; `200` with the
+image bytes streamed through (`Content-Type`/size passed along) on success.
 
 ### `POST /api/downloads/playlist`
 
@@ -865,12 +886,15 @@ is a nullable relative path pointing at one of the artist's own gallery images (
   "libraryMode": "manage", "libraryPaginationEnabled": false, "libraryPageSize": 48,
   "thumbnailFrameCount": 4, "privacyBlurStrength": "default", "skipDownloadPreview": false,
   "jellyfinEnabled": false, "jellyfinUrl": "", "jellyfinApiKey": "", "jellyfinRefreshMode": "none",
-  "libraryAutoplay": true
+  "libraryAutoplay": true, "imageConvertFormat": "jpg"
 }
 ```
 
 `downloadDirectory` and `maxConcurrentDownloads` reflect live config/worker-pool state, not just
-the last saved DB value. `jellyfinApiKey` is returned in plaintext, not masked.
+the last saved DB value. `jellyfinApiKey` is returned in plaintext, not masked. `imageConvertFormat`
+(`"original"|"jpg"|"png"|"webp"`, default `"jpg"`) is the format every `downloadType=image` download
+gets re-encoded to — matches the existing convention that video/audio thumbnails always normalize to
+JPEG.
 
 ### `PATCH /api/settings` — every field optional, only provided ones are persisted
 
@@ -1310,16 +1334,17 @@ No params on any of the three.
 ```json
 {
   "activeDownloads": 2, "queuedDownloads": 5, "completedToday": 14,
-  "libraryVideoCount": 320, "libraryAudioCount": 48,
-  "libraryVideoGhostCount": 3, "libraryAudioGhostCount": 1,
+  "libraryVideoCount": 320, "libraryAudioCount": 48, "libraryImageCount": 6,
+  "libraryVideoGhostCount": 3, "libraryAudioGhostCount": 1, "libraryImageGhostCount": 0,
   "totalStorageBytes": 128849018880,
   "diskTotalBytes": 500107862016, "diskFreeBytes": 128849018880
 }
 ```
 
-`libraryVideo/AudioGhostCount` are ghost-item (no downloaded file) counts, separate from the real
-counts. `diskTotal/FreeBytes` are best-effort (`0`/`0` if the filesystem call fails — never fails
-the whole request).
+`libraryVideo/Audio/ImageGhostCount` are ghost-item (no downloaded file) counts, separate from the
+real counts — ghost items are never created with `mediaType=image` today, so
+`libraryImageGhostCount` is currently always `0`. `diskTotal/FreeBytes` are best-effort (`0`/`0` if
+the filesystem call fails — never fails the whole request).
 
 ### `GET /api/stats/library-growth`
 
@@ -1370,6 +1395,28 @@ fails, `204` on success.
 
 `latestVersion` is `null` if the best-effort PyPI lookup fails (that alone never fails the
 request). `POST /api/ytdlp/update` — no body, `502` on failure, else `200 {"version": "2024.09.27"}`.
+
+## Proxy
+
+The `ytdlp_proxy` setting (Settings → yt-dlp → Proxy, e.g. `socks5://127.0.0.1:1080` or
+`http://gluetun:8888`) is read by every outbound fetch that would otherwise leak the server's real
+network path: yt-dlp's own `--proxy` flag, `downloadType=image` downloads, and both New Download
+preview paths (`GET /api/downloads/preview-image`, above) — a raw client-side `<img src>` fetch has
+no way to honor a backend-configured proxy, so those are proxied server-side instead.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/proxy/status` | Whether a proxy is configured and currently reachable |
+
+```json
+{ "configured": true, "reachable": true }
+```
+
+`configured: false` (with `reachable` meaningless/`false`) means no `ytdlp_proxy` is saved — nothing
+to probe. When configured, the backend makes a short-timeout (5s) `HEAD` request through it to a
+fixed external address to confirm it's actually passing traffic. Backs the sidebar's Downloads
+status dot (grey = unconfigured, green = reachable, red = configured but not reachable), polled
+every 30s.
 
 ## AI Enhancement
 

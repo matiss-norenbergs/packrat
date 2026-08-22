@@ -206,6 +206,7 @@ export function CollectionDialog({
                     <SelectContent>
                       <SelectItem value="video">Video</SelectItem>
                       <SelectItem value="audio">Audio</SelectItem>
+                      <SelectItem value="image">Image</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

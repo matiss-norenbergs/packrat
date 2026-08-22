@@ -29,7 +29,8 @@ export type DownloadStatus =
   | "interrupted"
   | "duplicate"
 
-export type DownloadType = "video" | "audio"
+export type MediaType = "video" | "audio" | "image"
+export type DownloadType = MediaType
 export type AudioFormat = "mp3" | "flac" | "m4a" | "aac" | "wav"
 export type VideoQuality = "best" | "2160p" | "1440p" | "1080p" | "720p" | "480p" | "360p" | "worst"
 
@@ -200,7 +201,7 @@ export interface LibraryItem {
   uploader: string | null
   duration: number | null
   resolution: string | null
-  mediaType: "video" | "audio" | null
+  mediaType: MediaType | null
   thumbnail: string | null
   thumbnailSmallPath: string | null
   thumbnailMediumPath: string | null
@@ -511,6 +512,7 @@ export interface Settings {
   libraryPaginationEnabled: boolean
   libraryPageSize: number
   thumbnailFrameCount: number
+  imageConvertFormat: "original" | "jpg" | "png" | "webp"
   privacyEnabled: boolean
   privacyBlurStrength: string
   browseIgnorePrivacy: boolean
@@ -655,6 +657,7 @@ export interface UpdateSettingsRequest {
   libraryPaginationEnabled?: boolean
   libraryPageSize?: number
   thumbnailFrameCount?: number
+  imageConvertFormat?: "original" | "jpg" | "png" | "webp"
   privacyEnabled?: boolean
   privacyBlurStrength?: string
   browseIgnorePrivacy?: boolean
@@ -844,9 +847,11 @@ export interface Stats {
   completedToday: number
   libraryVideoCount: number
   libraryAudioCount: number
-  // Ghost (no-file placeholder) subset of the two counts above.
+  libraryImageCount: number
+  // Ghost (no-file placeholder) subset of the three counts above.
   libraryVideoGhostCount: number
   libraryAudioGhostCount: number
+  libraryImageGhostCount: number
   totalStorageBytes: number
   // Describe the filesystem underlying the server's media root, not the
   // whole host — 0/0 if the disk-usage lookup failed server-side.
@@ -993,6 +998,13 @@ export interface ThumbnailEnhancementStatus {
   configured: boolean
   reachable: boolean
   error: string | null
+}
+
+// Configured is false whenever no ytdlp_proxy is saved — reachable is
+// meaningless in that case, there's nothing to probe.
+export interface ProxyStatus {
+  configured: boolean
+  reachable: boolean
 }
 
 // One row of the "Preview eligible items" dialog — a live snapshot of what

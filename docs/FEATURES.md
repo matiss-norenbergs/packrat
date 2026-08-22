@@ -33,11 +33,18 @@ The live download queue.
   - Pick a collection (optional). Selecting one inherits its default type/quality, and — if set —
     its Season # and Artist defaults (see Collections below); only fills those in, never clears a
     value you've already typed.
-  - Video or audio, quality/format, and an optional filename override (defaults to the source's
-    title).
-  - A live preview card (thumbnail/title/uploader/duration) fetches before you submit, unless
-    "I trust this source" is enabled in Settings → Downloads. If the URL matches something already
-    in the library, a duplicate warning is shown but doesn't block submission.
+  - Video, audio, or **Image**, quality/format, and an optional filename override (defaults to the
+    source's title). Image is for a direct link to a single image file — no `yt-dlp` involved, no
+    gallery/multi-image support (a real gallery-site integration is a possible future addition, not
+    this). The image is re-encoded per Settings → Library → "Image conversion format" (default
+    JPEG) and doubles as its own thumbnail.
+  - A live preview card (thumbnail/title/uploader/duration for video/audio; the image itself for
+    Image) fetches before you submit, unless "I trust this source" is enabled in Settings →
+    Downloads. If the URL matches something already in the library, a duplicate warning is shown
+    but doesn't block submission. Every preview image request — the Image type's own preview and
+    the yt-dlp-reported video/audio thumbnail alike — is proxied through the backend rather than
+    fetched directly by the browser, so it honors a configured proxy (see Settings → yt-dlp below)
+    the same way the real download does.
   - **Playlists**: pasting a playlist URL offers a mode — download just the one video ("current"),
     the entire playlist, a numbered range, or the first N entries. The server re-resolves the
     playlist itself at submit time rather than trusting a client-built entry list.
@@ -416,7 +423,10 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   via the `MEDIA_ROOT` environment variable).
 - **Account** — change your password (requires the current one).
 - **yt-dlp** — shows the installed version and whether a newer one is available on PyPI; one-click
-  update.
+  update. Also where the cookies browser/profile, proxy, and rate-limit are set. The proxy
+  (`socks5://`/`http://`/`https://`) is used by `yt-dlp` itself and by every image download/preview
+  fetch (see Downloads above) — a sidebar dot next to **Downloads** shows its live state at a
+  glance: grey (not set), green (reachable), red (configured but not reachable).
 - **Appearance** — light / dark / system theme.
 - **Downloads** — default download type and quality for new downloads; "I trust this source" (skip
   the New Download preview fetch and queue immediately); how long to keep the download log
@@ -432,9 +442,11 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   plays); **Backfill Images** — a one-click background job that generates missing thumbnail/artist
   image/collection-cover derivatives for anything that predates them, and backfills stored
   thumbnail width/height for older items so the "Thumbnail resolution" field is accurate without a
-  live image fetch (safe to re-run, a progress readout updates while it's running); **Scan for
-  Missing Files** — checks every item's file against disk and converts anything gone into a
-  [ghost placeholder](#ghost-items) (manual only, never scheduled).
+  live image fetch (safe to re-run, a progress readout updates while it's running); **Image
+  conversion format** — Original/JPEG/PNG/WebP, what every new `downloadType=image` download gets
+  re-encoded to (default JPEG); **Scan for Missing Files** — checks every item's file against disk
+  and converts anything gone into a [ghost placeholder](#ghost-items) (manual only, never
+  scheduled).
 - **Backup** — turn on **Auto Backup** and pick an interval (6h/12h/24h/3 days/weekly) for
   automatic full backups (see Backup above), and how many to keep before old ones are pruned
   (default 14, or unlimited).

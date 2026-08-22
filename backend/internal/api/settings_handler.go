@@ -36,6 +36,30 @@ func ImportIgnoredFolders(ctx context.Context, repo *repository.SettingsRepo) ([
 	return folders, nil
 }
 
+// defaultImageConvertFormat matches the existing convention that video
+// thumbnails always get normalized to JPEG (yt-dlp's --convert-thumbnails
+// jpg).
+const defaultImageConvertFormat = "jpg"
+
+// ImageConvertFormat reads the image_convert_format setting, defaulting to
+// defaultImageConvertFormat if it's never been set or is corrupt. Shared by
+// GetSettings.
+func ImageConvertFormat(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingImageConvertFormat)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultImageConvertFormat, nil
+	}
+	if err != nil {
+		return defaultImageConvertFormat, err
+	}
+	switch raw {
+	case "original", "jpg", "png", "webp":
+		return raw, nil
+	default:
+		return defaultImageConvertFormat, nil
+	}
+}
+
 // HistoryAnonymizeURLs reads the history_anonymize_urls setting, defaulting
 // to false if it's never been set (no migration seeds this key). Shared by
 // GetSettings and ListHistory.
@@ -849,6 +873,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		imageConvertFormat, err := ImageConvertFormat(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1047,6 +1076,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			LibraryPaginationEnabled:    libraryPaginationEnabled,
 			LibraryPageSize:             libraryPageSize,
 			ThumbnailFrameCount:         thumbnailFrameCount,
+			ImageConvertFormat:          imageConvertFormat,
 			PrivacyEnabled:              privacyEnabled,
 			PrivacyBlurStrength:         privacyBlurStrength,
 			BrowseIgnorePrivacy:         browseIgnorePrivacy,
@@ -1318,6 +1348,12 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		}
 		if req.ThumbnailFrameCount != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameCount, strconv.Itoa(*req.ThumbnailFrameCount)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.ImageConvertFormat != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingImageConvertFormat, *req.ImageConvertFormat); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

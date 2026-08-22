@@ -352,6 +352,7 @@ function DownloadsTab() {
             <SelectContent>
               <SelectItem value="video">Video</SelectItem>
               <SelectItem value="audio">Audio</SelectItem>
+              <SelectItem value="image">Image</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -458,6 +459,7 @@ function LibraryTab() {
   const [thumbHigh, setThumbHigh] = useState(1080)
   const [frameCount, setFrameCount] = useState(4)
   const [autoplay, setAutoplay] = useState(false)
+  const [imageConvertFormat, setImageConvertFormat] = useState<"original" | "jpg" | "png" | "webp">("jpg")
 
   useEffect(() => {
     if (!settings) return
@@ -469,6 +471,7 @@ function LibraryTab() {
     setThumbHigh(settings.thumbnailResolutionThresholdHigh)
     setFrameCount(settings.thumbnailFrameCount)
     setAutoplay(settings.libraryAutoplay)
+    setImageConvertFormat(settings.imageConvertFormat)
   }, [settings])
 
   if (isLoading || !settings) return <Skeleton className="h-40 w-full max-w-lg" />
@@ -483,6 +486,7 @@ function LibraryTab() {
   if (thumbHigh !== settings.thumbnailResolutionThresholdHigh) payload.thumbnailResolutionThresholdHigh = thumbHigh
   if (frameCount !== settings.thumbnailFrameCount) payload.thumbnailFrameCount = frameCount
   if (autoplay !== settings.libraryAutoplay) payload.libraryAutoplay = autoplay
+  if (imageConvertFormat !== settings.imageConvertFormat) payload.imageConvertFormat = imageConvertFormat
   const dirty = Object.keys(payload).length > 0
 
   const lowLabel = RESOLUTION_STEP_LABELS[low] ?? `${low}p`
@@ -642,6 +646,29 @@ function LibraryTab() {
                 : `Low: <${thumbHighLabel} · High: ≥${thumbHighLabel}`}
             </p>
           </div>
+        </div>
+      </div>
+
+      <div className="space-y-2 border-t pt-4">
+        <h3 className="text-sm font-medium">Images</h3>
+        <div className="space-y-2">
+          <FieldLabel
+            htmlFor="image-convert-format"
+            info="What format a downloaded image gets converted to. Original keeps whatever format the source served."
+          >
+            Image conversion format
+          </FieldLabel>
+          <Select value={imageConvertFormat} onValueChange={(v) => setImageConvertFormat(v as typeof imageConvertFormat)}>
+            <SelectTrigger id="image-convert-format" className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="original">Original</SelectItem>
+              <SelectItem value="jpg">JPEG</SelectItem>
+              <SelectItem value="png">PNG</SelectItem>
+              <SelectItem value="webp">WebP</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

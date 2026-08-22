@@ -19,6 +19,11 @@ const (
 	SettingLibraryPaginationEnabled = "library_pagination_enabled" // bool, default false — off shows every item
 	SettingLibraryPageSize          = "library_page_size"
 	SettingThumbnailFrameCount      = "thumbnail_frame_count"
+	// SettingImageConvertFormat controls what format a downloaded "image"
+	// item's file gets converted to on ingest — "original" leaves it as
+	// fetched. Matches the existing convention that video thumbnails always
+	// get normalized to JPEG (yt-dlp's --convert-thumbnails jpg).
+	SettingImageConvertFormat = "image_convert_format" // "original" | "jpg" | "png" | "webp"; default "jpg"
 	SettingPrivacyEnabled           = "privacy_enabled"       // bool, default false — master switch for the whole privacy workflow
 	SettingPrivacyBlurStrength      = "privacy_blur_strength" // "weak" | "default" | "strong"
 	SettingBrowseIgnorePrivacy      = "browse_ignore_privacy" // bool, default false — Browse-page-only override, doesn't affect Library

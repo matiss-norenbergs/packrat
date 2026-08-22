@@ -844,7 +844,7 @@ func (r *LibraryRepo) ListPaths(ctx context.Context) (map[string]bool, error) {
 // originating download's download_type when the item came from a real
 // download (LEFT JOIN downloads), falling back to "has a resolution ->
 // video, else audio" for imported files with no linked download.
-func (r *LibraryRepo) Stats(ctx context.Context) (videoCount, audioCount, videoGhostCount, audioGhostCount int, totalBytes int64, err error) {
+func (r *LibraryRepo) Stats(ctx context.Context) (videoCount, audioCount, imageCount, videoGhostCount, audioGhostCount, imageGhostCount int, totalBytes int64, err error) {
 	row := r.db.QueryRowContext(ctx, `
 		WITH typed AS (
 			SELECT
@@ -857,15 +857,17 @@ func (r *LibraryRepo) Stats(ctx context.Context) (videoCount, audioCount, videoG
 		SELECT
 			COALESCE(SUM(CASE WHEN media_type = 'video' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN media_type = 'audio' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN media_type = 'image' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN media_type = 'video' AND status = 'ghost' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN media_type = 'audio' AND status = 'ghost' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN media_type = 'image' AND status = 'ghost' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(file_size_bytes), 0)
 		FROM typed`,
 	)
-	if err = row.Scan(&videoCount, &audioCount, &videoGhostCount, &audioGhostCount, &totalBytes); err != nil {
-		return 0, 0, 0, 0, 0, fmt.Errorf("computing library stats: %w", err)
+	if err = row.Scan(&videoCount, &audioCount, &imageCount, &videoGhostCount, &audioGhostCount, &imageGhostCount, &totalBytes); err != nil {
+		return 0, 0, 0, 0, 0, 0, 0, fmt.Errorf("computing library stats: %w", err)
 	}
-	return videoCount, audioCount, videoGhostCount, audioGhostCount, totalBytes, nil
+	return videoCount, audioCount, imageCount, videoGhostCount, audioGhostCount, imageGhostCount, totalBytes, nil
 }
 
 // LibraryGrowthPoint is one calendar day's new-item tally for the
