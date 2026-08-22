@@ -133,8 +133,8 @@ func EntriesFromMetadata(meta *downloader.Metadata, url string) []downloader.Pla
 func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription, entries []downloader.PlaylistEntry, baseline bool) (int, error) {
 	ids := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if e.ID != "" {
-			ids = append(ids, e.ID)
+		if id := sourceID(e); id != "" {
+			ids = append(ids, id)
 		}
 	}
 	seen, err := deps.SubscriptionsRepo.HasSeenEntries(ctx, sub.ID, ids)
@@ -144,7 +144,8 @@ func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription
 
 	newCount := 0
 	for _, entry := range entries {
-		if entry.ID == "" || seen[entry.ID] {
+		id := sourceID(entry)
+		if id == "" || seen[id] {
 			continue
 		}
 
@@ -152,25 +153,53 @@ func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription
 		if !baseline {
 			if sub.AutoDownload {
 				if _, err := enqueueSubscriptionDownload(ctx, deps, sub, entry); err != nil {
+					// Still falls through to RecordSeenEntry below — an entry
+					// that fails to enqueue is still a real entry Packrat has
+					// seen, not a nonexistent one. Recording it (with no
+					// library_item_id, same as a not-yet-downloaded new entry)
+					// is what makes it show up in Known Items at all, and is
+					// what stops every future check from retrying the exact
+					// same failure forever — without this, a persistent
+					// failure (bad audio format, dead URL, ...) would never
+					// get recorded and would be silently re-attempted on
+					// every single check indefinitely.
 					log.Printf("subscription %d: enqueuing %q failed: %v", sub.ID, entry.URL, err)
-					continue
+				} else {
+					newCount++
 				}
 			} else {
 				id, err := createGhostForEntry(ctx, deps, sub, entry)
 				if err != nil {
+					// Same reasoning as the enqueue-failure case above.
 					log.Printf("subscription %d: creating ghost item for %q failed: %v", sub.ID, entry.URL, err)
-					continue
+				} else {
+					libraryItemID = &id
+					newCount++
 				}
-				libraryItemID = &id
 			}
-			newCount++
 		}
 
-		if err := deps.SubscriptionsRepo.RecordSeenEntry(ctx, sub.ID, entry.ID, entry.Title, entry.URL, entry.Duration, libraryItemID); err != nil {
-			log.Printf("subscription %d: recording seen entry %q failed: %v", sub.ID, entry.ID, err)
+		if err := deps.SubscriptionsRepo.RecordSeenEntry(ctx, sub.ID, id, entry.Title, entry.URL, entry.Duration, libraryItemID); err != nil {
+			log.Printf("subscription %d: recording seen entry %q failed: %v", sub.ID, id, err)
 		}
 	}
 	return newCount, nil
+}
+
+// sourceID picks the stable identifier processEntries dedups/records an
+// entry under: entry.ID when the extractor's flat-playlist output actually
+// provides one, entry.URL otherwise. Not every extractor does — some sites'
+// channel/listing pages only ever populate url/title/ie_key, never id — and
+// entry.ID being permanently "" for an entire source would mean every entry
+// from it fails the "have we seen this?" check forever, since there'd be
+// nothing to key it by: baselining, automatic checks, and manual "Check now"
+// would all silently record zero entries no matter how many videos the
+// source actually has.
+func sourceID(entry downloader.PlaylistEntry) string {
+	if entry.ID != "" {
+		return entry.ID
+	}
+	return entry.URL
 }
 
 // enqueueSubscriptionDownload mirrors enqueueDownload's core

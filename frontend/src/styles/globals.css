@@ -120,6 +120,32 @@
     --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Settings → Appearance → "Primary color" — an optional accent override on
+   top of the neutral default above. Applied via a `data-accent` attribute on
+   <html> (see useAccentColor), never a `:root`/`.dark` split — a saturated
+   accent reads fine against both light and dark surfaces at the same
+   lightness/chroma, unlike the neutral default (which genuinely inverts
+   between light/dark). Must come after `.dark` so it wins regardless of
+   which theme is active (equal specificity, later rule wins). Foreground is
+   the same near-white for every accent, matching how buttons/badges already
+   use white text on a solid accent fill. */
+[data-accent="blue"] {
+    --primary: oklch(0.55 0.2 260);
+    --primary-foreground: oklch(0.985 0 0);
+}
+[data-accent="red"] {
+    --primary: oklch(0.55 0.22 10);
+    --primary-foreground: oklch(0.985 0 0);
+}
+[data-accent="green"] {
+    --primary: oklch(0.55 0.17 145);
+    --primary-foreground: oklch(0.985 0 0);
+}
+[data-accent="violet"] {
+    --primary: oklch(0.55 0.22 300);
+    --primary-foreground: oklch(0.985 0 0);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

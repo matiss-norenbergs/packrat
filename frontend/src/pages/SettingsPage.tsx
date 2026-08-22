@@ -44,7 +44,16 @@ import {
   useYtDlpVersion,
 } from "@/hooks/useSettings"
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
+import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
 import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/api"
+
+const ACCENT_COLOR_OPTIONS: { value: AccentColor; label: string; swatch: string }[] = [
+  { value: "default", label: "Default", swatch: "oklch(0.556 0 0)" },
+  { value: "blue", label: "Blue", swatch: "oklch(0.55 0.2 260)" },
+  { value: "red", label: "Red", swatch: "oklch(0.55 0.22 10)" },
+  { value: "green", label: "Green", swatch: "oklch(0.55 0.17 145)" },
+  { value: "violet", label: "Violet", swatch: "oklch(0.55 0.22 300)" },
+]
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
 
@@ -1620,20 +1629,44 @@ function YtDlpTab() {
 
 function AppearanceTab() {
   const { theme, setTheme } = useTheme()
+  const { accent, setAccent } = useAccentColor()
 
   return (
-    <div className="max-w-lg space-y-2">
-      <Label>Theme</Label>
-      <Select value={theme ?? "system"} onValueChange={setTheme}>
-        <SelectTrigger className="w-48">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="light">Light</SelectItem>
-          <SelectItem value="dark">Dark</SelectItem>
-          <SelectItem value="system">System</SelectItem>
-        </SelectContent>
-      </Select>
+    <div className="max-w-lg space-y-6">
+      <div className="space-y-2">
+        <Label>Theme</Label>
+        <Select value={theme ?? "system"} onValueChange={setTheme}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="light">Light</SelectItem>
+            <SelectItem value="dark">Dark</SelectItem>
+            <SelectItem value="system">System</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Primary color</Label>
+        <Select value={accent} onValueChange={(v) => setAccent(v as AccentColor)}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ACCENT_COLOR_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: opt.swatch }}
+                  />
+                  {opt.label}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   )
 }

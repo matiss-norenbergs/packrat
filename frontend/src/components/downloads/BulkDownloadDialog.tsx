@@ -260,7 +260,7 @@ export function BulkDownloadDialog() {
       <Tooltip>
         <TooltipTrigger asChild>
           <DialogTrigger asChild>
-            <Button variant="outline" size="icon" className="rounded-l-none border-l-0" aria-label="Bulk Download">
+            <Button size="icon" className="rounded-l-none border-l border-primary-foreground/20" aria-label="Bulk Download">
               <ListPlus className="h-4 w-4" />
             </Button>
           </DialogTrigger>

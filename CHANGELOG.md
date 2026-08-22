@@ -35,6 +35,10 @@ Maintenance notes:
   one isn't specified. `yt-dlp` was getting handed `--audio-format ""` and rejecting it outright.
   Subscriptions now apply the same `mp3` default; the yt-dlp arg-building step also got a defensive
   fallback so no future caller can reproduce this by forgetting to set one.
+- **New: Settings → Appearance → "Primary color"** — pick an accent color for buttons, badges,
+  switches, and other primary-colored UI from five presets (Default, Blue, Red, Green, Violet);
+  Default leaves the look exactly as it's always been. Applies instantly app-wide and persists like
+  the existing Theme setting (a browser-local preference, no backend round-trip).
 
 ## 2026-08-20
 
