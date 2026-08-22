@@ -99,6 +99,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo, deps.SettingsRepo))
 		api.POST("/downloads/preview", PreviewDownloadMetadata(deps.YtDlp, deps.LibraryRepo))
+		api.GET("/downloads/preview-image", PreviewImage(deps.SettingsRepo))
 		api.POST("/downloads/playlist", CreatePlaylistDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo, deps.LibraryRepo, deps.HistoryRepo, deps.YtDlp))
 		api.POST("/downloads/batch", CreateBatchDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo, deps.LibraryRepo, deps.HistoryRepo))
 		api.POST("/downloads/:id/cancel", CancelDownload(deps.Manager))
@@ -184,6 +185,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp))
 		api.POST("/settings/backfill-images", StartImageBackfill(deps.ImageBackfillManager))
 		api.GET("/settings/backfill-images", GetImageBackfillStatus(deps.ImageBackfillManager))
+		api.GET("/proxy/status", GetProxyStatus(deps.SettingsRepo))
 
 		api.POST("/backup/export/settings", ExportSettings(deps.SettingsRepo))
 		api.POST("/backup/export/library", ExportLibrary(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.DownloadsRepo))

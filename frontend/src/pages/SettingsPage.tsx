@@ -44,7 +44,16 @@ import {
   useYtDlpVersion,
 } from "@/hooks/useSettings"
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
+import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
 import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/api"
+
+const ACCENT_COLOR_OPTIONS: { value: AccentColor; label: string; swatch: string }[] = [
+  { value: "default", label: "Default", swatch: "oklch(0.556 0 0)" },
+  { value: "blue", label: "Blue", swatch: "oklch(0.55 0.2 260)" },
+  { value: "red", label: "Red", swatch: "oklch(0.55 0.22 10)" },
+  { value: "green", label: "Green", swatch: "oklch(0.55 0.17 145)" },
+  { value: "violet", label: "Violet", swatch: "oklch(0.55 0.22 300)" },
+]
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
 
@@ -352,6 +361,7 @@ function DownloadsTab() {
             <SelectContent>
               <SelectItem value="video">Video</SelectItem>
               <SelectItem value="audio">Audio</SelectItem>
+              <SelectItem value="image">Image</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -458,6 +468,7 @@ function LibraryTab() {
   const [thumbHigh, setThumbHigh] = useState(1080)
   const [frameCount, setFrameCount] = useState(4)
   const [autoplay, setAutoplay] = useState(false)
+  const [imageConvertFormat, setImageConvertFormat] = useState<"original" | "jpg" | "png" | "webp">("jpg")
 
   useEffect(() => {
     if (!settings) return
@@ -469,6 +480,7 @@ function LibraryTab() {
     setThumbHigh(settings.thumbnailResolutionThresholdHigh)
     setFrameCount(settings.thumbnailFrameCount)
     setAutoplay(settings.libraryAutoplay)
+    setImageConvertFormat(settings.imageConvertFormat)
   }, [settings])
 
   if (isLoading || !settings) return <Skeleton className="h-40 w-full max-w-lg" />
@@ -483,6 +495,7 @@ function LibraryTab() {
   if (thumbHigh !== settings.thumbnailResolutionThresholdHigh) payload.thumbnailResolutionThresholdHigh = thumbHigh
   if (frameCount !== settings.thumbnailFrameCount) payload.thumbnailFrameCount = frameCount
   if (autoplay !== settings.libraryAutoplay) payload.libraryAutoplay = autoplay
+  if (imageConvertFormat !== settings.imageConvertFormat) payload.imageConvertFormat = imageConvertFormat
   const dirty = Object.keys(payload).length > 0
 
   const lowLabel = RESOLUTION_STEP_LABELS[low] ?? `${low}p`
@@ -642,6 +655,29 @@ function LibraryTab() {
                 : `Low: <${thumbHighLabel} · High: ≥${thumbHighLabel}`}
             </p>
           </div>
+        </div>
+      </div>
+
+      <div className="space-y-2 border-t pt-4">
+        <h3 className="text-sm font-medium">Images</h3>
+        <div className="space-y-2">
+          <FieldLabel
+            htmlFor="image-convert-format"
+            info="What format a downloaded image gets converted to. Original keeps whatever format the source served."
+          >
+            Image conversion format
+          </FieldLabel>
+          <Select value={imageConvertFormat} onValueChange={(v) => setImageConvertFormat(v as typeof imageConvertFormat)}>
+            <SelectTrigger id="image-convert-format" className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="original">Original</SelectItem>
+              <SelectItem value="jpg">JPEG</SelectItem>
+              <SelectItem value="png">PNG</SelectItem>
+              <SelectItem value="webp">WebP</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -1593,20 +1629,44 @@ function YtDlpTab() {
 
 function AppearanceTab() {
   const { theme, setTheme } = useTheme()
+  const { accent, setAccent } = useAccentColor()
 
   return (
-    <div className="max-w-lg space-y-2">
-      <Label>Theme</Label>
-      <Select value={theme ?? "system"} onValueChange={setTheme}>
-        <SelectTrigger className="w-48">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="light">Light</SelectItem>
-          <SelectItem value="dark">Dark</SelectItem>
-          <SelectItem value="system">System</SelectItem>
-        </SelectContent>
-      </Select>
+    <div className="max-w-lg space-y-6">
+      <div className="space-y-2">
+        <Label>Theme</Label>
+        <Select value={theme ?? "system"} onValueChange={setTheme}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="light">Light</SelectItem>
+            <SelectItem value="dark">Dark</SelectItem>
+            <SelectItem value="system">System</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Primary color</Label>
+        <Select value={accent} onValueChange={(v) => setAccent(v as AccentColor)}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ACCENT_COLOR_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: opt.swatch }}
+                  />
+                  {opt.label}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   )
 }

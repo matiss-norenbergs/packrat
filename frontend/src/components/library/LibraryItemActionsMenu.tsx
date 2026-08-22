@@ -89,6 +89,10 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   // disabled, since there's nothing to explain via a tooltip; "Redownload"
   // doubles as the "fill this in" action, so it's relabeled instead.
   const isGhost = item.status === "ghost"
+  // Video/thumbnail-specific actions (Trim, NFO, frame-grab/frame-match
+  // thumbnails, Sharpen) don't apply to a plain downloaded image — same
+  // hidden-not-disabled treatment as the ghost gating above.
+  const isImage = item.mediaType === "image"
 
   const handleCopyUrl = () => {
     if (!item.originalUrl) return
@@ -109,7 +113,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => setEditOpen(true)}>Edit</DropdownMenuItem>
           {!isGhost && <DropdownMenuItem onClick={() => setMoveOpen(true)}>Move</DropdownMenuItem>}
-          {!isGhost && <DropdownMenuItem onClick={() => setTrimOpen(true)}>Trim…</DropdownMenuItem>}
+          {!isGhost && !isImage && <DropdownMenuItem onClick={() => setTrimOpen(true)}>Trim…</DropdownMenuItem>}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleCopyUrl} disabled={!hasUrl}>
             Copy URL
@@ -138,7 +142,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>NFO</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              {!isGhost && (
+              {!isGhost && !isImage && (
                 <DropdownMenuItem onClick={() => generateNfo.mutate(item.id)} disabled={!item.generateNfo}>
                   Generate Now
                 </DropdownMenuItem>
@@ -157,23 +161,23 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
               <DropdownMenuItem onClick={() => setRedownloadThumbWarningOpen(true)} disabled={!hasUrl}>
                 Redownload from URL
               </DropdownMenuItem>
-              {!isGhost && (
+              {!isGhost && !isImage && (
                 <DropdownMenuItem onClick={() => setQuickGrabWarningOpen(true)}>Quick Grab</DropdownMenuItem>
               )}
-              {!isGhost && (
+              {!isGhost && !isImage && (
                 <DropdownMenuItem onClick={() => setThumbnailPickerOpen(true)}>Choose from Video…</DropdownMenuItem>
               )}
-              {!isGhost && (
+              {!isGhost && !isImage && (
                 <DropdownMenuItem onClick={() => setFrameMatchMode("url")} disabled={!hasUrl}>
                   Match from URL Thumbnail…
                 </DropdownMenuItem>
               )}
-              {!isGhost && (
+              {!isGhost && !isImage && (
                 <DropdownMenuItem onClick={() => setFrameMatchMode("current")} disabled={!hasThumbnail}>
                   Match from Current Thumbnail…
                 </DropdownMenuItem>
               )}
-              {!isGhost && settings?.thumbnailEnhancementEnabled && (
+              {!isGhost && !isImage && settings?.thumbnailEnhancementEnabled && (
                 <DropdownMenuItem onClick={() => setSharpenWarningOpen(true)} disabled={!hasThumbnail}>
                   Sharpen Thumbnail…
                 </DropdownMenuItem>

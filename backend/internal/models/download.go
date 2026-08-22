@@ -32,7 +32,7 @@ type Download struct {
 	CollectionName *string
 	Folder         string
 	Filename       string
-	DownloadType   string // "video" | "audio"
+	DownloadType   string // "video" | "audio" | "image"
 	Quality        string
 	AudioFormat    *string
 	Status         DownloadStatus

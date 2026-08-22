@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAddSubscriptionEntry, useMarkSubscriptionEntrySeen, useSubscriptionEntries } from "@/hooks/useSubscriptions"
 import { formatDuration } from "@/lib/utils"
 import type { AddSubscriptionEntryMode, Subscription } from "@/types/api"
@@ -77,36 +78,48 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
                       <span className="text-xs text-muted-foreground">No details recorded</span>
                     ) : (
                       <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={addEntry.isPending}
-                          onClick={() => handleAdd(entry.sourceId, "ghost")}
-                        >
-                          <Ghost className="h-4 w-4" />
-                          {isPendingGhost ? "Adding…" : "Add as ghost"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={addEntry.isPending}
-                          onClick={() => handleAdd(entry.sourceId, "download")}
-                        >
-                          <Download className="h-4 w-4" />
-                          {isPendingDownload ? "Queuing…" : "Queue download"}
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              disabled={addEntry.isPending}
+                              onClick={() => handleAdd(entry.sourceId, "ghost")}
+                            >
+                              <Ghost className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{isPendingGhost ? "Adding…" : "Add as ghost"}</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              disabled={addEntry.isPending}
+                              onClick={() => handleAdd(entry.sourceId, "download")}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{isPendingDownload ? "Queuing…" : "Queue download"}</TooltipContent>
+                        </Tooltip>
                       </>
                     )}
                     {isUnseen && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={markSeen.isPending}
-                        onClick={() => handleMarkSeen(entry.sourceId)}
-                      >
-                        <Eye className="h-4 w-4" />
-                        {isPendingSeen ? "Marking…" : "Mark seen"}
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            disabled={markSeen.isPending}
+                            onClick={() => handleMarkSeen(entry.sourceId)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{isPendingSeen ? "Marking…" : "Mark seen"}</TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
                 </div>

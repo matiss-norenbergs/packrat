@@ -92,7 +92,9 @@ export function AddGhostLibraryItemDialog({ open, onOpenChange }: AddGhostLibrar
   const handleCollectionChange = (value: string) => {
     setCollectionId(value)
     const collection = collections?.find((c) => String(c.id) === value)
-    if (collection) setMediaType(collection.defaultDownloadType)
+    // Ghost items don't support "image" — a collection defaulted to Image
+    // just leaves the current video/audio selection alone.
+    if (collection && collection.defaultDownloadType !== "image") setMediaType(collection.defaultDownloadType)
   }
 
   const reset = () => {

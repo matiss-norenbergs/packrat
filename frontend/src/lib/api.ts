@@ -76,6 +76,7 @@ import type {
   RunThumbnailEnhancementResult,
   ThumbnailEnhancementStatus,
   ThumbnailEnhancementEligibleItem,
+  ProxyStatus,
   CreateTagRequest,
   RedownloadOverwriteField,
   RedownloadPreview,
@@ -214,6 +215,17 @@ export function fetchLibraryFacets(): Promise<LibraryFacets> {
 
 export function mediaFileUrl(relativePath: string): string {
   return `/media-files/${relativePath.split("/").map(encodeURIComponent).join("/")}`
+}
+
+// Routes an external image URL (a pasted direct-image-download URL, or a
+// yt-dlp-reported thumbnail URL) through the backend instead of pointing an
+// <img> at it directly — an <img src> fetch happens in the browser and has
+// no way to honor the backend's configured yt-dlp proxy setting, so a direct
+// fetch would silently bypass it. Used only for the New Download dialog's
+// pre-submit preview; every other image in the app is already backend-local
+// (mediaFileUrl/imageUrl above).
+export function previewImageUrl(externalUrl: string): string {
+  return `/api/downloads/preview-image?url=${encodeURIComponent(externalUrl)}`
 }
 
 // Resolves a relative path under the backend's images root (artist/collection
@@ -892,6 +904,10 @@ export function listThumbnailUpscalers(url: string, username: string, password: 
 
 export function getThumbnailEnhancementStatus(): Promise<ThumbnailEnhancementStatus> {
   return request<ThumbnailEnhancementStatus>("/thumbnail-enhancement/status")
+}
+
+export function getProxyStatus(): Promise<ProxyStatus> {
+  return request<ProxyStatus>("/proxy/status")
 }
 
 export function listThumbnailEnhancementEligible(): Promise<ThumbnailEnhancementEligibleItem[]> {

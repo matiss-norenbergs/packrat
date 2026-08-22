@@ -77,7 +77,8 @@ export function LibraryItemDetail({
   const autoPlay = resumePaused != null ? !resumePaused : (settings?.libraryAutoplay ?? true)
   const audioRef = usePersistedVolume<HTMLAudioElement>()
   const videoRef = usePersistedVolume<HTMLVideoElement>()
-  const isVideo = !isAudioFilename(item.filename)
+  const isImage = item.mediaType === "image"
+  const isVideo = !isImage && !isAudioFilename(item.filename)
 
   // resumeAt (mini-player hand-off) wins when present; otherwise fall back
   // to the persisted server-side position powering Continue Watching — only
@@ -142,7 +143,7 @@ export function LibraryItemDetail({
             </TooltipTrigger>
             <TooltipContent>Back</TooltipContent>
           </Tooltip>
-          {onMinimize && !locked && (
+          {onMinimize && !locked && !isImage && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -171,6 +172,12 @@ export function LibraryItemDetail({
             <span className="text-sm font-medium">This item is private</span>
             <span className="text-xs text-white/70">Click to reveal and play</span>
           </button>
+        ) : isImage ? (
+          <img
+            src={mediaFileUrl(item.path)}
+            alt={item.title}
+            className="h-full w-full object-contain"
+          />
         ) : isAudioFilename(item.filename) ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-8">
             <div className="aspect-square h-full max-h-72 w-auto overflow-hidden rounded-lg bg-neutral-800 shadow-lg">

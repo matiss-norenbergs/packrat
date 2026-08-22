@@ -16,10 +16,10 @@ type LibraryItem struct {
 	Uploader            *string
 	Duration            *int
 	Resolution          *string
-	// MediaType is "video" or "audio" — explicit rather than inferred, since
-	// a ghost item (no file, no linked download) has neither of the signals
-	// (Resolution, the linked download's own type) real items are otherwise
-	// inferred from.
+	// MediaType is "video", "audio", or "image" — explicit rather than
+	// inferred, since a ghost item (no file, no linked download) has neither
+	// of the signals (Resolution, the linked download's own type) real items
+	// are otherwise inferred from.
 	MediaType           *string
 	Thumbnail           *string
 	ThumbnailSmallPath  *string // WebP derivative, relative to ImagesRoot

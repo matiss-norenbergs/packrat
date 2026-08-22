@@ -5,6 +5,7 @@ import {
   fetchImageBackfillStatus,
   fetchSettings,
   fetchYtDlpVersion,
+  getProxyStatus,
   rescanJellyfinLibrary,
   startImageBackfill,
   updateSettings,
@@ -60,6 +61,18 @@ export function useYtDlpVersion() {
     queryKey: ytdlpVersionQueryKey,
     queryFn: fetchYtDlpVersion,
     staleTime: 60 * 60 * 1000, // 1h — checking PyPI for a new release isn't time-sensitive
+  })
+}
+
+// useProxyStatus backs the sidebar's proxy status dot — polled continuously
+// (not gated behind a page being open) so the indicator reflects the
+// proxy's live reachability even when nobody's looking at Settings.
+export function useProxyStatus() {
+  return useQuery({
+    queryKey: ["proxy", "status"],
+    queryFn: getProxyStatus,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   })
 }
 

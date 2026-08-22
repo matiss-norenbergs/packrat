@@ -22,10 +22,11 @@ import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLogout } from "@/hooks/useAuth"
-import { useAppVersion, useSettings, useYtDlpVersion } from "@/hooks/useSettings"
+import { useAppVersion, useProxyStatus, useSettings, useYtDlpVersion } from "@/hooks/useSettings"
 import { useThumbnailEnhancementStatus } from "@/hooks/useThumbnailEnhancement"
 import { enhancementStatusColor } from "@/lib/enhancementStatus"
 import { cn } from "@/lib/utils"
+import type { ProxyStatus } from "@/types/api"
 import { NavItem } from "./NavItem"
 
 // Matches the backend's version.Repo (backend/internal/version/latest.go) —
@@ -34,7 +35,7 @@ const GITHUB_REPO = "matiss-norenbergs/packrat"
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/downloads", label: "Downloads", icon: Download },
+  { to: "/downloads", label: "Downloads", icon: Download, endAdornment: <ProxyStatusDot /> },
   { to: "/library", label: "Library", icon: Library },
   { to: "/collections", label: "Collections", icon: FolderKanban },
   { to: "/tags", label: "Tags", icon: Tags },
@@ -130,6 +131,37 @@ function AiEnhancementStatusDot() {
         <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT_CLASSNAME[color])} />
       </TooltipTrigger>
       <TooltipContent>{STATUS_DOT_LABEL[color]}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+const PROXY_STATUS_DOT_LABEL: Record<ReturnType<typeof enhancementStatusColor>, string> = {
+  green: "Proxy is configured and reachable",
+  red: "Proxy is configured but not reachable",
+  grey: "No proxy is configured",
+}
+
+// Same grey/green/red states as enhancementStatusColor (unconfigured /
+// reachable / unreachable), just sourced from the ytdlp_proxy setting
+// instead of the Stable Diffusion URL — kept separate since ProxyStatus has
+// no `error` field to shoehorn into that helper's signature.
+function proxyStatusColor(status: ProxyStatus | undefined, isLoading: boolean) {
+  if (isLoading || !status || !status.configured) return "grey"
+  return status.reachable ? "green" : "red"
+}
+
+// Polled continuously (see useProxyStatus) so this reflects live
+// reachability without requiring Settings to be open.
+function ProxyStatusDot() {
+  const { data: status, isLoading } = useProxyStatus()
+  const color = proxyStatusColor(status, isLoading)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT_CLASSNAME[color])} />
+      </TooltipTrigger>
+      <TooltipContent>{PROXY_STATUS_DOT_LABEL[color]}</TooltipContent>
     </Tooltip>
   )
 }

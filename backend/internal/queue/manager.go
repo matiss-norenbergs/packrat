@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -15,6 +17,7 @@ import (
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
+	"packrat/backend/internal/imagefetch"
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/importer"
 	"packrat/backend/internal/jellyfin"
@@ -292,10 +295,20 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		log.Printf("queue: update status failed for %d: %v", id, err)
 	}
 
-	meta, err := m.ytdlp.FetchMetadata(runCtx, d.URL)
-	if err != nil {
-		m.finishError(parentCtx, runCtx, id, d.URL, err.Error(), "", "")
-		return
+	var meta *downloader.Metadata
+	if d.DownloadType == "image" {
+		// A bare image URL isn't a video-hosting page — yt-dlp's extractors
+		// don't reliably recognize it, so the metadata fetch is skipped
+		// entirely rather than attempted and ignored. titleFromURL gives
+		// effectiveTitle below something readable to fall back to before it
+		// falls back to the raw URL itself.
+		meta = &downloader.Metadata{Title: titleFromURL(d.URL)}
+	} else {
+		meta, err = m.ytdlp.FetchMetadata(runCtx, d.URL)
+		if err != nil {
+			m.finishError(parentCtx, runCtx, id, d.URL, err.Error(), "", "")
+			return
+		}
 	}
 	duration := int(meta.Duration)
 	if err := m.downloadsRepo.UpdateMetadata(runCtx, id, strPtr(meta.ID), strPtr(meta.Title), strPtr(meta.Uploader), &duration, strPtr(meta.Thumbnail)); err != nil {
@@ -358,6 +371,13 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		if len(extraDirSegments) > 0 {
 			destDir = filepath.Join(append([]string{destDir}, extraDirSegments...)...)
 		}
+		if resolvedFilename == "" && d.DownloadType == "image" {
+			// resolveFilename's "" return means "let yt-dlp fall back to its
+			// own default naming" — there's no yt-dlp in the image path to do
+			// that, so fall back to the effective title directly (mirrors
+			// what yt-dlp's own %(title)s default would have produced).
+			resolvedFilename = effectiveTitle
+		}
 		filename = fsutil.SanitizeFilename(resolvedFilename)
 
 		if err := fsutil.EnsureDir(destDir); err != nil {
@@ -366,50 +386,63 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		}
 	}
 
-	job := downloader.DownloadJob{
-		URL:            d.URL,
-		DestDir:        destDir,
-		Filename:       filename,
-		DownloadType:   d.DownloadType,
-		Quality:        d.Quality,
-		AudioFormat:    audioFormat,
-		ForceOverwrite: isRedownload,
-	}
-
 	if err := m.downloadsRepo.UpdateStatus(runCtx, id, models.StatusDownloading, nil); err != nil {
 		log.Printf("queue: update status failed for %d: %v", id, err)
 	}
 	m.broadcastQueueUpdate()
 
-	result, runErr := m.ytdlp.Run(runCtx, job, func(ev downloader.ProgressEvent) {
-		m.onProgress(id, ev)
-	})
+	var result downloader.RunResult
+	if d.DownloadType == "image" {
+		// No yt-dlp involved at all — a bare image URL isn't a video-hosting
+		// page, so this is a plain HTTP GET plus an optional format
+		// conversion instead of a subprocess invocation.
+		result, err = m.runImageDownload(runCtx, id, d, destDir, filename, isRedownload)
+		if err != nil {
+			m.finishError(parentCtx, runCtx, id, d.URL, err.Error(), "", "")
+			return
+		}
+	} else {
+		job := downloader.DownloadJob{
+			URL:            d.URL,
+			DestDir:        destDir,
+			Filename:       filename,
+			DownloadType:   d.DownloadType,
+			Quality:        d.Quality,
+			AudioFormat:    audioFormat,
+			ForceOverwrite: isRedownload,
+		}
 
-	if runErr != nil {
-		m.finishError(parentCtx, runCtx, id, d.URL, runErr.Error(), "", "")
-		return
-	}
-	if result.ExitCode != 0 {
-		// A non-zero exit doesn't necessarily mean the video itself failed —
-		// --write-thumbnail/--convert-thumbnails runs as a postprocessing
-		// step inside the same yt-dlp invocation (args.go), and a thumbnail
-		// yt-dlp can't convert (e.g. an AVIF thumbnail on a minimal ffmpeg
-		// build with no AVIF decoder) makes yt-dlp exit non-zero even though
-		// the video already finished downloading and moving into place.
-		// result.FinalPath is only ever populated from the "after_move:"
-		// print hook, which only fires once that move has actually
-		// happened — trust that signal (and confirm the file is really
-		// there) instead of discarding a good download.
-		if result.FinalPath == "" {
-			m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
+		var runErr error
+		result, runErr = m.ytdlp.Run(runCtx, job, func(ev downloader.ProgressEvent) {
+			m.onProgress(id, ev)
+		})
+
+		if runErr != nil {
+			m.finishError(parentCtx, runCtx, id, d.URL, runErr.Error(), "", "")
 			return
 		}
-		if _, statErr := os.Stat(result.FinalPath); statErr != nil {
-			m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
-			return
+		if result.ExitCode != 0 {
+			// A non-zero exit doesn't necessarily mean the video itself failed —
+			// --write-thumbnail/--convert-thumbnails runs as a postprocessing
+			// step inside the same yt-dlp invocation (args.go), and a thumbnail
+			// yt-dlp can't convert (e.g. an AVIF thumbnail on a minimal ffmpeg
+			// build with no AVIF decoder) makes yt-dlp exit non-zero even though
+			// the video already finished downloading and moving into place.
+			// result.FinalPath is only ever populated from the "after_move:"
+			// print hook, which only fires once that move has actually
+			// happened — trust that signal (and confirm the file is really
+			// there) instead of discarding a good download.
+			if result.FinalPath == "" {
+				m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
+				return
+			}
+			if _, statErr := os.Stat(result.FinalPath); statErr != nil {
+				m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
+				return
+			}
+			log.Printf("queue: download %d: yt-dlp exited with code %d but %s was written successfully — continuing, likely a postprocessing failure (e.g. thumbnail conversion)", id, result.ExitCode, result.FinalPath)
+			cleanupOrphanedThumbnailArtifacts(result.FinalPath)
 		}
-		log.Printf("queue: download %d: yt-dlp exited with code %d but %s was written successfully — continuing, likely a postprocessing failure (e.g. thumbnail conversion)", id, result.ExitCode, result.FinalPath)
-		cleanupOrphanedThumbnailArtifacts(result.FinalPath)
 	}
 
 	if err := m.downloadsRepo.SetCommand(parentCtx, id, result.Command); err != nil {
@@ -473,7 +506,19 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 			log.Printf("queue: generating thumbnail derivatives for library item %d failed: %v", libID, err)
 		} else {
 			var width, height *int
-			if w, h, err := imageproc.ProbeDimensions(thumbAbs); err != nil {
+			if d.DownloadType == "image" {
+				// thumbAbs IS the downloaded image here (see buildLibraryItem),
+				// which may not be JPEG (depends on the configured convert
+				// format) — imageproc.ProbeDimensions only decodes JPEG
+				// headers, so reuse the dimensions already probed via ffprobe
+				// into resolution instead of re-probing a possibly-unsupported
+				// format.
+				if resolution != nil {
+					if w, h, ok := parseResolution(*resolution); ok {
+						width, height = &w, &h
+					}
+				}
+			} else if w, h, err := imageproc.ProbeDimensions(thumbAbs); err != nil {
 				log.Printf("queue: probing thumbnail dimensions for library item %d failed: %v", libID, err)
 			} else {
 				width, height = &w, &h
@@ -508,7 +553,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	// requested at download time, same file writeNFO (library_handler.go)
 	// produces for the manual "Generate NFO Now" action — fetched after the
 	// override-tags block above so a batch item's tags are already settled.
-	if d.GenerateNFO {
+	if d.GenerateNFO && d.DownloadType != "image" {
 		tags, err := m.tagsRepo.TagsForLibraryItem(parentCtx, libID)
 		if err != nil {
 			log.Printf("queue: loading tags for nfo for %d failed: %v", id, err)
@@ -524,7 +569,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	// UpdateLibraryItem already uses on manual edits. Skipped entirely when
 	// no override was set, so a plain download never pays the ffmpeg remux
 	// cost.
-	if d.OverrideTitle != nil || d.OverrideArtistID != nil || d.OverrideYear != nil || d.OverrideSequenceNumber != nil || d.OverrideSeasonNumber != nil {
+	if d.DownloadType != "image" && (d.OverrideTitle != nil || d.OverrideArtistID != nil || d.OverrideYear != nil || d.OverrideSequenceNumber != nil || d.OverrideSeasonNumber != nil) {
 		var overrideArtistName *string
 		if d.OverrideArtistID != nil {
 			if a, err := m.artistsRepo.Get(context.Background(), *d.OverrideArtistID); err == nil {
@@ -539,6 +584,91 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	}
 
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: id, LibraryID: libID, Title: libItem.Title}})
+}
+
+// runImageDownload is the "image" download type's entire fetch step — a
+// plain HTTP GET (imagefetch.Fetch) instead of a yt-dlp subprocess, with an
+// optional format conversion per the image_convert_format setting. Returns
+// the same downloader.RunResult shape runOne's yt-dlp path produces, so
+// everything downstream (resolution/duration probing, buildLibraryItem,
+// completeRedownload) keeps working unmodified regardless of which path
+// produced it.
+func (m *DownloadManager) runImageDownload(ctx context.Context, id int64, d *models.Download, destDir, filename string, forceOverwrite bool) (downloader.RunResult, error) {
+	// Reuses the same ytdlp_proxy setting yt-dlp's own --proxy flag reads
+	// (see downloader/args.go) — "" if unset, meaning a direct connection.
+	proxy, _ := m.settingsRepo.Get(ctx, models.SettingYtdlpProxy)
+	finalPath, _, err := imagefetch.Fetch(ctx, d.URL, destDir, filename, forceOverwrite, proxy)
+	if err != nil {
+		return downloader.RunResult{}, err
+	}
+
+	// Mirrors api.ImageConvertFormat's default/validation (queue can't import
+	// api — api already imports queue) — missing, unreadable, or corrupt
+	// falls back to "jpg", matching the thumbnail-JPEG convention.
+	format, settingErr := m.settingsRepo.Get(ctx, models.SettingImageConvertFormat)
+	switch {
+	case settingErr != nil:
+		format = "jpg"
+	case format != "original" && format != "jpg" && format != "png" && format != "webp":
+		format = "jpg"
+	}
+	targetExt := "." + format
+	if format != "original" && !strings.EqualFold(filepath.Ext(finalPath), targetExt) {
+		// Convert into a distinctly-suffixed temp path first — never
+		// ffmpeg src==dst. finalPath's extension-stripped basename can be
+		// empty (e.g. a bare ".jpg"), which would otherwise make a naively
+		// re-suffixed target collide with the source it's still reading.
+		tmp := finalPath + ".converting" + targetExt
+		if err := imageproc.ConvertImage(ctx, m.ytdlp.FFmpegPath, finalPath, tmp, format); err != nil {
+			log.Printf("queue: converting image %d to %s failed: %v — keeping original format", id, format, err)
+			os.Remove(tmp) // best-effort cleanup of any partial output
+		} else {
+			target := strings.TrimSuffix(finalPath, filepath.Ext(finalPath)) + targetExt
+			if err := os.Remove(finalPath); err != nil {
+				log.Printf("queue: removing pre-conversion image %d failed: %v", id, err)
+			}
+			if err := os.Rename(tmp, target); err != nil {
+				log.Printf("queue: finalizing converted image %d failed: %v", id, err)
+			} else {
+				finalPath = target
+			}
+		}
+	}
+
+	return downloader.RunResult{FinalPath: finalPath, Command: "GET " + d.URL}, nil
+}
+
+// titleFromURL derives a readable fallback title from an image URL's last
+// path segment (extension stripped, percent-decoded) — used only for the
+// "image" download type, which has no yt-dlp metadata fetch to pull a title
+// from. Returns "" (falling through to the raw URL, same as the yt-dlp path)
+// if the URL has no usable path segment.
+func titleFromURL(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	base := path.Base(u.Path)
+	if base == "" || base == "." || base == "/" {
+		return ""
+	}
+	if decoded, err := url.PathUnescape(base); err == nil {
+		base = decoded
+	}
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+// parseResolution splits a "WxH" resolution string (as produced by
+// importer.Probe) back into width/height. Used only by the image download
+// path, where the thumbnail dimensions being recorded are the exact same
+// file resolution was already probed from, so re-probing via
+// imageproc.ProbeDimensions (JPEG-only) would be redundant and, for a
+// non-JPEG convert format, unsupported.
+func parseResolution(res string) (w, h int, ok bool) {
+	if _, err := fmt.Sscanf(res, "%dx%d", &w, &h); err != nil {
+		return 0, 0, false
+	}
+	return w, h, true
 }
 
 // maybeAutoEnhanceThumbnail is the best-effort background hook fired after
@@ -640,17 +770,26 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 	}
 
 	var thumbRelPtr *string
-	thumbAbs := thumbnailPathFor(finalPath)
-	if thumbAbs != "" {
-		// thumbnailPathFor only computes where yt-dlp's --convert-thumbnails
-		// step *should* have written the jpg — confirm it's actually there
-		// before storing the path, so a failed conversion (see the
-		// exit-code leniency in runOne) never leaves the item pointing at a
-		// thumbnail that doesn't exist. Falls back to no thumbnail; a later
-		// manual "grab thumbnail" edit still works normally since that path
-		// (FetchThumbnail) already checks for this itself.
-		if _, err := os.Stat(thumbAbs); err != nil {
-			thumbAbs = ""
+	var thumbAbs string
+	if d.DownloadType == "image" {
+		// The downloaded image doubles as its own thumbnail — there's no
+		// separate sidecar to look for, so the tier-generation block below
+		// just re-derives small/medium WebP tiers from the file itself,
+		// exactly like collection covers/artist images already do.
+		thumbAbs = finalPath
+	} else {
+		thumbAbs = thumbnailPathFor(finalPath)
+		if thumbAbs != "" {
+			// thumbnailPathFor only computes where yt-dlp's --convert-thumbnails
+			// step *should* have written the jpg — confirm it's actually there
+			// before storing the path, so a failed conversion (see the
+			// exit-code leniency in runOne) never leaves the item pointing at a
+			// thumbnail that doesn't exist. Falls back to no thumbnail; a later
+			// manual "grab thumbnail" edit still works normally since that path
+			// (FetchThumbnail) already checks for this itself.
+			if _, err := os.Stat(thumbAbs); err != nil {
+				thumbAbs = ""
+			}
 		}
 	}
 	if thumbAbs != "" {
@@ -817,7 +956,40 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 	// see BuildArgs' --write-thumbnail). Otherwise it's discarded unused and
 	// the item's existing thumbnail/tiers are left completely alone.
 	hasExistingThumbnail := target.Thumbnail != nil || target.ThumbnailSmallPath != nil
-	if overwrite["thumbnail"] || !hasExistingThumbnail {
+	if d.DownloadType == "image" {
+		// The redownloaded image doubles as its own thumbnail — same
+		// convention as the fresh-download path (buildLibraryItem) — so
+		// swap/regenerate unconditionally rather than looking for a separate
+		// yt-dlp-fetched sidecar (tmpThumbPath), which doesn't exist here.
+		var oldThumbAbs string
+		if target.Thumbnail != nil {
+			oldThumbAbs = filepath.Join(m.mediaRoot, filepath.FromSlash(*target.Thumbnail))
+		}
+		if oldThumbAbs != "" && oldThumbAbs != newPath {
+			if err := os.Remove(oldThumbAbs); err != nil && !os.IsNotExist(err) {
+				log.Printf("queue: removing stale thumbnail %s failed: %v", oldThumbAbs, err)
+			}
+		}
+		if err := thumbnailenhance.DeleteOriginal(parentCtx, thumbnailenhance.Deps{OriginalsRepo: m.thumbnailEnhancementOriginalsRepo, ImagesRoot: m.imagesRoot}, targetID); err != nil && !errors.Is(err, repository.ErrNotFound) {
+			log.Printf("queue: clearing stale AI-enhancement backup for library item %d failed: %v", targetID, err)
+		}
+		if err := m.libraryRepo.UpdateThumbnail(parentCtx, targetID, &relPath); err != nil {
+			log.Printf("queue: updating thumbnail path for library item %d failed: %v", targetID, err)
+		}
+		if tiers, err := imageproc.GenerateTiersFromPath(parentCtx, m.ytdlp.FFmpegPath, m.imagesRoot, "library", targetID, newPath, libraryThumbnailTiers); err != nil {
+			log.Printf("queue: generating thumbnail derivatives for library item %d failed: %v", targetID, err)
+		} else {
+			var width, height *int
+			if resolution != nil {
+				if w, h, ok := parseResolution(*resolution); ok {
+					width, height = &w, &h
+				}
+			}
+			if err := m.libraryRepo.UpdateThumbnailTiers(parentCtx, targetID, &tiers[0], &tiers[1], width, height); err != nil {
+				log.Printf("queue: saving thumbnail derivatives for library item %d failed: %v", targetID, err)
+			}
+		}
+	} else if overwrite["thumbnail"] || !hasExistingThumbnail {
 		if _, err := os.Stat(tmpThumbPath); err == nil {
 			newThumbPath := thumbnailPathFor(newPath)
 			var oldThumbAbs string
@@ -874,7 +1046,7 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 
 	// Best-effort: regenerate the .nfo sidecar if it's turned on for this
 	// item, so it doesn't go stale with pre-redownload duration/resolution.
-	if updated.GenerateNFO {
+	if updated.GenerateNFO && d.DownloadType != "image" {
 		tags, err := m.tagsRepo.TagsForLibraryItem(parentCtx, targetID)
 		if err != nil {
 			log.Printf("queue: loading tags for nfo for library item %d failed: %v", targetID, err)
@@ -888,11 +1060,18 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 	// so the freshly-fetched source's title/uploader are already baked in
 	// regardless of what was checked; this keeps the file's own tags
 	// consistent with the DB record even when a field was left unchecked.
+	// Skipped for images: -c copy -metadata muxing is meaningless (and can
+	// error) against a JPEG/PNG/WebP file.
 	var artistName *string
 	if updated.ArtistID != nil {
 		if a, err := m.artistsRepo.Get(parentCtx, *updated.ArtistID); err == nil {
 			artistName = &a.Name
 		}
+	}
+	if d.DownloadType == "image" {
+		m.triggerJellyfinRefresh(parentCtx, d)
+		m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: downloadID, LibraryID: targetID, Title: updated.Title}})
+		return
 	}
 	go func(path, title string, artist *string, year, seq, season *int) {
 		if err := m.ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, seq, season); err != nil {

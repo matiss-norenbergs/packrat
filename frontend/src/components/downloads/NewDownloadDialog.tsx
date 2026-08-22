@@ -33,6 +33,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { useSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import { cn, formatDuration } from "@/lib/utils"
+import { previewImageUrl } from "@/lib/api"
 import { resolveFilenameTemplatePreview } from "@/lib/nametemplate"
 import { resolveInheritedArtistId, sortCollectionsByPath } from "@/lib/collectionTree"
 import { invalidSegmentChars, invalidTemplateChars } from "@/lib/filenameValidation"
@@ -128,6 +129,17 @@ export function NewDownloadDialog() {
   // loading too — useDownloadPreview's query is disabled until debouncedUrl
   // is set, so previewLoading alone would report false during that window.
   const previewPending = !debouncedUrl || previewLoading
+
+  // For an image download, the pasted URL *is* the image — no yt-dlp
+  // metadata fetch needed to show a preview, just load the URL directly.
+  // Tracked separately from the generic preview/previewError state above
+  // (which still fires for image URLs too, but its result is ignored here)
+  // so a broken/non-image URL falls back to the same placeholder box
+  // without waiting on that unrelated fetch.
+  const [imagePreviewFailed, setImagePreviewFailed] = useState(false)
+  useEffect(() => {
+    setImagePreviewFailed(false)
+  }, [trimmedUrl])
 
   useEffect(() => {
     if (!looksLikeUrl) {
@@ -432,7 +444,26 @@ export function NewDownloadDialog() {
 
           {showPreviewBox && (
             <div className="rounded-md border p-3">
-              {previewPending ? (
+              {downloadType === "image" ? (
+                <div className="flex items-center gap-3">
+                  {imagePreviewFailed ? (
+                    <div className="h-12 w-20 shrink-0 rounded bg-muted" />
+                  ) : (
+                    <img
+                      key={trimmedUrl}
+                      src={previewImageUrl(trimmedUrl)}
+                      alt=""
+                      className="h-12 w-20 shrink-0 rounded object-cover bg-muted"
+                      onError={() => setImagePreviewFailed(true)}
+                    />
+                  )}
+                  <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                    {imagePreviewFailed
+                      ? "Couldn't load a preview for this URL — you can still queue the download."
+                      : trimmedUrl}
+                  </p>
+                </div>
+              ) : previewPending ? (
                 <div className="flex items-center gap-3">
                   <Skeleton className="h-12 w-20 shrink-0 rounded" />
                   <div className="min-w-0 flex-1 space-y-1.5">
@@ -453,7 +484,7 @@ export function NewDownloadDialog() {
                 <div className="flex items-center gap-3">
                   {preview.thumbnail ? (
                     <img
-                      src={preview.thumbnail}
+                      src={previewImageUrl(preview.thumbnail)}
                       alt=""
                       className="h-12 w-20 shrink-0 rounded object-cover bg-muted"
                     />
@@ -583,6 +614,7 @@ export function NewDownloadDialog() {
                 <SelectContent>
                   <SelectItem value="video">Video</SelectItem>
                   <SelectItem value="audio">Audio</SelectItem>
+                  <SelectItem value="image">Image</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -603,7 +635,7 @@ export function NewDownloadDialog() {
                   </SelectContent>
                 </Select>
               </div>
-            ) : (
+            ) : downloadType === "audio" ? (
               <div className="flex-1 space-y-2">
                 <Label>Format</Label>
                 <Select value={audioFormat} onValueChange={(v) => setAudioFormat(v as AudioFormat)}>
@@ -619,7 +651,7 @@ export function NewDownloadDialog() {
                   </SelectContent>
                 </Select>
               </div>
-            )}
+            ) : null}
           </div>
 
           {!preview?.isPlaylist && (

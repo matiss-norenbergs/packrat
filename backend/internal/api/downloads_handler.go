@@ -11,6 +11,7 @@ import (
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
+	"packrat/backend/internal/imagefetch"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/queue"
@@ -68,6 +69,39 @@ func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *reposi
 		}
 
 		c.JSON(http.StatusOK, toPreviewDownloadResponse(meta, dup))
+	}
+}
+
+// PreviewImage proxies a single image through the backend for the New
+// Download dialog's live preview — both the direct-image-URL preview (Type
+// = Image) and the yt-dlp-reported thumbnail preview (Type = Video/Audio)
+// use this instead of pointing an <img> straight at the target/thumbnail
+// URL. That matters specifically because of the configured proxy: an <img
+// src> fetch happens in the user's own browser and has no way to honor the
+// backend's ytdlp_proxy setting, silently leaking the request to the local
+// network even when a proxy/VPN is configured for exactly this purpose.
+// Routing through the backend (which does honor it, via imagefetch.Open)
+// closes that gap. GET-only and read-only, so no CSRF token is required —
+// same convention as /media-files/*path.
+func PreviewImage(settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		target := c.Query("url")
+		if !isHTTPURL(target) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "url must be an http or https URL"})
+			return
+		}
+
+		proxy, _ := settingsRepo.Get(c.Request.Context(), models.SettingYtdlpProxy)
+
+		body, contentType, size, cancel, err := imagefetch.Open(c.Request.Context(), target, proxy)
+		if err != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			return
+		}
+		defer body.Close()
+		defer cancel()
+
+		c.DataFromReader(http.StatusOK, size, contentType, body, nil)
 	}
 }
 
