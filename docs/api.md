@@ -1294,7 +1294,12 @@ Every upload ever seen for this subscription, most-recent-first:
 ```
 
 `seenAt: null` means unseen ("New"). An entry recorded before this feature tracked full details has
-empty `title`/`url` and `null` `durationSeconds`.
+empty `title`/`url` and `null` `durationSeconds`. `sourceId` is usually the extractor's native video
+ID, but falls back to the entry's URL for sources whose flat-playlist listing doesn't provide one —
+either way it's stable and unique per subscription. An entry that fails to auto-download/auto-ghost
+during a check is still recorded here (`libraryItemId: null`, unseen) rather than silently dropped —
+without that, a persistent failure would retry (and fail) on every future check indefinitely, never
+visible anywhere.
 
 ### `POST /api/subscriptions/:id/entries/:sourceId/add`
 

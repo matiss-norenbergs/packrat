@@ -354,7 +354,9 @@ back manually.
 - **Known items** (per subscription) lists every upload ever seen, newest first, each tagged "New"
   if unseen. Per-entry actions: **Add as ghost** (creates a library placeholder for later review),
   **Queue download** (downloads it now), or **Mark seen** (dismiss without acting on it — for
-  uploads you don't want).
+  uploads you don't want). An upload that fails to auto-download/auto-ghost during a scheduled or
+  "Check now" pass still shows up here (tagged "New", no library placeholder) rather than silently
+  vanishing — retry it manually with the same actions.
 - **Check now** re-checks immediately instead of waiting for the next scheduled pass; **Edit**
   changes everything except the source URL/Type (changing those is really delete-and-re-add).
 
@@ -427,7 +429,9 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   (`socks5://`/`http://`/`https://`) is used by `yt-dlp` itself and by every image download/preview
   fetch (see Downloads above) — a sidebar dot next to **Downloads** shows its live state at a
   glance: grey (not set), green (reachable), red (configured but not reachable).
-- **Appearance** — light / dark / system theme.
+- **Appearance** — light / dark / system theme, plus a primary color (Default/Blue/Red/Green/Violet)
+  applied to buttons, badges, switches, and other primary-colored UI app-wide. Both are browser-local
+  preferences — no backend round-trip, same as any other client-only setting.
 - **Downloads** — default download type and quality for new downloads; "I trust this source" (skip
   the New Download preview fetch and queue immediately); how long to keep the download log
   (Downloads/Logs pages) before automatic pruning, plus a "Clear all now" button.

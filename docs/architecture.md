@@ -233,6 +233,17 @@ upload as already-seen (`BaselineOnCreate`) without creating anything, so a new 
 ever surfaces uploads from that point forward. There is no per-subscription goroutine/ticker — see
 Retention sweeps below.
 
+Every entry is recorded (`RecordSeenEntry`) under a `sourceID` — the extractor's own `entry.ID` when
+`--flat-playlist` provides one, `entry.URL` otherwise. Not every extractor populates `id` in flat-
+playlist mode (some sites' channel/listing pages only ever return `url`/`title`); without the URL
+fallback, every entry from such a source would fail the "have we seen this?" check forever, since
+there'd be nothing to key it by — baselining, scheduled checks, and manual "Check now" would all
+silently record zero entries no matter how many uploads actually exist. `RecordSeenEntry` also runs
+regardless of whether the auto-download/ghost-creation step it's paired with actually succeeded — an
+entry that fails to enqueue is still recorded (with no `library_item_id`, same shape as an
+unactioned new entry) rather than skipped, which is what stops a persistent per-entry failure from
+being silently retried on every future check and never surfacing anywhere.
+
 ## Collection-level defaults for new downloads
 
 Two optional collection fields exist purely to save repetitive manual entry when adding files to a
