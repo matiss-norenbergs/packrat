@@ -126,4 +126,25 @@ CREATE INDEX idx_library_video_id ON library(video_id);
 CREATE INDEX idx_library_status ON library(status);
 CREATE INDEX idx_library_downloaded_at ON library(downloaded_at);
 
+-- Same reasoning as the up-migration: DROP TABLE library drops its triggers
+-- too, and RENAME doesn't restore them — recreate the library_fts sync
+-- triggers (originally from 000014_library_search) so a rollback doesn't
+-- leave full-text search silently broken for anything written afterward.
+CREATE TRIGGER library_ai AFTER INSERT ON library BEGIN
+  INSERT INTO library_fts(rowid, title, filename, uploader, description, folder, original_url)
+  VALUES (new.id, new.title, new.filename, new.uploader, new.description, new.folder, new.original_url);
+END;
+
+CREATE TRIGGER library_ad AFTER DELETE ON library BEGIN
+  INSERT INTO library_fts(library_fts, rowid, title, filename, uploader, description, folder, original_url)
+  VALUES ('delete', old.id, old.title, old.filename, old.uploader, old.description, old.folder, old.original_url);
+END;
+
+CREATE TRIGGER library_au AFTER UPDATE ON library BEGIN
+  INSERT INTO library_fts(library_fts, rowid, title, filename, uploader, description, folder, original_url)
+  VALUES ('delete', old.id, old.title, old.filename, old.uploader, old.description, old.folder, old.original_url);
+  INSERT INTO library_fts(rowid, title, filename, uploader, description, folder, original_url)
+  VALUES (new.id, new.title, new.filename, new.uploader, new.description, new.folder, new.original_url);
+END;
+
 PRAGMA foreign_keys = ON;

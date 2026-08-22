@@ -132,4 +132,27 @@ CREATE INDEX idx_library_video_id ON library(video_id);
 CREATE INDEX idx_library_status ON library(status);
 CREATE INDEX idx_library_downloaded_at ON library(downloaded_at);
 
+-- DROP TABLE library above also drops every trigger defined on it — SQLite
+-- ties a trigger to its target table, and RENAME doesn't carry them over to
+-- the renamed-in replacement. Without recreating these (originally added by
+-- 000014_library_search), library_fts silently stops receiving new rows:
+-- every insert/update/delete after this migration would go unindexed, and
+-- full-text search would quietly return fewer results with no error.
+CREATE TRIGGER library_ai AFTER INSERT ON library BEGIN
+  INSERT INTO library_fts(rowid, title, filename, uploader, description, folder, original_url)
+  VALUES (new.id, new.title, new.filename, new.uploader, new.description, new.folder, new.original_url);
+END;
+
+CREATE TRIGGER library_ad AFTER DELETE ON library BEGIN
+  INSERT INTO library_fts(library_fts, rowid, title, filename, uploader, description, folder, original_url)
+  VALUES ('delete', old.id, old.title, old.filename, old.uploader, old.description, old.folder, old.original_url);
+END;
+
+CREATE TRIGGER library_au AFTER UPDATE ON library BEGIN
+  INSERT INTO library_fts(library_fts, rowid, title, filename, uploader, description, folder, original_url)
+  VALUES ('delete', old.id, old.title, old.filename, old.uploader, old.description, old.folder, old.original_url);
+  INSERT INTO library_fts(rowid, title, filename, uploader, description, folder, original_url)
+  VALUES (new.id, new.title, new.filename, new.uploader, new.description, new.folder, new.original_url);
+END;
+
 PRAGMA foreign_keys = ON;
