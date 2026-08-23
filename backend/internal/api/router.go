@@ -70,6 +70,17 @@ func limitRequestBody(c *gin.Context) {
 
 func SetupRouter(deps Deps) *gin.Engine {
 	r := gin.Default()
+	// Known Items entries whose source has no native video ID key by their
+	// full URL instead (see subscriptions.sourceID) — that URL travels as
+	// the :sourceId path param on routes like .../entries/:sourceId/add,
+	// percent-encoded (e.g. "%2F" for its slashes) by the frontend. Gin's
+	// default UseRawPath=false makes it match routes against the
+	// already-decoded req.URL.Path, where those "%2F"s have become literal
+	// "/"s — splitting one sourceId segment into several and 404ing the
+	// route. UseRawPath=true matches against the still-encoded path instead
+	// (c.Param still returns the decoded value, since UnescapePathValues
+	// defaults to true).
+	r.UseRawPath = true
 	r.Use(limitRequestBody)
 
 	// All JSON API routes live under /api so they can never collide with a

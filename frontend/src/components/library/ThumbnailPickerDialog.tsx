@@ -25,7 +25,7 @@ const GRID_COLS: Record<number, string> = {
   6: "grid-cols-3",
   8: "grid-cols-4",
   12: "grid-cols-4",
-  24: "grid-cols-3",
+  24: "grid-cols-4",
 }
 
 const GRID_COLS_COUNT: Record<number, number> = {
@@ -34,7 +34,7 @@ const GRID_COLS_COUNT: Record<number, number> = {
   6: 3,
   8: 4,
   12: 4,
-  24: 3,
+  24: 4,
 }
 
 export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPickerDialogProps) {
