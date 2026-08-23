@@ -19,6 +19,12 @@ const (
 	SettingLibraryPaginationEnabled = "library_pagination_enabled" // bool, default false — off shows every item
 	SettingLibraryPageSize          = "library_page_size"
 	SettingThumbnailFrameCount      = "thumbnail_frame_count"
+	// SettingThumbnailFrameRangeLow/High bound the portion of the video
+	// (as a percentage of duration) that "Choose from Video"/Quick Grab pick
+	// candidate frames from — default 5-100 skips the likely-blank intro
+	// while allowing right up to the end (see pickFrameTimestamps).
+	SettingThumbnailFrameRangeLow  = "thumbnail_frame_range_low"  // percent 0-100; default 5
+	SettingThumbnailFrameRangeHigh = "thumbnail_frame_range_high" // percent 0-100; default 100
 	// SettingImageConvertFormat controls what format a downloaded "image"
 	// item's file gets converted to on ingest — "original" leaves it as
 	// fetched. Matches the existing convention that video thumbnails always

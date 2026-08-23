@@ -61,6 +61,7 @@ import { useAddToCompareList, useCompareList, useRemoveFromCompareList } from "@
 import { useSettings } from "@/hooks/useSettings"
 import { useSharpenThumbnailItems } from "@/hooks/useThumbnailEnhancement"
 import { useSaveThumbnailToGallery } from "@/hooks/useThumbnailGallery"
+import { isAudioFilename } from "@/lib/utils"
 import { EditLibraryItemDialog } from "./EditLibraryItemDialog"
 import { MoveLibraryItemDialog } from "./MoveLibraryItemDialog"
 import { DeleteLibraryItemDialog } from "./DeleteLibraryItemDialog"
@@ -126,6 +127,13 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   // thumbnails, Sharpen) don't apply to a plain downloaded image — same
   // hidden-not-disabled treatment as the ghost gating above.
   const isImage = item.mediaType === "image"
+  // Frame-extraction thumbnail actions (Quick Grab, Choose from Video,
+  // both frame-match modes) need an actual video stream to pull frames
+  // from — an audio file's thumbnail is just album art, so these are
+  // hidden the same way as the ghost/image gating above. Redownload from
+  // URL, Sharpen, Save/View Gallery, and Delete all still work fine on an
+  // audio item's thumbnail, so they stay.
+  const isAudio = isAudioFilename(item.filename)
 
   const handleCopyUrl = () => {
     if (!item.originalUrl) return
@@ -220,22 +228,22 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
               <DropdownMenuItem onClick={() => setRedownloadThumbWarningOpen(true)} disabled={!hasUrl}>
                 <Download /> Redownload from URL
               </DropdownMenuItem>
-              {!isGhost && !isImage && (
+              {!isGhost && !isImage && !isAudio && (
                 <DropdownMenuItem onClick={() => setQuickGrabWarningOpen(true)}>
                   <Camera /> Quick Grab
                 </DropdownMenuItem>
               )}
-              {!isGhost && !isImage && (
+              {!isGhost && !isImage && !isAudio && (
                 <DropdownMenuItem onClick={() => setThumbnailPickerOpen(true)}>
                   <Film /> Choose from Video…
                 </DropdownMenuItem>
               )}
-              {!isGhost && !isImage && (
+              {!isGhost && !isImage && !isAudio && (
                 <DropdownMenuItem onClick={() => setFrameMatchMode("url")} disabled={!hasUrl}>
                   <Link2 /> Match from URL Thumbnail…
                 </DropdownMenuItem>
               )}
-              {!isGhost && !isImage && (
+              {!isGhost && !isImage && !isAudio && (
                 <DropdownMenuItem onClick={() => setFrameMatchMode("current")} disabled={!hasThumbnail}>
                   <RefreshCw /> Match from Current Thumbnail…
                 </DropdownMenuItem>

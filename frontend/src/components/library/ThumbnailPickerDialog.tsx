@@ -25,6 +25,7 @@ const GRID_COLS: Record<number, string> = {
   6: "grid-cols-3",
   8: "grid-cols-4",
   12: "grid-cols-4",
+  24: "grid-cols-3",
 }
 
 const GRID_COLS_COUNT: Record<number, number> = {
@@ -33,6 +34,7 @@ const GRID_COLS_COUNT: Record<number, number> = {
   6: 3,
   8: 4,
   12: 4,
+  24: 3,
 }
 
 export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPickerDialogProps) {
@@ -83,25 +85,29 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
   const gridColsClass = GRID_COLS[frameCount] || GRID_COLS[4]
   const cols = GRID_COLS_COUNT[frameCount] || GRID_COLS_COUNT[4]
   const rows = Math.ceil(frameCount / cols)
-  // Fixed per-row height (not aspect-ratio-derived) so total grid height —
-  // rows * rowHeight + gaps — always stays within the dialog's max-h-[90vh],
-  // no matter the frame count. 13rem reserves space for the header, toolbar,
-  // the footer's own bar (border/background/padding make it taller than a
-  // plain button row), and dialog padding around the grid — measured via the
-  // actual rendered chrome height (~12.6rem) plus a little slack, since the
-  // previous 11.5rem budget undershot it and left a scrollbar at some
-  // viewport heights. object-cover crops each frame to fill its cell instead
-  // of letting width dictate height, which is what caused a scrollbar to
-  // appear with fewer/wider columns before.
-  const budgetHeight = `calc((90vh - 13rem - ${(rows - 1) * 0.75}rem) / ${rows})`
-  // With few rows (e.g. 1 row for 2 frames), the budget above can exceed a
-  // real video frame's proportions, cropping tiles into near-squares. Cap
-  // each cell at the height a true 16:9 frame would be for its column's
-  // width, so it only shrinks below that on short viewports — the smaller
-  // of the two is used via min().
+  // A large frame count (24) doesn't try to squeeze every row into the
+  // dialog's max-h-[90vh] at once the way smaller counts do below — that's
+  // what made 24 look cramped/unusable. Instead it gets a fixed, real 16:9
+  // row height and the grid area scrolls once it has more rows than fit.
+  const scrollable = frameCount > 12
+  // Cap each cell at the height a true 16:9 frame would be for its column's
+  // width.
   const columnWidth = `calc((95vw - 2rem - ${(cols - 1) * 0.75}rem) / ${cols})`
   const aspectCapHeight = `calc(${columnWidth} * 9 / 16)`
-  const rowHeight = `min(${budgetHeight}, ${aspectCapHeight})`
+  // Fixed per-row height (not aspect-ratio-derived) so total grid height —
+  // rows * rowHeight + gaps — always stays within the dialog's max-h-[90vh].
+  // 13rem reserves space for the header, toolbar, the footer's own bar
+  // (border/background/padding make it taller than a plain button row), and
+  // dialog padding around the grid — measured via the actual rendered
+  // chrome height (~12.6rem) plus a little slack. object-cover crops each
+  // frame to fill its cell instead of letting width dictate height, which is
+  // what caused a scrollbar to appear with fewer/wider columns before. With
+  // few rows (e.g. 1 row for 2 frames), this budget can exceed a real video
+  // frame's proportions, cropping tiles into near-squares — the smaller of
+  // the two is used via min() so it only shrinks below the aspect cap on
+  // short viewports.
+  const budgetHeight = `calc((90vh - 13rem - ${(rows - 1) * 0.75}rem) / ${rows})`
+  const rowHeight = scrollable ? aspectCapHeight : `min(${budgetHeight}, ${aspectCapHeight})`
 
   const handleGetNewFrames = () => {
     const exclude = batches.flat()
@@ -183,7 +189,10 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
         </div>
 
         {isLoading ? (
-          <div className={`grid ${gridColsClass} gap-3`} style={{ gridAutoRows: rowHeight }}>
+          <div
+            className={`grid ${gridColsClass} gap-3 ${scrollable ? "max-h-[55vh] overflow-y-auto pr-1" : ""}`}
+            style={{ gridAutoRows: rowHeight }}
+          >
             {Array.from({ length: frameCount }).map((_, i) => (
               <Skeleton key={i} className="h-full w-full" />
             ))}
@@ -191,7 +200,10 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
         ) : fetchCandidates.isError ? (
           <p className="text-sm text-destructive">Failed to grab frames: {(fetchCandidates.error as Error).message}</p>
         ) : (
-          <div className={`grid ${gridColsClass} gap-3`} style={{ gridAutoRows: rowHeight }}>
+          <div
+            className={`grid ${gridColsClass} gap-3 ${scrollable ? "max-h-[55vh] overflow-y-auto pr-1" : ""}`}
+            style={{ gridAutoRows: rowHeight }}
+          >
             {displayed.map((candidate, i) => (
               <button
                 key={i}

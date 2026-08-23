@@ -407,6 +407,50 @@ func ThumbnailFrameCount(ctx context.Context, repo *repository.SettingsRepo) (in
 	return n, nil
 }
 
+// defaultThumbnailFrameRangeLow/High are the pick-range defaults — the
+// middle 5%-100% of the video, matching pickFrameTimestamps' historical
+// hardcoded behavior before this became configurable.
+const (
+	defaultThumbnailFrameRangeLow  = 5
+	defaultThumbnailFrameRangeHigh = 100
+)
+
+// ThumbnailFrameRangeLow reads the thumbnail_frame_range_low setting
+// (percent of video duration), defaulting to defaultThumbnailFrameRangeLow
+// if it's never been set or is corrupt. Shared by GetSettings and
+// GetLibraryThumbnailCandidates/QuickGrabLibraryThumbnail.
+func ThumbnailFrameRangeLow(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailFrameRangeLow)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultThumbnailFrameRangeLow, nil
+	}
+	if err != nil {
+		return defaultThumbnailFrameRangeLow, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultThumbnailFrameRangeLow, nil
+	}
+	return n, nil
+}
+
+// ThumbnailFrameRangeHigh mirrors ThumbnailFrameRangeLow for the range's
+// upper bound.
+func ThumbnailFrameRangeHigh(ctx context.Context, repo *repository.SettingsRepo) (int, error) {
+	raw, err := repo.Get(ctx, models.SettingThumbnailFrameRangeHigh)
+	if errors.Is(err, repository.ErrNotFound) {
+		return defaultThumbnailFrameRangeHigh, nil
+	}
+	if err != nil {
+		return defaultThumbnailFrameRangeHigh, err
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultThumbnailFrameRangeHigh, nil
+	}
+	return n, nil
+}
+
 // PrivacyEnabled reads the privacy_enabled setting, defaulting to false — the
 // master switch for the whole privacy workflow starts off, so upgrading to
 // this feature doesn't retroactively start blurring anything for anyone who
@@ -873,6 +917,16 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		thumbnailFrameRangeLow, err := ThumbnailFrameRangeLow(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		thumbnailFrameRangeHigh, err := ThumbnailFrameRangeHigh(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		imageConvertFormat, err := ImageConvertFormat(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1076,6 +1130,8 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			LibraryPaginationEnabled:    libraryPaginationEnabled,
 			LibraryPageSize:             libraryPageSize,
 			ThumbnailFrameCount:         thumbnailFrameCount,
+			ThumbnailFrameRangeLow:      thumbnailFrameRangeLow,
+			ThumbnailFrameRangeHigh:     thumbnailFrameRangeHigh,
 			ImageConvertFormat:          imageConvertFormat,
 			PrivacyEnabled:              privacyEnabled,
 			PrivacyBlurStrength:         privacyBlurStrength,
@@ -1350,6 +1406,49 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 			if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameCount, strconv.Itoa(*req.ThumbnailFrameCount)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
+			}
+		}
+		// Mirrors the resolution threshold pairs above — resolve whichever
+		// side isn't in this request from what's currently stored, so a lone
+		// update can't invert the pair.
+		if req.ThumbnailFrameRangeLow != nil || req.ThumbnailFrameRangeHigh != nil {
+			effectiveLow := 0
+			if req.ThumbnailFrameRangeLow != nil {
+				effectiveLow = *req.ThumbnailFrameRangeLow
+			} else {
+				var err error
+				effectiveLow, err = ThumbnailFrameRangeLow(c.Request.Context(), repo)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			effectiveHigh := 0
+			if req.ThumbnailFrameRangeHigh != nil {
+				effectiveHigh = *req.ThumbnailFrameRangeHigh
+			} else {
+				var err error
+				effectiveHigh, err = ThumbnailFrameRangeHigh(c.Request.Context(), repo)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			if effectiveLow >= effectiveHigh {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "thumbnail frame range low must be less than the high bound"})
+				return
+			}
+			if req.ThumbnailFrameRangeLow != nil {
+				if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameRangeLow, strconv.Itoa(*req.ThumbnailFrameRangeLow)); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			if req.ThumbnailFrameRangeHigh != nil {
+				if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameRangeHigh, strconv.Itoa(*req.ThumbnailFrameRangeHigh)); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
 			}
 		}
 		if req.ImageConvertFormat != nil {

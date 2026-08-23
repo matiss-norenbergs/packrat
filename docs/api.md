@@ -549,11 +549,13 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
 - **`POST /api/library/:id/thumbnail/redownload`** — no body. Re-fetches the thumbnail from
   `originalUrl`, overwriting the current one. `400` no source URL, `502` fetch failure.
 - **`POST /api/library/:id/thumbnail/quick-grab`** — no body. Extracts one video frame at a random
-  timestamp (avoiding the blank-ish first/last 10%) and sets it immediately. `502` if extraction
+  timestamp within the configured pick range (see `thumbnailFrameRangeLow`/`High` below; default
+  5%-100% of duration, skipping the likely-blank intro) and sets it immediately. `502` if extraction
   fails.
 - **`GET /api/library/:id/thumbnail/candidates`** — no body, read-only. Extracts N frames (N = the
-  `thumbnailFrameCount` setting: 2/4/6/8) spread across the video as base64 JPEGs. A per-candidate
-  failure is skipped, not fatal; `502` only if zero candidates could be extracted.
+  `thumbnailFrameCount` setting: 2/4/6/8/12/24), spread across the same configured pick range, as
+  base64 JPEGs. A per-candidate failure is skipped, not fatal; `502` only if zero candidates could
+  be extracted.
   ```json
   { "candidates": [ { "timestampSeconds": 34.2, "imageBase64": "/9j/4AAQ..." } ] }
   ```
@@ -884,7 +886,8 @@ is a nullable relative path pointing at one of the artist's own gallery images (
   "historyAnonymizeUrls": false, "historyRetentionDays": 0, "downloadLogRetentionDays": 0,
   "libraryView": "grid", "librarySortKey": "downloadedAt", "librarySortDir": "desc",
   "libraryMode": "manage", "libraryPaginationEnabled": false, "libraryPageSize": 48,
-  "thumbnailFrameCount": 4, "privacyBlurStrength": "default", "skipDownloadPreview": false,
+  "thumbnailFrameCount": 4, "thumbnailFrameRangeLow": 5, "thumbnailFrameRangeHigh": 100,
+  "privacyBlurStrength": "default", "skipDownloadPreview": false,
   "jellyfinEnabled": false, "jellyfinUrl": "", "jellyfinApiKey": "", "jellyfinRefreshMode": "none",
   "libraryAutoplay": true, "imageConvertFormat": "jpg"
 }
@@ -894,7 +897,9 @@ is a nullable relative path pointing at one of the artist's own gallery images (
 the last saved DB value. `jellyfinApiKey` is returned in plaintext, not masked. `imageConvertFormat`
 (`"original"|"jpg"|"png"|"webp"`, default `"jpg"`) is the format every `downloadType=image` download
 gets re-encoded to — matches the existing convention that video/audio thumbnails always normalize to
-JPEG.
+JPEG. `thumbnailFrameRangeLow`/`thumbnailFrameRangeHigh` (percent 0-100, default 5/100) bound which
+portion of a video's duration "Choose from Video"/Quick Grab pick candidate frames from — see the
+Library thumbnail endpoints above.
 
 ### `PATCH /api/settings` — every field optional, only provided ones are persisted
 

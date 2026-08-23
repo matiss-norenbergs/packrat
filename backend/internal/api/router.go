@@ -131,7 +131,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/library/:id/redownload/preview-url", PreviewRedownloadURL(deps.LibraryRepo, deps.YtDlp))
 		api.POST("/library/:id/redownload/from-url", RedownloadLibraryItemFromURL(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.POST("/library/:id/thumbnail/redownload", RedownloadLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.ThumbnailGalleryRepo))
-		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.ThumbnailGalleryRepo))
+		api.POST("/library/:id/thumbnail/quick-grab", QuickGrabLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.ThumbnailGalleryRepo))
 		api.GET("/library/:id/thumbnail/candidates", GetLibraryThumbnailCandidates(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.SettingsRepo))
 		api.POST("/library/:id/thumbnail", SetLibraryThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.ThumbnailGalleryRepo))
 		api.DELETE("/library/:id/thumbnail", DeleteLibraryItemThumbnail(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo))

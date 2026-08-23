@@ -869,6 +869,8 @@ type SettingsResponse struct {
 	LibraryPaginationEnabled    bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize             int      `json:"libraryPageSize"`
 	ThumbnailFrameCount         int      `json:"thumbnailFrameCount"`
+	ThumbnailFrameRangeLow      int      `json:"thumbnailFrameRangeLow"`
+	ThumbnailFrameRangeHigh     int      `json:"thumbnailFrameRangeHigh"`
 	ImageConvertFormat          string   `json:"imageConvertFormat"`
 	PrivacyEnabled              bool     `json:"privacyEnabled"`
 	PrivacyBlurStrength         string   `json:"privacyBlurStrength"`
@@ -926,7 +928,9 @@ type UpdateSettingsRequest struct {
 	LibraryMode                 *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
 	LibraryPaginationEnabled    *bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize             *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
-	ThumbnailFrameCount         *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8 12"`
+	ThumbnailFrameCount         *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8 12 24"`
+	ThumbnailFrameRangeLow      *int      `json:"thumbnailFrameRangeLow" binding:"omitempty,min=0,max=100"`
+	ThumbnailFrameRangeHigh     *int      `json:"thumbnailFrameRangeHigh" binding:"omitempty,min=0,max=100"`
 	ImageConvertFormat          *string   `json:"imageConvertFormat" binding:"omitempty,oneof=original jpg png webp"`
 	PrivacyEnabled              *bool     `json:"privacyEnabled"`
 	PrivacyBlurStrength         *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`

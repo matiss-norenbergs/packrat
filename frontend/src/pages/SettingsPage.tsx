@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ResolutionTierSlider } from "@/components/ResolutionTierSlider"
+import { ThumbnailFrameRangeSlider } from "@/components/ThumbnailFrameRangeSlider"
 import { RESOLUTION_STEP_LABELS } from "@/lib/resolution"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
@@ -451,7 +452,7 @@ function DownloadsTab() {
   )
 }
 
-const FRAME_COUNT_OPTIONS = [2, 4, 6, 8, 12]
+const FRAME_COUNT_OPTIONS = [2, 4, 6, 8, 12, 24]
 
 function LibraryTab() {
   const { data: settings, isLoading } = useSettings()
@@ -467,6 +468,8 @@ function LibraryTab() {
   const [thumbLow, setThumbLow] = useState(480)
   const [thumbHigh, setThumbHigh] = useState(1080)
   const [frameCount, setFrameCount] = useState(4)
+  const [frameRangeLow, setFrameRangeLow] = useState(5)
+  const [frameRangeHigh, setFrameRangeHigh] = useState(100)
   const [autoplay, setAutoplay] = useState(false)
   const [imageConvertFormat, setImageConvertFormat] = useState<"original" | "jpg" | "png" | "webp">("jpg")
 
@@ -479,6 +482,8 @@ function LibraryTab() {
     setThumbLow(settings.thumbnailResolutionThresholdLow)
     setThumbHigh(settings.thumbnailResolutionThresholdHigh)
     setFrameCount(settings.thumbnailFrameCount)
+    setFrameRangeLow(settings.thumbnailFrameRangeLow)
+    setFrameRangeHigh(settings.thumbnailFrameRangeHigh)
     setAutoplay(settings.libraryAutoplay)
     setImageConvertFormat(settings.imageConvertFormat)
   }, [settings])
@@ -494,6 +499,8 @@ function LibraryTab() {
   if (thumbLow !== settings.thumbnailResolutionThresholdLow) payload.thumbnailResolutionThresholdLow = thumbLow
   if (thumbHigh !== settings.thumbnailResolutionThresholdHigh) payload.thumbnailResolutionThresholdHigh = thumbHigh
   if (frameCount !== settings.thumbnailFrameCount) payload.thumbnailFrameCount = frameCount
+  if (frameRangeLow !== settings.thumbnailFrameRangeLow) payload.thumbnailFrameRangeLow = frameRangeLow
+  if (frameRangeHigh !== settings.thumbnailFrameRangeHigh) payload.thumbnailFrameRangeHigh = frameRangeHigh
   if (autoplay !== settings.libraryAutoplay) payload.libraryAutoplay = autoplay
   if (imageConvertFormat !== settings.imageConvertFormat) payload.imageConvertFormat = imageConvertFormat
   const dirty = Object.keys(payload).length > 0
@@ -615,6 +622,26 @@ function LibraryTab() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <FieldLabel
+            htmlFor="thumbnail-frame-range-slider"
+            info="Which portion of the video, by duration, candidate frames are picked from. Narrowing this away from the default skips more of the intro/outro; the low end defaults to 5% to avoid a likely-blank opening frame."
+          >
+            "Choose from Video" pick range
+          </FieldLabel>
+          <ThumbnailFrameRangeSlider
+            low={frameRangeLow}
+            high={frameRangeHigh}
+            onCommit={(newLow, newHigh) => {
+              setFrameRangeLow(newLow)
+              setFrameRangeHigh(newHigh)
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            {frameRangeLow}% – {frameRangeHigh}% of the video's duration
+          </p>
         </div>
 
         <div className="space-y-2">

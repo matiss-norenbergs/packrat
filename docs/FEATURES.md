@@ -136,10 +136,15 @@ deleting their files).
 - **Thumbnail** submenu:
   - **Redownload from URL** — re-fetches the thumbnail image from the source.
   - **Quick Grab** — grabs one random frame from the video file itself.
-  - **Choose from Video…** — extracts several candidate frames spread across the video (2/4/6/8,
-    configurable in Settings) and lets you pick one.
+  - **Choose from Video…** — extracts several candidate frames spread across the video (2/4/6/8/12/24,
+    configurable in Settings, along with which portion of the video — by percentage of duration —
+    frames are pulled from) and lets you pick one. At higher frame counts the grid scrolls
+    independently of the rest of the dialog so each frame stays a real, viewable size.
   - **Match from URL/Current Thumbnail…** — see [Frame Matching](#frame-matching).
   - **Save in Thumbnail Gallery** / **View Gallery…** — see Thumbnail gallery below.
+  - Quick Grab, Choose from Video…, and both Match actions need an actual video stream to pull
+    frames from, so they're hidden (not just disabled) on an audio item — its thumbnail is just
+    album art. Everything else in this submenu still works on one.
 - **NFO** submenu (when Generate NFO is enabled on the item) — generate/regenerate, view the raw
   XML, or delete just the sidecar file (leaves the toggle itself alone, so it's rewritten again on
   the next relevant edit).
@@ -159,7 +164,8 @@ assigned to it — is marked private. See Collections and Tags below.
 A **ghost item** is a library entry with metadata saved but no file downloaded yet — shown with a
 type-appropriate placeholder icon and a "Ghost item" badge instead of a thumbnail. A ghost's
 actions menu hides file-dependent actions (Move, Trim, NFO, frame-grab thumbnails, Delete file)
-since there's nothing to act on yet.
+since there's nothing to act on yet. Frame-grab thumbnail actions are likewise hidden on an audio
+item, for the same file-doesn't-have-what's-needed reason — see the Thumbnail submenu above.
 
 - **Add item** (Library toolbar) creates one directly: paste a source URL to prefill the title from
   a live preview and optionally fetch the thumbnail up front, or just type a title with no URL for
@@ -450,8 +456,9 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
 - **History** — "Anonymize History Links" toggle (see History above); how long to keep history
   entries before automatic pruning, plus a "Clear all now" button.
 - **Library** — resolution and thumbnail quality tiers (the color-coded low/medium/high thresholds
-  shown on library cards); how many candidate frames "Choose from Video" offers (2/4/6/8) and
-  whether the medium derivative tier is used; autoplay on opening a library item (including a
+  shown on library cards); how many candidate frames "Choose from Video" offers (2/4/6/8/12/24) and
+  which portion of the video (by percentage of duration) they're pulled from; whether the medium
+  derivative tier is used; autoplay on opening a library item (including a
   private one, right after you reveal it — playback volume is remembered automatically between
   plays); **Backfill Images** — a one-click background job that generates missing thumbnail/artist
   image/collection-cover derivatives for anything that predates them, and backfills stored

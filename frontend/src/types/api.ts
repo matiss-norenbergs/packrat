@@ -512,6 +512,8 @@ export interface Settings {
   libraryPaginationEnabled: boolean
   libraryPageSize: number
   thumbnailFrameCount: number
+  thumbnailFrameRangeLow: number
+  thumbnailFrameRangeHigh: number
   imageConvertFormat: "original" | "jpg" | "png" | "webp"
   privacyEnabled: boolean
   privacyBlurStrength: string
@@ -657,6 +659,8 @@ export interface UpdateSettingsRequest {
   libraryPaginationEnabled?: boolean
   libraryPageSize?: number
   thumbnailFrameCount?: number
+  thumbnailFrameRangeLow?: number
+  thumbnailFrameRangeHigh?: number
   imageConvertFormat?: "original" | "jpg" | "png" | "webp"
   privacyEnabled?: boolean
   privacyBlurStrength?: string

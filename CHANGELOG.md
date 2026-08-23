@@ -32,6 +32,20 @@ Maintenance notes:
 - **"Add to compare list" moved into the item detail page's "⋮" actions menu** (right under Trim),
   alongside the rest of the per-item actions, instead of its own separate button.
 - **Compare list playback: merged the separate Play/Pause icon buttons into a single toggle.**
+- **New: configurable pick range for "Choose from Video"** — Settings → Library → a slider under
+  the frame-count setting controls which portion of the video (by percentage of duration) candidate
+  frames are pulled from, for both "Choose from Video" and Quick Grab. Defaults to 5%-100% (skips a
+  likely-blank intro, allows right up to the end), matching prior fixed behavior exactly. Also added
+  a 24-frame option to the frame-count setting itself, alongside 2/4/6/8/12.
+- **Fix: "Choose from Video" was unusable at higher frame counts (e.g. the new 24 option)** —
+  every row used to shrink to squeeze the whole grid into the dialog at once, so a large frame count
+  crammed every frame into a sliver too small to make out. The frame grid now scrolls independently
+  once it has more rows than comfortably fit (header/toolbar/footer stay in place), and each frame
+  keeps a real, viewable size.
+- **Thumbnail actions hidden for audio items where they don't apply** — Quick Grab, Choose from
+  Video, and both "Match from Thumbnail" actions need an actual video stream to pull frames from, so
+  they're no longer offered on an audio file's item (its thumbnail is just album art). Redownload
+  from URL, Sharpen, gallery save/view, and Delete are unaffected — those all still work on it.
 - **Dev: CI now runs `gofmt -l` (fails the build on unformatted Go code) and `go test -race`**
   (previously no race detector); the dev Docker Compose stack now also joins
   `media-stack_default` so `packrat-dev` can resolve/reach `gluetun` by hostname the same way the
