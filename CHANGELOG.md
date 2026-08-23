@@ -12,6 +12,31 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-23
+
+- **New: manually link a subscription's "Known items" entry to a library item** — for when a video
+  was actually downloaded through a different source/URL than the one a subscription tracks, so the
+  automatic match could never find it on its own. "Known items" → select a row → "Link to library
+  item…" opens a search-and-pick dialog over the whole library; "Unlink" clears the association.
+  Linking also marks the entry seen. Multiple entries — even across different subscriptions — can
+  link to the same library item, and re-adding an already-linked entry as a ghost/download no longer
+  overwrites the existing link.
+- **"Known items" dialog reworked into a real table** — checkbox row selection (click, shift-click
+  for a range, ctrl/cmd-click to toggle, or click-and-drag across rows), pagination, and a sticky
+  header so only the row content scrolls. Toolbar actions (Add as ghost, Queue download, Mark seen,
+  Link/Unlink) now apply to the whole selection at once instead of one row at a time, and re-adding
+  an entry already in the library asks for confirmation instead of silently duplicating it.
+- **Fix: "Known items" sort order was non-deterministic** — every entry baselined when a subscription
+  is first created shares the exact same `first_seen_at` timestamp, so sorting on that column alone
+  left ties in an unstable order that could reshuffle between loads. Added `id DESC` as a tiebreak.
+- **"Add to compare list" moved into the item detail page's "⋮" actions menu** (right under Trim),
+  alongside the rest of the per-item actions, instead of its own separate button.
+- **Compare list playback: merged the separate Play/Pause icon buttons into a single toggle.**
+- **Dev: CI now runs `gofmt -l` (fails the build on unformatted Go code) and `go test -race`**
+  (previously no race detector); the dev Docker Compose stack now also joins
+  `media-stack_default` so `packrat-dev` can resolve/reach `gluetun` by hostname the same way the
+  release container does — needed for testing a proxy setting copied over from release Settings.
+
 ## 2026-08-22
 
 - **New: "Image" download type** — the New Download dialog (and Bulk Download, batch, and playlist

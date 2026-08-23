@@ -32,9 +32,9 @@ func GetStats(downloadsRepo *repository.DownloadsRepo, libraryRepo *repository.L
 		}
 
 		c.JSON(http.StatusOK, StatsResponse{
-			ActiveDownloads:   active,
-			QueuedDownloads:   queued,
-			CompletedToday:    completedToday,
+			ActiveDownloads:        active,
+			QueuedDownloads:        queued,
+			CompletedToday:         completedToday,
 			LibraryVideoCount:      videoCount,
 			LibraryAudioCount:      audioCount,
 			LibraryImageCount:      imageCount,
@@ -42,8 +42,8 @@ func GetStats(downloadsRepo *repository.DownloadsRepo, libraryRepo *repository.L
 			LibraryAudioGhostCount: audioGhostCount,
 			LibraryImageGhostCount: imageGhostCount,
 			TotalStorageBytes:      totalBytes,
-			DiskTotalBytes:    diskTotal,
-			DiskFreeBytes:     diskFree,
+			DiskTotalBytes:         diskTotal,
+			DiskFreeBytes:          diskFree,
 		})
 	}
 }

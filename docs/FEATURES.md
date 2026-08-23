@@ -113,6 +113,8 @@ deleting their files).
   trimmed copy without touching the original — toggle Original/Preview to A-B compare, then
   "Accept" (with a confirmation; overwriting the original isn't reversible) or discard the preview.
   Not offered for ghost items.
+- **Add to compare list** / **Remove from compare list** — toggles this one item in/out of the
+  [compare list](#compare-list); label and icon reflect its current membership.
 - **Compare Metadata** — side-by-side diff of what's currently saved versus what a fresh fetch of
   the source URL would return right now (title, uploader, duration, description, thumbnail,
   resolution) — read-only, changes nothing. Useful for spotting an upstream title/description edit
@@ -351,12 +353,20 @@ back manually.
 - The subscriptions table shows known-item count (with a "+N new" badge when there's anything
   unseen), last-checked time (with the error, if the last check failed), auto-download status, and
   an Enabled toggle — disabling only pauses the scheduled checks, "Check now" still works.
-- **Known items** (per subscription) lists every upload ever seen, newest first, each tagged "New"
-  if unseen. Per-entry actions: **Add as ghost** (creates a library placeholder for later review),
-  **Queue download** (downloads it now), or **Mark seen** (dismiss without acting on it — for
-  uploads you don't want). An upload that fails to auto-download/auto-ghost during a scheduled or
-  "Check now" pass still shows up here (tagged "New", no library placeholder) rather than silently
-  vanishing — retry it manually with the same actions.
+- **Known items** (per subscription) is a sortable, paginated table of every upload ever seen,
+  most-recently-first-seen first. Select rows (click, shift-click for a range, ctrl/cmd-click to
+  toggle, or click-and-drag across rows) and use the toolbar to act on the whole selection at once:
+  **Add as ghost** (creates library placeholders for later review), **Queue download** (downloads
+  them now), **Mark seen** (dismiss without acting on it — for uploads you don't want), **Link to
+  library item…** (single-row only — search-and-pick a library item to manually associate with this
+  entry, for when the video was actually downloaded through a different source than this
+  subscription tracks, so it was never found automatically), and **Unlink** (clears that
+  association). The Status column shows "New" (unseen), "In library" / "In library (ghost)" (linked
+  to a library item, automatically or manually — same badge either way), or nothing for a seen entry
+  with no link. Re-adding an entry that's already linked prompts for confirmation first rather than
+  silently duplicating it, and doesn't overwrite the existing link. An upload that fails to
+  auto-download/auto-ghost during a scheduled or "Check now" pass still shows up here (tagged "New",
+  no library placeholder) rather than silently vanishing — retry it manually with the same actions.
 - **Check now** re-checks immediately instead of waiting for the next scheduled pass; **Edit**
   changes everything except the source URL/Type (changing those is really delete-and-re-add).
 

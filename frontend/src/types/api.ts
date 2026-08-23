@@ -933,6 +933,15 @@ export interface SubscriptionEntry {
   libraryItemId: number | null
   seenAt: string | null
   firstSeenAt: string
+  // The library item this entry is effectively associated with, if any —
+  // libraryItemId (whether set by a prior ghost/download or a manual
+  // "Link to library item…") when present, otherwise a fallback URL/
+  // video-id soft match. A video already in the library through some
+  // other route (manual download, a different subscription, import, or
+  // an explicit manual link) shows up here even when libraryItemId itself
+  // is null.
+  linkedLibraryItemId: number | null
+  linkedLibraryItemIsGhost: boolean
 }
 
 // One row of the AI Enhancement page's history table — one attempted item,

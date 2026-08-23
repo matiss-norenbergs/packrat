@@ -111,12 +111,21 @@ export function ComparePlayPage() {
   const readyCount = items.filter((item) => readyIds.has(item.id)).length
   const playBlocked = waitForReady && !allReady
 
-  const playAll = () => {
+  // Tracks this button's own last command, not each cell's actual playing
+  // state — a per-cell native control can still pause/play independently
+  // afterward (see the component doc comment above), same looseness the
+  // separate Play/Pause buttons this replaced already had.
+  const [isPlaying, setIsPlaying] = useState(false)
+
+  const togglePlayAll = () => {
+    if (isPlaying) {
+      for (const el of mediaRefs.current.values()) el.pause()
+      setIsPlaying(false)
+      return
+    }
     if (playBlocked) return
     for (const el of mediaRefs.current.values()) el.play()
-  }
-  const pauseAll = () => {
-    for (const el of mediaRefs.current.values()) el.pause()
+    setIsPlaying(true)
   }
   const setAllVolume = (volume: number) => {
     for (const el of mediaRefs.current.values()) el.volume = volume
@@ -169,19 +178,23 @@ export function ComparePlayPage() {
         <div className="flex shrink-0 items-center gap-2 border-t bg-background px-3 py-2">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button type="button" variant="secondary" size="icon-sm" onClick={playAll} disabled={playBlocked}>
-                <Play className="h-4 w-4" />
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon-sm"
+                onClick={togglePlayAll}
+                disabled={!isPlaying && playBlocked}
+              >
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{playBlocked ? `Buffering… (${readyCount}/${items.length} ready)` : "Play all"}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button type="button" variant="secondary" size="icon-sm" onClick={pauseAll}>
-                <Pause className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Pause all</TooltipContent>
+            <TooltipContent>
+              {!isPlaying && playBlocked
+                ? `Buffering… (${readyCount}/${items.length} ready)`
+                : isPlaying
+                  ? "Pause all"
+                  : "Play all"}
+            </TooltipContent>
           </Tooltip>
 
           {/* Stacked two-row block so both toggles fit compactly, but the

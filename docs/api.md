@@ -1237,6 +1237,8 @@ download queue.
 | GET | `/api/subscriptions/:id/entries` | List every upload ever seen ("Known items") |
 | POST | `/api/subscriptions/:id/entries/:sourceId/add` | Add one known entry as a ghost or a download |
 | POST | `/api/subscriptions/:id/entries/:sourceId/seen` | Dismiss one entry without acting on it |
+| POST | `/api/subscriptions/:id/entries/:sourceId/link` | Manually associate an entry with an existing library item |
+| POST | `/api/subscriptions/:id/entries/:sourceId/unlink` | Clear an entry's library item association |
 
 ### `POST /api/subscriptions`
 
@@ -1281,14 +1283,18 @@ Response `200 {"newItemsFound": 2}`.
 
 ### `GET /api/subscriptions/:id/entries` — no params
 
-Every upload ever seen for this subscription, most-recent-first:
+Every upload ever seen for this subscription, most-recently-first-seen first
+(`first_seen_at DESC, id DESC` — the tiebreak matters because every entry baselined at subscribe
+time shares the exact same `firstSeenAt`, so sorting on that column alone left ties in
+undefined/unstable order):
 
 ```json
 [
   {
     "sourceId": "abc123", "title": "New Upload", "url": "https://youtube.com/watch?v=abc123",
     "durationSeconds": 214.0, "libraryItemId": null,
-    "seenAt": null, "firstSeenAt": "2026-08-22T09:00:00Z"
+    "seenAt": null, "firstSeenAt": "2026-08-22T09:00:00Z",
+    "linkedLibraryItemId": null, "linkedLibraryItemIsGhost": false
   }
 ]
 ```
@@ -1299,7 +1305,12 @@ ID, but falls back to the entry's URL for sources whose flat-playlist listing do
 either way it's stable and unique per subscription. An entry that fails to auto-download/auto-ghost
 during a check is still recorded here (`libraryItemId: null`, unseen) rather than silently dropped —
 without that, a persistent failure would retry (and fail) on every future check indefinitely, never
-visible anywhere.
+visible anywhere. `linkedLibraryItemId`/`linkedLibraryItemIsGhost` report the library item this
+entry is *effectively* associated with, if any: `libraryItemId` (set by a prior ghost/download, or
+by `/link` below) when present, otherwise a fallback URL/video-id soft match against the whole
+library — so a video already present through some other route (a manual download, a different
+subscription, an import, or an explicit manual link) shows up linked here even when `libraryItemId`
+itself is `null`.
 
 ### `POST /api/subscriptions/:id/entries/:sourceId/add`
 
@@ -1308,14 +1319,36 @@ visible anywhere.
 ```
 
 `mode` is `"ghost"` (creates a library placeholder immediately, for review) or `"download"` (queues
-a real download right now) — both mark the entry seen as a side effect. `404` unknown
-subscription/entry, `400` already added, or no URL recorded for a pre-tracking entry, `502`
-ghost-create/enqueue failure. Response `200 {"mode": "ghost", "libraryItemId": 118}` or
+a real download right now) — both mark the entry seen as a side effect. Re-adding an entry that's
+already linked to a library item is allowed (the frontend confirms first when it detects this); an
+existing link is left untouched rather than overwritten by the new ghost/download. `404` unknown
+subscription/entry, `400` no URL recorded for a pre-tracking entry, `502` ghost-create/enqueue
+failure. Response `200 {"mode": "ghost", "libraryItemId": 118}` or
 `{"mode": "download", "downloadId": 55}`.
 
 ### `POST /api/subscriptions/:id/entries/:sourceId/seen` — no body
 
 Dismisses one entry without creating anything. `404` unknown entry, `204`.
+
+### `POST /api/subscriptions/:id/entries/:sourceId/link`
+
+```json
+{ "libraryItemId": 25 }
+```
+
+Manually associates this entry with an existing library item — for when the video was actually
+downloaded through a different source/URL than the one this subscription tracks, so the automatic
+URL/video-id match could never have found it on its own (surfaced in the "Known items" dialog as
+"Link to library item…", a plain search-and-pick over the whole library). Also marks the entry seen.
+Multiple entries — even across different subscriptions — can link to the same library item. `404`
+unknown subscription/entry/library item, `204` on success.
+
+### `POST /api/subscriptions/:id/entries/:sourceId/unlink` — no body
+
+Clears an entry's manual/auto library item association (`libraryItemId` back to `null`) without
+touching the library item itself or the entry's seen state. A soft URL/video-id match, if one still
+applies, keeps showing as linked in `linkedLibraryItemId` regardless. `404` unknown
+subscription/entry, `204`.
 
 ### Automatic checking
 

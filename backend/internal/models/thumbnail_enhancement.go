@@ -11,18 +11,18 @@ import "time"
 // completed — e.g. a connection failure to the upscaler leaves
 // Enhanced* nil but Original* populated.
 type ThumbnailEnhancementHistoryEntry struct {
-	ID                 int64
-	LibraryItemID      *int64
-	ItemTitle          string
-	Status             string // "success" | "failed"
-	OriginalWidth      *int
-	OriginalHeight     *int
-	EnhancedWidth      *int
-	EnhancedHeight     *int
-	OriginalSizeBytes  *int64
-	EnhancedSizeBytes  *int64
-	Error              *string
-	CreatedAt          time.Time
+	ID                int64
+	LibraryItemID     *int64
+	ItemTitle         string
+	Status            string // "success" | "failed"
+	OriginalWidth     *int
+	OriginalHeight    *int
+	EnhancedWidth     *int
+	EnhancedHeight    *int
+	OriginalSizeBytes *int64
+	EnhancedSizeBytes *int64
+	Error             *string
+	CreatedAt         time.Time
 	// TriggerType records what caused this attempt — "manual" (RunOnce /
 	// EnhanceItem), "scheduled" (RunDueEnhancements), or "auto"
 	// (MaybeAutoEnhanceOnDownload) — surfaced as a badge column in the

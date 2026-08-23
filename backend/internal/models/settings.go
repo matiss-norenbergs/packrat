@@ -23,23 +23,23 @@ const (
 	// item's file gets converted to on ingest — "original" leaves it as
 	// fetched. Matches the existing convention that video thumbnails always
 	// get normalized to JPEG (yt-dlp's --convert-thumbnails jpg).
-	SettingImageConvertFormat = "image_convert_format" // "original" | "jpg" | "png" | "webp"; default "jpg"
-	SettingPrivacyEnabled           = "privacy_enabled"       // bool, default false — master switch for the whole privacy workflow
-	SettingPrivacyBlurStrength      = "privacy_blur_strength" // "weak" | "default" | "strong"
-	SettingBrowseIgnorePrivacy      = "browse_ignore_privacy" // bool, default false — Browse-page-only override, doesn't affect Library
-	SettingSkipDownloadPreview      = "skip_download_preview" // bool, true = skip the New Download preview card
-	SettingJellyfinEnabled          = "jellyfin_enabled"
-	SettingJellyfinURL              = "jellyfin_url"
-	SettingJellyfinAPIKey           = "jellyfin_api_key"
-	SettingJellyfinRefreshMode      = "jellyfin_refresh_mode"      // "entire" | "specific" | "none"; default "none"
-	SettingLibraryAutoplay          = "library_autoplay"           // bool, default true — matches the player's pre-existing hardcoded behavior
-	SettingYtdlpCookiesBrowser      = "ytdlp_cookies_browser"      // "" | one of yt-dlp's supported browser names; "" = disabled
-	SettingYtdlpCookiesProfile      = "ytdlp_cookies_profile"      // optional profile name, only meaningful when CookiesBrowser is set
-	SettingYtdlpProxy               = "ytdlp_proxy"                // e.g. "socks5://127.0.0.1:1080"; "" = disabled
-	SettingYtdlpRateLimit           = "ytdlp_rate_limit"           // e.g. "500K"; "" = disabled
-	SettingYtdlpRetries             = "ytdlp_retries"              // int as string; 0 = yt-dlp's own default (10), not passed explicitly
-	SettingAutoBackupIntervalHours  = "auto_backup_interval_hours" // hours; 0 = disabled (default)
-	SettingBackupRetentionCount     = "backup_retention_count"     // count; 0 = unlimited; default backup.DefaultBackupRetentionCount
+	SettingImageConvertFormat      = "image_convert_format"  // "original" | "jpg" | "png" | "webp"; default "jpg"
+	SettingPrivacyEnabled          = "privacy_enabled"       // bool, default false — master switch for the whole privacy workflow
+	SettingPrivacyBlurStrength     = "privacy_blur_strength" // "weak" | "default" | "strong"
+	SettingBrowseIgnorePrivacy     = "browse_ignore_privacy" // bool, default false — Browse-page-only override, doesn't affect Library
+	SettingSkipDownloadPreview     = "skip_download_preview" // bool, true = skip the New Download preview card
+	SettingJellyfinEnabled         = "jellyfin_enabled"
+	SettingJellyfinURL             = "jellyfin_url"
+	SettingJellyfinAPIKey          = "jellyfin_api_key"
+	SettingJellyfinRefreshMode     = "jellyfin_refresh_mode"      // "entire" | "specific" | "none"; default "none"
+	SettingLibraryAutoplay         = "library_autoplay"           // bool, default true — matches the player's pre-existing hardcoded behavior
+	SettingYtdlpCookiesBrowser     = "ytdlp_cookies_browser"      // "" | one of yt-dlp's supported browser names; "" = disabled
+	SettingYtdlpCookiesProfile     = "ytdlp_cookies_profile"      // optional profile name, only meaningful when CookiesBrowser is set
+	SettingYtdlpProxy              = "ytdlp_proxy"                // e.g. "socks5://127.0.0.1:1080"; "" = disabled
+	SettingYtdlpRateLimit          = "ytdlp_rate_limit"           // e.g. "500K"; "" = disabled
+	SettingYtdlpRetries            = "ytdlp_retries"              // int as string; 0 = yt-dlp's own default (10), not passed explicitly
+	SettingAutoBackupIntervalHours = "auto_backup_interval_hours" // hours; 0 = disabled (default)
+	SettingBackupRetentionCount    = "backup_retention_count"     // count; 0 = unlimited; default backup.DefaultBackupRetentionCount
 
 	SettingResolutionTierMediumEnabled = "resolution_tier_medium_enabled" // bool, default true
 	SettingResolutionThresholdLow      = "resolution_threshold_low"       // height in px; default 720 — at/below is "low"
@@ -50,8 +50,8 @@ const (
 	// range than a video (rarely exceeds 1080p), so it needs lower defaults
 	// rather than sharing the video thresholds.
 	SettingThumbnailResolutionTierMediumEnabled = "thumbnail_resolution_tier_medium_enabled" // bool, default true
-	SettingThumbnailResolutionThresholdLow      = "thumbnail_resolution_threshold_low"        // height in px; default 480 — at/below is "low"
-	SettingThumbnailResolutionThresholdHigh     = "thumbnail_resolution_threshold_high"       // height in px; default 1080 — at/above is "high"
+	SettingThumbnailResolutionThresholdLow      = "thumbnail_resolution_threshold_low"       // height in px; default 480 — at/below is "low"
+	SettingThumbnailResolutionThresholdHigh     = "thumbnail_resolution_threshold_high"      // height in px; default 1080 — at/above is "high"
 
 	// AI thumbnail enhancement — opt-in, off by default. Upscales library
 	// thumbnails via a user-supplied local Stable Diffusion WebUI

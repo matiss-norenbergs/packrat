@@ -10,13 +10,13 @@ import "time"
 // thumbnail on explicit accept, with no revert story to keep records around
 // for, so once a row is resolved there's nothing left to keep.
 type FrameMatchQueueItem struct {
-	ID                 int64
-	LibraryItemID      int64
-	ItemTitle          string
-	Mode               string // "url" | "current"
-	State              string // "queued" | "running" | "done" | "error"
-	TimestampSeconds   *float64
-	Score              *float64
+	ID               int64
+	LibraryItemID    int64
+	ItemTitle        string
+	Mode             string // "url" | "current"
+	State            string // "queued" | "running" | "done" | "error"
+	TimestampSeconds *float64
+	Score            *float64
 	// FoundFramePath and ReferenceImagePath are relative to ImagesRoot,
 	// servable via /local-images/* — a snapshot of both images captured at
 	// match-completion time (see framematch.persistQueueImages), not

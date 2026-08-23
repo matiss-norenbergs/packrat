@@ -563,10 +563,10 @@ type StartFrameMatchResponse struct {
 // "running", "done", or "error" — the result/score/image fields are only
 // populated once State is "done", and Error only once State is "error".
 type FrameMatchStatusResponse struct {
-	State                string   `json:"state"`
-	TimestampSeconds     *float64 `json:"timestampSeconds,omitempty"`
-	Score                *float64 `json:"score,omitempty"`
-	ImageBase64          *string  `json:"imageBase64,omitempty"`
+	State            string   `json:"state"`
+	TimestampSeconds *float64 `json:"timestampSeconds,omitempty"`
+	Score            *float64 `json:"score,omitempty"`
+	ImageBase64      *string  `json:"imageBase64,omitempty"`
 	// ReferenceImageBase64 is what the found frame was judged against — for
 	// mode "url" this is the only copy of that image the frontend ever
 	// sees, since the fetched-fresh source thumbnail is never persisted.
@@ -1265,7 +1265,7 @@ type RestoreBackupRequest struct {
 // BackupRestoreFullResponse reports what a full-backup restore did across
 // both halves of the bundle it applied.
 type BackupRestoreFullResponse struct {
-	SettingsApplied int                        `json:"settingsApplied"`
+	SettingsApplied int                         `json:"settingsApplied"`
 	Library         BackupImportLibraryResponse `json:"library"`
 }
 
@@ -1276,7 +1276,7 @@ type BackupRestoreFullResponse struct {
 // new/duplicate diffing, serialized as-is (same pattern PreviewLibraryImport
 // already uses for backup.LibraryBundlePreview).
 type FullImportPreviewResponse struct {
-	SettingsCount int                       `json:"settingsCount"`
+	SettingsCount int                         `json:"settingsCount"`
 	Library       backup.LibraryBundlePreview `json:"library"`
 }
 
@@ -1463,9 +1463,19 @@ type SubscriptionEntryResponse struct {
 	LibraryItemID   *int64   `json:"libraryItemId"`
 	SeenAt          *string  `json:"seenAt"`
 	FirstSeenAt     string   `json:"firstSeenAt"`
+	// LinkedLibraryItemID/LinkedLibraryItemIsGhost report the library item
+	// this entry is effectively associated with, if any — LibraryItemID
+	// (whether set by a prior ghost/download or a manual "Link to library
+	// item…") when present, otherwise a fallback URL/video-id soft match
+	// (same lookup PreviewDownloadMetadata's duplicate warning uses). A
+	// video already in the library through some other route (manual
+	// download, a different subscription, import, or an explicit manual
+	// link) shows up here even when LibraryItemID itself is nil.
+	LinkedLibraryItemID      *int64 `json:"linkedLibraryItemId"`
+	LinkedLibraryItemIsGhost bool   `json:"linkedLibraryItemIsGhost"`
 }
 
-func toSubscriptionEntryResponse(e models.SubscriptionSeenEntry) SubscriptionEntryResponse {
+func toSubscriptionEntryResponse(e models.SubscriptionSeenEntry, linked *models.LibraryItem) SubscriptionEntryResponse {
 	resp := SubscriptionEntryResponse{
 		SourceID:        e.SourceID,
 		Title:           e.Title,
@@ -1477,6 +1487,10 @@ func toSubscriptionEntryResponse(e models.SubscriptionSeenEntry) SubscriptionEnt
 	if e.SeenAt != nil {
 		t := e.SeenAt.Format(time.RFC3339)
 		resp.SeenAt = &t
+	}
+	if linked != nil {
+		resp.LinkedLibraryItemID = &linked.ID
+		resp.LinkedLibraryItemIsGhost = linked.Status == "ghost"
 	}
 	return resp
 }
@@ -1491,6 +1505,13 @@ type AddSubscriptionEntryResponse struct {
 	Mode          string `json:"mode"`
 	LibraryItemID *int64 `json:"libraryItemId,omitempty"`
 	DownloadID    *int64 `json:"downloadId,omitempty"`
+}
+
+// LinkSubscriptionEntryRequest drives the "Known items" dialog's manual
+// "Link to library item…" action — see LinkSubscriptionEntry
+// (subscriptions_handler.go).
+type LinkSubscriptionEntryRequest struct {
+	LibraryItemID int64 `json:"libraryItemId" binding:"required"`
 }
 
 // ThumbnailEnhancementHistoryResponse is the camelCase mirror of
@@ -1604,11 +1625,11 @@ type BulkThumbnailOriginalsResponse struct {
 // scheduled sweep) would consider, not a completed-attempt audit row like
 // ThumbnailEnhancementHistoryResponse.
 type ThumbnailEnhancementEligibleItemResponse struct {
-	LibraryItemID int64   `json:"libraryItemId"`
-	ItemTitle     string  `json:"itemTitle"`
-	Width         int     `json:"width"`
-	Height        int     `json:"height"`
-	ArtistName    *string `json:"artistName"`
+	LibraryItemID  int64   `json:"libraryItemId"`
+	ItemTitle      string  `json:"itemTitle"`
+	Width          int     `json:"width"`
+	Height         int     `json:"height"`
+	ArtistName     *string `json:"artistName"`
 	CollectionName *string `json:"collectionName"`
 	// RecentlyFailedAt (RFC3339) is set when this item's most recent
 	// attempt failed within the last hour — automatic runs skip it, but it
@@ -1623,13 +1644,13 @@ func toThumbnailEnhancementEligibleItemResponse(e thumbnailenhance.EligibleItem)
 		recentlyFailedAt = &s
 	}
 	return ThumbnailEnhancementEligibleItemResponse{
-		LibraryItemID:     e.LibraryItemID,
-		ItemTitle:         e.ItemTitle,
-		Width:             e.Width,
-		Height:            e.Height,
-		ArtistName:        e.ArtistName,
-		CollectionName:    e.CollectionName,
-		RecentlyFailedAt:  recentlyFailedAt,
+		LibraryItemID:    e.LibraryItemID,
+		ItemTitle:        e.ItemTitle,
+		Width:            e.Width,
+		Height:           e.Height,
+		ArtistName:       e.ArtistName,
+		CollectionName:   e.CollectionName,
+		RecentlyFailedAt: recentlyFailedAt,
 	}
 }
 
