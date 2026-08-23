@@ -863,6 +863,17 @@ export function markSubscriptionEntrySeen(id: number, sourceId: string): Promise
   return request<void>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/seen`, { method: "POST" })
 }
 
+export function linkSubscriptionEntry(id: number, sourceId: string, libraryItemId: number): Promise<void> {
+  return request<void>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/link`, {
+    method: "POST",
+    body: JSON.stringify({ libraryItemId }),
+  })
+}
+
+export function unlinkSubscriptionEntry(id: number, sourceId: string): Promise<void> {
+  return request<void>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/unlink`, { method: "POST" })
+}
+
 export interface ThumbnailEnhancementHistoryParams {
   q?: string
   status?: string

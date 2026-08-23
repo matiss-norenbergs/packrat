@@ -5,9 +5,11 @@ import {
   checkSubscriptionNow,
   createSubscription,
   deleteSubscription,
+  linkSubscriptionEntry,
   listSubscriptionEntries,
   listSubscriptions,
   markSubscriptionEntrySeen,
+  unlinkSubscriptionEntry,
   updateSubscription,
 } from "@/lib/api"
 import { libraryQueryKey } from "./useLibrary"
@@ -142,5 +144,81 @@ export function useMarkSubscriptionEntrySeen() {
       queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
     },
     onError: (err: Error) => toast.error(`Failed to mark seen: ${err.message}`),
+  })
+}
+
+// No bulk-add route exists on the backend — same fan-out approach as
+// useBulkDeleteSubscriptions, one POST per selected sourceId, single toast/
+// invalidate once every call settles.
+export function useBulkAddSubscriptionEntries() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      subscriptionId,
+      sourceIds,
+      mode,
+    }: {
+      subscriptionId: number
+      sourceIds: string[]
+      mode: AddSubscriptionEntryMode
+    }) => Promise.all(sourceIds.map((sourceId) => addSubscriptionEntry(subscriptionId, sourceId, mode))),
+    onSuccess: (_result, { subscriptionId, sourceIds, mode }) => {
+      toast.success(
+        `${mode === "ghost" ? "Added" : "Queued"} ${sourceIds.length} item${sourceIds.length === 1 ? "" : "s"}`,
+      )
+      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
+      queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
+      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+    },
+    onError: (err: Error) => toast.error(`Failed to add items: ${err.message}`),
+  })
+}
+
+// Same fan-out approach, mirrors useMarkSubscriptionEntrySeen's own
+// no-success-toast choice for the same reason.
+export function useBulkMarkSubscriptionEntriesSeen() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ subscriptionId, sourceIds }: { subscriptionId: number; sourceIds: string[] }) =>
+      Promise.all(sourceIds.map((sourceId) => markSubscriptionEntrySeen(subscriptionId, sourceId))),
+    onSuccess: (_data, { subscriptionId }) => {
+      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
+      queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
+    },
+    onError: (err: Error) => toast.error(`Failed to mark seen: ${err.message}`),
+  })
+}
+
+// Backs the "Known items" dialog's "Link to library item…" action —
+// single-entry only (there's no sensible bulk target to link a whole
+// selection to), unlike the other row actions here.
+export function useLinkSubscriptionEntry() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ subscriptionId, sourceId, libraryItemId }: { subscriptionId: number; sourceId: string; libraryItemId: number }) =>
+      linkSubscriptionEntry(subscriptionId, sourceId, libraryItemId),
+    onSuccess: (_data, { subscriptionId }) => {
+      toast.success("Linked")
+      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
+      queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
+    },
+    onError: (err: Error) => toast.error(`Failed to link: ${err.message}`),
+  })
+}
+
+// Unlink is a pure "clear," so — unlike Link — it composes fine as a bulk
+// action; same fan-out approach as the other bulk hooks here.
+export function useBulkUnlinkSubscriptionEntries() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ subscriptionId, sourceIds }: { subscriptionId: number; sourceIds: string[] }) =>
+      Promise.all(sourceIds.map((sourceId) => unlinkSubscriptionEntry(subscriptionId, sourceId))),
+    onSuccess: (_result, { subscriptionId, sourceIds }) => {
+      toast.success(`Unlinked ${sourceIds.length} item${sourceIds.length === 1 ? "" : "s"}`)
+      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
+      queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
+    },
+    onError: (err: Error) => toast.error(`Failed to unlink: ${err.message}`),
   })
 }

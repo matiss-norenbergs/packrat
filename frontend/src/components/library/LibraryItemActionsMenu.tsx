@@ -1,5 +1,28 @@
 import { useState } from "react"
-import { MoreVertical } from "lucide-react"
+import {
+  ArrowLeftRight,
+  BookmarkPlus,
+  Camera,
+  Copy,
+  Download,
+  Eye,
+  FileImage,
+  FilePlus2,
+  FileText,
+  FileX,
+  Film,
+  FolderInput,
+  GitCompare,
+  Images,
+  Info,
+  Link2,
+  MoreVertical,
+  Pencil,
+  RefreshCw,
+  Scissors,
+  Sparkles,
+  Trash2,
+} from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -34,6 +57,7 @@ import {
   useRedownloadLibraryThumbnail,
   useRefreshLibraryItemMetadata,
 } from "@/hooks/useLibrary"
+import { useAddToCompareList, useCompareList, useRemoveFromCompareList } from "@/hooks/useCompareList"
 import { useSettings } from "@/hooks/useSettings"
 import { useSharpenThumbnailItems } from "@/hooks/useThumbnailEnhancement"
 import { useSaveThumbnailToGallery } from "@/hooks/useThumbnailGallery"
@@ -82,6 +106,15 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const sharpenThumbnail = useSharpenThumbnailItems()
   const saveThumbnailToGallery = useSaveThumbnailToGallery()
 
+  const { data: compareList } = useCompareList()
+  const inCompareList = compareList?.some((i) => i.id === item.id) ?? false
+  const addToCompareList = useAddToCompareList()
+  const removeFromCompareList = useRemoveFromCompareList()
+  const toggleCompareList = () => {
+    if (inCompareList) removeFromCompareList.mutate(item.id)
+    else addToCompareList.mutate({ itemIds: [item.id] })
+  }
+
   const hasUrl = !!item.originalUrl
   const hasThumbnail = !!(item.thumbnail || item.thumbnailSmallPath || item.thumbnailMediumPath)
   // A ghost item has no downloaded file yet — file-dependent actions (Move,
@@ -111,100 +144,132 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem onClick={() => setEditOpen(true)}>Edit</DropdownMenuItem>
-          {!isGhost && <DropdownMenuItem onClick={() => setMoveOpen(true)}>Move</DropdownMenuItem>}
-          {!isGhost && !isImage && <DropdownMenuItem onClick={() => setTrimOpen(true)}>Trim…</DropdownMenuItem>}
+          <DropdownMenuItem onClick={() => setEditOpen(true)}>
+            <Pencil /> Edit
+          </DropdownMenuItem>
+          {!isGhost && (
+            <DropdownMenuItem onClick={() => setMoveOpen(true)}>
+              <FolderInput /> Move
+            </DropdownMenuItem>
+          )}
+          {!isGhost && !isImage && (
+            <DropdownMenuItem onClick={() => setTrimOpen(true)}>
+              <Scissors /> Trim…
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            onClick={toggleCompareList}
+            disabled={addToCompareList.isPending || removeFromCompareList.isPending}
+          >
+            <GitCompare /> {inCompareList ? "Remove from compare list" : "Add to compare list"}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleCopyUrl} disabled={!hasUrl}>
-            Copy URL
+            <Copy /> Copy URL
           </DropdownMenuItem>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Metadata</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>
+              <Info /> Metadata
+            </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuItem onClick={() => setCompareOpen(true)} disabled={!hasUrl}>
-                Compare
+                <ArrowLeftRight /> Compare
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setRefreshWarningOpen(true)} disabled={!hasUrl}>
-                Refresh
+                <RefreshCw /> Refresh
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Redownload</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>
+              <Download /> Redownload
+            </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuItem onClick={() => setRedownloadWarningOpen(true)} disabled={!hasUrl}>
-                {isGhost ? "Download now" : "From Current URL"}
+                <Download /> {isGhost ? "Download now" : "From Current URL"}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setRedownloadFromUrlOpen(true)}>From Different URL…</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setRedownloadFromUrlOpen(true)}>
+                <Link2 /> From Different URL…
+              </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>NFO</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>
+              <FileText /> NFO
+            </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               {!isGhost && !isImage && (
                 <DropdownMenuItem onClick={() => generateNfo.mutate(item.id)} disabled={!item.generateNfo}>
-                  Generate Now
+                  <FilePlus2 /> Generate Now
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={() => setNfoContentOpen(true)} disabled={!item.nfoExists}>
-                View Contents
+                <Eye /> View Contents
               </DropdownMenuItem>
               <DropdownMenuItem variant="destructive" onClick={() => setDeleteNfoWarningOpen(true)}>
-                Delete File
+                <Trash2 /> Delete File
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Thumbnail</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>
+              <FileImage /> Thumbnail
+            </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuItem onClick={() => setRedownloadThumbWarningOpen(true)} disabled={!hasUrl}>
-                Redownload from URL
+                <Download /> Redownload from URL
               </DropdownMenuItem>
               {!isGhost && !isImage && (
-                <DropdownMenuItem onClick={() => setQuickGrabWarningOpen(true)}>Quick Grab</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setQuickGrabWarningOpen(true)}>
+                  <Camera /> Quick Grab
+                </DropdownMenuItem>
               )}
               {!isGhost && !isImage && (
-                <DropdownMenuItem onClick={() => setThumbnailPickerOpen(true)}>Choose from Video…</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setThumbnailPickerOpen(true)}>
+                  <Film /> Choose from Video…
+                </DropdownMenuItem>
               )}
               {!isGhost && !isImage && (
                 <DropdownMenuItem onClick={() => setFrameMatchMode("url")} disabled={!hasUrl}>
-                  Match from URL Thumbnail…
+                  <Link2 /> Match from URL Thumbnail…
                 </DropdownMenuItem>
               )}
               {!isGhost && !isImage && (
                 <DropdownMenuItem onClick={() => setFrameMatchMode("current")} disabled={!hasThumbnail}>
-                  Match from Current Thumbnail…
+                  <RefreshCw /> Match from Current Thumbnail…
                 </DropdownMenuItem>
               )}
               {!isGhost && !isImage && settings?.thumbnailEnhancementEnabled && (
                 <DropdownMenuItem onClick={() => setSharpenWarningOpen(true)} disabled={!hasThumbnail}>
-                  Sharpen Thumbnail…
+                  <Sparkles /> Sharpen Thumbnail…
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem disabled={!hasThumbnail} onClick={() => saveThumbnailToGallery.mutate({ id: item.id })}>
-                Save in Thumbnail Gallery
+                <BookmarkPlus /> Save in Thumbnail Gallery
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setThumbnailGalleryOpen(true)}>View Gallery…</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setThumbnailGalleryOpen(true)}>
+                <Images /> View Gallery…
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
                 disabled={!hasThumbnail}
                 onClick={() => setDeleteThumbnailWarningOpen(true)}
               >
-                Delete
+                <Trash2 /> Delete
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
           {!isGhost && (
             <DropdownMenuItem variant="destructive" onClick={() => setDeleteFileWarningOpen(true)}>
-              Delete file…
+              <FileX /> Delete file…
             </DropdownMenuItem>
           )}
           <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-            Delete
+            <Trash2 /> Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

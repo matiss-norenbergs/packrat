@@ -227,6 +227,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/subscriptions/:id/entries", ListSubscriptionEntries(subCheckDeps))
 		api.POST("/subscriptions/:id/entries/:sourceId/add", AddSubscriptionEntry(subCheckDeps))
 		api.POST("/subscriptions/:id/entries/:sourceId/seen", MarkSubscriptionEntrySeen(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/:sourceId/link", LinkSubscriptionEntry(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/:sourceId/unlink", UnlinkSubscriptionEntry(subCheckDeps))
 
 		enhanceDeps := thumbnailenhance.Deps{
 			SettingsRepo:  deps.SettingsRepo,

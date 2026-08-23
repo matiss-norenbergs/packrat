@@ -1,9 +1,12 @@
 import { useState } from "react"
 
-export function useIdSelection() {
-  const [selected, setSelected] = useState<Set<number>>(new Set())
+// Generic over the id type — defaults to number (every existing caller's
+// row ids), but a caller keyed by a string id (e.g. a subscription entry's
+// sourceId) can pass that in explicitly: useIdSelection<string>().
+export function useIdSelection<T = number>() {
+  const [selected, setSelected] = useState<Set<T>>(new Set())
 
-  const toggle = (id: number) => {
+  const toggle = (id: T) => {
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) {
@@ -15,10 +18,10 @@ export function useIdSelection() {
     })
   }
 
-  const clear = () => setSelected(new Set())
-  const isSelected = (id: number) => selected.has(id)
-  const selectAll = (ids: number[]) => setSelected(new Set(ids))
-  const selectOnly = (id: number) => setSelected(new Set([id]))
+  const clear = () => setSelected(new Set<T>())
+  const isSelected = (id: T) => selected.has(id)
+  const selectAll = (ids: T[]) => setSelected(new Set(ids))
+  const selectOnly = (id: T) => setSelected(new Set([id]))
 
   return {
     selected,

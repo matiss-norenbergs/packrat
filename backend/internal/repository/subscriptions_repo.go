@@ -217,10 +217,19 @@ func (r *SubscriptionsRepo) RecordSeenEntry(ctx context.Context, subscriptionID 
 
 // ListSeenEntries returns every entry ever recorded for subscriptionID,
 // most recently seen first — the "Known items" dialog's data source.
+// first_seen_at alone is a weak sort key: every entry recorded by the same
+// check (most commonly an entire baseline, all inserted within the same
+// second) shares the exact same value, which would otherwise leave their
+// relative order to SQLite's undefined tie-break behavior. `id DESC` (the
+// row's own insertion order) breaks ties deterministically — there's no
+// real per-video upload date available here at all (see
+// subscriptions.EntriesFromMetadata: flat-playlist listings never populate
+// one, and fetching it for real would mean a full per-video request instead
+// of one request for the whole playlist).
 func (r *SubscriptionsRepo) ListSeenEntries(ctx context.Context, subscriptionID int64) ([]models.SubscriptionSeenEntry, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT source_id, title, source_url, duration_seconds, library_item_id, seen_at, first_seen_at
-			FROM subscription_seen_entries WHERE subscription_id = ? ORDER BY first_seen_at DESC`,
+			FROM subscription_seen_entries WHERE subscription_id = ? ORDER BY first_seen_at DESC, id DESC`,
 		subscriptionID,
 	)
 	if err != nil {
@@ -281,11 +290,15 @@ func scanSeenEntry(row rowScanner) (*models.SubscriptionSeenEntry, error) {
 	return &e, nil
 }
 
-// SetSeenEntryLibraryItemID links a seen entry to the library row it
-// produced — called both by a normal check's ghost path (via
-// RecordSeenEntry's libraryItemID at insert time) and, for entries added
-// later through the "Known items" dialog, as a follow-up UPDATE once the
-// ghost item has been created.
+// SetSeenEntryLibraryItemID links a seen entry to a library item — called
+// by a normal check's ghost path (via RecordSeenEntry's libraryItemID at
+// insert time), as a follow-up UPDATE once the "Known items" dialog's own
+// ghost-creation action succeeds, and by the manual "Link to library
+// item…" action, which points an entry at an *existing*, arbitrary library
+// item — useful when the same video was actually downloaded through a
+// different source/URL than the one this subscription tracks, so the
+// automatic URL/video-id match (LibraryRepo.FindDuplicates) could never
+// have found it on its own.
 func (r *SubscriptionsRepo) SetSeenEntryLibraryItemID(ctx context.Context, subscriptionID int64, sourceID string, libraryItemID int64) error {
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE subscription_seen_entries SET library_item_id = ? WHERE subscription_id = ? AND source_id = ?`,
@@ -293,6 +306,24 @@ func (r *SubscriptionsRepo) SetSeenEntryLibraryItemID(ctx context.Context, subsc
 	)
 	if err != nil {
 		return fmt.Errorf("linking seen subscription entry to library item: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// UnlinkSeenEntry dissolves a seen entry's association with a library item
+// — the manual counterpart to SetSeenEntryLibraryItemID, for a link the
+// user set (or that Packrat's own ghost/download creation set) that no
+// longer applies. Never touches the library item itself, only the
+// association; if the entry's own URL/video id still genuinely matches
+// something in the library, the "Known items" dialog falls back to
+// reporting that soft match again once this is cleared.
+func (r *SubscriptionsRepo) UnlinkSeenEntry(ctx context.Context, subscriptionID int64, sourceID string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE subscription_seen_entries SET library_item_id = NULL WHERE subscription_id = ? AND source_id = ?`,
+		subscriptionID, sourceID,
+	)
+	if err != nil {
+		return fmt.Errorf("unlinking seen subscription entry: %w", err)
 	}
 	return checkRowsAffected(res)
 }

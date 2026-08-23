@@ -3,19 +3,32 @@ import { useSearchParams } from "react-router-dom"
 import {
   ArrowDownAZ,
   ArrowUpAZ,
+  Calendar,
   Columns3,
+  Download,
   Eye,
   EyeOff,
+  FileImage,
+  FilePlus2,
+  FileX,
   FolderTree,
+  GitCompare,
   Info,
   LayoutGrid,
+  Link2,
   List,
+  ListChecks,
+  ListOrdered,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   Settings,
   SlidersHorizontal,
+  Sparkles,
   Tags,
+  Trash2,
+  User,
   X,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -263,7 +276,7 @@ export function LibraryToolbar() {
   return (
     <div className="space-y-2">
     <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => setAddGhostOpen(true)}>
+        <Button size="sm" onClick={() => setAddGhostOpen(true)}>
           <Plus className="h-4 w-4" />
           Add item
         </Button>
@@ -272,44 +285,63 @@ export function LibraryToolbar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" disabled={!selectionActive}>
+              <ListChecks className="h-4 w-4" />
               Bulk operations
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-48">
-            <DropdownMenuItem onSelect={() => setBulkEditOpen(true)}>Edit…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setBulkTagsOpen(true)}>Assign tags…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setBulkArtistOpen(true)}>Set artist…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setBulkYearOpen(true)}>Set year…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setBulkNfoOpen(true)}>Generate NFO…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setEditSequenceOpen(true)}>Edit sequence…</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setAddToCompareOpen(true)}>Add to compare list…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkEditOpen(true)}>
+              <Pencil /> Edit…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkTagsOpen(true)}>
+              <Tags /> Assign tags…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkArtistOpen(true)}>
+              <User /> Set artist…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkYearOpen(true)}>
+              <Calendar /> Set year…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkNfoOpen(true)}>
+              <FilePlus2 /> Generate NFO…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setEditSequenceOpen(true)}>
+              <ListOrdered /> Edit sequence…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setAddToCompareOpen(true)}>
+              <GitCompare /> Add to compare list…
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => setBulkRedownloadOpen(true)}>Download file(s)…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setBulkRedownloadOpen(true)}>
+              <Download /> Download file(s)…
+            </DropdownMenuItem>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>Thumbnail</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger>
+                <FileImage /> Thumbnail
+              </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuItem onSelect={() => setBulkFetchThumbnailsOpen(true)}>
-                  Download thumbnail(s)…
+                  <Download /> Download thumbnail(s)…
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setBulkFrameMatchMode("url")}>
-                  Match from URL thumbnail…
+                  <Link2 /> Match from URL thumbnail…
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setBulkFrameMatchMode("current")}>
-                  Match from current thumbnail…
+                  <RefreshCw /> Match from current thumbnail…
                 </DropdownMenuItem>
                 {settings?.thumbnailEnhancementEnabled && (
                   <DropdownMenuItem onSelect={() => setBulkSharpenOpen(true)}>
-                    Sharpen thumbnail(s)…
+                    <Sparkles /> Sharpen thumbnail(s)…
                   </DropdownMenuItem>
                 )}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={() => setBulkDeleteFileOpen(true)}>
-              Delete file…
+              <FileX /> Delete file…
             </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onSelect={() => setBulkDeleteOpen(true)}>
-              Delete selected…
+              <Trash2 /> Delete selected…
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

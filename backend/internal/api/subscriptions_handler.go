@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -270,9 +271,49 @@ func ListSubscriptionEntries(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		out := make([]SubscriptionEntryResponse, 0, len(entries))
+
+		// One batched query instead of one FindDuplicate per entry — same
+		// approach enqueueBatch already uses for playlist/bulk skipDuplicates.
+		queries := make([]repository.DuplicateQuery, len(entries))
+		for i, e := range entries {
+			queries[i] = repository.DuplicateQuery{URL: e.URL, VideoID: e.SourceID}
+		}
+		matches, err := deps.LibraryRepo.FindDuplicates(ctx, queries)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// An entry's own library_item_id (whether manually linked or set by
+		// a prior ghost/download) is authoritative over the broader URL/
+		// video-id soft match — resolve those explicitly-linked items too,
+		// deduped since the same item can now be linked from more than one
+		// entry.
+		linked := make(map[int64]*models.LibraryItem)
 		for _, e := range entries {
-			out = append(out, toSubscriptionEntryResponse(e))
+			if e.LibraryItemID == nil {
+				continue
+			}
+			if _, ok := linked[*e.LibraryItemID]; ok {
+				continue
+			}
+			item, err := deps.LibraryRepo.Get(ctx, *e.LibraryItemID)
+			if err != nil {
+				log.Printf("subscriptions: resolving linked library item %d failed: %v", *e.LibraryItemID, err)
+				continue
+			}
+			linked[*e.LibraryItemID] = item
+		}
+
+		out := make([]SubscriptionEntryResponse, 0, len(entries))
+		for i, e := range entries {
+			match := matches[i]
+			if e.LibraryItemID != nil {
+				if item, ok := linked[*e.LibraryItemID]; ok {
+					match = item
+				}
+			}
+			out = append(out, toSubscriptionEntryResponse(e, match))
 		}
 		c.JSON(http.StatusOK, out)
 	}
@@ -316,10 +357,11 @@ func AddSubscriptionEntry(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if entry.LibraryItemID != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "this entry has already been added to the library"})
-			return
-		}
+		// Deliberately no "already added" guard — the Known Items dialog
+		// itself now confirms before calling this when the entry already
+		// has a library match, rather than the backend refusing outright.
+		// A fresh ghost/download is always allowed: the same video can
+		// legitimately warrant a second copy.
 		if entry.URL == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no URL recorded for this entry — re-check the subscription first"})
 			return
@@ -369,6 +411,98 @@ func MarkSubscriptionEntrySeen(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		}
 
 		if err := deps.SubscriptionsRepo.MarkSeenEntry(ctx, id, sourceID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "entry not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
+// LinkSubscriptionEntry manually associates a "Known items" row with an
+// *existing* library item — for when the same video was actually
+// downloaded through a different source/URL than the one this subscription
+// tracks, so the automatic URL/video-id match could never have found it on
+// its own. Also marks the entry seen, same as every other action that
+// resolves one (see AddKnownEntryAsGhost/AddKnownEntryAsDownload). The
+// same library item can be linked from more than one entry (including
+// across different subscriptions) — deliberately unrestricted, since the
+// same upload can legitimately appear in more than one tracked source.
+func LinkSubscriptionEntry(deps subscriptions.CheckDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+		sourceID := c.Param("sourceId")
+
+		var req LinkSubscriptionEntryRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if _, err := deps.SubscriptionsRepo.Get(ctx, id); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if _, err := deps.LibraryRepo.Get(ctx, req.LibraryItemID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if err := deps.SubscriptionsRepo.SetSeenEntryLibraryItemID(ctx, id, sourceID, req.LibraryItemID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "entry not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if err := deps.SubscriptionsRepo.MarkSeenEntry(ctx, id, sourceID); err != nil {
+			log.Printf("subscription %d: marking linked entry %q seen failed: %v", id, sourceID, err)
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
+// UnlinkSubscriptionEntry dissolves a manual (or auto-created) library
+// link on a "Known items" row — never touches the library item itself,
+// only the association. If the entry's own URL/video id still genuinely
+// matches something in the library, the dialog falls back to reporting
+// that soft match again once this clears.
+func UnlinkSubscriptionEntry(deps subscriptions.CheckDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+		sourceID := c.Param("sourceId")
+
+		if _, err := deps.SubscriptionsRepo.Get(ctx, id); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if err := deps.SubscriptionsRepo.UnlinkSeenEntry(ctx, id, sourceID); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "entry not found"})
 				return

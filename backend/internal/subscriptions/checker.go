@@ -255,8 +255,16 @@ func AddKnownEntryAsGhost(ctx context.Context, deps CheckDeps, sub models.Subscr
 	if err != nil {
 		return 0, err
 	}
-	if err := deps.SubscriptionsRepo.SetSeenEntryLibraryItemID(ctx, sub.ID, entry.SourceID, id); err != nil {
-		log.Printf("subscription %d: linking ghost item %d to entry %q failed: %v", sub.ID, id, entry.SourceID, err)
+	// Only claims the entry's link if it doesn't already have one — an
+	// entry can already be linked here (a prior ghost/download, or a
+	// manual "Link to library item…") when this runs as the "add another
+	// anyway" path off a confirmed duplicate; that existing, presumably
+	// deliberate association shouldn't be silently reassigned to whatever
+	// fresh copy just got created.
+	if entry.LibraryItemID == nil {
+		if err := deps.SubscriptionsRepo.SetSeenEntryLibraryItemID(ctx, sub.ID, entry.SourceID, id); err != nil {
+			log.Printf("subscription %d: linking ghost item %d to entry %q failed: %v", sub.ID, id, entry.SourceID, err)
+		}
 	}
 	if err := deps.SubscriptionsRepo.MarkSeenEntry(ctx, sub.ID, entry.SourceID); err != nil {
 		log.Printf("subscription %d: marking entry %q seen failed: %v", sub.ID, entry.SourceID, err)

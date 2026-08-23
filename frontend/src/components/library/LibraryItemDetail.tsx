@@ -1,13 +1,12 @@
 import { useEffect } from "react"
 import { Link } from "react-router-dom"
-import { ArrowLeft, GitCompare, Minimize2, Music } from "lucide-react"
+import { ArrowLeft, Minimize2, Music } from "lucide-react"
 import { syncMediaOnReady } from "@/lib/mediaSeek"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
 import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
-import { useAddToCompareList, useCompareList, useRemoveFromCompareList } from "@/hooks/useCompareList"
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress"
 import { useSettings } from "@/hooks/useSettings"
 import { sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
@@ -64,15 +63,6 @@ export function LibraryItemDetail({
   const revealed = isRevealed(item.id)
   const effectiveBlurred = item.blurred && !ignorePrivacy
   const locked = effectiveBlurred && !revealed
-
-  const { data: compareList } = useCompareList()
-  const inCompareList = compareList?.some((i) => i.id === item.id) ?? false
-  const addToCompareList = useAddToCompareList()
-  const removeFromCompareList = useRemoveFromCompareList()
-  const toggleCompareList = () => {
-    if (inCompareList) removeFromCompareList.mutate(item.id)
-    else addToCompareList.mutate({ itemIds: [item.id] })
-  }
 
   const autoPlay = resumePaused != null ? !resumePaused : (settings?.libraryAutoplay ?? true)
   const audioRef = usePersistedVolume<HTMLAudioElement>()
@@ -214,20 +204,6 @@ export function LibraryItemDetail({
               </h1>
               <p className="text-sm text-muted-foreground">{item.artistName ?? item.uploader ?? "Uncategorized"}</p>
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={inCompareList ? "secondary" : "outline"}
-                  size="icon"
-                  onClick={toggleCompareList}
-                  disabled={addToCompareList.isPending || removeFromCompareList.isPending}
-                >
-                  <GitCompare className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{inCompareList ? "Remove from compare list" : "Add to compare list"}</TooltipContent>
-            </Tooltip>
             <LibraryItemActionsMenu item={item} />
           </div>
 
