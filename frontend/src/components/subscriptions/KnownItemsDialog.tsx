@@ -301,7 +301,7 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
             <Table containerClassName="h-full overflow-auto">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-8">
+                  <TableHead className="w-8 text-center">
                     <Checkbox
                       checked={allSelected ? true : someSelected ? "indeterminate" : false}
                       onCheckedChange={(checked) =>
@@ -311,9 +311,9 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
                     />
                   </TableHead>
                   <TableHead>Title</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>First seen</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Duration</TableHead>
+                  <TableHead className="text-center">First seen</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -329,7 +329,7 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
                       onMouseDown={(e) => handleRowMouseDown(e, entry.sourceId)}
                       onMouseEnter={() => handleRowMouseEnter(entry.sourceId)}
                     >
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Checkbox
                           checked={isSelected(entry.sourceId)}
                           onCheckedChange={() => toggle(entry.sourceId)}
@@ -339,11 +339,11 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
                       <TableCell className="max-w-[360px] truncate font-medium">
                         {isKnownEntry ? entry.title : "Unknown"}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{formatDuration(entry.durationSeconds)}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-right text-muted-foreground">{formatDuration(entry.durationSeconds)}</TableCell>
+                      <TableCell className="text-center text-muted-foreground">
                         {new Date(entry.firstSeenAt).toLocaleDateString()}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {entry.linkedLibraryItemId != null ? (
                           <Badge variant="secondary">
                             {entry.linkedLibraryItemIsGhost ? "In library (ghost)" : "In library"}

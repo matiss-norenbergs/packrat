@@ -270,7 +270,7 @@ export function ArtistsPage() {
                   <Table containerClassName="h-full overflow-auto rounded-md border">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-8">
+                        <TableHead className="w-8 text-center">
                           <Checkbox
                             checked={allSelected ? true : someSelected ? "indeterminate" : false}
                             onCheckedChange={(checked) => (checked ? selectAll(pageData.map((a) => a.id)) : clear())}
@@ -278,8 +278,8 @@ export function ArtistsPage() {
                           />
                         </TableHead>
                         <TableHead>Name</TableHead>
-                        <TableHead>Birthday</TableHead>
-                        <TableHead>Usage</TableHead>
+                        <TableHead className="text-center">Birthday</TableHead>
+                        <TableHead className="text-center">Usage</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -442,11 +442,11 @@ function ArtistRow({
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
     >
-      <TableCell>
+      <TableCell className="text-center">
         <Checkbox checked={selected} onCheckedChange={onSelectedChange} aria-label={`Select ${artist.name}`} />
       </TableCell>
       <TableCell className="font-medium">{artist.name}</TableCell>
-      <TableCell className="text-muted-foreground">
+      <TableCell className="text-center text-muted-foreground">
         {artist.birthday ? (
           <>
             {format(parseISO(artist.birthday), "MMM d, yyyy")}{" "}
@@ -456,7 +456,7 @@ function ArtistRow({
           "—"
         )}
       </TableCell>
-      <TableCell>
+      <TableCell className="text-center">
         <Badge variant="outline">
           {artist.usageCount} item{artist.usageCount === 1 ? "" : "s"}
         </Badge>

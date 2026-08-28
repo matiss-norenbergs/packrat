@@ -46,6 +46,23 @@ Maintenance notes:
   fixed green/amber/red colors instead of the primary accent, so they read the same regardless of
   which accent is picked.
 - **Dashboard: image count now shown** in the Library card and the media-type breakdown chart.
+- **Logs page reworked to match the rest of the app** — row selection (checkbox column,
+  click-and-drag, shift/ctrl-click) replaces the old per-row "View log" button; **View log** now
+  lives in the toolbar and in a right-click context menu, enabled only when exactly one row with a
+  captured log is selected. The status filter moved to the right of the toolbar, directly before
+  the search bar.
+- **Compare list toolbar reorganized**: Play selected → Clear list → reveal/hide private items, now
+  a proper toolbar row under the header instead of buttons floated top-right. The buttons stay
+  visible (disabled, not hidden) with an empty list, **Clear list** now asks for confirmation and
+  has an icon, and only the file grid scrolls — the header and toolbar stay put.
+- **File Import page rebuilt as a table**, matching History/Logs/Tags: paginated, searchable by
+  filename, real multi-select (checkbox column, click-and-drag, shift/ctrl-click), and every button
+  has an icon. **Import Selected**/**Import All** now confirm before running and show how many
+  files will be added; the per-file Import button stays a single click, no prompt.
+- **Normalized column alignment across every table in the app** — date, status/tag, switch, and
+  icon columns are now centered, numeric columns (sizes, durations, dimensions, counts) are
+  right-aligned, and everything else stays left-aligned, instead of every column defaulting left
+  regardless of its content.
 
 ## 2026-08-23
 

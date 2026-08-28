@@ -116,7 +116,7 @@ export function LibraryListView() {
       <Table containerClassName="relative max-h-[calc(100vh-239px)] w-full overflow-auto rounded-md border">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-10">
+            <TableHead className="w-10 text-center">
               <Checkbox
                 checked={pageSelectedCount === 0 ? false : allOnPageSelected ? true : "indeterminate"}
                 onCheckedChange={toggleSelectAll}
@@ -152,7 +152,7 @@ export function LibraryListView() {
                 )}
               </TableHead>
             ))}
-            <TableHead className="w-10" />
+            <TableHead className="w-10 text-center" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -272,7 +272,7 @@ function LibraryListRow({
       onClick={selectionActive ? onToggleSelected : undefined}
       data-state={selected ? "selected" : undefined}
     >
-      <TableCell>
+      <TableCell className="text-center">
         <Checkbox
           checked={selected}
           onCheckedChange={onToggleSelected}
@@ -311,7 +311,9 @@ function LibraryListRow({
           {renderColumnCell(key, item, visibleTags, hiddenTags)}
         </TableCell>
       ))}
-      <TableCell onClick={(e) => e.stopPropagation()}>{!selectionActive && <LibraryItemActionsMenu item={item} />}</TableCell>
+      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+        {!selectionActive && <LibraryItemActionsMenu item={item} />}
+      </TableCell>
     </TableRow>
   )
 }

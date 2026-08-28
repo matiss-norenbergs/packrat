@@ -260,18 +260,26 @@ once and toggle fullscreen. Two playback options (remembered per-browser): **Pre
 every file aggressively as soon as the page opens rather than waiting for Play, and **Wait for
 ready** disables "Play all" until every file has buffered enough to play without stalling.
 
+The toolbar (Play selected → Clear list → reveal/hide private items) stays visible even with an
+empty list — its buttons disable instead of disappearing. **Clear list** asks for confirmation
+before removing every item (your library files are unaffected either way).
+
 ## Import
 
 For files placed directly under your media root from outside the app (e.g. copied in manually,
 or downloaded by some other tool) — brings them into the Library without re-downloading anything.
 
 - **Rescan** re-scans the media root for files not already in the Library, showing size, duration,
-  resolution, and which collection folder (existing or new) each one would land in.
-- Select individual files or **Import All** — each import probes the file with `ffprobe` and
-  creates a Library entry for it. You can optionally attach an original source URL per file (so
-  Redownload/Refresh Metadata/Compare Metadata work on it later) — imports without one just skip
-  those actions. Imported rows are greyed out and can't be re-imported; the scan list itself
-  doesn't auto-refresh after every import, only on page load or manual Rescan.
+  resolution, and which collection folder (existing or new) each one would land in. Results are
+  paginated and searchable by filename, same as the Library/History/Logs tables.
+- Select individual files (click/shift-click for a range, ctrl/cmd-click to toggle, or click-and-
+  drag across rows) and hit **Import Selected**, or **Import All** to import every pending file —
+  either asks for confirmation first and shows how many files will be added. Each import probes
+  the file with `ffprobe` and creates a Library entry for it. You can optionally attach an original
+  source URL per file (so Redownload/Refresh Metadata/Compare Metadata work on it later) — imports
+  without one just skip those actions; a per-file **Import** button imports just that one row
+  without a confirmation prompt. Imported rows are greyed out and can't be re-imported; the scan
+  list itself doesn't auto-refresh after every import, only on page load or manual Rescan.
 - **Ignored Folders** — mark specific folders (and their sub-folders) to be skipped in future
   scans entirely, e.g. a raw-footage or behind-the-scenes folder you never want surfaced here.
 
@@ -302,10 +310,13 @@ debugging rather than as a live control panel.
 
 - Free-text search matches against title/URL and the captured command; a status filter narrows
   the list to one download status.
-- **View log** opens the full detail for a row: command, exit code, and the stdout/stderr tails
-  in scrollable monospace blocks, each with its own copy-to-clipboard button. The button is
-  disabled (with a tooltip) for rows that never got far enough to invoke yt-dlp at all (e.g. a
-  still-queued download).
+- Select a single row (click, or right-click to select-and-open its context menu) and hit
+  **View log** — in the toolbar or the context menu — for its full detail: command, exit code, and
+  the stdout/stderr tails in scrollable monospace blocks, each with its own copy-to-clipboard
+  button. Disabled (with a tooltip) when nothing's selected, more than one row is selected, or the
+  selected row never got far enough to invoke yt-dlp at all (e.g. a still-queued download). Rows
+  also support the usual multi-select gestures (shift-click for a range, ctrl/cmd-click to toggle,
+  click-and-drag) even though only a single-row selection can actually be viewed.
 - Retry count is shown when a download needed more than one attempt.
 - Respects the same "Anonymize History Links" setting as History (Settings → Privacy) — URLs are
   hashed the same way when that's enabled.

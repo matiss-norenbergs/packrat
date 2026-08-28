@@ -256,7 +256,7 @@ export function HistoryPage() {
               <Table containerClassName="h-full overflow-auto rounded-md border">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8">
+                    <TableHead className="w-8 text-center">
                       <Checkbox
                         checked={allSelected ? true : someSelected ? "indeterminate" : false}
                         onCheckedChange={(checked) => (checked ? selectAll(pageData.map((h) => h.id)) : clear())}
@@ -265,8 +265,8 @@ export function HistoryPage() {
                     </TableHead>
                     <TableHead className="w-16" />
                     <TableHead>Title</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -357,7 +357,7 @@ function HistoryRow({
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
     >
-      <TableCell>
+      <TableCell className="text-center">
         <Checkbox
           checked={selected}
           onCheckedChange={onSelectedChange}
@@ -385,10 +385,10 @@ function HistoryRow({
           </p>
         )}
       </TableCell>
-      <TableCell>
+      <TableCell className="text-center">
         <Badge variant={STATUS_VARIANT[item.status] ?? "outline"}>{formatDownloadStatus(item.status)}</Badge>
       </TableCell>
-      <TableCell className="text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</TableCell>
+      <TableCell className="text-center text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</TableCell>
     </TableRow>
   )
 }
