@@ -81,7 +81,7 @@ export function BackupHistoryTable() {
                 <TableCell>{entry.triggerType === "manual" ? "Manual" : "Scheduled"}</TableCell>
                 <TableCell>
                   <div className="space-y-1">
-                    <Badge variant={entry.status === "success" ? "default" : "destructive"}>
+                    <Badge variant={entry.status === "success" ? "success" : "destructive"}>
                       {entry.status === "success" ? "Success" : "Failed"}
                     </Badge>
                     {entry.status === "failed" && entry.errorMessage && (

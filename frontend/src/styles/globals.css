@@ -25,6 +25,8 @@
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
+    --color-warning: var(--warning);
+    --color-success: var(--success);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
@@ -55,7 +57,10 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
+    /* Matches the app logo's purple (public/favicon.svg / PackratLogo) —
+       oklch converted directly from its #7e14ff gradient stop, not hand-
+       picked, so "Default" and the logo are provably the same color. */
+    --primary: oklch(0.534 0.288 293);
     --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
@@ -64,13 +69,30 @@
     --accent: oklch(0.97 0 0);
     --accent-foreground: oklch(0.205 0 0);
     --destructive: oklch(0.577 0.245 27.325);
+    /* Fixed status colors — "Completed"/"Success"/"Done" and "Update
+       available"/warning indicators. Deliberately never themed by the
+       primary-color accent (--primary), same reasoning --destructive
+       already follows: a status needs to mean the same thing regardless of
+       which accent is picked. L/C chosen to match --destructive's own
+       light/dark lightness steps (~0.58 light, ~0.70-0.77 dark) for equal
+       visual weight among the three. success = Tailwind green-600/500 (not
+       emerald — emerald leans teal and reads more muted than the vivid
+       green actually wanted here); warning = amber-700/500. */
+    --success: oklch(0.627 0.17 149.2);
+    --warning: oklch(0.555 0.146 49);
     /* Bumped from shadcn's stock 0.922 — at that lightness a 1px border on a
        white background is nearly invisible (checkboxes, cards, inputs all
        but disappear). 0.82 keeps the light-theme look while staying legible. */
     --border: oklch(0.82 0 0);
     --input: oklch(0.82 0 0);
     --ring: oklch(0.708 0 0);
-    --chart-1: #2a78d6;
+    /* Dashboard charts' "first/single series" color (Library Growth,
+       Items by Resolution, Top Tags/Artists, Storage's "Packrat" segment,
+       Video vs Audio's "Video" segment) — tracks the current accent instead
+       of a fixed blue. chart-2 onward stay fixed, distinct hues: deriving a
+       whole categorical palette from one primary color reads muddy/samey,
+       not intentional. */
+    --chart-1: var(--primary);
     --chart-2: #eb6834;
     --chart-3: #1baf7a;
     --chart-4: #eda100;
@@ -93,8 +115,8 @@
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
+    --primary: oklch(0.534 0.288 293);
+    --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
@@ -102,10 +124,12 @@
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
+    --success: oklch(0.723 0.192 149.6);
+    --warning: oklch(0.769 0.165 70.1);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
-    --chart-1: #3987e5;
+    --chart-1: var(--primary);
     --chart-2: #d95926;
     --chart-3: #199e70;
     --chart-4: #c98500;
@@ -121,14 +145,28 @@
 }
 
 /* Settings → Appearance → "Primary color" — an optional accent override on
-   top of the neutral default above. Applied via a `data-accent` attribute on
-   <html> (see useAccentColor), never a `:root`/`.dark` split — a saturated
-   accent reads fine against both light and dark surfaces at the same
-   lightness/chroma, unlike the neutral default (which genuinely inverts
-   between light/dark). Must come after `.dark` so it wins regardless of
+   top of the app's own purple default above. Applied via a `data-accent`
+   attribute on <html> (see useAccentColor), never a `:root`/`.dark` split for
+   --primary itself — a saturated accent reads fine against both light and
+   dark surfaces at the same lightness/chroma, same reasoning the purple
+   default itself relies on. Must come after `.dark` so it wins regardless of
    which theme is active (equal specificity, later rule wins). Foreground is
    the same near-white for every accent, matching how buttons/badges already
-   use white text on a solid accent fill. */
+   use white text on a solid accent fill.
+
+   Dashboard charts' --chart-1 already tracks --primary automatically (see
+   above) with no per-accent work needed. --chart-2..5 (the fixed secondary
+   categorical colors) stay put for blue/violet — their hue sits far enough
+   from the base purple default's own tail (orange/aqua/yellow/magenta) that
+   it validates unchanged (dataviz skill's six checks: CVD separation, normal-
+   vision floor, contrast, run via validate_palette.js) — but red and green
+   each collide with a color already in that tail (red neighbors both the
+   reference "red" and "magenta" hue families; green sits almost on top of
+   the reference "aqua" family), so those two get their own validated
+   secondary set below. Split by `.dark` here too, unlike --primary, since
+   --chart-2..5's own base values already are (dark needs lighter/less
+   saturated steps to clear 3:1 against the dark surface) — chart colors
+   never adopted --primary's single-value-for-both-modes convention. */
 [data-accent="blue"] {
     --primary: oklch(0.55 0.2 260);
     --primary-foreground: oklch(0.985 0 0);
@@ -136,10 +174,30 @@
 [data-accent="red"] {
     --primary: oklch(0.55 0.22 10);
     --primary-foreground: oklch(0.985 0 0);
+    --chart-2: #1baf7a; /* aqua */
+    --chart-3: #4a3aa7; /* violet */
+    --chart-4: #eda100; /* yellow */
+    --chart-5: #008300; /* green */
+}
+.dark[data-accent="red"] {
+    --chart-2: #199e70;
+    --chart-3: #9085e9;
+    --chart-4: #c98500;
+    --chart-5: #008300;
 }
 [data-accent="green"] {
     --primary: oklch(0.55 0.17 145);
     --primary-foreground: oklch(0.985 0 0);
+    --chart-2: #e87ba4; /* magenta */
+    --chart-3: #2a78d6; /* blue */
+    --chart-4: #e34948; /* red */
+    --chart-5: #4a3aa7; /* violet */
+}
+.dark[data-accent="green"] {
+    --chart-2: #d55181;
+    --chart-3: #3987e5;
+    --chart-4: #e66767;
+    --chart-5: #9085e9;
 }
 [data-accent="violet"] {
     --primary: oklch(0.55 0.22 300);

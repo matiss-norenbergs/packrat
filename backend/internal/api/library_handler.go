@@ -169,6 +169,71 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 	}
 }
 
+// GetLibraryItem returns one library item by id, with the same
+// blurred/tags/gallery-count computation ListLibrary applies to every row —
+// for a caller that needs one item's full response shape (e.g. checking its
+// privacy status before showing its title in a desktop notification)
+// without fetching/filtering the whole list.
+func GetLibraryItem(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, galleryRepo *repository.ThumbnailGalleryRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+		item, err := repo.Get(c.Request.Context(), id)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		cols, err := collectionsRepo.List(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		privacy := effectivePrivacyMap(cols)
+
+		ids := []int64{id}
+		tagsByID, err := tagsRepo.TagsByLibraryIDs(c.Request.Context(), ids)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		privateTagNames, err := tagsRepo.PrivateTagNames(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), settingsRepo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		galleryCountByID, err := galleryRepo.CountsByLibraryItemIDs(c.Request.Context(), ids)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		blurred := privacyEnabled && item.CollectionID != nil && privacy[*item.CollectionID]
+		if !blurred && privacyEnabled {
+			for _, t := range tagsByID[item.ID] {
+				if privateTagNames[t] {
+					blurred = true
+					break
+				}
+			}
+		}
+
+		c.JSON(http.StatusOK, toLibraryItemResponse(*item, blurred, tagsByID[item.ID], galleryCountByID[item.ID], mediaRoot))
+	}
+}
+
 // GetLibraryFacets returns distinct filter values computed over the whole
 // library, for UI pickers (the year dropdown) that need every possible
 // value regardless of whatever page/folder/search is currently active.

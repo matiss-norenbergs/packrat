@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Navigate } from "react-router-dom"
-import { Package } from "lucide-react"
+import { PackratLogo } from "@/components/PackratLogo"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -50,7 +50,7 @@ export function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="mb-2 flex items-center gap-2">
-            <Package className="h-5 w-5" />
+            <PackratLogo className="h-5 w-5 shrink-0" />
             <span className="text-base font-semibold">Packrat</span>
           </div>
           <CardTitle>{isSetup ? "Create admin account" : "Log in"}</CardTitle>

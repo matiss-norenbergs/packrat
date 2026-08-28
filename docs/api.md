@@ -239,6 +239,7 @@ automatic retention sweep. `200 {"deleted": <n>}`.
 |---|---|---|
 | GET | `/api/library` | List/search/filter/paginate |
 | GET | `/api/library/facets` | Distinct filter values (currently: years) |
+| GET | `/api/library/:id` | Fetch one item, same response shape as a row from the list endpoint |
 | DELETE | `/api/library/:id` | Remove an item |
 | PATCH | `/api/library/:id` | Edit metadata (partial merge) |
 | POST | `/api/library/bulk-tags` | Overwrite tags on many items at once |
@@ -338,6 +339,12 @@ derived value, regenerated the next time the thumbnail changes.
 `playbackPositionSeconds`/`lastWatchedAt` back the Browse page's "Continue Watching" row — see
 `POST /api/library/:id/progress` below. `galleryCount` is the number of saved images in this item's
 thumbnail gallery — see Thumbnail gallery below.
+
+### `GET /api/library/:id` — no params
+
+One item, the same response shape as a row from `GET /api/library` (including `blurred`) — for a
+caller that needs one item without fetching/filtering the whole list (e.g. checking an item's
+privacy status before showing its title in a desktop notification). `404` unknown id.
 
 ### `GET /api/library/facets` — no params
 
@@ -1595,7 +1602,7 @@ socket exists purely to push live deltas; there is no initial snapshot on connec
 fetches current state via REST first and then listens for updates. Ping every 54s, 10s write
 deadline; a slow/backed-up client is dropped rather than blocking broadcasts for everyone else.
 
-Each message is `{ "type": "...", "payload": {...} }`. Six event types are ever broadcast:
+Each message is `{ "type": "...", "payload": {...} }`. Eight event types are ever broadcast:
 
 **`progress`** — emitted repeatedly during an active download, throttled to roughly once/sec:
 ```json
@@ -1638,6 +1645,20 @@ trigger (single ad-hoc job or bulk queue):
 { "type": "frame_match_progress", "payload": { "queueId": 7, "libraryItemId": 118, "itemTitle": "Some Video", "state": "done", "error": null } }
 ```
 `state` is `"running"`, `"done"`, or `"error"` (then `error` is set).
+
+**`subscription_new_items`** — once per subscription, only from the *scheduled* background sweep
+finding new items (manual "Check now" gets its count synchronously via the HTTP response instead,
+so it never broadcasts this):
+```json
+{ "type": "subscription_new_items", "payload": { "subscriptionId": 4, "subscriptionTitle": "Some Channel", "newCount": 3 } }
+```
+
+**`backup_completed`** — only from the *scheduled* auto-backup sweep, and only when it fails (a
+manual backup gets its result synchronously via the HTTP response instead, and a routine scheduled
+success isn't broadcast — see `backup.RunScheduledBackupIfDue`):
+```json
+{ "type": "backup_completed", "payload": { "status": "failed", "errorMessage": "writing backup file: ..." } }
+```
 
 The WebSocket is a live-delta channel only — clients should treat `GET /api/downloads` and
 `GET /api/library` as the source of truth on initial load and on reconnect.

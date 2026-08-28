@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
-import { LayoutDashboard, Package, Search, X } from "lucide-react"
+import { LayoutDashboard, Search, X } from "lucide-react"
+import { PackratLogo } from "@/components/PackratLogo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -45,7 +46,7 @@ export function BrowseHeader() {
   return (
     <header className="sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-4 py-3 backdrop-blur-sm md:gap-4 md:px-8">
       <Link to="/browse" className="flex shrink-0 items-center gap-2">
-        <Package className="h-5 w-5 shrink-0" />
+        <PackratLogo className="h-5 w-5 shrink-0" />
         {/* Collapses away (mobile only — md: forces it back open) while
             search is expanded, so the input gets the width instead of
             fighting the wordmark for it. max-width + opacity, not

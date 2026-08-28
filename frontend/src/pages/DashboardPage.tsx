@@ -43,18 +43,22 @@ export function DashboardPage() {
             {isLoading || !stats ? (
               <Skeleton className="h-16 w-full" />
             ) : (
-              <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
                 <Stat label="Videos" value={stats.libraryVideoCount} />
                 <Stat label="Audio Files" value={stats.libraryAudioCount} />
+                <Stat label="Images" value={stats.libraryImageCount} />
                 <Stat label="Storage Used" value={formatBytes(stats.totalStorageBytes)} />
               </div>
             )}
-            {stats && stats.libraryVideoGhostCount + stats.libraryAudioGhostCount > 0 && (
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                {stats.libraryVideoGhostCount + stats.libraryAudioGhostCount} ghost{" "}
-                {stats.libraryVideoGhostCount + stats.libraryAudioGhostCount === 1 ? "item" : "items"}
-              </p>
-            )}
+            {stats &&
+              stats.libraryVideoGhostCount + stats.libraryAudioGhostCount + stats.libraryImageGhostCount > 0 && (
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  {stats.libraryVideoGhostCount + stats.libraryAudioGhostCount + stats.libraryImageGhostCount} ghost{" "}
+                  {stats.libraryVideoGhostCount + stats.libraryAudioGhostCount + stats.libraryImageGhostCount === 1
+                    ? "item"
+                    : "items"}
+                </p>
+              )}
             <p className="mt-3 text-sm text-muted-foreground">
               See the <a href="/library" className="underline">Library</a> page for completed downloads.
             </p>

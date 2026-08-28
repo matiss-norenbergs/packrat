@@ -194,6 +194,7 @@ func run() error {
 		LibraryRepo:       libraryRepo,
 		DownloadsRepo:     downloadsRepo,
 		BackupHistoryRepo: backupHistoryRepo,
+		Broadcaster:       hub,
 	}
 
 	subCheckDeps := subscriptions.CheckDeps{
@@ -204,6 +205,7 @@ func run() error {
 		Manager:           mgr,
 		YtDlp:             ytdlpSvc,
 		ImagesRoot:        cfg.ImagesRoot,
+		Broadcaster:       hub,
 	}
 
 	enhanceDeps := thumbnailenhance.Deps{

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react"
 import { useQueryClient, type QueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
+import { fetchLibraryItem } from "@/lib/api"
+import { notifyDesktop, notifyDesktopAsync, notifyEvent, notifyEventAsync } from "@/lib/notify"
 import { connectDownloadsSocket } from "@/lib/ws"
 import { downloadsQueryKey } from "./useDownloads"
 import { libraryQueryKey } from "./useLibrary"
@@ -10,6 +11,8 @@ import {
   thumbnailEnhancementHistoryQueryKey,
 } from "./useThumbnailEnhancement"
 import { frameMatchQueueQueryKey } from "./useFrameMatchQueue"
+import { subscriptionsQueryKey } from "./useSubscriptions"
+import { backupHistoryQueryKey } from "./useBackup"
 import type { Download, ThumbnailEnhancementEligibleItem } from "@/types/api"
 import type { EnhanceProgressPayload, WSEvent } from "@/types/ws"
 
@@ -88,16 +91,24 @@ export function useDownloadsSocket() {
         case "completed": {
           queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
           queryClient.invalidateQueries({ queryKey: libraryQueryKey })
-          toast.success(`Download complete: ${event.payload.title}`)
+          const { title, libraryId } = event.payload
+          // The toast shows the real title unconditionally (only ever seen
+          // by whoever's already on this tab); the desktop notification
+          // needs a privacy check first, since it can surface on a lock
+          // screen or notification center — not somewhere a private item's
+          // title should casually show up. See notifyEventAsync.
+          notifyEventAsync("success", "Download complete", title, () =>
+            fetchLibraryItem(libraryId).then((item) => (item.blurred ? undefined : title)),
+          )
           break
         }
         case "failed": {
           queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
           const p = event.payload
           if (p.status === "cancelled") {
-            toast.info("Download cancelled")
+            notifyEvent("info", "Download cancelled", undefined, true)
           } else {
-            toast.error(`Download failed: ${p.error}`)
+            notifyEvent("error", "Download failed", p.error, true)
           }
           break
         }
@@ -107,10 +118,37 @@ export function useDownloadsSocket() {
         }
         case "enhance_progress": {
           handleEnhanceProgress(queryClient, event.payload)
+          if (event.payload.status === "success") {
+            const { libraryItemId, itemTitle } = event.payload
+            notifyDesktopAsync("Thumbnail enhanced", () =>
+              fetchLibraryItem(libraryItemId).then((item) => (item.blurred ? undefined : itemTitle)),
+            )
+          }
           break
         }
         case "frame_match_progress": {
           queryClient.invalidateQueries({ queryKey: frameMatchQueueQueryKey })
+          if (event.payload.state === "done") {
+            const { libraryItemId, itemTitle } = event.payload
+            notifyDesktopAsync("Frame match found", () =>
+              fetchLibraryItem(libraryItemId).then((item) => (item.blurred ? undefined : itemTitle)),
+            )
+          }
+          break
+        }
+        case "subscription_new_items": {
+          queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
+          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+          const { subscriptionTitle, newCount } = event.payload
+          notifyDesktop(
+            "New subscription items",
+            `${newCount} new item${newCount === 1 ? "" : "s"} in ${subscriptionTitle}`,
+          )
+          break
+        }
+        case "backup_completed": {
+          queryClient.invalidateQueries({ queryKey: backupHistoryQueryKey })
+          notifyDesktop("Scheduled backup failed", event.payload.errorMessage)
           break
         }
       }

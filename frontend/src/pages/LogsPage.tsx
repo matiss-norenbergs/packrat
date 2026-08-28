@@ -16,8 +16,8 @@ import type { DownloadStatus, LogEntry } from "@/types/api"
 const PAGE_SIZE = 50
 const NONE = "none"
 
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  completed: "default",
+const STATUS_VARIANT: Record<string, "success" | "secondary" | "destructive" | "outline"> = {
+  completed: "success",
   failed: "destructive",
   cancelled: "outline",
   interrupted: "destructive",

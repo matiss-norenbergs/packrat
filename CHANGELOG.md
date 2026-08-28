@@ -12,6 +12,41 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-08-28
+
+- **New: Desktop notifications** — Settings → Notifications → one toggle for browser/OS
+  notifications covering a download completing/failing/being cancelled, a thumbnail finishing AI
+  Enhancement, a Frame Match being found, a scheduled subscription check finding new items, or a
+  scheduled backup failing. Only fires while you're away from the tab (backgrounded, minimized, or
+  the window isn't focused) — the existing in-app toast already covers the case where you're
+  looking at it, and still always shows for downloads regardless of this setting; the other four
+  skip the toast and rely on the desktop notification alone (they either already show live status
+  elsewhere, or a manual trigger of the same action already gets its own synchronous feedback). A
+  private library item's title is never shown in the notification body — checked via a new
+  `GET /api/library/:id` endpoint before the notification fires.
+- **Fix: every per-entry "Known items" action (Add/Mark seen/Link/Unlink) silently failed for an
+  entry whose source has no native video ID** — such entries key by their full URL instead, and
+  that URL (percent-encoded by the frontend) was being routed incorrectly: the backend router
+  matched against the already-decoded request path by default, so an encoded slash became a
+  literal path separator and split what should have been one path segment into several — the
+  request silently fell through to the app shell instead of reaching the API. Fixed by matching
+  routes against the still-encoded path instead.
+- **Settings remembers which tab you were on** — the active tab now lives in the URL (`?tab=…`), so
+  a reload (or a shared/bookmarked link) lands back on the same tab instead of always resetting to
+  General.
+- **Rebranded favicon and in-app logo, and reworked the color theme app-wide.** The favicon and
+  every in-app logo (sidebar, login, mobile nav, browse header) now use the app's actual icon
+  instead of the old default; the in-app logo's gradient tracks whichever primary accent color is
+  active. The default primary color changed from a neutral grey to match that logo's purple — the
+  existing Blue/Red/Green/Violet accent overrides in Settings → Appearance are unchanged. Dashboard
+  and other charts now use the current accent for their primary series instead of a fixed blue, and
+  each accent has its own hand-picked, colorblind-validated palette for the remaining series.
+  Separately, status indicators — the Completed/Success/Done tags on Downloads/History/Backup/Frame
+  Matching, the sidebar's status dots, and the resolution/quality-tier sliders and values — now use
+  fixed green/amber/red colors instead of the primary accent, so they read the same regardless of
+  which accent is picked.
+- **Dashboard: image count now shown** in the Library card and the media-type breakdown chart.
+
 ## 2026-08-23
 
 - **New: manually link a subscription's "Known items" entry to a library item** — for when a video

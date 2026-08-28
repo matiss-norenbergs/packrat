@@ -542,7 +542,7 @@ export function ThumbnailEnhancementPage() {
                             <RevertedBadge revertedAt={entry.revertedAt} />
                           ) : (
                             <>
-                              <Badge variant={entry.status === "success" ? "default" : "destructive"}>
+                              <Badge variant={entry.status === "success" ? "success" : "destructive"}>
                                 {entry.status === "success" ? "Success" : "Failed"}
                               </Badge>
                               {entry.status === "failed" && entry.error && <ErrorBadge error={entry.error} />}

@@ -119,6 +119,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo, deps.MediaRoot))
 		api.GET("/library/facets", GetLibraryFacets(deps.LibraryRepo))
+		api.GET("/library/:id", GetLibraryItem(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo, deps.MediaRoot))
 		api.POST("/library/ghost", CreateGhostLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.ImagesRoot, deps.YtDlp, deps.TagsRepo))
 		api.DELETE("/library/:id/file", DeleteLibraryItemFile(deps.LibraryRepo, deps.MediaRoot))
 		api.POST("/library/scan-missing", ScanMissingLibraryFiles(deps.MediaRoot, deps.LibraryRepo))

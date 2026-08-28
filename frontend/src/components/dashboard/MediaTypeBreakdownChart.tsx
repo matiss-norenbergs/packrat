@@ -4,19 +4,21 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useStats } from "@/hooks/useStats"
 import { ChartTooltipContent } from "./ChartTooltip"
 
-// Two categories only — a 2-slice pie/donut is a well-documented chart
-// anti-pattern (near-impossible to compare two close slice angles at a
-// glance). A single part-to-whole stacked bar reads faster and stays
-// legible at any ratio, with a legend since there are 2 series.
+// Three categories — a pie/donut gets hard to compare at a glance past a
+// couple of slices, so this stays a single part-to-whole stacked bar, which
+// reads fine at any ratio (including a category that's legitimately zero),
+// with a legend since there are 3 series.
 export function MediaTypeBreakdownChart() {
   const { data: stats, isLoading } = useStats()
 
-  const total = stats ? stats.libraryVideoCount + stats.libraryAudioCount : 0
-  // Ghost (no-file placeholder) items fold into the same Video/Audio bar
-  // segments rather than a separate series — a lighter shade of the same
+  const total = stats ? stats.libraryVideoCount + stats.libraryAudioCount + stats.libraryImageCount : 0
+  // Ghost (no-file placeholder) items fold into the same Video/Audio/Image
+  // bar segments rather than a separate series — a lighter shade of the same
   // hue (not a new color) marks the ghost sub-portion, per the dataviz
   // convention of secondary encoding for a sub-dimension split.
-  const hasGhosts = stats ? stats.libraryVideoGhostCount + stats.libraryAudioGhostCount > 0 : false
+  const hasGhosts = stats
+    ? stats.libraryVideoGhostCount + stats.libraryAudioGhostCount + stats.libraryImageGhostCount > 0
+    : false
   const data = stats
     ? [
         {
@@ -25,14 +27,22 @@ export function MediaTypeBreakdownChart() {
           videoGhost: stats.libraryVideoGhostCount,
           audioReal: stats.libraryAudioCount - stats.libraryAudioGhostCount,
           audioGhost: stats.libraryAudioGhostCount,
+          imageReal: stats.libraryImageCount - stats.libraryImageGhostCount,
+          imageGhost: stats.libraryImageGhostCount,
         },
       ]
     : []
+  // Only the very first segment (video's real portion) and the very last
+  // segment (image's ghost portion, or its real portion when there are no
+  // ghosts to append) get rounded outer corners — everything in between is
+  // square so the stack reads as one continuous bar.
+  const lastRadius: [number, number, number, number] = [0, 4, 4, 0]
+  const squareRadius: [number, number, number, number] = [0, 0, 0, 0]
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-medium text-muted-foreground">Video vs Audio</CardTitle>
+        <CardTitle className="text-sm font-medium text-muted-foreground">Media Types</CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading || !stats ? (
@@ -65,6 +75,7 @@ export function MediaTypeBreakdownChart() {
                     fillOpacity={0.35}
                     stroke="var(--card)"
                     strokeWidth={2}
+                    radius={squareRadius}
                     barSize={28}
                   />
                 )}
@@ -75,7 +86,7 @@ export function MediaTypeBreakdownChart() {
                   fill="var(--chart-2)"
                   stroke="var(--card)"
                   strokeWidth={2}
-                  radius={hasGhosts ? [0, 0, 0, 0] : [0, 4, 4, 0]}
+                  radius={squareRadius}
                   barSize={28}
                 />
                 {hasGhosts && (
@@ -87,7 +98,30 @@ export function MediaTypeBreakdownChart() {
                     fillOpacity={0.35}
                     stroke="var(--card)"
                     strokeWidth={2}
-                    radius={[0, 4, 4, 0]}
+                    radius={squareRadius}
+                    barSize={28}
+                  />
+                )}
+                <Bar
+                  dataKey="imageReal"
+                  name="Image"
+                  stackId="a"
+                  fill="var(--chart-3)"
+                  stroke="var(--card)"
+                  strokeWidth={2}
+                  radius={hasGhosts ? squareRadius : lastRadius}
+                  barSize={28}
+                />
+                {hasGhosts && (
+                  <Bar
+                    dataKey="imageGhost"
+                    name="Image (ghost)"
+                    stackId="a"
+                    fill="var(--chart-3)"
+                    fillOpacity={0.35}
+                    stroke="var(--card)"
+                    strokeWidth={2}
+                    radius={lastRadius}
                     barSize={28}
                   />
                 )}
@@ -96,12 +130,15 @@ export function MediaTypeBreakdownChart() {
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm">
               <LegendEntry color="var(--chart-1)" label="Video" value={stats.libraryVideoCount} />
               <LegendEntry color="var(--chart-2)" label="Audio" value={stats.libraryAudioCount} />
+              <LegendEntry color="var(--chart-3)" label="Image" value={stats.libraryImageCount} />
               {hasGhosts && (
                 <LegendEntry
                   color="var(--muted-foreground)"
                   opacity={0.35}
                   label="Ghost items"
-                  value={stats.libraryVideoGhostCount + stats.libraryAudioGhostCount}
+                  value={
+                    stats.libraryVideoGhostCount + stats.libraryAudioGhostCount + stats.libraryImageGhostCount
+                  }
                 />
               )}
             </div>

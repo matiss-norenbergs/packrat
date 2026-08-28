@@ -394,6 +394,10 @@ export function fetchLibraryItemTrimFrames(id: number, start: number, end: numbe
   return request<{ frames: TrimFrame[] }>(`/library/${id}/trim/frames?start=${start}&end=${end}`)
 }
 
+export function fetchLibraryItem(id: number): Promise<LibraryItem> {
+  return request<LibraryItem>(`/library/${id}`)
+}
+
 export function redownloadLibraryItem(id: number): Promise<{ id: number }> {
   return request<{ id: number }>(`/library/${id}/redownload`, { method: "POST" })
 }

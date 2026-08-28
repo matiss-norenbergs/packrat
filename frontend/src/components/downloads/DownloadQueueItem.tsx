@@ -12,12 +12,12 @@ import type { Download } from "@/types/api"
 
 export const CANCELLABLE_STATUSES = new Set(["queued", "fetching_metadata", "downloading", "processing"])
 
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+const STATUS_VARIANT: Record<string, "success" | "secondary" | "destructive" | "outline"> = {
   queued: "outline",
   fetching_metadata: "secondary",
   downloading: "secondary",
   processing: "secondary",
-  completed: "default",
+  completed: "success",
   failed: "destructive",
   cancelled: "outline",
   interrupted: "destructive",

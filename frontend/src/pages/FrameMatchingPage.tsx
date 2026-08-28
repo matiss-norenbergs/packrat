@@ -28,10 +28,10 @@ import type { FrameMatchQueueItem } from "@/types/api"
 
 const PAGE_SIZE = 25
 
-function stateBadgeVariant(state: FrameMatchQueueItem["state"]): "default" | "secondary" | "destructive" | "outline" {
+function stateBadgeVariant(state: FrameMatchQueueItem["state"]): "success" | "secondary" | "destructive" | "outline" {
   switch (state) {
     case "done":
-      return "default"
+      return "success"
     case "running":
       return "secondary"
     case "error":

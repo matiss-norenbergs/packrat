@@ -13,6 +13,7 @@ import (
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/ws"
 )
 
 // DefaultBackupRetentionCount is how many on-disk backups RunBackup keeps
@@ -53,6 +54,10 @@ type RunDeps struct {
 	LibraryRepo       *repository.LibraryRepo
 	DownloadsRepo     *repository.DownloadsRepo
 	BackupHistoryRepo *repository.BackupHistoryRepo
+	// Broadcaster is used only by RunScheduledBackupIfDue to report the
+	// outcome — a manual backup already gets its result synchronously via
+	// the HTTP response, so it doesn't need this.
+	Broadcaster ws.Broadcaster
 }
 
 // RunBackup builds a full bundle, writes it (always unencrypted — an
@@ -196,7 +201,20 @@ func RunScheduledBackupIfDue(ctx context.Context, deps RunDeps) {
 		return
 	}
 
-	if _, err := RunBackup(ctx, deps, "scheduled"); err != nil {
+	entry, err := RunBackup(ctx, deps, "scheduled")
+	if err != nil {
 		log.Printf("scheduled backup failed: %v", err)
+		return
+	}
+	// Only the failure case is broadcast — unlike downloads/enhancement,
+	// which notify on success, a scheduled backup succeeding is the
+	// routine/expected outcome; it's silently failing for weeks that's the
+	// actual risk worth surfacing to someone who isn't watching the Backup
+	// page.
+	if entry.Status == "failed" && deps.Broadcaster != nil {
+		deps.Broadcaster.Broadcast(ws.Event{
+			Type:    ws.EventBackupCompleted,
+			Payload: ws.BackupCompletedPayload{Status: entry.Status, ErrorMessage: entry.ErrorMessage},
+		})
 	}
 }
