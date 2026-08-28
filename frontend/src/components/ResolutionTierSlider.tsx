@@ -11,9 +11,9 @@ interface ResolutionTierSliderProps {
 }
 
 const TRACK_COLOR = {
-  low: "bg-red-500",
-  medium: "bg-yellow-500",
-  high: "bg-green-500",
+  low: "bg-destructive",
+  medium: "bg-warning",
+  high: "bg-success",
 } as const
 
 const MAX_INDEX = RESOLUTION_STEPS.length - 1

@@ -28,10 +28,10 @@ import type { FrameMatchQueueItem } from "@/types/api"
 
 const PAGE_SIZE = 25
 
-function stateBadgeVariant(state: FrameMatchQueueItem["state"]): "default" | "secondary" | "destructive" | "outline" {
+function stateBadgeVariant(state: FrameMatchQueueItem["state"]): "success" | "secondary" | "destructive" | "outline" {
   switch (state) {
     case "done":
-      return "default"
+      return "success"
     case "running":
       return "secondary"
     case "error":
@@ -232,7 +232,7 @@ export function FrameMatchingPage() {
               <Table containerClassName="h-full overflow-auto rounded-md border">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8">
+                    <TableHead className="w-8 text-center">
                       <Checkbox
                         checked={allSelected ? true : someSelected ? "indeterminate" : false}
                         onCheckedChange={(checked) => (checked ? selectAll(pageItems.map((i) => i.id)) : clear())}
@@ -240,7 +240,7 @@ export function FrameMatchingPage() {
                       />
                     </TableHead>
                     <TableHead>Item</TableHead>
-                    <TableHead>Mode</TableHead>
+                    <TableHead className="text-center">Mode</TableHead>
                     <TableHead>State</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -254,7 +254,7 @@ export function FrameMatchingPage() {
                       onMouseDown={(e) => handleRowMouseDown(e, item.id)}
                       onMouseEnter={() => handleRowMouseEnter(item.id)}
                     >
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Checkbox
                           checked={isSelected(item.id)}
                           onCheckedChange={() => toggle(item.id)}
@@ -269,7 +269,7 @@ export function FrameMatchingPage() {
                           {item.itemTitle}
                         </Link>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Badge variant="outline">{item.mode === "url" ? "From URL" : "From current"}</Badge>
                       </TableCell>
                       <TableCell>

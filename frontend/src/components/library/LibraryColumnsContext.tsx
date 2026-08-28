@@ -19,13 +19,13 @@ export const LIBRARY_COLUMNS: {
   cellClassName?: string
   defaultVisible?: boolean
 }[] = [
-  { key: "seasonEpisode", label: "Season/Episode", sortKey: "seasonNumber", headerClassName: "w-36" },
-  { key: "year", label: "Year", sortKey: "year", headerClassName: "w-20", defaultVisible: false },
-  { key: "duration", label: "Duration", sortKey: "duration", headerClassName: "w-24", defaultVisible: false },
-  { key: "downloadedAt", label: "Downloaded", sortKey: "downloadedAt", headerClassName: "w-32", defaultVisible: false },
+  { key: "seasonEpisode", label: "Season/Episode", sortKey: "seasonNumber", headerClassName: "w-36 text-right", cellClassName: "text-right" },
+  { key: "year", label: "Year", sortKey: "year", headerClassName: "w-20 text-right", cellClassName: "text-right", defaultVisible: false },
+  { key: "duration", label: "Duration", sortKey: "duration", headerClassName: "w-24 text-right", cellClassName: "text-right", defaultVisible: false },
+  { key: "downloadedAt", label: "Downloaded", sortKey: "downloadedAt", headerClassName: "w-32 text-center", cellClassName: "text-center", defaultVisible: false },
   { key: "artist", label: "Artist", cellClassName: "max-w-40 truncate" },
   { key: "collection", label: "Collection", cellClassName: "max-w-40 truncate" },
-  { key: "size", label: "Size", headerClassName: "w-20", defaultVisible: false },
+  { key: "size", label: "Size", headerClassName: "w-20 text-right", cellClassName: "text-right", defaultVisible: false },
   { key: "tags", label: "Tags" },
 ]
 

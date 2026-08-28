@@ -45,6 +45,24 @@ export interface FrameMatchProgressPayload {
   error?: string
 }
 
+// SubscriptionNewItemsPayload reports a scheduled (automatic) subscription
+// check finding new items — manual "Check now" gets its count synchronously
+// via the HTTP response instead, so this only ever fires for the
+// unattended background sweep.
+export interface SubscriptionNewItemsPayload {
+  subscriptionId: number
+  subscriptionTitle: string
+  newCount: number
+}
+
+// BackupCompletedPayload reports a scheduled auto-backup's outcome — same
+// scheduled-only reasoning as SubscriptionNewItemsPayload. Only ever
+// broadcast for a "failed" status; see backup.RunScheduledBackupIfDue.
+export interface BackupCompletedPayload {
+  status: "success" | "failed"
+  errorMessage?: string
+}
+
 export type WSEvent =
   | { type: "progress"; payload: ProgressPayload }
   | { type: "completed"; payload: CompletedPayload }
@@ -52,3 +70,5 @@ export type WSEvent =
   | { type: "queue_update"; payload: QueueUpdatePayload }
   | { type: "enhance_progress"; payload: EnhanceProgressPayload }
   | { type: "frame_match_progress"; payload: FrameMatchProgressPayload }
+  | { type: "subscription_new_items"; payload: SubscriptionNewItemsPayload }
+  | { type: "backup_completed"; payload: BackupCompletedPayload }

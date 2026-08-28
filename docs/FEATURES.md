@@ -21,7 +21,8 @@ searching/filtering, which is what the Library page is for.
 The landing page. Two cards summarize current state at a glance:
 
 - **Downloads** — active, queued, and completed-today counts, with a link to the Downloads page.
-- **Library** — video count, audio count, and total storage used across the whole library.
+- **Library** — video count, audio count, image count, and total storage used across the whole
+  library.
 
 Read-only — it's a summary view, not a control panel.
 
@@ -259,18 +260,26 @@ once and toggle fullscreen. Two playback options (remembered per-browser): **Pre
 every file aggressively as soon as the page opens rather than waiting for Play, and **Wait for
 ready** disables "Play all" until every file has buffered enough to play without stalling.
 
+The toolbar (Play selected → Clear list → reveal/hide private items) stays visible even with an
+empty list — its buttons disable instead of disappearing. **Clear list** asks for confirmation
+before removing every item (your library files are unaffected either way).
+
 ## Import
 
 For files placed directly under your media root from outside the app (e.g. copied in manually,
 or downloaded by some other tool) — brings them into the Library without re-downloading anything.
 
 - **Rescan** re-scans the media root for files not already in the Library, showing size, duration,
-  resolution, and which collection folder (existing or new) each one would land in.
-- Select individual files or **Import All** — each import probes the file with `ffprobe` and
-  creates a Library entry for it. You can optionally attach an original source URL per file (so
-  Redownload/Refresh Metadata/Compare Metadata work on it later) — imports without one just skip
-  those actions. Imported rows are greyed out and can't be re-imported; the scan list itself
-  doesn't auto-refresh after every import, only on page load or manual Rescan.
+  resolution, and which collection folder (existing or new) each one would land in. Results are
+  paginated and searchable by filename, same as the Library/History/Logs tables.
+- Select individual files (click/shift-click for a range, ctrl/cmd-click to toggle, or click-and-
+  drag across rows) and hit **Import Selected**, or **Import All** to import every pending file —
+  either asks for confirmation first and shows how many files will be added. Each import probes
+  the file with `ffprobe` and creates a Library entry for it. You can optionally attach an original
+  source URL per file (so Redownload/Refresh Metadata/Compare Metadata work on it later) — imports
+  without one just skip those actions; a per-file **Import** button imports just that one row
+  without a confirmation prompt. Imported rows are greyed out and can't be re-imported; the scan
+  list itself doesn't auto-refresh after every import, only on page load or manual Rescan.
 - **Ignored Folders** — mark specific folders (and their sub-folders) to be skipped in future
   scans entirely, e.g. a raw-footage or behind-the-scenes folder you never want surfaced here.
 
@@ -301,10 +310,13 @@ debugging rather than as a live control panel.
 
 - Free-text search matches against title/URL and the captured command; a status filter narrows
   the list to one download status.
-- **View log** opens the full detail for a row: command, exit code, and the stdout/stderr tails
-  in scrollable monospace blocks, each with its own copy-to-clipboard button. The button is
-  disabled (with a tooltip) for rows that never got far enough to invoke yt-dlp at all (e.g. a
-  still-queued download).
+- Select a single row (click, or right-click to select-and-open its context menu) and hit
+  **View log** — in the toolbar or the context menu — for its full detail: command, exit code, and
+  the stdout/stderr tails in scrollable monospace blocks, each with its own copy-to-clipboard
+  button. Disabled (with a tooltip) when nothing's selected, more than one row is selected, or the
+  selected row never got far enough to invoke yt-dlp at all (e.g. a still-queued download). Rows
+  also support the usual multi-select gestures (shift-click for a range, ctrl/cmd-click to toggle,
+  click-and-drag) even though only a single-row selection can actually be viewed.
 - Retry count is shown when a download needed more than one attempt.
 - Respects the same "Anonymize History Links" setting as History (Settings → Privacy) — URLs are
   hashed the same way when that's enabled.
@@ -446,8 +458,13 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   fetch (see Downloads above) — a sidebar dot next to **Downloads** shows its live state at a
   glance: grey (not set), green (reachable), red (configured but not reachable).
 - **Appearance** — light / dark / system theme, plus a primary color (Default/Blue/Red/Green/Violet)
-  applied to buttons, badges, switches, and other primary-colored UI app-wide. Both are browser-local
-  preferences — no backend round-trip, same as any other client-only setting.
+  applied to buttons, badges, switches, the sidebar/login logo, and the Dashboard's charts (the
+  primary series tracks the chosen accent; the other series get their own hand-picked, colorblind-
+  validated palette per accent). Default matches the app's own logo purple. Both are browser-local
+  preferences — no backend round-trip, same as any other client-only setting. Status indicators
+  (Completed/Success/Done tags, "update available" dots, resolution/quality-tier colors) are
+  deliberately **not** themed by the accent — they always use a fixed green/amber/red so they read
+  the same regardless of which accent is active.
 - **Downloads** — default download type and quality for new downloads; "I trust this source" (skip
   the New Download preview fetch and queue immediately); how long to keep the download log
   (Downloads/Logs pages) before automatic pruning, plus a "Clear all now" button.
@@ -476,6 +493,17 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   library linked to the download's collection (set per-collection in Collections → Edit). A burst
   of downloads within a short window is coalesced into a single rescan rather than one per file.
   "Rescan Library Now" triggers one manually at any time.
+- **Notifications** — one toggle for desktop/OS notifications, covering: a download
+  completing/failing/being cancelled, a thumbnail finishing AI Enhancement, a Frame Match being
+  found, a scheduled subscription check finding new items, or a scheduled backup failing. Fires
+  only while you're away from the tab (backgrounded, minimized, or unfocused) — the in-app toast
+  already covers the case where you're looking at it, and downloads always get that toast
+  regardless of this setting; the other four skip the toast entirely (they either already show
+  live status elsewhere, or a manual trigger of the same action — "Check now", a manual backup —
+  already gets synchronous feedback of its own) and rely on the desktop notification alone. A
+  private library item's title never appears in the notification body. Turning this on prompts
+  for browser notification permission if you haven't granted or denied it yet. A personal
+  per-browser preference (like Theme), not synced across devices.
 
 Every card here saves immediately on change — there's no separate "Save" step, except General,
 Downloads' type/quality pair, and Jellyfin, which each batch their fields behind one Save button.

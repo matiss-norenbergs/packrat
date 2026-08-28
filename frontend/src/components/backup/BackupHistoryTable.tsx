@@ -66,22 +66,22 @@ export function BackupHistoryTable() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
+              <TableHead className="text-center">Date</TableHead>
               <TableHead>Trigger</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="text-center">Status</TableHead>
               <TableHead>Contents</TableHead>
-              <TableHead>Size</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-right">Size</TableHead>
+              <TableHead className="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.map((entry) => (
               <TableRow key={entry.id}>
-                <TableCell>{new Date(entry.createdAt).toLocaleString()}</TableCell>
+                <TableCell className="text-center">{new Date(entry.createdAt).toLocaleString()}</TableCell>
                 <TableCell>{entry.triggerType === "manual" ? "Manual" : "Scheduled"}</TableCell>
-                <TableCell>
+                <TableCell className="text-center">
                   <div className="space-y-1">
-                    <Badge variant={entry.status === "success" ? "default" : "destructive"}>
+                    <Badge variant={entry.status === "success" ? "success" : "destructive"}>
                       {entry.status === "success" ? "Success" : "Failed"}
                     </Badge>
                     {entry.status === "failed" && entry.errorMessage && (
@@ -92,9 +92,9 @@ export function BackupHistoryTable() {
                   </div>
                 </TableCell>
                 <TableCell>{itemsSummary(entry)}</TableCell>
-                <TableCell>{entry.fileSizeBytes != null ? formatBytes(entry.fileSizeBytes) : "—"}</TableCell>
+                <TableCell className="text-right">{entry.fileSizeBytes != null ? formatBytes(entry.fileSizeBytes) : "—"}</TableCell>
                 <TableCell>
-                  <div className="flex justify-end gap-1">
+                  <div className="flex justify-center gap-1">
                     {entry.status === "success" && entry.fileName && (
                       <>
                         <Tooltip>

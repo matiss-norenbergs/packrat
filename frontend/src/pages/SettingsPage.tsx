@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { useTheme } from "next-themes"
 import {
   AlertDialog,
@@ -46,10 +46,11 @@ import {
 } from "@/hooks/useSettings"
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
 import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
+import { useDesktopNotifications } from "@/hooks/useDesktopNotifications"
 import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/api"
 
 const ACCENT_COLOR_OPTIONS: { value: AccentColor; label: string; swatch: string }[] = [
-  { value: "default", label: "Default", swatch: "oklch(0.556 0 0)" },
+  { value: "default", label: "Default", swatch: "oklch(0.534 0.288 293)" },
   { value: "blue", label: "Blue", swatch: "oklch(0.55 0.2 260)" },
   { value: "red", label: "Red", swatch: "oklch(0.55 0.22 10)" },
   { value: "green", label: "Green", swatch: "oklch(0.55 0.17 145)" },
@@ -64,14 +65,44 @@ const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720
 const NO_COOKIES_BROWSER = "none"
 const YTDLP_COOKIE_BROWSERS = ["brave", "chrome", "chromium", "edge", "firefox", "opera", "safari", "vivaldi", "whale"] as const
 
-export function SettingsPage() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+const SETTINGS_TABS = [
+  "general",
+  "account",
+  "downloads",
+  "library",
+  "privacy",
+  "history",
+  "backup",
+  "jellyfin",
+  "notifications",
+  "ai-enhance",
+  "ytdlp",
+  "appearance",
+] as const
 
-      <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
-        <Tabs defaultValue="general">
-          <TabsList className="px-4">
+export function SettingsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get("tab")
+  const activeTab = (SETTINGS_TABS as readonly string[]).includes(tabParam ?? "") ? tabParam! : "general"
+
+  const setActiveTab = (value: string) => {
+    const next = new URLSearchParams(searchParams)
+    if (value === "general") next.delete("tab")
+    else next.set("tab", value)
+    setSearchParams(next, { replace: true })
+  }
+
+  return (
+    <div className="flex h-full flex-col space-y-6">
+      <h1 className="shrink-0 text-2xl font-semibold">Settings</h1>
+
+      {/* min-h-0 lets this flex child actually shrink below its content
+          height — without it, the flex-1 content pane below can't establish
+          a bounded height to scroll within, and just grows the whole page
+          instead (a classic flexbox-overflow gotcha). */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="min-h-0 flex-1">
+          <TabsList className="shrink-0 px-4">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="account">Account</TabsTrigger>
             <TabsTrigger value="downloads">Downloads</TabsTrigger>
@@ -80,43 +111,47 @@ export function SettingsPage() {
             <TabsTrigger value="history">History</TabsTrigger>
             <TabsTrigger value="backup">Backup</TabsTrigger>
             <TabsTrigger value="jellyfin">Jellyfin</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="ai-enhance">AI Enhancement</TabsTrigger>
             <TabsTrigger value="ytdlp">yt-dlp</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
           </TabsList>
 
-          <div className="p-6">
-            <TabsContent value="general" className="mt-0">
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            <TabsContent value="general" className="mt-0 h-full">
               <GeneralTab />
             </TabsContent>
-            <TabsContent value="account" className="mt-0">
+            <TabsContent value="account" className="mt-0 h-full">
               <AccountTab />
             </TabsContent>
-            <TabsContent value="downloads" className="mt-0">
+            <TabsContent value="downloads" className="mt-0 h-full">
               <DownloadsTab />
             </TabsContent>
-            <TabsContent value="library" className="mt-0">
+            <TabsContent value="library" className="mt-0 h-full">
               <LibraryTab />
             </TabsContent>
-            <TabsContent value="privacy" className="mt-0">
+            <TabsContent value="privacy" className="mt-0 h-full">
               <PrivacyTab />
             </TabsContent>
-            <TabsContent value="history" className="mt-0">
+            <TabsContent value="history" className="mt-0 h-full">
               <HistoryTab />
             </TabsContent>
-            <TabsContent value="backup" className="mt-0">
+            <TabsContent value="backup" className="mt-0 h-full">
               <BackupTab />
             </TabsContent>
-            <TabsContent value="jellyfin" className="mt-0">
+            <TabsContent value="jellyfin" className="mt-0 h-full">
               <JellyfinTab />
             </TabsContent>
-            <TabsContent value="ai-enhance" className="mt-0">
+            <TabsContent value="notifications" className="mt-0 h-full">
+              <NotificationsTab />
+            </TabsContent>
+            <TabsContent value="ai-enhance" className="mt-0 h-full">
               <ThumbnailEnhancementTab />
             </TabsContent>
-            <TabsContent value="ytdlp" className="mt-0">
+            <TabsContent value="ytdlp" className="mt-0 h-full">
               <YtDlpTab />
             </TabsContent>
-            <TabsContent value="appearance" className="mt-0">
+            <TabsContent value="appearance" className="mt-0 h-full">
               <AppearanceTab />
             </TabsContent>
           </div>
@@ -145,14 +180,14 @@ function SaveRow({
 }) {
   const status = dirty ? "Unsaved changes" : isSuccess ? "Saved" : "No changes"
   return (
-    <div className="flex items-center gap-3 border-t pt-4">
+    <div className="sticky -bottom-6 -mx-6 -mb-6 mt-auto flex items-center gap-3 border-t bg-card px-6 py-4">
       <Button onClick={onSave} disabled={!dirty || isPending}>
         {isPending ? "Saving…" : "Save"}
       </Button>
       <span
         className={cn(
           "text-xs",
-          dirty ? "text-amber-600 dark:text-amber-500" : isSuccess ? "text-green-600 dark:text-green-500" : "text-muted-foreground",
+          dirty ? "text-warning" : isSuccess ? "text-success" : "text-muted-foreground",
         )}
       >
         {status}
@@ -188,7 +223,8 @@ function GeneralTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="flex min-h-full flex-col space-y-4">
+      <div className="max-w-lg space-y-4">
       <div className="space-y-2">
         <FieldLabel
           htmlFor="download-directory"
@@ -243,6 +279,7 @@ function GeneralTab() {
         />
       </div>
 
+      </div>
       <SaveRow
         dirty={dirty}
         isPending={updateSettings.isPending}
@@ -351,7 +388,8 @@ function DownloadsTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="flex min-h-full flex-col space-y-4">
+      <div className="max-w-lg space-y-4">
       <div className="flex gap-4">
         <div className="flex-1 space-y-2">
           <Label>Default Type</Label>
@@ -442,12 +480,49 @@ function DownloadsTab() {
         </AlertDialogContent>
       </AlertDialog>
 
+      </div>
       <SaveRow
         dirty={dirty}
         isPending={updateSettings.isPending}
         isSuccess={updateSettings.isSuccess}
         onSave={() => updateSettings.mutate(payload)}
       />
+    </div>
+  )
+}
+
+// Its own tab (rather than living under Downloads, where it started) since
+// desktop notifications aren't download-specific — the same toggle governs
+// any future notification-worthy event, not just a download finishing.
+function NotificationsTab() {
+  const { enabled: desktopNotifications, setEnabled: setDesktopNotifications } = useDesktopNotifications()
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <div className="flex items-center gap-1.5">
+        <Checkbox
+          id="desktop-notifications"
+          checked={desktopNotifications}
+          onCheckedChange={(v) => setDesktopNotifications(v === true)}
+        />
+        <Label htmlFor="desktop-notifications" className="font-normal">
+          Desktop notifications
+        </Label>
+        <InfoPopover>
+          Shows a browser/OS notification for notification-worthy events (currently: a download
+          completing/failing/being cancelled, a thumbnail finishing AI Enhancement, a Frame Match
+          being found, a scheduled subscription check finding new items, or a scheduled backup
+          failing) — on top of the in-app toast, which always shows regardless of this setting
+          for downloads (the rest skip the toast and use only the desktop notification — either
+          because they already show live status on their own page, like Enhancement/Frame Match,
+          or because a manual trigger of the same action already gets synchronous feedback, like
+          "Check now"/a manual backup). Only fires while you're away from this tab (it's
+          backgrounded, minimized, or the window isn't focused) — the toast already covers the
+          case where you're looking at it. A personal per-browser preference (like Theme), not
+          synced across devices. Turning this on prompts for
+          notification permission if you haven't granted or denied it yet.
+        </InfoPopover>
+      </div>
     </div>
   )
 }
@@ -511,7 +586,8 @@ function LibraryTab() {
   const thumbHighLabel = RESOLUTION_STEP_LABELS[thumbHigh] ?? `${thumbHigh}p`
 
   return (
-    <div className="max-w-lg space-y-6">
+    <div className="flex min-h-full flex-col space-y-4">
+      <div className="max-w-lg space-y-6">
       <div className="space-y-2">
         <div className="flex items-center gap-1.5">
           <Label>Image derivatives</Label>
@@ -722,6 +798,7 @@ function LibraryTab() {
         </div>
       </div>
 
+      </div>
       <SaveRow
         dirty={dirty}
         isPending={updateSettings.isPending}
@@ -762,7 +839,8 @@ function PrivacyTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="flex min-h-full flex-col space-y-4">
+      <div className="max-w-lg space-y-4">
       <div className="flex items-center gap-1.5">
         <Checkbox id="privacy-enabled" checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
         <Label htmlFor="privacy-enabled" className="font-normal">
@@ -814,6 +892,7 @@ function PrivacyTab() {
         </InfoPopover>
       </div>
 
+      </div>
       <SaveRow
         dirty={dirty}
         isPending={updateSettings.isPending}
@@ -847,7 +926,8 @@ function HistoryTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="flex min-h-full flex-col space-y-4">
+      <div className="max-w-lg space-y-4">
       <div className="flex items-center gap-1.5">
         <Checkbox id="history-anonymize" checked={anonymize} onCheckedChange={(v) => setAnonymize(v === true)} />
         <Label htmlFor="history-anonymize" className="font-normal">
@@ -901,6 +981,7 @@ function HistoryTab() {
         </AlertDialogContent>
       </AlertDialog>
 
+      </div>
       <SaveRow
         dirty={dirty}
         isPending={updateSettings.isPending}
@@ -952,7 +1033,8 @@ function BackupTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="flex min-h-full flex-col space-y-4">
+      <div className="max-w-lg space-y-4">
       <div className="space-y-2">
         <FieldLabel
           htmlFor="auto-backup-interval"
@@ -994,6 +1076,7 @@ function BackupTab() {
         </Select>
       </div>
 
+      </div>
       <SaveRow
         dirty={dirty}
         isPending={updateSettings.isPending}
@@ -1032,7 +1115,8 @@ function JellyfinTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="flex min-h-full flex-col space-y-4">
+      <div className="max-w-lg space-y-4">
       <div className="flex items-center gap-1.5">
         <Checkbox id="jellyfin-enabled" checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
         <Label htmlFor="jellyfin-enabled" className="font-normal">
@@ -1101,6 +1185,7 @@ function JellyfinTab() {
         {rescan.isPending ? "Rescanning…" : "Rescan Library Now"}
       </Button>
 
+      </div>
       <SaveRow
         dirty={dirty}
         isPending={updateSettings.isPending}
@@ -1274,7 +1359,8 @@ function ThumbnailEnhancementTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="flex min-h-full flex-col space-y-4">
+      <div className="max-w-lg space-y-4">
       <div className="flex items-center gap-1.5">
         <Checkbox id="thumb-enhance-enabled" checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
         <Label htmlFor="thumb-enhance-enabled" className="font-normal">
@@ -1503,6 +1589,7 @@ function ThumbnailEnhancementTab() {
         .
       </p>
 
+      </div>
       <SaveRow
         dirty={dirty}
         isPending={updateSettings.isPending}
@@ -1547,7 +1634,8 @@ function YtDlpTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="flex min-h-full flex-col space-y-4">
+      <div className="max-w-lg space-y-4">
       {isLoading || !data ? (
         <Skeleton className="h-16 w-full" />
       ) : (
@@ -1641,15 +1729,15 @@ function YtDlpTab() {
               />
             </div>
           </div>
-
-          <SaveRow
-            dirty={dirty}
-            isPending={updateSettings.isPending}
-            isSuccess={updateSettings.isSuccess}
-            onSave={() => updateSettings.mutate(payload)}
-          />
         </div>
       )}
+      </div>
+      <SaveRow
+        dirty={dirty}
+        isPending={updateSettings.isPending}
+        isSuccess={updateSettings.isSuccess}
+        onSave={() => updateSettings.mutate(payload)}
+      />
     </div>
   )
 }

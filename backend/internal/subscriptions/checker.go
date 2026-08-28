@@ -20,6 +20,7 @@ import (
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/ws"
 )
 
 var thumbnailTiers = []imageproc.Tier{
@@ -35,6 +36,10 @@ type CheckDeps struct {
 	Manager           *queue.DownloadManager
 	YtDlp             *downloader.YtDlpService
 	ImagesRoot        string
+	// Broadcaster is used only by RunDueChecks (the scheduled sweep) to
+	// report new items found — the manual "Check now" HTTP handler already
+	// gets its count synchronously via the response, so it doesn't need this.
+	Broadcaster ws.Broadcaster
 }
 
 // RunDueChecks is called from the shared hourly ticker in cmd/server/main.go
@@ -57,8 +62,20 @@ func RunDueChecks(ctx context.Context, deps CheckDeps) {
 		if !due {
 			continue
 		}
-		if _, err := CheckOne(ctx, deps, sub); err != nil {
+		newCount, err := CheckOne(ctx, deps, sub)
+		if err != nil {
 			log.Printf("subscription %d (%s): scheduled check failed: %v", sub.ID, sub.URL, err)
+			continue
+		}
+		if newCount > 0 && deps.Broadcaster != nil {
+			deps.Broadcaster.Broadcast(ws.Event{
+				Type: ws.EventSubscriptionNewItems,
+				Payload: ws.SubscriptionNewItemsPayload{
+					SubscriptionID:    sub.ID,
+					SubscriptionTitle: sub.Title,
+					NewCount:          newCount,
+				},
+			})
 		}
 	}
 }

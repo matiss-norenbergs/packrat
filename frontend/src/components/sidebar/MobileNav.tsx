@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useLocation } from "react-router-dom"
-import { Menu, Package, X } from "lucide-react"
+import { Menu, X } from "lucide-react"
+import { PackratLogo } from "@/components/PackratLogo"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SidebarContent } from "./Sidebar"
@@ -24,7 +25,7 @@ export function MobileNav() {
           </TooltipTrigger>
           <TooltipContent>Open menu</TooltipContent>
         </Tooltip>
-        <Package className="h-5 w-5 text-sidebar-foreground" />
+        <PackratLogo className="h-5 w-5 shrink-0" />
         <span className="text-base font-semibold text-sidebar-foreground">Packrat</span>
       </div>
 

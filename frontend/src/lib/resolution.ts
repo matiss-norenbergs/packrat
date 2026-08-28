@@ -17,9 +17,9 @@ export const RESOLUTION_STEP_LABELS: Record<number, string> = {
 export type ResolutionTier = "low" | "medium" | "high"
 
 export const RESOLUTION_TIER_CLASS: Record<ResolutionTier, string> = {
-  low: "text-red-600 dark:text-red-500",
-  medium: "text-yellow-600 dark:text-yellow-500",
-  high: "text-green-600 dark:text-green-500",
+  low: "text-destructive",
+  medium: "text-warning",
+  high: "text-success",
 }
 
 // Resolution is stored/displayed everywhere as a raw "WIDTHxHEIGHT" string

@@ -260,7 +260,7 @@ export function TagsPage() {
               <Table containerClassName="h-full overflow-auto rounded-md border">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8">
+                    <TableHead className="w-8 text-center">
                       <Checkbox
                         checked={allSelected ? true : someSelected ? "indeterminate" : false}
                         onCheckedChange={(checked) => (checked ? selectAll(pageData.map((t) => t.id)) : clear())}
@@ -268,8 +268,8 @@ export function TagsPage() {
                       />
                     </TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead>Usage</TableHead>
-                    {privacyEnabled && <TableHead>Private</TableHead>}
+                    <TableHead className="text-center">Usage</TableHead>
+                    {privacyEnabled && <TableHead className="text-center">Private</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -364,18 +364,18 @@ function TagRow({
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
     >
-      <TableCell>
+      <TableCell className="text-center">
         <Checkbox checked={selected} onCheckedChange={onSelectedChange} aria-label={`Select ${tag.name}`} />
       </TableCell>
       <TableCell className="font-medium">{tag.name}</TableCell>
-      <TableCell>
+      <TableCell className="text-center">
         <Badge variant="outline">
           {tag.usageCount} item{tag.usageCount === 1 ? "" : "s"}
         </Badge>
       </TableCell>
       {privacyEnabled && (
-        <TableCell>
-          {tag.isPrivate && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label="Private" />}
+        <TableCell className="text-center">
+          {tag.isPrivate && <Lock className="mx-auto h-3.5 w-3.5 text-muted-foreground" aria-label="Private" />}
         </TableCell>
       )}
     </TableRow>

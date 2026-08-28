@@ -84,7 +84,7 @@ export function EligibleItemsDialog({ open, onOpenChange }: EligibleItemsDialogP
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-8">
+                  <TableHead className="w-8 text-center">
                     <Checkbox
                       checked={allSelected ? true : someSelected ? "indeterminate" : false}
                       onCheckedChange={(checked) => toggleAll(checked === true)}
@@ -94,14 +94,14 @@ export function EligibleItemsDialog({ open, onOpenChange }: EligibleItemsDialogP
                   <TableHead>Item</TableHead>
                   <TableHead>Artist</TableHead>
                   <TableHead>Collection</TableHead>
-                  <TableHead>Dimensions</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Dimensions</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((item) => (
                   <TableRow key={item.libraryItemId}>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Checkbox
                         checked={selectedIds.has(item.libraryItemId)}
                         onCheckedChange={(checked) => toggleOne(item.libraryItemId, checked === true)}
@@ -118,10 +118,10 @@ export function EligibleItemsDialog({ open, onOpenChange }: EligibleItemsDialogP
                     </TableCell>
                     <TableCell className="text-muted-foreground">{item.artistName ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{item.collectionName ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="text-right text-muted-foreground">
                       {item.width}×{item.height}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {item.isProcessing ? (
                         <Badge variant="secondary" className="gap-1">
                           <Loader2 className="h-3 w-3 animate-spin" />

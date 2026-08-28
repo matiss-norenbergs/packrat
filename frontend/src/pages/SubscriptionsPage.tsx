@@ -306,7 +306,7 @@ export function SubscriptionsPage() {
               <Table containerClassName="h-full overflow-auto rounded-md border">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8">
+                    <TableHead className="w-8 text-center">
                       <Checkbox
                         checked={allSelected ? true : someSelected ? "indeterminate" : false}
                         onCheckedChange={(checked) => (checked ? selectAll(pageData.map((s) => s.id)) : clear())}
@@ -315,10 +315,10 @@ export function SubscriptionsPage() {
                     </TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Collection</TableHead>
-                    <TableHead>Known items</TableHead>
-                    <TableHead>Last checked</TableHead>
-                    <TableHead>Auto-download</TableHead>
-                    <TableHead>Enabled</TableHead>
+                    <TableHead className="text-right">Known items</TableHead>
+                    <TableHead className="text-center">Last checked</TableHead>
+                    <TableHead className="text-center">Auto-download</TableHead>
+                    <TableHead className="text-center">Enabled</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -331,7 +331,7 @@ export function SubscriptionsPage() {
                       onMouseDown={(e) => handleRowMouseDown(e, sub.id)}
                       onMouseEnter={() => handleRowMouseEnter(sub.id)}
                     >
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Checkbox
                           checked={isSelected(sub.id)}
                           onCheckedChange={() => toggle(sub.id)}
@@ -343,22 +343,22 @@ export function SubscriptionsPage() {
                         <p className="truncate text-xs text-muted-foreground">{sub.url}</p>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{sub.collectionName ?? "Uncategorized"}</TableCell>
-                      <TableCell className="text-sm">
-                        <span className="flex items-center gap-1.5">
+                      <TableCell className="text-right text-sm">
+                        <span className="flex items-center justify-end gap-1.5">
                           {sub.knownEntryCount}
                           {sub.unseenEntryCount > 0 && <Badge variant="secondary">+{sub.unseenEntryCount} new</Badge>}
                         </span>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1.5">
+                      <TableCell className="text-center text-sm text-muted-foreground">
+                        <div className="flex items-center justify-center gap-1.5">
                           {sub.lastCheckedAt ? new Date(sub.lastCheckedAt).toLocaleString() : "Never"}
                           {sub.lastCheckError && <LastCheckErrorBadge error={sub.lastCheckError} />}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {sub.autoDownload ? <Badge variant="secondary">On</Badge> : <span className="text-sm text-muted-foreground">Off</span>}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Switch checked={sub.enabled} onCheckedChange={(v) => toggleEnabled(sub, v)} />
                       </TableCell>
                     </TableRow>

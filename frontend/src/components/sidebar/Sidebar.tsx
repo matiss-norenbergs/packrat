@@ -8,7 +8,6 @@ import {
   History,
   Settings,
   ScrollText,
-  Package,
   Tags,
   Mic2,
   Archive,
@@ -19,6 +18,7 @@ import {
   ScanSearch,
 } from "lucide-react"
 import { Link } from "react-router-dom"
+import { PackratLogo } from "@/components/PackratLogo"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLogout } from "@/hooks/useAuth"
@@ -70,7 +70,7 @@ export function SidebarContent() {
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-4">
-        <Package className="h-5 w-5 text-sidebar-foreground" />
+        <PackratLogo className="h-5 w-5 shrink-0" />
         <span className="text-base font-semibold text-sidebar-foreground">Packrat</span>
       </div>
       <div className="px-2 pb-2">
@@ -105,7 +105,7 @@ export function SidebarContent() {
 }
 
 const STATUS_DOT_CLASSNAME: Record<ReturnType<typeof enhancementStatusColor>, string> = {
-  green: "bg-emerald-500",
+  green: "bg-success",
   red: "bg-destructive",
   grey: "bg-muted-foreground/40",
 }
@@ -178,7 +178,7 @@ function AppVersionLine() {
         {data.updateAvailable && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-warning" />
             </TooltipTrigger>
             <TooltipContent>Update available: v{data.latestVersion}</TooltipContent>
           </Tooltip>
@@ -218,7 +218,7 @@ function VersionLine() {
         {data.updateAvailable && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-warning" />
             </TooltipTrigger>
             <TooltipContent>Update available</TooltipContent>
           </Tooltip>

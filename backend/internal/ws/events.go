@@ -3,12 +3,14 @@ package ws
 type EventType string
 
 const (
-	EventProgress           EventType = "progress"
-	EventCompleted          EventType = "completed"
-	EventFailed             EventType = "failed"
-	EventQueueUpdate        EventType = "queue_update"
-	EventEnhanceProgress    EventType = "enhance_progress"
-	EventFrameMatchProgress EventType = "frame_match_progress"
+	EventProgress             EventType = "progress"
+	EventCompleted            EventType = "completed"
+	EventFailed               EventType = "failed"
+	EventQueueUpdate          EventType = "queue_update"
+	EventEnhanceProgress      EventType = "enhance_progress"
+	EventFrameMatchProgress   EventType = "frame_match_progress"
+	EventSubscriptionNewItems EventType = "subscription_new_items"
+	EventBackupCompleted      EventType = "backup_completed"
 )
 
 type Event struct {
@@ -63,6 +65,25 @@ type FrameMatchProgressPayload struct {
 	ItemTitle     string  `json:"itemTitle"`
 	State         string  `json:"state"` // "running" | "done" | "error"
 	Error         *string `json:"error,omitempty"`
+}
+
+// SubscriptionNewItemsPayload reports a scheduled (automatic) subscription
+// check finding new items. Manual "Check now" gets its count synchronously
+// via the HTTP response instead (see subscriptions.CheckOne's caller in
+// api.CheckSubscriptionNow) — this is scheduled-sweep-only, so it's the one
+// path with no other live feedback for the user.
+type SubscriptionNewItemsPayload struct {
+	SubscriptionID    int64  `json:"subscriptionId"`
+	SubscriptionTitle string `json:"subscriptionTitle"`
+	NewCount          int    `json:"newCount"`
+}
+
+// BackupCompletedPayload reports a scheduled auto-backup's outcome. A manual
+// backup gets its result synchronously via the HTTP response instead — this
+// is scheduled-sweep-only, same reasoning as SubscriptionNewItemsPayload.
+type BackupCompletedPayload struct {
+	Status       string  `json:"status"` // "success" | "failed"
+	ErrorMessage *string `json:"errorMessage,omitempty"`
 }
 
 // Broadcaster is satisfied by Hub. It is defined here (rather than in the

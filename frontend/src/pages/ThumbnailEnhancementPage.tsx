@@ -119,11 +119,8 @@ function ItemTitleCell({ entry }: { entry: ThumbnailEnhancementHistoryEntry }) {
 // Green/red/grey mirrors the sidebar nav dot — both read the same
 // enhancementStatusColor helper so the page and the nav always agree on
 // what "active/not reachable/not configured" means.
-const STATUS_BADGE_STYLE: Record<EnhancementStatusColor, { variant: "outline" | "destructive" | "secondary"; className: string }> = {
-  green: {
-    variant: "outline",
-    className: "border-transparent bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400",
-  },
+const STATUS_BADGE_STYLE: Record<EnhancementStatusColor, { variant: "success" | "destructive" | "secondary"; className: string }> = {
+  green: { variant: "success", className: "" },
   red: { variant: "destructive", className: "" },
   grey: { variant: "secondary", className: "" },
 }
@@ -499,7 +496,7 @@ export function ThumbnailEnhancementPage() {
               <Table containerClassName="h-full overflow-auto rounded-md border">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8">
+                    <TableHead className="w-8 text-center">
                       <Checkbox
                         checked={allSelected ? true : someSelected ? "indeterminate" : false}
                         onCheckedChange={(checked) => (checked ? selectAll(history.map((e) => e.id)) : clear())}
@@ -507,13 +504,13 @@ export function ThumbnailEnhancementPage() {
                       />
                     </TableHead>
                     <TableHead>Item</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Trigger</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Dimensions</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Trigger</TableHead>
+                    <TableHead className="text-center">Type</TableHead>
+                    <TableHead className="text-right">Dimensions</TableHead>
+                    <TableHead className="text-right">Size</TableHead>
+                    <TableHead className="text-center">Date</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -526,7 +523,7 @@ export function ThumbnailEnhancementPage() {
                       onMouseDown={(e) => handleRowMouseDown(e, entry.id)}
                       onMouseEnter={() => handleRowMouseEnter(entry.id)}
                     >
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Checkbox
                           checked={isSelected(entry.id)}
                           onCheckedChange={() => toggle(entry.id)}
@@ -536,13 +533,13 @@ export function ThumbnailEnhancementPage() {
                       <TableCell>
                         <ItemTitleCell entry={entry} />
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1.5">
                           {entry.revertedAt ? (
                             <RevertedBadge revertedAt={entry.revertedAt} />
                           ) : (
                             <>
-                              <Badge variant={entry.status === "success" ? "default" : "destructive"}>
+                              <Badge variant={entry.status === "success" ? "success" : "destructive"}>
                                 {entry.status === "success" ? "Success" : "Failed"}
                               </Badge>
                               {entry.status === "failed" && entry.error && <ErrorBadge error={entry.error} />}
@@ -550,24 +547,24 @@ export function ThumbnailEnhancementPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Badge variant="secondary">
                           {entry.triggerType === "manual" ? "Manual" : entry.triggerType === "scheduled" ? "Scheduled" : "Auto"}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Badge variant="outline">{entry.mode === "sharpen" ? "Sharpen" : "Upscale"}</Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         {dimensions(entry.originalWidth, entry.originalHeight)} → {dimensions(entry.enhancedWidth, entry.enhancedHeight)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         {entry.originalSizeBytes != null ? formatBytes(entry.originalSizeBytes) : "—"} →{" "}
                         {entry.enhancedSizeBytes != null ? formatBytes(entry.enhancedSizeBytes) : "—"}
                       </TableCell>
-                      <TableCell>{new Date(entry.createdAt).toLocaleString()}</TableCell>
+                      <TableCell className="text-center">{new Date(entry.createdAt).toLocaleString()}</TableCell>
                       <TableCell>
-                        <div className="flex justify-end">
+                        <div className="flex justify-center">
                           {entry.hasOriginalBackup && (
                             <Tooltip>
                               <TooltipTrigger asChild>
