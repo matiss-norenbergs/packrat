@@ -457,7 +457,8 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   (`socks5://`/`http://`/`https://`) is used by `yt-dlp` itself and by every image download/preview
   fetch (see Downloads above) — a sidebar dot next to **Downloads** shows its live state at a
   glance: grey (not set), green (reachable), red (configured but not reachable).
-- **Appearance** — light / dark / system theme, plus a primary color (Default/Blue/Red/Green/Violet)
+- **Appearance** — light / dark / system theme, plus a primary color
+  (Default/Blue/Red/Green/Yellow/Monochrome — Monochrome is black in light mode, white in dark)
   applied to buttons, badges, switches, the sidebar/login logo, and the Dashboard's charts (the
   primary series tracks the chosen accent; the other series get their own hand-picked, colorblind-
   validated palette per accent). Default matches the app's own logo purple. Both are browser-local

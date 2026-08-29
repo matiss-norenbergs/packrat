@@ -883,6 +883,7 @@ type SettingsResponse struct {
 	LibraryAutoplay             bool     `json:"libraryAutoplay"`
 	YtdlpCookiesBrowser         string   `json:"ytdlpCookiesBrowser"`
 	YtdlpCookiesProfile         string   `json:"ytdlpCookiesProfile"`
+	YtdlpCookiesFile            string   `json:"ytdlpCookiesFile"`
 	YtdlpProxy                  string   `json:"ytdlpProxy"`
 	YtdlpRateLimit              string   `json:"ytdlpRateLimit"`
 	YtdlpRetries                int      `json:"ytdlpRetries"`
@@ -943,6 +944,7 @@ type UpdateSettingsRequest struct {
 	LibraryAutoplay             *bool     `json:"libraryAutoplay"`
 	YtdlpCookiesBrowser         *string   `json:"ytdlpCookiesBrowser"`
 	YtdlpCookiesProfile         *string   `json:"ytdlpCookiesProfile"`
+	YtdlpCookiesFile            *string   `json:"ytdlpCookiesFile"`
 	YtdlpProxy                  *string   `json:"ytdlpProxy"`
 	YtdlpRateLimit              *string   `json:"ytdlpRateLimit"`
 	YtdlpRetries                *int      `json:"ytdlpRetries" binding:"omitempty,min=0"`

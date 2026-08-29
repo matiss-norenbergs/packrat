@@ -3,10 +3,10 @@ import { useEffect, useState } from "react"
 // Client-side only, same as the light/dark/system theme choice (next-themes,
 // see App.tsx) — a personal browser preference, not something that needs a
 // backend Settings round-trip.
-export type AccentColor = "default" | "blue" | "red" | "green" | "violet"
+export type AccentColor = "default" | "blue" | "red" | "green" | "yellow" | "mono"
 
 const STORAGE_KEY = "packrat-accent-color"
-const ACCENT_COLORS: readonly AccentColor[] = ["default", "blue", "red", "green", "violet"]
+const ACCENT_COLORS: readonly AccentColor[] = ["default", "blue", "red", "green", "yellow", "mono"]
 
 function isAccentColor(value: string | null): value is AccentColor {
   return value !== null && (ACCENT_COLORS as readonly string[]).includes(value)

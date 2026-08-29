@@ -89,14 +89,19 @@
     /* Dashboard charts' "first/single series" color (Library Growth,
        Items by Resolution, Top Tags/Artists, Storage's "Packrat" segment,
        Video vs Audio's "Video" segment) — tracks the current accent instead
-       of a fixed blue. chart-2 onward stay fixed, distinct hues: deriving a
-       whole categorical palette from one primary color reads muddy/samey,
-       not intentional. */
+       of a fixed blue. chart-2..5 draw from the same 8-hue reference
+       categorical palette (see the dataviz skill's palette.md) every accent
+       below picks from — orange/aqua/yellow/green here are simply the 4 of
+       those 8 families that sit farthest (by OKLCH hue distance) from this
+       default purple primary, so chart-1 never visually collides with its
+       own supporting series. Chosen and re-validated (six-checks script,
+       both modes) alongside the accent overrides below — see that comment
+       for the full method. */
     --chart-1: var(--primary);
     --chart-2: #eb6834;
     --chart-3: #1baf7a;
     --chart-4: #eda100;
-    --chart-5: #e87ba4;
+    --chart-5: #008300;
     --radius: 0.625rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
@@ -133,7 +138,7 @@
     --chart-2: #d95926;
     --chart-3: #199e70;
     --chart-4: #c98500;
-    --chart-5: #d55181;
+    --chart-5: #008300;
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -155,18 +160,29 @@
    use white text on a solid accent fill.
 
    Dashboard charts' --chart-1 already tracks --primary automatically (see
-   above) with no per-accent work needed. --chart-2..5 (the fixed secondary
-   categorical colors) stay put for blue/violet — their hue sits far enough
-   from the base purple default's own tail (orange/aqua/yellow/magenta) that
-   it validates unchanged (dataviz skill's six checks: CVD separation, normal-
-   vision floor, contrast, run via validate_palette.js) — but red and green
-   each collide with a color already in that tail (red neighbors both the
-   reference "red" and "magenta" hue families; green sits almost on top of
-   the reference "aqua" family), so those two get their own validated
-   secondary set below. Split by `.dark` here too, unlike --primary, since
-   --chart-2..5's own base values already are (dark needs lighter/less
-   saturated steps to clear 3:1 against the dark surface) — chart colors
-   never adopted --primary's single-value-for-both-modes convention. */
+   above) with no per-accent work needed. For --chart-2..5, every accent
+   picks its 4 secondary hues from the same 8-family reference categorical
+   palette (dataviz skill's palette.md: blue/orange/aqua/yellow/magenta/
+   green/violet/red) — chosen per accent by ranking those 8 families by
+   OKLCH hue-distance from that accent's own --primary and keeping the 4
+   farthest, so a series never visually collides with the primary-colored
+   chart-1 beside it. blue is far enough from the base purple default's own
+   pick (orange/aqua/yellow/green) to reuse it unchanged; red, green, and
+   yellow each sit close enough to a member of that set (red neighbors both
+   the reference "red" and "magenta" families; green sits almost on top of
+   "aqua" and *is* the reference "green"; yellow *is*, near-exactly, the
+   reference "yellow" — see its own comment below) that they need their own
+   4. Every set (default's above included) is re-validated as an ordered
+   sequence with the dataviz skill's six-checks script (CVD separation,
+   normal-vision floor, contrast — run via validate_palette.js) — the
+   ordering matters as much as the hue choice: e.g. red's set deliberately
+   avoids putting two warm hues (orange/yellow/magenta/red) next to each
+   other, which fails the normal-vision floor even when neither hue
+   individually collides with the primary. Split by `.dark` here too,
+   unlike --primary, since --chart-2..5's own base values already are (dark
+   needs lighter/less saturated steps to clear 3:1 against the dark
+   surface) — chart colors never adopted --primary's single-value-for-
+   both-modes convention. */
 [data-accent="blue"] {
     --primary: oklch(0.55 0.2 260);
     --primary-foreground: oklch(0.985 0 0);
@@ -175,33 +191,94 @@
     --primary: oklch(0.55 0.22 10);
     --primary-foreground: oklch(0.985 0 0);
     --chart-2: #1baf7a; /* aqua */
-    --chart-3: #4a3aa7; /* violet */
-    --chart-4: #eda100; /* yellow */
-    --chart-5: #008300; /* green */
+    --chart-3: #2a78d6; /* blue */
+    --chart-4: #008300; /* green */
+    --chart-5: #4a3aa7; /* violet */
 }
 .dark[data-accent="red"] {
     --chart-2: #199e70;
-    --chart-3: #9085e9;
-    --chart-4: #c98500;
-    --chart-5: #008300;
+    --chart-3: #3987e5;
+    --chart-4: #008300;
+    --chart-5: #9085e9;
 }
 [data-accent="green"] {
     --primary: oklch(0.55 0.17 145);
     --primary-foreground: oklch(0.985 0 0);
-    --chart-2: #e87ba4; /* magenta */
-    --chart-3: #2a78d6; /* blue */
-    --chart-4: #e34948; /* red */
-    --chart-5: #4a3aa7; /* violet */
+    --chart-2: #2a78d6; /* blue */
+    --chart-3: #e87ba4; /* magenta */
+    --chart-4: #4a3aa7; /* violet */
+    --chart-5: #e34948; /* red */
 }
 .dark[data-accent="green"] {
-    --chart-2: #d55181;
-    --chart-3: #3987e5;
-    --chart-4: #e66767;
-    --chart-5: #9085e9;
+    --chart-2: #3987e5;
+    --chart-3: #d55181;
+    --chart-4: #9085e9;
+    --chart-5: #e66767;
 }
-[data-accent="violet"] {
-    --primary: oklch(0.55 0.22 300);
+/* "Yellow" ("Honey gold") — deliberately not a bright yellow: every accent
+   uses white foreground text (see above), and a light/bright yellow can't
+   carry white text at a legible contrast. This gold/amber step (L 0.58, C
+   0.15) keeps white text readable (4.18:1, in line with the other accents'
+   4.39-5.91 range) while still reading as "yellow" in hue (H 82). Its own
+   hue sits almost on top of the reference "yellow" family (H 75.1, the
+   closest of any accent-to-family pairing in this file), so unlike
+   blue/red/green it can't reuse ANY of the default's four secondary hues —
+   orange and yellow are both too close. Its --chart-2..5 draws from the
+   four reference families farthest from it instead (blue/aqua/violet/
+   green), ordered to keep the two close cool pairs (aqua-green, blue-
+   violet — see the comment above) apart. Validated six-checks, both
+   modes, same as the others. */
+[data-accent="yellow"] {
+    --primary: oklch(0.58 0.15 82);
     --primary-foreground: oklch(0.985 0 0);
+    --chart-2: #2a78d6; /* blue */
+    --chart-3: #1baf7a; /* aqua */
+    --chart-4: #4a3aa7; /* violet */
+    --chart-5: #008300; /* green */
+}
+.dark[data-accent="yellow"] {
+    --chart-2: #3987e5;
+    --chart-3: #199e70;
+    --chart-4: #9085e9;
+    --chart-5: #008300;
+}
+/* "Monochrome" — the one accent with no hue at all: pure black in light
+   mode, pure white in dark mode (true oklch(0 0 0) / oklch(1 0 0), not the
+   app's softer near-black/near-white foreground steps — a duotone reads
+   crisper at the full extremes). This is the only accent whose --primary
+   AND --primary-foreground both need a `.dark` split — every other accent
+   is one saturated value that reads fine on both surfaces, but flat black
+   and flat white each only work as a *fill* on one of the two surfaces,
+   and the "always near-white" foreground convention above would put white
+   text on the white dark-mode fill.
+   Chart-1 (= --primary here) deliberately fails the dataviz skill's
+   chroma-floor and lightness-band checks (C 0, L 0/1) when run through
+   validate_palette.js — expected, not a bug: those checks exist to catch a
+   hue that's *accidentally* gone gray and lost its identity signal, but
+   here going achromatic is the entire point. Identity is carried by being
+   the most extreme lightness in the chart (darkest mark in light mode,
+   lightest in dark) against both the surface and chart-2..5, not by hue -
+   the same reasoning a "Total"/baseline series in black often gets in
+   other dashboards. --chart-2..5 reuse the default purple's already-
+   validated four (orange/aqua/yellow/green) unchanged: with zero chroma
+   there's no hue for them to collide with, and the six-checks confirm
+   chart-2..5 still pass each other exactly as they do for Default/Blue -
+   only chart-1's own two flags are the (expected) exception. */
+[data-accent="mono"] {
+    --primary: oklch(0 0 0);
+    --primary-foreground: oklch(1 0 0);
+    --chart-2: #eb6834;
+    --chart-3: #1baf7a;
+    --chart-4: #eda100;
+    --chart-5: #008300;
+}
+.dark[data-accent="mono"] {
+    --primary: oklch(1 0 0);
+    --primary-foreground: oklch(0 0 0);
+    --chart-2: #d95926;
+    --chart-3: #199e70;
+    --chart-4: #c98500;
+    --chart-5: #008300;
 }
 
 @layer base {

@@ -19,6 +19,7 @@ import { ThumbnailFrameRangeSlider } from "@/components/ThumbnailFrameRangeSlide
 import { RESOLUTION_STEP_LABELS } from "@/lib/resolution"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { PresetOrCustomNumberField } from "@/components/ui/preset-or-custom-number-field"
 import {
@@ -54,7 +55,11 @@ const ACCENT_COLOR_OPTIONS: { value: AccentColor; label: string; swatch: string 
   { value: "blue", label: "Blue", swatch: "oklch(0.55 0.2 260)" },
   { value: "red", label: "Red", swatch: "oklch(0.55 0.22 10)" },
   { value: "green", label: "Green", swatch: "oklch(0.55 0.17 145)" },
-  { value: "violet", label: "Violet", swatch: "oklch(0.55 0.22 300)" },
+  { value: "yellow", label: "Yellow", swatch: "oklch(0.58 0.15 82)" },
+  // Swatch tracks --foreground (not a fixed color) — this accent has no
+  // single hue: it's black in light mode, white in dark mode, so the dot
+  // itself flips with the current theme same as the real accent would.
+  { value: "mono", label: "Monochrome", swatch: "var(--foreground)" },
 ]
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -1608,6 +1613,7 @@ function YtDlpTab() {
 
   const [cookiesBrowser, setCookiesBrowser] = useState(NO_COOKIES_BROWSER)
   const [cookiesProfile, setCookiesProfile] = useState("")
+  const [cookiesFile, setCookiesFile] = useState("")
   const [proxy, setProxy] = useState("")
   const [rateLimit, setRateLimit] = useState("")
   const [retries, setRetries] = useState("")
@@ -1616,6 +1622,7 @@ function YtDlpTab() {
     if (!settings) return
     setCookiesBrowser(settings.ytdlpCookiesBrowser || NO_COOKIES_BROWSER)
     setCookiesProfile(settings.ytdlpCookiesProfile)
+    setCookiesFile(settings.ytdlpCookiesFile)
     setProxy(settings.ytdlpProxy)
     setRateLimit(settings.ytdlpRateLimit)
     setRetries(settings.ytdlpRetries > 0 ? String(settings.ytdlpRetries) : "")
@@ -1626,6 +1633,7 @@ function YtDlpTab() {
     const browserValue = cookiesBrowser === NO_COOKIES_BROWSER ? "" : cookiesBrowser
     if (browserValue !== settings.ytdlpCookiesBrowser) payload.ytdlpCookiesBrowser = browserValue
     if (cookiesProfile !== settings.ytdlpCookiesProfile) payload.ytdlpCookiesProfile = cookiesProfile
+    if (cookiesFile !== settings.ytdlpCookiesFile) payload.ytdlpCookiesFile = cookiesFile
     if (proxy !== settings.ytdlpProxy) payload.ytdlpProxy = proxy
     if (rateLimit !== settings.ytdlpRateLimit) payload.ytdlpRateLimit = rateLimit
     const retriesValue = retries.trim() === "" ? 0 : Number(retries)
@@ -1666,12 +1674,50 @@ function YtDlpTab() {
         <div className="space-y-4 border-t pt-4">
           <div className="space-y-2">
             <FieldLabel
+              htmlFor="ytdlp-cookies-file"
+              info="Paste or upload a Netscape-format cookies.txt (exported from your browser with an extension like 'Get cookies.txt'). Unlike Cookies browser below, this works in Docker — yt-dlp reads the file directly instead of needing a real browser profile on the same machine. Takes priority over Cookies browser when both are set."
+            >
+              Cookies file
+            </FieldLabel>
+            <Textarea
+              id="ytdlp-cookies-file"
+              placeholder="# Netscape HTTP Cookie File&#10;.youtube.com	TRUE	/	TRUE	...	..."
+              className="h-28 font-mono text-xs"
+              value={cookiesFile}
+              onChange={(e) => setCookiesFile(e.target.value)}
+            />
+            <div className="flex items-center gap-2">
+              <Input
+                type="file"
+                accept=".txt,text/plain"
+                className="h-8 max-w-64"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  setCookiesFile(await file.text())
+                  e.target.value = ""
+                }}
+              />
+              {cookiesFile && (
+                <Button variant="ghost" size="sm" onClick={() => setCookiesFile("")}>
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <FieldLabel
               htmlFor="ytdlp-cookies-browser"
-              info="Reads cookies directly from an installed browser's profile — useful for members-only or age-gated videos."
+              info={
+                cookiesFile
+                  ? "Ignored while a cookies file is set above. Reads cookies directly from an installed browser's profile — only works when yt-dlp runs on the same machine as that browser, not in Docker."
+                  : "Reads cookies directly from an installed browser's profile — only works when yt-dlp runs on the same machine as that browser (not in Docker). Prefer Cookies file above for a container deployment."
+              }
             >
               Cookies browser
             </FieldLabel>
-            <Select value={cookiesBrowser} onValueChange={setCookiesBrowser}>
+            <Select value={cookiesBrowser} onValueChange={setCookiesBrowser} disabled={!!cookiesFile}>
               <SelectTrigger id="ytdlp-cookies-browser" className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -1693,7 +1739,7 @@ function YtDlpTab() {
               placeholder="e.g. Default"
               value={cookiesProfile}
               onChange={(e) => setCookiesProfile(e.target.value)}
-              disabled={cookiesBrowser === NO_COOKIES_BROWSER}
+              disabled={cookiesBrowser === NO_COOKIES_BROWSER || !!cookiesFile}
             />
           </div>
 

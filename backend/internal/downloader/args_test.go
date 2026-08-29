@@ -7,9 +7,9 @@ import (
 
 func TestBuildGlobalArgs(t *testing.T) {
 	tests := []struct {
-		name                                                 string
-		cookiesBrowser, cookiesProfile, proxy, rate, retries string
-		want                                                 []string
+		name                                                                  string
+		cookiesBrowser, cookiesProfile, cookiesFilePath, proxy, rate, retries string
+		want                                                                  []string
 	}{
 		{
 			name: "all unset produces no flags",
@@ -25,6 +25,17 @@ func TestBuildGlobalArgs(t *testing.T) {
 			cookiesBrowser: "firefox",
 			cookiesProfile: "Default",
 			want:           []string{"--cookies-from-browser", "firefox:Default"},
+		},
+		{
+			name:            "cookies file takes priority over cookies browser",
+			cookiesBrowser:  "firefox",
+			cookiesFilePath: "/app/data/db/ytdlp-cookies.txt",
+			want:            []string{"--cookies", "/app/data/db/ytdlp-cookies.txt"},
+		},
+		{
+			name:            "cookies file only",
+			cookiesFilePath: "/app/data/db/ytdlp-cookies.txt",
+			want:            []string{"--cookies", "/app/data/db/ytdlp-cookies.txt"},
 		},
 		{
 			name:  "proxy only",
@@ -69,10 +80,10 @@ func TestBuildGlobalArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildGlobalArgs(tt.cookiesBrowser, tt.cookiesProfile, tt.proxy, tt.rate, tt.retries)
+			got := buildGlobalArgs(tt.cookiesBrowser, tt.cookiesProfile, tt.cookiesFilePath, tt.proxy, tt.rate, tt.retries)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("buildGlobalArgs(%q, %q, %q, %q, %q) = %#v, want %#v",
-					tt.cookiesBrowser, tt.cookiesProfile, tt.proxy, tt.rate, tt.retries, got, tt.want)
+				t.Fatalf("buildGlobalArgs(%q, %q, %q, %q, %q, %q) = %#v, want %#v",
+					tt.cookiesBrowser, tt.cookiesProfile, tt.cookiesFilePath, tt.proxy, tt.rate, tt.retries, got, tt.want)
 			}
 		})
 	}

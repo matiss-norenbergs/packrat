@@ -39,8 +39,9 @@ const (
 	SettingJellyfinAPIKey          = "jellyfin_api_key"
 	SettingJellyfinRefreshMode     = "jellyfin_refresh_mode"      // "entire" | "specific" | "none"; default "none"
 	SettingLibraryAutoplay         = "library_autoplay"           // bool, default true — matches the player's pre-existing hardcoded behavior
-	SettingYtdlpCookiesBrowser     = "ytdlp_cookies_browser"      // "" | one of yt-dlp's supported browser names; "" = disabled
+	SettingYtdlpCookiesBrowser     = "ytdlp_cookies_browser"      // "" | one of yt-dlp's supported browser names; "" = disabled. Only works when yt-dlp can see a real browser profile on its own filesystem — never true in the Docker image, see SettingYtdlpCookiesFile
 	SettingYtdlpCookiesProfile     = "ytdlp_cookies_profile"      // optional profile name, only meaningful when CookiesBrowser is set
+	SettingYtdlpCookiesFile        = "ytdlp_cookies_file"         // raw Netscape-format cookies.txt content; "" = disabled. Takes priority over CookiesBrowser when both are set (yt-dlp rejects passing both flags) — this is the one that actually works in Docker, since the content is written server-side to a stable file rather than needing a browser profile on disk
 	SettingYtdlpProxy              = "ytdlp_proxy"                // e.g. "socks5://127.0.0.1:1080"; "" = disabled
 	SettingYtdlpRateLimit          = "ytdlp_rate_limit"           // e.g. "500K"; "" = disabled
 	SettingYtdlpRetries            = "ytdlp_retries"              // int as string; 0 = yt-dlp's own default (10), not passed explicitly

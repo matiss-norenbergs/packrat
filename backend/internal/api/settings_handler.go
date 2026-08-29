@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -806,6 +807,36 @@ func YtdlpCookiesProfile(ctx context.Context, repo *repository.SettingsRepo) (st
 	return raw, err
 }
 
+// YtdlpCookiesFile reads the ytdlp_cookies_file setting (raw cookies.txt
+// content), defaulting to "" (disabled) if it's never been set. Shared by
+// GetSettings.
+func YtdlpCookiesFile(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
+	raw, err := repo.Get(ctx, models.SettingYtdlpCookiesFile)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", nil
+	}
+	return raw, err
+}
+
+// writeCookiesFile keeps the on-disk cookies file (see
+// YtDlpService.CookiesFilePath) in sync with the ytdlp_cookies_file
+// setting's content — called from UpdateSettings whenever that field is
+// present in a PATCH, including an empty string, which removes the file
+// rather than leaving a stale one yt-dlp would still pick up. 0600 since
+// cookies.txt can carry live session cookies.
+func writeCookiesFile(path, content string) error {
+	if path == "" {
+		return nil
+	}
+	if content == "" {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	return os.WriteFile(path, []byte(content), 0o600)
+}
+
 // YtdlpProxy reads the ytdlp_proxy setting, defaulting to "" (disabled) if
 // it's never been set. Shared by GetSettings.
 func YtdlpProxy(ctx context.Context, repo *repository.SettingsRepo) (string, error) {
@@ -987,6 +1018,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		ytdlpCookiesFile, err := YtdlpCookiesFile(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		ytdlpProxy, err := YtdlpProxy(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1144,6 +1180,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			LibraryAutoplay:             libraryAutoplay,
 			YtdlpCookiesBrowser:         ytdlpCookiesBrowser,
 			YtdlpCookiesProfile:         ytdlpCookiesProfile,
+			YtdlpCookiesFile:            ytdlpCookiesFile,
 			YtdlpProxy:                  ytdlpProxy,
 			YtdlpRateLimit:              ytdlpRateLimit,
 			YtdlpRetries:                ytdlpRetries,
@@ -1519,6 +1556,16 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		}
 		if req.YtdlpCookiesProfile != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingYtdlpCookiesProfile, *req.YtdlpCookiesProfile); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.YtdlpCookiesFile != nil {
+			if err := repo.Set(c.Request.Context(), models.SettingYtdlpCookiesFile, *req.YtdlpCookiesFile); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			if err := writeCookiesFile(ytdlp.CookiesFilePath, *req.YtdlpCookiesFile); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

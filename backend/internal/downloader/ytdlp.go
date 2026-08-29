@@ -23,6 +23,15 @@ type YtDlpService struct {
 	PipPath      string
 	SettingsRepo *repository.SettingsRepo
 
+	// CookiesFilePath is the stable on-disk location the settings handler
+	// writes SettingYtdlpCookiesFile's content to (see UpdateSettings) —
+	// globalArgs passes it to yt-dlp via --cookies whenever that setting is
+	// non-empty. Set directly by main.go rather than threaded through
+	// NewYtDlpService, since only the real server needs it (the frame-match
+	// benchmark binary's YtDlpService never downloads anything). Left "" it
+	// behaves exactly as if no cookies file were ever configured.
+	CookiesFilePath string
+
 	transcodes *transcodeLimiter
 }
 

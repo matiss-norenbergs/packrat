@@ -526,6 +526,7 @@ export interface Settings {
   libraryAutoplay: boolean
   ytdlpCookiesBrowser: string
   ytdlpCookiesProfile: string
+  ytdlpCookiesFile: string
   ytdlpProxy: string
   ytdlpRateLimit: string
   ytdlpRetries: number
@@ -673,6 +674,7 @@ export interface UpdateSettingsRequest {
   libraryAutoplay?: boolean
   ytdlpCookiesBrowser?: string
   ytdlpCookiesProfile?: string
+  ytdlpCookiesFile?: string
   ytdlpProxy?: string
   ytdlpRateLimit?: string
   ytdlpRetries?: number

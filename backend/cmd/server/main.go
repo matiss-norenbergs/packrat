@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -139,6 +140,10 @@ func run() error {
 	thumbnailEnhancementOriginalsRepo := repository.NewThumbnailEnhancementOriginalsRepo(conn)
 	thumbnailGalleryRepo := repository.NewThumbnailGalleryRepo(conn)
 	ytdlpSvc := downloader.NewYtDlpService(cfg.YtDlpPath, cfg.FFmpegPath, cfg.PipPath, settingsRepo, cfg.MaxConcurrentTranscodes)
+	// Lives next to the DB rather than under MediaRoot/BackupsRoot — no new
+	// volume mount required, since data/db is already persisted in both
+	// docker-compose.yml and docker-compose.dev.yml.
+	ytdlpSvc.CookiesFilePath = filepath.Join(filepath.Dir(cfg.DBPath), "ytdlp-cookies.txt")
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
 

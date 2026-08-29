@@ -92,21 +92,38 @@ func (s *YtDlpService) BuildArgs(ctx context.Context, job DownloadJob) []string 
 func (s *YtDlpService) globalArgs(ctx context.Context) []string {
 	browser, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpCookiesBrowser)
 	profile, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpCookiesProfile)
+	cookiesFile, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpCookiesFile)
 	proxy, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpProxy)
 	rateLimit, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpRateLimit)
 	retries, _ := s.SettingsRepo.Get(ctx, models.SettingYtdlpRetries)
-	return buildGlobalArgs(browser, profile, proxy, rateLimit, retries)
+
+	// The setting holds the cookies.txt *content*; the settings handler
+	// writes that content to this stable on-disk path whenever it changes
+	// (see UpdateSettings) — only its presence/absence is decided here, by
+	// whether the content is non-empty.
+	cookiesFilePath := ""
+	if cookiesFile != "" {
+		cookiesFilePath = s.CookiesFilePath
+	}
+	return buildGlobalArgs(browser, profile, cookiesFilePath, proxy, rateLimit, retries)
 }
 
-// buildGlobalArgs turns the four global yt-dlp settings into their CLI
-// flags. Blank/zero values mean "not configured" and are skipped, so
-// leaving everything unset reproduces pre-existing flag-free behavior
-// exactly. Pulled out as a pure function (no settings-repo access) so it's
+// buildGlobalArgs turns the global yt-dlp settings into their CLI flags.
+// Blank/zero values mean "not configured" and are skipped, so leaving
+// everything unset reproduces pre-existing flag-free behavior exactly.
+// Pulled out as a pure function (no settings-repo access) so it's
 // unit-testable without a DB, same extraction rationale as
 // queue/manager.go's resolveFilename.
-func buildGlobalArgs(cookiesBrowser, cookiesProfile, proxy, rateLimit, retries string) []string {
+func buildGlobalArgs(cookiesBrowser, cookiesProfile, cookiesFilePath, proxy, rateLimit, retries string) []string {
 	var args []string
-	if cookiesBrowser != "" {
+	if cookiesFilePath != "" {
+		// A cookies file takes priority over browser-extraction — yt-dlp
+		// rejects both flags together — and is the only one of the two that
+		// actually works in the Docker image: --cookies-from-browser needs
+		// a real browser profile on the same filesystem yt-dlp runs on,
+		// which the container never has.
+		args = append(args, "--cookies", cookiesFilePath)
+	} else if cookiesBrowser != "" {
 		value := cookiesBrowser
 		if cookiesProfile != "" {
 			value += ":" + cookiesProfile
