@@ -27,6 +27,7 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
   Docker network), add `-f docker-compose.local.yml` to the command. Never put machine-specific
   config in the committed compose files.
   `frontend/.env.local` has `BACKEND_PORT=51200`.
+- Dev container login: see `CLAUDE.local.md` (gitignored, machine-local).
 - **The running dev container serves whatever image it was last built from.** After ANY backend
   change, rebuild it before verifying — an un-rebuilt container returns "Settings saved" while
   silently ignoring new fields. Confirm with a changed endpoint/field or file on disk, not a toast.

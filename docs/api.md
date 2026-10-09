@@ -264,6 +264,7 @@ automatic retention sweep. `200 {"deleted": <n>}`.
 | GET | `/api/library/:id/trim/frames` | Decode every frame in a short window (frame-accurate picker) |
 | POST | `/api/library/:id/thumbnail/redownload` | Re-fetch just the thumbnail |
 | POST | `/api/library/:id/thumbnail/quick-grab` | Grab one random video frame as thumbnail |
+| GET | `/api/library/:id/thumbnail/timestamps` | Pick N candidate-frame timestamps (read-only, no extraction) |
 | GET | `/api/library/:id/thumbnail/candidates` | Extract N candidate frames (read-only) |
 | POST | `/api/library/:id/thumbnail` | Set the thumbnail from a supplied image |
 | DELETE | `/api/library/:id/thumbnail` | Remove the thumbnail |
@@ -559,10 +560,22 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   timestamp within the configured pick range (see `thumbnailFrameRangeLow`/`High` below; default
   5%-100% of duration, skipping the likely-blank intro) and sets it immediately. `502` if extraction
   fails.
+- **`GET /api/library/:id/thumbnail/timestamps`** — read-only; extracts nothing. Picks the
+  timestamps for a "choose from video" batch: `count` frames spread across the pick range, one
+  random point per equal bucket. Optional query params `count` (1–50), `low` and `high` (percent of
+  duration, `0 <= low < high <= 100`) override the `thumbnailFrameCount` /
+  `thumbnailFrameRangeLow` / `thumbnailFrameRangeHigh` settings for this call only; `exclude` is a
+  comma-separated list of timestamps to steer away from. `400` on an out-of-range value. The
+  frontend then fetches the frames one at a time via `/candidates?timestamps=` to drive its
+  progress bar.
+  ```json
+  { "timestamps": [12.4, 48.9, 77.1, 103.6] }
+  ```
 - **`GET /api/library/:id/thumbnail/candidates`** — no body, read-only. Extracts N frames (N = the
   `thumbnailFrameCount` setting: 2/4/6/8/12/24), spread across the same configured pick range, as
-  base64 JPEGs. A per-candidate failure is skipped, not fatal; `502` only if zero candidates could
-  be extracted.
+  base64 JPEGs. With `timestamps=` (comma-separated, at most 50) it extracts exactly those instead
+  of picking new ones. A per-candidate failure is skipped, not fatal; `502` only if zero candidates
+  could be extracted.
   ```json
   { "candidates": [ { "timestampSeconds": 34.2, "imageBase64": "/9j/4AAQ..." } ] }
   ```

@@ -1,44 +1,45 @@
-import { useLayoutEffect, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { Bookmark, RefreshCw } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useFetchLibraryThumbnailCandidates, useSetLibraryThumbnail } from "@/hooks/useLibrary"
+import { useSetLibraryThumbnail } from "@/hooks/useLibrary"
 import { useSaveThumbnailToGallery } from "@/hooks/useThumbnailGallery"
 import { useSettings } from "@/hooks/useSettings"
+import { fetchLibraryThumbnailCandidates, fetchLibraryThumbnailTimestamps } from "@/lib/api"
 import { formatDuration } from "@/lib/utils"
 import type { LibraryItem, ThumbnailCandidate } from "@/types/api"
+import type { ThumbnailPickOptions } from "./ThumbnailCustomRangeDialog"
 
 interface ThumbnailPickerDialogProps {
   item: LibraryItem
   open: boolean
   onOpenChange: (open: boolean) => void
+  // Per-run frame count / pick range ("Choose from Video (custom)…"). Absent
+  // means use the Settings values, which the backend resolves itself.
+  options?: ThumbnailPickOptions
 }
 
 // Literal class strings, not a "grid-cols-" + n template — Tailwind's
 // build-time class scanner only picks up whole strings it can find verbatim.
-const GRID_COLS: Record<number, string> = {
+const GRID_COLS_CLASS: Record<number, string> = {
   2: "grid-cols-2",
-  4: "grid-cols-2",
-  6: "grid-cols-3",
-  8: "grid-cols-4",
-  12: "grid-cols-4",
-  24: "grid-cols-4",
+  3: "grid-cols-3",
+  4: "grid-cols-4",
 }
 
-const GRID_COLS_COUNT: Record<number, number> = {
-  2: 2,
-  4: 2,
-  6: 3,
-  8: 4,
-  12: 4,
-  24: 4,
+// Column count for n frames: 2 up to 4 frames, 3 for 5-6, 4 beyond that.
+function gridColumns(n: number): number {
+  if (n <= 4) return 2
+  if (n <= 6) return 3
+  return 4
 }
 
-export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPickerDialogProps) {
-  const fetchCandidates = useFetchLibraryThumbnailCandidates()
+export function ThumbnailPickerDialog({ item, open, onOpenChange, options }: ThumbnailPickerDialogProps) {
   const setThumbnail = useSetLibraryThumbnail()
   const saveToGallery = useSaveThumbnailToGallery()
   const { data: settings } = useSettings()
@@ -58,32 +59,97 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
   // gallery (via the floating icon) never risks also changing the thumbnail
   // by mis-clicking the tile itself.
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  // Non-null exactly while a batch is being extracted; `done` counts frames
+  // attempted (including any that failed and were skipped).
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  // Bumped on every new load and when the dialog closes, so a superseded
+  // loop notices it's stale and stops (at most one in-flight request is
+  // wasted).
+  const runId = useRef(0)
+
+  const cancelLoad = () => {
+    runId.current++
+  }
+
+  const configuredCount =options?.count ?? settings?.thumbnailFrameCount ?? 4
+
+  // Picks the batch's timestamps (unless the caller already has them), then
+  // extracts the frames one request at a time so the progress bar reflects
+  // real work and tiles appear as they arrive. A frame that fails to extract
+  // is skipped, matching the old all-at-once endpoint; it only counts as an
+  // error if none came back. onLoaded gets the finished batch.
+  const loadBatch = async (
+    plan: { timestamps?: number[]; exclude?: number[] },
+    onLoaded: (candidates: ThumbnailCandidate[]) => void,
+  ) => {
+    const run = ++runId.current
+    const stale = () => run !== runId.current
+    setError(null)
+    setDisplayed([])
+    setSelectedIndex(null)
+    setProgress({ done: 0, total: plan.timestamps?.length ?? configuredCount })
+    try {
+      let timestamps = plan.timestamps
+      if (!timestamps) {
+        const picked = await fetchLibraryThumbnailTimestamps(item.id, {
+          count: options?.count,
+          low: options?.low,
+          high: options?.high,
+          exclude: plan.exclude,
+        })
+        if (stale()) return
+        timestamps = picked.timestamps
+        setProgress({ done: 0, total: timestamps.length })
+      }
+
+      const got: ThumbnailCandidate[] = []
+      let lastError = ""
+      for (let i = 0; i < timestamps.length; i++) {
+        try {
+          const { candidates } = await fetchLibraryThumbnailCandidates(item.id, { timestamps: [timestamps[i]] })
+          if (stale()) return
+          got.push(...candidates)
+          setDisplayed([...got])
+        } catch (err) {
+          if (stale()) return
+          lastError = (err as Error).message
+        }
+        setProgress({ done: i + 1, total: timestamps.length })
+      }
+      if (got.length === 0) {
+        throw new Error(lastError || "couldn't extract any frames — this file may not contain a video stream")
+      }
+      onLoaded(got)
+    } catch (err) {
+      if (stale()) return
+      const message = (err as Error).message
+      setError(message)
+      toast.error(`Failed to grab frames: ${message}`)
+    } finally {
+      if (!stale()) setProgress(null)
+    }
+  }
 
   // Layout effect, not a plain effect — resets state synchronously before
   // paint so a reopened dialog never flashes the previous session's stale
-  // frames for a frame before the skeleton takes over.
+  // frames for a frame before the progress state takes over.
   useLayoutEffect(() => {
     if (!open) return
     setBatches([])
-    setDisplayed([])
     setSelectedBatch(0)
-    setSelectedIndex(null)
-    fetchCandidates.mutate(
-      { id: item.id },
-      {
-        onSuccess: (data) => {
-          setBatches([data.candidates.map((c) => c.timestampSeconds)])
-          setDisplayed(data.candidates)
-          setSelectedBatch(0)
-        },
-      },
-    )
+    void loadBatch({}, (candidates) => {
+      setBatches([candidates.map((c) => c.timestampSeconds)])
+      setSelectedBatch(0)
+    })
+    return cancelLoad
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const frameCount = settings?.thumbnailFrameCount || 4
-  const gridColsClass = GRID_COLS[frameCount] || GRID_COLS[4]
-  const cols = GRID_COLS_COUNT[frameCount] || GRID_COLS_COUNT[4]
+  const isLoading = progress != null
+  const frameCount = isLoading ? progress.total : displayed.length || configuredCount
+  const cols = gridColumns(frameCount)
+  const gridColsClass = GRID_COLS_CLASS[cols]
   const rows = Math.ceil(frameCount / cols)
   // A large frame count (24) doesn't try to squeeze every row into the
   // dialog's max-h-[90vh] at once the way smaller counts do below — that's
@@ -112,33 +178,17 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
   const handleGetNewFrames = () => {
     const exclude = batches.flat()
     const batchIndex = batches.length
-    fetchCandidates.mutate(
-      { id: item.id, exclude },
-      {
-        onSuccess: (data) => {
-          setBatches((prev) => [...prev, data.candidates.map((c) => c.timestampSeconds)])
-          setDisplayed(data.candidates)
-          setSelectedBatch(batchIndex)
-          setSelectedIndex(null)
-        },
-      },
-    )
+    void loadBatch({ exclude }, (candidates) => {
+      setBatches((prev) => [...prev, candidates.map((c) => c.timestampSeconds)])
+      setSelectedBatch(batchIndex)
+    })
   }
 
   const handleRevisitBatch = (value: string) => {
     const index = Number(value)
     const timestamps = batches[index]
     if (!timestamps || index === selectedBatch) return
-    fetchCandidates.mutate(
-      { id: item.id, timestamps },
-      {
-        onSuccess: (data) => {
-          setDisplayed(data.candidates)
-          setSelectedBatch(index)
-          setSelectedIndex(null)
-        },
-      },
-    )
+    void loadBatch({ timestamps }, () => setSelectedBatch(index))
   }
 
   const handleSelectConfirm = () => {
@@ -150,11 +200,8 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
     )
   }
 
-  // batches.length === 0 (not just isPending) covers the gap between the
-  // layout-effect reset and the mutation's async resolution, since
-  // isPending's own transition to true isn't guaranteed to land in the same
-  // pre-paint tick as the state reset above.
-  const isLoading = !fetchCandidates.isError && (fetchCandidates.isPending || batches.length === 0)
+  const percent = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
+  const pendingTiles = progress ? Math.max(progress.total - progress.done, 0) : 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -162,14 +209,23 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
         <DialogHeader>
           <DialogTitle>Choose a thumbnail</DialogTitle>
           <DialogDescription>
-            {frameCount} frames pulled from across the video — pick one to use as the thumbnail, or save any frame
-            straight to the gallery.
+            {configuredCount} frames pulled from{" "}
+            {options ? `${options.low}%–${options.high}% of the video` : "across the video"} — pick one to use as the
+            thumbnail, or save any frame straight to the gallery.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center justify-end gap-2">
+          {progress && (
+            <div className="mr-auto flex min-w-0 flex-1 items-center gap-3">
+              <Progress value={percent} className="h-2" />
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                {progress.done} / {progress.total} ({percent}%)
+              </span>
+            </div>
+          )}
           {batches.length > 1 && (
-            <Select value={String(selectedBatch)} onValueChange={handleRevisitBatch} disabled={fetchCandidates.isPending}>
+            <Select value={String(selectedBatch)} onValueChange={handleRevisitBatch} disabled={isLoading}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
               </SelectTrigger>
@@ -182,23 +238,14 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
               </SelectContent>
             </Select>
           )}
-          <Button variant="outline" size="sm" onClick={handleGetNewFrames} disabled={fetchCandidates.isPending}>
-            <RefreshCw className={`h-4 w-4 ${fetchCandidates.isPending ? "animate-spin" : ""}`} />
-            Get {frameCount} new frames
+          <Button variant="outline" size="sm" onClick={handleGetNewFrames} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            Get {configuredCount} new frames
           </Button>
         </div>
 
-        {isLoading ? (
-          <div
-            className={`grid ${gridColsClass} gap-3 ${scrollable ? "max-h-[55vh] overflow-y-auto pr-1" : ""}`}
-            style={{ gridAutoRows: rowHeight }}
-          >
-            {Array.from({ length: frameCount }).map((_, i) => (
-              <Skeleton key={i} className="h-full w-full" />
-            ))}
-          </div>
-        ) : fetchCandidates.isError ? (
-          <p className="text-sm text-destructive">Failed to grab frames: {(fetchCandidates.error as Error).message}</p>
+        {error && !isLoading && displayed.length === 0 ? (
+          <p className="text-sm text-destructive">Failed to grab frames: {error}</p>
         ) : (
           <div
             className={`grid ${gridColsClass} gap-3 ${scrollable ? "max-h-[55vh] overflow-y-auto pr-1" : ""}`}
@@ -246,6 +293,9 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange }: ThumbnailPic
                   <TooltipContent>Save this frame to the gallery</TooltipContent>
                 </Tooltip>
               </button>
+            ))}
+            {Array.from({ length: pendingTiles }).map((_, i) => (
+              <Skeleton key={`pending-${i}`} className="h-full w-full" />
             ))}
           </div>
         )}

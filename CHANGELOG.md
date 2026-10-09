@@ -12,6 +12,15 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-09
+
+- **New: "Choose from Video (custom)…"** — Thumbnail submenu entry that first asks for a frame
+  count (1–50) and pick range for just this run (prefilled from Settings, not remembered), then
+  opens the usual frame picker. Backed by a new `GET /library/:id/thumbnail/timestamps` endpoint.
+- **Progress bar for "Choose from Video"** — frames are now extracted one at a time, so the picker
+  shows "n / total (%)" and each tile appears as soon as its frame is ready (also for "Get N new
+  frames" and revisiting a frame set), instead of waiting on one long request.
+
 ## 2026-08-28
 
 - **New: Desktop notifications** — Settings → Notifications → one toggle for browser/OS

@@ -20,6 +20,7 @@ import {
   Pencil,
   RefreshCw,
   Scissors,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
 } from "lucide-react"
@@ -66,6 +67,7 @@ import { EditLibraryItemDialog } from "./EditLibraryItemDialog"
 import { MoveLibraryItemDialog } from "./MoveLibraryItemDialog"
 import { DeleteLibraryItemDialog } from "./DeleteLibraryItemDialog"
 import { NfoContentDialog } from "./NfoContentDialog"
+import { ThumbnailCustomRangeDialog, type ThumbnailPickOptions } from "./ThumbnailCustomRangeDialog"
 import { ThumbnailPickerDialog } from "./ThumbnailPickerDialog"
 import { ThumbnailGalleryDialog } from "./ThumbnailGalleryDialog"
 import { FrameMatchDialog } from "./FrameMatchDialog"
@@ -86,6 +88,10 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const [redownloadThumbWarningOpen, setRedownloadThumbWarningOpen] = useState(false)
   const [quickGrabWarningOpen, setQuickGrabWarningOpen] = useState(false)
   const [thumbnailPickerOpen, setThumbnailPickerOpen] = useState(false)
+  // undefined = use the Settings frame count / pick range; set by the custom
+  // dialog for one run of the picker.
+  const [thumbnailPickOptions, setThumbnailPickOptions] = useState<ThumbnailPickOptions | undefined>()
+  const [thumbnailCustomRangeOpen, setThumbnailCustomRangeOpen] = useState(false)
   const [thumbnailGalleryOpen, setThumbnailGalleryOpen] = useState(false)
   const [nfoContentOpen, setNfoContentOpen] = useState(false)
   const [deleteNfoWarningOpen, setDeleteNfoWarningOpen] = useState(false)
@@ -234,8 +240,18 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
                 </DropdownMenuItem>
               )}
               {!isGhost && !isImage && !isAudio && (
-                <DropdownMenuItem onClick={() => setThumbnailPickerOpen(true)}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setThumbnailPickOptions(undefined)
+                    setThumbnailPickerOpen(true)
+                  }}
+                >
                   <Film /> Choose from Video…
+                </DropdownMenuItem>
+              )}
+              {!isGhost && !isImage && !isAudio && (
+                <DropdownMenuItem onClick={() => setThumbnailCustomRangeOpen(true)}>
+                  <SlidersHorizontal /> Choose from Video (custom)…
                 </DropdownMenuItem>
               )}
               {!isGhost && !isImage && !isAudio && (
@@ -288,7 +304,21 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
       <MoveLibraryItemDialog item={item} open={moveOpen} onOpenChange={setMoveOpen} />
       <TrimLibraryItemDialog item={item} open={trimOpen} onOpenChange={setTrimOpen} />
       <DeleteLibraryItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
-      <ThumbnailPickerDialog item={item} open={thumbnailPickerOpen} onOpenChange={setThumbnailPickerOpen} />
+      <ThumbnailCustomRangeDialog
+        open={thumbnailCustomRangeOpen}
+        onOpenChange={setThumbnailCustomRangeOpen}
+        onConfirm={(options) => {
+          setThumbnailPickOptions(options)
+          setThumbnailCustomRangeOpen(false)
+          setThumbnailPickerOpen(true)
+        }}
+      />
+      <ThumbnailPickerDialog
+        item={item}
+        open={thumbnailPickerOpen}
+        onOpenChange={setThumbnailPickerOpen}
+        options={thumbnailPickOptions}
+      />
       <ThumbnailGalleryDialog item={item} open={thumbnailGalleryOpen} onOpenChange={setThumbnailGalleryOpen} />
       <NfoContentDialog item={item} open={nfoContentOpen} onOpenChange={setNfoContentOpen} />
       {frameMatchMode && (
