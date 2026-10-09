@@ -140,10 +140,17 @@ deleting their files).
   - **Choose from Video…** — extracts several candidate frames spread across the video (2/4/6/8/12/24,
     configurable in Settings, along with which portion of the video — by percentage of duration —
     frames are pulled from) and lets you pick one. At higher frame counts the grid scrolls
-    independently of the rest of the dialog so each frame stays a real, viewable size.
+    independently of the rest of the dialog so each frame stays a real, viewable size. Frames are
+    extracted one at a time, with a progress bar ("n / total (%)") beside the toolbar and each
+    tile appearing as soon as its frame is ready; "Get N new frames" and revisiting an earlier
+    frame set show the same progress.
+  - **Choose from Video (custom)…** — same picker, but first asks for the frame count (1–50, number
+    input) and pick range (same from/to slider as Settings) for this run only. Both start from the
+    Settings values every time; nothing is remembered. "Get N new frames" in that session reuses the
+    custom count and range.
   - **Match from URL/Current Thumbnail…** — see [Frame Matching](#frame-matching).
   - **Save in Thumbnail Gallery** / **View Gallery…** — see Thumbnail gallery below.
-  - Quick Grab, Choose from Video…, and both Match actions need an actual video stream to pull
+  - Quick Grab, both Choose from Video… entries, and both Match actions need an actual video stream to pull
     frames from, so they're hidden (not just disabled) on an audio item — its thumbnail is just
     album art. Everything else in this submenu still works on one.
 - **NFO** submenu (when Generate NFO is enabled on the item) — generate/regenerate, view the raw

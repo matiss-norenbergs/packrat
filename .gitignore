@@ -29,3 +29,6 @@ Thumbs.db
 .claude/
 backend/run-dev.cmd
 docker/docker-compose.local.yml
+
+# Local-only agent notes (dev credentials)
+CLAUDE.local.md

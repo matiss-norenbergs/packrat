@@ -425,6 +425,22 @@ export function quickGrabLibraryThumbnail(id: number): Promise<LibraryItem> {
   return request<LibraryItem>(`/library/${id}/thumbnail/quick-grab`, { method: "POST" })
 }
 
+// Picks the timestamps for a "choose from video" batch without extracting any
+// frames, so the dialog can then fetch them one at a time and show progress.
+// count/low/high override the Settings values for this call only.
+export function fetchLibraryThumbnailTimestamps(
+  id: number,
+  params?: { count?: number; low?: number; high?: number; exclude?: number[] },
+): Promise<{ timestamps: number[] }> {
+  const search = new URLSearchParams()
+  if (params?.count != null) search.set("count", String(params.count))
+  if (params?.low != null) search.set("low", String(params.low))
+  if (params?.high != null) search.set("high", String(params.high))
+  if (params?.exclude?.length) search.set("exclude", params.exclude.join(","))
+  const qs = search.toString()
+  return request<{ timestamps: number[] }>(`/library/${id}/thumbnail/timestamps${qs ? `?${qs}` : ""}`)
+}
+
 export function fetchLibraryThumbnailCandidates(
   id: number,
   params?: { timestamps?: number[]; exclude?: number[] },

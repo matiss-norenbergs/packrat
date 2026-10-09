@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -233,6 +234,112 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 	}
 }
 
+// maxThumbnailCandidateFrames caps both the "count" a caller may request from
+// GET .../thumbnail/timestamps and how many explicit timestamps one
+// GET .../thumbnail/candidates call will extract.
+const maxThumbnailCandidateFrames = 50
+
+// intQueryParam reads an optional integer query param, returning fallback
+// when it's absent.
+func intQueryParam(c *gin.Context, name string, fallback int) (int, error) {
+	raw := c.Query(name)
+	if raw == "" {
+		return fallback, nil
+	}
+	return strconv.Atoi(raw)
+}
+
+// validateFramePick checks a per-call frame count and pick range (percent of
+// duration) against the same bounds the Settings page enforces.
+func validateFramePick(count, low, high int) error {
+	if count < 1 || count > maxThumbnailCandidateFrames {
+		return fmt.Errorf("count must be between 1 and %d", maxThumbnailCandidateFrames)
+	}
+	if low < 0 || high > 100 || low >= high {
+		return errors.New("range must satisfy 0 <= low < high <= 100")
+	}
+	return nil
+}
+
+// GetLibraryThumbnailTimestamps picks the timestamps for a "choose from
+// video" batch without extracting anything — the first half of the
+// client-driven flow: the frontend then fetches the frames one at a time via
+// GET .../thumbnail/candidates?timestamps=, so it can show real progress.
+// "count", "low" and "high" (percent of duration) override the matching
+// settings for this call only; "exclude" is the same comma-separated list of
+// already-seen timestamps the candidates endpoint takes.
+func GetLibraryThumbnailTimestamps(mediaRoot string, libraryRepo *repository.LibraryRepo, ffprobePath string, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+
+		item, err := libraryRepo.Get(ctx, id)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
+			return
+		}
+
+		count, err := ThumbnailFrameCount(ctx, settingsRepo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		rangeLow, err := ThumbnailFrameRangeLow(ctx, settingsRepo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		rangeHigh, err := ThumbnailFrameRangeHigh(ctx, settingsRepo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if count, err = intQueryParam(c, "count", count); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid count"})
+			return
+		}
+		if rangeLow, err = intQueryParam(c, "low", rangeLow); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid low"})
+			return
+		}
+		if rangeHigh, err = intQueryParam(c, "high", rangeHigh); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid high"})
+			return
+		}
+		if err := validateFramePick(count, rangeLow, rangeHigh); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var exclude []float64
+		if raw := c.Query("exclude"); raw != "" {
+			exclude, err = parseFloatList(raw)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid exclude: " + err.Error()})
+				return
+			}
+		}
+
+		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
+		duration := resolveDuration(ctx, item.Duration, mediaAbs, ffprobePath)
+		timestamps := pickFrameTimestamps(duration, float64(rangeLow), float64(rangeHigh), count, exclude)
+		c.JSON(http.StatusOK, gin.H{"timestamps": timestamps})
+	}
+}
+
 // GetLibraryThumbnailCandidates extracts candidate frames spread across the
 // video and returns them as base64 JPEGs — read-only, doesn't touch the DB
 // or the current thumbnail. The frontend shows them all and the user's pick
@@ -278,6 +385,10 @@ func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.Lib
 			timestamps, err = parseFloatList(raw)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timestamps: " + err.Error()})
+				return
+			}
+			if len(timestamps) > maxThumbnailCandidateFrames {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "too many timestamps (max " + strconv.Itoa(maxThumbnailCandidateFrames) + ")"})
 				return
 			}
 		} else {
