@@ -14,6 +14,10 @@ Maintenance notes:
 
 ## 2026-10-09
 
+- **New: "Save all to gallery" in the frame picker** — "Choose from Video…" and "Choose from Video
+  (custom)…" can now save every frame of the currently shown frame set to the thumbnail gallery in
+  one go (with a count confirmation), instead of bookmarking tiles one by one. Saving to or
+  removing from the gallery now also refreshes the library card's gallery image count immediately.
 - **Fix: tag suggestion list couldn't be scrolled** — in dialogs, the tag input's suggestion
   dropdown ignored the mouse wheel, and grabbing its scrollbar blurred the input and closed the list.
   Both now work, so long tag lists are usable.
