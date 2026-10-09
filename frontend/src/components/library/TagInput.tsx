@@ -96,6 +96,14 @@ export function TagInput({ value, onChange, suggestions = [] }: TagInputProps) {
             sideOffset={4}
             onOpenAutoFocus={(e) => e.preventDefault()}
             onCloseAutoFocus={(e) => e.preventDefault()}
+            // Grabbing the scrollbar (or any non-item area) would otherwise
+            // blur the input and close the list via the delayed onBlur
+            // above, so the list couldn't be scrolled by dragging.
+            onMouseDown={(e) => e.preventDefault()}
+            // Inside a Dialog, the dialog's scroll lock swallows wheel events
+            // on portaled content outside it; stopping propagation lets the
+            // list scroll natively.
+            onWheel={(e) => e.stopPropagation()}
           >
             {filteredSuggestions.map((s) => (
               <button

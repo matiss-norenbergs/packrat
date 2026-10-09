@@ -14,6 +14,9 @@ Maintenance notes:
 
 ## 2026-10-09
 
+- **Fix: tag suggestion list couldn't be scrolled** — in dialogs, the tag input's suggestion
+  dropdown ignored the mouse wheel, and grabbing its scrollbar blurred the input and closed the list.
+  Both now work, so long tag lists are usable.
 - **Thumbnail gallery: frame time, favorites, sort & filter** — gallery images saved from "Choose
   from Video…" or Frame Matching now store the video time (ms precision) they came from and show it
   on the tile/viewer. New heart toggle to favorite images, plus a filter (all / favorites / with
