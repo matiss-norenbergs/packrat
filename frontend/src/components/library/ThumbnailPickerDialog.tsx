@@ -1,6 +1,16 @@
 import { useLayoutEffect, useRef, useState } from "react"
-import { Bookmark, RefreshCw } from "lucide-react"
+import { Bookmark, BookmarkPlus, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
@@ -8,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useSetLibraryThumbnail } from "@/hooks/useLibrary"
-import { useSaveThumbnailToGallery } from "@/hooks/useThumbnailGallery"
+import { useSaveThumbnailToGallery, useSaveThumbnailsToGallery } from "@/hooks/useThumbnailGallery"
 import { useSettings } from "@/hooks/useSettings"
 import { fetchLibraryThumbnailCandidates, fetchLibraryThumbnailTimestamps } from "@/lib/api"
 import { formatDuration } from "@/lib/utils"
@@ -42,6 +52,8 @@ function gridColumns(n: number): number {
 export function ThumbnailPickerDialog({ item, open, onOpenChange, options }: ThumbnailPickerDialogProps) {
   const setThumbnail = useSetLibraryThumbnail()
   const saveToGallery = useSaveThumbnailToGallery()
+  const saveAllToGallery = useSaveThumbnailsToGallery()
+  const [confirmSaveAll, setConfirmSaveAll] = useState(false)
   const { data: settings } = useSettings()
 
   // Every timestamp ever returned this dialog session, grouped by the
@@ -200,6 +212,14 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange, options }: Thu
     )
   }
 
+  // Only the frames currently on screen (the selected frame set) are saved.
+  const handleSaveAll = () => {
+    saveAllToGallery.mutate({
+      id: item.id,
+      frames: displayed.map((c) => ({ imageBase64: c.imageBase64, timestampSeconds: c.timestampSeconds })),
+    })
+  }
+
   const percent = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
   const pendingTiles = progress ? Math.max(progress.total - progress.done, 0) : 0
 
@@ -238,6 +258,15 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange, options }: Thu
               </SelectContent>
             </Select>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setConfirmSaveAll(true)}
+            disabled={isLoading || displayed.length === 0 || saveAllToGallery.isPending}
+          >
+            <BookmarkPlus className="h-4 w-4" />
+            Save all to gallery
+          </Button>
           <Button variant="outline" size="sm" onClick={handleGetNewFrames} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
             Get {configuredCount} new frames
@@ -309,6 +338,24 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange, options }: Thu
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog open={confirmSaveAll} onOpenChange={setConfirmSaveAll}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Save {displayed.length} {displayed.length === 1 ? "frame" : "frames"} to the gallery?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Every frame currently shown is saved to this item's thumbnail gallery. Frames already saved are not
+              skipped, and the active thumbnail is not changed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSaveAll}>Save all</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }

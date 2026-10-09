@@ -194,7 +194,10 @@ without re-extracting or re-fetching anything.
 
 - **Save in Thumbnail Gallery** (Thumbnail submenu) saves a copy of the current thumbnail as-is;
   "Choose from Video…"'s frame picker and Frame Matching's review screen each have their own save
-  icon to stash a specific frame without making it the active thumbnail.
+  icon to stash a specific frame without making it the active thumbnail. The frame picker (also
+  used by "Choose from Video (custom)…") additionally has a **Save all to gallery** button that
+  saves every frame in the currently shown frame set after a confirmation (frames already saved are
+  not skipped; other frame sets are not included).
 - **View Gallery…** opens a grid of everything saved. Hover a tile for "Set as thumbnail" (applies
   it immediately) or "Remove from gallery"; click to open a fullscreen viewer with next/prev
   arrow-key navigation.
