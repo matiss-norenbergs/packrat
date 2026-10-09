@@ -467,10 +467,21 @@ export function setLibraryThumbnail(id: number, imageBase64: string): Promise<Li
 // gallery without touching its active thumbnail. Omit imageBase64 to save a
 // copy of the item's current active thumbnail; pass it to save exact bytes
 // already on hand instead (a picker candidate frame).
-export function saveThumbnailToGallery(id: number, imageBase64?: string): Promise<ThumbnailGalleryImage> {
+export function saveThumbnailToGallery(
+  id: number,
+  imageBase64?: string,
+  timestampSeconds?: number | null,
+): Promise<ThumbnailGalleryImage> {
   return request<ThumbnailGalleryImage>(`/library/${id}/thumbnail/gallery`, {
     method: "POST",
-    body: imageBase64 ? JSON.stringify({ imageBase64 }) : undefined,
+    body: imageBase64 ? JSON.stringify({ imageBase64, timestampSeconds: timestampSeconds ?? null }) : undefined,
+  })
+}
+
+export function setThumbnailGalleryFavorite(id: number, galleryId: number, isFavorite: boolean): Promise<ThumbnailGalleryImage> {
+  return request<ThumbnailGalleryImage>(`/library/${id}/thumbnail/gallery/${galleryId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ isFavorite }),
   })
 }
 

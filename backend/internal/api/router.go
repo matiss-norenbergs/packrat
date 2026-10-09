@@ -151,6 +151,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/:id/thumbnail/gallery", SaveLibraryThumbnailToGallery(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.ThumbnailGalleryRepo))
 		api.GET("/library/:id/thumbnail/gallery", ListLibraryThumbnailGallery(deps.LibraryRepo, deps.ThumbnailGalleryRepo))
 		api.POST("/library/:id/thumbnail/gallery/:galleryId/apply", ApplyLibraryThumbnailFromGallery(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.ThumbnailGalleryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
+		api.PATCH("/library/:id/thumbnail/gallery/:galleryId", SetLibraryThumbnailGalleryFavorite(deps.ThumbnailGalleryRepo))
 		api.DELETE("/library/:id/thumbnail/gallery/:galleryId", DeleteLibraryThumbnailGalleryImage(deps.ImagesRoot, deps.ThumbnailGalleryRepo))
 		api.POST("/library/:id/thumbnail/match", StartFrameMatch(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.FrameMatchJobs, deps.FrameMatchQueueRepo))
 		api.GET("/thumbnail-match/:jobId", GetFrameMatchStatus(deps.FrameMatchJobs))

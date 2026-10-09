@@ -114,7 +114,7 @@ func SaveLibraryThumbnailToGallery(mediaRoot, imagesRoot string, libraryRepo *re
 		}
 		rel := filepath.ToSlash(filepath.Join("thumbnail-gallery", strconv.FormatInt(id, 10), filename))
 
-		galleryID, err := galleryRepo.Create(ctx, id, rel, width, height)
+		galleryID, err := galleryRepo.Create(ctx, id, rel, width, height, req.TimestampSeconds)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -156,6 +156,49 @@ func ListLibraryThumbnailGallery(libraryRepo *repository.LibraryRepo, galleryRep
 			out[i] = toThumbnailGalleryImageResponse(img)
 		}
 		c.JSON(http.StatusOK, gin.H{"images": out})
+	}
+}
+
+// SetLibraryThumbnailGalleryFavorite toggles a gallery image's favorite flag.
+func SetLibraryThumbnailGalleryFavorite(galleryRepo *repository.ThumbnailGalleryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
+		}
+		galleryID, err := strconv.ParseInt(c.Param("galleryId"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gallery id"})
+			return
+		}
+		var req SetThumbnailGalleryFavoriteRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		img, err := galleryRepo.Get(ctx, galleryID)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "gallery image not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if img.LibraryItemID != id {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "gallery image does not belong to this item"})
+			return
+		}
+
+		if err := galleryRepo.SetFavorite(ctx, galleryID, req.IsFavorite); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		img.IsFavorite = req.IsFavorite
+		c.JSON(http.StatusOK, toThumbnailGalleryImageResponse(img))
 	}
 }
 

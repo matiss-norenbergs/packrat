@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { applyThumbnailFromGallery, deleteThumbnailGalleryImage, fetchThumbnailGallery, saveThumbnailToGallery, urlToBase64 } from "@/lib/api"
+import {
+  applyThumbnailFromGallery,
+  deleteThumbnailGalleryImage,
+  fetchThumbnailGallery,
+  saveThumbnailToGallery,
+  setThumbnailGalleryFavorite,
+  urlToBase64,
+} from "@/lib/api"
 import { libraryQueryKey } from "./useLibrary"
 
 export const thumbnailGalleryQueryKey = (libraryItemId: number) => ["thumbnail-gallery", libraryItemId] as const
@@ -18,7 +25,8 @@ export function useThumbnailGallery(libraryItemId: number, enabled = true) {
 export function useSaveThumbnailToGallery() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, imageBase64 }: { id: number; imageBase64?: string }) => saveThumbnailToGallery(id, imageBase64),
+    mutationFn: ({ id, imageBase64, timestampSeconds }: { id: number; imageBase64?: string; timestampSeconds?: number | null }) =>
+      saveThumbnailToGallery(id, imageBase64, timestampSeconds),
     onSuccess: (_data, { id }) => {
       toast.success("Saved to gallery")
       queryClient.invalidateQueries({ queryKey: thumbnailGalleryQueryKey(id) })
@@ -34,12 +42,23 @@ export function useSaveThumbnailToGallery() {
 export function useSaveThumbnailToGalleryFromUrl() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, url }: { id: number; url: string }) => saveThumbnailToGallery(id, await urlToBase64(url)),
+    mutationFn: async ({ id, url, timestampSeconds }: { id: number; url: string; timestampSeconds?: number | null }) =>
+      saveThumbnailToGallery(id, await urlToBase64(url), timestampSeconds),
     onSuccess: (_data, { id }) => {
       toast.success("Saved to gallery")
       queryClient.invalidateQueries({ queryKey: thumbnailGalleryQueryKey(id) })
     },
     onError: (err: Error) => toast.error(`Failed to save to gallery: ${err.message}`),
+  })
+}
+
+export function useSetThumbnailGalleryFavorite() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, galleryId, isFavorite }: { id: number; galleryId: number; isFavorite: boolean }) =>
+      setThumbnailGalleryFavorite(id, galleryId, isFavorite),
+    onSuccess: (_data, { id }) => queryClient.invalidateQueries({ queryKey: thumbnailGalleryQueryKey(id) }),
+    onError: (err: Error) => toast.error(`Failed to update favorite: ${err.message}`),
   })
 }
 

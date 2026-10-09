@@ -198,6 +198,15 @@ without re-extracting or re-fetching anything.
 - **View Gallery…** opens a grid of everything saved. Hover a tile for "Set as thumbnail" (applies
   it immediately) or "Remove from gallery"; click to open a fullscreen viewer with next/prev
   arrow-key navigation.
+- Frames saved from "Choose from Video…" or a Frame Matching result remember the video time they
+  came from, shown on the tile (precise to the millisecond in the tile tooltip and the viewer).
+  Copies of an existing thumbnail, enhancement compare images, and images saved before this
+  existed have no time.
+- The heart on a tile (or in the viewer) marks a favorite. The dialog header has a filter (All /
+  Favorites only / With frame time) and a sort (Date saved / Frame time / Favorites) with an
+  ascending/descending toggle (defaults: newest first, earliest frame first, favorites first);
+  images without a frame time always sort last under Frame time. The viewer's next/prev
+  follows the displayed order.
 - Removing an image from the gallery never affects the item's current thumbnail, and vice versa.
 
 ## Collections

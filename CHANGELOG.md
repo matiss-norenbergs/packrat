@@ -14,6 +14,11 @@ Maintenance notes:
 
 ## 2026-10-09
 
+- **Thumbnail gallery: frame time, favorites, sort & filter** — gallery images saved from "Choose
+  from Video…" or Frame Matching now store the video time (ms precision) they came from and show it
+  on the tile/viewer. New heart toggle to favorite images, plus a filter (all / favorites / with
+  frame time) and sort (date saved, frame time, favorites, with an ascending/descending toggle) in the gallery dialog.
+  Migration `000045`; new `PATCH /library/:id/thumbnail/gallery/:galleryId`.
 - **New: "Choose from Video (custom)…"** — Thumbnail submenu entry that first asks for a frame
   count (1–50) and pick range for just this run (prefilled from Settings, not remembered), then
   opens the usual frame picker. Backed by a new `GET /library/:id/thumbnail/timestamps` endpoint.

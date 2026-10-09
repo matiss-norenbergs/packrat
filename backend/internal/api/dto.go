@@ -520,28 +520,41 @@ type SetLibraryThumbnailRequest struct {
 // "save a copy of the item's current active thumbnail"; a non-empty
 // ImageBase64 saves those exact bytes instead, the "Choose from Video"
 // dialog's per-frame save icon.
+//
+// TimestampSeconds, when set, records which point in the video the frame
+// came from (picker candidates, frame-match results).
 type SaveThumbnailToGalleryRequest struct {
-	ImageBase64 string `json:"imageBase64"`
+	ImageBase64      string   `json:"imageBase64"`
+	TimestampSeconds *float64 `json:"timestampSeconds"`
+}
+
+// SetThumbnailGalleryFavoriteRequest is PATCH .../thumbnail/gallery/:galleryId's body.
+type SetThumbnailGalleryFavoriteRequest struct {
+	IsFavorite bool `json:"isFavorite"`
 }
 
 // ThumbnailGalleryImageResponse is one saved gallery image. ImagePath is
 // relative to ImagesRoot — resolve via the frontend's imageUrl() helper,
 // same convention as FrameMatchQueueItemResponse's FoundFramePath.
 type ThumbnailGalleryImageResponse struct {
-	ID        int64  `json:"id"`
-	ImagePath string `json:"imagePath"`
-	Width     *int   `json:"width"`
-	Height    *int   `json:"height"`
-	CreatedAt string `json:"createdAt"`
+	ID               int64    `json:"id"`
+	ImagePath        string   `json:"imagePath"`
+	Width            *int     `json:"width"`
+	Height           *int     `json:"height"`
+	TimestampSeconds *float64 `json:"timestampSeconds"`
+	IsFavorite       bool     `json:"isFavorite"`
+	CreatedAt        string   `json:"createdAt"`
 }
 
 func toThumbnailGalleryImageResponse(img models.ThumbnailGalleryImage) ThumbnailGalleryImageResponse {
 	return ThumbnailGalleryImageResponse{
-		ID:        img.ID,
-		ImagePath: img.ImagePath,
-		Width:     img.Width,
-		Height:    img.Height,
-		CreatedAt: img.CreatedAt.Format(time.RFC3339),
+		ID:               img.ID,
+		ImagePath:        img.ImagePath,
+		Width:            img.Width,
+		Height:           img.Height,
+		TimestampSeconds: img.TimestampSeconds,
+		IsFavorite:       img.IsFavorite,
+		CreatedAt:        img.CreatedAt.Format(time.RFC3339),
 	}
 }
 
