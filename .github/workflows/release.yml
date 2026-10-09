@@ -63,6 +63,16 @@ jobs:
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
+      # Authenticated Docker Hub pulls: setup-qemu-action pulls
+      # tonistiigi/binfmt and the Dockerfile pulls its base images from
+      # Docker Hub, and anonymous pulls from shared runner IPs hit the
+      # rate limit. Needs the DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets
+      # (a read-only access token is enough).
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
@@ -118,6 +128,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # setup-buildx-action pulls moby/buildkit from Docker Hub.
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - uses: docker/setup-buildx-action@v3
 
