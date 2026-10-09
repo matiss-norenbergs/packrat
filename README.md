@@ -68,6 +68,9 @@ cd docker
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
+Anything machine-specific (e.g. joining an external Docker network) goes in a gitignored
+`docker/docker-compose.local.yml`, layered on with an extra `-f docker-compose.local.yml`.
+
 Point the frontend dev server at it by setting `BACKEND_PORT=51200` in `frontend/.env.local` (see
 `frontend/vite.config.ts`) instead of running the backend natively, then `npm run dev` as usual.
 Since the image bakes in a full `npm run build` of the frontend too, this container is also a

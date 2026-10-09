@@ -24,3 +24,8 @@ docker/data-dev/
 Thumbs.db
 .vscode/
 .idea/
+
+# Machine-specific dev tooling / overrides (see CLAUDE.md)
+.claude/
+backend/run-dev.cmd
+docker/docker-compose.local.yml
