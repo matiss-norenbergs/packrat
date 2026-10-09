@@ -18,11 +18,11 @@ func NewThumbnailGalleryRepo(db *sql.DB) *ThumbnailGalleryRepo {
 }
 
 // Create records a saved gallery image and returns its new id.
-func (r *ThumbnailGalleryRepo) Create(ctx context.Context, libraryItemID int64, imagePath string, width, height *int) (int64, error) {
+func (r *ThumbnailGalleryRepo) Create(ctx context.Context, libraryItemID int64, imagePath string, width, height *int, timestampSeconds *float64) (int64, error) {
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO thumbnail_gallery (library_item_id, image_path, width, height)
-		VALUES (?, ?, ?, ?)`,
-		libraryItemID, imagePath, width, height,
+		INSERT INTO thumbnail_gallery (library_item_id, image_path, width, height, timestamp_seconds)
+		VALUES (?, ?, ?, ?, ?)`,
+		libraryItemID, imagePath, width, height, timestampSeconds,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting thumbnail gallery image for item %d: %w", libraryItemID, err)
@@ -33,7 +33,7 @@ func (r *ThumbnailGalleryRepo) Create(ctx context.Context, libraryItemID int64, 
 // ListByLibraryItemID returns an item's saved gallery images, newest first.
 func (r *ThumbnailGalleryRepo) ListByLibraryItemID(ctx context.Context, libraryItemID int64) ([]models.ThumbnailGalleryImage, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, library_item_id, image_path, width, height, created_at
+		SELECT id, library_item_id, image_path, width, height, timestamp_seconds, is_favorite, created_at
 		FROM thumbnail_gallery WHERE library_item_id = ? ORDER BY id DESC`, libraryItemID,
 	)
 	if err != nil {
@@ -55,7 +55,7 @@ func (r *ThumbnailGalleryRepo) ListByLibraryItemID(ctx context.Context, libraryI
 // Get returns one gallery image by id, or ErrNotFound.
 func (r *ThumbnailGalleryRepo) Get(ctx context.Context, id int64) (models.ThumbnailGalleryImage, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, library_item_id, image_path, width, height, created_at
+		SELECT id, library_item_id, image_path, width, height, timestamp_seconds, is_favorite, created_at
 		FROM thumbnail_gallery WHERE id = ?`, id,
 	)
 	img, err := scanThumbnailGalleryRow(row)
@@ -66,6 +66,22 @@ func (r *ThumbnailGalleryRepo) Get(ctx context.Context, id int64) (models.Thumbn
 		return models.ThumbnailGalleryImage{}, fmt.Errorf("loading thumbnail gallery image %d: %w", id, err)
 	}
 	return img, nil
+}
+
+// SetFavorite flips one gallery image's favorite flag, or ErrNotFound.
+func (r *ThumbnailGalleryRepo) SetFavorite(ctx context.Context, id int64, favorite bool) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE thumbnail_gallery SET is_favorite = ? WHERE id = ?`, favorite, id)
+	if err != nil {
+		return fmt.Errorf("updating thumbnail gallery image %d favorite: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // CountByLibraryItemID returns how many gallery images one item has —
@@ -141,8 +157,10 @@ func scanThumbnailGalleryRow(s rowScanner) (models.ThumbnailGalleryImage, error)
 	var img models.ThumbnailGalleryImage
 	var createdAt string
 	var width, height sql.NullInt64
+	var timestamp sql.NullFloat64
+	var favorite int
 
-	if err := s.Scan(&img.ID, &img.LibraryItemID, &img.ImagePath, &width, &height, &createdAt); err != nil {
+	if err := s.Scan(&img.ID, &img.LibraryItemID, &img.ImagePath, &width, &height, &timestamp, &favorite, &createdAt); err != nil {
 		return models.ThumbnailGalleryImage{}, err
 	}
 
@@ -154,6 +172,12 @@ func scanThumbnailGalleryRow(s rowScanner) (models.ThumbnailGalleryImage, error)
 		h := int(height.Int64)
 		img.Height = &h
 	}
+
+	if timestamp.Valid {
+		ts := timestamp.Float64
+		img.TimestampSeconds = &ts
+	}
+	img.IsFavorite = favorite != 0
 
 	var err error
 	img.CreatedAt, err = parseSQLiteTime(createdAt)

@@ -277,13 +277,13 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange, options }: Thu
                       aria-label="Save this frame to the gallery"
                       onClick={(e) => {
                         e.stopPropagation()
-                        saveToGallery.mutate({ id: item.id, imageBase64: candidate.imageBase64 })
+                        saveToGallery.mutate({ id: item.id, imageBase64: candidate.imageBase64, timestampSeconds: candidate.timestampSeconds })
                       }}
                       onKeyDown={(e) => {
                         if (e.key !== "Enter" && e.key !== " ") return
                         e.stopPropagation()
                         e.preventDefault()
-                        saveToGallery.mutate({ id: item.id, imageBase64: candidate.imageBase64 })
+                        saveToGallery.mutate({ id: item.id, imageBase64: candidate.imageBase64, timestampSeconds: candidate.timestampSeconds })
                       }}
                       className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1.5 text-white opacity-0 transition hover:bg-black/80 group-hover:opacity-100"
                     >

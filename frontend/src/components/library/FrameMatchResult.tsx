@@ -80,7 +80,7 @@ export function FrameMatchResult({ libraryItemId, referenceUrl, foundUrl, timest
                   type="button"
                   aria-label="Save to gallery"
                   disabled={saveToGallery.isPending}
-                  onClick={() => saveToGallery.mutate({ id: libraryItemId, url: foundUrl })}
+                  onClick={() => saveToGallery.mutate({ id: libraryItemId, url: foundUrl, timestampSeconds })}
                   className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100 disabled:opacity-50"
                 >
                   <Bookmark className="h-3.5 w-3.5" />

@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Dialog as DialogPrimitive } from "radix-ui"
-import { CheckCircle2, Trash2, XIcon } from "lucide-react"
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCircle2, Heart, Trash2, XIcon } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,11 +12,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ThumbnailDimensionsValue } from "@/components/ThumbnailDimensionsValue"
-import { useApplyThumbnailFromGallery, useDeleteThumbnailGalleryImage, useThumbnailGallery } from "@/hooks/useThumbnailGallery"
+import {
+  useApplyThumbnailFromGallery,
+  useDeleteThumbnailGalleryImage,
+  useSetThumbnailGalleryFavorite,
+  useThumbnailGallery,
+} from "@/hooks/useThumbnailGallery"
 import { imageUrl } from "@/lib/api"
+import { applyGalleryView, defaultSortDirection, type GalleryFilter, type GallerySort, type GallerySortDirection } from "@/lib/thumbnailGalleryView"
+import { cn, formatDuration, formatPreciseTime } from "@/lib/utils"
 import type { LibraryItem } from "@/types/api"
 import { ThumbnailGalleryViewerDialog } from "./ThumbnailGalleryViewerDialog"
 
@@ -30,10 +38,17 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
   const { data, isLoading } = useThumbnailGallery(item.id, open)
   const applyThumbnail = useApplyThumbnailFromGallery()
   const deleteImage = useDeleteThumbnailGalleryImage()
+  const setFavorite = useSetThumbnailGalleryFavorite()
+  const [sort, setSort] = useState<GallerySort>("saved")
+  const [direction, setDirection] = useState<GallerySortDirection>(defaultSortDirection.saved)
+  const [filter, setFilter] = useState<GalleryFilter>("all")
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
 
-  const images = data?.images ?? []
+  const allImages = data?.images ?? []
+  // The viewer indexes into the same displayed list as the grid, so its
+  // next/prev follows whatever sort/filter is active.
+  const images = useMemo(() => applyGalleryView(data?.images ?? [], sort, direction, filter), [data, sort, direction, filter])
 
   return (
     <>
@@ -59,6 +74,47 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
                   Images saved for this item — click one for a closer look, set it as the thumbnail, or remove it.
                 </DialogPrimitive.Description>
               </div>
+              <div className="ml-auto flex items-center gap-2">
+                <Select value={filter} onValueChange={(v) => setFilter(v as GalleryFilter)}>
+                  <SelectTrigger className="w-44" aria-label="Filter gallery">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All images</SelectItem>
+                    <SelectItem value="favorites">Favorites only</SelectItem>
+                    <SelectItem value="with-time">With frame time</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={sort}
+                  onValueChange={(v) => {
+                    setSort(v as GallerySort)
+                    setDirection(defaultSortDirection[v as GallerySort])
+                  }}
+                >
+                  <SelectTrigger className="w-44" aria-label="Sort gallery">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="saved">Date saved</SelectItem>
+                    <SelectItem value="frame-time">Frame time</SelectItem>
+                    <SelectItem value="favorites">Favorites</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label={direction === "asc" ? "Ascending" : "Descending"}
+                      onClick={() => setDirection((d) => (d === "asc" ? "desc" : "asc"))}
+                    >
+                      {direction === "asc" ? <ArrowUpNarrowWide /> : <ArrowDownNarrowWide />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{direction === "asc" ? "Ascending" : "Descending"} — click to reverse</TooltipContent>
+                </Tooltip>
+              </div>
               <DialogPrimitive.Close asChild>
                 <Button variant="ghost" size="icon-sm">
                   <XIcon />
@@ -74,10 +130,12 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
                     <Skeleton key={i} className="aspect-video w-full" />
                   ))}
                 </div>
-              ) : images.length === 0 ? (
+              ) : allImages.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No images saved yet — use "Save in Thumbnail Gallery" or the save icon on a frame in "Choose from Video…".
                 </p>
+              ) : images.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No images match this filter.</p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
                   {images.map((img, i) => (
@@ -108,6 +166,22 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
                           <TooltipTrigger asChild>
                             <button
                               type="button"
+                              aria-label={img.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                              onClick={() => setFavorite.mutate({ id: item.id, galleryId: img.id, isFavorite: !img.isFavorite })}
+                              className={cn(
+                                "absolute bottom-1.5 right-1.5 rounded-full bg-black/70 p-1.5 text-white transition hover:bg-black/90",
+                                !img.isFavorite && "opacity-0 group-hover:opacity-100",
+                              )}
+                            >
+                              <Heart className={cn("h-3.5 w-3.5", img.isFavorite && "fill-current")} />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>{img.isFavorite ? "Remove from favorites" : "Add to favorites"}</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
                               aria-label="Remove from gallery"
                               onClick={() => setConfirmDeleteId(img.id)}
                               className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100"
@@ -118,7 +192,12 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
                           <TooltipContent>Remove from gallery</TooltipContent>
                         </Tooltip>
                       </div>
-                      <ThumbnailDimensionsValue width={img.width} height={img.height} className="text-xs text-muted-foreground" />
+                      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <ThumbnailDimensionsValue width={img.width} height={img.height} className="text-xs text-muted-foreground" />
+                        {img.timestampSeconds != null && (
+                          <span title={`Frame at ${formatPreciseTime(img.timestampSeconds)}`}>{formatDuration(img.timestampSeconds)}</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -136,6 +215,7 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
         itemTitle={item.title}
         isApplying={applyThumbnail.isPending}
         onSetAsThumbnail={(galleryId) => applyThumbnail.mutate({ id: item.id, galleryId })}
+        onToggleFavorite={(galleryId, isFavorite) => setFavorite.mutate({ id: item.id, galleryId, isFavorite })}
         onDelete={(galleryId) => setConfirmDeleteId(galleryId)}
       />
 

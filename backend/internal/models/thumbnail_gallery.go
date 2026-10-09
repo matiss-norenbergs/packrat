@@ -14,5 +14,10 @@ type ThumbnailGalleryImage struct {
 	ImagePath string
 	Width     *int
 	Height    *int
-	CreatedAt time.Time
+	// TimestampSeconds is the video position the frame was taken from, when
+	// known (picker / frame-match saves); nil for older rows and for copies
+	// of an existing thumbnail.
+	TimestampSeconds *float64
+	IsFavorite       bool
+	CreatedAt        time.Time
 }

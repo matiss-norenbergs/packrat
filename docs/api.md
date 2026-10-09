@@ -271,6 +271,7 @@ automatic retention sweep. `200 {"deleted": <n>}`.
 | POST | `/api/library/:id/thumbnail/gallery` | Save an image to the item's thumbnail gallery |
 | GET | `/api/library/:id/thumbnail/gallery` | List the item's saved gallery images |
 | POST | `/api/library/:id/thumbnail/gallery/:galleryId/apply` | Apply a saved gallery image as the active thumbnail |
+| PATCH | `/api/library/:id/thumbnail/gallery/:galleryId` | Favorite/unfavorite a saved gallery image |
 | DELETE | `/api/library/:id/thumbnail/gallery/:galleryId` | Remove a saved gallery image |
 | POST | `/api/library/:id/thumbnail/match` | Start an ad-hoc frame-match job for this item |
 | GET | `/api/thumbnail-match/:jobId` | Poll an ad-hoc frame-match job |
@@ -593,25 +594,31 @@ re-extracting/re-fetching. Cascade-deleted with the library item.
 
 - **`POST /api/library/:id/thumbnail/gallery`** — body optional:
   ```json
-  { "imageBase64": "/9j/4AAQ..." }
+  { "imageBase64": "/9j/4AAQ...", "timestampSeconds": 83.417 }
   ```
   Empty/omitted body saves a copy of the item's *current* thumbnail as-is; a non-empty
   `imageBase64` saves those exact bytes instead (e.g. a specific frame from "Choose from Video," or
-  a Frame Matching result). `400` item has neither a current thumbnail nor a supplied image.
-  Response `201`:
+  a Frame Matching result). Optional `timestampSeconds` records the video position the frame came
+  from (millisecond-precise float); omit/`null` when unknown. `400` item has neither a current
+  thumbnail nor a supplied image. Response `201`:
   ```json
-  { "id": 12, "imagePath": "thumbnail-gallery/118/6c1f...-4a2e.jpg", "width": 1920, "height": 1080, "createdAt": "2026-07-19T10:00:00Z" }
+  { "id": 12, "imagePath": "thumbnail-gallery/118/6c1f...-4a2e.jpg", "width": 1920, "height": 1080, "timestampSeconds": 83.417, "isFavorite": false, "createdAt": "2026-07-19T10:00:00Z" }
   ```
 - **`GET /api/library/:id/thumbnail/gallery`** — no params.
   ```json
-  { "images": [ { "id": 12, "imagePath": "thumbnail-gallery/118/6c1f...-4a2e.jpg", "width": 1920, "height": 1080, "createdAt": "..." } ] }
+  { "images": [ { "id": 12, "imagePath": "thumbnail-gallery/118/6c1f...-4a2e.jpg", "width": 1920, "height": 1080, "timestampSeconds": 83.417, "isFavorite": false, "createdAt": "..." } ] }
   ```
+  Newest first. `timestampSeconds` is `null` for rows saved before the field existed and for saves
+  that carry no source time (a copy of the current thumbnail, an enhancement compare image).
+  Sorting/filtering by frame time or favorite is done client-side.
   `imagePath` is `ImagesRoot`-relative, served under `/local-images/*` — distinct from `thumbnail`,
   which is `MediaRoot`-relative.
 - **`POST /api/library/:id/thumbnail/gallery/:galleryId/apply`** — no body. Makes a saved gallery
   image the item's active thumbnail (same finish as `POST .../thumbnail`: regenerates derivatives,
   clears any stale AI-enhancement backup). `400` item has no media file, or `galleryId` belongs to a
   different item; `404` unknown gallery id/item. `200` with the full updated library item.
+- **`PATCH /api/library/:id/thumbnail/gallery/:galleryId`** — body `{ "isFavorite": true }`.
+  `400` belongs to a different item, `404` unknown id, `200` with the updated gallery image.
 - **`DELETE /api/library/:id/thumbnail/gallery/:galleryId`** — removes the saved image; doesn't
   touch the active thumbnail. `400` belongs to a different item, `404` unknown id, `204` on
   success.

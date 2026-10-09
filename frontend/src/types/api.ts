@@ -476,6 +476,10 @@ export interface ThumbnailGalleryImage {
   imagePath: string
   width: number | null
   height: number | null
+  // Video position the frame was taken from; null for older rows and for
+  // copies of an existing thumbnail.
+  timestampSeconds: number | null
+  isFavorite: boolean
   createdAt: string
 }
 

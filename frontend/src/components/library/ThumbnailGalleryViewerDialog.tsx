@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
 import { Dialog as DialogPrimitive } from "radix-ui"
-import { CheckCircle2, ChevronLeftIcon, ChevronRightIcon, Trash2, XIcon } from "lucide-react"
+import { CheckCircle2, ChevronLeftIcon, ChevronRightIcon, Heart, Trash2, XIcon } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { imageUrl } from "@/lib/api"
+import { cn, formatPreciseTime } from "@/lib/utils"
 import type { ThumbnailGalleryImage } from "@/types/api"
 
 interface ThumbnailGalleryViewerDialogProps {
@@ -13,6 +14,7 @@ interface ThumbnailGalleryViewerDialogProps {
   itemTitle: string
   onSetAsThumbnail: (galleryId: number) => void
   onDelete: (galleryId: number) => void
+  onToggleFavorite: (galleryId: number, isFavorite: boolean) => void
   isApplying: boolean
 }
 
@@ -29,6 +31,7 @@ export function ThumbnailGalleryViewerDialog({
   itemTitle,
   onSetAsThumbnail,
   onDelete,
+  onToggleFavorite,
   isApplying,
 }: ThumbnailGalleryViewerDialogProps) {
   const [index, setIndex] = useState(initialIndex)
@@ -140,6 +143,7 @@ export function ThumbnailGalleryViewerDialog({
             <span className="text-xs text-white/70">
               {images.length > 1 ? `${index + 1} / ${images.length}` : null}
               {current.width && current.height ? ` — ${current.width}×${current.height}` : null}
+              {current.timestampSeconds != null ? ` — frame at ${formatPreciseTime(current.timestampSeconds)}` : null}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -151,6 +155,19 @@ export function ThumbnailGalleryViewerDialog({
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Set as thumbnail
               </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={current.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    onClick={() => onToggleFavorite(current.id, !current.isFavorite)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70"
+                  >
+                    <Heart className={cn("h-3.5 w-3.5", current.isFavorite && "fill-current")} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{current.isFavorite ? "Remove from favorites" : "Add to favorites"}</TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
