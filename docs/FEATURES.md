@@ -268,7 +268,10 @@ selectable from the New Download dialog so you don't have to re-pick them every 
 automatic fallback (the most-recently-downloaded item's thumbnail in that collection's subtree) on
 Browse/folder tiles. Choose from an image file already sitting in the collection's own folder on
 disk, or upload one directly. Packrat generates its own resized copies rather than serving your
-original file — removing the cover reverts the tile to the automatic fallback.
+original file — removing the cover reverts the tile to the automatic fallback. The picker's candidate
+tiles are served as small resized WebPs (`GET /api/image`, `srcset` 320/480/720 px) rather than the
+raw files, so a folder of large images no longer loads at full size just to show thumbnails; the
+original is the fallback if a resize fails.
 
 ## Tags
 

@@ -2,7 +2,14 @@ import { useRef } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { useCollectionCoverCandidates, useSetCollectionCover } from "@/hooks/useCollections"
-import { mediaFileUrl } from "@/lib/api"
+import { ResizedImage } from "@/components/ResizedImage"
+import type { ResizeWidth } from "@/lib/api"
+
+// Candidate widths for a picker tile's srcset; sizes mirrors the dialog layout:
+// p-4 padding, gap-3, 95vw wide from sm (640px) up with 6 columns, otherwise
+// the default viewport-minus-2rem width with 4 columns.
+const TILE_WIDTHS: readonly ResizeWidth[] = [320, 480, 720]
+const TILE_SIZES = "(min-width: 640px) calc((95vw - 92px) / 6), calc((100vw - 100px) / 4)"
 
 interface CollectionCoverDialogProps {
   collectionId: number
@@ -66,7 +73,16 @@ export function CollectionCoverDialog({ collectionId, open, onOpenChange }: Coll
                   onClick={() => handlePickCandidate(c.relPath)}
                   className="aspect-square overflow-hidden rounded-md border transition hover:ring-2 hover:ring-primary disabled:opacity-50"
                 >
-                  <img src={mediaFileUrl(c.relPath)} alt="" className="h-full w-full object-cover" />
+                  <ResizedImage
+                    root="media"
+                    path={c.relPath}
+                    widths={TILE_WIDTHS}
+                    sizes={TILE_SIZES}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover"
+                  />
                 </button>
               ))}
             </div>

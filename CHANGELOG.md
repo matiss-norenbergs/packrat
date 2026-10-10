@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-10
+- **Collection cover picker loads resized tiles** — the "Pick cover art" dialog showed every image
+  in the collection's folder at full size (a 60-image test folder was 120 MB). Tiles now come from
+  `GET /api/image` at 320/480/720 px (`srcset`/`sizes` matched to the dialog grid), with the original
+  as fallback; a new shared `ResizedImage` component carries the fallback behaviour.
 
 - **Browse hero preloads the next slide** — while a slide is showing, the following slide's resized
   image is fetched into the browser cache (hidden `<img>`, same `srcset`/`sizes`), so rotation
