@@ -1,8 +1,9 @@
 # Live image resizing — plan
 
-**Status: parts 1 and 2 implemented** (backend endpoint, cache, limits, eviction, tests, the Browse
-hero banner, and the thumbnail gallery grid). The rest of this document is the original plan; the
-gallery's measurements and decisions are recorded under "Part 2 results".
+**Status: parts 1, 2 and 3 implemented** (backend endpoint, cache, limits, eviction, tests, the
+Browse hero banner, the thumbnail gallery grid, and the collection cover picker). The rest of this
+document is the original plan; measurements and decisions are recorded under "Part 2 results" and
+"Part 3 results".
 
 ## Goal
 
@@ -340,6 +341,44 @@ Each step is independently shippable and revertable; step 1 alone changes no beh
 
 None. All design questions are answered. Small implementation details (exact `sizes` value, helper
 naming) are left to implementation time. Eviction age is decided: 7 days.
+
+## Part 3 results (collection cover picker)
+
+**Implemented (frontend only):** the "Pick cover art" dialog's candidate tiles
+(`CollectionCoverDialog.tsx`) use a new shared `ResizedImage` component (`components/ResizedImage.tsx`:
+`/api/image` srcset with the original as `src`, srcset dropped on error). Widths 320/480/720; `sizes`
+mirrors the dialog layout (`p-4`, `gap-3`, 95vw wide with 6 columns from `sm`, else 4 columns).
+Tiles are `loading="lazy"` / `decoding="async"`. No backend change, no new parameters.
+
+**Why this surface:** its candidates are every image found under the collection's folder
+(`importer.ScanImages`, full depth) — arbitrary user files with no tiers and unbounded size, unlike
+the library thumbnails, which already have tiers (measured: tiers beat live resizing there, see
+"Library comparison" below). The artist image picker is *not* the same case: its candidates are the
+artist's own library thumbnails (~100-300 KB), so it was left alone.
+
+**Measurements** — synthetic test collection "Resize Test" (id 61) in the dev container: 60 images,
+120 MB total — 20 JPEG 1280x720 (~0.24 MB), 20 JPEG 1920x1080 (~0.5 MB), 15 JPEG 4000x3000 (~3 MB),
+5 PNG 3000x2000 (~12.7 MB), in three folder depths. Vite dev server -> dev container, 1034 px
+viewport (6 columns, 144 px tiles, DPR 1), localhost.
+
+| State | Requests | Bytes | Time to last tile |
+|---|---|---|---|
+| Before (raw files) | 60 | 120.4 MB | 6.3 s |
+| After, cold server cache | 60 (all `w=320`) | 27 KB body | 7.1 s |
+| After, page reload (server cache warm, 304s) | 60 | 27 KB body / 18 KB transferred | 1.1 s |
+| After, close and reopen in the same session | 0 | 0 | instant (browser cache) |
+
+Caveats: the images are synthetic noise-over-flat-colour, which downsizes to far smaller WebPs than
+real photos would (expect tens of KB each, i.e. ~1-2 MB for 60 — still ~100x less than the raw
+120 MB, but not 27 KB). Over localhost the raw transfer is cheap, so the *time* gain is
+understated: the same 120 MB over a LAN/Wi-Fi/remote link is seconds to minutes. The cold
+resize is CPU-bound on the server (2 concurrent ffmpeg, per-image cost scaling with source size:
+roughly 0.3 s for 720p JPEGs, 1 s for 12 MP JPEGs, 2 s for 12 MB PNGs, measured as request
+latency including queueing). Not measured: NAS/Pi hardware, real photo content.
+
+**Library comparison (measured earlier, `:50505`, 26 items):** switching Library grid/list/strip
+to live resizing is not worth it — same bytes as the tiers (same encoder/quality), ~10x slower
+cold (1.2 s vs 0.13 s for 26 tiles), equal warm. Tiers stay for the library.
 
 ## Docs to update when implemented
 
