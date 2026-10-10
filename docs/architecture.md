@@ -77,7 +77,7 @@ The auth status query is prefetched at module load so it runs in parallel with t
 
 **Stale chunks after a deploy.** A tab opened before an update still references the old hashed chunk
 names; the server answers the missing file with the SPA fallback (200 `text/html`), the dynamic import
-rejects and the router surfaces it as a route error. The root route's `RouteError` element recognises
+rejects and the router surfaces it as a route error. The `RouteError` element on each top-level route recognises
 that (`lib/chunkReload.ts`) and reloads once, which fetches the new `index.html`. A `sessionStorage`
 timestamp (30 s window) prevents loops: a second failure — or unusable storage — shows the error
 page with a Reload button instead. Only the route error is handled: `vite:preloadError` also fires
