@@ -515,6 +515,7 @@ export interface Settings {
   libraryMode: string
   libraryPaginationEnabled: boolean
   libraryPageSize: number
+  dashboardHiddenWidgets: string[]
   thumbnailFrameCount: number
   thumbnailFrameRangeLow: number
   thumbnailFrameRangeHigh: number
@@ -663,6 +664,7 @@ export interface UpdateSettingsRequest {
   libraryMode?: string
   libraryPaginationEnabled?: boolean
   libraryPageSize?: number
+  dashboardHiddenWidgets?: string[]
   thumbnailFrameCount?: number
   thumbnailFrameRangeLow?: number
   thumbnailFrameRangeHigh?: number

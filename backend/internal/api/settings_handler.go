@@ -37,6 +37,58 @@ func ImportIgnoredFolders(ctx context.Context, repo *repository.SettingsRepo) ([
 	return folders, nil
 }
 
+// dashboardWidgetIDs is the allowlist of Dashboard blocks that can be hidden;
+// keep in sync with DASHBOARD_WIDGETS in the frontend.
+var dashboardWidgetIDs = map[string]bool{
+	"downloads":     true,
+	"library":       true,
+	"libraryGrowth": true,
+	"mediaTypes":    true,
+	"resolutions":   true,
+	"storage":       true,
+	"topArtists":    true,
+	"topTags":       true,
+}
+
+// DashboardHiddenWidgets reads and JSON-decodes the dashboard_hidden_widgets
+// setting, defaulting to an empty list (everything visible) if it's never been
+// set. Unknown IDs (e.g. a widget since removed) are dropped. Shared by
+// GetSettings.
+func DashboardHiddenWidgets(ctx context.Context, repo *repository.SettingsRepo) ([]string, error) {
+	raw, err := repo.Get(ctx, models.SettingDashboardHiddenWidgets)
+	if errors.Is(err, repository.ErrNotFound) {
+		return []string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return []string{}, nil
+	}
+	out, _ := normalizeDashboardWidgetIDs(ids)
+	return out, nil
+}
+
+// normalizeDashboardWidgetIDs de-dupes ids (keeping first-seen order) and
+// drops unknown ones, returning them as the second value so the PATCH handler
+// can reject them while the reader just ignores them.
+func normalizeDashboardWidgetIDs(ids []string) (valid, unknown []string) {
+	seen := make(map[string]bool, len(ids))
+	valid = make([]string, 0, len(ids))
+	for _, id := range ids {
+		if !dashboardWidgetIDs[id] {
+			unknown = append(unknown, id)
+			continue
+		}
+		if !seen[id] {
+			seen[id] = true
+			valid = append(valid, id)
+		}
+	}
+	return valid, unknown
+}
+
 // defaultImageConvertFormat matches the existing convention that video
 // thumbnails always get normalized to JPEG (yt-dlp's --convert-thumbnails
 // jpg).
@@ -938,6 +990,11 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		dashboardHiddenWidgets, err := DashboardHiddenWidgets(c.Request.Context(), repo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		libraryPageSize, err := LibraryPageSize(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1165,6 +1222,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			LibraryMode:                 libraryMode,
 			LibraryPaginationEnabled:    libraryPaginationEnabled,
 			LibraryPageSize:             libraryPageSize,
+			DashboardHiddenWidgets:      dashboardHiddenWidgets,
 			ThumbnailFrameCount:         thumbnailFrameCount,
 			ThumbnailFrameRangeLow:      thumbnailFrameRangeLow,
 			ThumbnailFrameRangeHigh:     thumbnailFrameRangeHigh,
@@ -1435,6 +1493,22 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		}
 		if req.LibraryPageSize != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingLibraryPageSize, strconv.Itoa(*req.LibraryPageSize)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if req.DashboardHiddenWidgets != nil {
+			ids, unknown := normalizeDashboardWidgetIDs(*req.DashboardHiddenWidgets)
+			if len(unknown) > 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown dashboard widget: " + unknown[0]})
+				return
+			}
+			encoded, err := json.Marshal(ids)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			if err := repo.Set(c.Request.Context(), models.SettingDashboardHiddenWidgets, string(encoded)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}

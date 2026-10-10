@@ -881,6 +881,7 @@ type SettingsResponse struct {
 	LibraryMode                 string   `json:"libraryMode"`
 	LibraryPaginationEnabled    bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize             int      `json:"libraryPageSize"`
+	DashboardHiddenWidgets      []string `json:"dashboardHiddenWidgets"`
 	ThumbnailFrameCount         int      `json:"thumbnailFrameCount"`
 	ThumbnailFrameRangeLow      int      `json:"thumbnailFrameRangeLow"`
 	ThumbnailFrameRangeHigh     int      `json:"thumbnailFrameRangeHigh"`
@@ -942,6 +943,7 @@ type UpdateSettingsRequest struct {
 	LibraryMode                 *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
 	LibraryPaginationEnabled    *bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize             *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
+	DashboardHiddenWidgets      *[]string `json:"dashboardHiddenWidgets"`
 	ThumbnailFrameCount         *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8 12 24"`
 	ThumbnailFrameRangeLow      *int      `json:"thumbnailFrameRangeLow" binding:"omitempty,min=0,max=100"`
 	ThumbnailFrameRangeHigh     *int      `json:"thumbnailFrameRangeHigh" binding:"omitempty,min=0,max=100"`

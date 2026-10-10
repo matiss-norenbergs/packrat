@@ -18,13 +18,18 @@ searching/filtering, which is what the Library page is for.
 
 ## Dashboard
 
-The landing page. Two cards summarize current state at a glance:
+The landing page. Two cards summarize current state at a glance, followed by charts:
 
 - **Downloads** — active, queued, and completed-today counts, with a link to the Downloads page.
 - **Library** — video count, audio count, image count, and total storage used across the whole
   library.
+- **Charts** — Library Growth, Media Types, Items by Resolution, Storage, Top Artists, Top Tags.
 
-Read-only — it's a summary view, not a control panel.
+Read-only — it's a summary view, not a control panel. The cog button in the header opens a popover
+with a switch per card (the two summary cards and all six charts); **Save** hides the switched-off
+ones. The choice is stored server-side (`dashboardHiddenWidgets`), so it's the same on every
+device, and hidden cards aren't rendered, so they don't fetch their data. Cards added in future
+versions show up by default. Hiding everything shows a hint pointing at the cog.
 
 ## Downloads
 
