@@ -26,6 +26,11 @@ describe("applyGalleryView", () => {
     expect(ids(applyGalleryView(images, "frame-time", "desc", "all"))).toEqual([1, 5, 3, 4, 2])
   })
 
+  it("sorts by frame time then date saved, untimed images last by date saved", () => {
+    expect(ids(applyGalleryView(images, "frame-time-saved", "asc", "all"))).toEqual([3, 5, 1, 2, 4])
+    expect(ids(applyGalleryView(images, "frame-time-saved", "desc", "all"))).toEqual([1, 5, 3, 4, 2])
+  })
+
   it("sorts favorites first (desc) or last (asc), newest within each group", () => {
     expect(ids(applyGalleryView(images, "favorites", "desc", "all"))).toEqual([5, 2, 4, 3, 1])
     expect(ids(applyGalleryView(images, "favorites", "asc", "all"))).toEqual([4, 3, 1, 5, 2])

@@ -51,8 +51,8 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
   const deleteImages = useDeleteThumbnailGalleryImages()
   const setFavorite = useSetThumbnailGalleryFavorite()
   const setFavorites = useSetThumbnailGalleryFavorites()
-  const [sort, setSort] = useState<GallerySort>("saved")
-  const [direction, setDirection] = useState<GallerySortDirection>(defaultSortDirection.saved)
+  const [sort, setSort] = useState<GallerySort>("frame-time-saved")
+  const [direction, setDirection] = useState<GallerySortDirection>(defaultSortDirection["frame-time-saved"])
   const [filter, setFilter] = useState<GalleryFilter>("all")
   const [confirmDeleteIds, setConfirmDeleteIds] = useState<number[] | null>(null)
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
@@ -234,10 +234,11 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
                     setDirection(defaultSortDirection[v as GallerySort])
                   }}
                 >
-                  <SelectTrigger className="w-44" aria-label="Sort gallery">
+                  <SelectTrigger className="w-60" aria-label="Sort gallery">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="frame-time-saved">Frame time, then date saved</SelectItem>
                     <SelectItem value="saved">Date saved</SelectItem>
                     <SelectItem value="frame-time">Frame time</SelectItem>
                     <SelectItem value="favorites">Favorites</SelectItem>

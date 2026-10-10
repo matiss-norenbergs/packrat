@@ -1,12 +1,13 @@
 import type { ThumbnailGalleryImage } from "@/types/api"
 
-export type GallerySort = "saved" | "frame-time" | "favorites"
+export type GallerySort = "frame-time-saved" | "saved" | "frame-time" | "favorites"
 export type GallerySortDirection = "asc" | "desc"
 export type GalleryFilter = "all" | "favorites" | "with-time"
 
 // The direction each sort starts in when picked: newest saved first, earliest
 // frame first, favorites first.
 export const defaultSortDirection: Record<GallerySort, GallerySortDirection> = {
+  "frame-time-saved": "asc",
   saved: "desc",
   "frame-time": "asc",
   favorites: "desc",
@@ -31,8 +32,11 @@ export function galleryIdRange(images: ThumbnailGalleryImage[], anchorId: number
 // applyGalleryView filters then sorts a gallery's images for display.
 // "asc" means oldest saved / earliest frame / non-favorites first. Images
 // without a frame time (older rows, copies of an existing thumbnail) always
-// sort after every timed one under "frame-time", whatever the direction;
-// ties fall back to newest first.
+// sort after every timed one under "frame-time" and "frame-time-saved",
+// whatever the direction. "frame-time" breaks ties newest first;
+// "frame-time-saved" breaks them by date saved in the same direction (so
+// ascending is earliest frame, then oldest saved) and orders the untimed
+// images by date saved too.
 export function applyGalleryView(
   images: ThumbnailGalleryImage[],
   sort: GallerySort,
@@ -48,6 +52,12 @@ export function applyGalleryView(
 
   return [...filtered].sort((a, b) => {
     switch (sort) {
+      case "frame-time-saved": {
+        if (a.timestampSeconds == null && b.timestampSeconds == null) return sign * (a.id - b.id)
+        if (a.timestampSeconds == null) return 1
+        if (b.timestampSeconds == null) return -1
+        return sign * (a.timestampSeconds - b.timestampSeconds) || sign * (a.id - b.id)
+      }
       case "frame-time": {
         if (a.timestampSeconds == null && b.timestampSeconds == null) return byNewest(a, b)
         if (a.timestampSeconds == null) return 1

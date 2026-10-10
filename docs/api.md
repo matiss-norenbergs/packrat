@@ -564,7 +564,7 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
 - **`GET /api/library/:id/thumbnail/timestamps`** — read-only; extracts nothing. Picks the
   timestamps for a "choose from video" batch: `count` frames spread across the pick range, one
   random point per equal bucket. Optional query params `count` (1–50), `low` and `high` (percent of
-  duration, `0 <= low < high <= 100`) override the `thumbnailFrameCount` /
+  duration, decimals allowed, `0 <= low < high <= 100`) override the `thumbnailFrameCount` /
   `thumbnailFrameRangeLow` / `thumbnailFrameRangeHigh` settings for this call only; `exclude` is a
   comma-separated list of timestamps to steer away from. `400` on an out-of-range value. The
   frontend then fetches the frames one at a time via `/candidates?timestamps=` to drive its

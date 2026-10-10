@@ -249,9 +249,23 @@ func intQueryParam(c *gin.Context, name string, fallback int) (int, error) {
 	return strconv.Atoi(raw)
 }
 
+// floatQueryParam is intQueryParam for decimal values — the per-call pick
+// range may be fractional (a time-based range converted to percent).
+func floatQueryParam(c *gin.Context, name string, fallback float64) (float64, error) {
+	raw := c.Query(name)
+	if raw == "" {
+		return fallback, nil
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, errors.New("not a finite number")
+	}
+	return v, nil
+}
+
 // validateFramePick checks a per-call frame count and pick range (percent of
 // duration) against the same bounds the Settings page enforces.
-func validateFramePick(count, low, high int) error {
+func validateFramePick(count int, low, high float64) error {
 	if count < 1 || count > maxThumbnailCandidateFrames {
 		return fmt.Errorf("count must be between 1 and %d", maxThumbnailCandidateFrames)
 	}
@@ -296,12 +310,12 @@ func GetLibraryThumbnailTimestamps(mediaRoot string, libraryRepo *repository.Lib
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		rangeLow, err := ThumbnailFrameRangeLow(ctx, settingsRepo)
+		settingLow, err := ThumbnailFrameRangeLow(ctx, settingsRepo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		rangeHigh, err := ThumbnailFrameRangeHigh(ctx, settingsRepo)
+		settingHigh, err := ThumbnailFrameRangeHigh(ctx, settingsRepo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -311,11 +325,13 @@ func GetLibraryThumbnailTimestamps(mediaRoot string, libraryRepo *repository.Lib
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid count"})
 			return
 		}
-		if rangeLow, err = intQueryParam(c, "low", rangeLow); err != nil {
+		rangeLow, err := floatQueryParam(c, "low", float64(settingLow))
+		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid low"})
 			return
 		}
-		if rangeHigh, err = intQueryParam(c, "high", rangeHigh); err != nil {
+		rangeHigh, err := floatQueryParam(c, "high", float64(settingHigh))
+		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid high"})
 			return
 		}
@@ -335,7 +351,7 @@ func GetLibraryThumbnailTimestamps(mediaRoot string, libraryRepo *repository.Lib
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		duration := resolveDuration(ctx, item.Duration, mediaAbs, ffprobePath)
-		timestamps := pickFrameTimestamps(duration, float64(rangeLow), float64(rangeHigh), count, exclude)
+		timestamps := pickFrameTimestamps(duration, rangeLow, rangeHigh, count, exclude)
 		c.JSON(http.StatusOK, gin.H{"timestamps": timestamps})
 	}
 }
