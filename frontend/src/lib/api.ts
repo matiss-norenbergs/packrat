@@ -101,6 +101,18 @@ function getCookie(name: string): string {
   return match ? decodeURIComponent(match[1]) : ""
 }
 
+// Thrown for every non-2xx response, carrying the HTTP status so callers can
+// tell "doesn't exist" (404) from a transient failure — useLibraryItem uses it
+// to skip retrying a missing item.
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = "ApiError"
+    this.status = status
+  }
+}
+
 // All JSON API routes live under /api (kept distinct from the frontend's
 // client-side routes of the same name, e.g. /downloads and /library — see
 // backend/internal/api/router.go).
@@ -112,7 +124,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ?? `${res.status} ${res.statusText}`)
+    throw new ApiError(body.error ?? `${res.status} ${res.statusText}`, res.status)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -180,14 +192,6 @@ export function cancelDownload(id: number): Promise<void> {
 
 export function deleteDownload(id: number): Promise<void> {
   return request<void>(`/downloads/${id}`, { method: "DELETE" })
-}
-
-// fetchLibrary returns the entire library, unfiltered — for call sites that
-// genuinely need every item (the item detail page's sibling strip). Grid/
-// folder views use fetchLibraryQuery instead, which does search/filter/sort/
-// pagination server-side.
-export function fetchLibrary(): Promise<LibraryItem[]> {
-  return fetchLibraryQuery({}).then((res) => res.items)
 }
 
 export function fetchLibraryQuery(params: LibraryQueryParams): Promise<LibraryListResponse> {

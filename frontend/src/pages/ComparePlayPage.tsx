@@ -6,8 +6,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ComparePlayerCell } from "@/components/library/ComparePlayerCell"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
-import { useLibrary } from "@/hooks/useLibrary"
-import type { LibraryItem } from "@/types/api"
+import { useLibraryItemsByIds } from "@/hooks/useLibrary"
 
 // Zoom-style gallery sizing — as square a grid as possible (columns first,
 // so a lone leftover item lands on its own row rather than stretching
@@ -40,7 +39,6 @@ function readBoolSetting(key: string): boolean {
 // properties.
 export function ComparePlayPage() {
   const [searchParams] = useSearchParams()
-  const { data: allItems, isLoading } = useLibrary()
   const mediaRefs = useRef<Map<number, HTMLMediaElement>>(new Map())
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -96,11 +94,8 @@ export function ComparePlayPage() {
   // trusted from the URL, since a ghost could still be sitting in a
   // persisted compare list (added before its file was deleted) even though
   // CompareListPage no longer lets one be selected.
-  const items = useMemo(() => {
-    if (!allItems) return []
-    const byId = new Map(allItems.map((i) => [i.id, i]))
-    return ids.map((id) => byId.get(id)).filter((i): i is LibraryItem => i != null && i.status !== "ghost")
-  }, [allItems, ids])
+  const { items: fetchedItems, isLoading } = useLibraryItemsByIds(ids)
+  const items = useMemo(() => fetchedItems.filter((i) => i.status !== "ghost"), [fetchedItems])
 
   const registerMedia = (id: number) => (el: HTMLMediaElement | null) => {
     if (el) mediaRefs.current.set(id, el)
