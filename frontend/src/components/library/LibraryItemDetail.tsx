@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
 import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
+import { useLibraryQuery } from "@/hooks/useLibrary"
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress"
 import { useSettings } from "@/hooks/useSettings"
 import { sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
@@ -39,7 +40,6 @@ import type { LibraryItem } from "@/types/api"
 // LibraryItemPage never does, so Library's blur behavior is unaffected.
 export function LibraryItemDetail({
   item,
-  items,
   backTo,
   basePath = "/library",
   playerHeightClass,
@@ -49,7 +49,6 @@ export function LibraryItemDetail({
   ignorePrivacy = false,
 }: {
   item: LibraryItem
-  items: LibraryItem[]
   backTo: string
   basePath?: string
   playerHeightClass: string
@@ -91,8 +90,11 @@ export function LibraryItemDetail({
 
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
   const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
+  // Only this item's own collection is fetched (not the whole library) — and
+  // not at all for an uncategorized item, which has no siblings.
+  const { data: collectionItems } = useLibraryQuery({ collectionId: item.collectionId ?? undefined }, item.collectionId != null)
   const siblings = sortLibraryItems(
-    items.filter((i) => item.collectionId != null && i.collectionId === item.collectionId && i.id !== item.id),
+    (collectionItems?.items ?? []).filter((i) => item.collectionId != null && i.collectionId === item.collectionId && i.id !== item.id),
     sortKey,
     sortDir,
   )

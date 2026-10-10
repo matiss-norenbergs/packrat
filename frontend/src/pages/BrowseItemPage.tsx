@@ -2,7 +2,7 @@ import { useEffect } from "react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useLibrary } from "@/hooks/useLibrary"
+import { isLibraryItemNotFound, useLibraryItem } from "@/hooks/useLibrary"
 import { useSettings } from "@/hooks/useSettings"
 import { LibraryItemDetail } from "@/components/library/LibraryItemDetail"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
@@ -13,9 +13,11 @@ import { useMiniPlayer } from "@/components/browse/MiniPlayerContext"
 // player/metadata/sibling-strip content itself.
 export function BrowseItemPage() {
   const { id } = useParams<{ id: string }>()
-  const { data: items, isLoading } = useLibrary()
+  const { data, isLoading, error } = useLibraryItem(Number(id))
   const { data: settings } = useSettings()
-  const item = items?.find((i) => i.id === Number(id))
+  // A deleted item's refetch 404s while react-query still holds the last
+  // good copy — don't keep rendering it.
+  const item = isLibraryItemNotFound(error) ? undefined : data
   const navigate = useNavigate()
   const location = useLocation()
   const { minimize, close } = useMiniPlayer()
@@ -52,7 +54,7 @@ export function BrowseItemPage() {
     )
   }
 
-  if (!items || !item) {
+  if (!item) {
     return (
       <div className="flex flex-col items-center gap-3 py-16 text-center">
         <p className="text-sm text-muted-foreground">This library item doesn't exist (it may have been deleted).</p>
@@ -84,7 +86,6 @@ export function BrowseItemPage() {
       <div className="p-4 md:p-6">
         <LibraryItemDetail
           item={item}
-          items={items}
           backTo={backTo}
           basePath="/browse"
           playerHeightClass="h-screen"

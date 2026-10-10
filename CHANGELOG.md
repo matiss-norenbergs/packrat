@@ -13,6 +13,16 @@ Maintenance notes:
 -->
 
 ## 2026-10-10
+- **Item pages no longer download the whole library** — `/library/:id`, `/browse/:id` and the
+  compare player fetched `GET /api/library` (every item, ~1.2 KB each) just to find one item, and
+  re-fetched all of it on every download completion. They now fetch `GET /api/library/:id` plus
+  the item's own collection for the sibling strip (nothing extra for an uncategorized item); the
+  compare player fetches its <= 6 items individually. Item page open at ~5,000 items (dev
+  container, production build): API bytes 3.41 MB -> 37 KB, time to content ~510 ms -> ~160 ms,
+  and a download completion refetches ~14 KB instead of ~3.4 MB. An item inside a collection that
+  itself holds most of the library sees no saving (the strip still needs those siblings).
+  Clicking a sibling tile renders the next item at once from the already-fetched collection list
+  (no loading skeleton) and revalidates it in the background.
 - **Frontend code-split by route** — the SPA shipped as one 1.63 MB (446 KB gzip) JS file with
   recharts and every page loaded up front. Pages are now router-level `lazy` chunks, vendor code is
   grouped into `vendor-react` / `vendor` / `vendor-charts` / `app-shared` (45 JS files total), and

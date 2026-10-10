@@ -1,7 +1,7 @@
 import { Link, useLocation, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useLibrary } from "@/hooks/useLibrary"
+import { isLibraryItemNotFound, useLibraryItem } from "@/hooks/useLibrary"
 import { LibraryItemDetail } from "@/components/library/LibraryItemDetail"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 
@@ -13,8 +13,10 @@ export function LibraryItemPage() {
   // carries router state, so this correctly falls back to the plain
   // library page in that case.
   const backTo = (location.state as { from?: string } | null)?.from || "/library"
-  const { data: items, isLoading } = useLibrary()
-  const item = items?.find((i) => i.id === Number(id))
+  const { data, isLoading, error } = useLibraryItem(Number(id))
+  // A deleted item's refetch 404s while react-query still holds the last
+  // good copy — don't keep rendering it.
+  const item = isLibraryItemNotFound(error) ? undefined : data
 
   if (isLoading) {
     return (
@@ -30,7 +32,7 @@ export function LibraryItemPage() {
     )
   }
 
-  if (!items || !item) {
+  if (!item) {
     return (
       <div className="flex flex-col items-center gap-3 py-16 text-center">
         <p className="text-sm text-muted-foreground">This library item doesn't exist (it may have been deleted).</p>
@@ -62,7 +64,6 @@ export function LibraryItemPage() {
     <RevealAllProvider>
       <LibraryItemDetail
         item={item}
-        items={items}
         backTo={backTo}
         basePath="/library"
         playerHeightClass="h-[calc(100vh-3.5rem)] md:h-screen"

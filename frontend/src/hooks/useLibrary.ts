@@ -1,6 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  ApiError,
   acceptLibraryItemTrim,
   bulkAssignTags,
   bulkDeleteLibraryItemFiles,
@@ -13,8 +14,8 @@ import {
   deleteLibraryItemNFO,
   deleteLibraryItemThumbnail,
   discardLibraryItemTrim,
-  fetchLibrary,
   fetchLibraryFacets,
+  fetchLibraryItem,
   fetchLibraryItemMetadataPreview,
   fetchLibraryItemNFO,
   fetchLibraryItemTrimFrames,
@@ -56,14 +57,73 @@ import { downloadsQueryKey } from "./useDownloads"
 import { tagsQueryKey } from "./useTags"
 
 export const libraryQueryKey = ["library"] as const
+const libraryItemQueryKey = (id: number) => [...libraryQueryKey, "item", id] as const
 
-// The entire, unfiltered library — only for call sites that genuinely need
-// every item (the item detail page's sibling strip). The grid/folder views
-// use useLibraryQuery instead.
-export function useLibrary() {
+// Retry transient failures, but not a 404 — a deleted/unknown item is a
+// definitive answer, and retrying would hold the skeleton up for several
+// seconds before the "doesn't exist" state shows.
+const retryUnlessNotFound = (failureCount: number, err: Error) =>
+  !(err instanceof ApiError && err.status === 404) && failureCount < 3
+
+export function isLibraryItemNotFound(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 404
+}
+
+// Looks an item up in any already-cached library list (the sibling strip's
+// collection query, a grid page, Continue Watching…) so navigating to an item
+// that's already in memory can render it before its own request returns.
+function findCachedLibraryItem(queryClient: QueryClient, id: number): LibraryItem | undefined {
+  const lists = queryClient.getQueriesData<LibraryListResponse>({ queryKey: [...libraryQueryKey, "query"] })
+  for (const [, list] of lists) {
+    const found = list?.items.find((i) => i.id === id)
+    if (found) return found
+  }
+  return undefined
+}
+
+// One item (GET /api/library/:id) — what the item detail pages use instead of
+// fetching the whole library just to find one row. Sits under the "library"
+// key prefix, so every mutation's invalidateQueries({ queryKey: libraryQueryKey })
+// refreshes it too. `isLibraryItemNotFound(error)` distinguishes a missing/
+// deleted item from a transient failure.
+//
+// placeholderData (not initialData) is deliberate: when the item is already in
+// a cached list (clicking a sibling tile — the strip just fetched the whole
+// collection), the page renders it immediately instead of a full-page
+// skeleton, but the entry itself stays empty, so the request always still
+// fires, the copy is never kept as authoritative, and a 404 for a deleted item
+// ends in the error state (placeholder data isn't shown once the query errors)
+// rather than being masked by the seed.
+export function useLibraryItem(id: number) {
+  const queryClient = useQueryClient()
   return useQuery({
-    queryKey: libraryQueryKey,
-    queryFn: fetchLibrary,
+    queryKey: libraryItemQueryKey(id),
+    queryFn: () => fetchLibraryItem(id),
+    enabled: Number.isFinite(id),
+    retry: retryUnlessNotFound,
+    placeholderData: () => findCachedLibraryItem(queryClient, id),
+  })
+}
+
+// Several single-item fetches in parallel (the compare player, capped at 6
+// items). Results come back in `ids` order; an id that no longer exists is
+// simply left out, same as it used to be silently dropped from the
+// whole-library lookup.
+function combineLibraryItems(results: UseQueryResult<LibraryItem>[]) {
+  return {
+    items: results.flatMap((r) => (r.data && !isLibraryItemNotFound(r.error) ? [r.data] : [])),
+    isLoading: results.some((r) => r.isLoading),
+  }
+}
+
+export function useLibraryItemsByIds(ids: number[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: libraryItemQueryKey(id),
+      queryFn: () => fetchLibraryItem(id),
+      retry: retryUnlessNotFound,
+    })),
+    combine: combineLibraryItems,
   })
 }
 
@@ -176,8 +236,8 @@ export function useUpdateLibraryItem() {
 // Fires every few seconds during video playback (see usePlaybackProgress),
 // so unlike the other mutations here it deliberately skips the toast and
 // invalidateQueries — a toast per autosave would be obnoxious, and
-// invalidating the whole library list on every tick would force refetches
-// while the same item is still playing. Patching the cached list directly
+// invalidating the library queries on every tick would force refetches
+// while the same item is still playing. Patching the cached entries directly
 // keeps the Browse page's "Continue Watching" row correct next time it
 // mounts without any of that.
 export function useUpdateLibraryProgress() {
@@ -189,8 +249,8 @@ export function useUpdateLibraryProgress() {
       const lastWatchedAt = new Date().toISOString()
       const patch = (item: LibraryItem) =>
         item.id === id ? { ...item, playbackPositionSeconds: positionSeconds, lastWatchedAt } : item
-      // Exact-match setQueryData for the bare LibraryItem[] shape (useLibrary).
-      queryClient.setQueryData<LibraryItem[]>(libraryQueryKey, (old) => old?.map(patch))
+      // Exact-match setQueryData for the single-item entry (useLibraryItem).
+      queryClient.setQueryData<LibraryItem>(libraryItemQueryKey(id), (old) => (old ? patch(old) : old))
       // Prefix-match setQueriesData for every useLibraryQuery cache entry
       // (LibraryListResponse shape, e.g. Browse's Continue Watching row) —
       // scoped to the "query" sub-key specifically so this doesn't also try
