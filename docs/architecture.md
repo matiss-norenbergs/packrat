@@ -64,6 +64,17 @@ them `public, max-age=31536000, immutable`; `index.html` (including the SPA fall
 `no-cache`. There is deliberately no build-time precompression yet — the JS bundle is re-gzipped
 per request.
 
+## Frontend bundle is split per route
+
+`frontend/src/routes/index.tsx` loads every page through react-router's route-level `lazy`
+(not `React.lazy`/Suspense: a Suspense fallback made first content ~300 ms slower because of React's
+reveal throttle, and route `lazy` also keeps the old page on screen until the next is ready). The
+layouts, sidebar and auth gate stay in the entry chunk. `vite.config.ts` groups node_modules into
+`vendor-react`, `vendor` and `vendor-charts` (recharts, Dashboard only), plus `app-shared` for
+`components/ui`, `hooks`, `lib` and `types`; without the groups rolldown emits ~100 tiny shared
+chunks. A delegated `pointerover`/`focusin` listener preloads the chunk of any in-app link.
+The auth status query is prefetched at module load so it runs in parallel with the initial chunk.
+
 ## Auth and CSRF
 
 The app is single-user (no registration beyond a one-time setup wizard) but is fully
