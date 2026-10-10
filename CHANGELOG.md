@@ -14,6 +14,10 @@ Maintenance notes:
 
 ## 2026-10-10
 
+- **Thumbnail gallery grid loads lazily and as resized WebP** — tiles use `loading="lazy"` and are
+  served from `GET /api/image` at 320/480/720 px (`srcset`/`sizes` matched to the grid columns)
+  instead of full-frame files, with the original as fallback; the fullscreen viewer still loads the
+  full-size image.
 - **Live image resizing endpoint; Browse hero now loads resized WebP** — new authenticated
   `GET /api/image?root=media|images&path=…&w=…[&h=…]` resizes a stored image to a whitelisted width
   (and optional height cap) as WebP, cached under the new `CACHE_ROOT` (default `./data/cache`),

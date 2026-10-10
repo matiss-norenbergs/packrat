@@ -1,8 +1,8 @@
 # Live image resizing — plan
 
-**Status: part 1 implemented** (backend endpoint, cache, limits, eviction, tests, and the Browse
-hero banner as first consumer). Part 2 (thumbnail gallery grid) is not started. The rest of this
-document is the original plan.
+**Status: parts 1 and 2 implemented** (backend endpoint, cache, limits, eviction, tests, the Browse
+hero banner, and the thumbnail gallery grid). The rest of this document is the original plan; the
+gallery's measurements and decisions are recorded under "Part 2 results".
 
 ## Goal
 
@@ -246,6 +246,51 @@ A single helper alongside `mediaFileUrl` / `imageUrl` in `lib/api.ts`, e.g.
 `resizedImageUrl({ root, path, width, height? })`, used only by the candidate call sites. The hero
 additionally needs a `srcset` builder (e.g. `resizedImageSrcSet({ root, path, widths })`) that
 emits one `url Nw` entry per whitelisted width. No change to the existing small/medium helpers.
+
+## Part 2 results (thumbnail gallery grid)
+
+**Implemented (frontend only, no backend change):** the grid tile `<img>` has `loading="lazy"` +
+`decoding="async"` and is served from `/api/image?root=images` with `srcset` 320w/480w/720w and
+`sizes` matching the grid (fullscreen dialog, `p-4`, `gap-3`; 2 / 4 / 6 columns below sm / below lg /
+lg+, i.e. `(100vw - 32px - (cols-1)*12px) / cols`). 720w is included because a 6-column tile at
+1920 css px is ~305 px, which wants ~610 px at DPR 2. `src` stays the original file; a failed
+resize drops the srcset (same fallback as the hero). The viewer, "Set as thumbnail", save/remove are
+untouched.
+
+**Caching decision:** gallery tiles use the endpoint exactly as it behaves (`no-cache` + ETag /
+`Last-Modified`, revalidated with a 304), not `immutable`. Reason: simpler (no new parameter or
+backend change) and consistent with every other image in the app.
+
+**Measurements** — item 31 (1920x1080), 30 gallery images (~156 KB JPEG each), Vite dev server
+proxying to the dev container, 1034 px-wide viewport (6 columns, 155 px tiles, DPR 1), a fresh
+browser origin per row so the browser cache is cold. Totals are from Resource Timing for the
+gallery image requests only.
+
+| # | State | Image requests | Body bytes | Notes |
+|---|---|---|---|---|
+| 1 | Before any change | 30 | 4,669,378 (4.45 MiB) | all 200; first tile done 235 ms, all 721 ms |
+| 2 | A only (lazy) | 30 | 4,669,378 | identical: all 30 tiles fit within the viewport + lazy margin |
+| 3 | A+B, cold browser + cold server cache | 30 | 185,718 (181 KiB) | all 200, `w=320`; first tile 42 ms, all 386 ms |
+| 4 | A+B, reload and reopen (warm browser cache) | 30 | 0 body, ~9,000 transferred | all 30 are 304s (server log: 30 x 304, ~4-85 ms each) |
+
+Server-side, the 30 cold resizes took 7-175 ms each (at most 2 run at once), and the resized files
+are a few KB each (30 files = 181 KiB at 320w; 330 KiB at 480w on a DPR 2 / 390 px phone viewport).
+Caveat: x86 Docker on a dev machine, not target NAS/Pi hardware; rows 1-3 were single runs.
+
+Lazy loading only matters once the grid overflows the viewport plus the browser's margin (Chromium
+loads roughly 1,250-2,500 px ahead). With a 90-image gallery at 390 px wide (2 columns, ~6,000 px
+tall), 30 tiles were requested on open and the rest only when scrolled near. Without lazy loading
+all 90 (~14 MB of originals) would be fetched on open; with 30 images at desktop widths it is a
+no-op.
+
+**Recommendation:** keep live resizing for the gallery. It cuts a 30-frame gallery from 4.5 MB
+to ~0.2 MB (about 25x) on first open, the cold-cache cost is small (tens of ms per tile, bounded by
+the 2-slot semaphore, 30 tiles in under 0.4 s here), and reopening costs 30 conditional requests of
+~300 bytes. A save-time small tier would make the first view marginally faster but needs a new
+column/migration, a backfill for existing images and cleanup on delete, for a saving of tens of
+milliseconds on a surface opened occasionally. Revisit only if target hardware shows cold-open
+latency noticeably worse than here, or if galleries routinely hold hundreds of images where
+per-tile 304s add up.
 
 ## Rollout
 

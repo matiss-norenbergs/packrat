@@ -233,6 +233,11 @@ without re-extracting or re-fetching anything.
   already in that state (each is disabled when nothing in the selection would change). Switching
   Manage off, or pressing Esc once, leaves manage mode and clears the selection; Esc again closes
   the dialog.
+- Grid tiles are lazy-loaded (`loading="lazy"`, `decoding="async"`; the `aspect-video` frame
+  reserves each tile's space so the grid doesn't shift) and load a resized WebP from
+  `GET /api/image` (320/480/720 px `srcset`, `sizes` matched to the 2/4/6-column layout) instead of
+  the full-frame file. If the resized request fails a tile falls back to the original. The
+  fullscreen viewer, "Set as thumbnail" and saving always use the full-size file.
 - Removing an image from the gallery never affects the item's current thumbnail, and vice versa.
 
 ## Collections
