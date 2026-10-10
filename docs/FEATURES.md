@@ -152,7 +152,9 @@ deleting their files).
   - **Choose from Video (custom)…** — same picker, but first asks for the frame count (1–50, number
     input) and pick range (same from/to slider as Settings) for this run only. Both start from the
     Settings values every time; nothing is remembered. "Get N new frames" in that session reuses the
-    custom count and range.
+    custom count and range. The slider here moves in 0.1% steps
+    (Settings stays whole percents), its ends read `0:00` … the video's duration, and the readout
+    below shows the range as both percent and times.
   - **Match from URL/Current Thumbnail…** — see [Frame Matching](#frame-matching).
   - **Save in Thumbnail Gallery** / **View Gallery…** — see Thumbnail gallery below.
   - Quick Grab, both Choose from Video… entries, and both Match actions need an actual video stream to pull
@@ -211,10 +213,11 @@ without re-extracting or re-fetching anything.
   Copies of an existing thumbnail, enhancement compare images, and images saved before this
   existed have no time.
 - The heart on a tile (or in the viewer) marks a favorite. The dialog header has a filter (All /
-  Favorites only / With frame time) and a sort (Date saved / Frame time / Favorites) with an
-  ascending/descending toggle (defaults: newest first, earliest frame first, favorites first);
-  images without a frame time always sort last under Frame time. The viewer's next/prev
-  follows the displayed order.
+  Favorites only / With frame time) and a sort (Frame time then date saved / Date saved / Frame
+  time / Favorites) with an ascending/descending toggle (defaults: earliest frame then oldest
+  saved first — the gallery's default sort — newest first, earliest frame first, favorites first);
+  images without a frame time always sort last under either frame-time sort (by date saved under
+  the combined one). The viewer's next/prev follows the displayed order.
 - The **Manage** switch (toolbar, left of the filter/sort) turns the grid into a multi-select: the
   per-tile hover buttons give way to a selection circle on each tile, and clicking a tile selects it
   instead of opening the viewer (shift-click selects a range in the displayed order). While on, the

@@ -4,10 +4,13 @@ import "testing"
 
 func TestValidateFramePick(t *testing.T) {
 	cases := []struct {
-		name           string
-		count, low, hi int
-		wantErr        bool
+		name    string
+		count   int
+		low, hi float64
+		wantErr bool
 	}{
+		{"fractional range", 4, 12.5, 87.25, false},
+		{"fractional low equals high", 4, 50.5, 50.5, true},
 		{"defaults", 4, 5, 100, false},
 		{"min count", 1, 0, 1, false},
 		{"max count", 50, 0, 100, false},
@@ -22,7 +25,7 @@ func TestValidateFramePick(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := validateFramePick(tc.count, tc.low, tc.hi)
 			if (err != nil) != tc.wantErr {
-				t.Fatalf("validateFramePick(%d, %d, %d) err = %v, wantErr %v", tc.count, tc.low, tc.hi, err, tc.wantErr)
+				t.Fatalf("validateFramePick(%d, %v, %v) err = %v, wantErr %v", tc.count, tc.low, tc.hi, err, tc.wantErr)
 			}
 		})
 	}

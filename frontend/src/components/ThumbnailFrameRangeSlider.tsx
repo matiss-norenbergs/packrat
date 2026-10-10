@@ -1,16 +1,22 @@
 import { Slider as SliderPrimitive } from "radix-ui"
 import { useEffect, useState } from "react"
+import { formatDuration } from "@/lib/utils"
 
 interface ThumbnailFrameRangeSliderProps {
   low: number
   high: number
   onCommit: (low: number, high: number) => void
+  // When set, the axis end labels read as times (0:00 … duration) instead of
+  // 0% / 100%. The slider itself stays percent-based either way.
+  durationSeconds?: number | null
+  // Percent step; 1 (Settings) unless a caller wants finer picks.
+  step?: number
 }
 
 // Plain 0-100 percent range, unlike ResolutionTierSlider's resolution-step
 // index mapping and colored low/medium/high segments — just the one
 // selected-range segment, so this doesn't share that component's machinery.
-export function ThumbnailFrameRangeSlider({ low, high, onCommit }: ThumbnailFrameRangeSliderProps) {
+export function ThumbnailFrameRangeSlider({ low, high, onCommit, durationSeconds, step = 1 }: ThumbnailFrameRangeSliderProps) {
   const committedValue = [low, high]
 
   // Local drag state — onValueChange updates this continuously so the track
@@ -24,7 +30,9 @@ export function ThumbnailFrameRangeSlider({ low, high, onCommit }: ThumbnailFram
   }, [low, high])
 
   const handleCommit = (value: number[]) => {
-    onCommit(value[0], value[1])
+    // Round off float noise from fractional steps (5.300000000000001).
+    const round = (v: number) => Math.round(v * 1000) / 1000
+    onCommit(round(value[0]), round(value[1]))
   }
 
   return (
@@ -33,7 +41,7 @@ export function ThumbnailFrameRangeSlider({ low, high, onCommit }: ThumbnailFram
         className="relative flex h-4 w-full touch-none items-center select-none"
         min={0}
         max={100}
-        step={1}
+        step={step}
         minStepsBetweenThumbs={1}
         value={dragValue}
         onValueChange={setDragValue}
@@ -53,8 +61,8 @@ export function ThumbnailFrameRangeSlider({ low, high, onCommit }: ThumbnailFram
         ))}
       </SliderPrimitive.Root>
       <div className="relative h-3.5 text-[10px] text-muted-foreground">
-        <span className="absolute left-0">0%</span>
-        <span className="absolute right-0">100%</span>
+        <span className="absolute left-0">{durationSeconds ? formatDuration(0) : "0%"}</span>
+        <span className="absolute right-0">{durationSeconds ? formatDuration(durationSeconds) : "100%"}</span>
       </div>
     </div>
   )

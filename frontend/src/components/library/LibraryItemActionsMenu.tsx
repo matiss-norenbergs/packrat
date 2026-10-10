@@ -307,6 +307,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
       <ThumbnailCustomRangeDialog
         open={thumbnailCustomRangeOpen}
         onOpenChange={setThumbnailCustomRangeOpen}
+        durationSeconds={item.duration}
         onConfirm={(options) => {
           setThumbnailPickOptions(options)
           setThumbnailCustomRangeOpen(false)

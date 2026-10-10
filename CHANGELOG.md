@@ -14,6 +14,11 @@ Maintenance notes:
 
 ## 2026-10-10
 
+- **Choose from Video (custom): finer range, shown as time too** — the pick-range slider moves in
+  0.1% steps, its ends read as the video's timeline and the readout shows percent and times
+  together. The per-call `low`/`high` on `/thumbnail/timestamps` now accept decimals to match.
+- **Thumbnail gallery: "Frame time, then date saved" sort, now the default** — ascending frame time,
+  ties and untimed images by date saved.
 - **Dashboard: choose which cards are shown** — a settings cog in the Dashboard header opens a
   popover with a switch per card (Downloads, Library and the six charts); Save hides the unchecked
   ones. Stored globally as the `dashboardHiddenWidgets` setting, so new cards appear by default.
