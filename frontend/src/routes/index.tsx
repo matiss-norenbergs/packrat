@@ -47,51 +47,50 @@ const BrowseItemPage = page(() => import("@/pages/BrowseItemPage"), "BrowseItemP
 const BrowseShowPage = page(() => import("@/pages/BrowseShowPage"), "BrowseShowPage")
 const BrowseArtistPage = page(() => import("@/pages/BrowseArtistPage"), "BrowseArtistPage")
 
-// Root route exists only to carry the error element; it adds no layout.
+// Each top-level branch carries the error element (failed page chunk, render
+// error); see RouteError.
 export const router = createBrowserRouter([
+  { path: "/login", errorElement: <RouteError />, ...LoginPage },
   {
+    element: <AppLayout />,
     errorElement: <RouteError />,
     children: [
-      { path: "/login", ...LoginPage },
-      {
-        element: <AppLayout />,
-        children: [
-          { path: "/", ...DashboardPage },
-          { path: "/downloads", ...DownloadsPage },
-          { path: "/library", ...LibraryPage },
-          { path: "/library/:id", ...LibraryItemPage },
-          { path: "/collections", ...CollectionsPage },
-          { path: "/tags", ...TagsPage },
-          { path: "/artists", ...ArtistsPage },
-          { path: "/compare-list", ...CompareListPage },
-          { path: "/import", ...ImportPage },
-          { path: "/history", ...HistoryPage },
-          { path: "/backup", ...BackupPage },
-          { path: "/subscriptions", ...SubscriptionsPage },
-          { path: "/thumbnail-enhancement", ...ThumbnailEnhancementPage },
-          { path: "/frame-matching", ...FrameMatchingPage },
-          { path: "/settings", ...SettingsPage },
-          { path: "/logs", ...LogsPage },
-        ],
-      },
-      {
-        // A deliberately separate branch from AppLayout — see BrowseLayout for
-        // why (no shared Sidebar/MobileNav with the management area).
-        element: <BrowseLayout />,
-        children: [
-          { path: "/browse", ...BrowsePage },
-          { path: "/browse/collection/:id", ...BrowseShowPage },
-          { path: "/browse/artist/:id", ...BrowseArtistPage },
-          { path: "/browse/:id", ...BrowseItemPage },
-        ],
-      },
-      {
-        // A third, deliberately chrome-less branch — see ImmersiveLayout for why
-        // this can't just reuse BrowseLayout or AppLayout.
-        element: <ImmersiveLayout />,
-        children: [{ path: "/compare-list/play", ...ComparePlayPage }],
-      },
+      { path: "/", ...DashboardPage },
+      { path: "/downloads", ...DownloadsPage },
+      { path: "/library", ...LibraryPage },
+      { path: "/library/:id", ...LibraryItemPage },
+      { path: "/collections", ...CollectionsPage },
+      { path: "/tags", ...TagsPage },
+      { path: "/artists", ...ArtistsPage },
+      { path: "/compare-list", ...CompareListPage },
+      { path: "/import", ...ImportPage },
+      { path: "/history", ...HistoryPage },
+      { path: "/backup", ...BackupPage },
+      { path: "/subscriptions", ...SubscriptionsPage },
+      { path: "/thumbnail-enhancement", ...ThumbnailEnhancementPage },
+      { path: "/frame-matching", ...FrameMatchingPage },
+      { path: "/settings", ...SettingsPage },
+      { path: "/logs", ...LogsPage },
     ],
+  },
+  {
+    // A deliberately separate branch from AppLayout — see BrowseLayout for
+    // why (no shared Sidebar/MobileNav with the management area).
+    element: <BrowseLayout />,
+    errorElement: <RouteError />,
+    children: [
+      { path: "/browse", ...BrowsePage },
+      { path: "/browse/collection/:id", ...BrowseShowPage },
+      { path: "/browse/artist/:id", ...BrowseArtistPage },
+      { path: "/browse/:id", ...BrowseItemPage },
+    ],
+  },
+  {
+    // A third, deliberately chrome-less branch — see ImmersiveLayout for why
+    // this can't just reuse BrowseLayout or AppLayout.
+    element: <ImmersiveLayout />,
+    errorElement: <RouteError />,
+    children: [{ path: "/compare-list/play", ...ComparePlayPage }],
   },
 ])
 
