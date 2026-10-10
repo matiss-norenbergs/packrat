@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCheck, CheckCircle2, Heart, HeartOff, Info, Square, Trash2, XIcon } from "lucide-react"
 import {
@@ -62,6 +62,10 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
   const [manageMode, setManageMode] = useState(false)
   const selection = useIdSelection()
   const anchorIdRef = useRef<number | null>(null)
+  const manageModeRef = useRef(manageMode)
+  useEffect(() => {
+    manageModeRef.current = manageMode
+  }, [manageMode])
 
   // LibraryItemActionsMenu keeps this component mounted while closed (only
   // the Radix content unmounts), so manage mode and the selection would
@@ -126,8 +130,12 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
             onPointerDownOutside={(e) => e.preventDefault()}
             // Esc leaves manage mode first (dropping the selection) and only
             // closes the dialog from the normal view.
+            // Read through a ref: Radix invokes this from a document-level
+            // key listener that can hold the previous render's closure, in
+            // which case manage mode would look off and Esc would close the
+            // dialog outright.
             onEscapeKeyDown={(e) => {
-              if (manageMode) {
+              if (manageModeRef.current) {
                 e.preventDefault()
                 changeManageMode(false)
               }
