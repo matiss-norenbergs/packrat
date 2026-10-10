@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { ThumbnailGalleryImage } from "@/types/api"
-import { applyGalleryView } from "./thumbnailGalleryView"
+import { applyGalleryView, galleryIdRange } from "./thumbnailGalleryView"
 
 const img = (id: number, timestampSeconds: number | null, isFavorite = false): ThumbnailGalleryImage => ({
   id,
@@ -40,5 +40,22 @@ describe("applyGalleryView", () => {
     const copy = [...images]
     applyGalleryView(images, "saved", "asc", "all")
     expect(images).toEqual(copy)
+  })
+})
+
+describe("galleryIdRange", () => {
+  const shown = [img(9, null), img(7, null), img(5, null), img(3, null)]
+
+  it("returns the inclusive range in displayed order, either direction", () => {
+    expect(galleryIdRange(shown, 7, 3)).toEqual([7, 5, 3])
+    expect(galleryIdRange(shown, 3, 7)).toEqual([7, 5, 3])
+  })
+
+  it("returns a single id when anchor equals target", () => {
+    expect(galleryIdRange(shown, 5, 5)).toEqual([5])
+  })
+
+  it("falls back to the target when the anchor isn't displayed", () => {
+    expect(galleryIdRange(shown, 100, 5)).toEqual([5])
   })
 })

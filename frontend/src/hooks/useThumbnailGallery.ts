@@ -101,6 +101,67 @@ export function useSetThumbnailGalleryFavorite() {
   })
 }
 
+// Bulk favorite/unfavorite for the gallery's manage mode. Like
+// useSaveThumbnailsToGallery it loops the single-image endpoint — one summary
+// toast and one refetch — and a failure doesn't stop the rest; it only errors
+// if none succeeded.
+export function useSetThumbnailGalleryFavorites() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, galleryIds, isFavorite }: { id: number; galleryIds: number[]; isFavorite: boolean }) => {
+      let done = 0
+      let lastError = ""
+      for (const galleryId of galleryIds) {
+        try {
+          await setThumbnailGalleryFavorite(id, galleryId, isFavorite)
+          done++
+        } catch (err) {
+          lastError = (err as Error).message
+        }
+      }
+      if (done === 0) throw new Error(lastError || "nothing to update")
+      return { done, total: galleryIds.length, isFavorite }
+    },
+    onSuccess: ({ done, total, isFavorite }, { id }) => {
+      const verb = isFavorite ? "Added to favorites" : "Removed from favorites"
+      toast.success(done === total ? `${verb}: ${done} image${done === 1 ? "" : "s"}` : `${verb}: ${done} of ${total} images`)
+      queryClient.invalidateQueries({ queryKey: thumbnailGalleryQueryKey(id) })
+    },
+    onError: (err: Error, { id }) => {
+      toast.error(`Failed to update favorites: ${err.message}`)
+      queryClient.invalidateQueries({ queryKey: thumbnailGalleryQueryKey(id) })
+    },
+  })
+}
+
+export function useDeleteThumbnailGalleryImages() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, galleryIds }: { id: number; galleryIds: number[] }) => {
+      let done = 0
+      let lastError = ""
+      for (const galleryId of galleryIds) {
+        try {
+          await deleteThumbnailGalleryImage(id, galleryId)
+          done++
+        } catch (err) {
+          lastError = (err as Error).message
+        }
+      }
+      if (done === 0) throw new Error(lastError || "nothing to remove")
+      return { done, total: galleryIds.length }
+    },
+    onSuccess: ({ done, total }, { id }) => {
+      toast.success(done === total ? `Removed ${done} image${done === 1 ? "" : "s"} from gallery` : `Removed ${done} of ${total} images from gallery`)
+      invalidateGalleryCaches(queryClient, id)
+    },
+    onError: (err: Error, { id }) => {
+      toast.error(`Failed to remove from gallery: ${err.message}`)
+      invalidateGalleryCaches(queryClient, id)
+    },
+  })
+}
+
 export function useApplyThumbnailFromGallery() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -113,14 +174,3 @@ export function useApplyThumbnailFromGallery() {
   })
 }
 
-export function useDeleteThumbnailGalleryImage() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, galleryId }: { id: number; galleryId: number }) => deleteThumbnailGalleryImage(id, galleryId),
-    onSuccess: (_data, { id }) => {
-      toast.success("Removed from gallery")
-      invalidateGalleryCaches(queryClient, id)
-    },
-    onError: (err: Error) => toast.error(`Failed to remove from gallery: ${err.message}`),
-  })
-}

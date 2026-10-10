@@ -16,6 +16,18 @@ export const defaultSortDirection: Record<GallerySort, GallerySortDirection> = {
 // comparing ids gives the same order without parsing createdAt.
 const byNewest = (a: ThumbnailGalleryImage, b: ThumbnailGalleryImage) => b.id - a.id
 
+// galleryIdRange returns the ids from anchorId to targetId (inclusive, in
+// displayed order, whichever comes first) for shift-click range selection. If
+// either end isn't in the list — the anchor was filtered out since — it falls
+// back to just the target.
+export function galleryIdRange(images: ThumbnailGalleryImage[], anchorId: number, targetId: number): number[] {
+  const a = images.findIndex((i) => i.id === anchorId)
+  const b = images.findIndex((i) => i.id === targetId)
+  if (a < 0 || b < 0) return [targetId]
+  const [from, to] = a <= b ? [a, b] : [b, a]
+  return images.slice(from, to + 1).map((i) => i.id)
+}
+
 // applyGalleryView filters then sorts a gallery's images for display.
 // "asc" means oldest saved / earliest frame / non-favorites first. Images
 // without a frame time (older rows, copies of an existing thumbnail) always
