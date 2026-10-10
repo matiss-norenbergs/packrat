@@ -50,6 +50,20 @@ are grouped under `/api` (see `internal/api/router.go`) to make that collision s
 impossible, no matter how many more pages are added later. `/media-files` and `/ws` stay
 unprefixed since no frontend route shares those names.
 
+## Response compression and static caching
+
+`Compress()` (`internal/api/compress.go`) is a global middleware that gzips SPA assets and JSON API
+bodies for clients sending `Accept-Encoding: gzip`, at `gzip.BestSpeed` (this runs on NAS/Pi-class
+CPUs: level 1 is ~3x cheaper than level 6 for ~20% larger output). It decides lazily from the
+status, headers and first 1 KiB of the body, so handlers don't know it exists. It never touches
+`/media-files`, `/local-images`, `/api/image`, `/ws`, `Range` requests (video seeking), non-GET,
+non-200, already-encoded or `no-transform` responses, non-text content types, or bodies under
+1 KiB; compressed responses get `Vary: Accept-Encoding`, lose `Content-Length`/`Accept-Ranges` and
+have strong ETags weakened. Files under `/assets/*` are Vite content-hashed, so `serveSPA` sends
+them `public, max-age=31536000, immutable`; `index.html` (including the SPA fallback) is
+`no-cache`. There is deliberately no build-time precompression yet — the JS bundle is re-gzipped
+per request.
+
 ## Auth and CSRF
 
 The app is single-user (no registration beyond a one-time setup wizard) but is fully

@@ -13,6 +13,11 @@ Maintenance notes:
 -->
 
 ## 2026-10-10
+- **Gzip-compressed HTTP responses** — the backend sent everything uncompressed (1.6 MB main JS,
+  multi-MB `GET /api/library` on big libraries). A new `Compress()` middleware gzips SPA assets and
+  JSON for clients that accept it (~67% smaller JS, ~81% smaller library JSON), skipping media,
+  `/api/image`, `/ws`, `Range` requests, already-encoded and tiny responses. Hashed `/assets/*`
+  now carry `Cache-Control: immutable` and `index.html` is `no-cache`.
 - **Collection cover picker loads resized tiles** — the "Pick cover art" dialog showed every image
   in the collection's folder at full size (a 60-image test folder was 120 MB). Tiles now come from
   `GET /api/image` at 320/480/720 px (`srcset`/`sizes` matched to the dialog grid), with the original
