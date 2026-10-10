@@ -22,7 +22,7 @@ const (
 	// user has hidden. Stored as hidden (not visible) so widgets added later
 	// show up by default.
 	SettingDashboardHiddenWidgets = "dashboard_hidden_widgets"
-	SettingThumbnailFrameCount      = "thumbnail_frame_count"
+	SettingThumbnailFrameCount    = "thumbnail_frame_count"
 	// SettingThumbnailFrameRangeLow/High bound the portion of the video
 	// (as a percentage of duration) that "Choose from Video"/Quick Grab pick
 	// candidate frames from — default 5-100 skips the likely-blank intro
