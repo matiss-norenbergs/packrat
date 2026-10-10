@@ -18,6 +18,10 @@ const (
 	SettingLibraryMode              = "library_mode"               // "manage" | "details"
 	SettingLibraryPaginationEnabled = "library_pagination_enabled" // bool, default false — off shows every item
 	SettingLibraryPageSize          = "library_page_size"
+	// SettingDashboardHiddenWidgets is a JSON array of Dashboard widget IDs the
+	// user has hidden. Stored as hidden (not visible) so widgets added later
+	// show up by default.
+	SettingDashboardHiddenWidgets = "dashboard_hidden_widgets"
 	SettingThumbnailFrameCount      = "thumbnail_frame_count"
 	// SettingThumbnailFrameRangeLow/High bound the portion of the video
 	// (as a percentage of duration) that "Choose from Video"/Quick Grab pick

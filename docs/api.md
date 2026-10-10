@@ -913,6 +913,7 @@ is a nullable relative path pointing at one of the artist's own gallery images (
   "historyAnonymizeUrls": false, "historyRetentionDays": 0, "downloadLogRetentionDays": 0,
   "libraryView": "grid", "librarySortKey": "downloadedAt", "librarySortDir": "desc",
   "libraryMode": "manage", "libraryPaginationEnabled": false, "libraryPageSize": 48,
+  "dashboardHiddenWidgets": [],
   "thumbnailFrameCount": 4, "thumbnailFrameRangeLow": 5, "thumbnailFrameRangeHigh": 100,
   "privacyBlurStrength": "default", "skipDownloadPreview": false,
   "jellyfinEnabled": false, "jellyfinUrl": "", "jellyfinApiKey": "", "jellyfinRefreshMode": "none",
@@ -938,6 +939,9 @@ Same field set as the `GET` response. Notes:
 
 - `librarySortKey`/`librarySortDir` are stored together as one row — patching just one merges with
   the other's current value.
+- `dashboardHiddenWidgets` is the list of Dashboard card IDs to hide (default `[]` = all shown).
+  Valid IDs: `downloads`, `library`, `libraryGrowth`, `mediaTypes`, `resolutions`, `storage`,
+  `topArtists`, `topTags`. Duplicates are collapsed; an unknown ID is a `400`.
 - `maxConcurrentDownloads` **immediately resizes the live worker pool**, no restart needed.
 - `downloadDirectory` (`MEDIA_ROOT`) is **not** patchable here — env-config only.
 

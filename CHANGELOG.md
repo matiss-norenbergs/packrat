@@ -14,6 +14,9 @@ Maintenance notes:
 
 ## 2026-10-10
 
+- **Dashboard: choose which cards are shown** — a settings cog in the Dashboard header opens a
+  popover with a switch per card (Downloads, Library and the six charts); Save hides the unchecked
+  ones. Stored globally as the `dashboardHiddenWidgets` setting, so new cards appear by default.
 - **Thumbnail gallery: manage mode with bulk favorite & delete** — a "Manage" switch in the gallery
   dialog's toolbar turns the grid into a multi-select (click to select, shift-click for a range,
   Select all / Deselect all) with bulk Favorite, Unfavorite and Delete (count confirmation), instead
