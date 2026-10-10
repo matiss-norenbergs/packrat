@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
+import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   ApiError,
@@ -69,17 +69,39 @@ export function isLibraryItemNotFound(err: unknown): boolean {
   return err instanceof ApiError && err.status === 404
 }
 
+// Looks an item up in any already-cached library list (the sibling strip's
+// collection query, a grid page, Continue Watching…) so navigating to an item
+// that's already in memory can render it before its own request returns.
+function findCachedLibraryItem(queryClient: QueryClient, id: number): LibraryItem | undefined {
+  const lists = queryClient.getQueriesData<LibraryListResponse>({ queryKey: [...libraryQueryKey, "query"] })
+  for (const [, list] of lists) {
+    const found = list?.items.find((i) => i.id === id)
+    if (found) return found
+  }
+  return undefined
+}
+
 // One item (GET /api/library/:id) — what the item detail pages use instead of
 // fetching the whole library just to find one row. Sits under the "library"
 // key prefix, so every mutation's invalidateQueries({ queryKey: libraryQueryKey })
 // refreshes it too. `isLibraryItemNotFound(error)` distinguishes a missing/
 // deleted item from a transient failure.
+//
+// placeholderData (not initialData) is deliberate: when the item is already in
+// a cached list (clicking a sibling tile — the strip just fetched the whole
+// collection), the page renders it immediately instead of a full-page
+// skeleton, but the entry itself stays empty, so the request always still
+// fires, the copy is never kept as authoritative, and a 404 for a deleted item
+// ends in the error state (placeholder data isn't shown once the query errors)
+// rather than being masked by the seed.
 export function useLibraryItem(id: number) {
+  const queryClient = useQueryClient()
   return useQuery({
     queryKey: libraryItemQueryKey(id),
     queryFn: () => fetchLibraryItem(id),
     enabled: Number.isFinite(id),
     retry: retryUnlessNotFound,
+    placeholderData: () => findCachedLibraryItem(queryClient, id),
   })
 }
 

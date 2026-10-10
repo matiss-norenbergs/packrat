@@ -4,8 +4,7 @@ import { renderHook, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { isLibraryItemNotFound, useLibraryItem, useLibraryItemsByIds } from "./useLibrary"
 
-function wrapper() {
-  const client = new QueryClient()
+function wrapper(client = new QueryClient()) {
   return ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
@@ -48,5 +47,49 @@ describe("useLibraryItemsByIds", () => {
     const { result } = renderHook(() => useLibraryItemsByIds([3, 2, 1]), { wrapper: wrapper() })
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(result.current.items.map((i) => i.id)).toEqual([3, 1])
+  })
+})
+
+describe("useLibraryItem seeded from a cached list", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  const cachedList = { items: [{ id: 7, title: "cached seven", status: "completed" }], total: 1 }
+
+  it("renders the cached copy with no loading state, then refetches", async () => {
+    const client = new QueryClient()
+    client.setQueryData(["library", "query", { collectionId: 1 }], cachedList)
+    const fetchMock = mockFetch({ 7: { id: 7, title: "fresh seven" } })
+    const { result } = renderHook(() => useLibraryItem(7), { wrapper: wrapper(client) })
+
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.data).toMatchObject({ id: 7, title: "cached seven" })
+    expect(result.current.isPlaceholderData).toBe(true)
+
+    await waitFor(() => expect(result.current.data).toMatchObject({ title: "fresh seven" }))
+    expect(result.current.isPlaceholderData).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("still loads normally when no cached list contains the id", async () => {
+    const client = new QueryClient()
+    client.setQueryData(["library", "query", { collectionId: 1 }], cachedList)
+    mockFetch({ 8: { id: 8, title: "eight" } })
+    const { result } = renderHook(() => useLibraryItem(8), { wrapper: wrapper(client) })
+
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.data).toBeUndefined()
+    await waitFor(() => expect(result.current.data).toMatchObject({ id: 8 }))
+  })
+
+  it("ends in not-found when the background refetch 404s", async () => {
+    const client = new QueryClient()
+    client.setQueryData(["library", "query", { collectionId: 1 }], cachedList)
+    mockFetch({})
+    const { result } = renderHook(() => useLibraryItem(7), { wrapper: wrapper(client) })
+
+    expect(result.current.data).toMatchObject({ id: 7 })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(isLibraryItemNotFound(result.current.error)).toBe(true)
+    expect(result.current.data).toBeUndefined()
   })
 })
