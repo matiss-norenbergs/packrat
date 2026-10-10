@@ -21,6 +21,8 @@ Maintenance notes:
   `/browse` and `/` is ~20-30% faster, `/library` unchanged; a click on an unprefetched page costs
   ~+70 ms at 40 ms RTT (~+12 ms on localhost), ~0 when hovered first. Server CPU for JS per cold
   load rises (1 request -> 7-18) from ~6 ms to ~25-45 ms.
+  A tab left open across a deploy now recovers from a missing page chunk by reloading once (guarded by a
+  30 s sessionStorage window) and otherwise shows an error page with a Reload button.
 - **Image tiers generated in one ffmpeg pass** — `GenerateTiersFromPath` ran ffmpeg once per tier,
   decoding the same source 2-3 times on every download, thumbnail change, subscription check, AI
   enhance revert and backfill. All tiers now come from a single invocation (`split` filter, one scaled

@@ -5,6 +5,7 @@ import { ImmersiveLayout } from "@/layouts/ImmersiveLayout"
 import { authStatusQueryKey } from "@/hooks/useAuth"
 import { fetchAuthStatus } from "@/lib/api"
 import { queryClient } from "@/lib/queryClient"
+import { RouteError } from "@/components/RouteError"
 
 // Every page is its own chunk (router-level `lazy`) so the shell — layouts,
 // sidebar, auth gate — stays small and recharts only ships with the
@@ -20,7 +21,7 @@ void queryClient.prefetchQuery({ queryKey: authStatusQueryKey, queryFn: fetchAut
 // listeners at the bottom); `lazy` then resolves from the module cache.
 const page = <T extends string>(load: () => Promise<Record<T, React.ComponentType>>, name: T) => ({
   lazy: async () => ({ Component: (await load())[name] }),
-  handle: { preload: () => void load() },
+  handle: { preload: () => void load().catch(() => {}) },
 })
 
 const LoginPage = page(() => import("@/pages/LoginPage"), "LoginPage")
@@ -46,45 +47,51 @@ const BrowseItemPage = page(() => import("@/pages/BrowseItemPage"), "BrowseItemP
 const BrowseShowPage = page(() => import("@/pages/BrowseShowPage"), "BrowseShowPage")
 const BrowseArtistPage = page(() => import("@/pages/BrowseArtistPage"), "BrowseArtistPage")
 
+// Root route exists only to carry the error element; it adds no layout.
 export const router = createBrowserRouter([
-  { path: "/login", ...LoginPage },
   {
-    element: <AppLayout />,
+    errorElement: <RouteError />,
     children: [
-      { path: "/", ...DashboardPage },
-      { path: "/downloads", ...DownloadsPage },
-      { path: "/library", ...LibraryPage },
-      { path: "/library/:id", ...LibraryItemPage },
-      { path: "/collections", ...CollectionsPage },
-      { path: "/tags", ...TagsPage },
-      { path: "/artists", ...ArtistsPage },
-      { path: "/compare-list", ...CompareListPage },
-      { path: "/import", ...ImportPage },
-      { path: "/history", ...HistoryPage },
-      { path: "/backup", ...BackupPage },
-      { path: "/subscriptions", ...SubscriptionsPage },
-      { path: "/thumbnail-enhancement", ...ThumbnailEnhancementPage },
-      { path: "/frame-matching", ...FrameMatchingPage },
-      { path: "/settings", ...SettingsPage },
-      { path: "/logs", ...LogsPage },
+      { path: "/login", ...LoginPage },
+      {
+        element: <AppLayout />,
+        children: [
+          { path: "/", ...DashboardPage },
+          { path: "/downloads", ...DownloadsPage },
+          { path: "/library", ...LibraryPage },
+          { path: "/library/:id", ...LibraryItemPage },
+          { path: "/collections", ...CollectionsPage },
+          { path: "/tags", ...TagsPage },
+          { path: "/artists", ...ArtistsPage },
+          { path: "/compare-list", ...CompareListPage },
+          { path: "/import", ...ImportPage },
+          { path: "/history", ...HistoryPage },
+          { path: "/backup", ...BackupPage },
+          { path: "/subscriptions", ...SubscriptionsPage },
+          { path: "/thumbnail-enhancement", ...ThumbnailEnhancementPage },
+          { path: "/frame-matching", ...FrameMatchingPage },
+          { path: "/settings", ...SettingsPage },
+          { path: "/logs", ...LogsPage },
+        ],
+      },
+      {
+        // A deliberately separate branch from AppLayout — see BrowseLayout for
+        // why (no shared Sidebar/MobileNav with the management area).
+        element: <BrowseLayout />,
+        children: [
+          { path: "/browse", ...BrowsePage },
+          { path: "/browse/collection/:id", ...BrowseShowPage },
+          { path: "/browse/artist/:id", ...BrowseArtistPage },
+          { path: "/browse/:id", ...BrowseItemPage },
+        ],
+      },
+      {
+        // A third, deliberately chrome-less branch — see ImmersiveLayout for why
+        // this can't just reuse BrowseLayout or AppLayout.
+        element: <ImmersiveLayout />,
+        children: [{ path: "/compare-list/play", ...ComparePlayPage }],
+      },
     ],
-  },
-  {
-    // A deliberately separate branch from AppLayout â€” see BrowseLayout for
-    // why (no shared Sidebar/MobileNav with the management area).
-    element: <BrowseLayout />,
-    children: [
-      { path: "/browse", ...BrowsePage },
-      { path: "/browse/collection/:id", ...BrowseShowPage },
-      { path: "/browse/artist/:id", ...BrowseArtistPage },
-      { path: "/browse/:id", ...BrowseItemPage },
-    ],
-  },
-  {
-    // A third, deliberately chrome-less branch â€” see ImmersiveLayout for why
-    // this can't just reuse BrowseLayout or AppLayout.
-    element: <ImmersiveLayout />,
-    children: [{ path: "/compare-list/play", ...ComparePlayPage }],
   },
 ])
 

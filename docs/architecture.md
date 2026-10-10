@@ -75,6 +75,15 @@ layouts, sidebar and auth gate stay in the entry chunk. `vite.config.ts` groups 
 chunks. A delegated `pointerover`/`focusin` listener preloads the chunk of any in-app link.
 The auth status query is prefetched at module load so it runs in parallel with the initial chunk.
 
+**Stale chunks after a deploy.** A tab opened before an update still references the old hashed chunk
+names; the server answers the missing file with the SPA fallback (200 `text/html`), the dynamic import
+rejects and the router surfaces it as a route error. The root route's `RouteError` element recognises
+that (`lib/chunkReload.ts`) and reloads once, which fetches the new `index.html`. A `sessionStorage`
+timestamp (30 s window) prevents loops: a second failure — or unusable storage — shows the error
+page with a Reload button instead. Only the route error is handled: `vite:preloadError` also fires
+for the same failure but is redundant, and a handler that calls `preventDefault` there would make
+`lazy` resolve to `undefined` before the reload.
+
 ## Auth and CSRF
 
 The app is single-user (no registration beyond a one-time setup wizard) but is fully
