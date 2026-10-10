@@ -84,6 +84,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 	// defaults to true).
 	r.UseRawPath = true
 	r.Use(limitRequestBody)
+	r.Use(Compress())
 
 	// All JSON API routes live under /api so they can never collide with a
 	// frontend client-side route of the same name (e.g. both the SPA and the

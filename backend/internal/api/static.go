@@ -3,6 +3,7 @@ package api
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,9 +20,22 @@ func serveSPA(dir string) gin.HandlerFunc {
 		fullPath := filepath.Join(dir, reqPath)
 
 		if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
+			switch {
+			case strings.HasPrefix(filepath.ToSlash(reqPath), "/assets/"):
+				// Vite content-hashes everything under /assets, so a given
+				// URL never changes content. (Only set for files that exist:
+				// a stale hashed URL falls through to index.html below and
+				// must not be cached as immutable.)
+				c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			case filepath.Base(fullPath) == "index.html":
+				c.Header("Cache-Control", "no-cache")
+			}
 			c.File(fullPath)
 			return
 		}
+		// SPA fallback: always revalidate so a new deploy's asset hashes are
+		// picked up immediately.
+		c.Header("Cache-Control", "no-cache")
 		c.File(filepath.Join(dir, "index.html"))
 	}
 }
