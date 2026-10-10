@@ -38,6 +38,14 @@ const generateTimeout = 30 * time.Second
 // to a WebP file at dstAbs, capping width at maxWidth while preserving
 // aspect ratio.
 func GenerateWebP(ctx context.Context, ffmpegPath, srcAbs, dstAbs string, maxWidth int) error {
+	return GenerateWebPBox(ctx, ffmpegPath, srcAbs, dstAbs, maxWidth, 0)
+}
+
+// GenerateWebPBox is GenerateWebP with an optional height cap: maxHeight > 0
+// scales the image to fit inside a maxWidth x maxHeight box (aspect ratio
+// preserved, never upscaled, never cropped/padded). maxHeight == 0 is exactly
+// the width-only behaviour of GenerateWebP.
+func GenerateWebPBox(ctx context.Context, ffmpegPath, srcAbs, dstAbs string, maxWidth, maxHeight int) error {
 	ctx, cancel := context.WithTimeout(ctx, generateTimeout)
 	defer cancel()
 
@@ -45,6 +53,9 @@ func GenerateWebP(ctx context.Context, ffmpegPath, srcAbs, dstAbs string, maxWid
 	// filtergraph parser (which otherwise reads it as a filter separator) —
 	// this isn't shell quoting, there's no shell involved via exec.Command.
 	scaleFilter := fmt.Sprintf(`scale='min(iw\,%d)':-2`, maxWidth)
+	if maxHeight > 0 {
+		scaleFilter = fmt.Sprintf(`scale='min(iw\,%d)':'min(ih\,%d)':force_original_aspect_ratio=decrease`, maxWidth, maxHeight)
+	}
 
 	cmd := exec.CommandContext(ctx, ffmpegPath, "-y", "-i", srcAbs, "-vf", scaleFilter, "-c:v", "libwebp", "-q:v", "80", dstAbs)
 	var stderr bytes.Buffer

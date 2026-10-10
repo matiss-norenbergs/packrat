@@ -14,6 +14,12 @@ Maintenance notes:
 
 ## 2026-10-10
 
+- **Live image resizing endpoint; Browse hero now loads resized WebP** — new authenticated
+  `GET /api/image?root=media|images&path=…&w=…[&h=…]` resizes a stored image to a whitelisted width
+  (and optional height cap) as WebP, cached under the new `CACHE_ROOT` (default `./data/cache`),
+  with request coalescing, a 2-resize concurrency cap, ETag/`Last-Modified` revalidation and an
+  hourly age-based sweep (7 days unused). The Browse hero banner uses it via `srcset`/`sizes`
+  instead of always loading the full-size JPEG, falling back to the original on error.
 - **Frame picker header shows the picked time range** — after "Choose from Video (custom)…", the
   "Choose a thumbnail" dialog lists the range as times next to the percentages (e.g.
   `21.5%–59.6% of the video (0:35–1:38)`).

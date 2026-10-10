@@ -1615,6 +1615,28 @@ Static file server rooted at `MEDIA_ROOT`. Requires a valid session cookie but n
 via `If-Modified-Since`, but never assumes a stale byte range is fresh, since sidecar thumbnails
 get overwritten in place at the same path.
 
+## Resized images
+
+| Method | Path |
+|---|---|
+| GET | `/api/image` |
+
+Authenticated (session cookie; GET, so no CSRF header). Returns a stored image resized to WebP
+(quality 80) — computed once, cached under `CACHE_ROOT`, then served from the cache.
+
+| Query | Required | Notes |
+|---|---|---|
+| `root` | yes | `media` (`MEDIA_ROOT`) or `images` (`IMAGES_ROOT`) |
+| `path` | yes | path relative to that root; traversal outside it is a `400`. Source must be `.jpg`/`.jpeg`/`.png`/`.webp` |
+| `w` | yes | max width, one of `320, 480, 720, 1080, 1280, 1920` |
+| `h` | no | max height, one of `180, 270, 405, 720, 1080`; fit-inside, never crop/pad |
+
+Output is scaled to fit inside `w × h` preserving aspect ratio and is never upscaled. Errors:
+`400` (bad `root`/`path`/extension, `w`/`h` outside the whitelist — never rounded), `404` (source
+missing), `500` (ffmpeg failure). Response headers: `Content-Type: image/webp`,
+`Cache-Control: no-cache`, `ETag` (the cache key, which includes the source mtime/size),
+`Last-Modified` (source mtime); `If-None-Match` / `If-Modified-Since` yield `304`. Not `immutable`.
+
 ## WebSocket
 
 | Method | Path |

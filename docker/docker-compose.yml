@@ -12,6 +12,10 @@ services:
       - MEDIA_ROOT=/app/data/media
       - IMAGES_ROOT=/app/data/images
       - BACKUPS_ROOT=/app/data/backups
+      # Resized-image cache (GET /api/image). Disposable — rebuilt on demand and
+      # swept after 7 days unused — so it needs no volume; mount one only to
+      # keep it across container recreation or to browse it directly.
+      - CACHE_ROOT=/app/data/cache
       - MAX_CONCURRENT_DOWNLOADS=2
     volumes:
       - ./data/media:/app/data/media

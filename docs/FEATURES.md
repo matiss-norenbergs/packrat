@@ -16,6 +16,12 @@ with saved playback progress — see the Library player below), **Recently Added
 by show/collection and by artist. Meant for casual "what do I watch next" browsing rather than
 searching/filtering, which is what the Library page is for.
 
+The hero banner loads the item's thumbnail as a resized WebP from `GET /api/image` rather than the
+full-size file: the `<img>` carries a `srcset` of 720/1080/1280/1920 px candidates with
+`sizes="100vw"`, so the browser picks the smallest one covering its width × device pixel ratio.
+`src` stays the original file URL, and if the resized request fails the hero falls back to it so the
+banner never goes blank. The Library grid/list/strip keep the pre-generated small/medium tiers.
+
 ## Dashboard
 
 The landing page. Two cards summarize current state at a glance, followed by charts:

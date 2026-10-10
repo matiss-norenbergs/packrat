@@ -2,11 +2,15 @@ import { type ReactNode, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { mediaFileUrl } from "@/lib/api"
+import { type ResizeWidth, mediaFileUrl, resizedImageSrcSet } from "@/lib/api"
 import type { LibraryItem } from "@/types/api"
 
 // How long each item stays featured before auto-advancing.
 const ROTATE_DURATION_MS = 10_000
+
+// Candidate widths for the banner's srcset; the browser picks from layout
+// width x devicePixelRatio (the banner spans the viewport, hence sizes="100vw").
+const HERO_WIDTHS: readonly ResizeWidth[] = [720, 1080, 1280, 1920]
 
 // The large "featured item" banner at the top of Browse — rotates through
 // `items` (the most recently added, most-recent first), one at a time, with
@@ -43,7 +47,7 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
       onMouseLeave={() => setHovered(false)}
     >
       {item.thumbnail ? (
-        <img src={mediaFileUrl(item.thumbnail)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <HeroImage key={item.id} path={item.thumbnail} />
       ) : (
         <div className="absolute inset-0 bg-muted" />
       )}
@@ -111,5 +115,24 @@ function HeroIconButton({ label, onClick, children }: { label: string; onClick: 
     >
       {children}
     </button>
+  )
+}
+
+// Serves the banner as a resized WebP via srcset, with the original file as
+// the `src` fallback. If the resize endpoint errors (unsupported source type,
+// ffmpeg failure) the srcset is dropped so the browser reloads the original
+// and the hero never goes blank. Keyed by item id by the caller so the
+// failure state resets on rotation.
+function HeroImage({ path }: { path: string }) {
+  const [resizeFailed, setResizeFailed] = useState(false)
+  return (
+    <img
+      src={mediaFileUrl(path)}
+      srcSet={resizeFailed ? undefined : resizedImageSrcSet({ root: "media", path, widths: HERO_WIDTHS })}
+      sizes="100vw"
+      alt=""
+      className="absolute inset-0 h-full w-full object-cover"
+      onError={() => setResizeFailed(true)}
+    />
   )
 }

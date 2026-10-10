@@ -298,9 +298,29 @@ On startup, `DownloadsRepo.MarkInterruptedIfActive` scans for rows left in `queu
 process was mid-flight on) and marks them `interrupted`. Nothing is silently resumed — the user
 must manually retry from the Downloads or History page.
 
+## Live image resizing
+
+`GET /api/image` (`api/image_handler.go`, `imageproc/resize.go`) resizes a stored image on demand
+to a whitelisted width (and optional height cap) as WebP, reusing the ffmpeg path of
+`imageproc.GenerateWebP` (`GenerateWebPBox` adds the height cap). It is an addition to, not a
+replacement for, the pre-generated small/medium tiers, which stay the path for the hot
+grid/list/strip views; today only the Browse hero uses it.
+
+- **Cache:** `CACHE_ROOT` (default `./data/cache`, created on first use, deliberately outside the
+  static trees). Key = sha256 of (root, path, source mtime, source size, w, h), so an in-place
+  overwrite of the source simply misses. Files are written to a temp name then atomically renamed;
+  every hit touches the file's mtime, which is the "last accessed" time.
+- **Concurrency:** identical in-flight keys are coalesced in a small in-flight map (one ffmpeg
+  per key; followers wait on the leader, which runs detached from any single request's context),
+  and at most 2 resizes run at once (a channel semaphore, same shape as `embedMetadataSem`).
+- **Eviction:** `cleanupImageCache` runs on the shared hourly ticker and deletes cache files not
+  accessed within `imageproc.ResizeCacheMaxAge` (7 days, one constant). Orphaned variants of
+  overwritten sources age out the same way.
+
 ## Retention sweeps
 
-A single shared hourly ticker in `main.go` (`historyCleanupInterval = time.Hour`) drives five
+A single shared hourly ticker in `main.go` (`historyCleanupInterval = time.Hour`) also runs the
+image-cache sweep (see Live image resizing) and drives five
 independent, sequential, no-op-if-not-due sweeps per tick — one goroutine, not five separate
 tickers: history/download-log retention, thumbnail-enhancement history cleanup, due subscription
 checks (`subscriptions.RunDueChecks`), and due scheduled backups

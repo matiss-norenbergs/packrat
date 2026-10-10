@@ -234,6 +234,40 @@ export function imageUrl(relativePath: string): string {
   return `/local-images/${relativePath.split("/").map(encodeURIComponent).join("/")}`
 }
 
+// Live-resize endpoint (GET /api/image): the stored image as WebP at a
+// whitelisted width, optionally also capped in height (fit-inside, never
+// cropped or upscaled). Widths/heights must match the backend whitelist in
+// imageproc/resize.go — anything else is a 400.
+export const RESIZE_WIDTHS = [320, 480, 720, 1080, 1280, 1920] as const
+export const RESIZE_HEIGHTS = [180, 270, 405, 720, 1080] as const
+export type ResizeWidth = (typeof RESIZE_WIDTHS)[number]
+export type ResizeHeight = (typeof RESIZE_HEIGHTS)[number]
+
+export interface ResizedImageSource {
+  root: "media" | "images"
+  path: string
+}
+
+export function resizedImageUrl({
+  root,
+  path,
+  width,
+  height,
+}: ResizedImageSource & { width: ResizeWidth; height?: ResizeHeight }): string {
+  const params = new URLSearchParams({ root, path, w: String(width) })
+  if (height) params.set("h", String(height))
+  return `/api/image?${params.toString()}`
+}
+
+// One `url Nw` candidate per width, for an <img srcset>.
+export function resizedImageSrcSet({
+  root,
+  path,
+  widths,
+}: ResizedImageSource & { widths: readonly ResizeWidth[] }): string {
+  return widths.map((width) => `${resizedImageUrl({ root, path, width })} ${width}w`).join(", ")
+}
+
 // Fetches whatever's already showing at an <img>'s src — a mediaFileUrl()/
 // imageUrl() path or a data: URI alike — and returns it as bare base64, for
 // call sites that only have a rendered image's URL but need the bytes to
