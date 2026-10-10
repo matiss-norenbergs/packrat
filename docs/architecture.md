@@ -64,6 +64,26 @@ them `public, max-age=31536000, immutable`; `index.html` (including the SPA fall
 `no-cache`. There is deliberately no build-time precompression yet — the JS bundle is re-gzipped
 per request.
 
+## Frontend bundle is split per route
+
+`frontend/src/routes/index.tsx` loads every page through react-router's route-level `lazy`
+(not `React.lazy`/Suspense: a Suspense fallback made first content ~300 ms slower because of React's
+reveal throttle, and route `lazy` also keeps the old page on screen until the next is ready). The
+layouts, sidebar and auth gate stay in the entry chunk. `vite.config.ts` groups node_modules into
+`vendor-react`, `vendor` and `vendor-charts` (recharts, Dashboard only), plus `app-shared` for
+`components/ui`, `hooks`, `lib` and `types`; without the groups rolldown emits ~100 tiny shared
+chunks. A delegated `pointerover`/`focusin` listener preloads the chunk of any in-app link.
+The auth status query is prefetched at module load so it runs in parallel with the initial chunk.
+
+**Stale chunks after a deploy.** A tab opened before an update still references the old hashed chunk
+names; the server answers the missing file with the SPA fallback (200 `text/html`), the dynamic import
+rejects and the router surfaces it as a route error. The `RouteError` element on each top-level route recognises
+that (`lib/chunkReload.ts`) and reloads once, which fetches the new `index.html`. A `sessionStorage`
+timestamp (30 s window) prevents loops: a second failure — or unusable storage — shows the error
+page with a Reload button instead. Only the route error is handled: `vite:preloadError` also fires
+for the same failure but is redundant, and a handler that calls `preventDefault` there would make
+`lazy` resolve to `undefined` before the reload.
+
 ## Auth and CSRF
 
 The app is single-user (no registration beyond a one-time setup wizard) but is fully

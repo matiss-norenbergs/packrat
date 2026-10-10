@@ -13,6 +13,16 @@ Maintenance notes:
 -->
 
 ## 2026-10-10
+- **Frontend code-split by route** — the SPA shipped as one 1.63 MB (446 KB gzip) JS file with
+  recharts and every page loaded up front. Pages are now router-level `lazy` chunks, vendor code is
+  grouped into `vendor-react` / `vendor` / `vendor-charts` / `app-shared` (45 JS files total), and
+  hovering or focusing an in-app link preloads its chunk. Cold-load JS on the wire (gzip, dev
+  container): `/library` 532 -> 470 KB, `/browse` -> 430 KB, `/` -> 424 KB. Content-ready on cold
+  `/browse` and `/` is ~20-30% faster, `/library` unchanged; a click on an unprefetched page costs
+  ~+70 ms at 40 ms RTT (~+12 ms on localhost), ~0 when hovered first. Server CPU for JS per cold
+  load rises (1 request -> 7-18) from ~6 ms to ~25-45 ms.
+  A tab left open across a deploy now recovers from a missing page chunk by reloading once (guarded by a
+  30 s sessionStorage window) and otherwise shows an error page with a Reload button.
 - **Image tiers generated in one ffmpeg pass** — `GenerateTiersFromPath` ran ffmpeg once per tier,
   decoding the same source 2-3 times on every download, thumbnail change, subscription check, AI
   enhance revert and backfill. All tiers now come from a single invocation (`split` filter, one scaled
