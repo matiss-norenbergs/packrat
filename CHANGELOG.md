@@ -14,6 +14,9 @@ Maintenance notes:
 
 ## 2026-10-10
 
+- **Frame picker header shows the picked time range** — after "Choose from Video (custom)…", the
+  "Choose a thumbnail" dialog lists the range as times next to the percentages (e.g.
+  `21.5%–59.6% of the video (0:35–1:38)`).
 - **Choose from Video (custom): finer range, shown as time too** — the pick-range slider moves in
   0.1% steps, its ends read as the video's timeline and the readout shows percent and times
   together. The per-call `low`/`high` on `/thumbnail/timestamps` now accept decimals to match.

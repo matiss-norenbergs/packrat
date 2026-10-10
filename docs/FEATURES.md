@@ -154,7 +154,7 @@ deleting their files).
     Settings values every time; nothing is remembered. "Get N new frames" in that session reuses the
     custom count and range. The slider here moves in 0.1% steps
     (Settings stays whole percents), its ends read `0:00` … the video's duration, and the readout
-    below shows the range as both percent and times.
+    below shows the range as both percent and times (the frame picker's header repeats both).
   - **Match from URL/Current Thumbnail…** — see [Frame Matching](#frame-matching).
   - **Save in Thumbnail Gallery** / **View Gallery…** — see Thumbnail gallery below.
   - Quick Grab, both Choose from Video… entries, and both Match actions need an actual video stream to pull

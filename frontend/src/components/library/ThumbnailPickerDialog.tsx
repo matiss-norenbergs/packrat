@@ -230,7 +230,14 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange, options }: Thu
           <DialogTitle>Choose a thumbnail</DialogTitle>
           <DialogDescription>
             {configuredCount} frames pulled from{" "}
-            {options ? `${options.low}%–${options.high}% of the video` : "across the video"} — pick one to use as the
+            {options
+              ? `${options.low}%–${options.high}% of the video${
+                  item.duration != null && item.duration > 0
+                    ? ` (${formatDuration((options.low / 100) * item.duration)}–${formatDuration((options.high / 100) * item.duration)})`
+                    : ""
+                }`
+              : "across the video"}{" "}
+            — pick one to use as the
             thumbnail, or save any frame straight to the gallery.
           </DialogDescription>
         </DialogHeader>
