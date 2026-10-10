@@ -187,7 +187,8 @@ location to anchor a sidecar file to.
 `imageproc.GenerateTiers`/`GenerateTiersFromPath` (ffmpeg shell-out, never a cgo image library) is
 the one shared pipeline behind every resized-image feature in the app: library thumbnails
 (small/medium), collection covers (small/medium/original), and artist images (a single 400px
-tier). Collection-cover and artist-image writes additionally share a common dual-source request
+tier). All tiers of one call come from a single ffmpeg invocation (`split` filter, one scaled
+branch + output per tier), so the source is decoded once. Collection-cover and artist-image writes additionally share a common dual-source request
 pattern (`sourceRelPath` — an existing file under `MEDIA_ROOT` — or `imageBase64`+`filename`, a
 fresh upload) via `resolveImageSourceBytes` (`internal/api/image_source.go`). All of these
 derivatives live under a separate `ImagesRoot`/`/local-images/*` static tree, distinct from

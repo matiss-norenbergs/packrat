@@ -13,6 +13,11 @@ Maintenance notes:
 -->
 
 ## 2026-10-10
+- **Image tiers generated in one ffmpeg pass** — `GenerateTiersFromPath` ran ffmpeg once per tier,
+  decoding the same source 2-3 times on every download, thumbnail change, subscription check, AI
+  enhance revert and backfill. All tiers now come from a single invocation (`split` filter, one scaled
+  branch and output per tier); output files are byte-identical. A failed generation now also removes
+  the tiers it had already written. Backfill of 100 test items: ~57 s -> ~39 s in the dev container.
 - **Gzip-compressed HTTP responses** — the backend sent everything uncompressed (1.6 MB main JS,
   multi-MB `GET /api/library` on big libraries). A new `Compress()` middleware gzips SPA assets and
   JSON for clients that accept it (~67% smaller JS, ~81% smaller library JSON), skipping media,

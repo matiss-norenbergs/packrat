@@ -41,6 +41,18 @@ func GenerateWebP(ctx context.Context, ffmpegPath, srcAbs, dstAbs string, maxWid
 	return GenerateWebPBox(ctx, ffmpegPath, srcAbs, dstAbs, maxWidth, 0)
 }
 
+// scaleFilterFor builds the ffmpeg scale filter shared by every WebP
+// generation path: width-capped (maxHeight == 0) or fit-inside-a-box, never
+// upscaling. The comma inside min(iw,maxWidth) must be escaped for ffmpeg's
+// own filtergraph parser (which otherwise reads it as a filter separator) -
+// this isn't shell quoting, there's no shell involved via exec.Command.
+func scaleFilterFor(maxWidth, maxHeight int) string {
+	if maxHeight > 0 {
+		return fmt.Sprintf(`scale='min(iw\,%d)':'min(ih\,%d)':force_original_aspect_ratio=decrease`, maxWidth, maxHeight)
+	}
+	return fmt.Sprintf(`scale='min(iw\,%d)':-2`, maxWidth)
+}
+
 // GenerateWebPBox is GenerateWebP with an optional height cap: maxHeight > 0
 // scales the image to fit inside a maxWidth x maxHeight box (aspect ratio
 // preserved, never upscaled, never cropped/padded). maxHeight == 0 is exactly
@@ -49,13 +61,7 @@ func GenerateWebPBox(ctx context.Context, ffmpegPath, srcAbs, dstAbs string, max
 	ctx, cancel := context.WithTimeout(ctx, generateTimeout)
 	defer cancel()
 
-	// The comma inside min(iw,maxWidth) must be escaped for ffmpeg's own
-	// filtergraph parser (which otherwise reads it as a filter separator) —
-	// this isn't shell quoting, there's no shell involved via exec.Command.
-	scaleFilter := fmt.Sprintf(`scale='min(iw\,%d)':-2`, maxWidth)
-	if maxHeight > 0 {
-		scaleFilter = fmt.Sprintf(`scale='min(iw\,%d)':'min(ih\,%d)':force_original_aspect_ratio=decrease`, maxWidth, maxHeight)
-	}
+	scaleFilter := scaleFilterFor(maxWidth, maxHeight)
 
 	cmd := exec.CommandContext(ctx, ffmpegPath, "-y", "-i", srcAbs, "-vf", scaleFilter, "-c:v", "libwebp", "-q:v", "80", dstAbs)
 	var stderr bytes.Buffer
@@ -100,29 +106,84 @@ func GenerateTiers(ctx context.Context, ffmpegPath, imagesRoot, kind string, ent
 // event, and fresh every call so replacing an image always changes the URL
 // (cache-busting — a fixed filename would let the browser keep showing
 // stale bytes after a same-path replacement, since the <img src> string
-// would never change). Returns the relative paths (under imagesRoot) in the
+// would never change). All tiers come from a single ffmpeg invocation (the
+// source is decoded once). Returns the relative paths (under imagesRoot) in the
 // same order as tiers. Used when the source image is already a file on disk
 // (e.g. a library item's sidecar thumbnail); GenerateTiers is the
 // byte-slice-source sibling for upload/copy flows.
 func GenerateTiersFromPath(ctx context.Context, ffmpegPath, imagesRoot, kind string, entityID int64, srcAbs string, tiers []Tier) ([]string, error) {
 	uid := uuid.NewString()
 	paths := make([]string, len(tiers))
+	destAbs := make([]string, len(tiers))
 	for i, tier := range tiers {
 		destDir := filepath.Join(imagesRoot, kind, strconv.FormatInt(entityID, 10), tier.Name)
 		if err := os.MkdirAll(destDir, 0o755); err != nil {
 			return nil, fmt.Errorf("creating %s tier dir: %w", tier.Name, err)
 		}
-		destAbs := filepath.Join(destDir, uid+".webp")
-		if err := GenerateWebP(ctx, ffmpegPath, srcAbs, destAbs, tier.MaxWidth); err != nil {
-			return nil, fmt.Errorf("generating %s tier: %w", tier.Name, err)
-		}
-		rel, err := filepath.Rel(imagesRoot, destAbs)
+		destAbs[i] = filepath.Join(destDir, uid+".webp")
+		rel, err := filepath.Rel(imagesRoot, destAbs[i])
 		if err != nil {
-			rel = destAbs
+			rel = destAbs[i]
 		}
 		paths[i] = filepath.ToSlash(rel)
 	}
+	if len(tiers) == 0 {
+		return paths, nil
+	}
+
+	if err := generateWebPTiers(ctx, ffmpegPath, srcAbs, destAbs, tiers); err != nil {
+		// Never leave a half-generated set behind: a later retry mints a new
+		// uid, so these files would otherwise be orphaned forever.
+		for _, p := range destAbs {
+			os.Remove(p)
+		}
+		return nil, err
+	}
 	return paths, nil
+}
+
+// generateWebPTiers decodes srcAbs once and writes one WebP per tier with a
+// single ffmpeg invocation: the decoded frame is split into one branch per
+// tier, each branch gets the same scale filter GenerateWebP would apply for
+// that tier's width, and each branch is mapped to its own output. Output is
+// identical to running GenerateWebP once per tier. destAbs[i] receives
+// tiers[i].
+func generateWebPTiers(ctx context.Context, ffmpegPath, srcAbs string, destAbs []string, tiers []Tier) error {
+	ctx, cancel := context.WithTimeout(ctx, generateTimeout)
+	defer cancel()
+
+	var graph strings.Builder
+	n := len(tiers)
+	if n > 1 {
+		graph.WriteString("[0:v]split=" + strconv.Itoa(n))
+		for i := range tiers {
+			fmt.Fprintf(&graph, "[s%d]", i)
+		}
+		graph.WriteString(";")
+	}
+	for i, tier := range tiers {
+		in := "[0:v]"
+		if n > 1 {
+			in = fmt.Sprintf("[s%d]", i)
+		}
+		if i > 0 {
+			graph.WriteString(";")
+		}
+		fmt.Fprintf(&graph, "%s%s[o%d]", in, scaleFilterFor(tier.MaxWidth, 0), i)
+	}
+
+	args := []string{"-y", "-i", srcAbs, "-filter_complex", graph.String()}
+	for i := range tiers {
+		args = append(args, "-map", fmt.Sprintf("[o%d]", i), "-c:v", "libwebp", "-q:v", "80", destAbs[i])
+	}
+
+	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg webp tier encode failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
 }
 
 // ProbeDimensions reads an image file's pixel width/height from its header
