@@ -40,6 +40,12 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
 
   const goTo = (i: number) => setIndex(((i % items.length) + items.length) % items.length)
 
+  // The slide that auto-advance (or "Next") shows next — fetched ahead so the
+  // swap doesn't wait on the network or a cold resize. Only when rotating, and
+  // never the current item itself (a one-item list).
+  const nextItem = canRotate ? items[(index + 1) % items.length] : undefined
+  const nextThumbnail = nextItem?.thumbnail ?? null
+
   return (
     <div
       className="group/hero relative flex h-[50vh] min-h-72 w-full items-end overflow-hidden md:h-[60vh]"
@@ -51,6 +57,7 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
       ) : (
         <div className="absolute inset-0 bg-muted" />
       )}
+      {nextThumbnail && <HeroPreload key={`preload-${nextItem?.id}`} path={nextThumbnail} />}
       <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
       {canRotate && <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/50 to-transparent" />}
 
@@ -127,12 +134,30 @@ function HeroImage({ path }: { path: string }) {
   const [resizeFailed, setResizeFailed] = useState(false)
   return (
     <img
-      src={mediaFileUrl(path)}
-      srcSet={resizeFailed ? undefined : resizedImageSrcSet({ root: "media", path, widths: HERO_WIDTHS })}
-      sizes="100vw"
+      {...heroImageSource(path, resizeFailed)}
       alt=""
       className="absolute inset-0 h-full w-full object-cover"
       onError={() => setResizeFailed(true)}
     />
   )
+}
+
+// Fetches the upcoming slide into the browser cache. A hidden <img> using the
+// exact same src/srcset/sizes as HeroImage, so the browser resolves the same
+// srcset candidate (sizes="100vw" depends on the viewport, not layout, so
+// display:none doesn't change the pick) and the real <img> reuses the
+// response instead of fetching twice. Failures are ignored: HeroImage has its
+// own fallback when the slide actually shows.
+function HeroPreload({ path }: { path: string }) {
+  return <img {...heroImageSource(path, false)} alt="" aria-hidden="true" className="hidden" />
+}
+
+// The one place the hero's image attributes are built, so the displayed image
+// and its preload can never drift apart.
+function heroImageSource(path: string, resizeFailed: boolean) {
+  return {
+    src: mediaFileUrl(path),
+    srcSet: resizeFailed ? undefined : resizedImageSrcSet({ root: "media" as const, path, widths: HERO_WIDTHS }),
+    sizes: "100vw",
+  }
 }

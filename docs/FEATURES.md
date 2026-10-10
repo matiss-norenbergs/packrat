@@ -20,7 +20,9 @@ The hero banner loads the item's thumbnail as a resized WebP from `GET /api/imag
 full-size file: the `<img>` carries a `srcset` of 720/1080/1280/1920 px candidates with
 `sizes="100vw"`, so the browser picks the smallest one covering its width × device pixel ratio.
 `src` stays the original file URL, and if the resized request fails the hero falls back to it so the
-banner never goes blank. The Library grid/list/strip keep the pre-generated small/medium tiers.
+banner never goes blank. The next slide is fetched ahead in a hidden `<img>` with identical
+attributes, so rotation does not wait on the network or a cold resize. The Library grid/list/strip
+keep the pre-generated small/medium tiers.
 
 ## Dashboard
 

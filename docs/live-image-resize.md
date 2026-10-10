@@ -84,7 +84,9 @@ that always loads the original.
   already-cached larger candidate, and on a window resize it may pick a larger candidate but won't
   swap back down). The `src` attribute keeps the original-file URL as the fallback for
   browsers/situations that ignore `srcset`, and for the error fallback below.
-- **Optional:** preload the next slide's image.
+- **Preload (implemented):** the next slide is fetched into the browser cache by a hidden `<img>`
+  built from the same attributes as the visible one (`heroImageSource` in `BrowseHero.tsx`), so the
+  browser resolves the same `srcset` candidate and reuses the response.
 - **Caching:** the base JPEG is overwritten in place on replace, so the response must revalidate
   (ETag / `Last-Modified`), same rationale as the existing `no-cache` on static routes.
 - **Fallback:** if the resize endpoint errors, fall back to the existing `mediaFileUrl` so the hero

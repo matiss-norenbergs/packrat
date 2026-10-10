@@ -14,6 +14,9 @@ Maintenance notes:
 
 ## 2026-10-10
 
+- **Browse hero preloads the next slide** — while a slide is showing, the following slide's resized
+  image is fetched into the browser cache (hidden `<img>`, same `srcset`/`sizes`), so rotation
+  and "Next" no longer wait on the network or a cold resize.
 - **Thumbnail gallery grid loads lazily and as resized WebP** — tiles use `loading="lazy"` and are
   served from `GET /api/image` at 320/480/720 px (`srcset`/`sizes` matched to the grid columns)
   instead of full-frame files, with the original as fallback; the fullscreen viewer still loads the
