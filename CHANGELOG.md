@@ -12,6 +12,14 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-10
+
+- **Thumbnail gallery: manage mode with bulk favorite & delete** — a "Manage" switch in the gallery
+  dialog's toolbar turns the grid into a multi-select (click to select, shift-click for a range,
+  Select all / Deselect all) with bulk Favorite, Unfavorite and Delete (count confirmation), instead
+  of acting on tiles one at a time. Filter and sort moved from the dialog header into the same
+  toolbar row.
+
 ## 2026-10-09
 
 - **New: "Save all to gallery" in the frame picker** — "Choose from Video…" and "Choose from Video

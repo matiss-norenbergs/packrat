@@ -210,6 +210,15 @@ without re-extracting or re-fetching anything.
   ascending/descending toggle (defaults: newest first, earliest frame first, favorites first);
   images without a frame time always sort last under Frame time. The viewer's next/prev
   follows the displayed order.
+- The **Manage** switch (toolbar, left of the filter/sort) turns the grid into a multi-select: the
+  per-tile hover buttons give way to a selection circle on each tile, and clicking a tile selects it
+  instead of opening the viewer (shift-click selects a range in the displayed order). While on, the
+  toolbar adds **Select all / Deselect all** (everything currently displayed), **Favorite**,
+  **Unfavorite**, **Delete** (with a count confirmation) and a selected count. Bulk actions only
+  apply to selected images that are currently displayed, and Favorite/Unfavorite skip images
+  already in that state (each is disabled when nothing in the selection would change). Switching
+  Manage off, or pressing Esc once, leaves manage mode and clears the selection; Esc again closes
+  the dialog.
 - Removing an image from the gallery never affects the item's current thumbnail, and vice versa.
 
 ## Collections
