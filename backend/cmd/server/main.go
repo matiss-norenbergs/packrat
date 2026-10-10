@@ -19,6 +19,7 @@ import (
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/framematch"
 	"packrat/backend/internal/imagebackfill"
+	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
@@ -57,6 +58,21 @@ func cleanupHistory(ctx context.Context, historyRepo *repository.HistoryRepo, se
 	}
 	if n > 0 {
 		log.Printf("history cleanup: removed %d entries older than %d days", n, days)
+	}
+}
+
+// cleanupImageCache deletes resized-image cache files (GET /api/image) not
+// accessed within imageproc.ResizeCacheMaxAge. Stale variants (source
+// overwritten in place) are orphaned rather than invalidated, so this is
+// what reclaims them.
+func cleanupImageCache(cacheRoot string) {
+	n, err := imageproc.SweepCache(cacheRoot, imageproc.ResizeCacheMaxAge, time.Now())
+	if err != nil {
+		log.Printf("image cache cleanup failed: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("image cache cleanup: removed %d file(s) not accessed in %s", n, imageproc.ResizeCacheMaxAge)
 	}
 }
 
@@ -224,13 +240,16 @@ func run() error {
 		Broadcaster:   hub,
 	}
 
+	imageResizer := imageproc.NewResizer(cfg.FFmpegPath, cfg.CacheRoot)
+
 	go func() {
-		// All five sweeps share one ticker — they run on the same cadence
+		// All six sweeps share one ticker — they run on the same cadence
 		// and each is already a no-op when its own setting is unset/not due.
 		// The smallest auto-backup interval option is 6h, and subscriptions
 		// default to 6h too, so hourly-granularity checking is more than
 		// sufficient.
 		cleanupHistory(ctx, historyRepo, settingsRepo) // once immediately, so a just-raised retention takes effect right away
+		cleanupImageCache(cfg.CacheRoot)
 		cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
 		cleanupThumbnailEnhancementHistory(ctx, enhanceDeps)
 		backup.RunScheduledBackupIfDue(ctx, runDeps)
@@ -244,6 +263,7 @@ func run() error {
 				return
 			case <-ticker.C:
 				cleanupHistory(ctx, historyRepo, settingsRepo)
+				cleanupImageCache(cfg.CacheRoot)
 				cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
 				cleanupThumbnailEnhancementHistory(ctx, enhanceDeps)
 				backup.RunScheduledBackupIfDue(ctx, runDeps)
@@ -288,6 +308,7 @@ func run() error {
 		MediaRoot:                         cfg.MediaRoot,
 		ImagesRoot:                        cfg.ImagesRoot,
 		BackupsRoot:                       cfg.BackupsRoot,
+		ImageResizer:                      imageResizer,
 		FFProbePath:                       cfg.FFProbePath,
 		WSHandler:                         hub.GinHandler(),
 		Broadcaster:                       hub,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type ImgHTMLAttributes, type KeyboardEvent, type MouseEvent } from "react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCheck, CheckCircle2, Heart, HeartOff, Info, Square, Trash2, XIcon } from "lucide-react"
 import {
@@ -26,7 +26,7 @@ import {
   useSetThumbnailGalleryFavorites,
   useThumbnailGallery,
 } from "@/hooks/useThumbnailGallery"
-import { imageUrl } from "@/lib/api"
+import { type ResizeWidth, imageUrl, resizedImageSrcSet } from "@/lib/api"
 import {
   applyGalleryView,
   defaultSortDirection,
@@ -301,9 +301,14 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
                             },
                           })}
                         >
-                          <img
-                            src={imageUrl(img.imagePath)}
+                          <GalleryTileImage
+                            path={img.imagePath}
                             alt="Saved thumbnail"
+                            // Off-screen tiles aren't fetched until scrolled
+                            // near; aspect-video reserves each tile's space
+                            // so the grid doesn't shift as images arrive.
+                            loading="lazy"
+                            decoding="async"
                             title={manageMode ? undefined : "Click to view"}
                             onClick={manageMode ? undefined : () => setViewerIndex(i)}
                             draggable={!manageMode}
@@ -427,5 +432,32 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
         </AlertDialogContent>
       </AlertDialog>
     </>
+  )
+}
+
+// Candidate widths for a grid tile's srcset (the whitelisted widths that
+// cover a tile at 1x and 2x pixel density).
+const TILE_WIDTHS: readonly ResizeWidth[] = [320, 480, 720]
+
+// The grid is fullscreen with p-4 and gap-3: 2 / 4 / 6 columns below sm
+// (640px) / below lg (1024px) / from lg up, so a tile is
+// (100vw - 2*16px padding - (cols-1)*12px gaps) / cols wide.
+const TILE_SIZES =
+  "(min-width: 1024px) calc((100vw - 92px) / 6), (min-width: 640px) calc((100vw - 68px) / 4), calc((100vw - 44px) / 2)"
+
+// A grid tile served as a resized WebP via srcset, with the original file as
+// the `src` fallback. If the resized request errors the srcset is dropped so
+// the browser loads the original and a tile never goes blank. The full-size
+// viewer deliberately keeps using the original file.
+function GalleryTileImage({ path, ...props }: { path: string } & Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "srcSet" | "sizes">) {
+  const [resizeFailed, setResizeFailed] = useState(false)
+  return (
+    <img
+      {...props}
+      src={imageUrl(path)}
+      srcSet={resizeFailed ? undefined : resizedImageSrcSet({ root: "images", path, widths: TILE_WIDTHS })}
+      sizes={resizeFailed ? undefined : TILE_SIZES}
+      onError={() => setResizeFailed(true)}
+    />
   )
 }

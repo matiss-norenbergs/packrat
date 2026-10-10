@@ -16,6 +16,14 @@ with saved playback progress — see the Library player below), **Recently Added
 by show/collection and by artist. Meant for casual "what do I watch next" browsing rather than
 searching/filtering, which is what the Library page is for.
 
+The hero banner loads the item's thumbnail as a resized WebP from `GET /api/image` rather than the
+full-size file: the `<img>` carries a `srcset` of 720/1080/1280/1920 px candidates with
+`sizes="100vw"`, so the browser picks the smallest one covering its width × device pixel ratio.
+`src` stays the original file URL, and if the resized request fails the hero falls back to it so the
+banner never goes blank. The next slide is fetched ahead in a hidden `<img>` with identical
+attributes, so rotation does not wait on the network or a cold resize. The Library grid/list/strip
+keep the pre-generated small/medium tiers.
+
 ## Dashboard
 
 The landing page. Two cards summarize current state at a glance, followed by charts:
@@ -227,6 +235,11 @@ without re-extracting or re-fetching anything.
   already in that state (each is disabled when nothing in the selection would change). Switching
   Manage off, or pressing Esc once, leaves manage mode and clears the selection; Esc again closes
   the dialog.
+- Grid tiles are lazy-loaded (`loading="lazy"`, `decoding="async"`; the `aspect-video` frame
+  reserves each tile's space so the grid doesn't shift) and load a resized WebP from
+  `GET /api/image` (320/480/720 px `srcset`, `sizes` matched to the 2/4/6-column layout) instead of
+  the full-frame file. If the resized request fails a tile falls back to the original. The
+  fullscreen viewer, "Set as thumbnail" and saving always use the full-size file.
 - Removing an image from the gallery never affects the item's current thumbnail, and vice versa.
 
 ## Collections

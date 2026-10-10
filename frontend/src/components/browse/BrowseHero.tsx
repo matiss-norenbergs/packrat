@@ -2,11 +2,15 @@ import { type ReactNode, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { mediaFileUrl } from "@/lib/api"
+import { type ResizeWidth, mediaFileUrl, resizedImageSrcSet } from "@/lib/api"
 import type { LibraryItem } from "@/types/api"
 
 // How long each item stays featured before auto-advancing.
 const ROTATE_DURATION_MS = 10_000
+
+// Candidate widths for the banner's srcset; the browser picks from layout
+// width x devicePixelRatio (the banner spans the viewport, hence sizes="100vw").
+const HERO_WIDTHS: readonly ResizeWidth[] = [720, 1080, 1280, 1920]
 
 // The large "featured item" banner at the top of Browse — rotates through
 // `items` (the most recently added, most-recent first), one at a time, with
@@ -36,6 +40,12 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
 
   const goTo = (i: number) => setIndex(((i % items.length) + items.length) % items.length)
 
+  // The slide that auto-advance (or "Next") shows next — fetched ahead so the
+  // swap doesn't wait on the network or a cold resize. Only when rotating, and
+  // never the current item itself (a one-item list).
+  const nextItem = canRotate ? items[(index + 1) % items.length] : undefined
+  const nextThumbnail = nextItem?.thumbnail ?? null
+
   return (
     <div
       className="group/hero relative flex h-[50vh] min-h-72 w-full items-end overflow-hidden md:h-[60vh]"
@@ -43,10 +53,11 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
       onMouseLeave={() => setHovered(false)}
     >
       {item.thumbnail ? (
-        <img src={mediaFileUrl(item.thumbnail)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <HeroImage key={item.id} path={item.thumbnail} />
       ) : (
         <div className="absolute inset-0 bg-muted" />
       )}
+      {nextThumbnail && <HeroPreload key={`preload-${nextItem?.id}`} path={nextThumbnail} />}
       <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
       {canRotate && <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/50 to-transparent" />}
 
@@ -112,4 +123,41 @@ function HeroIconButton({ label, onClick, children }: { label: string; onClick: 
       {children}
     </button>
   )
+}
+
+// Serves the banner as a resized WebP via srcset, with the original file as
+// the `src` fallback. If the resize endpoint errors (unsupported source type,
+// ffmpeg failure) the srcset is dropped so the browser reloads the original
+// and the hero never goes blank. Keyed by item id by the caller so the
+// failure state resets on rotation.
+function HeroImage({ path }: { path: string }) {
+  const [resizeFailed, setResizeFailed] = useState(false)
+  return (
+    <img
+      {...heroImageSource(path, resizeFailed)}
+      alt=""
+      className="absolute inset-0 h-full w-full object-cover"
+      onError={() => setResizeFailed(true)}
+    />
+  )
+}
+
+// Fetches the upcoming slide into the browser cache. A hidden <img> using the
+// exact same src/srcset/sizes as HeroImage, so the browser resolves the same
+// srcset candidate (sizes="100vw" depends on the viewport, not layout, so
+// display:none doesn't change the pick) and the real <img> reuses the
+// response instead of fetching twice. Failures are ignored: HeroImage has its
+// own fallback when the slide actually shows.
+function HeroPreload({ path }: { path: string }) {
+  return <img {...heroImageSource(path, false)} alt="" aria-hidden="true" className="hidden" />
+}
+
+// The one place the hero's image attributes are built, so the displayed image
+// and its preload can never drift apart.
+function heroImageSource(path: string, resizeFailed: boolean) {
+  return {
+    src: mediaFileUrl(path),
+    srcSet: resizeFailed ? undefined : resizedImageSrcSet({ root: "media" as const, path, widths: HERO_WIDTHS }),
+    sizes: "100vw",
+  }
 }

@@ -10,6 +10,7 @@ import (
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/framematch"
 	"packrat/backend/internal/imagebackfill"
+	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
@@ -45,6 +46,7 @@ type Deps struct {
 	MediaRoot                         string
 	ImagesRoot                        string
 	BackupsRoot                       string
+	ImageResizer                      *imageproc.Resizer // nil disables GET /api/image
 	FFProbePath                       string
 	WSHandler                         gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
 	Broadcaster                       ws.Broadcaster
@@ -106,6 +108,10 @@ func SetupRouter(deps Deps) *gin.Engine {
 	api.Use(RequireAuth(deps.UsersRepo), RequireCSRF())
 	{
 		api.PATCH("/auth/password", ChangePassword(deps.UsersRepo))
+
+		if deps.ImageResizer != nil {
+			api.GET("/image", GetResizedImage(deps.MediaRoot, deps.ImagesRoot, deps.ImageResizer))
+		}
 
 		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo, deps.SettingsRepo))

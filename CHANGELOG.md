@@ -14,6 +14,19 @@ Maintenance notes:
 
 ## 2026-10-10
 
+- **Browse hero preloads the next slide** — while a slide is showing, the following slide's resized
+  image is fetched into the browser cache (hidden `<img>`, same `srcset`/`sizes`), so rotation
+  and "Next" no longer wait on the network or a cold resize.
+- **Thumbnail gallery grid loads lazily and as resized WebP** — tiles use `loading="lazy"` and are
+  served from `GET /api/image` at 320/480/720 px (`srcset`/`sizes` matched to the grid columns)
+  instead of full-frame files, with the original as fallback; the fullscreen viewer still loads the
+  full-size image.
+- **Live image resizing endpoint; Browse hero now loads resized WebP** — new authenticated
+  `GET /api/image?root=media|images&path=…&w=…[&h=…]` resizes a stored image to a whitelisted width
+  (and optional height cap) as WebP, cached under the new `CACHE_ROOT` (default `./data/cache`),
+  with request coalescing, a 2-resize concurrency cap, ETag/`Last-Modified` revalidation and an
+  hourly age-based sweep (7 days unused). The Browse hero banner uses it via `srcset`/`sizes`
+  instead of always loading the full-size JPEG, falling back to the original on error.
 - **Frame picker header shows the picked time range** — after "Choose from Video (custom)…", the
   "Choose a thumbnail" dialog lists the range as times next to the percentages (e.g.
   `21.5%–59.6% of the video (0:35–1:38)`).

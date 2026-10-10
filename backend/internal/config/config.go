@@ -13,6 +13,7 @@ type Config struct {
 	MediaRoot               string
 	ImagesRoot              string
 	BackupsRoot             string
+	CacheRoot               string
 	MaxConcurrentDownloads  int
 	MaxConcurrentTranscodes int
 	YtDlpPath               string
@@ -28,6 +29,7 @@ func Load() (Config, error) {
 		MediaRoot:               getEnv("MEDIA_ROOT", "./data/media"),
 		ImagesRoot:              getEnv("IMAGES_ROOT", "./data/images"),
 		BackupsRoot:             getEnv("BACKUPS_ROOT", "./data/backups"),
+		CacheRoot:               getEnv("CACHE_ROOT", "./data/cache"),
 		MaxConcurrentDownloads:  2,
 		MaxConcurrentTranscodes: 2,
 		YtDlpPath:               getEnv("YTDLP_PATH", "yt-dlp"),
@@ -78,6 +80,14 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("creating BACKUPS_ROOT %q: %w", backupsRoot, err)
 	}
 	cfg.BackupsRoot = backupsRoot
+
+	// Not created here: the resizer creates it (and its shard dirs) on first
+	// use, so an unused cache leaves nothing behind.
+	cacheRoot, err := filepath.Abs(cfg.CacheRoot)
+	if err != nil {
+		return Config{}, fmt.Errorf("resolving CACHE_ROOT: %w", err)
+	}
+	cfg.CacheRoot = cacheRoot
 
 	dbDir := filepath.Dir(cfg.DBPath)
 	if err := os.MkdirAll(dbDir, 0o755); err != nil {
