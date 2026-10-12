@@ -9,6 +9,7 @@ import (
 	"packrat/backend/internal/backup"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/framematch"
+	"packrat/backend/internal/hostactions"
 	"packrat/backend/internal/imagebackfill"
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/jellyfin"
@@ -51,6 +52,7 @@ type Deps struct {
 	WSHandler                         gin.HandlerFunc // set once the WS hub exists; nil is fine (no /ws route)
 	Broadcaster                       ws.Broadcaster
 	StaticDir                         string // built frontend assets; empty in dev (Vite serves it)
+	HostActions                       []hostactions.Action
 }
 
 // noCacheHeaders forces revalidation on every request instead of letting the
@@ -109,6 +111,9 @@ func SetupRouter(deps Deps) *gin.Engine {
 	api.Use(RequireAuth(deps.UsersRepo), RequireCSRF())
 	{
 		api.PATCH("/auth/password", ChangePassword(deps.UsersRepo))
+
+		api.GET("/actions", ListHostActions(deps.HostActions))
+		api.POST("/actions/:id/run", RunHostAction(deps.HostActions))
 
 		if deps.ImageResizer != nil {
 			api.GET("/image", GetResizedImage(deps.MediaRoot, deps.ImagesRoot, deps.ImageResizer))

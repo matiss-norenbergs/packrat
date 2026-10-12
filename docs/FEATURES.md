@@ -468,6 +468,38 @@ model, scaling mode, minimum-dimension threshold below which a thumbnail is cons
   per-item ("Sharpen Thumbnail" in the actions menu) or in bulk ("Sharpen Thumbnail(s)…" from the
   Library toolbar) — shares the same history log and Compare/Revert/Keep-Enhanced/Keep-Original
   mechanics as upscale enhancements.
+- **Starting Stable Diffusion from Packrat** — with the bundled
+  [`tools/sd-launcher`](../tools/sd-launcher/README.md) running on the SD machine, the sidebar's
+  **Actions** menu can start and stop the instance (see Host actions below); the sidebar status dot
+  turns green once its API is up.
+
+## Host actions
+
+An **Actions** button at the bottom of the sidebar, shown only when at least one action is
+configured. Each entry sends one fixed HTTP request defined by the admin in
+`PACKRAT_ACTION_<N>_*` environment variables — the intended use is starting/stopping Stable
+Diffusion through [`tools/sd-launcher`](../tools/sd-launcher/README.md), but any webhook works
+(Home Assistant, n8n, a Wake-on-LAN relay, …).
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `PACKRAT_ACTION_<N>_LABEL` | yes | Menu text. |
+| `PACKRAT_ACTION_<N>_URL` | yes | `http(s)` URL to call. From Docker, reach the host with `host.docker.internal`. |
+| `PACKRAT_ACTION_<N>_METHOD` | no | `POST` (default) or `GET`. |
+| `PACKRAT_ACTION_<N>_TOKEN` | no | Sent as `Authorization: Bearer <token>`. |
+| `PACKRAT_ACTION_<N>_CONFIRM` | no | `true` asks for confirmation before running. |
+
+`<N>` is any positive integer and sets the menu order. A malformed entry (missing label/URL, unknown
+field, non-http URL) stops Packrat at startup with an error naming the variable, rather than
+silently dropping the button.
+
+- Actions are env-only on purpose: they can't be added or edited from the UI or a settings backup,
+  so a web session can press the buttons but never point them somewhere new. URLs and tokens never
+  reach the browser.
+- Running one shows the target's reply as a toast: its JSON `message` field if it has one,
+  otherwise the start of the response body. A non-2xx reply is shown as a failure; an unreachable
+  target (or no answer within 15 s) too. Running an action also re-checks the AI Enhancement status
+  immediately.
 
 ## Frame Matching
 

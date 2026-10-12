@@ -27,6 +27,7 @@ import { useThumbnailEnhancementStatus } from "@/hooks/useThumbnailEnhancement"
 import { enhancementStatusColor } from "@/lib/enhancementStatus"
 import { cn } from "@/lib/utils"
 import type { ProxyStatus } from "@/types/api"
+import { HostActionsMenu } from "./HostActionsMenu"
 import { NavItem } from "./NavItem"
 
 // Matches the backend's version.Repo (backend/internal/version/latest.go) —
@@ -87,6 +88,7 @@ export function SidebarContent() {
           <NavItem key={item.to} {...item} />
         ))}
       </nav>
+      <HostActionsMenu />
       <AppVersionLine />
       <VersionLine />
       <div className="px-2 py-2">

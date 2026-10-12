@@ -77,6 +77,8 @@ import type {
   ThumbnailEnhancementStatus,
   ThumbnailEnhancementEligibleItem,
   ProxyStatus,
+  HostAction,
+  RunHostActionResult,
   CreateTagRequest,
   RedownloadOverwriteField,
   RedownloadPreview,
@@ -1046,4 +1048,12 @@ export function bulkDeleteThumbnailEnhancementHistoryEntries(ids: number[]): Pro
 
 export function clearThumbnailEnhancementHistory(): Promise<{ deleted: number }> {
   return request<{ deleted: number }>("/thumbnail-enhancement/history/clear", { method: "POST" })
+}
+
+export function listHostActions(): Promise<HostAction[]> {
+  return request<HostAction[]>("/actions")
+}
+
+export function runHostAction(id: string): Promise<RunHostActionResult> {
+  return request<RunHostActionResult>(`/actions/${encodeURIComponent(id)}/run`, { method: "POST" })
 }

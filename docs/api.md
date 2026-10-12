@@ -1604,6 +1604,26 @@ does the opposite (commits the enhanced result, frees the backup).
 `200 {"updated": 2, "skipped": 1}` — an item with no backup (already committed/reverted/never
 enhanced) is skipped, not fatal.
 
+## Host actions
+
+Configured by `PACKRAT_ACTION_<N>_*` env vars (see "Host actions" in `FEATURES.md`). Both routes
+require a session; URLs and tokens are never returned.
+
+### `GET /api/actions` — no params
+```json
+[{ "id": "1", "label": "Start Stable Diffusion", "confirm": false }]
+```
+`id` is the `<N>` from the env vars; the array is ordered by it and empty when none are configured.
+
+### `POST /api/actions/:id/run` — no body
+Sends the configured request (15 s timeout) and relays the answer:
+```json
+{ "ok": true, "status": 202, "message": "Starting Stable Diffusion — the API takes a minute or two to come up" }
+```
+`200` whenever the target answered — `ok` is whether its status was 2xx, `message` is its JSON
+`message` field or the start of its body (≤300 chars). `404` for an unknown id; `502` with
+`{ "error": "..." }` when the target couldn't be reached at all.
+
 ## Media files
 
 | Method | Path |

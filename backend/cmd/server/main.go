@@ -313,6 +313,7 @@ func run() error {
 		WSHandler:                         hub.GinHandler(),
 		Broadcaster:                       hub,
 		StaticDir:                         os.Getenv("STATIC_DIR"),
+		HostActions:                       cfg.HostActions,
 	})
 
 	srv := &http.Server{
