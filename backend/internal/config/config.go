@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"packrat/backend/internal/hostactions"
 )
 
 type Config struct {
@@ -20,6 +22,8 @@ type Config struct {
 	FFmpegPath              string
 	FFProbePath             string
 	PipPath                 string
+	// HostActions are the sidebar Actions menu entries, from PACKRAT_ACTION_<N>_* env vars.
+	HostActions []hostactions.Action
 }
 
 func Load() (Config, error) {
@@ -53,6 +57,12 @@ func Load() (Config, error) {
 		}
 		cfg.MaxConcurrentTranscodes = n
 	}
+
+	actions, err := hostactions.Parse(os.Environ())
+	if err != nil {
+		return Config{}, fmt.Errorf("invalid host action config: %w", err)
+	}
+	cfg.HostActions = actions
 
 	mediaRoot, err := filepath.Abs(cfg.MediaRoot)
 	if err != nil {

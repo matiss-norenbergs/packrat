@@ -17,6 +17,15 @@ services:
       # keep it across container recreation or to browse it directly.
       - CACHE_ROOT=/app/data/cache
       - MAX_CONCURRENT_DOWNLOADS=2
+      # Optional sidebar "Actions" (see docs/FEATURES.md → Host actions). E.g. starting
+      # Stable Diffusion via tools/sd-launcher — its setup.ps1 prints these with your token:
+      # - PACKRAT_ACTION_1_LABEL=Start Stable Diffusion
+      # - PACKRAT_ACTION_1_URL=http://host.docker.internal:7870/start
+      # - PACKRAT_ACTION_1_TOKEN=<token from sd_launcher.json>
+      # - PACKRAT_ACTION_2_LABEL=Stop Stable Diffusion
+      # - PACKRAT_ACTION_2_URL=http://host.docker.internal:7870/stop
+      # - PACKRAT_ACTION_2_TOKEN=<token from sd_launcher.json>
+      # - PACKRAT_ACTION_2_CONFIRM=true
     volumes:
       - ./data/media:/app/data/media
       - ./data/db:/app/data/db

@@ -12,6 +12,15 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-12
+- **Sidebar "Actions" menu + Stable Diffusion launcher** — admins can define fixed HTTP actions in
+  `PACKRAT_ACTION_<N>_{LABEL,URL,METHOD,TOKEN,CONFIRM}` env vars; they appear under an Actions
+  button in the sidebar (hidden when none are set), with the target's reply shown as a toast.
+  Env-only by design, so the web UI can trigger but never redefine them, and URLs/tokens never
+  reach the browser. New `tools/sd-launcher` (stdlib Python + `setup.ps1`) runs on the Stable
+  Diffusion PC and starts/stops `webui-user.bat` on token-authenticated requests, so AI Enhancement
+  no longer needs someone at that machine to launch SD.
+
 ## 2026-10-10
 - **Item pages no longer download the whole library** — `/library/:id`, `/browse/:id` and the
   compare player fetched `GET /api/library` (every item, ~1.2 KB each) just to find one item, and

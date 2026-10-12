@@ -1,0 +1,8 @@
+{
+  "token": "replace-with-a-long-random-string-or-run-setup.ps1",
+  "bind": "127.0.0.1",
+  "port": 7870,
+  "start_command": "C:\\stable-diffusion-webui\\webui-user.bat",
+  "sd_url": "http://127.0.0.1:7860",
+  "show_console": true
+}

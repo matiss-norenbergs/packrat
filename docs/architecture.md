@@ -38,6 +38,8 @@ backend/
     framematch/              perceptual-hash frame matching (ad-hoc job store + durable queue)
     subscriptions/           periodic channel/playlist re-check + ghost/download creation
     thumbnailenhance/        AI upscale/sharpen via a self-hosted Stable Diffusion instance
+    hostactions/             env-defined sidebar "Actions" (PACKRAT_ACTION_<N>_*): fixed HTTP
+                             requests, e.g. to tools/sd-launcher; never editable from the UI
 ```
 
 ## API routes live under `/api`

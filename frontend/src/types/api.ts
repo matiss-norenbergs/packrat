@@ -1054,3 +1054,19 @@ export interface AddSubscriptionEntryResult {
   libraryItemId?: number
   downloadId?: number
 }
+
+// A sidebar Actions menu entry, defined server-side by PACKRAT_ACTION_<N>_*
+// env vars. Its URL and token never reach the browser.
+export interface HostAction {
+  id: string
+  label: string
+  confirm: boolean
+}
+
+// What the action's target answered. ok mirrors a 2xx status; message is the
+// target's JSON "message" (or the start of its body).
+export interface RunHostActionResult {
+  ok: boolean
+  status: number
+  message: string
+}

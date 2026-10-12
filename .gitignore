@@ -32,3 +32,7 @@ docker/docker-compose.local.yml
 
 # Local-only agent notes (dev credentials)
 CLAUDE.local.md
+
+# SD launcher local config (contains the token) and log
+tools/sd-launcher/sd_launcher.json
+tools/sd-launcher/sd_launcher.log
