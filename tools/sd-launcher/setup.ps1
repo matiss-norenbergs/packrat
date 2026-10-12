@@ -1,16 +1,23 @@
 <#
 .SYNOPSIS
   One-time setup for the Packrat SD launcher: writes sd_launcher.json with a
-  freshly generated token (if it doesn't exist yet), registers a Task
-  Scheduler task that starts the launcher at log on, and prints the lines to
-  paste into Packrat's environment.
+  freshly generated token (if it doesn't exist yet), adds a shortcut to your
+  Startup folder so the launcher starts at log on, starts it now, and prints
+  the lines to paste into Packrat's environment.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\setup.ps1 -StartCommand "C:\stable-diffusion-webui\webui-user.bat"
 
 .NOTES
   Re-running is safe: an existing sd_launcher.json (and its token) is kept,
-  and the scheduled task is replaced. Run -Uninstall to remove the task.
+  and a running launcher is restarted so config changes apply.
+  Run -Uninstall to stop the launcher and remove the shortcut.
+
+  Why a Startup shortcut and not Task Scheduler: Stable Diffusion started from
+  a Task Scheduler task failed with "Torch is not able to use GPU", while the
+  same launcher started normally worked. Startup-folder items are launched by
+  Explorer like anything you double-click, so SD gets the same environment as
+  when you run its .bat by hand.
 #>
 param(
     [string]$StartCommand,
@@ -20,14 +27,35 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$TaskName = "Packrat SD Launcher"
+$Name = "Packrat SD Launcher"
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here "sd_launcher.json"
 $Script = Join-Path $Here "sd_launcher.py"
+$Shortcut = Join-Path ([Environment]::GetFolderPath("Startup")) "$Name.lnk"
+
+function Stop-Launcher {
+    Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe' OR Name = 'python.exe'" |
+        Where-Object { $_.CommandLine -like "*sd_launcher.py*" } |
+        ForEach-Object {
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            Write-Host "Stopped running launcher (pid $($_.ProcessId))."
+        }
+}
+
+# Earlier versions of this script registered a scheduled task instead.
+function Remove-OldTask {
+    if (Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue) {
+        Stop-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $Name -Confirm:$false
+        Write-Host "Removed old scheduled task '$Name'."
+    }
+}
 
 if ($Uninstall) {
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-    Write-Host "Removed scheduled task '$TaskName'. sd_launcher.json was left in place."
+    Stop-Launcher
+    Remove-OldTask
+    if (Test-Path $Shortcut) { Remove-Item $Shortcut; Write-Host "Removed $Shortcut" }
+    Write-Host "Done. sd_launcher.json was left in place."
     exit 0
 }
 
@@ -63,16 +91,27 @@ if (Test-Path $ConfigPath) {
     Write-Host "Wrote $ConfigPath"
 }
 
-# At log on, in your own session (needed for GPU/desktop access), restart on crash.
-$action = New-ScheduledTaskAction -Execute $Pythonw -Argument "`"$Script`"" -WorkingDirectory $Here
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-    -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
-    -Principal $principal -Force | Out-Null
-Start-ScheduledTask -TaskName $TaskName
-Write-Host "Registered and started scheduled task '$TaskName'."
+Remove-OldTask
+Stop-Launcher
+
+$shell = New-Object -ComObject WScript.Shell
+$lnk = $shell.CreateShortcut($Shortcut)
+$lnk.TargetPath = $Pythonw
+$lnk.Arguments = "`"$Script`""
+$lnk.WorkingDirectory = $Here
+$lnk.Description = "Starts/stops Stable Diffusion for Packrat"
+$lnk.Save()
+Write-Host "Created $Shortcut (runs at log on)."
+
+# Launch through Explorer, exactly as at log on — and un-elevated even if this
+# PowerShell window is running as administrator.
+Start-Process explorer.exe -ArgumentList "`"$Shortcut`""
+Start-Sleep -Seconds 2
+if (Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe'" | Where-Object { $_.CommandLine -like "*sd_launcher.py*" }) {
+    Write-Host "Launcher is running."
+} else {
+    Write-Warning "Launcher didn't start - check $(Join-Path $Here 'sd_launcher.log'), or run 'python .\sd_launcher.py' to see the error."
+}
 
 Write-Host ""
 Write-Host "Add these under 'environment:' in docker-compose.yml (as '- KEY=value'), then recreate the container."

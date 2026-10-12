@@ -22,9 +22,10 @@ Packrat (Docker) ──POST /start + token──► sd_launcher.py (127.0.0.1:78
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\setup.ps1 -StartCommand "C:\stable-diffusion-webui\webui-user.bat"
    ```
-   This generates a random token into `sd_launcher.json`, registers a Task Scheduler task that starts
-   the launcher whenever you log on (and restarts it if it crashes), starts it now, and prints the
-   `PACKRAT_ACTION_*` lines to add to Packrat.
+   This generates a random token into `sd_launcher.json`, adds a shortcut to your Startup folder so
+   the launcher starts whenever you log on, starts it now, and prints the `PACKRAT_ACTION_*` lines
+   to add to Packrat. If you set it up with an earlier version that used Task Scheduler, just
+   re-run the script: it removes the old task.
 4. Add those lines to the `environment:` section of `docker/docker-compose.yml` (prefixed with
    `- `, like the other entries there) and recreate the container: `docker compose up -d`.
 
@@ -36,7 +37,7 @@ Packrat (Docker) ──POST /start + token──► sd_launcher.py (127.0.0.1:78
 The **Actions** button then appears at the bottom of Packrat's sidebar.
 
 Options for `setup.ps1`: `-Port` (default 7870), `-SdUrl` (default `http://127.0.0.1:7860`, used to
-detect an already-running instance), `-Uninstall` (removes the scheduled task).
+detect an already-running instance), `-Uninstall` (stops the launcher and removes the shortcut).
 
 ## Config (`sd_launcher.json`)
 
@@ -48,8 +49,9 @@ detect an already-running instance), `-Uninstall` (removes the scheduled task).
 | `start_command` | — | Path to `webui-user.bat`. Run from its own folder. |
 | `sd_url` | `http://127.0.0.1:7860` | Where the SD API answers; used to report status and avoid starting a second copy. |
 | `show_console` | `true` | Open SD in its own console window, like double-clicking the `.bat`. `false` hides it. |
+| `startup_timeout` | `600` | Seconds SD may take to answer. After that a launch that never came up (e.g. crashed and waiting on "Press any key") is reported as failed, and the next Start kills it and starts fresh. |
 
-Edit the file and restart the task (Task Scheduler → "Packrat SD Launcher" → End, then Run) to apply
+Edit the file and re-run `setup.ps1` (no arguments needed) to restart the launcher with the
 changes. Logs go to `sd_launcher.log` next to the script.
 
 ## Endpoints
@@ -66,8 +68,13 @@ Every response carries a `message`, which Packrat shows as a toast.
 
 ## Notes
 
-- The launcher must run in your logged-in session; Windows services can't start GPU desktop apps
-  properly. After a reboot it starts once you log on. Locked screen is fine.
+- The launcher must run in your logged-in session, started the normal way. Don't run it as a
+  Windows service or a Task Scheduler task: Stable Diffusion started from a scheduled task failed
+  with "Torch is not able to use GPU" in testing, while the same launcher started from a terminal
+  or the Startup folder worked. After a reboot it starts once you log on. Locked screen is fine.
+- If a launch fails, its console window shows the error and waits on "Press any key". Stop (or
+  Start again, after `startup_timeout`) clears it. Don't add `--skip-torch-cuda-test` for a GPU
+  error: that makes SD run on the CPU.
 - Starting SD takes as long as it does when you double-click the `.bat` (often 1-2 minutes). The AI
   Enhancement status dot in Packrat's sidebar turns green when the API is up.
 - Packrat on a different machine: set `bind` to `0.0.0.0`, allow the port only from Packrat's IP

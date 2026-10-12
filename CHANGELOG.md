@@ -13,6 +13,12 @@ Maintenance notes:
 -->
 
 ## 2026-10-12
+- **SD launcher starts at log on via the Startup folder, not Task Scheduler** — Stable Diffusion
+  launched from the scheduled task failed with "Torch is not able to use GPU" while the same
+  launcher started normally worked. `setup.ps1` now adds a Startup-folder shortcut (and removes the
+  old task on re-run). A launch that never brings the API up within `startup_timeout` (default
+  10 min, e.g. crashed and waiting on "Press any key") is now reported as failed, and Start kills
+  and relaunches it instead of claiming it's already running.
 - **Sidebar "Actions" menu + Stable Diffusion launcher** — admins can define fixed HTTP actions in
   `PACKRAT_ACTION_<N>_{LABEL,URL,METHOD,TOKEN,CONFIRM}` env vars; they appear under an Actions
   button in the sidebar (hidden when none are set), with the target's reply shown as a toast.

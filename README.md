@@ -105,6 +105,6 @@ hosts, add an `extra_hosts` entry to [`docker/docker-compose.yml`](docker/docker
 
 Packrat can't run the WebUI's `.bat` from inside its container, but
 [`tools/sd-launcher`](tools/sd-launcher/README.md) — a tiny standard-library Python service you run
-on the Stable Diffusion machine — can. Its `setup.ps1` generates a token, registers a log-on task,
+on the Stable Diffusion machine — can. Its `setup.ps1` generates a token, makes it start at log on,
 and prints the `PACKRAT_ACTION_*` lines that add **Start/Stop Stable Diffusion** to the sidebar's
 **Actions** menu. See "Host actions" in [`docs/FEATURES.md`](docs/FEATURES.md) for the variables.
