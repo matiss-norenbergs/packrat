@@ -3,8 +3,8 @@ Stable Diffusion WebUI on request, so Packrat (running in Docker on the same
 machine) can bring it up for AI enhancement without anyone touching the PC.
 
 Standard library only (Python 3.8+). Run it in your logged-in Windows
-session (setup.ps1 registers a Task Scheduler "At log on" task for that) —
-a Windows service can't start a GPU desktop app properly.
+session (setup.ps1 adds a Startup-folder shortcut for that). Not as a
+service or Task Scheduler task: SD started from one couldn't see the GPU.
 
 Endpoints (all require "Authorization: Bearer <token>"):
   GET  /status  -> {"ok", "running", "managed", "apiUp", "message"}
@@ -24,6 +24,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -54,6 +55,9 @@ def load_config(path):
         "start_command": os.path.abspath(command),
         "sd_url": str(cfg.get("sd_url", "http://127.0.0.1:7860")),
         "show_console": bool(cfg.get("show_console", True)),
+        # How long SD may take to answer before a running-but-silent process
+        # counts as stuck (e.g. crashed and waiting on "Press any key").
+        "startup_timeout": int(cfg.get("startup_timeout", 600)),
     }
 
 
@@ -74,28 +78,58 @@ class Launcher:
     def __init__(self, cfg):
         self.cfg = cfg
         self.proc = None
+        self.started_at = 0.0
         self.lock = threading.Lock()
 
     def _alive(self):
         return self.proc is not None and self.proc.poll() is None
 
+    def _stuck(self, api_up):
+        """Our process is alive but SD never answered — typically a failed
+        launch sitting at the .bat's "Press any key to continue"."""
+        return self._alive() and not api_up and time.monotonic() - self.started_at > self.cfg["startup_timeout"]
+
+    def _kill_locked(self):
+        pid = self.proc.pid
+        if IS_WINDOWS:
+            # /T: the .bat spawns cmd -> python -> children; kill the whole tree.
+            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
+        else:
+            try:
+                os.killpg(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        try:
+            self.proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            log.warning("pid %d did not exit within 15s", pid)
+        self.proc = None
+        log.info("stopped pid %d", pid)
+
     def status(self):
+        api_up = port_open(self.cfg["sd_url"])
         with self.lock:
             managed = self._alive()
-        api_up = port_open(self.cfg["sd_url"])
+            stuck = self._stuck(api_up)
         if api_up:
             msg = "Stable Diffusion is up"
+        elif stuck:
+            msg = "Stable Diffusion didn't come up — check its window; Start again restarts it"
         elif managed:
             msg = "Stable Diffusion is starting"
         else:
             msg = "Stable Diffusion is not running"
-        return {"ok": True, "running": managed or api_up, "managed": managed, "apiUp": api_up, "message": msg}
+        return {"ok": True, "running": api_up or (managed and not stuck), "managed": managed, "apiUp": api_up, "message": msg}
 
     def start(self):
+        api_up = port_open(self.cfg["sd_url"])
         with self.lock:
+            if self._stuck(api_up):
+                log.warning("pid %d never brought the API up; restarting", self.proc.pid)
+                self._kill_locked()
             if self._alive():
                 return 200, {"ok": True, "message": "Stable Diffusion is already running"}
-            if port_open(self.cfg["sd_url"]):
+            if api_up:
                 # Started by hand (double-clicked .bat) — don't launch a second copy.
                 return 200, {"ok": True, "message": "Stable Diffusion is already up (not started by the launcher)"}
 
@@ -108,6 +142,7 @@ class Launcher:
                 self.proc = subprocess.Popen(args, cwd=cwd, creationflags=flags)
             else:  # for local testing on Linux/macOS with a shell script
                 self.proc = subprocess.Popen([command], cwd=cwd, start_new_session=True)
+            self.started_at = time.monotonic()
             log.info("started %s (pid %d)", command, self.proc.pid)
             return 202, {"ok": True, "message": "Starting Stable Diffusion — the API takes a minute or two to come up"}
 
@@ -117,21 +152,7 @@ class Launcher:
                 if port_open(self.cfg["sd_url"]):
                     return 409, {"ok": False, "message": "Stable Diffusion is running but wasn't started by the launcher — close it by hand"}
                 return 200, {"ok": True, "message": "Stable Diffusion is not running"}
-            pid = self.proc.pid
-            if IS_WINDOWS:
-                # /T: the .bat spawns cmd -> python -> children; kill the whole tree.
-                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
-            else:
-                try:
-                    os.killpg(pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-            try:
-                self.proc.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                log.warning("pid %d did not exit within 15s", pid)
-            self.proc = None
-            log.info("stopped pid %d", pid)
+            self._kill_locked()
             return 200, {"ok": True, "message": "Stable Diffusion stopped"}
 
 
