@@ -75,7 +75,8 @@ Start-ScheduledTask -TaskName $TaskName
 Write-Host "Registered and started scheduled task '$TaskName'."
 
 Write-Host ""
-Write-Host "Add these to Packrat's environment (docker-compose.yml 'environment:' or .env), then recreate the container:"
+Write-Host "Add these under 'environment:' in docker-compose.yml (as '- KEY=value'), then recreate the container."
+Write-Host "(Or put them in docker/.env AND add 'env_file: [.env]' to the packrat service - a .env alone isn't passed in.)"
 Write-Host ""
 Write-Host "  PACKRAT_ACTION_1_LABEL=Start Stable Diffusion"
 Write-Host "  PACKRAT_ACTION_1_URL=http://host.docker.internal:$($cfg.port)/start"

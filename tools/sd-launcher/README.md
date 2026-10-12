@@ -25,8 +25,13 @@ Packrat (Docker) ──POST /start + token──► sd_launcher.py (127.0.0.1:78
    This generates a random token into `sd_launcher.json`, registers a Task Scheduler task that starts
    the launcher whenever you log on (and restarts it if it crashes), starts it now, and prints the
    `PACKRAT_ACTION_*` lines to add to Packrat.
-4. Add those lines to the `environment:` section of `docker/docker-compose.yml` (or your `.env`) and
-   recreate the container: `docker compose up -d`.
+4. Add those lines to the `environment:` section of `docker/docker-compose.yml` (prefixed with
+   `- `, like the other entries there) and recreate the container: `docker compose up -d`.
+
+   To keep the token out of the compose file instead, put the lines in `docker/.env` and add
+   `env_file: [.env]` under the `packrat` service. A `.env` alone isn't enough: without
+   `env_file`, Compose only uses it for `${...}` substitution and never passes it into the
+   container.
 
 The **Actions** button then appears at the bottom of Packrat's sidebar.
 
