@@ -174,10 +174,14 @@ deleting their files).
 - **Delete file…** — removes just the media file from disk (optionally the thumbnail too, via a
   checkbox) to reclaim space, while keeping the library entry — tags, collection membership, and
   all other metadata are untouched. The item becomes a ghost placeholder (see below) until you
-  redownload it. Distinct from **Delete**, below, which is permanent.
+  redownload it. The `.nfo` sidecar always goes with the media file; ticking the thumbnail box also
+  removes the generated thumbnail sizes and any AI-enhancement backup. Distinct from **Delete**,
+  below, which is permanent.
 - **Delete** — "Remove from library" deletes only the database entry (file stays on disk);
-  "Delete files too" also removes the media file and thumbnail from disk. Unlike "Delete file…"
-  above, there's no entry left to redownload into afterward.
+  "Delete files too" also removes the media file, thumbnail and `.nfo` sidecar from disk. Either way
+  the item's generated images (thumbnail sizes, AI-enhancement backup, thumbnail gallery, frame-match
+  snapshots) are cleaned up, and files are only removed once the database delete has succeeded.
+  Unlike "Delete file…" above, there's no entry left to redownload into afterward.
 
 An item is blurred (thumbnail obscured until clicked/hovered) if its collection — or any tag
 assigned to it — is marked private. See Collections and Tags below.
@@ -262,7 +266,7 @@ selectable from the New Download dialog so you don't have to re-pick them every 
   Links this collection to a specific Jellyfin library so "Refresh after download → Specific
   library" (Settings → Jellyfin) knows which one to rescan when something lands here.
 - Deleting a collection does not delete the files inside it — downloads/library items just lose
-  their collection association.
+  their collection association. Its own cover images are removed from disk.
 
 **Cover image (optional)** — pick a custom cover image for a collection, shown instead of the
 automatic fallback (the most-recently-downloaded item's thumbnail in that collection's subtree) on
@@ -292,7 +296,8 @@ A simple named list, assignable to library items and downloads (manually, or aut
 collection's Artist default — see Collections above).
 
 - Create/rename/delete from the Artists page; usage count shown per artist; deleting one clears it
-  from every item that had it (items themselves are untouched, they just lose the artist link).
+  from every item that had it (items themselves are untouched, they just lose the artist link) and
+  removes the artist's gallery images from disk.
 - Select multiple artists to bulk-delete.
 
 **Image gallery (optional)** — build a gallery of images for an artist and pick one as their

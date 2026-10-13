@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -100,7 +101,7 @@ func UpdateArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
 	}
 }
 
-func DeleteArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
+func DeleteArtist(repo *repository.ArtistsRepo, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -116,6 +117,7 @@ func DeleteArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		removeDirBestEffort(filepath.Join(imagesRoot, "artists", strconv.FormatInt(id, 10)))
 		c.Status(http.StatusNoContent)
 	}
 }
@@ -126,7 +128,7 @@ func DeleteArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
 // nulled out via ON DELETE SET NULL, not blocked). The deletes run inside
 // one transaction, so a genuine mid-batch failure rolls back every row
 // already deleted instead of leaving a partial batch.
-func BulkDeleteArtists(db *sql.DB, repo *repository.ArtistsRepo) gin.HandlerFunc {
+func BulkDeleteArtists(db *sql.DB, repo *repository.ArtistsRepo, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BulkDeleteRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -142,6 +144,7 @@ func BulkDeleteArtists(db *sql.DB, repo *repository.ArtistsRepo) gin.HandlerFunc
 		defer tx.Rollback()
 		txRepo := repo.WithTx(tx)
 
+		var deletedIDs []int64
 		var resp BulkDeleteResponse
 		for _, id := range req.IDs {
 			if err := txRepo.Delete(c.Request.Context(), id); err != nil {
@@ -151,12 +154,16 @@ func BulkDeleteArtists(db *sql.DB, repo *repository.ArtistsRepo) gin.HandlerFunc
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			deletedIDs = append(deletedIDs, id)
 			resp.Deleted++
 		}
 
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+		for _, id := range deletedIDs {
+			removeDirBestEffort(filepath.Join(imagesRoot, "artists", strconv.FormatInt(id, 10)))
 		}
 		c.JSON(http.StatusOK, resp)
 	}

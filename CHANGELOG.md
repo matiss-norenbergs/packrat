@@ -12,6 +12,16 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-13
+- **Delete routes no longer leak files** — deleting a library item (single or bulk) now also removes
+  its generated images (`images/library/<id>/` incl. the AI-enhancement backup,
+  `thumbnail-gallery/<id>/`, `frame-match/<queueId>/`), and with "delete files" the `.nfo` sidecar;
+  files are removed only after the DB delete/commit succeeds. "Delete file…" always removes the
+  `.nfo` and, with the thumbnail option, the WebP tiers + AI original (and now clears the stored
+  thumbnail dimensions). Deleting a thumbnail also drops the AI backup, re-fetching a thumbnail
+  (ghost creation, bulk "Download thumbnails") removes the replaced tiers, and deleting a
+  collection or artist removes its cover/gallery images.
+
 ## 2026-10-12
 - **SD launcher starts at log on via the Startup folder, not Task Scheduler** — Stable Diffusion
   launched from the scheduled task failed with "Torch is not able to use GPU" while the same

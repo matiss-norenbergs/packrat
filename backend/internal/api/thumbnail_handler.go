@@ -507,10 +507,10 @@ func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *
 // DeleteLibraryItemThumbnail removes an item's thumbnail — the raw sidecar
 // file (if any — a ghost's fetched thumbnail has no MediaRoot-relative
 // Thumbnail, only the ImagesRoot derivatives, see fetchGhostThumbnail) and
-// both small/medium derivatives — leaving the media file, filename/path,
+// both small/medium derivatives plus any AI-enhancement original — leaving the media file, filename/path,
 // and status untouched. The item falls back to MediaTypePlaceholder
 // everywhere a thumbnail would've shown.
-func DeleteLibraryItemThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
+func DeleteLibraryItemThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -553,6 +553,9 @@ func DeleteLibraryItemThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		// The enhanced image was the thumbnail itself; with it gone the
+		// backup has nothing left to compare against or revert onto.
+		removeEnhancementOriginal(ctx, originalsRepo, imagesRoot, id)
 		c.Status(http.StatusNoContent)
 	}
 }

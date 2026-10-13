@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -248,11 +247,12 @@ func GetLibraryFacets(repo *repository.LibraryRepo) gin.HandlerFunc {
 	}
 }
 
-// DeleteLibraryItem removes a library row and, when ?deleteFiles=true is
-// passed, best-effort removes the media file and thumbnail from disk too —
-// a missing file is logged, not treated as a request failure, since the
-// end state (file gone) is the same either way.
-func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.HandlerFunc {
+// DeleteLibraryItem removes a library row and, after the DB delete succeeds,
+// best-effort removes the item's ImagesRoot artifacts (always) and — when
+// ?deleteFiles=true is passed — the media file, thumbnail and .nfo sidecar
+// too (see purgeLibraryItemArtifacts). A missing file is logged, not treated
+// as a request failure, since the end state (file gone) is the same either way.
+func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -271,8 +271,11 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 			return
 		}
 
-		if deleteFiles {
-			deleteLibraryItemFiles(mediaRoot, item)
+		// The queue rows cascade away with the library row, so grab their ids first.
+		artifacts, err := collectLibraryItemArtifacts(c.Request.Context(), repo, item)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
 
 		if err := repo.Delete(c.Request.Context(), id); err != nil {
@@ -283,6 +286,8 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot string) gin.Handl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		purgeLibraryItemArtifacts(mediaRoot, imagesRoot, artifacts, deleteFiles)
 		c.Status(http.StatusNoContent)
 	}
 }
@@ -317,34 +322,15 @@ func UpdateLibraryItemProgress(repo *repository.LibraryRepo) gin.HandlerFunc {
 	}
 }
 
-// deleteLibraryItemFiles best-effort removes item's media file and
-// thumbnail (if any) from mediaRoot — a missing file is logged, not treated
-// as an error, since the end state (file gone) is the same either way.
-// Shared by DeleteLibraryItem and BulkDeleteLibraryItems.
-func deleteLibraryItemFiles(mediaRoot string, item *models.LibraryItem) {
-	mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-	if err := os.Remove(mediaAbs); err != nil && !os.IsNotExist(err) {
-		log.Printf("library: failed to delete media file %s: %v", mediaAbs, err)
-	}
-	if item.Thumbnail != nil {
-		thumbAbs := filepath.Join(mediaRoot, filepath.FromSlash(*item.Thumbnail))
-		if err := os.Remove(thumbAbs); err != nil && !os.IsNotExist(err) {
-			log.Printf("library: failed to delete thumbnail %s: %v", thumbAbs, err)
-		}
-	}
-}
-
 // BulkDeleteLibraryItems mirrors DeleteLibraryItem applied to a batch — one
 // shared DeleteFiles flag for the whole request, not per item. An id that's
 // already gone (ErrNotFound) is skipped rather than failing the batch. The
 // DB deletes run inside one transaction, so a genuine mid-batch failure
 // rolls back every row this call already deleted instead of leaving a mix
-// of deleted/not-deleted rows — files removed from disk in earlier
-// iterations aren't part of that transaction (there's no filesystem
-// rollback), but the DB and the on-disk library it describes were already
-// only best-effort synced before this fix, and DeleteFiles failures are
-// logged, not fatal, so this doesn't make that any worse.
-func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, mediaRoot string) gin.HandlerFunc {
+// of deleted/not-deleted rows. Files are only touched after tx.Commit
+// succeeds (items and their frame-match queue ids are collected inside the
+// tx), so a failed batch leaves disk untouched.
+func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, mediaRoot, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BulkDeleteLibraryItemsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -361,6 +347,7 @@ func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, mediaRoot 
 		txRepo := repo.WithTx(tx)
 
 		var resp BulkDeleteResponse
+		var deleted []libraryItemArtifacts
 		for _, id := range req.ItemIDs {
 			item, err := txRepo.Get(c.Request.Context(), id)
 			if err != nil {
@@ -371,8 +358,10 @@ func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, mediaRoot 
 				return
 			}
 
-			if req.DeleteFiles {
-				deleteLibraryItemFiles(mediaRoot, item)
+			artifacts, err := collectLibraryItemArtifacts(c.Request.Context(), txRepo, item)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
 			}
 
 			if err := txRepo.Delete(c.Request.Context(), id); err != nil {
@@ -382,12 +371,16 @@ func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, mediaRoot 
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			deleted = append(deleted, artifacts)
 			resp.Deleted++
 		}
 
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+		for _, a := range deleted {
+			purgeLibraryItemArtifacts(mediaRoot, imagesRoot, a, req.DeleteFiles)
 		}
 		c.JSON(http.StatusOK, resp)
 	}

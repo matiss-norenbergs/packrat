@@ -358,8 +358,11 @@ Computed across the whole library, independent of the current search/page.
 
 ### `DELETE /api/library/:id?deleteFiles=true`
 
-`deleteFiles` (default false) best-effort removes the media file and thumbnail from disk — a
-missing file is logged, not an error. `404` unknown, `204` on success.
+`deleteFiles` (default false) best-effort removes the media file, thumbnail and `.nfo` sidecar from
+disk — a missing file is logged, not an error. Regardless of `deleteFiles`, once the row is deleted
+the item's `ImagesRoot` artifacts are removed too: `library/<id>/` (thumbnail tiers + AI-enhancement
+original), `thumbnail-gallery/<id>/` and `frame-match/<queueId>/` for each of its frame-match queue
+rows. Files are only touched after the DB delete succeeds. `404` unknown, `204` on success.
 
 ### `PATCH /api/library/:id` — partial merge (fields omitted are left untouched)
 
@@ -396,7 +399,8 @@ keeps each opted-in item's `.nfo` sidecar in sync. `204`.
 { "itemIds": [1, 2, 3], "deleteFiles": true }
 ```
 
-One `deleteFiles` flag for the whole batch. An already-gone id is silently skipped. Response:
+One `deleteFiles` flag for the whole batch (same on-disk cleanup as the single-item version; files
+are removed only after the transaction commits). An already-gone id is silently skipped. Response:
 `200 {"deleted": 3}`.
 
 ### `POST /api/library/:id/move`
@@ -502,7 +506,10 @@ deleted (`DELETE /:id/file`) or found missing on disk (`scan-missing`).
   Response `201` with the full library item (`galleryCount` always `0` on a fresh item).
 - **`DELETE /api/library/:id/file?deleteThumbnail=true`** — removes just the media file (best-effort
   on disk) and flips the item to `status="ghost"`; all other metadata (tags, collection, artist,
-  etc.) is untouched. `deleteThumbnail` (default false) also removes the thumbnail. Distinct from
+  etc.) is untouched. The `.nfo` sidecar is always removed with the media file. `deleteThumbnail`
+  (default false) also removes the thumbnail, its `ImagesRoot` WebP tiers (clearing the stored
+  thumbnail dimensions too) and the AI-enhancement original. Files are removed only after the DB
+  update succeeds. Distinct from
   the already-documented `DELETE /api/library/:id?deleteFiles=true`: that one deletes the DB row
   entirely and is permanent — this keeps the row so it can be redownloaded later. `400` item is
   already a ghost, `404` unknown id, `204` on success.
@@ -583,7 +590,9 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
 - **`POST /api/library/:id/thumbnail`** — `{ "imageBase64": "/9j/4AAQ..." }`. Writes the given
   bytes as the thumbnail — finalize step for "choose from video." `400` invalid base64. All three
   thumbnail endpoints respond `200` with the full updated library item.
-- **`DELETE /api/library/:id/thumbnail`** — removes the thumbnail (all tiers). `404` unknown item,
+- **`DELETE /api/library/:id/thumbnail`** — removes the thumbnail (all tiers) and the item's
+  AI-enhancement original (the enhanced image *is* the thumbnail, so the backup has nothing left to
+  compare against or revert onto). `404` unknown item,
   `204` on success.
 
 ### Thumbnail gallery
@@ -776,7 +785,8 @@ name, `204` on success.
 
 `404` unknown, `409 {"error":"collection has sub-collections — move or delete them first"}` if it
 has children, `204` on success. Never deletes the files inside it — items just lose their
-collection association.
+collection association — but removes the collection's own cover images (`ImagesRoot/collections/<id>/`).
+`bulk-delete` does the same for each deleted collection, after commit.
 
 ### `POST /api/collections/bulk-delete`
 
@@ -857,8 +867,8 @@ Identical pattern to Tags, minus `isPrivate`, plus an optional image gallery.
 | GET | `/api/artists` | List all artists |
 | POST | `/api/artists` | Create an artist |
 | PATCH | `/api/artists/:id` | Rename an artist |
-| DELETE | `/api/artists/:id` | Delete an artist |
-| POST | `/api/artists/bulk-delete` | Delete many at once |
+| DELETE | `/api/artists/:id` | Delete an artist (and its gallery images on disk) |
+| POST | `/api/artists/bulk-delete` | Delete many at once (gallery images removed after commit) |
 | GET | `/api/artists/:id/image-candidates` | Suggest images from this artist's own library items |
 | GET | `/api/artists/:id/images` | List the artist's image gallery |
 | POST | `/api/artists/:id/images` | Add an image to the gallery |
