@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils"
 import { useChangePassword } from "@/hooks/useAuth"
 import { useClearDownloadLog } from "@/hooks/useDownloads"
 import { useClearHistory } from "@/hooks/useHistory"
+import { StrayFilesRow } from "@/components/settings/StrayFilesRow"
 import { useScanMissingLibraryFiles } from "@/hooks/useLibrary"
 import {
   useImageBackfillStatus,
@@ -637,12 +638,15 @@ function LibraryTab() {
             Checks every non-ghost item's file against disk and converts any that are missing
             (deleted, moved, or renamed outside the app) into ghost placeholders — the DB row,
             tags, and metadata are kept, "Download now" fills it back in. On-demand only, not
-            scheduled.
+            scheduled. "Find Stray Files" is the inverse: it lists files on disk that no database
+            record references (leftover thumbnails, orphaned sidecars, abandoned temp files) so you
+            can review and delete them.
           </InfoPopover>
         </div>
         <Button variant="outline" onClick={() => scanMissing.mutate()} disabled={scanMissing.isPending}>
           {scanMissing.isPending ? "Scanning…" : "Scan for Missing Files"}
         </Button>
+        <StrayFilesRow />
       </div>
 
       <div className="space-y-4 border-t pt-4">

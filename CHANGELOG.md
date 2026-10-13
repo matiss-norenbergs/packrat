@@ -13,6 +13,11 @@ Maintenance notes:
 -->
 
 ## 2026-10-13
+- **Stray files maintenance tool** — Settings → Library maintenance → "Find Stray Files" lists files
+  on disk that no DB record references (unreferenced/owner-deleted images, orphaned `.nfo` and
+  thumbnail sidecars, abandoned trim-preview and `.part` files) and deletes the ones you pick. Scan
+  is report-only; delete re-validates every path server-side. Media files without a row are never
+  flagged, and anything modified in the last 10 minutes is skipped.
 - **Delete routes no longer leak files** — deleting a library item (single or bulk) now also removes
   its generated images (`images/library/<id>/` incl. the AI-enhancement backup,
   `thumbnail-gallery/<id>/`, `frame-match/<queueId>/`), and with "delete files" the `.nfo` sidecar;

@@ -254,6 +254,8 @@ automatic retention sweep. `200 {"deleted": <n>}`.
 | POST | `/api/library/:id/progress` | Record current playback position (Continue Watching) |
 | POST | `/api/library/ghost` | Create a ghost (placeholder, no file) library item |
 | DELETE | `/api/library/:id/file` | Delete just the file, keep the entry (becomes a ghost) |
+| GET | `/api/maintenance/stray-files` | Report files on disk no DB record references (never deletes) |
+| POST | `/api/maintenance/stray-files/delete` | Delete chosen stray files, re-validated per path |
 | POST | `/api/library/scan-missing` | Convert any item whose on-record file is gone from disk into a ghost |
 | POST | `/api/library/bulk-redownload` | Re-queue downloads for many items at once |
 | POST | `/api/library/bulk-fetch-thumbnails` | Re-fetch thumbnails for many items at once |
@@ -906,6 +908,39 @@ is a nullable relative path pointing at one of the artist's own gallery images (
   image belongs to a different artist. Sets `selectedImagePath` to that image's path. `204`.
 - **`DELETE /api/artists/:id/selected-image`** — no body. Clears the selection pointer only — the
   gallery image itself stays, still selectable again later. `404` unknown artist, `204`.
+
+## Maintenance
+
+### `GET /api/maintenance/stray-files`
+
+Report only — never deletes. Detection rules: see `internal/strayfiles` and *Stray files* in
+`FEATURES.md`.
+
+```json
+{
+  "entries": [
+    { "root": "images", "path": "library/12", "sizeBytes": 48211, "modifiedAt": "2026-10-13T09:00:00Z", "reason": "owner deleted" },
+    { "root": "media", "path": "Music/old.nfo", "sizeBytes": 812, "modifiedAt": "2026-09-01T10:00:00Z", "reason": "orphan .nfo sidecar" }
+  ],
+  "totals": { "count": 2, "bytes": 49023 }
+}
+```
+
+`root` is `images` (ImagesRoot) or `media` (MediaRoot); `path` is root-relative with `/`. Reasons:
+`unreferenced file`, `owner deleted` (a whole `images/<kind>/<id>/` directory), `orphan .nfo sidecar`,
+`orphan thumbnail sidecar`, `abandoned trim preview`, `abandoned partial download`. Files modified
+in the last 10 minutes are never reported.
+
+### `POST /api/maintenance/stray-files/delete`
+
+```json
+{ "paths": [ { "root": "images", "path": "library/12" }, { "root": "media", "path": "Music/old.nfo" } ] }
+```
+
+The stray check is re-run server-side at delete time and each path is resolved with
+`pathsafe.ResolveUnderRoot`; only entries that are still stray are removed. Response:
+`200 {"deleted": 2, "skipped": 0}` (`skipped` = no longer stray, unsafe or failed). `400` on an empty
+list.
 
 ## Settings
 

@@ -135,6 +135,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/ghost", CreateGhostLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.ImagesRoot, deps.YtDlp, deps.TagsRepo))
 		api.DELETE("/library/:id/file", DeleteLibraryItemFile(deps.LibraryRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.MediaRoot, deps.ImagesRoot))
 		api.POST("/library/scan-missing", ScanMissingLibraryFiles(deps.MediaRoot, deps.LibraryRepo))
+		api.GET("/maintenance/stray-files", ScanStrayFiles(deps.DB, deps.MediaRoot, deps.ImagesRoot))
+		api.POST("/maintenance/stray-files/delete", DeleteStrayFiles(deps.DB, deps.MediaRoot, deps.ImagesRoot))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.ImagesRoot))
 		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo, deps.ArtistsRepo))
 		api.POST("/library/:id/progress", UpdateLibraryItemProgress(deps.LibraryRepo))

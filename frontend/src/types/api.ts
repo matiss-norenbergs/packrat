@@ -493,6 +493,29 @@ export interface ScanMissingLibraryFilesResult {
   missing: MissingLibraryFile[]
 }
 
+export type StrayFileRoot = "images" | "media"
+
+export interface StrayFileRef {
+  root: StrayFileRoot
+  path: string
+}
+
+export interface StrayFileEntry extends StrayFileRef {
+  sizeBytes: number
+  modifiedAt: string
+  reason: string
+}
+
+export interface StrayFilesResult {
+  entries: StrayFileEntry[]
+  totals: { count: number; bytes: number }
+}
+
+export interface DeleteStrayFilesResult {
+  deleted: number
+  skipped: number
+}
+
 export interface MoveLibraryItemRequest {
   collectionId?: number | null
   folder: string

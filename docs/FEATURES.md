@@ -574,7 +574,23 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   conversion format** — Original/JPEG/PNG/WebP, what every new `downloadType=image` download gets
   re-encoded to (default JPEG); **Scan for Missing Files** — checks every item's file against disk
   and converts anything gone into a [ghost placeholder](#ghost-items) (manual only, never
-  scheduled).
+  scheduled); **Find Stray Files** — the inverse: lists files on disk that no database record
+  references and lets you delete them (see below).
+- **Stray files** — Settings → Library maintenance → **Find Stray Files** scans and, if anything
+  is found, opens a dialog (root, path, reason, size, modified; checkbox/drag/shift selection,
+  50 rows/page). **Delete selected** asks for confirmation with the count. A one-line summary
+  ("12 stray files · 48 MB") stays next to the button. Rules:
+  - *Images folder* (fully app-owned): any file not referenced by a library thumbnail tier, AI
+    original, thumbnail-gallery image, frame-match snapshot, collection cover or artist image is
+    stray. A whole `<kind>/<id>/` folder whose owner no longer exists is shown as one
+    "owner deleted" entry. Unknown top-level folders and the resize cache are ignored.
+  - *Media folder* (shared with you and Jellyfin, so conservative): only `.nfo` / thumbnail `.jpg`
+    sidecars whose media file is gone and that no library row references, plus abandoned
+    `.trim-preview-` and yt-dlp `.part` files. Media files without a row are never flagged (that's
+    the importer's job), neither are folders, nor Jellyfin artwork names like `folder.jpg`/`poster.jpg`.
+  - Anything modified in the last 10 minutes is skipped, so running jobs are safe.
+  - Delete re-checks every path against the current database and disk, so something that became
+    referenced since the scan is skipped, not deleted.
 - **Backup** — turn on **Auto Backup** and pick an interval (6h/12h/24h/3 days/weekly) for
   automatic full backups (see Backup above), and how many to keep before old ones are pruned
   (default 14, or unlimited).
