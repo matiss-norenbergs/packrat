@@ -1285,8 +1285,6 @@ func (m *DownloadManager) broadcastQueueUpdate() {
 	}})
 }
 
-// ProgressSnapshot exposes live progress for the API layer to merge with DB
-// rows in GET /downloads.
 // HasActive reports whether any download is currently running — used by the
 // stray-files scan to hold back temp files (.part etc.) that yt-dlp may still
 // have open.
@@ -1294,6 +1292,8 @@ func (m *DownloadManager) HasActive() bool {
 	return atomic.LoadInt32(&m.activeCount) > 0
 }
 
+// ProgressSnapshot exposes live progress for the API layer to merge with DB
+// rows in GET /downloads.
 func (m *DownloadManager) ProgressSnapshot() map[int64]*LiveProgress {
 	return m.progress.Snapshot()
 }
