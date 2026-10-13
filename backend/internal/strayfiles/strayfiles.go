@@ -79,6 +79,10 @@ type Config struct {
 	DB         *sql.DB
 	MediaRoot  string
 	ImagesRoot string
+	// AnyDownloadActive reports whether any download is running. While it is,
+	// MediaRoot temp files are never reported (a stalled download's .part can
+	// be older than MinAge yet still open by yt-dlp). Nil means "none active".
+	AnyDownloadActive func() bool
 }
 
 type Entry struct {
@@ -439,7 +443,15 @@ func scanMedia(ctx context.Context, cfg Config, now time.Time) ([]Entry, error) 
 		return nil, ctx.Err()
 	}
 
+	downloading := cfg.AnyDownloadActive != nil && cfg.AnyDownloadActive()
+
 	var out []Entry
+	// A lone .jpg is indistinguishable from an unimported image, so a
+	// thumbnail sidecar is only flagged when an orphan .nfo with the same
+	// dir/stem is flagged in this same scan (strong signal both were a
+	// Packrat item's sidecars).
+	flaggedNFOStems := map[string]bool{}
+	var thumbCandidates []Entry
 	cutoff := now.Add(-MinAge)
 	for _, f := range files {
 		if f.info.ModTime().After(cutoff) {
@@ -448,10 +460,11 @@ func scanMedia(ctx context.Context, cfg Config, now time.Time) ([]Entry, error) 
 		reason := ""
 		base := path.Base(f.rel)
 		switch {
-		case strings.Contains(base, ".trim-preview-"):
-			reason = ReasonTrimPreview
-		case strings.HasSuffix(base, ".part"):
-			reason = ReasonPartialDownld
+		case isTemp(f.rel):
+			if downloading {
+				continue
+			}
+			reason = tempReason(base)
 		case isSidecarExt(f.rel):
 			stem := strings.TrimSuffix(base, path.Ext(base))
 			if reservedStems[strings.ToLower(stem)] || refFiles[f.rel] || refStems[stemKey(f.rel)] || hasMedia[stemKey(f.rel)] {
@@ -459,13 +472,20 @@ func scanMedia(ctx context.Context, cfg Config, now time.Time) ([]Entry, error) 
 			}
 			if strings.EqualFold(path.Ext(base), ".nfo") {
 				reason = ReasonOrphanNFO
+				flaggedNFOStems[stemKey(f.rel)] = true
 			} else {
-				reason = ReasonOrphanThumb
+				thumbCandidates = append(thumbCandidates, Entry{Root: RootMedia, Path: f.rel, SizeBytes: f.info.Size(), ModifiedAt: f.info.ModTime(), Reason: ReasonOrphanThumb})
+				continue
 			}
 		default:
 			continue // media files without a row are "unimported" — the importer's job
 		}
 		out = append(out, Entry{Root: RootMedia, Path: f.rel, SizeBytes: f.info.Size(), ModifiedAt: f.info.ModTime(), Reason: reason})
+	}
+	for _, c := range thumbCandidates {
+		if flaggedNFOStems[stemKey(c.Path)] {
+			out = append(out, c)
+		}
 	}
 	return out, nil
 }
@@ -478,9 +498,20 @@ func isSidecarExt(rel string) bool {
 	return false
 }
 
+// isTemp matches app/yt-dlp temp files: trim previews, ".part" downloads,
+// ".part-Frag*" fragment leftovers and ".ytdl" state files.
 func isTemp(rel string) bool {
-	base := path.Base(rel)
-	return strings.Contains(base, ".trim-preview-") || strings.HasSuffix(base, ".part")
+	return tempReason(path.Base(rel)) != ""
+}
+
+func tempReason(base string) string {
+	switch {
+	case strings.Contains(base, ".trim-preview-"):
+		return ReasonTrimPreview
+	case strings.HasSuffix(base, ".part"), strings.Contains(base, ".part-Frag"), strings.HasSuffix(base, ".ytdl"):
+		return ReasonPartialDownld
+	}
+	return ""
 }
 
 // stemKey is "dir/name-without-extension".

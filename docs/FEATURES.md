@@ -584,11 +584,15 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
     original, thumbnail-gallery image, frame-match snapshot, collection cover or artist image is
     stray. A whole `<kind>/<id>/` folder whose owner no longer exists is shown as one
     "owner deleted" entry. Unknown top-level folders and the resize cache are ignored.
-  - *Media folder* (shared with you and Jellyfin, so conservative): only `.nfo` / thumbnail `.jpg`
-    sidecars whose media file is gone and that no library row references, plus abandoned
-    `.trim-preview-` and yt-dlp `.part` files. Media files without a row are never flagged (that's
+  - *Media folder* (shared with you and Jellyfin, so conservative): only `.nfo` sidecars whose
+    media file is gone and that no library row references, and a thumbnail `.jpg` only when such an
+    orphan `.nfo` with the same name is flagged too (a lone `.jpg` is an unimported image, never
+    flagged), plus abandoned
+    `.trim-preview-` and yt-dlp `.part` / `.part-Frag*` / `.ytdl` files. Media files without a row are never flagged (that's
     the importer's job), neither are folders, nor Jellyfin artwork names like `folder.jpg`/`poster.jpg`.
-  - Anything modified in the last 10 minutes is skipped, so running jobs are safe.
+  - Anything modified in the last 10 minutes is skipped, so running jobs are safe. Temp files
+    (`.part`, yt-dlp `.part-Frag*`/`.ytdl` leftovers, trim previews) are never reported at all
+    while any download is active, since a stalled download's `.part` is still open.
   - Delete re-checks every path against the current database and disk, so something that became
     referenced since the scan is skipped, not deleted.
 - **Backup** — turn on **Auto Backup** and pick an interval (6h/12h/24h/3 days/weekly) for

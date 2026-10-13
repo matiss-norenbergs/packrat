@@ -928,8 +928,9 @@ Report only — never deletes. Detection rules: see `internal/strayfiles` and *S
 
 `root` is `images` (ImagesRoot) or `media` (MediaRoot); `path` is root-relative with `/`. Reasons:
 `unreferenced file`, `owner deleted` (a whole `images/<kind>/<id>/` directory), `orphan .nfo sidecar`,
-`orphan thumbnail sidecar`, `abandoned trim preview`, `abandoned partial download`. Files modified
-in the last 10 minutes are never reported.
+`orphan thumbnail sidecar` (only alongside a flagged orphan `.nfo` of the same name), `abandoned trim preview`, `abandoned partial download`. Files modified
+in the last 10 minutes are never reported, and temp files (`abandoned trim preview`, `abandoned partial
+download`) are omitted entirely while any download is active.
 
 ### `POST /api/maintenance/stray-files/delete`
 

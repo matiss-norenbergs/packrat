@@ -17,7 +17,10 @@ Maintenance notes:
   on disk that no DB record references (unreferenced/owner-deleted images, orphaned `.nfo` and
   thumbnail sidecars, abandoned trim-preview and `.part` files) and deletes the ones you pick. Scan
   is report-only; delete re-validates every path server-side. Media files without a row are never
-  flagged, and anything modified in the last 10 minutes is skipped.
+  flagged, and anything modified in the last 10 minutes is skipped. A thumbnail `.jpg` is only
+  flagged next to an orphan `.nfo` of the same name (a lone `.jpg` is an unimported image), temp
+  files are held back while any download is active, and yt-dlp `.part-Frag*`/`.ytdl` leftovers
+  count as abandoned partial downloads.
 - **Delete routes no longer leak files** — deleting a library item (single or bulk) now also removes
   its generated images (`images/library/<id>/` incl. the AI-enhancement backup,
   `thumbnail-gallery/<id>/`, `frame-match/<queueId>/`), and with "delete files" the `.nfo` sidecar;

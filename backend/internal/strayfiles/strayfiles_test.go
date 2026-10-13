@@ -198,6 +198,8 @@ func TestMediaOnlyAppLeftoversFlagged(t *testing.T) {
 	e.put(t, RootMedia, "Music/gone.jpg", false)
 	e.put(t, RootMedia, "Music/vid.trim-preview-abc.mp4", false)
 	e.put(t, RootMedia, "Music/dl.webm.part", false)
+	e.put(t, RootMedia, "Music/dl.f137.mp4.part-Frag12", false)
+	e.put(t, RootMedia, "Music/dl.webm.ytdl", false)
 	// Media file without a row: unimported, never flagged.
 	e.put(t, RootMedia, "Music/unimported.mp4", false)
 	// Sidecars next to an existing media file (even without a row).
@@ -215,13 +217,19 @@ func TestMediaOnlyAppLeftoversFlagged(t *testing.T) {
 	e.libraryItem(t, "Pics/photo.jpg", nil, nil)
 	e.put(t, RootMedia, "Pics/photo.jpg", false)
 
+	// A lone .jpg (no row, no .nfo, no sibling media) is an unimported image.
+	e.put(t, RootMedia, "Pics/vacation.jpg", false)
+
 	got := e.scan(t)
+	notWant(t, got, "media:Pics/vacation.jpg")
 	want(t, got, "media:Music/gone.nfo", ReasonOrphanNFO)
 	want(t, got, "media:Music/gone.jpg", ReasonOrphanThumb)
 	want(t, got, "media:Music/vid.trim-preview-abc.mp4", ReasonTrimPreview)
 	want(t, got, "media:Music/dl.webm.part", ReasonPartialDownld)
-	if len(got) != 4 {
-		t.Errorf("expected exactly 4 media entries, got %v", keys(got))
+	want(t, got, "media:Music/dl.f137.mp4.part-Frag12", ReasonPartialDownld)
+	want(t, got, "media:Music/dl.webm.ytdl", ReasonPartialDownld)
+	if len(got) != 6 {
+		t.Errorf("expected exactly 6 media entries, got %v", keys(got))
 	}
 	notWant(t, got, "media:Music/unimported.mp4")
 }
@@ -283,5 +291,66 @@ func TestDeleteSkipsRecentlyTouchedFile(t *testing.T) {
 	deleted, skipped, err := Delete(context.Background(), e.cfg, []Ref{{RootImages, "library/1/small/a.webp"}}, e.now)
 	if err != nil || deleted != 0 || skipped != 1 {
 		t.Fatalf("deleted/skipped/err = %d/%d/%v", deleted, skipped, err)
+	}
+}
+
+func TestMediaLoneJpgNeverFlagged(t *testing.T) {
+	e := newEnv(t)
+	e.put(t, RootMedia, "Pics/vacation.jpg", false)
+	if got := e.scan(t); len(got) != 0 {
+		t.Fatalf("lone .jpg must not be flagged, got %v", keys(got))
+	}
+
+	// With a sibling orphan .nfo both are flagged...
+	e.put(t, RootMedia, "Music/gone.jpg", false)
+	e.put(t, RootMedia, "Music/gone.nfo", false)
+	got := e.scan(t)
+	want(t, got, "media:Music/gone.jpg", ReasonOrphanThumb)
+	want(t, got, "media:Music/gone.nfo", ReasonOrphanNFO)
+	notWant(t, got, "media:Pics/vacation.jpg")
+
+	// ...but not if the .nfo is too recent to be flagged itself.
+	e2 := newEnv(t)
+	e2.put(t, RootMedia, "Music/gone.jpg", false)
+	e2.put(t, RootMedia, "Music/gone.nfo", true)
+	if got := e2.scan(t); len(got) != 0 {
+		t.Fatalf("jpg must not be flagged when its nfo isn't, got %v", keys(got))
+	}
+}
+
+func TestMediaTempFilesHeldBackWhileDownloadActive(t *testing.T) {
+	e := newEnv(t)
+	temps := []string{"Music/a.webm.part", "Music/a.f1.part-Frag3", "Music/a.webm.ytdl", "Music/v.trim-preview-x.mp4"}
+	for _, p := range temps {
+		e.put(t, RootMedia, p, false)
+	}
+	e.put(t, RootMedia, "Music/gone.nfo", false) // non-temp strays are unaffected
+
+	active := true
+	e.cfg.AnyDownloadActive = func() bool { return active }
+	got := e.scan(t)
+	for _, p := range temps {
+		notWant(t, got, "media:"+p)
+	}
+	want(t, got, "media:Music/gone.nfo", ReasonOrphanNFO)
+
+	// Delete re-runs Scan, so it inherits the guard.
+	deleted, skipped, err := Delete(context.Background(), e.cfg, []Ref{{RootMedia, "Music/a.webm.part"}}, e.now)
+	if err != nil || deleted != 0 || skipped != 1 {
+		t.Fatalf("deleted/skipped/err = %d/%d/%v", deleted, skipped, err)
+	}
+	if _, err := os.Stat(filepath.Join(e.cfg.MediaRoot, "Music/a.webm.part")); err != nil {
+		t.Fatalf(".part must survive while a download is active: %v", err)
+	}
+
+	// Idle (and a nil check) -> reported again.
+	active = false
+	got = e.scan(t)
+	for _, p := range temps {
+		want(t, got, "media:"+p, tempReason(filepath.Base(p)))
+	}
+	e.cfg.AnyDownloadActive = nil
+	if len(e.scan(t)) != len(temps)+1 {
+		t.Error("nil guard should behave as nothing active")
 	}
 }
