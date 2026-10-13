@@ -14,6 +14,7 @@ import (
 	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/strayfiles"
 	"packrat/backend/internal/thumbnailenhance"
 )
 
@@ -1690,4 +1691,15 @@ type ThumbnailEnhancementStatusResponse struct {
 	Configured bool    `json:"configured"`
 	Reachable  bool    `json:"reachable"`
 	Error      *string `json:"error"`
+}
+
+// DeleteStrayFilesRequest lists entries from a previous stray-files scan; each
+// is re-validated server-side before anything is removed.
+type DeleteStrayFilesRequest struct {
+	Paths []strayfiles.Ref `json:"paths" binding:"required,min=1"`
+}
+
+type DeleteStrayFilesResponse struct {
+	Deleted int `json:"deleted"`
+	Skipped int `json:"skipped"`
 }

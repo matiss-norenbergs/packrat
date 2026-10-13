@@ -113,6 +113,15 @@ func fetchGhostThumbnail(ctx context.Context, libraryRepo *repository.LibraryRep
 		log.Printf("ghost item %d: generating thumbnail derivatives failed: %v", id, err)
 		return false
 	}
+	// Snapshot the tiers being replaced so they can be removed once the DB
+	// points at the new ones (best-effort; a failed lookup just skips cleanup).
+	var oldSmall, oldMedium *string
+	if existing, err := libraryRepo.Get(ctx, id); err != nil {
+		log.Printf("ghost item %d: loading previous thumbnail tiers failed: %v", id, err)
+	} else {
+		oldSmall, oldMedium = existing.ThumbnailSmallPath, existing.ThumbnailMediumPath
+	}
+
 	var width, height *int
 	if w, h, err := imageproc.ProbeDimensions(thumbAbs); err != nil {
 		log.Printf("ghost item %d: probing thumbnail dimensions failed: %v", id, err)
@@ -123,6 +132,7 @@ func fetchGhostThumbnail(ctx context.Context, libraryRepo *repository.LibraryRep
 		log.Printf("ghost item %d: saving thumbnail derivatives failed: %v", id, err)
 		return false
 	}
+	removeThumbnailTiers(imagesRoot, oldSmall, oldMedium)
 	return true
 }
 
@@ -171,7 +181,7 @@ func BulkFetchLibraryThumbnails(libraryRepo *repository.LibraryRepo, imagesRoot 
 // metadata are left untouched. The inverse of a real download completing;
 // puts the item into the same "ghost" state CreateGhostLibraryItem creates
 // directly (see LibraryRepo.ClearFile).
-func DeleteLibraryItemFile(libraryRepo *repository.LibraryRepo, mediaRoot string) gin.HandlerFunc {
+func DeleteLibraryItemFile(libraryRepo *repository.LibraryRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, mediaRoot, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -195,31 +205,12 @@ func DeleteLibraryItemFile(libraryRepo *repository.LibraryRepo, mediaRoot string
 		}
 
 		clearThumbnail := c.Query("deleteThumbnail") == "true"
-		removeLibraryItemFile(mediaRoot, item, clearThumbnail)
-
 		if err := libraryRepo.ClearFile(ctx, id, clearThumbnail); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		purgeLibraryItemFileArtifacts(ctx, mediaRoot, imagesRoot, originalsRepo, item, clearThumbnail)
 		c.Status(http.StatusNoContent)
-	}
-}
-
-// removeLibraryItemFile deletes item's media file (and, if clearThumbnail,
-// its thumbnail) from disk — shared by the single-item and bulk delete-file
-// handlers. Best-effort: failures are logged, not returned, matching
-// deleteLibraryItemFiles' (library_handler.go) convention for the
-// whole-item-delete case.
-func removeLibraryItemFile(mediaRoot string, item *models.LibraryItem, clearThumbnail bool) {
-	mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-	if err := os.Remove(mediaAbs); err != nil && !os.IsNotExist(err) {
-		log.Printf("library: failed to delete media file %s: %v", mediaAbs, err)
-	}
-	if clearThumbnail && item.Thumbnail != nil {
-		thumbAbs := filepath.Join(mediaRoot, filepath.FromSlash(*item.Thumbnail))
-		if err := os.Remove(thumbAbs); err != nil && !os.IsNotExist(err) {
-			log.Printf("library: failed to delete thumbnail %s: %v", thumbAbs, err)
-		}
 	}
 }
 
@@ -266,7 +257,7 @@ func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRe
 // that's already gone or already has no file (already a ghost) is skipped
 // rather than failing the batch — a bulk selection spanning both real and
 // ghost items is an expected, not exceptional, case here.
-func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, mediaRoot string) gin.HandlerFunc {
+func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, mediaRoot, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BulkDeleteLibraryItemFilesRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -283,6 +274,7 @@ func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, mediaR
 		txRepo := repo.WithTx(tx)
 
 		var resp BulkDeleteResponse
+		var cleared []*models.LibraryItem
 		for _, id := range req.ItemIDs {
 			item, err := txRepo.Get(c.Request.Context(), id)
 			if err != nil {
@@ -296,18 +288,21 @@ func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, mediaR
 				continue
 			}
 
-			removeLibraryItemFile(mediaRoot, item, req.DeleteThumbnail)
-
 			if err := txRepo.ClearFile(c.Request.Context(), id, req.DeleteThumbnail); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			cleared = append(cleared, item)
 			resp.Deleted++
 		}
 
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+		// Files only go once the commit has succeeded.
+		for _, item := range cleared {
+			purgeLibraryItemFileArtifacts(c.Request.Context(), mediaRoot, imagesRoot, originalsRepo, item, req.DeleteThumbnail)
 		}
 		c.JSON(http.StatusOK, resp)
 	}

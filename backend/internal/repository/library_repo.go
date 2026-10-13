@@ -740,7 +740,7 @@ func (r *LibraryRepo) ApplyRedownload(ctx context.Context, id int64, p ApplyRedo
 func (r *LibraryRepo) ClearFile(ctx context.Context, id int64, clearThumbnail bool) error {
 	query := `UPDATE library SET filename = '', path = '', file_size_bytes = NULL, status = 'ghost'`
 	if clearThumbnail {
-		query += `, thumbnail = NULL, thumbnail_small_path = NULL, thumbnail_medium_path = NULL`
+		query += `, thumbnail = NULL, thumbnail_small_path = NULL, thumbnail_medium_path = NULL, thumbnail_width = NULL, thumbnail_height = NULL`
 	}
 	query += ` WHERE id = ?`
 
@@ -749,6 +749,28 @@ func (r *LibraryRepo) ClearFile(ctx context.Context, id int64, clearThumbnail bo
 		return fmt.Errorf("clearing library item file: %w", err)
 	}
 	return checkRowsAffected(res)
+}
+
+// FrameMatchQueueIDs returns the ids of every frame_match_queue row for a
+// library item — those rows (and their images/frame-match/<id>/ snapshot
+// dirs) are removed by ON DELETE CASCADE / by the delete handlers, so callers
+// collect the ids BEFORE deleting the library row.
+func (r *LibraryRepo) FrameMatchQueueIDs(ctx context.Context, libraryItemID int64) ([]int64, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id FROM frame_match_queue WHERE library_item_id = ?`, libraryItemID)
+	if err != nil {
+		return nil, fmt.Errorf("listing frame match queue ids for item %d: %w", libraryItemID, err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scanning frame match queue id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // ClearThumbnail wipes just an item's thumbnail fields — the raw sidecar

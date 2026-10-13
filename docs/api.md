@@ -254,6 +254,8 @@ automatic retention sweep. `200 {"deleted": <n>}`.
 | POST | `/api/library/:id/progress` | Record current playback position (Continue Watching) |
 | POST | `/api/library/ghost` | Create a ghost (placeholder, no file) library item |
 | DELETE | `/api/library/:id/file` | Delete just the file, keep the entry (becomes a ghost) |
+| GET | `/api/maintenance/stray-files` | Report files on disk no DB record references (never deletes) |
+| POST | `/api/maintenance/stray-files/delete` | Delete chosen stray files, re-validated per path |
 | POST | `/api/library/scan-missing` | Convert any item whose on-record file is gone from disk into a ghost |
 | POST | `/api/library/bulk-redownload` | Re-queue downloads for many items at once |
 | POST | `/api/library/bulk-fetch-thumbnails` | Re-fetch thumbnails for many items at once |
@@ -358,8 +360,11 @@ Computed across the whole library, independent of the current search/page.
 
 ### `DELETE /api/library/:id?deleteFiles=true`
 
-`deleteFiles` (default false) best-effort removes the media file and thumbnail from disk — a
-missing file is logged, not an error. `404` unknown, `204` on success.
+`deleteFiles` (default false) best-effort removes the media file, thumbnail and `.nfo` sidecar from
+disk — a missing file is logged, not an error. Regardless of `deleteFiles`, once the row is deleted
+the item's `ImagesRoot` artifacts are removed too: `library/<id>/` (thumbnail tiers + AI-enhancement
+original), `thumbnail-gallery/<id>/` and `frame-match/<queueId>/` for each of its frame-match queue
+rows. Files are only touched after the DB delete succeeds. `404` unknown, `204` on success.
 
 ### `PATCH /api/library/:id` — partial merge (fields omitted are left untouched)
 
@@ -396,7 +401,8 @@ keeps each opted-in item's `.nfo` sidecar in sync. `204`.
 { "itemIds": [1, 2, 3], "deleteFiles": true }
 ```
 
-One `deleteFiles` flag for the whole batch. An already-gone id is silently skipped. Response:
+One `deleteFiles` flag for the whole batch (same on-disk cleanup as the single-item version; files
+are removed only after the transaction commits). An already-gone id is silently skipped. Response:
 `200 {"deleted": 3}`.
 
 ### `POST /api/library/:id/move`
@@ -502,7 +508,10 @@ deleted (`DELETE /:id/file`) or found missing on disk (`scan-missing`).
   Response `201` with the full library item (`galleryCount` always `0` on a fresh item).
 - **`DELETE /api/library/:id/file?deleteThumbnail=true`** — removes just the media file (best-effort
   on disk) and flips the item to `status="ghost"`; all other metadata (tags, collection, artist,
-  etc.) is untouched. `deleteThumbnail` (default false) also removes the thumbnail. Distinct from
+  etc.) is untouched. The `.nfo` sidecar is always removed with the media file. `deleteThumbnail`
+  (default false) also removes the thumbnail, its `ImagesRoot` WebP tiers (clearing the stored
+  thumbnail dimensions too) and the AI-enhancement original. Files are removed only after the DB
+  update succeeds. Distinct from
   the already-documented `DELETE /api/library/:id?deleteFiles=true`: that one deletes the DB row
   entirely and is permanent — this keeps the row so it can be redownloaded later. `400` item is
   already a ghost, `404` unknown id, `204` on success.
@@ -583,7 +592,9 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
 - **`POST /api/library/:id/thumbnail`** — `{ "imageBase64": "/9j/4AAQ..." }`. Writes the given
   bytes as the thumbnail — finalize step for "choose from video." `400` invalid base64. All three
   thumbnail endpoints respond `200` with the full updated library item.
-- **`DELETE /api/library/:id/thumbnail`** — removes the thumbnail (all tiers). `404` unknown item,
+- **`DELETE /api/library/:id/thumbnail`** — removes the thumbnail (all tiers) and the item's
+  AI-enhancement original (the enhanced image *is* the thumbnail, so the backup has nothing left to
+  compare against or revert onto). `404` unknown item,
   `204` on success.
 
 ### Thumbnail gallery
@@ -776,7 +787,8 @@ name, `204` on success.
 
 `404` unknown, `409 {"error":"collection has sub-collections — move or delete them first"}` if it
 has children, `204` on success. Never deletes the files inside it — items just lose their
-collection association.
+collection association — but removes the collection's own cover images (`ImagesRoot/collections/<id>/`).
+`bulk-delete` does the same for each deleted collection, after commit.
 
 ### `POST /api/collections/bulk-delete`
 
@@ -857,8 +869,8 @@ Identical pattern to Tags, minus `isPrivate`, plus an optional image gallery.
 | GET | `/api/artists` | List all artists |
 | POST | `/api/artists` | Create an artist |
 | PATCH | `/api/artists/:id` | Rename an artist |
-| DELETE | `/api/artists/:id` | Delete an artist |
-| POST | `/api/artists/bulk-delete` | Delete many at once |
+| DELETE | `/api/artists/:id` | Delete an artist (and its gallery images on disk) |
+| POST | `/api/artists/bulk-delete` | Delete many at once (gallery images removed after commit) |
 | GET | `/api/artists/:id/image-candidates` | Suggest images from this artist's own library items |
 | GET | `/api/artists/:id/images` | List the artist's image gallery |
 | POST | `/api/artists/:id/images` | Add an image to the gallery |
@@ -896,6 +908,40 @@ is a nullable relative path pointing at one of the artist's own gallery images (
   image belongs to a different artist. Sets `selectedImagePath` to that image's path. `204`.
 - **`DELETE /api/artists/:id/selected-image`** — no body. Clears the selection pointer only — the
   gallery image itself stays, still selectable again later. `404` unknown artist, `204`.
+
+## Maintenance
+
+### `GET /api/maintenance/stray-files`
+
+Report only — never deletes. Detection rules: see `internal/strayfiles` and *Stray files* in
+`FEATURES.md`.
+
+```json
+{
+  "entries": [
+    { "root": "images", "path": "library/12", "sizeBytes": 48211, "modifiedAt": "2026-10-13T09:00:00Z", "reason": "owner deleted" },
+    { "root": "media", "path": "Music/old.nfo", "sizeBytes": 812, "modifiedAt": "2026-09-01T10:00:00Z", "reason": "orphan .nfo sidecar" }
+  ],
+  "totals": { "count": 2, "bytes": 49023 }
+}
+```
+
+`root` is `images` (ImagesRoot) or `media` (MediaRoot); `path` is root-relative with `/`. Reasons:
+`unreferenced file`, `owner deleted` (a whole `images/<kind>/<id>/` directory), `orphan .nfo sidecar`,
+`orphan thumbnail sidecar` (only alongside a flagged orphan `.nfo` of the same name), `abandoned trim preview`, `abandoned partial download`. Files modified
+in the last 10 minutes are never reported, and temp files (`abandoned trim preview`, `abandoned partial
+download`) are omitted entirely while any download is active.
+
+### `POST /api/maintenance/stray-files/delete`
+
+```json
+{ "paths": [ { "root": "images", "path": "library/12" }, { "root": "media", "path": "Music/old.nfo" } ] }
+```
+
+The stray check is re-run server-side at delete time and each path is resolved with
+`pathsafe.ResolveUnderRoot`; only entries that are still stray are removed. Response:
+`200 {"deleted": 2, "skipped": 0}` (`skipped` = no longer stray, unsafe or failed). `400` on an empty
+list.
 
 ## Settings
 

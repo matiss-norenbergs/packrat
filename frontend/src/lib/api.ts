@@ -59,6 +59,9 @@ import type {
   LogEntry,
   MoveLibraryItemRequest,
   ScanMissingLibraryFilesResult,
+  DeleteStrayFilesResult,
+  StrayFileRef,
+  StrayFilesResult,
   ScannedFile,
   Settings,
   SetArtistImageRequest,
@@ -341,6 +344,17 @@ export function deleteLibraryItemThumbnail(id: number): Promise<void> {
 
 export function scanMissingLibraryFiles(): Promise<ScanMissingLibraryFilesResult> {
   return request<ScanMissingLibraryFilesResult>("/library/scan-missing", { method: "POST" })
+}
+
+export function scanStrayFiles(): Promise<StrayFilesResult> {
+  return request<StrayFilesResult>("/maintenance/stray-files")
+}
+
+export function deleteStrayFiles(paths: StrayFileRef[]): Promise<DeleteStrayFilesResult> {
+  return request<DeleteStrayFilesResult>("/maintenance/stray-files/delete", {
+    method: "POST",
+    body: JSON.stringify({ paths }),
+  })
 }
 
 export function updateLibraryItem(id: number, payload: UpdateLibraryItemRequest): Promise<void> {
