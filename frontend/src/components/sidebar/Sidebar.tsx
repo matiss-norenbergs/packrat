@@ -37,15 +37,13 @@ const GITHUB_REPO = "matiss-norenbergs/packrat"
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/downloads", label: "Downloads", icon: Download, endAdornment: <ProxyStatusDot /> },
+  { to: "/subscriptions", label: "Subscriptions", icon: Rss },
+  { to: "/import", label: "File Import", icon: Import },
   { to: "/library", label: "Library", icon: Library },
   { to: "/collections", label: "Collections", icon: FolderKanban },
-  { to: "/tags", label: "Tags", icon: Tags },
   { to: "/artists", label: "Artists", icon: Mic2 },
+  { to: "/tags", label: "Tags", icon: Tags },
   { to: "/compare-list", label: "Compare list", icon: GitCompare },
-  { to: "/import", label: "File Import", icon: Import },
-  { to: "/history", label: "History", icon: History },
-  { to: "/backup", label: "Backup", icon: Archive },
-  { to: "/subscriptions", label: "Subscriptions", icon: Rss },
   {
     to: "/thumbnail-enhancement",
     label: "AI Enhancement",
@@ -54,8 +52,10 @@ const navItems = [
     endAdornment: <AiEnhancementStatusDot />,
   },
   { to: "/frame-matching", label: "Frame Matching", icon: ScanSearch },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/history", label: "History", icon: History },
   { to: "/logs", label: "Logs", icon: ScrollText },
+  { to: "/backup", label: "Backup", icon: Archive },
+  { to: "/settings", label: "Settings", icon: Settings },
 ]
 
 export function SidebarContent() {
