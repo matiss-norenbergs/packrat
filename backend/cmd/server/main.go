@@ -226,6 +226,7 @@ func run() error {
 		Manager:           mgr,
 		YtDlp:             ytdlpSvc,
 		ImagesRoot:        cfg.ImagesRoot,
+		SettingsRepo:      settingsRepo,
 		Broadcaster:       hub,
 	}
 
@@ -274,13 +275,14 @@ func run() error {
 	}()
 
 	go framematch.RunQueue(ctx, framematch.QueueDeps{
-		QueueRepo:   frameMatchQueueRepo,
-		LibraryRepo: libraryRepo,
-		YtDlp:       ytdlpSvc,
-		FFProbePath: cfg.FFProbePath,
-		MediaRoot:   cfg.MediaRoot,
-		ImagesRoot:  cfg.ImagesRoot,
-		Broadcaster: hub,
+		QueueRepo:    frameMatchQueueRepo,
+		LibraryRepo:  libraryRepo,
+		YtDlp:        ytdlpSvc,
+		FFProbePath:  cfg.FFProbePath,
+		MediaRoot:    cfg.MediaRoot,
+		ImagesRoot:   cfg.ImagesRoot,
+		SettingsRepo: settingsRepo,
+		Broadcaster:  hub,
 	})
 
 	router := api.SetupRouter(api.Deps{

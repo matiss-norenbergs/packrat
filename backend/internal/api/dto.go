@@ -912,6 +912,12 @@ type SettingsResponse struct {
 	ThumbnailResolutionThresholdLow      int  `json:"thumbnailResolutionThresholdLow"`
 	ThumbnailResolutionThresholdHigh     int  `json:"thumbnailResolutionThresholdHigh"`
 
+	// Feature toggles (Settings → Features); each defaults to true.
+	FeatureSubscriptionsEnabled bool `json:"featureSubscriptionsEnabled"`
+	FeatureFrameMatchingEnabled bool `json:"featureFrameMatchingEnabled"`
+	FeatureCompareListEnabled   bool `json:"featureCompareListEnabled"`
+	FeatureFileImportEnabled    bool `json:"featureFileImportEnabled"`
+
 	ThumbnailEnhancementEnabled         bool   `json:"thumbnailEnhancementEnabled"`
 	ThumbnailEnhancementURL             string `json:"thumbnailEnhancementUrl"`
 	ThumbnailEnhancementUsername        string `json:"thumbnailEnhancementUsername"`
@@ -973,6 +979,11 @@ type UpdateSettingsRequest struct {
 	ThumbnailResolutionTierMediumEnabled *bool `json:"thumbnailResolutionTierMediumEnabled"`
 	ThumbnailResolutionThresholdLow      *int  `json:"thumbnailResolutionThresholdLow" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
 	ThumbnailResolutionThresholdHigh     *int  `json:"thumbnailResolutionThresholdHigh" binding:"omitempty,oneof=480 720 1080 1440 2160 4320"`
+
+	FeatureSubscriptionsEnabled *bool `json:"featureSubscriptionsEnabled"`
+	FeatureFrameMatchingEnabled *bool `json:"featureFrameMatchingEnabled"`
+	FeatureCompareListEnabled   *bool `json:"featureCompareListEnabled"`
+	FeatureFileImportEnabled    *bool `json:"featureFileImportEnabled"`
 
 	ThumbnailEnhancementEnabled         *bool   `json:"thumbnailEnhancementEnabled"`
 	ThumbnailEnhancementURL             *string `json:"thumbnailEnhancementUrl"`

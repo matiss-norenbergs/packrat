@@ -64,6 +64,7 @@ import { useTags } from "@/hooks/useTags"
 import { sortCollectionsByPath } from "@/lib/collectionTree"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
 import { AddGhostLibraryItemDialog } from "./AddGhostLibraryItemDialog"
+import { useFeatureEnabled } from "@/hooks/useFeature"
 import { AddToCompareListDialog } from "./AddToCompareListDialog"
 import { BulkAssignTagsDialog } from "./BulkAssignTagsDialog"
 import { BulkDeleteLibraryItemFilesDialog } from "./BulkDeleteLibraryItemFilesDialog"
@@ -108,6 +109,8 @@ export function LibraryToolbar() {
   // moving "collection" out of the URL would break the folder view's
   // breadcrumb/browser-back behavior.
   const { data: settings } = useSettings()
+  const compareListEnabled = useFeatureEnabled("featureCompareListEnabled")
+  const frameMatchingEnabled = useFeatureEnabled("featureFrameMatchingEnabled")
   const updateSettings = useUpdateSettings()
   const { revealAll, toggleRevealAll } = useRevealAll()
   const { selectionActive, approxCount, clear } = useSelection()
@@ -308,9 +311,11 @@ export function LibraryToolbar() {
             <DropdownMenuItem onSelect={() => setEditSequenceOpen(true)}>
               <ListOrdered /> Edit sequence…
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setAddToCompareOpen(true)}>
-              <GitCompare /> Add to compare list…
-            </DropdownMenuItem>
+            {compareListEnabled && (
+              <DropdownMenuItem onSelect={() => setAddToCompareOpen(true)}>
+                <GitCompare /> Add to compare list…
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setBulkRedownloadOpen(true)}>
               <Download /> Download file(s)…
@@ -323,12 +328,16 @@ export function LibraryToolbar() {
                 <DropdownMenuItem onSelect={() => setBulkFetchThumbnailsOpen(true)}>
                   <Download /> Download thumbnail(s)…
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setBulkFrameMatchMode("url")}>
-                  <Link2 /> Match from URL thumbnail…
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setBulkFrameMatchMode("current")}>
-                  <RefreshCw /> Match from current thumbnail…
-                </DropdownMenuItem>
+                {frameMatchingEnabled && (
+                  <>
+                    <DropdownMenuItem onSelect={() => setBulkFrameMatchMode("url")}>
+                      <Link2 /> Match from URL thumbnail…
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setBulkFrameMatchMode("current")}>
+                      <RefreshCw /> Match from current thumbnail…
+                    </DropdownMenuItem>
+                  </>
+                )}
                 {settings?.thumbnailEnhancementEnabled && (
                   <DropdownMenuItem onSelect={() => setBulkSharpenOpen(true)}>
                     <Sparkles /> Sharpen thumbnail(s)…
@@ -352,7 +361,7 @@ export function LibraryToolbar() {
         <BulkSetGenerateNfoDialog open={bulkNfoOpen} onOpenChange={setBulkNfoOpen} />
         <BulkRedownloadLibraryItemsDialog open={bulkRedownloadOpen} onOpenChange={setBulkRedownloadOpen} />
         <BulkFetchLibraryThumbnailsDialog open={bulkFetchThumbnailsOpen} onOpenChange={setBulkFetchThumbnailsOpen} />
-        {bulkFrameMatchMode && (
+        {frameMatchingEnabled && bulkFrameMatchMode && (
           <BulkFrameMatchDialog
             mode={bulkFrameMatchMode}
             open={bulkFrameMatchMode != null}
@@ -363,7 +372,7 @@ export function LibraryToolbar() {
         <BulkDeleteLibraryItemFilesDialog open={bulkDeleteFileOpen} onOpenChange={setBulkDeleteFileOpen} />
         <BulkDeleteLibraryItemsDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
         <EditSequenceDialog open={editSequenceOpen} onOpenChange={setEditSequenceOpen} />
-        <AddToCompareListDialog open={addToCompareOpen} onOpenChange={setAddToCompareOpen} />
+        {compareListEnabled && <AddToCompareListDialog open={addToCompareOpen} onOpenChange={setAddToCompareOpen} />}
 
         {selectionActive && (
           <Button variant="ghost" size="sm" onClick={clear}>

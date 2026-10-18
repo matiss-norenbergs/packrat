@@ -5,10 +5,14 @@ import type { AddToCompareListRequest } from "@/types/api"
 
 export const compareListQueryKey = ["compare-list"] as const
 
-export function useCompareList() {
+// enabled: false skips the fetch — callers that sit outside the Compare list
+// page (the Library item menu) pass the feature flag, since the endpoint
+// rejects requests while the feature is off.
+export function useCompareList({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: compareListQueryKey,
     queryFn: fetchCompareList,
+    enabled,
   })
 }
 

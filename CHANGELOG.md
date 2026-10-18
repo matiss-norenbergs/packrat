@@ -12,6 +12,17 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-18
+- **Optional features** — new Settings → Features tab with switches for Subscriptions, File Import,
+  Compare list (incl. the side-by-side player) and Frame Matching, all on by default. Turning one off
+  hides its sidebar entry and Library menu items, shows a "turned off" notice on its URL, rejects its
+  API routes with `403`, and stops its background work (scheduled subscription checks, the Frame
+  Matching queue worker) so it costs nothing while unused. Data is never touched; turning it back on
+  restores everything, and subscriptions that came due meanwhile are checked straight away.
+- **Sidebar reordered** — grouped as intake (Downloads, Subscriptions, File Import), browse (Library,
+  Collections, Artists, Tags), tools (Compare list, AI Enhancement, Frame Matching) and admin
+  (History, Logs, Backup, Settings).
+
 ## 2026-10-13
 - **Stray files maintenance tool** — Settings → Library maintenance → "Find Stray Files" lists files
   on disk that no DB record references (unreferenced/owner-deleted images, orphaned `.nfo` and

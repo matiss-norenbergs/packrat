@@ -58,6 +58,7 @@ import {
   useRedownloadLibraryThumbnail,
   useRefreshLibraryItemMetadata,
 } from "@/hooks/useLibrary"
+import { useFeatureEnabled } from "@/hooks/useFeature"
 import { useAddToCompareList, useCompareList, useRemoveFromCompareList } from "@/hooks/useCompareList"
 import { useSettings } from "@/hooks/useSettings"
 import { useSharpenThumbnailItems } from "@/hooks/useThumbnailEnhancement"
@@ -113,7 +114,9 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
   const sharpenThumbnail = useSharpenThumbnailItems()
   const saveThumbnailToGallery = useSaveThumbnailToGallery()
 
-  const { data: compareList } = useCompareList()
+  const compareListEnabled = useFeatureEnabled("featureCompareListEnabled")
+  const frameMatchingEnabled = useFeatureEnabled("featureFrameMatchingEnabled")
+  const { data: compareList } = useCompareList({ enabled: compareListEnabled })
   const inCompareList = compareList?.some((i) => i.id === item.id) ?? false
   const addToCompareList = useAddToCompareList()
   const removeFromCompareList = useRemoveFromCompareList()
@@ -171,12 +174,14 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
               <Scissors /> Trim…
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem
-            onClick={toggleCompareList}
-            disabled={addToCompareList.isPending || removeFromCompareList.isPending}
-          >
-            <GitCompare /> {inCompareList ? "Remove from compare list" : "Add to compare list"}
-          </DropdownMenuItem>
+          {compareListEnabled && (
+            <DropdownMenuItem
+              onClick={toggleCompareList}
+              disabled={addToCompareList.isPending || removeFromCompareList.isPending}
+            >
+              <GitCompare /> {inCompareList ? "Remove from compare list" : "Add to compare list"}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleCopyUrl} disabled={!hasUrl}>
             <Copy /> Copy URL
@@ -254,12 +259,12 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
                   <SlidersHorizontal /> Choose from Video (custom)…
                 </DropdownMenuItem>
               )}
-              {!isGhost && !isImage && !isAudio && (
+              {frameMatchingEnabled && !isGhost && !isImage && !isAudio && (
                 <DropdownMenuItem onClick={() => setFrameMatchMode("url")} disabled={!hasUrl}>
                   <Link2 /> Match from URL Thumbnail…
                 </DropdownMenuItem>
               )}
-              {!isGhost && !isImage && !isAudio && (
+              {frameMatchingEnabled && !isGhost && !isImage && !isAudio && (
                 <DropdownMenuItem onClick={() => setFrameMatchMode("current")} disabled={!hasThumbnail}>
                   <RefreshCw /> Match from Current Thumbnail…
                 </DropdownMenuItem>
@@ -322,7 +327,7 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
       />
       <ThumbnailGalleryDialog item={item} open={thumbnailGalleryOpen} onOpenChange={setThumbnailGalleryOpen} />
       <NfoContentDialog item={item} open={nfoContentOpen} onOpenChange={setNfoContentOpen} />
-      {frameMatchMode && (
+      {frameMatchingEnabled && frameMatchMode && (
         <FrameMatchDialog
           item={item}
           mode={frameMatchMode}

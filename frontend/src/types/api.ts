@@ -566,6 +566,10 @@ export interface Settings {
   thumbnailResolutionTierMediumEnabled: boolean
   thumbnailResolutionThresholdLow: number
   thumbnailResolutionThresholdHigh: number
+  featureSubscriptionsEnabled: boolean
+  featureFrameMatchingEnabled: boolean
+  featureCompareListEnabled: boolean
+  featureFileImportEnabled: boolean
   thumbnailEnhancementEnabled: boolean
   thumbnailEnhancementUrl: string
   thumbnailEnhancementUsername: string
@@ -715,6 +719,10 @@ export interface UpdateSettingsRequest {
   thumbnailResolutionTierMediumEnabled?: boolean
   thumbnailResolutionThresholdLow?: number
   thumbnailResolutionThresholdHigh?: number
+  featureSubscriptionsEnabled?: boolean
+  featureFrameMatchingEnabled?: boolean
+  featureCompareListEnabled?: boolean
+  featureFileImportEnabled?: boolean
   thumbnailEnhancementEnabled?: boolean
   thumbnailEnhancementUrl?: string
   thumbnailEnhancementUsername?: string

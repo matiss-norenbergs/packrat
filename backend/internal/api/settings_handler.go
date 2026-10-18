@@ -14,6 +14,7 @@ import (
 
 	"packrat/backend/internal/backup"
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/features"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
@@ -1252,6 +1253,10 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			ThumbnailResolutionThresholdLow:      thumbnailResolutionThresholdLow,
 			ThumbnailResolutionThresholdHigh:     thumbnailResolutionThresholdHigh,
 
+			FeatureSubscriptionsEnabled:         features.Enabled(c.Request.Context(), repo, models.SettingFeatureSubscriptionsEnabled),
+			FeatureFrameMatchingEnabled:         features.Enabled(c.Request.Context(), repo, models.SettingFeatureFrameMatchingEnabled),
+			FeatureCompareListEnabled:           features.Enabled(c.Request.Context(), repo, models.SettingFeatureCompareListEnabled),
+			FeatureFileImportEnabled:            features.Enabled(c.Request.Context(), repo, models.SettingFeatureFileImportEnabled),
 			ThumbnailEnhancementEnabled:         thumbnailEnhancementEnabled,
 			ThumbnailEnhancementURL:             thumbnailEnhancementURL,
 			ThumbnailEnhancementUsername:        thumbnailEnhancementUsername,
@@ -1273,7 +1278,10 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 // UpdateSettings persists any provided fields and, for concurrency,
 // applies the change to the live worker pool immediately rather than
 // waiting for a restart.
-func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+// onSubscriptionsEnabled, if non-nil, is called after the Subscriptions feature
+// goes from off to on, so subscriptions that came due while it was off run
+// straight away instead of waiting for the next hourly sweep.
+func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdlp *downloader.YtDlpService, onSubscriptionsEnabled func()) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req UpdateSettingsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -1660,6 +1668,27 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 			if err := repo.Set(c.Request.Context(), models.SettingYtdlpRetries, strconv.Itoa(*req.YtdlpRetries)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
+			}
+		}
+		for _, f := range []struct {
+			val *bool
+			key string
+		}{
+			{req.FeatureSubscriptionsEnabled, models.SettingFeatureSubscriptionsEnabled},
+			{req.FeatureFrameMatchingEnabled, models.SettingFeatureFrameMatchingEnabled},
+			{req.FeatureCompareListEnabled, models.SettingFeatureCompareListEnabled},
+			{req.FeatureFileImportEnabled, models.SettingFeatureFileImportEnabled},
+		} {
+			if f.val == nil {
+				continue
+			}
+			wasOn := features.Enabled(c.Request.Context(), repo, f.key)
+			if err := repo.Set(c.Request.Context(), f.key, strconv.FormatBool(*f.val)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			if f.key == models.SettingFeatureSubscriptionsEnabled && *f.val && !wasOn && onSubscriptionsEnabled != nil {
+				onSubscriptionsEnabled()
 			}
 		}
 		if req.ThumbnailEnhancementEnabled != nil {

@@ -963,9 +963,19 @@ list.
   "thumbnailFrameCount": 4, "thumbnailFrameRangeLow": 5, "thumbnailFrameRangeHigh": 100,
   "privacyBlurStrength": "default", "skipDownloadPreview": false,
   "jellyfinEnabled": false, "jellyfinUrl": "", "jellyfinApiKey": "", "jellyfinRefreshMode": "none",
-  "libraryAutoplay": true, "imageConvertFormat": "jpg"
+  "libraryAutoplay": true, "imageConvertFormat": "jpg",
+  "featureSubscriptionsEnabled": true, "featureFrameMatchingEnabled": true,
+  "featureCompareListEnabled": true, "featureFileImportEnabled": true
 }
 ```
+
+`feature*Enabled` are the Settings → Features toggles (all default `true`). While one is `false`, every
+route of that feature answers `403 {"error": "<Feature> is turned off in Settings → Features",
+"feature": "feature_<name>_enabled"}`: `featureSubscriptionsEnabled` → `/api/subscriptions*`;
+`featureFrameMatchingEnabled` → `/api/library/:id/thumbnail/match`, `/api/library/thumbnail/match/bulk`,
+`/api/thumbnail-match/:jobId`, `/api/frame-match/*`; `featureCompareListEnabled` → `/api/compare-list*`;
+`featureFileImportEnabled` → `/api/import*`. The flag is read per request, so a change applies
+immediately. Turning Subscriptions from off to on also triggers an immediate sweep of due subscriptions.
 
 `downloadDirectory` and `maxConcurrentDownloads` reflect live config/worker-pool state, not just
 the last saved DB value. `jellyfinApiKey` is returned in plaintext, not masked. `imageConvertFormat`
