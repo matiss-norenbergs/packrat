@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 
@@ -13,6 +14,7 @@ import (
 	"packrat/backend/internal/imagebackfill"
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/jellyfin"
+	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
@@ -110,6 +112,29 @@ func SetupRouter(deps Deps) *gin.Engine {
 	api := r.Group("/api")
 	api.Use(RequireAuth(deps.UsersRepo), RequireCSRF())
 	{
+		// Optional features (Settings → Features), checked per request.
+		subscriptionsOnly := RequireFeature(deps.SettingsRepo, models.SettingFeatureSubscriptionsEnabled, "Subscriptions")
+		frameMatchingOnly := RequireFeature(deps.SettingsRepo, models.SettingFeatureFrameMatchingEnabled, "Frame Matching")
+		compareListOnly := RequireFeature(deps.SettingsRepo, models.SettingFeatureCompareListEnabled, "Compare list")
+		fileImportOnly := RequireFeature(deps.SettingsRepo, models.SettingFeatureFileImportEnabled, "File Import")
+
+		subCheckDeps := subscriptions.CheckDeps{
+			SubscriptionsRepo: deps.SubscriptionsRepo,
+			LibraryRepo:       deps.LibraryRepo,
+			TagsRepo:          deps.TagsRepo,
+			CollectionsRepo:   deps.CollectionsRepo,
+			Manager:           deps.Manager,
+			YtDlp:             deps.YtDlp,
+			ImagesRoot:        deps.ImagesRoot,
+			SettingsRepo:      deps.SettingsRepo,
+			Broadcaster:       deps.Broadcaster,
+		}
+		// Subscriptions that came due while the feature was off run as soon as it
+		// is switched back on, rather than waiting for the next hourly sweep.
+		onSubscriptionsEnabled := func() {
+			go subscriptions.RunDueChecks(context.Background(), subCheckDeps)
+		}
+
 		api.PATCH("/auth/password", ChangePassword(deps.UsersRepo))
 
 		api.GET("/actions", ListHostActions(deps.HostActions))
@@ -167,12 +192,12 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/:id/thumbnail/gallery/:galleryId/apply", ApplyLibraryThumbnailFromGallery(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.ThumbnailGalleryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo))
 		api.PATCH("/library/:id/thumbnail/gallery/:galleryId", SetLibraryThumbnailGalleryFavorite(deps.ThumbnailGalleryRepo))
 		api.DELETE("/library/:id/thumbnail/gallery/:galleryId", DeleteLibraryThumbnailGalleryImage(deps.ImagesRoot, deps.ThumbnailGalleryRepo))
-		api.POST("/library/:id/thumbnail/match", StartFrameMatch(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.FrameMatchJobs, deps.FrameMatchQueueRepo))
-		api.GET("/thumbnail-match/:jobId", GetFrameMatchStatus(deps.FrameMatchJobs))
-		api.POST("/library/thumbnail/match/bulk", BulkStartFrameMatch(deps.LibraryRepo, deps.FrameMatchQueueRepo))
-		api.GET("/frame-match/queue", ListFrameMatchQueue(deps.FrameMatchQueueRepo))
-		api.POST("/frame-match/queue/:id/accept", AcceptFrameMatchQueueItem(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.FrameMatchQueueRepo, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.ThumbnailGalleryRepo))
-		api.DELETE("/frame-match/queue/:id", DiscardFrameMatchQueueItem(deps.ImagesRoot, deps.FrameMatchQueueRepo))
+		api.POST("/library/:id/thumbnail/match", frameMatchingOnly, StartFrameMatch(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.FrameMatchJobs, deps.FrameMatchQueueRepo))
+		api.GET("/thumbnail-match/:jobId", frameMatchingOnly, GetFrameMatchStatus(deps.FrameMatchJobs))
+		api.POST("/library/thumbnail/match/bulk", frameMatchingOnly, BulkStartFrameMatch(deps.LibraryRepo, deps.FrameMatchQueueRepo))
+		api.GET("/frame-match/queue", frameMatchingOnly, ListFrameMatchQueue(deps.FrameMatchQueueRepo))
+		api.POST("/frame-match/queue/:id/accept", frameMatchingOnly, AcceptFrameMatchQueueItem(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.FrameMatchQueueRepo, deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.ThumbnailGalleryRepo))
+		api.DELETE("/frame-match/queue/:id", frameMatchingOnly, DiscardFrameMatchQueueItem(deps.ImagesRoot, deps.FrameMatchQueueRepo))
 		api.POST("/library/:id/nfo", GenerateLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo, deps.TagsRepo))
 		api.GET("/library/:id/nfo", GetLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
 		api.DELETE("/library/:id/nfo", DeleteLibraryItemNFO(deps.MediaRoot, deps.LibraryRepo))
@@ -192,10 +217,10 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/tags/:id", DeleteTag(deps.TagsRepo))
 		api.POST("/tags/bulk-delete", BulkDeleteTags(deps.DB, deps.TagsRepo))
 
-		api.GET("/compare-list", ListCompareList(deps.CompareListRepo, deps.TagsRepo, deps.CollectionsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo, deps.MediaRoot))
-		api.POST("/compare-list", AddToCompareList(deps.CompareListRepo))
-		api.DELETE("/compare-list/:id", RemoveFromCompareList(deps.CompareListRepo))
-		api.DELETE("/compare-list", ClearCompareList(deps.CompareListRepo))
+		api.GET("/compare-list", compareListOnly, ListCompareList(deps.CompareListRepo, deps.TagsRepo, deps.CollectionsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo, deps.MediaRoot))
+		api.POST("/compare-list", compareListOnly, AddToCompareList(deps.CompareListRepo))
+		api.DELETE("/compare-list/:id", compareListOnly, RemoveFromCompareList(deps.CompareListRepo))
+		api.DELETE("/compare-list", compareListOnly, ClearCompareList(deps.CompareListRepo))
 
 		api.GET("/artists", ListArtists(deps.ArtistsRepo))
 		api.POST("/artists", CreateArtist(deps.ArtistsRepo))
@@ -210,7 +235,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/artists/:id/selected-image", ClearArtistSelectedImage(deps.ArtistsRepo))
 
 		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp, deps.MediaRoot))
-		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp))
+		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp, onSubscriptionsEnabled))
 		api.POST("/settings/backfill-images", StartImageBackfill(deps.ImageBackfillManager))
 		api.GET("/settings/backfill-images", GetImageBackfillStatus(deps.ImageBackfillManager))
 		api.GET("/proxy/status", GetProxyStatus(deps.SettingsRepo))
@@ -238,25 +263,16 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/backup/history/:id/preview", PreviewBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.POST("/backup/history/:id/restore", RestoreFullBackup(deps.BackupsRoot, deps.BackupHistoryRepo, deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager))
 
-		subCheckDeps := subscriptions.CheckDeps{
-			SubscriptionsRepo: deps.SubscriptionsRepo,
-			LibraryRepo:       deps.LibraryRepo,
-			TagsRepo:          deps.TagsRepo,
-			CollectionsRepo:   deps.CollectionsRepo,
-			Manager:           deps.Manager,
-			YtDlp:             deps.YtDlp,
-			ImagesRoot:        deps.ImagesRoot,
-		}
-		api.POST("/subscriptions", CreateSubscription(subCheckDeps))
-		api.GET("/subscriptions", ListSubscriptions(subCheckDeps))
-		api.PATCH("/subscriptions/:id", UpdateSubscription(subCheckDeps))
-		api.DELETE("/subscriptions/:id", DeleteSubscription(subCheckDeps))
-		api.POST("/subscriptions/:id/check", CheckSubscriptionNow(subCheckDeps))
-		api.GET("/subscriptions/:id/entries", ListSubscriptionEntries(subCheckDeps))
-		api.POST("/subscriptions/:id/entries/:sourceId/add", AddSubscriptionEntry(subCheckDeps))
-		api.POST("/subscriptions/:id/entries/:sourceId/seen", MarkSubscriptionEntrySeen(subCheckDeps))
-		api.POST("/subscriptions/:id/entries/:sourceId/link", LinkSubscriptionEntry(subCheckDeps))
-		api.POST("/subscriptions/:id/entries/:sourceId/unlink", UnlinkSubscriptionEntry(subCheckDeps))
+		api.POST("/subscriptions", subscriptionsOnly, CreateSubscription(subCheckDeps))
+		api.GET("/subscriptions", subscriptionsOnly, ListSubscriptions(subCheckDeps))
+		api.PATCH("/subscriptions/:id", subscriptionsOnly, UpdateSubscription(subCheckDeps))
+		api.DELETE("/subscriptions/:id", subscriptionsOnly, DeleteSubscription(subCheckDeps))
+		api.POST("/subscriptions/:id/check", subscriptionsOnly, CheckSubscriptionNow(subCheckDeps))
+		api.GET("/subscriptions/:id/entries", subscriptionsOnly, ListSubscriptionEntries(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/:sourceId/add", subscriptionsOnly, AddSubscriptionEntry(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/:sourceId/seen", subscriptionsOnly, MarkSubscriptionEntrySeen(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/:sourceId/link", subscriptionsOnly, LinkSubscriptionEntry(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/:sourceId/unlink", subscriptionsOnly, UnlinkSubscriptionEntry(subCheckDeps))
 
 		enhanceDeps := thumbnailenhance.Deps{
 			SettingsRepo:  deps.SettingsRepo,
@@ -283,8 +299,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/thumbnail-enhancement/items/bulk-keep-enhanced", BulkDeleteThumbnailOriginals(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/bulk-keep-original", BulkRevertThumbnailOriginals(enhanceDeps))
 
-		api.GET("/import/scan", ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
-		api.POST("/import", CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))
+		api.GET("/import/scan", fileImportOnly, ScanImport(deps.MediaRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.SettingsRepo, deps.FFProbePath))
+		api.POST("/import", fileImportOnly, CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath))
 
 		api.GET("/history", ListHistory(deps.HistoryRepo, deps.SettingsRepo))
 		api.POST("/history/:id/retry", RetryHistoryItem(deps.HistoryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))

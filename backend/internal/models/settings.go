@@ -114,3 +114,15 @@ const (
 	// which always processes exactly the one item picked.
 	SettingThumbnailEnhancementMaxPerSweep = "thumbnail_enhancement_max_per_sweep" // int as string; default "5"
 )
+
+// Feature toggles (Settings → Features). Each is a bool stored as "true"/"false"
+// and defaults to true when unset — a feature is only ever off because the user
+// turned it off, so existing installs keep every page after an upgrade. Off hides
+// the feature's UI, rejects its API routes and stops its background work, but
+// never deletes its data. See the features package.
+const (
+	SettingFeatureSubscriptionsEnabled = "feature_subscriptions_enabled"
+	SettingFeatureFrameMatchingEnabled = "feature_frame_matching_enabled"
+	SettingFeatureCompareListEnabled   = "feature_compare_list_enabled"
+	SettingFeatureFileImportEnabled    = "feature_file_import_enabled"
+)

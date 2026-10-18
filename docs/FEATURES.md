@@ -308,6 +308,8 @@ auto-picked image); removing any other gallery image is unaffected.
 
 ## Compare list
 
+> Optional — can be turned off in [Settings → Features](#settings); see the note there for what "off" means.
+
 A scratch list for lining files up to play back side by side. Add files from the Library page
 (select one or more items, or whole collections) via "Add to compare list" — the list persists
 server-side across sessions until you remove items or clear it. From the Compare list page, check
@@ -322,6 +324,8 @@ empty list — its buttons disable instead of disappearing. **Clear list** asks 
 before removing every item (your library files are unaffected either way).
 
 ## Import
+
+> Optional — can be turned off in [Settings → Features](#settings); see the note there for what "off" means.
 
 For files placed directly under your media root from outside the app (e.g. copied in manually,
 or downloaded by some other tool) — brings them into the Library without re-downloading anything.
@@ -414,6 +418,8 @@ there's nowhere to type a password unattended — use the plain Export cards abo
 password-protected file to store off-site.
 
 ## Subscriptions
+
+> Optional — can be turned off in [Settings → Features](#settings); see the note there for what "off" means.
 
 Watches a channel or playlist URL and tells you about new uploads, without you having to check
 back manually.
@@ -508,6 +514,8 @@ silently dropping the button.
 
 ## Frame Matching
 
+> Optional — can be turned off in [Settings → Features](#settings); see the note there for what "off" means.
+
 Finds the exact video frame a thumbnail was likely taken from, so a thumbnail that's a degraded,
 cropped, or re-encoded copy can be relocated back to the clean, full-quality frame it came from.
 This compares images (perceptual hashing across the whole video, refined around the best matches)
@@ -541,6 +549,16 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   running past the limit; 0 = no limit). Download directory is shown but not editable here (set
   via the `MEDIA_ROOT` environment variable).
 - **Account** — change your password (requires the current one).
+- **Features** — switches for the optional parts of the app: **Subscriptions**, **File Import**,
+  **Compare list** (including its side-by-side player) and **Frame Matching**. All default to on. Off
+  means: the sidebar entry and any Library menu entries for it disappear, opening its URL shows a
+  "turned off" notice, its API routes answer `403`, and its background work stops — the scheduled
+  subscription checks (and the yt-dlp calls they make) and the Frame Matching queue worker. Nothing
+  is deleted: subscriptions, queued matches and the compare list are kept, and turning a feature back
+  on restores them (subscriptions that came due while it was off are checked right away; queued
+  matches resume within a couple of seconds). A match or check that is already running when you turn
+  its feature off is allowed to finish. AI Enhancement keeps its own switch in its own tab, since it
+  also needs a connection set up.
 - **yt-dlp** — shows the installed version and whether a newer one is available on PyPI; one-click
   update. Also where the cookies browser/profile, proxy, and rate-limit are set. The proxy
   (`socks5://`/`http://`/`https://`) is used by `yt-dlp` itself and by every image download/preview

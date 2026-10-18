@@ -13,9 +13,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/features"
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
@@ -36,11 +38,16 @@ type CheckDeps struct {
 	Manager           *queue.DownloadManager
 	YtDlp             *downloader.YtDlpService
 	ImagesRoot        string
+	// SettingsRepo is read only by RunDueChecks, to honour the Subscriptions
+	// feature toggle. Nil means "always on".
+	SettingsRepo *repository.SettingsRepo
 	// Broadcaster is used only by RunDueChecks (the scheduled sweep) to
 	// report new items found — the manual "Check now" HTTP handler already
 	// gets its count synchronously via the response, so it doesn't need this.
 	Broadcaster ws.Broadcaster
 }
+
+var sweepMu sync.Mutex
 
 // RunDueChecks is called from the shared hourly ticker in cmd/server/main.go
 // (alongside history/download-log cleanup and the scheduled-backup check) —
@@ -48,7 +55,21 @@ type CheckDeps struct {
 // elapsed since its last check and checks each in turn. One subscription
 // failing (dead URL, network error) is logged and skipped, never blocks the
 // rest — same tolerance backup.RunScheduledBackupIfDue's caller expects.
+//
+// Does nothing while the Subscriptions feature is off. Nothing is marked as
+// checked in that case, so every due subscription runs on the first sweep
+// after the feature comes back on (the settings handler triggers one
+// immediately). Overlapping sweeps (the hourly tick racing that immediate
+// one) are skipped rather than queued, so a subscription is never checked
+// twice at once.
 func RunDueChecks(ctx context.Context, deps CheckDeps) {
+	if !features.Enabled(ctx, deps.SettingsRepo, models.SettingFeatureSubscriptionsEnabled) {
+		return
+	}
+	if !sweepMu.TryLock() {
+		return
+	}
+	defer sweepMu.Unlock()
 	subs, err := deps.SubscriptionsRepo.List(ctx)
 	if err != nil {
 		log.Printf("subscriptions: listing for scheduled check failed: %v", err)

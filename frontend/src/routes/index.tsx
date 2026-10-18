@@ -5,6 +5,7 @@ import { ImmersiveLayout } from "@/layouts/ImmersiveLayout"
 import { authStatusQueryKey } from "@/hooks/useAuth"
 import { fetchAuthStatus } from "@/lib/api"
 import { queryClient } from "@/lib/queryClient"
+import { FeatureRoute } from "@/components/FeatureRoute"
 import { RouteError } from "@/components/RouteError"
 
 // Every page is its own chunk (router-level `lazy`) so the shell — layouts,
@@ -62,13 +63,25 @@ export const router = createBrowserRouter([
       { path: "/collections", ...CollectionsPage },
       { path: "/tags", ...TagsPage },
       { path: "/artists", ...ArtistsPage },
-      { path: "/compare-list", ...CompareListPage },
-      { path: "/import", ...ImportPage },
+      {
+        element: <FeatureRoute feature="featureCompareListEnabled" name="Compare list" />,
+        children: [{ path: "/compare-list", ...CompareListPage }],
+      },
+      {
+        element: <FeatureRoute feature="featureFileImportEnabled" name="File Import" />,
+        children: [{ path: "/import", ...ImportPage }],
+      },
       { path: "/history", ...HistoryPage },
       { path: "/backup", ...BackupPage },
-      { path: "/subscriptions", ...SubscriptionsPage },
+      {
+        element: <FeatureRoute feature="featureSubscriptionsEnabled" name="Subscriptions" />,
+        children: [{ path: "/subscriptions", ...SubscriptionsPage }],
+      },
       { path: "/thumbnail-enhancement", ...ThumbnailEnhancementPage },
-      { path: "/frame-matching", ...FrameMatchingPage },
+      {
+        element: <FeatureRoute feature="featureFrameMatchingEnabled" name="Frame Matching" />,
+        children: [{ path: "/frame-matching", ...FrameMatchingPage }],
+      },
       { path: "/settings", ...SettingsPage },
       { path: "/logs", ...LogsPage },
     ],
@@ -90,7 +103,12 @@ export const router = createBrowserRouter([
     // this can't just reuse BrowseLayout or AppLayout.
     element: <ImmersiveLayout />,
     errorElement: <RouteError />,
-    children: [{ path: "/compare-list/play", ...ComparePlayPage }],
+    children: [
+      {
+        element: <FeatureRoute feature="featureCompareListEnabled" name="Compare list" />,
+        children: [{ path: "/compare-list/play", ...ComparePlayPage }],
+      },
+    ],
   },
 ])
 

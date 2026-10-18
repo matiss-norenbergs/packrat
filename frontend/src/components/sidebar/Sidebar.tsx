@@ -37,13 +37,13 @@ const GITHUB_REPO = "matiss-norenbergs/packrat"
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/downloads", label: "Downloads", icon: Download, endAdornment: <ProxyStatusDot /> },
-  { to: "/subscriptions", label: "Subscriptions", icon: Rss },
-  { to: "/import", label: "File Import", icon: Import },
+  { to: "/subscriptions", label: "Subscriptions", icon: Rss, requiresFeature: "featureSubscriptionsEnabled" as const },
+  { to: "/import", label: "File Import", icon: Import, requiresFeature: "featureFileImportEnabled" as const },
   { to: "/library", label: "Library", icon: Library },
   { to: "/collections", label: "Collections", icon: FolderKanban },
   { to: "/artists", label: "Artists", icon: Mic2 },
   { to: "/tags", label: "Tags", icon: Tags },
-  { to: "/compare-list", label: "Compare list", icon: GitCompare },
+  { to: "/compare-list", label: "Compare list", icon: GitCompare, requiresFeature: "featureCompareListEnabled" as const },
   {
     to: "/thumbnail-enhancement",
     label: "AI Enhancement",
@@ -51,7 +51,7 @@ const navItems = [
     requiresSetting: "thumbnailEnhancementEnabled" as const,
     endAdornment: <AiEnhancementStatusDot />,
   },
-  { to: "/frame-matching", label: "Frame Matching", icon: ScanSearch },
+  { to: "/frame-matching", label: "Frame Matching", icon: ScanSearch, requiresFeature: "featureFrameMatchingEnabled" as const },
   { to: "/history", label: "History", icon: History },
   { to: "/logs", label: "Logs", icon: ScrollText },
   { to: "/backup", label: "Backup", icon: Archive },
@@ -66,7 +66,13 @@ export function SidebarContent() {
   // to be on — hidden both while settings are still loading and once
   // they're confirmed off, so a feature nobody's enabled doesn't clutter
   // the nav with a page that'll just tell them to go enable it.
-  const visibleNavItems = navItems.filter((item) => !item.requiresSetting || settings?.[item.requiresSetting])
+  // requiresFeature is the opposite default: those pages show unless their
+  // Settings → Features toggle is explicitly off.
+  const visibleNavItems = navItems.filter(
+    (item) =>
+      (!item.requiresSetting || settings?.[item.requiresSetting]) &&
+      (!item.requiresFeature || settings?.[item.requiresFeature] !== false),
+  )
 
   return (
     <>

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/features"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/ws"
@@ -29,7 +30,10 @@ type QueueDeps struct {
 	FFProbePath string
 	MediaRoot   string
 	ImagesRoot  string
-	Broadcaster ws.Broadcaster
+	// SettingsRepo is read each poll to honour the Frame Matching feature
+	// toggle. Nil means "always on".
+	SettingsRepo *repository.SettingsRepo
+	Broadcaster  ws.Broadcaster
 }
 
 // RunQueue processes frame_match_queue rows one at a time for as long as
@@ -44,6 +48,14 @@ func RunQueue(ctx context.Context, deps QueueDeps) {
 		case <-ctx.Done():
 			return
 		default:
+		}
+
+		// While the feature is off the loop stays alive but only re-reads the
+		// setting, so queued rows are left untouched and resume as soon as it
+		// is turned back on — within one poll, with no restart.
+		if !features.Enabled(ctx, deps.SettingsRepo, models.SettingFeatureFrameMatchingEnabled) {
+			sleepOrDone(ctx, queuePollInterval)
+			continue
 		}
 
 		item, err := deps.QueueRepo.NextQueued(ctx)
