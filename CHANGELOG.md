@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-21
+- **Desktop CI and release builds** — pull requests now check the Tauri shell (rustfmt, clippy,
+  tests). Releases build the desktop installers for Linux, Windows and macOS (Apple silicon + Intel)
+  and attach them to the GitHub Release alongside the Docker image; `desktop.yml` can also be run by
+  hand for a dry run. Installers are unsigned.
 - **Desktop app shell (Tauri)** — new `desktop/` project wrapping the shared frontend as a desktop
   client for a remote server (no bundled backend). Adds OS notifications via Tauri's notification
   plugin, http(s) links opening in the system browser, backup downloads saved to the OS Downloads

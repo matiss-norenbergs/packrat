@@ -15,7 +15,10 @@ fn unique_path(dir: &Path, name: &OsStr) -> PathBuf {
         return candidate;
     }
     let name = Path::new(name);
-    let stem = name.file_stem().unwrap_or(name.as_os_str()).to_string_lossy();
+    let stem = name
+        .file_stem()
+        .unwrap_or(name.as_os_str())
+        .to_string_lossy();
     let ext = name
         .extension()
         .map(|e| format!(".{}", e.to_string_lossy()))
@@ -59,7 +62,11 @@ fn main() {
                                 *destination = unique_path(&dir, &name);
                             }
                         }
-                        DownloadEvent::Finished { path: Some(path), success: true, .. } => {
+                        DownloadEvent::Finished {
+                            path: Some(path),
+                            success: true,
+                            ..
+                        } => {
                             let _ = handle
                                 .notification()
                                 .builder()
@@ -95,7 +102,10 @@ mod tests {
         assert_eq!(unique_path(&dir, name), dir.join("backup (2).json"));
         // No extension.
         std::fs::write(dir.join("notes"), "c").unwrap();
-        assert_eq!(unique_path(&dir, OsStr::new("notes")), dir.join("notes (1)"));
+        assert_eq!(
+            unique_path(&dir, OsStr::new("notes")),
+            dir.join("notes (1)")
+        );
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

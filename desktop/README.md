@@ -41,9 +41,21 @@ npm run build
 ```
 
 Runs `frontend`'s production build, embeds it, and produces the installers/bundles for the current
-OS under `src-tauri/target/release/bundle/`. Builds are per-OS (no cross-compiling); a CI matrix is
-the intended way to produce all three. Binaries are **unsigned** — signing/notarization, and the
-auto-updater, need certificates/keys and aren't set up yet.
+OS under `src-tauri/target/release/bundle/`. Builds are per-OS (no cross-compiling), so the other
+platforms come from CI:
+
+- **Every PR** (`ci.yml`, `desktop` job, Linux): `cargo fmt --check`, `cargo clippy -D warnings` and
+  `cargo test`, so the Rust side can't silently break.
+- **Releases** (`release.yml` → `desktop.yml`): after the Docker image is published, the installers
+  are built on Linux (`.deb`, `.rpm`, `.AppImage`), Windows (`.msi`, `.exe`) and macOS (`.dmg`, Apple
+  silicon and Intel) and attached to the same GitHub Release. The release version is stamped into
+  the installers. A failed desktop leg leaves the Docker release intact — re-run the failed job.
+- **Dry run**: once `desktop.yml` is on `main`, *Actions → Desktop → Run workflow* builds the
+  installers as downloadable workflow artifacts without releasing anything.
+
+The installers are **unsigned**: Windows SmartScreen and macOS Gatekeeper will warn on first launch
+(macOS: right-click → Open). Signing/notarization and the auto-updater need certificates/keys and
+aren't set up yet.
 
 ## How it fits together
 
