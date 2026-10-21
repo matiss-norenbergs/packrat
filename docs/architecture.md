@@ -100,6 +100,13 @@ via a double-submit cookie (`packrat_csrf`, readable by JS, echoed back as `X-CS
 mutating request) rather than relying on cookie security flags alone. See
 [`api.md`](api.md#auth-and-csrf) for the full mechanics.
 
+The same session token can also be presented as a bearer token (or, GET-only, a `?token=` query
+parameter for `<img>`/`<video>`/WebSocket URLs) so the desktop app — a different origin, where
+cookies and `document.cookie` don't work — can authenticate. `RequireAuth` records how each request
+authenticated, and `RequireCSRF` only enforces the double-submit check for cookie-authenticated ones
+(and fails closed if that marker is missing). A small allowlist-only CORS middleware
+(`CORS_ALLOWED_ORIGINS`) admits the desktop app's origin; the web UI is same-origin and unaffected.
+
 ## Collection root paths stay under `MEDIA_ROOT`
 
 The original spec's Collections examples show absolute paths (`/media/music`), Sonarr-root-folder

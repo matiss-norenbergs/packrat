@@ -12,6 +12,14 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-21
+- **Backend ready for a desktop client** — the API can now be used cross-origin by the upcoming
+  desktop app without touching the web UI's cookie + CSRF flow. Logging in with `X-Client: desktop`
+  returns the session token in the body (no cookies); `RequireAuth` accepts it as an `Authorization:
+  Bearer` header, or as `?token=` on GET/HEAD for image/video/WebSocket URLs, and CSRF is only
+  enforced for cookie-authenticated requests. New allowlist-only CORS (`CORS_ALLOWED_ORIGINS`, default
+  the Tauri origins), and the access log redacts `?token=`.
+
 ## 2026-10-18
 - **Optional features** — new Settings → Features tab with switches for Subscriptions, File Import,
   Compare list (incl. the side-by-side player) and Frame Matching, all on by default. Turning one off

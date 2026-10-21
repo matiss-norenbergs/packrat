@@ -55,6 +55,8 @@ type Deps struct {
 	Broadcaster                       ws.Broadcaster
 	StaticDir                         string // built frontend assets; empty in dev (Vite serves it)
 	HostActions                       []hostactions.Action
+	// CORSAllowedOrigins are the cross-origin callers (the desktop app) allowed to use the API.
+	CORSAllowedOrigins []string
 }
 
 // noCacheHeaders forces revalidation on every request instead of letting the
@@ -75,7 +77,10 @@ func limitRequestBody(c *gin.Context) {
 }
 
 func SetupRouter(deps Deps) *gin.Engine {
-	r := gin.Default()
+	// gin.Default() with the access logger swapped for one that redacts ?token= (see logger.go).
+	r := gin.New()
+	r.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: redactingLogFormatter}), gin.Recovery())
+	r.Use(CORS(deps.CORSAllowedOrigins))
 	// Known Items entries whose source has no native video ID key by their
 	// full URL instead (see subscriptions.sourceID) — that URL travels as
 	// the :sourceId path param on routes like .../entries/:sourceId/add,

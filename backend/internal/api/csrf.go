@@ -33,6 +33,14 @@ func RequireCSRF() gin.HandlerFunc {
 			return
 		}
 
+		// A bearer/query token is attached by the client explicitly; a browser never sends one
+		// on a forged cross-site request, so the double-submit defense has nothing to protect.
+		// Only a request that authenticated by cookie (ambient credential) needs the check.
+		if src, _ := c.Get(authSourceKey); src == authSourceBearer || src == authSourceQuery {
+			c.Next()
+			return
+		}
+
 		cookieVal, err := c.Cookie(csrfCookieName)
 		header := c.GetHeader("X-CSRF-Token")
 		// Constant-time compare: the cookie value is a secret the double-submit pattern relies on

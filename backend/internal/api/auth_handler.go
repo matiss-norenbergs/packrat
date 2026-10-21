@@ -35,6 +35,19 @@ func setSessionCookie(c *gin.Context, token string) {
 	c.SetCookie(sessionCookieName, token, int(sessionDuration.Seconds()), "/", "", false, true)
 }
 
+// respondWithSession hands a freshly created session to the client. The web UI gets its session
+// and CSRF cookies (204); the desktop app, which is cross-origin and can't rely on cookies, asks
+// for the token in the body via the X-Client: desktop header and sends it as a bearer token.
+func respondWithSession(c *gin.Context, token string) {
+	if isDesktopClient(c) {
+		c.JSON(http.StatusOK, TokenResponse{Token: token})
+		return
+	}
+	setSessionCookie(c, token)
+	setCSRFCookie(c, token)
+	c.Status(http.StatusNoContent)
+}
+
 func clearSessionCookie(c *gin.Context) {
 	c.SetCookie(sessionCookieName, "", -1, "/", "", false, true)
 }
@@ -55,12 +68,7 @@ func AuthStatus(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 
-		authenticated := false
-		if token, err := c.Cookie(sessionCookieName); err == nil {
-			if _, err := usersRepo.GetValidSession(c.Request.Context(), token); err == nil {
-				authenticated = true
-			}
-		}
+		_, _, authenticated := resolveSession(c, usersRepo)
 		c.JSON(http.StatusOK, AuthStatusResponse{SetupRequired: false, Authenticated: authenticated})
 	}
 }
@@ -106,9 +114,7 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		setSessionCookie(c, token)
-		setCSRFCookie(c, token)
-		c.Status(http.StatusNoContent)
+		respondWithSession(c, token)
 	}
 }
 
@@ -146,9 +152,7 @@ func AuthLogin(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		setSessionCookie(c, token)
-		setCSRFCookie(c, token)
-		c.Status(http.StatusNoContent)
+		respondWithSession(c, token)
 	}
 }
 
@@ -192,8 +196,8 @@ func ChangePassword(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 // stops working immediately, not just client-side) and clears the cookie.
 func AuthLogout(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if token, err := c.Cookie(sessionCookieName); err == nil {
-			if err := usersRepo.DeleteSession(c.Request.Context(), token); err != nil && !errors.Is(err, repository.ErrNotFound) {
+		for _, cand := range sessionCandidates(c) {
+			if err := usersRepo.DeleteSession(c.Request.Context(), cand.token); err != nil && !errors.Is(err, repository.ErrNotFound) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
