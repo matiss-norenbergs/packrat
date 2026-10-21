@@ -77,6 +77,24 @@ layouts, sidebar and auth gate stay in the entry chunk. `vite.config.ts` groups 
 chunks. A delegated `pointerover`/`focusin` listener preloads the chunk of any in-app link.
 The auth status query is prefetched at module load so it runs in parallel with the initial chunk.
 
+**Desktop client mode.** `frontend/src/lib/server.ts` decides where the app talks to. On the web
+(`isDesktop()` false: no Tauri, no `VITE_DESKTOP=true`) every URL stays relative and auth is the
+cookie — unchanged. On desktop, `request()` prefixes the saved server address and sends
+`Authorization: Bearer` (no cookies, no CSRF header), and every URL the browser loads itself —
+`mediaFileUrl`, `imageUrl`, `resizedImageUrl`/`SrcSet`, `previewImageUrl`, `backupDownloadUrl` and
+the `/ws` URL — goes through `serverUrl()`/`websocketUrl()`, which add the prefix and `?token=`
+(an `<img>`/`<video>` request can't set headers). The backend only ever returns relative paths, so
+these helpers are the single place URLs are built. `App.tsx` shows `ConnectPage` until a server is
+saved, and the route module skips its auth prefetch until then; `DesktopGate` covers an unreachable
+server; a 401 from any non-`/auth/` route clears the token and fires `UNAUTHORIZED_EVENT`.
+
+The Tauri shell is `desktop/` (see its README): `src-tauri/` points `frontendDist` at
+`frontend/dist` and `devUrl` at the Vite dev server, so there is one frontend codebase, not a fork.
+It is a pure client — no sidecar, no bundled backend — and only the plugin-backed behavior
+(notifications, opening links in the system browser) is guarded by `isTauri()`, with the plugins
+imported lazily so the web bundle never loads them. `desktop/` is excluded from the Docker build
+context (`.dockerignore`).
+
 **Stale chunks after a deploy.** A tab opened before an update still references the old hashed chunk
 names; the server answers the missing file with the SPA fallback (200 `text/html`), the dynamic import
 rejects and the router surfaces it as a route error. The `RouteError` element on each top-level route recognises
@@ -99,6 +117,13 @@ trusted LAN, and requiring HTTPS would break that default deployment. CSRF is ha
 via a double-submit cookie (`packrat_csrf`, readable by JS, echoed back as `X-CSRF-Token` on every
 mutating request) rather than relying on cookie security flags alone. See
 [`api.md`](api.md#auth-and-csrf) for the full mechanics.
+
+The same session token can also be presented as a bearer token (or, GET-only, a `?token=` query
+parameter for `<img>`/`<video>`/WebSocket URLs) so the desktop app — a different origin, where
+cookies and `document.cookie` don't work — can authenticate. `RequireAuth` records how each request
+authenticated, and `RequireCSRF` only enforces the double-submit check for cookie-authenticated ones
+(and fails closed if that marker is missing). A small allowlist-only CORS middleware
+(`CORS_ALLOWED_ORIGINS`) admits the desktop app's origin; the web UI is same-origin and unaffected.
 
 ## Collection root paths stay under `MEDIA_ROOT`
 

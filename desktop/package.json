@@ -1,0 +1,15 @@
+{
+  "name": "packrat-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Tauri shell for the Packrat frontend — a thin client for a remote Packrat server",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}

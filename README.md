@@ -76,6 +76,16 @@ Point the frontend dev server at it by setting `BACKEND_PORT=51200` in `frontend
 Since the image bakes in a full `npm run build` of the frontend too, this container is also a
 quick way to sanity-check a production build without going through the full release flow.
 
+To try the **desktop client mode** (the frontend talking cross-origin to a server with a bearer
+token — see [`docs/FEATURES.md`](docs/FEATURES.md#desktop-app-client-mode)) in a plain browser, run
+`VITE_DESKTOP=true npm run dev` and start the backend with
+`CORS_ALLOWED_ORIGINS=http://localhost:5173`.
+
+## Desktop app
+
+[`desktop/`](desktop/README.md) is a Tauri shell around the same frontend: a desktop client that
+connects to a Packrat server you already run (it bundles no backend). See its README for building it.
+
 ## Jellyfin
 
 The Jellyfin URL (Settings → Jellyfin) must be reachable **from inside the container's network**,

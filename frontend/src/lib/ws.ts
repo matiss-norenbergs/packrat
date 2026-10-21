@@ -1,8 +1,8 @@
+import { websocketUrl } from "@/lib/server"
 import type { WSEvent } from "@/types/ws"
 
 export function connectDownloadsSocket(onMessage: (event: WSEvent) => void): WebSocket {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-  const socket = new WebSocket(`${protocol}//${window.location.host}/ws`)
+  const socket = new WebSocket(websocketUrl())
 
   socket.addEventListener("message", (ev) => {
     try {

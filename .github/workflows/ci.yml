@@ -47,6 +47,39 @@ jobs:
       - run: npm run test
       - run: npm run build
 
+  # The Tauri desktop shell (desktop/). Linux only here: it checks the Rust compiles and its tests
+  # pass; the installers for every OS are built by desktop.yml at release time.
+  desktop:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop/src-tauri
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      # tauri::generate_context! needs the built frontend to embed.
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
   docker:
     runs-on: ubuntu-latest
     steps:

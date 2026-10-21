@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuthStatus, useLogin, useSetupAccount } from "@/hooks/useAuth"
+import { getServerUrl, isDesktop, resetServer } from "@/lib/server"
 
 export function LoginPage() {
   const { data: status, isLoading } = useAuthStatus()
@@ -111,6 +112,24 @@ export function LoginPage() {
           >
             {pending ? "Please wait…" : isSetup ? "Create account" : "Log in"}
           </Button>
+          {isDesktop() && (
+            <div className="flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
+              <span className="min-w-0 truncate" title={getServerUrl() ?? undefined}>
+                {getServerUrl()}
+              </span>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto shrink-0 p-0 text-xs"
+                onClick={() => {
+                  resetServer()
+                  window.location.reload()
+                }}
+              >
+                Change server
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

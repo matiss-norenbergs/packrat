@@ -1,4 +1,5 @@
 import { toast } from "sonner"
+import { isTauri } from "@/lib/server"
 
 // Whether desktop notifications are turned on — a personal per-browser
 // preference (Notification permission itself is granted per-browser/per-
@@ -18,6 +19,17 @@ export function setDesktopNotificationsEnabled(next: boolean): void {
 // after an explicit "denied" is up to the user via their browser's own site
 // settings, not something we can trigger again ourselves.
 export async function ensureNotificationPermission(): Promise<boolean> {
+  if (isTauri()) {
+    // The webview's own Notification API is unreliable across WebView2/WKWebView/WebKitGTK, so the
+    // desktop shell uses Tauri's notification plugin (loaded lazily — it's not needed on the web).
+    try {
+      const plugin = await import("@tauri-apps/plugin-notification")
+      if (await plugin.isPermissionGranted()) return true
+      return (await plugin.requestPermission()) === "granted"
+    } catch {
+      return false
+    }
+  }
   if (!("Notification" in window)) return false
   if (Notification.permission === "granted") return true
   if (Notification.permission === "denied") return false
@@ -25,6 +37,16 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 }
 
 function notify(title: string, body?: string) {
+  if (isTauri()) {
+    void import("@tauri-apps/plugin-notification")
+      .then(async (plugin) => {
+        if (await plugin.isPermissionGranted()) plugin.sendNotification({ title, body })
+      })
+      .catch(() => {
+        // Best-effort, same as the web path.
+      })
+    return
+  }
   if (!("Notification" in window) || Notification.permission !== "granted") return
   new Notification(title, { body, icon: "/favicon.svg" })
 }

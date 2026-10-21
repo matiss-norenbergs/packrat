@@ -46,6 +46,11 @@ type AuthStatusResponse struct {
 	Authenticated bool `json:"authenticated"`
 }
 
+// TokenResponse carries the session token to the desktop client (see respondWithSession).
+type TokenResponse struct {
+	Token string `json:"token"`
+}
+
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"currentPassword" binding:"required"`
 	NewPassword     string `json:"newPassword" binding:"required,min=8"`

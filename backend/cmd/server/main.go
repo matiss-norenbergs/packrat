@@ -316,6 +316,7 @@ func run() error {
 		Broadcaster:                       hub,
 		StaticDir:                         os.Getenv("STATIC_DIR"),
 		HostActions:                       cfg.HostActions,
+		CORSAllowedOrigins:                cfg.CORSAllowedOrigins,
 	})
 
 	srv := &http.Server{

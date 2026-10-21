@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions for the main window. It only ever loads the bundled frontend — never the remote server's pages — so no remote origins are granted anything.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "notification:default",
+    "opener:default",
+    "window-state:default"
+  ]
+}

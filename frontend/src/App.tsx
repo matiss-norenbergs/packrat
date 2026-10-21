@@ -1,7 +1,12 @@
+import { useEffect } from "react"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { RouterProvider } from "react-router-dom"
 import { ThemeProvider } from "next-themes"
+import { DesktopGate } from "@/components/DesktopGate"
+import { authStatusQueryKey } from "@/hooks/useAuth"
 import { queryClient } from "@/lib/queryClient"
+import { needsServerUrl, UNAUTHORIZED_EVENT } from "@/lib/server"
+import { ConnectPage } from "@/pages/ConnectPage"
 import { router } from "@/routes"
 // Side-effect only — applies the saved accent color to <html> as soon as
 // this module evaluates (before first paint), regardless of whether the
@@ -10,10 +15,32 @@ import { router } from "@/routes"
 import "@/hooks/useAccentColor"
 
 function App() {
+  // Desktop only: the server rejected our token (revoked/expired session) — drop to the login
+  // screen the same way a logout does, rather than leaving a page full of failing requests.
+  useEffect(() => {
+    const onUnauthorized = () => {
+      queryClient.setQueryData(authStatusQueryKey, { setupRequired: false, authenticated: false })
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "auth" })
+    }
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+  }, [])
+
+  // Desktop with no server chosen yet: nothing to render the router against.
+  if (needsServerUrl()) {
+    return (
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ConnectPage />
+      </ThemeProvider>
+    )
+  }
+
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <DesktopGate>
+          <RouterProvider router={router} />
+        </DesktopGate>
       </QueryClientProvider>
     </ThemeProvider>
   )

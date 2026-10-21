@@ -12,6 +12,29 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-21
+- **Desktop CI and release builds** — pull requests now check the Tauri shell (rustfmt, clippy,
+  tests). Releases build the desktop installers for Linux, Windows and macOS (Apple silicon + Intel)
+  and attach them to the GitHub Release alongside the Docker image; `desktop.yml` can also be run by
+  hand for a dry run. Installers are unsigned.
+- **Desktop app shell (Tauri)** — new `desktop/` project wrapping the shared frontend as a desktop
+  client for a remote server (no bundled backend). Adds OS notifications via Tauri's notification
+  plugin, http(s) links opening in the system browser, backup downloads saved to the OS Downloads
+  folder (never overwriting) with a completion notification, and window size/position memory.
+  Builds with `npm run build` in `desktop/`; unsigned, no auto-update yet.
+- **Desktop client mode in the frontend** — the UI can now run against a remote server: a "Connect to
+  a server" screen (address validated via `/api/health`), bearer-token login, server-prefixed API,
+  image, video and WebSocket URLs (token as `?token=` where headers aren't possible), a "Change
+  server" link on the login screen, a "Can't reach the server" screen with Retry, and automatic
+  return to login when the server revokes the session. Only active inside the Tauri shell (or with
+  `VITE_DESKTOP=true`); the web UI is unchanged.
+- **Backend ready for a desktop client** — the API can now be used cross-origin by the upcoming
+  desktop app without touching the web UI's cookie + CSRF flow. Logging in with `X-Client: desktop`
+  returns the session token in the body (no cookies); `RequireAuth` accepts it as an `Authorization:
+  Bearer` header, or as `?token=` on GET/HEAD for image/video/WebSocket URLs, and CSRF is only
+  enforced for cookie-authenticated requests. New allowlist-only CORS (`CORS_ALLOWED_ORIGINS`, default
+  the Tauri origins), and the access log redacts `?token=`.
+
 ## 2026-10-18
 - **Optional features** — new Settings → Features tab with switches for Subscriptions, File Import,
   Compare list (incl. the side-by-side player) and Frame Matching, all on by default. Turning one off

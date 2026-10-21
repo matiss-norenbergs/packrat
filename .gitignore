@@ -36,3 +36,8 @@ CLAUDE.local.md
 # SD launcher local config (contains the token) and log
 tools/sd-launcher/sd_launcher.json
 tools/sd-launcher/sd_launcher.log
+
+# Desktop (Tauri) shell
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

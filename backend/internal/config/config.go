@@ -5,9 +5,18 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"packrat/backend/internal/hostactions"
 )
+
+// DefaultCORSAllowedOrigins are the origins the Packrat desktop app (Tauri) loads its UI from:
+// macOS/Linux use tauri://localhost, Windows http(s)://tauri.localhost.
+var DefaultCORSAllowedOrigins = []string{
+	"tauri://localhost",
+	"http://tauri.localhost",
+	"https://tauri.localhost",
+}
 
 type Config struct {
 	Port                    string
@@ -24,6 +33,10 @@ type Config struct {
 	PipPath                 string
 	// HostActions are the sidebar Actions menu entries, from PACKRAT_ACTION_<N>_* env vars.
 	HostActions []hostactions.Action
+	// CORSAllowedOrigins is CORS_ALLOWED_ORIGINS (comma-separated): origins besides the server's
+	// own that may call the API from a browser context — the desktop app's. Defaults to the Tauri
+	// origins.
+	CORSAllowedOrigins []string
 }
 
 func Load() (Config, error) {
@@ -56,6 +69,15 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("invalid MAX_CONCURRENT_FFMPEG_TRANSCODES %q: must be a positive integer", raw)
 		}
 		cfg.MaxConcurrentTranscodes = n
+	}
+
+	cfg.CORSAllowedOrigins = DefaultCORSAllowedOrigins
+	if raw := os.Getenv("CORS_ALLOWED_ORIGINS"); raw != "" {
+		origins, err := parseOrigins(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid CORS_ALLOWED_ORIGINS: %w", err)
+		}
+		cfg.CORSAllowedOrigins = origins
 	}
 
 	actions, err := hostactions.Parse(os.Environ())
@@ -105,6 +127,23 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// parseOrigins splits a comma-separated origin list, dropping blanks and trailing slashes. A bare
+// "*" is rejected: the API is meant to be callable only from named origins.
+func parseOrigins(raw string) ([]string, error) {
+	var out []string
+	for _, o := range strings.Split(raw, ",") {
+		o = strings.TrimRight(strings.TrimSpace(o), "/")
+		if o == "" {
+			continue
+		}
+		if o == "*" {
+			return nil, fmt.Errorf("wildcard origins are not supported; list each origin explicitly")
+		}
+		out = append(out, o)
+	}
+	return out, nil
 }
 
 func getEnv(key, fallback string) string {

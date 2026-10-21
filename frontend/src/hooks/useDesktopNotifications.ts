@@ -5,6 +5,7 @@ import {
   isDesktopNotificationsEnabled,
   setDesktopNotificationsEnabled,
 } from "@/lib/notify"
+import { isTauri } from "@/lib/server"
 
 // Client-side only, same as accent color / theme — see notify.ts for why
 // this isn't a backend Settings field.
@@ -15,7 +16,11 @@ export function useDesktopNotifications() {
     if (next) {
       const granted = await ensureNotificationPermission()
       if (!granted) {
-        toast.error("Desktop notifications need permission — check your browser's site settings.")
+        toast.error(
+          isTauri()
+            ? "Desktop notifications need permission — check your system's notification settings."
+            : "Desktop notifications need permission — check your browser's site settings.",
+        )
         return
       }
     }

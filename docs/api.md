@@ -22,6 +22,24 @@ since Gin matches registered routes before falling back to serving `index.html`.
   value as the session token, set/cleared alongside it on login/setup/logout). Every mutating
   request (anything but GET/HEAD/OPTIONS) under the authenticated `/api` group must echo that value
   back in an `X-CSRF-Token` header, or the request gets a `403`.
+- **Bearer tokens (desktop client)**: the web UI uses the cookies above; a cross-origin client (the
+  desktop app) can't rely on them, so `RequireAuth` also accepts the same session token as
+  `Authorization: Bearer <token>` — and, for **GET/HEAD only**, as a `?token=` query parameter, which
+  exists for `<img>`/`<video>`/WebSocket URLs that can't set headers. Credentials are tried in the
+  order bearer → cookie → query; the first valid one wins. A request authenticated by bearer or query
+  token **skips the CSRF check** (nothing ambient for a forged request to ride on); a cookie-
+  authenticated request is checked exactly as before, whatever other headers it carries. The access
+  log redacts `?token=` values.
+- **Getting a token**: send `X-Client: desktop` on `POST /api/auth/login` or `/api/auth/setup`. The
+  response is then `200 {"token":"..."}` and **no cookies are set**; without the header the response
+  is the usual `204` + cookies. `GET /api/auth/status` and `POST /api/auth/logout` honor a bearer
+  token too (logout deletes that session server-side).
+- **CORS**: origins listed in `CORS_ALLOWED_ORIGINS` (comma-separated, no wildcard; default
+  `tauri://localhost,http://tauri.localhost,https://tauri.localhost`, i.e. the desktop app) may call
+  the API cross-origin. Allowed: `GET/HEAD/POST/PATCH/PUT/DELETE`, headers `Authorization`,
+  `Content-Type`, `X-CSRF-Token`, `X-Client`, `Range`; `Access-Control-Allow-Credentials` is never
+  sent. Requests with no `Origin` header (the same-origin web UI) or an unlisted one get no CORS
+  headers at all.
 - **First run**: `GET /api/auth/status` returns `{setupRequired, authenticated}`. While
   `setupRequired`, the client shows a setup wizard that `POST`s `/api/auth/setup` once; after that,
   setup always `409`s — there is no way to add a second user.
@@ -48,7 +66,7 @@ since Gin matches registered routes before falling back to serving `index.html`.
   while zero users exist (`409` otherwise). Creates the user, sets both cookies, `204`.
 - **`POST /api/auth/login`** — `{ "username": "...", "password": "..." }`. Wrong username *or*
   password both return `401 {"error":"invalid username or password"}` — never reveals which was
-  wrong. `204` on success, sets both cookies.
+  wrong. `204` on success, sets both cookies (desktop: `200 {"token"}`, see above).
 - **`POST /api/auth/logout`** — no body. Deletes the session row server-side (a replayed old cookie
   stops working immediately) and clears both cookies. `204`, idempotent even with no session.
 - **`PATCH /api/auth/password`** — `{ "currentPassword": "...", "newPassword": "min 8 chars" }`.
