@@ -8,6 +8,24 @@ Packrat requires signing in — the first time you open it, a one-time setup wiz
 single admin account (there's no multi-user support). See "Auth and CSRF" in
 [`architecture.md`](architecture.md) for the session/CSRF mechanics.
 
+## Desktop app (client mode)
+
+The same frontend also runs inside a desktop shell (Tauri) as a thin client for a Packrat server you
+already host — there's no bundled backend. On first launch it shows **Connect to a server**: enter
+an address (`192.168.1.20:50505`, or a full `https://…` URL; a bare host defaults to `http://`).
+The app checks `GET /api/health` before saving it, then shows the usual setup/login screen. The
+login screen shows the connected server with a **Change server** link (forgets the server and
+login, keeps the address to prefill the form). If the server can't be reached at startup, a "Can't
+reach the server" screen offers **Retry** and **Change server**. If the server revokes the session
+while the app is open, it drops back to the login screen.
+
+Unlike the browser, the desktop client authenticates with a bearer token instead of cookies (the
+server's `CORS_ALLOWED_ORIGINS` must include the app's origin — the Tauri defaults are built in).
+None of this applies to the web UI, which behaves as before. See "Auth and CSRF" in
+[`api.md`](api.md#auth-and-csrf). The shell itself (`desktop/`) is a later step; until then
+`VITE_DESKTOP=true npm run dev` runs the client mode in a plain browser (add
+`http://localhost:5173` to `CORS_ALLOWED_ORIGINS` on the server).
+
 ## Browse
 
 A Netflix-style homepage for your library, distinct from the Library page's flat grid/folder

@@ -77,6 +77,17 @@ layouts, sidebar and auth gate stay in the entry chunk. `vite.config.ts` groups 
 chunks. A delegated `pointerover`/`focusin` listener preloads the chunk of any in-app link.
 The auth status query is prefetched at module load so it runs in parallel with the initial chunk.
 
+**Desktop client mode.** `frontend/src/lib/server.ts` decides where the app talks to. On the web
+(`isDesktop()` false: no Tauri, no `VITE_DESKTOP=true`) every URL stays relative and auth is the
+cookie — unchanged. On desktop, `request()` prefixes the saved server address and sends
+`Authorization: Bearer` (no cookies, no CSRF header), and every URL the browser loads itself —
+`mediaFileUrl`, `imageUrl`, `resizedImageUrl`/`SrcSet`, `previewImageUrl`, `backupDownloadUrl` and
+the `/ws` URL — goes through `serverUrl()`/`websocketUrl()`, which add the prefix and `?token=`
+(an `<img>`/`<video>` request can't set headers). The backend only ever returns relative paths, so
+these helpers are the single place URLs are built. `App.tsx` shows `ConnectPage` until a server is
+saved, and the route module skips its auth prefetch until then; `DesktopGate` covers an unreachable
+server; a 401 from any non-`/auth/` route clears the token and fires `UNAUTHORIZED_EVENT`.
+
 **Stale chunks after a deploy.** A tab opened before an update still references the old hashed chunk
 names; the server answers the missing file with the SPA fallback (200 `text/html`), the dynamic import
 rejects and the router surfaces it as a route error. The `RouteError` element on each top-level route recognises

@@ -13,6 +13,12 @@ Maintenance notes:
 -->
 
 ## 2026-10-21
+- **Desktop client mode in the frontend** — the UI can now run against a remote server: a "Connect to
+  a server" screen (address validated via `/api/health`), bearer-token login, server-prefixed API,
+  image, video and WebSocket URLs (token as `?token=` where headers aren't possible), a "Change
+  server" link on the login screen, a "Can't reach the server" screen with Retry, and automatic
+  return to login when the server revokes the session. Only active inside the Tauri shell (or with
+  `VITE_DESKTOP=true`); the web UI is unchanged.
 - **Backend ready for a desktop client** — the API can now be used cross-origin by the upcoming
   desktop app without touching the web UI's cookie + CSRF flow. Logging in with `X-Client: desktop`
   returns the session token in the body (no cookies); `RequireAuth` accepts it as an `Authorization:

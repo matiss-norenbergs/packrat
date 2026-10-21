@@ -97,6 +97,8 @@ import type {
   YtDlpVersionInfo,
 } from "@/types/api"
 
+import { apiBase, clearToken, isDesktop, getToken, serverUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
+
 // Reads a cookie's raw value by name — used to echo the CSRF cookie back as
 // a header (see request() below). Cross-origin JS can never read this
 // cookie for a forged request, which is the entire double-submit-cookie
@@ -122,12 +124,35 @@ export class ApiError extends Error {
 // client-side routes of the same name, e.g. /downloads and /library — see
 // backend/internal/api/router.go).
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    ...init,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", "X-CSRF-Token": getCookie("packrat_csrf"), ...init?.headers },
-  })
+  const desktop = isDesktop()
+  const token = desktop ? getToken() : null
+  const res = await fetch(
+    `${apiBase()}/api${path}`,
+    desktop
+      ? {
+          // Cross-origin client: a bearer token instead of cookies + CSRF header, which a
+          // different-origin page can neither store nor read (see lib/server.ts).
+          ...init,
+          credentials: "omit",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Client": "desktop",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...init?.headers,
+          },
+        }
+      : {
+          ...init,
+          credentials: "include",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": getCookie("packrat_csrf"), ...init?.headers },
+        },
+  )
   if (!res.ok) {
+    // /auth/* answers 401 for a wrong password, which isn't an expired session.
+    if (desktop && res.status === 401 && !path.startsWith("/auth/")) {
+      clearToken()
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+    }
     const body = await res.json().catch(() => ({}))
     throw new ApiError(body.error ?? `${res.status} ${res.statusText}`, res.status)
   }
@@ -135,24 +160,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export function fetchAuthStatus(): Promise<AuthStatus> {
-  return request<AuthStatus>("/auth/status")
+// Desktop login/setup answer 200 {token} instead of setting cookies (see respondWithSession in
+// backend/internal/api/auth_handler.go); the web gets 204 and the cookies.
+function storeSessionToken(res: { token?: string } | undefined) {
+  if (isDesktop() && res?.token) setToken(res.token)
+}
+
+export async function fetchAuthStatus(): Promise<AuthStatus> {
+  const status = await request<AuthStatus>("/auth/status")
+  // /auth/status answers 200 {authenticated:false} (not 401) for a dead token, so the 401 handling
+  // in request() never fires for it — drop the stale desktop token here.
+  if (isDesktop() && !status.authenticated) clearToken()
+  return status
 }
 
 export function fetchAppVersion(): Promise<AppVersion> {
   return request<AppVersion>("/version")
 }
 
-export function setupAccount(payload: SetupRequest): Promise<void> {
-  return request<void>("/auth/setup", { method: "POST", body: JSON.stringify(payload) })
+export async function setupAccount(payload: SetupRequest): Promise<void> {
+  storeSessionToken(await request<{ token?: string } | undefined>("/auth/setup", { method: "POST", body: JSON.stringify(payload) }))
 }
 
-export function login(payload: LoginRequest): Promise<void> {
-  return request<void>("/auth/login", { method: "POST", body: JSON.stringify(payload) })
+export async function login(payload: LoginRequest): Promise<void> {
+  storeSessionToken(await request<{ token?: string } | undefined>("/auth/login", { method: "POST", body: JSON.stringify(payload) }))
 }
 
-export function logout(): Promise<void> {
-  return request<void>("/auth/logout", { method: "POST" })
+export async function logout(): Promise<void> {
+  try {
+    await request<void>("/auth/logout", { method: "POST" })
+  } finally {
+    // Even if the server can't be reached, the desktop client must not stay signed in locally.
+    if (isDesktop()) clearToken()
+  }
 }
 
 export function changePassword(payload: ChangePasswordRequest): Promise<void> {
@@ -223,7 +263,7 @@ export function fetchLibraryFacets(): Promise<LibraryFacets> {
 }
 
 export function mediaFileUrl(relativePath: string): string {
-  return `/media-files/${relativePath.split("/").map(encodeURIComponent).join("/")}`
+  return serverUrl(`/media-files/${relativePath.split("/").map(encodeURIComponent).join("/")}`)
 }
 
 // Routes an external image URL (a pasted direct-image-download URL, or a
@@ -234,13 +274,13 @@ export function mediaFileUrl(relativePath: string): string {
 // pre-submit preview; every other image in the app is already backend-local
 // (mediaFileUrl/imageUrl above).
 export function previewImageUrl(externalUrl: string): string {
-  return `/api/downloads/preview-image?url=${encodeURIComponent(externalUrl)}`
+  return serverUrl(`/api/downloads/preview-image?url=${encodeURIComponent(externalUrl)}`)
 }
 
 // Resolves a relative path under the backend's images root (artist/collection
 // pictures Packrat itself copied in) into a URL — mirrors mediaFileUrl().
 export function imageUrl(relativePath: string): string {
-  return `/local-images/${relativePath.split("/").map(encodeURIComponent).join("/")}`
+  return serverUrl(`/local-images/${relativePath.split("/").map(encodeURIComponent).join("/")}`)
 }
 
 // Live-resize endpoint (GET /api/image): the stored image as WebP at a
@@ -265,7 +305,7 @@ export function resizedImageUrl({
 }: ResizedImageSource & { width: ResizeWidth; height?: ResizeHeight }): string {
   const params = new URLSearchParams({ root, path, w: String(width) })
   if (height) params.set("h", String(height))
-  return `/api/image?${params.toString()}`
+  return serverUrl(`/api/image?${params.toString()}`)
 }
 
 // One `url Nw` candidate per width, for an <img srcset>.
@@ -771,7 +811,7 @@ export function deleteBackupHistoryEntry(id: number): Promise<void> {
 // native save, rather than a JS-intercepted fetch response. Includes the
 // /api prefix explicitly since it bypasses request()'s auto-prefixing.
 export function backupDownloadUrl(id: number): string {
-  return `/api/backup/history/${id}/download`
+  return serverUrl(`/api/backup/history/${id}/download`)
 }
 
 export function fetchBackupPreview(id: number): Promise<BackupContentPreview> {
