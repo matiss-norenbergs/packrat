@@ -13,6 +13,11 @@ Maintenance notes:
 -->
 
 ## 2026-10-21
+- **Desktop app shell (Tauri)** — new `desktop/` project wrapping the shared frontend as a desktop
+  client for a remote server (no bundled backend). Adds OS notifications via Tauri's notification
+  plugin, http(s) links opening in the system browser, backup downloads saved to the OS Downloads
+  folder (never overwriting) with a completion notification, and window size/position memory.
+  Builds with `npm run build` in `desktop/`; unsigned, no auto-update yet.
 - **Desktop client mode in the frontend** — the UI can now run against a remote server: a "Connect to
   a server" screen (address validated via `/api/health`), bearer-token login, server-prefixed API,
   image, video and WebSocket URLs (token as `?token=` where headers aren't possible), a "Change

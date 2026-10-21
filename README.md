@@ -81,6 +81,11 @@ token — see [`docs/FEATURES.md`](docs/FEATURES.md#desktop-app-client-mode)) in
 `VITE_DESKTOP=true npm run dev` and start the backend with
 `CORS_ALLOWED_ORIGINS=http://localhost:5173`.
 
+## Desktop app
+
+[`desktop/`](desktop/README.md) is a Tauri shell around the same frontend: a desktop client that
+connects to a Packrat server you already run (it bundles no backend). See its README for building it.
+
 ## Jellyfin
 
 The Jellyfin URL (Settings → Jellyfin) must be reachable **from inside the container's network**,

@@ -29,11 +29,17 @@ function write(key: string, value: string | null) {
   }
 }
 
+// True only inside the real Tauri shell — where its plugins (notifications, opening links in the
+// system browser) exist. isDesktop() is also true under VITE_DESKTOP, which has no plugins.
+export function isTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
+}
+
 // True inside the Tauri shell. VITE_DESKTOP=true forces it for a plain browser, so the desktop
 // code path can be exercised against a dev server without building the shell.
 export function isDesktop(): boolean {
   if (import.meta.env.VITE_DESKTOP === "true") return true
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
+  return isTauri()
 }
 
 // Accepts what a person types ("192.168.1.5:50505", "https://packrat.example/") and returns a clean

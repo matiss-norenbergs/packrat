@@ -13,6 +13,9 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - `docs/api.md` — REST/WS surface (83 KB — grep it by endpoint, don't load it whole).
 - `CHANGELOG.md` — read only the top ~100 lines for recent context.
 - Ignore `../docker-app-plan.md`: the original skeleton-era spec, long outdated.
+- `desktop/README.md` — the Tauri desktop shell (a thin client for a remote server; shares `frontend/`).
+  Desktop-only code paths are gated on `isDesktop()`/`isTauri()` in `frontend/src/lib/server.ts` —
+  the web UI must keep working exactly as before.
 
 ## Run / verify
 

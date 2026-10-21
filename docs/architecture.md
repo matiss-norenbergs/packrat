@@ -88,6 +88,13 @@ these helpers are the single place URLs are built. `App.tsx` shows `ConnectPage`
 saved, and the route module skips its auth prefetch until then; `DesktopGate` covers an unreachable
 server; a 401 from any non-`/auth/` route clears the token and fires `UNAUTHORIZED_EVENT`.
 
+The Tauri shell is `desktop/` (see its README): `src-tauri/` points `frontendDist` at
+`frontend/dist` and `devUrl` at the Vite dev server, so there is one frontend codebase, not a fork.
+It is a pure client — no sidecar, no bundled backend — and only the plugin-backed behavior
+(notifications, opening links in the system browser) is guarded by `isTauri()`, with the plugins
+imported lazily so the web bundle never loads them. `desktop/` is excluded from the Docker build
+context (`.dockerignore`).
+
 **Stale chunks after a deploy.** A tab opened before an update still references the old hashed chunk
 names; the server answers the missing file with the SPA fallback (200 `text/html`), the dynamic import
 rejects and the router surfaces it as a route error. The `RouteError` element on each top-level route recognises

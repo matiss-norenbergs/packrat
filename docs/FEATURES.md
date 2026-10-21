@@ -22,9 +22,12 @@ while the app is open, it drops back to the login screen.
 Unlike the browser, the desktop client authenticates with a bearer token instead of cookies (the
 server's `CORS_ALLOWED_ORIGINS` must include the app's origin — the Tauri defaults are built in).
 None of this applies to the web UI, which behaves as before. See "Auth and CSRF" in
-[`api.md`](api.md#auth-and-csrf). The shell itself (`desktop/`) is a later step; until then
-`VITE_DESKTOP=true npm run dev` runs the client mode in a plain browser (add
-`http://localhost:5173` to `CORS_ALLOWED_ORIGINS` on the server).
+[`api.md`](api.md#auth-and-csrf). The shell lives in [`desktop/`](../desktop/README.md). Inside it,
+http(s) links open in the system browser, desktop notifications go through the OS (Settings toggle
+unchanged), backup downloads are saved to the OS Downloads folder with a "Download complete"
+notification, and the window remembers its size and position. `VITE_DESKTOP=true npm run dev` runs
+the client mode in a plain browser for development (add `http://localhost:5173` to
+`CORS_ALLOWED_ORIGINS` on the server).
 
 ## Browse
 
