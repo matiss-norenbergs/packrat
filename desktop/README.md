@@ -84,6 +84,10 @@ aren't set up yet.
   (persisted in the app's data directory, **not encrypted**). The token is the same credential a
   browser session cookie would be; log out (or change server) to discard it. Moving it into the OS
   keychain is a possible hardening step.
+- **Server newer than the app** — frontend only (`hooks/useServerNewerNotice.ts`,
+  `components/ServerNewerNotice.tsx`, `lib/semver.ts`): compares `/api/version` with `getVersion()`
+  and shows a dismissible notice when the server is a newer valid semver. Settings → Desktop →
+  Updates always shows the server version.
 - **Updates** — manual, from Settings → Desktop → **Check for updates**. Nothing contacts GitHub until
   the button is pressed and nothing installs until **Install and restart** is. The app reads
   `latest.json` from the newest GitHub Release, downloads the update for its platform, verifies its

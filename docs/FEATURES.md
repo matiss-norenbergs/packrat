@@ -40,7 +40,14 @@ folder** button (or "Download failed"). The OS "Download complete" notification 
 the window isn't focused (hidden to the tray, minimized or behind another app), so you don't get
 both. The browser keeps its own download UI.
 
-**Updates** are manual: Settings → Desktop shows the installed version and a **Check for updates**
+**Server newer than the app**: after login, if the server's version (`GET /api/version`) is a newer
+release than the app's, a dismissible notice says "Your server (vX) is newer than this app (vY).
+Update the app in Settings → Desktop" with an **Open settings** button. "dev" or other non-semver
+server versions and an app that is as new or newer never show it. A dismissal is remembered per
+(server version, app version) pair, so it doesn't nag but returns after the next change to either.
+
+**Updates** are manual: Settings → Desktop shows the installed version, the server's version
+(**Server version: X**) and a **Check for updates**
 button. If a newer release exists it offers **Install and restart**, which downloads it, verifies its
 signature against the key built into the app, installs and restarts. Nothing is checked or downloaded
 automatically. On Linux this works for the AppImage only (`.deb`/`.rpm` installs are updated by

@@ -40,6 +40,7 @@ import { useClearHistory } from "@/hooks/useHistory"
 import { StrayFilesRow } from "@/components/settings/StrayFilesRow"
 import { useScanMissingLibraryFiles } from "@/hooks/useLibrary"
 import {
+  useAppVersion,
   useImageBackfillStatus,
   useRescanJellyfinLibrary,
   useSettings,
@@ -1924,6 +1925,7 @@ function DesktopTab() {
 function UpdatesSection() {
   const { state, check, install } = useAppUpdate()
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
+  const serverVersion = useAppVersion().data?.version
 
   useEffect(() => {
     let cancelled = false
@@ -1945,6 +1947,7 @@ function UpdatesSection() {
         <p className="text-sm text-muted-foreground">
           {currentVersion ? `You have version ${currentVersion}.` : "Checking your version…"}
         </p>
+        {serverVersion && <p className="text-sm text-muted-foreground">Server version: {serverVersion}</p>}
       </div>
 
       {state.status === "available" ? (

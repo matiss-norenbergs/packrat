@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-22
+- **Desktop: "server is newer" notice** — when the server runs a newer release than the desktop app,
+  a dismissible notice points to Settings → Desktop to update the app (dismissal remembered per
+  version pair; "dev" servers are ignored). Settings → Desktop → Updates now also shows the server
+  version.
 - **Desktop: download toasts** — downloads in the desktop app (e.g. backups) now show "Downloading…"
   then "Saved to <path>" with a **Show in folder** button, or an error toast. The OS notification is
   only sent when the window isn't focused, so there's no double signal. The browser is unchanged.
