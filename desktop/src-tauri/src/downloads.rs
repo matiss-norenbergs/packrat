@@ -1,8 +1,45 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-use tauri::{webview::DownloadEvent, AppHandle, Manager, Runtime, Webview};
+use serde::Serialize;
+use tauri::{webview::DownloadEvent, AppHandle, Emitter, Manager, Runtime, Webview};
 use tauri_plugin_notification::NotificationExt;
+
+/// Emitted when a download starts; the frontend shows a "Downloading…" toast
+/// (`frontend/src/hooks/useDownloadToasts.ts`).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+struct Started {
+    filename: String,
+    path: String,
+}
+
+/// Emitted when a download ends. `path` is where it was saved (absent if the webview didn't say).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+struct Finished {
+    path: Option<String>,
+    success: bool,
+}
+
+impl Started {
+    fn new(destination: &Path) -> Self {
+        Self {
+            filename: destination
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            path: destination.display().to_string(),
+        }
+    }
+}
+
+impl Finished {
+    fn new(path: Option<&Path>, success: bool) -> Self {
+        Self {
+            path: path.map(|p| p.display().to_string()),
+            success,
+        }
+    }
+}
 
 /// `dir/name`, or `dir/stem (1).ext`, `dir/stem (2).ext`, … if that already exists — a download
 /// never overwrites an earlier one.
@@ -43,18 +80,24 @@ pub fn on_download<R: Runtime>(
                         .unwrap_or_else(|_| std::env::temp_dir());
                     *destination = unique_path(&dir, &name);
                 }
+                let _ = handle.emit("download-started", Started::new(destination));
             }
-            DownloadEvent::Finished {
-                path: Some(path),
-                success: true,
-                ..
-            } => {
-                let _ = handle
-                    .notification()
-                    .builder()
-                    .title("Download complete")
-                    .body(path.display().to_string())
-                    .show();
+            DownloadEvent::Finished { path, success, .. } => {
+                let _ = handle.emit("download-finished", Finished::new(path.as_deref(), success));
+                // The in-app toast covers a focused window; the OS notification is for when the
+                // window is hidden (tray), minimized or behind another app.
+                let focused = handle
+                    .get_webview_window("main")
+                    .and_then(|w| w.is_focused().ok())
+                    .unwrap_or(false);
+                if let (Some(path), true, false) = (path, success, focused) {
+                    let _ = handle
+                        .notification()
+                        .builder()
+                        .title("Download complete")
+                        .body(path.display().to_string())
+                        .show();
+                }
             }
             _ => {}
         }
@@ -65,6 +108,20 @@ pub fn on_download<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn event_payloads_use_the_final_destination() {
+        let started = Started::new(Path::new("/dl/backup (1).json"));
+        assert_eq!(started.filename, "backup (1).json");
+        assert_eq!(started.path, "/dl/backup (1).json");
+        let json = serde_json::to_value(Finished::new(Some(Path::new("/dl/a")), true)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "path": "/dl/a", "success": true })
+        );
+        let json = serde_json::to_value(Finished::new(None, false)).unwrap();
+        assert_eq!(json, serde_json::json!({ "path": null, "success": false }));
+    }
 
     #[test]
     fn unique_path_never_overwrites() {

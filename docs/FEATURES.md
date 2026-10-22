@@ -24,8 +24,8 @@ server's `CORS_ALLOWED_ORIGINS` must include the app's origin — the Tauri defa
 None of this applies to the web UI, which behaves as before. See "Auth and CSRF" in
 [`api.md`](api.md#auth-and-csrf). The shell lives in [`desktop/`](../desktop/README.md). Inside it,
 http(s) links open in the system browser, desktop notifications go through the OS (Settings toggle
-unchanged), backup downloads are saved to the OS Downloads folder with a "Download complete"
-notification, and the window remembers its size and position. Starting the app a second time just
+unchanged), backup downloads are saved to the OS Downloads folder (never overwriting a file),
+and the window remembers its size and position. Starting the app a second time just
 brings the existing window forward (single instance). A **tray icon** (left click, or "Show
 Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of
@@ -34,6 +34,11 @@ by a failed request or a dropped live-update connection, then confirmed against 
 "Can't reach the server — retrying…" pill appears at the top with a **Retry now** button; it checks
 again every few seconds, disappears on its own when the server answers, and refreshes the data on
 screen.
+
+**Downloads** show a toast: "Downloading <file>…" turns into "Saved to <path>" with a **Show in
+folder** button (or "Download failed"). The OS "Download complete" notification is only sent when
+the window isn't focused (hidden to the tray, minimized or behind another app), so you don't get
+both. The browser keeps its own download UI.
 
 **Updates** are manual: Settings → Desktop shows the installed version and a **Check for updates**
 button. If a newer release exists it offers **Install and restart**, which downloads it, verifies its

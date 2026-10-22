@@ -61,7 +61,9 @@ aren't set up yet.
 
 - **Window** — built in `src-tauri/src/main.rs` (not just declared in `tauri.conf.json`) so it can
   carry a download handler: backup downloads land in the OS Downloads folder (never overwriting an
-  existing file) and raise a "Download complete" notification.
+  existing file), emit `download-started` / `download-finished` events (the frontend turns them into
+  toasts with a **Show in folder** action — `hooks/useDownloadToasts.ts`, `opener:allow-reveal-item-in-dir`)
+  and raise a "Download complete" OS notification only while the window isn't focused.
 - **Plugins** — `notification` (OS notifications; the webview's own `Notification` API is unreliable
   across the three webviews), `opener` (http(s) links open in the system browser —
   `frontend/src/lib/desktop.ts`), `window-state` (remembers size/position), `single-instance` (a

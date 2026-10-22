@@ -13,6 +13,9 @@ Maintenance notes:
 -->
 
 ## 2026-10-22
+- **Desktop: download toasts** — downloads in the desktop app (e.g. backups) now show "Downloading…"
+  then "Saved to <path>" with a **Show in folder** button, or an error toast. The OS notification is
+  only sent when the window isn't focused, so there's no double signal. The browser is unchanged.
 - **Desktop: in-app updates** — Settings → Desktop gets a **Check for updates** button (manual, nothing
   automatic). A newer release is downloaded, its signature verified against the key built into the
   app, then installed and the app restarts. Release builds now sign the update files with the Tauri
