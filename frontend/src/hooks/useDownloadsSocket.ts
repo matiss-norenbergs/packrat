@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react"
 import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { fetchLibraryItem } from "@/lib/api"
+import { reportNetworkFailure, reportReachable } from "@/lib/connection"
 import { notifyDesktop, notifyDesktopAsync, notifyEvent, notifyEventAsync } from "@/lib/notify"
 import { connectDownloadsSocket } from "@/lib/ws"
 import { downloadsQueryKey } from "./useDownloads"
@@ -160,12 +161,16 @@ export function useDownloadsSocket() {
 
       socket.addEventListener("open", () => {
         attemptRef.current = 0
+        reportReachable()
         queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
         queryClient.invalidateQueries({ queryKey: libraryQueryKey })
       })
 
       socket.addEventListener("close", () => {
         if (stopped) return
+        // Desktop only (no-op on the web): a dropped socket on an idle page is often the first sign
+        // the server went away — no request is in flight to notice it.
+        void reportNetworkFailure()
         const delay = Math.min(
           RECONNECT_BASE_DELAY_MS * 2 ** attemptRef.current,
           RECONNECT_MAX_DELAY_MS,

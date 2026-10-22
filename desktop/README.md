@@ -64,7 +64,16 @@ aren't set up yet.
   existing file) and raise a "Download complete" notification.
 - **Plugins** — `notification` (OS notifications; the webview's own `Notification` API is unreliable
   across the three webviews), `opener` (http(s) links open in the system browser —
-  `frontend/src/lib/desktop.ts`), `window-state` (remembers size/position).
+  `frontend/src/lib/desktop.ts`), `window-state` (remembers size/position), `single-instance` (a
+  second launch focuses the running window instead of opening another).
+- **Tray and close-to-tray** — `src/tray.rs` builds the tray icon (left click or "Show Packrat"
+  restores the window, "Quit" exits). The "Close to tray" preference (Settings → Desktop, default
+  on) is kept by the Rust side in `desktop.json` in the app config directory (`src/prefs.rs`),
+  because it must be known the moment the close button is pressed; the frontend reads and writes it
+  through the `get_close_to_tray`/`set_close_to_tray` commands. On Linux the tray needs a desktop
+  that shows app-indicator icons (GNOME needs an extension).
+- **Reconnect banner** — frontend only (`lib/connection.ts`, `ConnectionBanner`): see
+  [`docs/FEATURES.md`](../docs/FEATURES.md#desktop-app-client-mode).
 - **CSP** (`tauri.conf.json`) — scripts and styles are local-only, but `connect-src`/`img-src`/
   `media-src` allow any `http(s)`/`ws(s)` host because the server address is entered by the user.
   The window only ever loads the bundled frontend, never the server's pages, and the capability file
@@ -78,4 +87,4 @@ aren't set up yet.
 
 - Developed and exercised on Linux (WebKitGTK) only; macOS (WKWebView) and Windows (WebView2) are
   untested — in particular download handling, notifications and window-state.
-- No tray icon, auto-update or code signing yet.
+- No auto-update or code signing yet.

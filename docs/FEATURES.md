@@ -25,7 +25,15 @@ None of this applies to the web UI, which behaves as before. See "Auth and CSRF"
 [`api.md`](api.md#auth-and-csrf). The shell lives in [`desktop/`](../desktop/README.md). Inside it,
 http(s) links open in the system browser, desktop notifications go through the OS (Settings toggle
 unchanged), backup downloads are saved to the OS Downloads folder with a "Download complete"
-notification, and the window remembers its size and position. `VITE_DESKTOP=true npm run dev` runs
+notification, and the window remembers its size and position. Starting the app a second time just
+brings the existing window forward (single instance). A **tray icon** (left click, or "Show
+Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
+Desktop, on by default — which makes the window's close button hide the app to the tray instead of
+quitting, so it keeps running. If the server becomes unreachable while the app is open (found out
+by a failed request or a dropped live-update connection, then confirmed against `/api/health`), a
+"Can't reach the server — retrying…" pill appears at the top with a **Retry now** button; it checks
+again every few seconds, disappears on its own when the server answers, and refreshes the data on
+screen. `VITE_DESKTOP=true npm run dev` runs
 the client mode in a plain browser for development (add `http://localhost:5173` to
 `CORS_ALLOWED_ORIGINS` on the server).
 

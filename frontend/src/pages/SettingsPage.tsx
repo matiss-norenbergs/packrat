@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ResolutionTierSlider } from "@/components/ResolutionTierSlider"
 import { ThumbnailFrameRangeSlider } from "@/components/ThumbnailFrameRangeSlider"
 import { RESOLUTION_STEP_LABELS } from "@/lib/resolution"
+import { isTauri } from "@/lib/server"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -49,6 +50,7 @@ import {
 } from "@/hooks/useSettings"
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
 import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
+import { useCloseToTray } from "@/hooks/useCloseToTray"
 import { useDesktopNotifications } from "@/hooks/useDesktopNotifications"
 import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/api"
 
@@ -86,12 +88,17 @@ const SETTINGS_TABS = [
   "ai-enhance",
   "ytdlp",
   "appearance",
+  "desktop",
 ] as const
 
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get("tab")
-  const activeTab = (SETTINGS_TABS as readonly string[]).includes(tabParam ?? "") ? tabParam! : "general"
+  // "desktop" only exists inside the desktop shell; on the web a stale ?tab=desktop falls back.
+  const activeTab =
+    (SETTINGS_TABS as readonly string[]).includes(tabParam ?? "") && (tabParam !== "desktop" || isTauri())
+      ? tabParam!
+      : "general"
 
   const setActiveTab = (value: string) => {
     const next = new URLSearchParams(searchParams)
@@ -124,6 +131,7 @@ export function SettingsPage() {
             <TabsTrigger value="ai-enhance">AI Enhancement</TabsTrigger>
             <TabsTrigger value="ytdlp">yt-dlp</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
+            {isTauri() && <TabsTrigger value="desktop">Desktop</TabsTrigger>}
           </TabsList>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
@@ -166,6 +174,11 @@ export function SettingsPage() {
             <TabsContent value="appearance" className="mt-0 h-full">
               <AppearanceTab />
             </TabsContent>
+            {isTauri() && (
+              <TabsContent value="desktop" className="mt-0 h-full">
+                <DesktopTab />
+              </TabsContent>
+            )}
           </div>
         </Tabs>
       </div>
@@ -1872,6 +1885,34 @@ function YtDlpTab() {
         isSuccess={updateSettings.isSuccess}
         onSave={() => updateSettings.mutate(payload)}
       />
+    </div>
+  )
+}
+
+// Only reachable inside the desktop app (see the isTauri() checks where the tab is registered).
+// Like Theme/Accent it is a per-device preference — the shell stores it itself, not the server.
+function DesktopTab() {
+  const { enabled: closeToTray, setEnabled: setCloseToTray } = useCloseToTray()
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <div className="flex items-center gap-1.5">
+        <Checkbox
+          id="close-to-tray"
+          checked={closeToTray === true}
+          disabled={closeToTray === null}
+          onCheckedChange={(v) => setCloseToTray(v === true)}
+        />
+        <Label htmlFor="close-to-tray" className="font-normal">
+          Close to tray
+        </Label>
+        <InfoPopover>
+          When on, the window's close button hides Packrat to the system tray instead of quitting, so
+          it keeps running (and can still raise download notifications). Click the tray icon, or
+          choose "Show Packrat" from its menu, to bring the window back; choose "Quit" there to exit
+          completely. When off, closing the window quits the app.
+        </InfoPopover>
+      </div>
     </div>
   )
 }

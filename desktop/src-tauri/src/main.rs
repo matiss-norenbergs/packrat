@@ -1,43 +1,42 @@
 // No console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+mod downloads;
+mod prefs;
+mod tray;
 
-use tauri::{webview::DownloadEvent, Manager, WebviewWindowBuilder};
-use tauri_plugin_notification::NotificationExt;
-
-/// `dir/name`, or `dir/stem (1).ext`, `dir/stem (2).ext`, … if that already exists — a download
-/// never overwrites an earlier one.
-fn unique_path(dir: &Path, name: &OsStr) -> PathBuf {
-    let candidate = dir.join(name);
-    if !candidate.exists() {
-        return candidate;
-    }
-    let name = Path::new(name);
-    let stem = name
-        .file_stem()
-        .unwrap_or(name.as_os_str())
-        .to_string_lossy();
-    let ext = name
-        .extension()
-        .map(|e| format!(".{}", e.to_string_lossy()))
-        .unwrap_or_default();
-    (1..)
-        .map(|n| dir.join(format!("{stem} ({n}){ext}")))
-        .find(|p| !p.exists())
-        .expect("an unbounded range always yields a free name")
-}
+use tauri::{Manager, WebviewWindowBuilder, WindowEvent};
 
 fn main() {
     tauri::Builder::default()
+        // Must be registered first: a second launch hands over to the running instance, which
+        // brings its window forward, instead of opening another copy.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            tray::show_main_window(app);
+        }))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![
+            prefs::get_close_to_tray,
+            prefs::set_close_to_tray
+        ])
+        .on_window_event(|window, event| {
+            // With "close to tray" on, the close button hides the window and the app keeps running
+            // (the tray's Quit really exits).
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && window.state::<prefs::Prefs>().close_to_tray() {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
+            app.manage(prefs::load(app.handle()));
+            tray::build(app.handle())?;
+
             // The window is built here rather than from tauri.conf.json so it can carry a
-            // download handler. Backups are fetched from the server as file downloads, and the
-            // webview would otherwise drop them in the process's working directory.
+            // download handler (see downloads.rs).
             let config = app
                 .config()
                 .app
@@ -46,67 +45,11 @@ fn main() {
                 .find(|w| w.label == "main")
                 .expect("main window is declared in tauri.conf.json")
                 .clone();
-            let handle = app.handle().clone();
             WebviewWindowBuilder::from_config(app.handle(), &config)?
-                .on_download(move |_webview, event| {
-                    match event {
-                        DownloadEvent::Requested { destination, .. } => {
-                            // Keep only the filename the server suggested and save it into the
-                            // OS Downloads folder.
-                            if let Some(name) = destination.file_name().map(|n| n.to_owned()) {
-                                let dir = handle
-                                    .path()
-                                    .download_dir()
-                                    .or_else(|_| handle.path().home_dir())
-                                    .unwrap_or_else(|_| std::env::temp_dir());
-                                *destination = unique_path(&dir, &name);
-                            }
-                        }
-                        DownloadEvent::Finished {
-                            path: Some(path),
-                            success: true,
-                            ..
-                        } => {
-                            let _ = handle
-                                .notification()
-                                .builder()
-                                .title("Download complete")
-                                .body(path.display().to_string())
-                                .show();
-                        }
-                        _ => {}
-                    }
-                    true
-                })
+                .on_download(downloads::on_download(app.handle().clone()))
                 .build()?;
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running Packrat");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn unique_path_never_overwrites() {
-        let dir = std::env::temp_dir().join(format!("packrat-desktop-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let name = OsStr::new("backup.json");
-
-        assert_eq!(unique_path(&dir, name), dir.join("backup.json"));
-        std::fs::write(dir.join("backup.json"), "a").unwrap();
-        assert_eq!(unique_path(&dir, name), dir.join("backup (1).json"));
-        std::fs::write(dir.join("backup (1).json"), "b").unwrap();
-        assert_eq!(unique_path(&dir, name), dir.join("backup (2).json"));
-        // No extension.
-        std::fs::write(dir.join("notes"), "c").unwrap();
-        assert_eq!(
-            unique_path(&dir, OsStr::new("notes")),
-            dir.join("notes (1)")
-        );
-
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
 }

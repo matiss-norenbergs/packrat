@@ -12,6 +12,13 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-22
+- **Desktop: tray icon, close-to-tray, single instance, reconnect banner** — the desktop app now has
+  a tray icon (Show/Quit) and a "Close to tray" preference (Settings → Desktop, on by default) that
+  hides the window instead of quitting; launching it a second time focuses the running window; and
+  when the server becomes unreachable mid-session a "Can't reach the server — retrying…" banner
+  appears (with Retry now) and clears itself, refreshing the data, once the server is back.
+
 ## 2026-10-21
 - **Desktop CI and release builds** — pull requests now check the Tauri shell (rustfmt, clippy,
   tests). Releases build the desktop installers for Linux, Windows and macOS (Apple silicon + Intel)
