@@ -79,6 +79,9 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+      # The release's update-manifest generator (desktop/scripts).
+      - run: node --test scripts/*.test.mjs
+        working-directory: desktop
 
   docker:
     runs-on: ubuntu-latest

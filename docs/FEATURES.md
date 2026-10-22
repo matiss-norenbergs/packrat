@@ -33,9 +33,16 @@ quitting, so it keeps running. If the server becomes unreachable while the app i
 by a failed request or a dropped live-update connection, then confirmed against `/api/health`), a
 "Can't reach the server — retrying…" pill appears at the top with a **Retry now** button; it checks
 again every few seconds, disappears on its own when the server answers, and refreshes the data on
-screen. `VITE_DESKTOP=true npm run dev` runs
-the client mode in a plain browser for development (add `http://localhost:5173` to
-`CORS_ALLOWED_ORIGINS` on the server).
+screen.
+
+**Updates** are manual: Settings → Desktop shows the installed version and a **Check for updates**
+button. If a newer release exists it offers **Install and restart**, which downloads it, verifies its
+signature against the key built into the app, installs and restarts. Nothing is checked or downloaded
+automatically. On Linux this works for the AppImage only (`.deb`/`.rpm` installs are updated by
+reinstalling). See [`desktop/README.md`](../desktop/README.md#releasing-updates-one-time-setup).
+
+For development, `VITE_DESKTOP=true npm run dev` runs the client mode in a plain browser (add
+`http://localhost:5173` to `CORS_ALLOWED_ORIGINS` on the server).
 
 ## Browse
 

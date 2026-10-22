@@ -50,6 +50,7 @@ import {
 } from "@/hooks/useSettings"
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
 import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
+import { useAppUpdate } from "@/hooks/useAppUpdate"
 import { useCloseToTray } from "@/hooks/useCloseToTray"
 import { useDesktopNotifications } from "@/hooks/useDesktopNotifications"
 import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/api"
@@ -1895,7 +1896,7 @@ function DesktopTab() {
   const { enabled: closeToTray, setEnabled: setCloseToTray } = useCloseToTray()
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="max-w-lg space-y-8">
       <div className="flex items-center gap-1.5">
         <Checkbox
           id="close-to-tray"
@@ -1913,6 +1914,69 @@ function DesktopTab() {
           completely. When off, closing the window quits the app.
         </InfoPopover>
       </div>
+      <UpdatesSection />
+    </div>
+  )
+}
+
+// Manual app updates: nothing is contacted until "Check for updates" is pressed, and nothing is
+// installed until "Install and restart" is. See useAppUpdate.
+function UpdatesSection() {
+  const { state, check, install } = useAppUpdate()
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    import("@tauri-apps/api/app")
+      .then(({ getVersion }) => getVersion())
+      .then((version) => !cancelled && setCurrentVersion(version))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const busy = state.status === "checking" || state.status === "installing"
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-medium">Updates</h3>
+        <p className="text-sm text-muted-foreground">
+          {currentVersion ? `You have version ${currentVersion}.` : "Checking your version…"}
+        </p>
+      </div>
+
+      {state.status === "available" ? (
+        <div className="space-y-2 rounded-md border p-3 text-sm">
+          <p>
+            Version <span className="font-medium">{state.version}</span> is available.
+          </p>
+          {state.notes && <p className="text-muted-foreground">{state.notes}</p>}
+          <Button size="sm" onClick={install}>
+            Install and restart
+          </Button>
+        </div>
+      ) : (
+        <Button size="sm" variant="outline" onClick={check} disabled={busy}>
+          {state.status === "checking" ? "Checking…" : "Check for updates"}
+        </Button>
+      )}
+
+      {state.status === "installing" && (
+        <p className="text-sm text-muted-foreground">
+          {state.total
+            ? `Downloading… ${Math.min(100, Math.round((state.downloaded / state.total) * 100))}%`
+            : "Downloading…"}{" "}
+          Packrat will restart when it's done.
+        </p>
+      )}
+      {state.status === "upToDate" && <p className="text-sm text-muted-foreground">You're up to date.</p>}
+      {state.status === "error" && (
+        <p className="text-sm text-destructive">
+          {state.during === "check" ? "Couldn't check for updates" : "Couldn't install the update"}: {state.message}
+        </p>
+      )}
     </div>
   )
 }
