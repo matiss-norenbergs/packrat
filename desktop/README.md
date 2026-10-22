@@ -10,7 +10,7 @@ shared with the web UI; everything desktop-specific is gated on running inside T
 
 - Node 22+ and a Rust toolchain (`rustup`, stable).
 - Linux: `libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev
-  librsvg2-dev` (Debian/Ubuntu names). macOS: Xcode command line tools. Windows: WebView2 (preinstalled
+  librsvg2-dev libdbus-1-dev` (Debian/Ubuntu names). macOS: Xcode command line tools. Windows: WebView2 (preinstalled
   on Windows 11) and the MSVC build tools. See Tauri's
   [prerequisites](https://tauri.app/start/prerequisites/).
 - A reachable Packrat server that includes the desktop auth support (bearer tokens + CORS).
@@ -61,7 +61,9 @@ aren't set up yet.
 
 - **Window** — built in `src-tauri/src/main.rs` (not just declared in `tauri.conf.json`) so it can
   carry a download handler: backup downloads land in the OS Downloads folder (never overwriting an
-  existing file) and raise a "Download complete" notification.
+  existing file), emit `download-started` / `download-finished` events (the frontend turns them into
+  toasts with a **Show in folder** action — `hooks/useDownloadToasts.ts`, `opener:allow-reveal-item-in-dir`)
+  and raise a "Download complete" OS notification only while the window isn't focused.
 - **Plugins** — `notification` (OS notifications; the webview's own `Notification` API is unreliable
   across the three webviews), `opener` (http(s) links open in the system browser —
   `frontend/src/lib/desktop.ts`), `window-state` (remembers size/position), `single-instance` (a
@@ -78,10 +80,20 @@ aren't set up yet.
   `media-src` allow any `http(s)`/`ws(s)` host because the server address is entered by the user.
   The window only ever loads the bundled frontend, never the server's pages, and the capability file
   (`capabilities/default.json`) grants no remote origins anything.
-- **Auth/storage** — the server address and bearer token live in the webview's `localStorage`
-  (persisted in the app's data directory, **not encrypted**). The token is the same credential a
-  browser session cookie would be; log out (or change server) to discard it. Moving it into the OS
-  keychain is a possible hardening step.
+- **Auth/storage** — the server address lives in the webview's `localStorage` (not secret). The
+  login **token** lives in the OS secret store — Windows Credential Manager, macOS Keychain, or the
+  Linux Secret Service (GNOME Keyring / KWallet) — under service `io.github.matiss-norenbergs.packrat`,
+  via the `keyring` crate and the `token_get`/`token_set`/`token_clear`/`token_store_kind` commands in
+  `src/token.rs`. The frontend loads it into memory before the first render (`initTokenStore` in
+  `lib/server.ts`, called from `main.tsx`), so `getToken()` stays synchronous. A token left in
+  `localStorage` by an older version is moved into the keychain on first launch. If the keychain is
+  unavailable (typically Linux without a running Secret Service) the token stays in `localStorage`
+  instead of the login being dropped, and Settings → Desktop shows "Token storage: Local file
+  (keychain unavailable)". **What this protects:** the token is no longer a readable file in the app
+  data directory, so it isn't exposed by disk images, backups or syncs of AppData/the home folder.
+  **What it doesn't:** malware already running as your user can ask the keychain for it (as can any
+  app on a session that has the keychain unlocked) — it's the same credential a browser session
+  would hold. Log out (or change server) to discard it.
 - **Updates** — manual, from Settings → Desktop → **Check for updates**. Nothing contacts GitHub until
   the button is pressed and nothing installs until **Install and restart** is. The app reads
   `latest.json` from the newest GitHub Release, downloads the update for its platform, verifies its

@@ -3,18 +3,22 @@ import { PackratLogo } from "@/components/PackratLogo"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ConnectionBanner } from "@/components/ConnectionBanner"
+import { ServerNewerNotice } from "@/components/ServerNewerNotice"
 import { useAuthStatus } from "@/hooks/useAuth"
-import { getServerUrl, isDesktop, resetServer } from "@/lib/server"
+import { useDownloadToasts } from "@/hooks/useDownloadToasts"
+import { getServerUrl, isDesktop, isTauri, resetServer } from "@/lib/server"
 
 // Desktop only: if the very first auth check fails (server down, wrong network), the layouts would
 // otherwise render nothing at all. Show what's wrong and let the user retry or pick another server.
 // The status query is shared with the layouts, so this adds no request. Web: passes children through.
 export function DesktopGate({ children }: { children: ReactNode }) {
   const { data, isError, refetch, isFetching } = useAuthStatus()
+  useDownloadToasts()
   if (!isDesktop() || data || !isError) {
     return (
       <>
         <ConnectionBanner />
+        {isTauri() && data?.authenticated && <ServerNewerNotice />}
         {children}
       </>
     )

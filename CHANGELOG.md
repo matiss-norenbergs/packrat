@@ -13,6 +13,17 @@ Maintenance notes:
 -->
 
 ## 2026-10-22
+- **Desktop: login token in the OS keychain** — the session token moves from the webview's plain
+  `localStorage` to Windows Credential Manager / macOS Keychain / Linux Secret Service. Existing
+  logins are migrated on first launch. Without a keychain (e.g. Linux with no Secret Service) it falls
+  back to local storage and Settings → Desktop says so. Linux builds now need `libdbus-1-dev`.
+- **Desktop: "server is newer" notice** — when the server runs a newer release than the desktop app,
+  a dismissible notice points to Settings → Desktop to update the app (dismissal remembered per
+  version pair; "dev" servers are ignored). Settings → Desktop → Updates now also shows the server
+  version.
+- **Desktop: download toasts** — downloads in the desktop app (e.g. backups) now show "Downloading…"
+  then "Saved to <path>" with a **Show in folder** button, or an error toast. The OS notification is
+  only sent when the window isn't focused, so there's no double signal. The browser is unchanged.
 - **Desktop: in-app updates** — Settings → Desktop gets a **Check for updates** button (manual, nothing
   automatic). A newer release is downloaded, its signature verified against the key built into the
   app, then installed and the app restarts. Release builds now sign the update files with the Tauri

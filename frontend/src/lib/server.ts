@@ -80,16 +80,85 @@ export function getLastServerUrl(): string {
   return read(LAST_SERVER_URL_KEY) ?? ""
 }
 
+// Where the login token lives. In the Tauri shell it goes to the OS keychain (Windows Credential
+// Manager, macOS Keychain, Linux Secret Service) so it isn't a plain file in the app's data
+// directory; getToken() stays synchronous by reading an in-memory copy that initTokenStore()
+// fills before the first render. If the keychain is unavailable, or the browser/VITE_DESKTOP path
+// is in use, it stays in localStorage — a login is never dropped silently.
+export type TokenStorage = "keychain" | "local"
+
+type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>
+
+let tokenStorage: TokenStorage = "local"
+let tokenCache: string | null = null
+let invokeShell: Invoke | null = null
+
+// Settles once the token is loaded (immediately on the web). Anything that fires an authenticated
+// request at module load — the auth prefetch in routes/index.tsx — has to wait for it.
+let markTokenReady: () => void = () => {}
+export const tokenReady: Promise<void> = isTauri()
+  ? new Promise<void>((resolve) => {
+      markTokenReady = resolve
+    })
+  : Promise.resolve()
+
+export function getTokenStorage(): TokenStorage {
+  return tokenStorage
+}
+
+// Tauri only; awaited in main.tsx before rendering. Moves a pre-keychain localStorage token into the
+// keychain (existing logins survive the upgrade) and loads the token into memory.
+export async function initTokenStore(): Promise<void> {
+  if (!isTauri()) return
+  try {
+    await loadToken()
+  } finally {
+    markTokenReady()
+  }
+}
+
+async function loadToken() {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core")
+    if ((await invoke<TokenStorage>("token_store_kind")) !== "keychain") return
+    let token = await invoke<string | null>("token_get")
+    const legacy = read(TOKEN_KEY)
+    if (legacy) {
+      if (!token) {
+        await invoke("token_set", { token: legacy })
+        token = legacy
+      }
+      write(TOKEN_KEY, null)
+    }
+    invokeShell = invoke as Invoke
+    tokenCache = token
+    tokenStorage = "keychain"
+  } catch {
+    // keychain unusable — keep using localStorage
+  }
+}
+
+// The keychain stopped answering mid-session: keep the login in localStorage instead of losing it.
+function fallBackToLocal() {
+  tokenStorage = "local"
+  write(TOKEN_KEY, tokenCache)
+}
+
 export function getToken(): string | null {
-  return read(TOKEN_KEY)
+  return tokenStorage === "keychain" ? tokenCache : read(TOKEN_KEY)
 }
 
 export function setToken(token: string) {
-  write(TOKEN_KEY, token)
+  if (tokenStorage !== "keychain") return write(TOKEN_KEY, token)
+  tokenCache = token
+  invokeShell?.("token_set", { token }).catch(fallBackToLocal)
 }
 
 export function clearToken() {
+  if (tokenStorage !== "keychain") return write(TOKEN_KEY, null)
+  tokenCache = null
   write(TOKEN_KEY, null)
+  invokeShell?.("token_clear").catch(() => {})
 }
 
 // The desktop app has no server to talk to until the user has entered one.
