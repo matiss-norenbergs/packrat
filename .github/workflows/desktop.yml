@@ -3,7 +3,9 @@ name: Desktop
 # Builds the Tauri desktop client (desktop/) for Linux, Windows and macOS (Apple silicon + Intel).
 # Called by release.yml after the Docker image is published, so the installers are attached to the
 # same GitHub Release; can also be run by hand to get the installers as workflow artifacts without
-# releasing anything. The bundles are unsigned (see desktop/README.md).
+# releasing anything. The installers are not code-signed (see desktop/README.md), but the update
+# files are signed with the Tauri updater key (the TAURI_SIGNING_PRIVATE_KEY secret) and listed in
+# a latest.json manifest, which is what the app's "Check for updates" button reads.
 on:
   workflow_call:
     inputs:
@@ -37,9 +39,11 @@ jobs:
           - name: macos-arm64
             os: macos-latest
             target: aarch64-apple-darwin
+            arch: aarch64
           - name: macos-x64
             os: macos-latest
             target: x86_64-apple-darwin
+            arch: x64
     runs-on: ${{ matrix.os }}
     env:
       VERSION: ${{ inputs.version }}
@@ -96,48 +100,90 @@ jobs:
       - run: npm ci
         working-directory: desktop
 
-      # `tauri build` runs the frontend's production build itself (beforeBuildCommand).
+      # `tauri build` runs the frontend's production build itself (beforeBuildCommand). The updater
+      # artifacts (and their signatures) are only requested here, so a local `npm run build` works
+      # without the private key.
       - name: Build installers
         shell: bash
         working-directory: desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          if [ -n "${{ matrix.target }}" ]; then
-            npm run build -- --target "${{ matrix.target }}"
-          else
-            npm run build
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "The TAURI_SIGNING_PRIVATE_KEY secret is not available to this run." >&2
+            exit 1
           fi
+          args=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
+          if [ -n "${{ matrix.target }}" ]; then
+            args+=(--target "${{ matrix.target }}")
+          fi
+          npm run build -- "${args[@]}"
 
-      # Native installers only — not the raw binary or intermediate build directories.
+      # Gathers what a release needs into one flat folder: the installers people download, plus the
+      # one signed file per platform the updater uses. (Tauri names both macOS update tarballs
+      # "Packrat.app.tar.gz", so they get their architecture here.)
+      - name: Collect installers
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          shopt -s nullglob
+          b=desktop/src-tauri/target
+          mkdir -p out
+          case "$RUNNER_OS" in
+            Linux)
+              cp $b/release/bundle/deb/*.deb $b/release/bundle/rpm/*.rpm \
+                 $b/release/bundle/appimage/*.AppImage $b/release/bundle/appimage/*.AppImage.sig out/ ;;
+            Windows)
+              cp $b/release/bundle/msi/*.msi $b/release/bundle/nsis/*.exe $b/release/bundle/nsis/*.exe.sig out/ ;;
+            macOS)
+              cp $b/*/release/bundle/dmg/*.dmg out/
+              cp $b/*/release/bundle/macos/Packrat.app.tar.gz "out/Packrat_${VERSION}_${ARCH}.app.tar.gz"
+              cp $b/*/release/bundle/macos/Packrat.app.tar.gz.sig "out/Packrat_${VERSION}_${ARCH}.app.tar.gz.sig" ;;
+          esac
+          ls -l out
+
       - uses: actions/upload-artifact@v6
         with:
           name: packrat-desktop-${{ matrix.name }}
-          path: |
-            desktop/src-tauri/target/release/bundle/deb/*.deb
-            desktop/src-tauri/target/release/bundle/rpm/*.rpm
-            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
-            desktop/src-tauri/target/release/bundle/msi/*.msi
-            desktop/src-tauri/target/release/bundle/nsis/*.exe
-            desktop/src-tauri/target/*/release/bundle/dmg/*.dmg
+          path: out/*
           if-no-files-found: error
           retention-days: 14
 
-  # One job attaches everything to the release, so the matrix legs don't race to update it.
-  publish:
-    if: inputs.publish
+  # Builds the update manifest from every platform's files — on a dry run too, so a naming
+  # problem shows up before a release — and, when publishing, attaches everything to the release
+  # in one go, so the matrix legs don't race to update it.
+  package:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+
       - uses: actions/download-artifact@v7
         with:
           path: installers
           pattern: packrat-desktop-*
           merge-multiple: true
 
-      - run: ls -R installers
+      - name: Build the update manifest
+        env:
+          VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+        run: node desktop/scripts/update-manifest.mjs installers "$VERSION" "$REPO"
+
+      - run: ls -l installers && cat installers/latest.json
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: update-manifest
+          path: installers/latest.json
+          retention-days: 14
 
       - uses: softprops/action-gh-release@v3
+        if: inputs.publish
         with:
           tag_name: v${{ inputs.version }}
           files: installers/*

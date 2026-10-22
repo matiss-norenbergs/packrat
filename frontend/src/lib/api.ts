@@ -97,6 +97,7 @@ import type {
   YtDlpVersionInfo,
 } from "@/types/api"
 
+import { reportNetworkFailure, reportReachable } from "@/lib/connection"
 import { apiBase, clearToken, isDesktop, getToken, serverUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
 
 // Reads a cookie's raw value by name — used to echo the CSRF cookie back as
@@ -123,10 +124,23 @@ export class ApiError extends Error {
 // All JSON API routes live under /api (kept distinct from the frontend's
 // client-side routes of the same name, e.g. /downloads and /library — see
 // backend/internal/api/router.go).
+// fetch() that tells the connection monitor whether the server answered at all (desktop only):
+// a TypeError is a network failure (server down/unreachable), any HTTP response means it is up.
+async function fetchServer(input: string, init: RequestInit): Promise<Response> {
+  try {
+    const res = await fetch(input, init)
+    reportReachable()
+    return res
+  } catch (err) {
+    if (err instanceof TypeError) void reportNetworkFailure()
+    throw err
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const desktop = isDesktop()
   const token = desktop ? getToken() : null
-  const res = await fetch(
+  const res = await fetchServer(
     `${apiBase()}/api${path}`,
     desktop
       ? {

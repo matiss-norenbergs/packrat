@@ -64,7 +64,16 @@ aren't set up yet.
   existing file) and raise a "Download complete" notification.
 - **Plugins** — `notification` (OS notifications; the webview's own `Notification` API is unreliable
   across the three webviews), `opener` (http(s) links open in the system browser —
-  `frontend/src/lib/desktop.ts`), `window-state` (remembers size/position).
+  `frontend/src/lib/desktop.ts`), `window-state` (remembers size/position), `single-instance` (a
+  second launch focuses the running window instead of opening another).
+- **Tray and close-to-tray** — `src/tray.rs` builds the tray icon (left click or "Show Packrat"
+  restores the window, "Quit" exits). The "Close to tray" preference (Settings → Desktop, default
+  on) is kept by the Rust side in `desktop.json` in the app config directory (`src/prefs.rs`),
+  because it must be known the moment the close button is pressed; the frontend reads and writes it
+  through the `get_close_to_tray`/`set_close_to_tray` commands. On Linux the tray needs a desktop
+  that shows app-indicator icons (GNOME needs an extension).
+- **Reconnect banner** — frontend only (`lib/connection.ts`, `ConnectionBanner`): see
+  [`docs/FEATURES.md`](../docs/FEATURES.md#desktop-app-client-mode).
 - **CSP** (`tauri.conf.json`) — scripts and styles are local-only, but `connect-src`/`img-src`/
   `media-src` allow any `http(s)`/`ws(s)` host because the server address is entered by the user.
   The window only ever loads the bundled frontend, never the server's pages, and the capability file
@@ -73,9 +82,40 @@ aren't set up yet.
   (persisted in the app's data directory, **not encrypted**). The token is the same credential a
   browser session cookie would be; log out (or change server) to discard it. Moving it into the OS
   keychain is a possible hardening step.
+- **Updates** — manual, from Settings → Desktop → **Check for updates**. Nothing contacts GitHub until
+  the button is pressed and nothing installs until **Install and restart** is. The app reads
+  `latest.json` from the newest GitHub Release, downloads the update for its platform, verifies its
+  signature against the public key in `tauri.conf.json` (`plugins.updater.pubkey`) and only then
+  installs and restarts. On **Linux only the AppImage** can update itself; `.deb`/`.rpm` installs
+  have to be reinstalled by hand. The first release that contains the updater has to be installed
+  manually; every release after it can be updated from inside the app.
+
+## Releasing updates (one-time setup)
+
+Updates are signed with a Tauri updater key pair — separate from OS code signing, and not tied to any
+machine or user. Generate it **once**:
+
+```
+npx @tauri-apps/cli signer generate -w ~/.tauri/packrat-updater.key
+```
+
+- Put the **public** key (printed, and in `…key.pub`) in `src-tauri/tauri.conf.json` →
+  `plugins.updater.pubkey` (already done).
+- Add the private key file's contents and its password as the repository secrets
+  `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. `desktop.yml` signs each
+  platform's update file with them and fails fast if the key is missing.
+- **Keep a backup of the private key and never regenerate it**: every installed app trusts this one
+  public key, so a new key would leave existing installs unable to update (they would have to be
+  reinstalled by hand).
+
+`desktop.yml` also builds `latest.json` (`scripts/update-manifest.mjs`, tested with `npm test`) from
+every platform's files and attaches it to the release. A dry run (Actions → Desktop → Run workflow)
+builds and checks the manifest without publishing. Local `npm run build` does not need the key — the
+update files are only requested by CI (`bundle.createUpdaterArtifacts`).
 
 ## Known limitations
 
 - Developed and exercised on Linux (WebKitGTK) only; macOS (WKWebView) and Windows (WebView2) are
   untested — in particular download handling, notifications and window-state.
-- No tray icon, auto-update or code signing yet.
+- No code signing yet (updates are verified by the updater key, but the installers themselves are
+  unsigned). Updates are manual — there is no automatic background update.

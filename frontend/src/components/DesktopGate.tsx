@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { PackratLogo } from "@/components/PackratLogo"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ConnectionBanner } from "@/components/ConnectionBanner"
 import { useAuthStatus } from "@/hooks/useAuth"
 import { getServerUrl, isDesktop, resetServer } from "@/lib/server"
 
@@ -10,7 +11,14 @@ import { getServerUrl, isDesktop, resetServer } from "@/lib/server"
 // The status query is shared with the layouts, so this adds no request. Web: passes children through.
 export function DesktopGate({ children }: { children: ReactNode }) {
   const { data, isError, refetch, isFetching } = useAuthStatus()
-  if (!isDesktop() || data || !isError) return <>{children}</>
+  if (!isDesktop() || data || !isError) {
+    return (
+      <>
+        <ConnectionBanner />
+        {children}
+      </>
+    )
+  }
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">

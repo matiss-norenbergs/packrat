@@ -12,6 +12,19 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-22
+- **Desktop: in-app updates** — Settings → Desktop gets a **Check for updates** button (manual, nothing
+  automatic). A newer release is downloaded, its signature verified against the key built into the
+  app, then installed and the app restarts. Release builds now sign the update files with the Tauri
+  updater key (new repo secrets `TAURI_SIGNING_PRIVATE_KEY` / `…_PASSWORD`) and attach a `latest.json`
+  manifest to the GitHub Release. Linux needs the AppImage for this; the first updater-capable
+  release has to be installed by hand.
+- **Desktop: tray icon, close-to-tray, single instance, reconnect banner** — the desktop app now has
+  a tray icon (Show/Quit) and a "Close to tray" preference (Settings → Desktop, on by default) that
+  hides the window instead of quitting; launching it a second time focuses the running window; and
+  when the server becomes unreachable mid-session a "Can't reach the server — retrying…" banner
+  appears (with Retry now) and clears itself, refreshing the data, once the server is back.
+
 ## 2026-10-21
 - **Desktop CI and release builds** — pull requests now check the Tauri shell (rustfmt, clippy,
   tests). Releases build the desktop installers for Linux, Windows and macOS (Apple silicon + Intel)

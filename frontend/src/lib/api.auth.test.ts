@@ -128,6 +128,21 @@ describe("desktop request()", () => {
     expect(getToken()).toBe("good")
   })
 
+  it("reports network failures (not HTTP errors) to the connection monitor", async () => {
+    const connection = await import("@/lib/connection")
+    const failure = vi.spyOn(connection, "reportNetworkFailure").mockResolvedValue()
+    const reachable = vi.spyOn(connection, "reportReachable").mockImplementation(() => {})
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))
+    await expect(fetchLibraryFacets()).rejects.toThrow()
+    expect(failure).toHaveBeenCalledTimes(1)
+
+    mockFetch(() => ({ status: 500, body: { error: "boom" } }))
+    await expect(fetchLibraryFacets()).rejects.toMatchObject({ status: 500 })
+    expect(failure).toHaveBeenCalledTimes(1)
+    expect(reachable).toHaveBeenCalled()
+  })
+
   it("logout clears the token even when the server is unreachable", async () => {
     setToken("tok")
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))

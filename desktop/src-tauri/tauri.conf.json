@@ -38,5 +38,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRBNTU3QjBBNDE1M0ZENzYKUldSMi9WTkJDbnRWU29nRTliYkpkV2hEckhnNXdtYTJKZjkvZjF1Ky9mV3RPZUV0UC9KRU9vbGcK",
+      "endpoints": [
+        "https://github.com/matiss-norenbergs/packrat/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
