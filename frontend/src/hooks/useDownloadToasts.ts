@@ -65,7 +65,7 @@ async function revealInFolder(path: string) {
   try {
     const { revealItemInDir } = await import("@tauri-apps/plugin-opener")
     await revealItemInDir(path)
-  } catch {
-    toast.error("Couldn't open the folder.")
+  } catch (err) {
+    toast.error("Couldn't open the folder.", { description: err instanceof Error ? err.message : String(err) })
   }
 }
