@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ResolutionTierSlider } from "@/components/ResolutionTierSlider"
 import { ThumbnailFrameRangeSlider } from "@/components/ThumbnailFrameRangeSlider"
 import { RESOLUTION_STEP_LABELS } from "@/lib/resolution"
-import { isTauri } from "@/lib/server"
+import { getTokenStorage, isTauri } from "@/lib/server"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -1915,6 +1915,9 @@ function DesktopTab() {
           completely. When off, closing the window quits the app.
         </InfoPopover>
       </div>
+      <p className="text-sm text-muted-foreground">
+        Token storage: {getTokenStorage() === "keychain" ? "OS keychain" : "Local file (keychain unavailable)"}
+      </p>
       <UpdatesSection />
     </div>
   )

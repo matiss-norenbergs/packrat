@@ -5,7 +5,7 @@ import { ImmersiveLayout } from "@/layouts/ImmersiveLayout"
 import { authStatusQueryKey } from "@/hooks/useAuth"
 import { fetchAuthStatus } from "@/lib/api"
 import { queryClient } from "@/lib/queryClient"
-import { needsServerUrl } from "@/lib/server"
+import { needsServerUrl, tokenReady } from "@/lib/server"
 import { FeatureRoute } from "@/components/FeatureRoute"
 import { RouteError } from "@/components/RouteError"
 
@@ -17,8 +17,11 @@ import { RouteError } from "@/components/RouteError"
 // next one is ready. The router starts loading the initial URL's chunk as
 // soon as it is created, so the auth check is started here too, rather than
 // only when the layout mounts after that chunk arrives.
-// (Skipped on desktop until a server address is saved — there's nothing to ask yet.)
-if (!needsServerUrl()) void queryClient.prefetchQuery({ queryKey: authStatusQueryKey, queryFn: fetchAuthStatus })
+// (Skipped on desktop until a server address is saved — there's nothing to ask yet. In the desktop
+// shell it also waits for the keychain token to load; on the web that wait is already over.)
+if (!needsServerUrl()) {
+  void tokenReady.then(() => queryClient.prefetchQuery({ queryKey: authStatusQueryKey, queryFn: fetchAuthStatus }))
+}
 
 // `handle.preload` lets a link hover/focus start the chunk fetch early (see the
 // listeners at the bottom); `lazy` then resolves from the module cache.

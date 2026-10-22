@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-22
+- **Desktop: login token in the OS keychain** — the session token moves from the webview's plain
+  `localStorage` to Windows Credential Manager / macOS Keychain / Linux Secret Service. Existing
+  logins are migrated on first launch. Without a keychain (e.g. Linux with no Secret Service) it falls
+  back to local storage and Settings → Desktop says so. Linux builds now need `libdbus-1-dev`.
 - **Desktop: "server is newer" notice** — when the server runs a newer release than the desktop app,
   a dismissible notice points to Settings → Desktop to update the app (dismissal remembered per
   version pair; "dev" servers are ignored). Settings → Desktop → Updates now also shows the server

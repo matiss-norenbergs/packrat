@@ -3,6 +3,7 @@
 
 mod downloads;
 mod prefs;
+mod token;
 mod tray;
 
 use tauri::{Manager, WebviewWindowBuilder, WindowEvent};
@@ -21,7 +22,11 @@ fn main() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             prefs::get_close_to_tray,
-            prefs::set_close_to_tray
+            prefs::set_close_to_tray,
+            token::token_get,
+            token::token_set,
+            token::token_clear,
+            token::token_store_kind
         ])
         .on_window_event(|window, event| {
             // With "close to tray" on, the close button hides the window and the app keeps running
@@ -35,6 +40,7 @@ fn main() {
         })
         .setup(|app| {
             app.manage(prefs::load(app.handle()));
+            app.manage(token::Vault::keychain());
             tray::build(app.handle())?;
 
             // The window is built here rather than from tauri.conf.json so it can carry a

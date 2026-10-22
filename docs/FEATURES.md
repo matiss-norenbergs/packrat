@@ -21,6 +21,11 @@ while the app is open, it drops back to the login screen.
 
 Unlike the browser, the desktop client authenticates with a bearer token instead of cookies (the
 server's `CORS_ALLOWED_ORIGINS` must include the app's origin — the Tauri defaults are built in).
+The token is kept in the OS keychain (Windows Credential Manager, macOS Keychain, Linux Secret
+Service) rather than a plain file; where there is no keychain it falls back to the app's local
+storage, and Settings → Desktop says which is in use ("Token storage: OS keychain" / "Local file
+(keychain unavailable)"). A login from before this change is migrated automatically. This keeps the
+token out of readable app data (disk images, backups), not out of reach of malware running as you.
 None of this applies to the web UI, which behaves as before. See "Auth and CSRF" in
 [`api.md`](api.md#auth-and-csrf). The shell lives in [`desktop/`](../desktop/README.md). Inside it,
 http(s) links open in the system browser, desktop notifications go through the OS (Settings toggle

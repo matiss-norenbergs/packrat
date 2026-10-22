@@ -33,7 +33,8 @@ since Gin matches registered routes before falling back to serving `index.html`.
 - **Getting a token**: send `X-Client: desktop` on `POST /api/auth/login` or `/api/auth/setup`. The
   response is then `200 {"token":"..."}` and **no cookies are set**; without the header the response
   is the usual `204` + cookies. `GET /api/auth/status` and `POST /api/auth/logout` honor a bearer
-  token too (logout deletes that session server-side).
+  token too (logout deletes that session server-side). The desktop app stores the token client-side
+  in the OS keychain (no API change; see `desktop/README.md`).
 - **CORS**: origins listed in `CORS_ALLOWED_ORIGINS` (comma-separated, no wildcard; default
   `tauri://localhost,http://tauri.localhost,https://tauri.localhost`, i.e. the desktop app) may call
   the API cross-origin. Allowed: `GET/HEAD/POST/PATCH/PUT/DELETE`, headers `Authorization`,
