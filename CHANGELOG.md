@@ -12,6 +12,14 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-23
+- **Desktop: "Match server version"** — Settings → Desktop → Updates can install the app release equal
+  to the server's version, upgrading or downgrading (with a confirmation), so the app and server agree.
+  Manual only; the release URL is built solely from a strictly validated `X.Y.Z` version and downloads
+  stay signature-verified.
+- **Desktop: "app is newer than the server" notice** — the version notice now also fires when the app
+  is a newer release than the server, pointing to Settings → Desktop (or a server update).
+
 ## 2026-10-22
 - **Desktop: login token in the OS keychain** — the session token moves from the webview's plain
   `localStorage` to Windows Credential Manager / macOS Keychain / Linux Secret Service. Existing

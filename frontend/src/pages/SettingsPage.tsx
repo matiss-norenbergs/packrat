@@ -52,6 +52,8 @@ import {
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
 import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
 import { useAppUpdate } from "@/hooks/useAppUpdate"
+import { useMatchServerVersion } from "@/hooks/useMatchServerVersion"
+import { compareSemver, isReleaseVersion } from "@/lib/semver"
 import { useCloseToTray } from "@/hooks/useCloseToTray"
 import { useDesktopNotifications } from "@/hooks/useDesktopNotifications"
 import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/api"
@@ -1927,6 +1929,7 @@ function DesktopTab() {
 // installed until "Install and restart" is. See useAppUpdate.
 function UpdatesSection() {
   const { state, check, install } = useAppUpdate()
+  const match = useMatchServerVersion()
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
   const serverVersion = useAppVersion().data?.version
 
@@ -1941,7 +1944,13 @@ function UpdatesSection() {
     }
   }, [])
 
-  const busy = state.status === "checking" || state.status === "installing"
+  const busy =
+    state.status === "checking" ||
+    state.status === "installing" ||
+    match.state.status === "checking" ||
+    match.state.status === "installing"
+  const canMatch = isReleaseVersion(serverVersion) && !!currentVersion
+  const matches = canMatch && compareSemver(serverVersion, currentVersion) === 0
 
   return (
     <div className="space-y-3">
@@ -1969,11 +1978,26 @@ function UpdatesSection() {
         </Button>
       )}
 
-      {state.status === "installing" && (
+      {canMatch &&
+        (matches ? (
+          <p className="text-sm text-muted-foreground">Matches your server.</p>
+        ) : (
+          <div className="space-y-1">
+            <Button size="sm" variant="outline" onClick={() => match.check(serverVersion)} disabled={busy}>
+              {match.state.status === "checking" ? "Checking…" : "Match server version"}
+            </Button>
+            <p className="text-sm text-muted-foreground">Install v{serverVersion} to match your server.</p>
+          </div>
+        ))}
+
+      {(state.status === "installing" || match.state.status === "installing") && (
         <p className="text-sm text-muted-foreground">
-          {state.total
-            ? `Downloading… ${Math.min(100, Math.round((state.downloaded / state.total) * 100))}%`
-            : "Downloading…"}{" "}
+          {(() => {
+            const p = state.status === "installing" ? state : match.state.status === "installing" ? match.state : null
+            return p?.total
+              ? `Downloading… ${Math.min(100, Math.round((p.downloaded / p.total) * 100))}%`
+              : "Downloading…"
+          })()}{" "}
           Packrat will restart when it's done.
         </p>
       )}
@@ -1983,6 +2007,33 @@ function UpdatesSection() {
           {state.during === "check" ? "Couldn't check for updates" : "Couldn't install the update"}: {state.message}
         </p>
       )}
+      {match.state.status === "error" && (
+        <p className="text-sm text-destructive">
+          {match.state.during === "check" ? "Couldn't check for a matching version" : "Couldn't install the update"}:{" "}
+          {match.state.message}
+        </p>
+      )}
+
+      <AlertDialog open={match.state.status === "confirm"} onOpenChange={(open) => !open && match.cancel()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {match.state.status === "confirm" &&
+                (match.state.downgrade ? "Install an older version?" : `Install v${match.state.version}?`)}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {match.state.status === "confirm" &&
+                (match.state.downgrade
+                  ? `This replaces v${match.state.currentVersion} with the older v${match.state.version}. It matches your server, but older versions may lack features you're used to.`
+                  : `This replaces v${match.state.currentVersion} with v${match.state.version} to match your server. Packrat will restart when it's done.`)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={match.install}>Install and restart</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

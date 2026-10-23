@@ -101,6 +101,12 @@ aren't set up yet.
   installs and restarts. On **Linux only the AppImage** can update itself; `.deb`/`.rpm` installs
   have to be reinstalled by hand. The first release that contains the updater has to be installed
   manually; every release after it can be updated from inside the app.
+- **Match server version** — Settings → Desktop → Updates also offers to install the release equal to
+  the server's version (upgrade or downgrade; `src-tauri/src/match_update.rs`). The JS updater can't
+  change its endpoint, so the Rust side builds a one-off updater for
+  `…/releases/download/v<version>/latest.json`. The version comes from the server, so it is accepted
+  only as a plain `X.Y.Z` before any request is made, and the same signature check applies. Debug
+  builds (only) honor `PACKRAT_UPDATE_BASE_URL` to point it at a local mock release server.
 
 ## Releasing updates (one-time setup)
 

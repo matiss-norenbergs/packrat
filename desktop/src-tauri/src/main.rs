@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod downloads;
+mod match_update;
 mod prefs;
 mod token;
 mod tray;
@@ -21,6 +22,8 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
+            match_update::match_update_check,
+            match_update::match_update_install,
             prefs::get_close_to_tray,
             prefs::set_close_to_tray,
             token::token_get,
@@ -40,6 +43,7 @@ fn main() {
         })
         .setup(|app| {
             app.manage(prefs::load(app.handle()));
+            app.manage(match_update::Pending::default());
             app.manage(token::Vault::keychain());
             tray::build(app.handle())?;
 
