@@ -16,7 +16,7 @@ since Gin matches registered routes before falling back to serving `index.html`.
   `Secure=false` — deliberate, since the app is commonly run over plain HTTP on a LAN). 30-day
   expiry, validated server-side against a sessions table — not a signed/stateless token.
 - **`RequireAuth`** gates every `/api/*` route except `/api/health` and
-  `/api/auth/{status,setup,login,logout}`, plus `/media-files/*` and `/ws`. Missing/invalid session
+  `/api/auth/{status,setup,login,login/2fa,logout}`, plus `/media-files/*` and `/ws`. Missing/invalid session
   → `401`.
 - **CSRF**: double-submit cookie. Cookie `packrat_csrf` (`HttpOnly=false` so JS can read it, same
   value as the session token, set/cleared alongside it on login/setup/logout). Every mutating
@@ -60,20 +60,59 @@ since Gin matches registered routes before falling back to serving `index.html`.
 | GET | `/api/auth/status` | public |
 | POST | `/api/auth/setup` | public |
 | POST | `/api/auth/login` | public |
+| POST | `/api/auth/login/2fa` | public |
 | POST | `/api/auth/logout` | public |
 | PATCH | `/api/auth/password` | session + CSRF |
+| GET | `/api/auth/2fa` | session |
+| POST | `/api/auth/2fa/setup` | session + CSRF |
+| POST | `/api/auth/2fa/enable` | session + CSRF |
+| POST | `/api/auth/2fa/disable` | session + CSRF |
+| POST | `/api/auth/2fa/recovery-codes` | session + CSRF |
+| GET | `/api/auth/security-notice` | session |
+| POST | `/api/auth/security-notice/ack` | session + CSRF |
 
 - **`POST /api/auth/setup`** — `{ "username": "...", "password": "min 8 chars" }`. Only succeeds
   while zero users exist (`409` otherwise). Creates the user, sets both cookies, `204`.
 - **`POST /api/auth/login`** — `{ "username": "...", "password": "..." }`. Wrong username *or*
   password both return `401 {"error":"invalid username or password"}` — never reveals which was
-  wrong. `204` on success, sets both cookies (desktop: `200 {"token"}`, see above).
+  wrong. `204` on success, sets both cookies (desktop: `200 {"token"}`, see above). **If the account
+  has 2FA on**, a correct password returns `200 {"twoFactorRequired":true,"challengeToken":"...",
+  "expiresInSeconds":300}` instead — no cookie and no token, for the desktop client either — and the
+  login finishes at `POST /api/auth/login/2fa`.
+- **`POST /api/auth/login/2fa`** — `{ "challengeToken": "...", "code": "123456" }` or
+  `{ "challengeToken": "...", "recoveryCode": "K7F2-9QXM" }` (exactly one of the two; recovery codes
+  are case/dash/space-insensitive). Success is exactly like a normal login (`204` + cookies, or
+  `200 {"token"}` with `X-Client: desktop`). The challenge is single use and expires after 5 minutes;
+  `401 {"error","challengeExpired":true}` means it is gone (expired, used, or 5 wrong codes) and the
+  password must be entered again; a wrong code is `401 {"error":"invalid code"}`.
+- **Rate limiting (all credential endpoints)** — only *failures* count. Per IP: 10 failures / 15 min,
+  then `429` for that IP until the window clears (correct attempts too). Globally: 30 password or 10
+  code failures per hour start a cool-down for everyone on that step (15 min, doubling to a 4 h cap).
+  Applies to login, `/login/2fa`, `PATCH /auth/password`, and the `2fa/*` endpoints below that take a
+  password or code. Response: `429`, header `Retry-After: <seconds>`, body
+  `{"error":"too many attempts, try again later","retryAfterSeconds":<n>}`. The client IP is the
+  connection address; `X-Forwarded-For` is only honored from `TRUSTED_PROXIES`.
 - **`POST /api/auth/logout`** — no body. Deletes the session row server-side (a replayed old cookie
   stops working immediately) and clears both cookies. `204`, idempotent even with no session.
 - **`PATCH /api/auth/password`** — `{ "currentPassword": "...", "newPassword": "min 8 chars" }`.
   Requires the *current* password even though the route is already session-protected, so a
   hijacked/left-open session can't lock out the real owner. `401` if current password is wrong,
   else `204`.
+- **`GET /api/auth/2fa`** — `{ "enabled": bool, "recoveryCodesRemaining": n }`.
+- **`POST /api/auth/2fa/setup`** — no body; creates a *pending* secret (replacing any earlier one) and
+  returns `{ "secret": "<base32>", "otpauthUrl": "otpauth://totp/Packrat:<username>?..." }`. `409` if
+  2FA is already enabled. Nothing changes for logins until it is confirmed.
+- **`POST /api/auth/2fa/enable`** — `{ "code": "123456" }` checked against the pending secret; turns
+  2FA on and returns `{ "recoveryCodes": [10 × "XXXX-XXXX"] }` — the **only** time they are shown.
+  `401` bad code, `409` no pending secret / already enabled.
+- **`POST /api/auth/2fa/disable`** — `{ "password", "code" | "recoveryCode" }`; clears the secret and
+  recovery codes. `204`; `401` for a wrong password or code.
+- **`POST /api/auth/2fa/recovery-codes`** — `{ "password", "code" }`; replaces the whole set (old codes
+  stop working) and returns `{ "recoveryCodes": [...] }`.
+- **`GET /api/auth/security-notice`** — `{ "failedAttempts": n, "since": "<RFC 3339>",
+  "lastAttemptAt": "<RFC 3339>" | null }`: failed password/code attempts since the owner last
+  acknowledged (or since the account was created). **`POST /api/auth/security-notice/ack`** — no body,
+  `204`; resets the count.
 
 ## Downloads
 

@@ -108,7 +108,7 @@ for the same failure but is redundant, and a handler that calls `preventDefault`
 
 The app is single-user (no registration beyond a one-time setup wizard) but is fully
 session-gated: `RequireAuth` covers every `/api/*` route except `/api/health` and
-`/api/auth/{status,setup,login,logout}`, plus `/media-files/*` and `/ws`. Sessions are opaque
+`/api/auth/{status,setup,login,login/2fa,logout}`, plus `/media-files/*` and `/ws`. Sessions are opaque
 64-char hex tokens validated against a server-side sessions table (not signed/stateless JWTs),
 30-day expiry, cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`).
 
@@ -124,6 +124,53 @@ cookies and `document.cookie` don't work — can authenticate. `RequireAuth` rec
 authenticated, and `RequireCSRF` only enforces the double-submit check for cookie-authenticated ones
 (and fails closed if that marker is missing). A small allowlist-only CORS middleware
 (`CORS_ALLOWED_ORIGINS`) admits the desktop app's origin; the web UI is same-origin and unaffected.
+
+### Login throttling and the client IP
+
+Gin trusts every proxy by default, which would let any client pick its own address with a forged
+`X-Forwarded-For`. `SetupRouter` therefore trusts **none** unless `TRUSTED_PROXIES` (comma-separated
+IPs/CIDRs) says otherwise, so `c.ClientIP()` is the real connection address. (Behind Docker Desktop on
+Windows/macOS the container may see every client as one gateway IP, so per-IP limits then behave like
+global ones — which is why the limits below delay rather than lock.)
+
+`internal/ratelimit` counts **failures only** — wrong passwords (login, change password, disabling 2FA
+or regenerating recovery codes) and wrong 2FA/recovery codes. Normal authenticated traffic is never
+limited. Limits (constants in the package): 10 failures per IP per 15 min block that IP for 15 min
+(correct attempts included); globally, 30 password failures or 10 code failures per hour start a
+cool-down on that step for everyone — 15 min, doubling on repeated trips up to 4 h, relaxing after a
+quiet day. A completed login resets that IP's counters. It is in memory, mutex-guarded, bounded
+(oldest IP evicted), uses an injectable clock, and resets on restart. Blocks answer `429` +
+`Retry-After` + `{error, retryAfterSeconds}` and are logged by IP only. There is deliberately **no
+permanent lockout**: with one account, a hard lock would let anyone lock the owner out on purpose.
+
+### Two-factor auth (TOTP)
+
+Opt-in per account (`internal/twofactor`). TOTP is RFC 6238 via `github.com/pquerna/otp`
+(Apache-2.0): SHA-1, 6 digits, 30 s, 160-bit base32 secret, ±1 step of drift, and the last accepted
+step is stored so a code can't be replayed. Secrets are encrypted at rest with AES-256-GCM (bound to
+the user id) under a key from `PACKRAT_SECRET_KEY`, or by default an auto-generated `0600` key file
+`packrat-secret.key` next to the database (so it lives in the data volume). Without the key the
+secret can't be read; `packrat --disable-2fa` needs no key and is the way out. Recovery codes
+(10 × `XXXX-XXXX`, ~40 bits) are stored only as keyed HMAC-SHA256 hashes, compared in constant time,
+deleted on use.
+
+With 2FA on, `POST /api/auth/login` with the right password returns a **challenge**
+(`{twoFactorRequired, challengeToken, expiresInSeconds}`) and **no session** — no cookie, and no
+token for `X-Client: desktop` either. The challenge is 256 random bits kept in memory (hashed),
+single-use, valid 5 minutes, and destroyed after 5 wrong codes. Only `POST /api/auth/login/2fa`
+turns it into a session (via the same `respondWithSession`), and `respondWithSession` is reachable
+only from setup (no user yet, so no 2FA possible), a login of a non-2FA account, and that endpoint.
+The public `/auth/status` reveals nothing about 2FA. Backups are built from settings and library
+tables only, so they never contain 2FA secrets, recovery hashes or the key (pinned by a test).
+
+Failed attempts are stored (time, IP, step; pruned after 30 days) in `login_failures` and exposed to
+the owner after login as the dismissible "N failed login attempts since your last login" notice.
+
+### Admin commands
+
+`cmd/server` handles `--reset-password` (prompts twice without echo, or `--password-stdin`; never a
+password argument) and `--disable-2fa` before the server starts. They open the database from the
+normal config, apply pending migrations, act, exit non-zero on error, and delete **all** sessions.
 
 ## Collection root paths stay under `MEDIA_ROOT`
 
@@ -403,9 +450,10 @@ Still intentionally out of scope, not forgotten:
 - **No multi-user support.** One user account, created once via the setup wizard; there is no
   invite/second-account flow, and `POST /api/auth/setup` permanently 409s after the first user
   exists.
-- **No rate limiting.** The app is intended for a trusted local network; auth/CSRF protect against
-  CSRF and session theft, not brute-force or abuse from an untrusted network position. WebSocket
-  has no origin restriction (`CheckOrigin` always returns true) beyond the session-cookie gate.
+- **No permanent lockouts or distributed rate limiting.** Failed logins are throttled (see "Login
+  throttling" above) but only ever delayed, in memory per process; there is no account lock and no
+  shared store. WebSocket has no origin restriction (`CheckOrigin` always returns true) beyond the
+  session-cookie gate.
 - **No automatic media byte transfer in backups.** By design — see "Backup and restore" above.
   A library bundle is a recipe for re-downloading, not an archive of the files themselves.
 - **No image galleries/site scraping.** `downloadType=image` is deliberately scoped to one direct

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -26,10 +27,18 @@ import (
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
 	"packrat/backend/internal/thumbnailenhance"
+	"packrat/backend/internal/twofactor"
 	"packrat/backend/internal/ws"
 )
 
 func main() {
+	if handled, err := runAdmin(os.Args[1:]); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
@@ -132,11 +141,7 @@ func run() error {
 	}
 	defer conn.Close()
 
-	migrationsDir := os.Getenv("MIGRATIONS_DIR")
-	if migrationsDir == "" {
-		migrationsDir = "../database/migrations"
-	}
-	if err := db.Migrate(conn, migrationsDir); err != nil {
+	if err := db.Migrate(conn, migrationsDir()); err != nil {
 		return err
 	}
 	log.Println("migrations applied")
@@ -150,6 +155,12 @@ func run() error {
 	artistsRepo := repository.NewArtistsRepo(conn)
 	compareListRepo := repository.NewCompareListRepo(conn)
 	usersRepo := repository.NewUsersRepo(conn)
+	// Encrypts 2FA secrets. The default key file lives in the data volume next to the DB, like the
+	// cookies file; PACKRAT_SECRET_KEY overrides it.
+	secretCrypto, err := twofactor.LoadCrypto(cfg.SecretKey, filepath.Join(filepath.Dir(cfg.DBPath), "packrat-secret.key"))
+	if err != nil {
+		return err
+	}
 	backupHistoryRepo := repository.NewBackupHistoryRepo(conn)
 	subscriptionsRepo := repository.NewSubscriptionsRepo(conn)
 	thumbnailEnhancementHistoryRepo := repository.NewThumbnailEnhancementHistoryRepo(conn)
@@ -317,6 +328,8 @@ func run() error {
 		StaticDir:                         os.Getenv("STATIC_DIR"),
 		HostActions:                       cfg.HostActions,
 		CORSAllowedOrigins:                cfg.CORSAllowedOrigins,
+		TrustedProxies:                    cfg.TrustedProxies,
+		Auth:                              api.NewAuthDeps(usersRepo, secretCrypto, nil),
 	})
 
 	srv := &http.Server{

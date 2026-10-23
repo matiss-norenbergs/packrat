@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -57,6 +58,11 @@ type Deps struct {
 	HostActions                       []hostactions.Action
 	// CORSAllowedOrigins are the cross-origin callers (the desktop app) allowed to use the API.
 	CORSAllowedOrigins []string
+	// Auth carries the login rate limiter and 2FA machinery shared by the credential handlers.
+	Auth *AuthDeps
+	// TrustedProxies are the addresses/CIDRs whose X-Forwarded-For is believed when working out the
+	// client IP. Empty (the default) trusts none: the connection's own address is the client.
+	TrustedProxies []string
 }
 
 // noCacheHeaders forces revalidation on every request instead of letting the
@@ -76,9 +82,22 @@ func limitRequestBody(c *gin.Context) {
 	c.Next()
 }
 
+// setTrustedProxies tells Gin whose X-Forwarded-For to believe. Gin trusts every proxy unless told
+// otherwise, which would let any client pick its own IP with a forged header and sidestep the
+// login rate limits; a non-nil empty list means "trust none", so ClientIP is the connection address.
+func setTrustedProxies(r *gin.Engine, proxies []string) error {
+	if proxies == nil {
+		proxies = []string{}
+	}
+	return r.SetTrustedProxies(proxies)
+}
+
 func SetupRouter(deps Deps) *gin.Engine {
 	// gin.Default() with the access logger swapped for one that redacts ?token= (see logger.go).
 	r := gin.New()
+	if err := setTrustedProxies(r, deps.TrustedProxies); err != nil {
+		log.Fatalf("invalid trusted proxies: %v", err)
+	}
 	r.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: redactingLogFormatter}), gin.Recovery())
 	r.Use(CORS(deps.CORSAllowedOrigins))
 	// Known Items entries whose source has no native video ID key by their
@@ -110,7 +129,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		public.GET("/version", GetVersion())
 		public.GET("/auth/status", AuthStatus(deps.UsersRepo))
 		public.POST("/auth/setup", AuthSetup(deps.UsersRepo))
-		public.POST("/auth/login", AuthLogin(deps.UsersRepo))
+		public.POST("/auth/login", AuthLogin(deps.Auth))
+		public.POST("/auth/login/2fa", AuthLogin2FA(deps.Auth))
 		public.POST("/auth/logout", AuthLogout(deps.UsersRepo))
 	}
 
@@ -140,7 +160,14 @@ func SetupRouter(deps Deps) *gin.Engine {
 			go subscriptions.RunDueChecks(context.Background(), subCheckDeps)
 		}
 
-		api.PATCH("/auth/password", ChangePassword(deps.UsersRepo))
+		api.PATCH("/auth/password", ChangePassword(deps.Auth))
+		api.GET("/auth/2fa", TwoFactorStatus(deps.Auth))
+		api.POST("/auth/2fa/setup", TwoFactorSetup(deps.Auth))
+		api.POST("/auth/2fa/enable", TwoFactorEnable(deps.Auth))
+		api.POST("/auth/2fa/disable", TwoFactorDisable(deps.Auth))
+		api.POST("/auth/2fa/recovery-codes", TwoFactorRegenerateCodes(deps.Auth))
+		api.GET("/auth/security-notice", SecurityNotice(deps.Auth))
+		api.POST("/auth/security-notice/ack", SecurityNoticeAck(deps.Auth))
 
 		api.GET("/actions", ListHostActions(deps.HostActions))
 		api.POST("/actions/:id/run", RunHostAction(deps.HostActions))

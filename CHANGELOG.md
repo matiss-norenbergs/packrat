@@ -13,6 +13,21 @@ Maintenance notes:
 -->
 
 ## 2026-10-23
+- **Two-factor auth (TOTP)** — optional, off by default: Settings → Account → Two-factor
+  authentication (QR code drawn in the browser, 10 one-time recovery codes shown once). Login becomes
+  password → 6-digit code (or recovery code) only for accounts that enable it, in the web UI and the
+  desktop app. Secrets are encrypted at rest (key file next to the DB, or `PACKRAT_SECRET_KEY`); codes
+  can't be replayed.
+- **Login errors visible** — the login page now renders the toaster, so wrong password/code and "too many attempts" messages show.
+- **Login rate limiting** — failed passwords/codes are throttled per IP (10 / 15 min) and globally
+  (cool-down that doubles up to 4 h); delays only, never a lockout. `429` + `Retry-After`. Reverses
+  the old "no rate limiting" scope cut.
+- **Client IP is no longer spoofable** — Gin now trusts no forwarded-IP headers by default;
+  `TRUSTED_PROXIES` opts proxies in.
+- **Admin commands** — `packrat --reset-password` (prompt or `--password-stdin`) and
+  `packrat --disable-2fa`, run via `docker exec`; both sign out every session.
+- **Failed-login notice** — after signing in, a dismissible "N failed login attempts since your last
+  login" notice (web and desktop); attempts are kept 30 days.
 - **Desktop: "Match server version"** — Settings → Desktop → Updates can install the app release equal
   to the server's version, upgrading or downgrading (with a confirmation), so the app and server agree.
   Manual only; the release URL is built solely from a strictly validated `X.Y.Z` version and downloads

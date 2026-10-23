@@ -29,40 +29,46 @@ func (r *UsersRepo) Create(ctx context.Context, username, passwordHash string) (
 	return r.GetByID(ctx, id)
 }
 
-func (r *UsersRepo) GetByID(ctx context.Context, id int64) (*models.User, error) {
+const userColumns = `id, username, password_hash, created_at, COALESCE(totp_secret_enc, ''), COALESCE(totp_pending_enc, ''),
+	totp_enabled, totp_last_step, security_ack_at`
+
+func scanUser(row *sql.Row) (*models.User, error) {
 	var u models.User
 	var createdAt string
-	err := r.db.QueryRowContext(ctx, `SELECT id, username, password_hash, created_at FROM users WHERE id = ?`, id).
-		Scan(&u.ID, &u.Username, &u.PasswordHash, &createdAt)
+	var ackAt sql.NullString
+	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &createdAt, &u.TOTPSecretEnc, &u.TOTPPendingEnc,
+		&u.TOTPEnabled, &u.TOTPLastStep, &ackAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("scanning user: %w", err)
 	}
-	u.CreatedAt, err = parseSQLiteTime(createdAt)
-	if err != nil {
+	if u.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
 		return nil, err
+	}
+	if ackAt.Valid {
+		t, err := parseSQLiteTime(ackAt.String)
+		if err != nil {
+			return nil, err
+		}
+		u.SecurityAckAt = &t
 	}
 	return &u, nil
 }
 
+func (r *UsersRepo) GetByID(ctx context.Context, id int64) (*models.User, error) {
+	return scanUser(r.db.QueryRowContext(ctx, `SELECT `+userColumns+` FROM users WHERE id = ?`, id))
+}
+
 func (r *UsersRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
-	var u models.User
-	var createdAt string
-	err := r.db.QueryRowContext(ctx, `SELECT id, username, password_hash, created_at FROM users WHERE username = ?`, username).
-		Scan(&u.ID, &u.Username, &u.PasswordHash, &createdAt)
-	if err == sql.ErrNoRows {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("scanning user: %w", err)
-	}
-	u.CreatedAt, err = parseSQLiteTime(createdAt)
-	if err != nil {
-		return nil, err
-	}
-	return &u, nil
+	return scanUser(r.db.QueryRowContext(ctx, `SELECT `+userColumns+` FROM users WHERE username = ?`, username))
+}
+
+// First returns the oldest account — the only one, since setup is single-user. Used by the admin
+// commands, which act on "the" user.
+func (r *UsersRepo) First(ctx context.Context) (*models.User, error) {
+	return scanUser(r.db.QueryRowContext(ctx, `SELECT `+userColumns+` FROM users ORDER BY id LIMIT 1`))
 }
 
 // Count reports how many users exist — used to decide whether the frontend

@@ -41,6 +41,55 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// TwoFactorChallengeResponse is the password step's answer for an account with 2FA on: no cookie,
+// no token — only a single-use challenge to complete at POST /auth/login/2fa.
+type TwoFactorChallengeResponse struct {
+	TwoFactorRequired bool   `json:"twoFactorRequired"`
+	ChallengeToken    string `json:"challengeToken"`
+	ExpiresInSeconds  int    `json:"expiresInSeconds"`
+}
+
+type Login2FARequest struct {
+	ChallengeToken string `json:"challengeToken" binding:"required"`
+	Code           string `json:"code"`
+	RecoveryCode   string `json:"recoveryCode"`
+}
+
+type TwoFactorStatusResponse struct {
+	Enabled                bool `json:"enabled"`
+	RecoveryCodesRemaining int  `json:"recoveryCodesRemaining"`
+}
+
+type TwoFactorSetupResponse struct {
+	Secret     string `json:"secret"`
+	OtpauthURL string `json:"otpauthUrl"`
+}
+
+type TwoFactorEnableRequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
+type TwoFactorDisableRequest struct {
+	Password     string `json:"password" binding:"required"`
+	Code         string `json:"code"`
+	RecoveryCode string `json:"recoveryCode"`
+}
+
+type TwoFactorRegenerateRequest struct {
+	Password string `json:"password" binding:"required"`
+	Code     string `json:"code" binding:"required"`
+}
+
+type RecoveryCodesResponse struct {
+	RecoveryCodes []string `json:"recoveryCodes"`
+}
+
+type SecurityNoticeResponse struct {
+	FailedAttempts int     `json:"failedAttempts"`
+	Since          string  `json:"since"`
+	LastAttemptAt  *string `json:"lastAttemptAt"`
+}
+
 type AuthStatusResponse struct {
 	SetupRequired bool `json:"setupRequired"`
 	Authenticated bool `json:"authenticated"`

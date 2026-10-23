@@ -21,6 +21,7 @@ import { getTokenStorage, isTauri } from "@/lib/server"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { TwoFactorCard } from "@/components/settings/TwoFactorCard"
 import { Label } from "@/components/ui/label"
 import { PresetOrCustomNumberField } from "@/components/ui/preset-or-custom-number-field"
 import {
@@ -376,6 +377,7 @@ function AccountTab() {
       <Button onClick={handleSubmit} disabled={!canSubmit || changePassword.isPending}>
         {changePassword.isPending ? "Saving…" : "Change Password"}
       </Button>
+      <TwoFactorCard />
     </div>
   )
 }

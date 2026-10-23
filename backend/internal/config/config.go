@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -37,6 +38,12 @@ type Config struct {
 	// own that may call the API from a browser context — the desktop app's. Defaults to the Tauri
 	// origins.
 	CORSAllowedOrigins []string
+	// TrustedProxies is TRUSTED_PROXIES (comma-separated IPs/CIDRs): reverse proxies whose
+	// X-Forwarded-For is believed when determining the client IP. Empty (default) trusts none.
+	TrustedProxies []string
+	// SecretKey is PACKRAT_SECRET_KEY: the key that encrypts 2FA secrets at rest. Empty (default)
+	// uses an auto-generated key file next to the database.
+	SecretKey string
 }
 
 func Load() (Config, error) {
@@ -78,6 +85,16 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("invalid CORS_ALLOWED_ORIGINS: %w", err)
 		}
 		cfg.CORSAllowedOrigins = origins
+	}
+
+	cfg.SecretKey = os.Getenv("PACKRAT_SECRET_KEY")
+
+	if raw := os.Getenv("TRUSTED_PROXIES"); raw != "" {
+		proxies, err := parseTrustedProxies(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
+		}
+		cfg.TrustedProxies = proxies
 	}
 
 	actions, err := hostactions.Parse(os.Environ())
@@ -142,6 +159,22 @@ func parseOrigins(raw string) ([]string, error) {
 			return nil, fmt.Errorf("wildcard origins are not supported; list each origin explicitly")
 		}
 		out = append(out, o)
+	}
+	return out, nil
+}
+
+// parseTrustedProxies splits a comma-separated list of IPs and CIDRs, rejecting anything else.
+func parseTrustedProxies(raw string) ([]string, error) {
+	var out []string
+	for _, p := range strings.Split(raw, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(p); err != nil && net.ParseIP(p) == nil {
+			return nil, fmt.Errorf("%q is not an IP address or CIDR", p)
+		}
+		out = append(out, p)
 	}
 	return out, nil
 }

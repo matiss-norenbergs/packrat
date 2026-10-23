@@ -81,6 +81,31 @@ token — see [`docs/FEATURES.md`](docs/FEATURES.md#desktop-app-client-mode)) in
 `VITE_DESKTOP=true npm run dev` and start the backend with
 `CORS_ALLOWED_ORIGINS=http://localhost:5173`.
 
+## Security and admin commands
+
+Login failures are rate-limited (delays only, never a permanent lock) and two-factor auth (TOTP) is
+optional in Settings → Account — see [`docs/FEATURES.md`](docs/FEATURES.md). Environment variables:
+
+- `TRUSTED_PROXIES` — comma-separated IPs/CIDRs of reverse proxies whose `X-Forwarded-For` is
+  believed. Default: none, so the connection's own address is used. Under Docker Desktop on
+  Windows/macOS the container may see every client as one address, so per-IP limits then act like
+  global ones.
+- `PACKRAT_SECRET_KEY` — key that encrypts 2FA secrets. Default: an auto-generated key file
+  `packrat-secret.key` next to the database (in the data volume). If it's lost, 2FA can't verify;
+  `--disable-2fa` fixes that.
+
+Two recovery commands run on the host (in Docker via `docker exec`; `-it` is required for the
+password prompt). Both also sign out every session, and neither needs the 2FA key:
+
+```
+docker exec -it <container> /app/packrat --reset-password     # prompts for the new password twice
+echo 'new-password' | docker exec -i <container> /app/packrat --reset-password --password-stdin
+docker exec <container> /app/packrat --disable-2fa            # clears the secret and recovery codes
+```
+
+The password is never accepted as a command-line argument. Natively, run `packrat --reset-password`
+(or `go run ./cmd/server --reset-password`) with the same environment as the server.
+
 ## Desktop app
 
 [`desktop/`](desktop/README.md) is a Tauri shell around the same frontend: a desktop client that

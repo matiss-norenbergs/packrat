@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useAuthStatus, useLogin, useSetupAccount } from "@/hooks/useAuth"
+import { Toaster } from "@/components/ui/sonner"
+import { useAuthStatus, useLogin, useLogin2fa, useSetupAccount } from "@/hooks/useAuth"
+import { ApiError } from "@/lib/api"
 import { getServerUrl, isDesktop, resetServer } from "@/lib/server"
 
 export function LoginPage() {
@@ -14,8 +16,16 @@ export function LoginPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
 
+  // Second login step, only for an account with two-factor auth on: the challenge the password
+  // step returned, and the code (or recovery code) being typed for it.
+  const [challenge, setChallenge] = useState<string | null>(null)
+  const [code, setCode] = useState("")
+  const [useRecovery, setUseRecovery] = useState(false)
+  const [expiredMessage, setExpiredMessage] = useState<string | null>(null)
+
   const setupAccount = useSetupAccount()
   const login = useLogin()
+  const login2fa = useLogin2fa()
 
   if (isLoading || !status) return null
   // Also handles the post-login/post-setup redirect: both mutations write
@@ -38,16 +48,126 @@ export function LoginPage() {
       if (passwordsMismatch || passwordTooShort) return
       setupAccount.mutate({ username: username.trim(), password })
     } else {
-      login.mutate({ username: username.trim(), password })
+      setExpiredMessage(null)
+      login.mutate(
+        { username: username.trim(), password },
+        {
+          onSuccess: (result) => {
+            if (!result.twoFactorRequired) return
+            setChallenge(result.challengeToken)
+            setCode("")
+            setUseRecovery(false)
+          },
+        },
+      )
     }
+  }
+
+  const backToPassword = () => {
+    setChallenge(null)
+    setCode("")
+    setPassword("")
+  }
+
+  const codeReady = useRecovery ? code.trim().length >= 8 : code.length === 6
+
+  const handleCodeSubmit = () => {
+    if (!challenge || !codeReady) return
+    const payload = useRecovery
+      ? { challengeToken: challenge, recoveryCode: code.trim() }
+      : { challengeToken: challenge, code }
+    login2fa.mutate(payload, {
+      onError: (err) => {
+        if (err instanceof ApiError && err.challengeExpired) {
+          // Expired, used up or too many wrong codes: the password has to be entered again.
+          backToPassword()
+          setExpiredMessage(err.message)
+        } else {
+          setCode("")
+        }
+      },
+    })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSubmit()
   }
 
+  if (challenge) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Toaster />
+        <Card className="w-full max-w-sm">
+          <CardHeader>
+            <div className="mb-2 flex items-center gap-2">
+              <PackratLogo className="h-5 w-5 shrink-0" />
+              <span className="text-base font-semibold">Packrat</span>
+            </div>
+            <CardTitle>Two-factor authentication</CardTitle>
+            <CardDescription>
+              {useRecovery
+                ? "Enter one of your recovery codes. Each can be used once."
+                : "Enter the 6-digit code from your authenticator app."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="two-factor-code">{useRecovery ? "Recovery code" : "Authentication code"}</Label>
+              {useRecovery ? (
+                <Input
+                  id="two-factor-code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCodeSubmit()}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  placeholder="XXXX-XXXX"
+                  className="font-mono"
+                  autoFocus
+                />
+              ) : (
+                <Input
+                  id="two-factor-code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onKeyDown={(e) => e.key === "Enter" && handleCodeSubmit()}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  className="font-mono tracking-widest"
+                  autoFocus
+                />
+              )}
+            </div>
+            <Button className="w-full" onClick={handleCodeSubmit} disabled={login2fa.isPending || !codeReady}>
+              {login2fa.isPending ? "Please wait…" : "Verify"}
+            </Button>
+            <div className="flex items-center justify-between text-xs">
+              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={backToPassword}>
+                Back
+              </Button>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                onClick={() => {
+                  setUseRecovery((v) => !v)
+                  setCode("")
+                }}
+              >
+                {useRecovery ? "Use an authenticator code" : "Use a recovery code"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Toaster />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="mb-2 flex items-center gap-2">
@@ -62,6 +182,11 @@ export function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {expiredMessage && (
+            <p role="alert" className="text-sm text-destructive">
+              {expiredMessage}
+            </p>
+          )}
           <div className="space-y-2">
             <Label htmlFor="username">Username</Label>
             <Input
