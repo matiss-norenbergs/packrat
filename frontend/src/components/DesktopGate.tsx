@@ -3,7 +3,7 @@ import { PackratLogo } from "@/components/PackratLogo"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ConnectionBanner } from "@/components/ConnectionBanner"
-import { ServerNewerNotice } from "@/components/ServerNewerNotice"
+import { VersionMismatchNotice } from "@/components/VersionMismatchNotice"
 import { useAuthStatus } from "@/hooks/useAuth"
 import { useDownloadToasts } from "@/hooks/useDownloadToasts"
 import { getServerUrl, isDesktop, isTauri, resetServer } from "@/lib/server"
@@ -18,7 +18,7 @@ export function DesktopGate({ children }: { children: ReactNode }) {
     return (
       <>
         <ConnectionBanner />
-        {isTauri() && data?.authenticated && <ServerNewerNotice />}
+        {isTauri() && data?.authenticated && <VersionMismatchNotice />}
         {children}
       </>
     )

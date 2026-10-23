@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { compareSemver, parseSemver, serverNewerThanApp } from "@/lib/semver"
+import { appNewerThanServer, compareSemver, isReleaseVersion, parseSemver, serverNewerThanApp } from "@/lib/semver"
 
 describe("parseSemver", () => {
   it("accepts versions with an optional v, pre-release and build", () => {
@@ -41,5 +41,25 @@ describe("serverNewerThanApp", () => {
     expect(serverNewerThanApp("dev", "0.1.0")).toBe(false)
     expect(serverNewerThanApp("1.0.0", "garbage")).toBe(false)
     expect(serverNewerThanApp("1.0.0", null)).toBe(false)
+  })
+})
+
+describe("appNewerThanServer", () => {
+  it("is true only for a strictly newer valid app", () => {
+    expect(appNewerThanServer("1.2.0", "1.3.0")).toBe(true)
+    expect(appNewerThanServer("1.2.0", "1.2.0")).toBe(false)
+    expect(appNewerThanServer("1.3.0", "1.2.0")).toBe(false)
+    expect(appNewerThanServer("1.2.0-rc.1", "1.2.0")).toBe(true)
+    expect(appNewerThanServer("dev", "1.2.0")).toBe(false)
+    expect(appNewerThanServer("1.0.0", "garbage")).toBe(false)
+    expect(appNewerThanServer(undefined, "1.0.0")).toBe(false)
+  })
+})
+
+describe("isReleaseVersion", () => {
+  it("accepts only plain MAJOR.MINOR.PATCH", () => {
+    expect(isReleaseVersion("0.15.1")).toBe(true)
+    for (const bad of ["dev", "v1.2.3", "1.2", "1.2.3-rc.1", "1.2.3+b", "1.2.3/../x", "1.2.3?x", "1.2.3\n", "", null, undefined])
+      expect(isReleaseVersion(bad)).toBe(false)
   })
 })
