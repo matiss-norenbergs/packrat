@@ -85,8 +85,8 @@ since Gin matches registered routes before falling back to serving `index.html`.
   `200 {"token"}` with `X-Client: desktop`). The challenge is single use and expires after 5 minutes;
   `401 {"error","challengeExpired":true}` means it is gone (expired, used, or 5 wrong codes) and the
   password must be entered again; a wrong code is `401 {"error":"invalid code"}`.
-- **Rate limiting (all credential endpoints)** — only *failures* count. Per IP: 5 failures / 15 min,
-  then `429` for that IP until the window clears (correct attempts too). Globally: 15 password or 10
+- **Rate limiting (all credential endpoints)** — only *failures* count. Per IP: 10 failures / 15 min,
+  then `429` for that IP until the window clears (correct attempts too). Globally: 30 password or 10
   code failures per hour start a cool-down for everyone on that step (15 min, doubling to a 4 h cap).
   Applies to login, `/login/2fa`, `PATCH /auth/password`, and the `2fa/*` endpoints below that take a
   password or code. Response: `429`, header `Retry-After: <seconds>`, body

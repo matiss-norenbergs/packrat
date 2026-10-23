@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Toaster } from "@/components/ui/sonner"
 import { useAuthStatus, useLogin, useLogin2fa, useSetupAccount } from "@/hooks/useAuth"
 import { ApiError } from "@/lib/api"
 import { getServerUrl, isDesktop, resetServer } from "@/lib/server"
@@ -95,6 +96,7 @@ export function LoginPage() {
   if (challenge) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Toaster />
         <Card className="w-full max-w-sm">
           <CardHeader>
             <div className="mb-2 flex items-center gap-2">
@@ -165,6 +167,7 @@ export function LoginPage() {
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Toaster />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="mb-2 flex items-center gap-2">

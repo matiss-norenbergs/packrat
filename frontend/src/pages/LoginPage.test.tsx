@@ -7,7 +7,7 @@ import { getToken, setServerUrl } from "@/lib/server"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 
 const toastError = vi.fn()
-vi.mock("sonner", () => ({ toast: { error: (m: string) => toastError(m), success: vi.fn() } }))
+vi.mock("sonner", () => ({ toast: { error: (m: string) => toastError(m), success: vi.fn() }, Toaster: () => null }))
 
 const CHALLENGE = { twoFactorRequired: true, challengeToken: "chal-1", expiresInSeconds: 300 }
 const LOGGED_OUT = { setupRequired: false, authenticated: false }

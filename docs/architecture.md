@@ -135,8 +135,8 @@ global ones — which is why the limits below delay rather than lock.)
 
 `internal/ratelimit` counts **failures only** — wrong passwords (login, change password, disabling 2FA
 or regenerating recovery codes) and wrong 2FA/recovery codes. Normal authenticated traffic is never
-limited. Limits (constants in the package): 5 failures per IP per 15 min block that IP for 15 min
-(correct attempts included); globally, 15 password failures or 10 code failures per hour start a
+limited. Limits (constants in the package): 10 failures per IP per 15 min block that IP for 15 min
+(correct attempts included); globally, 30 password failures or 10 code failures per hour start a
 cool-down on that step for everyone — 15 min, doubling on repeated trips up to 4 h, relaxing after a
 quiet day. A completed login resets that IP's counters. It is in memory, mutex-guarded, bounded
 (oldest IP evicted), uses an injectable clock, and resets on restart. Blocks answer `429` +

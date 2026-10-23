@@ -18,7 +18,8 @@ Maintenance notes:
   password → 6-digit code (or recovery code) only for accounts that enable it, in the web UI and the
   desktop app. Secrets are encrypted at rest (key file next to the DB, or `PACKRAT_SECRET_KEY`); codes
   can't be replayed.
-- **Login rate limiting** — failed passwords/codes are throttled per IP (5 / 15 min) and globally
+- **Login errors visible** — the login page now renders the toaster, so wrong password/code and "too many attempts" messages show.
+- **Login rate limiting** — failed passwords/codes are throttled per IP (10 / 15 min) and globally
   (cool-down that doubles up to 4 h); delays only, never a lockout. `429` + `Retry-After`. Reverses
   the old "no rate limiting" scope cut.
 - **Client IP is no longer spoofable** — Gin now trusts no forwarded-IP headers by default;

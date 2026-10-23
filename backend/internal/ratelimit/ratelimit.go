@@ -22,11 +22,11 @@ const (
 const (
 	// PerIPMaxFailures failures (of any kind) from one address within PerIPWindow block that
 	// address for PerIPWindow.
-	PerIPMaxFailures = 5
+	PerIPMaxFailures = 10
 	PerIPWindow      = 15 * time.Minute
 
 	GlobalWindow          = time.Hour
-	GlobalMaxPassword     = 15
+	GlobalMaxPassword     = 30
 	GlobalMaxCode         = 10
 	GlobalBaseCooldown    = 15 * time.Minute
 	GlobalMaxCooldown     = 4 * time.Hour
