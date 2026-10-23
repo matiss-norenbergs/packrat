@@ -130,6 +130,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		public.GET("/auth/status", AuthStatus(deps.UsersRepo))
 		public.POST("/auth/setup", AuthSetup(deps.UsersRepo))
 		public.POST("/auth/login", AuthLogin(deps.Auth))
+		public.POST("/auth/login/2fa", AuthLogin2FA(deps.Auth))
 		public.POST("/auth/logout", AuthLogout(deps.UsersRepo))
 	}
 
@@ -160,6 +161,13 @@ func SetupRouter(deps Deps) *gin.Engine {
 		}
 
 		api.PATCH("/auth/password", ChangePassword(deps.Auth))
+		api.GET("/auth/2fa", TwoFactorStatus(deps.Auth))
+		api.POST("/auth/2fa/setup", TwoFactorSetup(deps.Auth))
+		api.POST("/auth/2fa/enable", TwoFactorEnable(deps.Auth))
+		api.POST("/auth/2fa/disable", TwoFactorDisable(deps.Auth))
+		api.POST("/auth/2fa/recovery-codes", TwoFactorRegenerateCodes(deps.Auth))
+		api.GET("/auth/security-notice", SecurityNotice(deps.Auth))
+		api.POST("/auth/security-notice/ack", SecurityNoticeAck(deps.Auth))
 
 		api.GET("/actions", ListHostActions(deps.HostActions))
 		api.POST("/actions/:id/run", RunHostAction(deps.HostActions))

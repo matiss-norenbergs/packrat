@@ -16,6 +16,7 @@ import (
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/ratelimit"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/twofactor"
 )
 
 const tauriOrigin = "tauri://localhost"
@@ -57,7 +58,7 @@ func newAuthTestEnv(t *testing.T) *authTestEnv {
 	}
 	users := repository.NewUsersRepo(conn)
 	clock := &testClock{t: time.Now()}
-	deps := &AuthDeps{Users: users, Limiter: ratelimit.New(clock.now)}
+	deps := NewAuthDeps(users, twofactor.NewCrypto([]byte("test-key")), clock.now)
 
 	r := gin.New()
 	if err := setTrustedProxies(r, nil); err != nil {
@@ -68,6 +69,7 @@ func newAuthTestEnv(t *testing.T) *authTestEnv {
 	public.GET("/auth/status", AuthStatus(users))
 	public.POST("/auth/setup", AuthSetup(users))
 	public.POST("/auth/login", AuthLogin(deps))
+	public.POST("/auth/login/2fa", AuthLogin2FA(deps))
 	public.POST("/auth/logout", AuthLogout(users))
 	protected := r.Group("/api")
 	protected.Use(RequireAuth(users), RequireCSRF())
@@ -75,6 +77,13 @@ func newAuthTestEnv(t *testing.T) *authTestEnv {
 	protected.GET("/thing", ok)
 	protected.POST("/thing", ok)
 	protected.PATCH("/auth/password", ChangePassword(deps))
+	protected.GET("/auth/2fa", TwoFactorStatus(deps))
+	protected.POST("/auth/2fa/setup", TwoFactorSetup(deps))
+	protected.POST("/auth/2fa/enable", TwoFactorEnable(deps))
+	protected.POST("/auth/2fa/disable", TwoFactorDisable(deps))
+	protected.POST("/auth/2fa/recovery-codes", TwoFactorRegenerateCodes(deps))
+	protected.GET("/auth/security-notice", SecurityNotice(deps))
+	protected.POST("/auth/security-notice/ack", SecurityNoticeAck(deps))
 	return &authTestEnv{r: r, deps: deps, clock: clock, users: users}
 }
 

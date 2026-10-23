@@ -24,10 +24,10 @@ import (
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
-	"packrat/backend/internal/ratelimit"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
 	"packrat/backend/internal/thumbnailenhance"
+	"packrat/backend/internal/twofactor"
 	"packrat/backend/internal/ws"
 )
 
@@ -155,6 +155,12 @@ func run() error {
 	artistsRepo := repository.NewArtistsRepo(conn)
 	compareListRepo := repository.NewCompareListRepo(conn)
 	usersRepo := repository.NewUsersRepo(conn)
+	// Encrypts 2FA secrets. The default key file lives in the data volume next to the DB, like the
+	// cookies file; PACKRAT_SECRET_KEY overrides it.
+	secretCrypto, err := twofactor.LoadCrypto(cfg.SecretKey, filepath.Join(filepath.Dir(cfg.DBPath), "packrat-secret.key"))
+	if err != nil {
+		return err
+	}
 	backupHistoryRepo := repository.NewBackupHistoryRepo(conn)
 	subscriptionsRepo := repository.NewSubscriptionsRepo(conn)
 	thumbnailEnhancementHistoryRepo := repository.NewThumbnailEnhancementHistoryRepo(conn)
@@ -323,7 +329,7 @@ func run() error {
 		HostActions:                       cfg.HostActions,
 		CORSAllowedOrigins:                cfg.CORSAllowedOrigins,
 		TrustedProxies:                    cfg.TrustedProxies,
-		Auth:                              &api.AuthDeps{Users: usersRepo, Limiter: ratelimit.New(nil)},
+		Auth:                              api.NewAuthDeps(usersRepo, secretCrypto, nil),
 	})
 
 	srv := &http.Server{

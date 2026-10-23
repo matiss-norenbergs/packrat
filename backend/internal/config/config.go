@@ -41,6 +41,9 @@ type Config struct {
 	// TrustedProxies is TRUSTED_PROXIES (comma-separated IPs/CIDRs): reverse proxies whose
 	// X-Forwarded-For is believed when determining the client IP. Empty (default) trusts none.
 	TrustedProxies []string
+	// SecretKey is PACKRAT_SECRET_KEY: the key that encrypts 2FA secrets at rest. Empty (default)
+	// uses an auto-generated key file next to the database.
+	SecretKey string
 }
 
 func Load() (Config, error) {
@@ -83,6 +86,8 @@ func Load() (Config, error) {
 		}
 		cfg.CORSAllowedOrigins = origins
 	}
+
+	cfg.SecretKey = os.Getenv("PACKRAT_SECRET_KEY")
 
 	if raw := os.Getenv("TRUSTED_PROXIES"); raw != "" {
 		proxies, err := parseTrustedProxies(raw)

@@ -12,6 +12,7 @@ import (
 
 	"packrat/backend/internal/ratelimit"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/twofactor"
 )
 
 const sessionCookieName = "packrat_session"
@@ -136,7 +137,7 @@ func AuthLogin(deps *AuthDeps) gin.HandlerFunc {
 
 		user, err := usersRepo.GetByUsername(c.Request.Context(), req.Username)
 		if errors.Is(err, repository.ErrNotFound) {
-			deps.fail(c, ratelimit.KindPassword)
+			deps.fail(c, ratelimit.KindPassword, "password")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 			return
 		}
@@ -145,8 +146,24 @@ func AuthLogin(deps *AuthDeps) gin.HandlerFunc {
 			return
 		}
 		if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
-			deps.fail(c, ratelimit.KindPassword)
+			deps.fail(c, ratelimit.KindPassword, "password")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+			return
+		}
+		// With 2FA on, a correct password only earns a challenge: no session, cookie or token
+		// (for the desktop client either) until POST /auth/login/2fa. The limiter isn't reset
+		// yet, since this isn't a completed login.
+		if user.TOTPEnabled {
+			challenge, err := deps.Challenges.Create(user.ID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, TwoFactorChallengeResponse{
+				TwoFactorRequired: true,
+				ChallengeToken:    challenge,
+				ExpiresInSeconds:  int(twofactor.ChallengeTTL.Seconds()),
+			})
 			return
 		}
 		deps.Limiter.Success(c.ClientIP())
@@ -187,7 +204,7 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 			return
 		}
 		if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)) != nil {
-			deps.fail(c, ratelimit.KindPassword)
+			deps.fail(c, ratelimit.KindPassword, "change-password")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
 			return
 		}
