@@ -73,7 +73,7 @@ func TestResetPasswordChangesHashAndDeletesSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tok := range []string{"a", "b"} {
-		if err := users.CreateSession(ctx, tok, u.ID, time.Now().Add(time.Hour)); err != nil {
+		if err := users.CreateSession(ctx, tok, u.ID, time.Now().Add(time.Hour), repository.SessionMeta{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -110,7 +110,7 @@ func TestDisable2FAClearsEverythingAndDeletesSessions(t *testing.T) {
 	if err := users.SetPendingTOTP(ctx, u.ID, "pending-again"); err != nil {
 		t.Fatal(err)
 	}
-	if err := users.CreateSession(ctx, "tok", u.ID, time.Now().Add(time.Hour)); err != nil {
+	if err := users.CreateSession(ctx, "tok", u.ID, time.Now().Add(time.Hour), repository.SessionMeta{}); err != nil {
 		t.Fatal(err)
 	}
 

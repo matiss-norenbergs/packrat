@@ -28,6 +28,7 @@ import type {
   ChangePasswordRequest,
   Login2FARequest,
   LoginResult,
+  ActiveSession,
   SecurityNotice,
   TwoFactorDisableRequest,
   TwoFactorRegenerateRequest,
@@ -272,6 +273,23 @@ export function fetchSecurityNotice(): Promise<SecurityNotice> {
 
 export function ackSecurityNotice(): Promise<void> {
   return request<void>("/auth/security-notice/ack", { method: "POST", body: "{}" })
+}
+
+export async function fetchSessions(): Promise<ActiveSession[]> {
+  const res = await request<{ sessions: ActiveSession[] }>("/auth/sessions")
+  return res.sessions
+}
+
+// Signing out the session this request uses is a logout: the server clears the cookies, and the
+// desktop client must drop its stored token too.
+export async function revokeSession(id: string, current: boolean): Promise<void> {
+  await request<void>(`/auth/sessions/${encodeURIComponent(id)}`, { method: "DELETE" })
+  if (current && isDesktop()) clearToken()
+}
+
+export async function revokeOtherSessions(): Promise<number> {
+  const res = await request<{ revoked: number }>("/auth/sessions/revoke-others", { method: "POST", body: "{}" })
+  return res.revoked
 }
 
 export async function logout(): Promise<void> {

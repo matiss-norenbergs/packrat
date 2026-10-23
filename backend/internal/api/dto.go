@@ -100,6 +100,25 @@ type TokenResponse struct {
 	Token string `json:"token"`
 }
 
+// SessionResponse describes one signed-in device. ID is a non-secret handle, never the token.
+type SessionResponse struct {
+	ID         string `json:"id"`
+	Client     string `json:"client"`
+	IP         string `json:"ip"`
+	UserAgent  string `json:"userAgent"`
+	CreatedAt  string `json:"createdAt"`
+	LastSeenAt string `json:"lastSeenAt"`
+	Current    bool   `json:"current"`
+}
+
+type SessionsResponse struct {
+	Sessions []SessionResponse `json:"sessions"`
+}
+
+type RevokeOthersResponse struct {
+	Revoked int `json:"revoked"`
+}
+
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"currentPassword" binding:"required"`
 	NewPassword     string `json:"newPassword" binding:"required,min=8"`

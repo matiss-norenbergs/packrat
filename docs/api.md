@@ -63,6 +63,9 @@ since Gin matches registered routes before falling back to serving `index.html`.
 | POST | `/api/auth/login/2fa` | public |
 | POST | `/api/auth/logout` | public |
 | PATCH | `/api/auth/password` | session + CSRF |
+| GET | `/api/auth/sessions` | session |
+| DELETE | `/api/auth/sessions/:id` | session + CSRF |
+| POST | `/api/auth/sessions/revoke-others` | session + CSRF |
 | GET | `/api/auth/2fa` | session |
 | POST | `/api/auth/2fa/setup` | session + CSRF |
 | POST | `/api/auth/2fa/enable` | session + CSRF |
@@ -98,6 +101,19 @@ since Gin matches registered routes before falling back to serving `index.html`.
   Requires the *current* password even though the route is already session-protected, so a
   hijacked/left-open session can't lock out the real owner. `401` if current password is wrong,
   else `204`.
+- **`GET /api/auth/sessions`** — the signed-in devices, most recently active first:
+  `{ "sessions": [{ "id", "client", "ip", "userAgent", "createdAt", "lastSeenAt", "current" }] }`
+  (times RFC 3339 UTC). `id` is a random, non-secret handle — the session token itself is never
+  returned or logged. `client` is `web` or `desktop` (the `X-Client` header at login; `""` for a
+  session created before this was recorded), `ip` is the login address (`TRUSTED_PROXIES` applies),
+  `userAgent` is truncated to 256 characters, `lastSeenAt` falls back to `createdAt` until the first
+  recorded activity, and `current` marks the session making the request. Expired sessions are left out.
+  `last_seen_at` is written by `RequireAuth` at most once a minute per session.
+- **`DELETE /api/auth/sessions/:id`** — signs that device out. `204`; `404` for an unknown id or one
+  that isn't yours. Revoking the session the request itself uses behaves like logout (both cookies
+  are cleared too).
+- **`POST /api/auth/sessions/revoke-others`** — no body; signs out every session except the current
+  one and returns `{ "revoked": n }` (`0` is fine).
 - **`GET /api/auth/2fa`** — `{ "enabled": bool, "recoveryCodesRemaining": n }`.
 - **`POST /api/auth/2fa/setup`** — no body; creates a *pending* secret (replacing any earlier one) and
   returns `{ "secret": "<base32>", "otpauthUrl": "otpauth://totp/Packrat:<username>?..." }`. `409` if

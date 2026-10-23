@@ -13,6 +13,11 @@ Maintenance notes:
 -->
 
 ## 2026-10-23
+- **Active sessions** — Settings → Account lists every signed-in device (browser/OS or desktop app,
+  IP, signed in, last active) and can sign out one device or all the others. New
+  `GET /auth/sessions`, `DELETE /auth/sessions/:id`, `POST /auth/sessions/revoke-others`; sessions
+  now record client, IP, User-Agent and a throttled last-seen time (migration 47) and are identified
+  in the API by a separate non-secret id, never the token.
 - **Separated-digit code input** — 6-digit authenticator codes (login, enabling, disabling and
   regenerating recovery codes) use one box per digit (shadcn `InputOTP`): paste, autofill, and the
   login step submits on the sixth digit.

@@ -629,6 +629,13 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   `docker exec -it <container> /app/packrat --disable-2fa` (see the README).
   After you sign in, a dismissible notice reports "N failed login attempts since your last login
   (latest: …)" when there were any; dismissing acknowledges them.
+  Below it, an **Active sessions** card lists every signed-in device: device (the desktop app, or
+  browser and OS read loosely from the User-Agent), IP address, signed-in date, last active
+  (relative; "Now" for this device) and a "This device" badge. The row button signs that device out
+  at once, no confirmation (signing out *this* device is a normal logout). **Sign out all other
+  devices** asks first, with the count, and keeps this one; it is disabled when nobody else is
+  signed in. Sessions from before this existed show as "Unknown device". Last-active is recorded at
+  most once a minute per session.
 - **Features** — switches for the optional parts of the app: **Subscriptions**, **File Import**,
   **Compare list** (including its side-by-side player) and **Frame Matching**. All default to on. Off
   means: the sidebar entry and any Library menu entries for it disappear, opening its URL shows a

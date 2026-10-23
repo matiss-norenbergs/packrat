@@ -21,6 +21,7 @@ import { getTokenStorage, isTauri } from "@/lib/server"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { SessionsCard } from "@/components/settings/SessionsCard"
 import { TwoFactorCard } from "@/components/settings/TwoFactorCard"
 import { Label } from "@/components/ui/label"
 import { PresetOrCustomNumberField } from "@/components/ui/preset-or-custom-number-field"
@@ -345,39 +346,42 @@ function AccountTab() {
   }
 
   return (
-    <div className="max-w-lg space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="current-password">Current Password</Label>
-        <Input
-          id="current-password"
-          type="password"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-        />
+    <div className="max-w-3xl">
+      <div className="max-w-lg space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="current-password">Current Password</Label>
+          <Input
+            id="current-password"
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="new-password">New Password</Label>
+          <Input
+            id="new-password"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirm-password">Confirm New Password</Label>
+          <Input
+            id="confirm-password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+          {mismatch && <p className="text-xs text-destructive">Passwords don't match</p>}
+        </div>
+        <Button onClick={handleSubmit} disabled={!canSubmit || changePassword.isPending}>
+          {changePassword.isPending ? "Saving…" : "Change Password"}
+        </Button>
+        <TwoFactorCard />
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="new-password">New Password</Label>
-        <Input
-          id="new-password"
-          type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="confirm-password">Confirm New Password</Label>
-        <Input
-          id="confirm-password"
-          type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-        />
-        {mismatch && <p className="text-xs text-destructive">Passwords don't match</p>}
-      </div>
-      <Button onClick={handleSubmit} disabled={!canSubmit || changePassword.isPending}>
-        {changePassword.isPending ? "Saving…" : "Change Password"}
-      </Button>
-      <TwoFactorCard />
+      <SessionsCard />
     </div>
   )
 }

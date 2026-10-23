@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { changePassword, fetchAuthStatus, login, login2fa, logout, setupAccount } from "@/lib/api"
 import type { AuthStatus, ChangePasswordRequest, Login2FARequest, LoginRequest, SetupRequest } from "@/types/api"
@@ -53,21 +53,24 @@ export function useLogin2fa() {
   })
 }
 
+// Local state after the session is gone (logout, or revoking the device you are on).
+export function markLoggedOut(queryClient: QueryClient) {
+  queryClient.setQueryData<AuthStatus>(authStatusQueryKey, { setupRequired: false, authenticated: false })
+  // Drop every OTHER cached protected-page query (not just invalidate —
+  // a stale library/downloads list must never flash for whoever logs in
+  // next on this browser). Excludes the auth key itself: clearing it
+  // too (e.g. via queryClient.clear()) removes the very entry the
+  // setQueryData call above just wrote, which left AppLayout's gate
+  // reading stale cached data instead of picking up the fresh
+  // {authenticated: false} — the redirect silently never fired.
+  queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "auth" })
+}
+
 export function useLogout() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => logout(),
-    onSuccess: () => {
-      queryClient.setQueryData<AuthStatus>(authStatusQueryKey, { setupRequired: false, authenticated: false })
-      // Drop every OTHER cached protected-page query (not just invalidate —
-      // a stale library/downloads list must never flash for whoever logs in
-      // next on this browser). Excludes the auth key itself: clearing it
-      // too (e.g. via queryClient.clear()) removes the very entry the
-      // setQueryData call above just wrote, which left AppLayout's gate
-      // reading stale cached data instead of picking up the fresh
-      // {authenticated: false} — the redirect silently never fired.
-      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "auth" })
-    },
+    onSuccess: () => markLoggedOut(queryClient),
     onError: (err: Error) => toast.error(`Logout failed: ${err.message}`),
   })
 }
