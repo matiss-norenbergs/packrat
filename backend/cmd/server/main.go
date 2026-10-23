@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -31,6 +32,13 @@ import (
 )
 
 func main() {
+	if handled, err := runAdmin(os.Args[1:]); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
@@ -133,11 +141,7 @@ func run() error {
 	}
 	defer conn.Close()
 
-	migrationsDir := os.Getenv("MIGRATIONS_DIR")
-	if migrationsDir == "" {
-		migrationsDir = "../database/migrations"
-	}
-	if err := db.Migrate(conn, migrationsDir); err != nil {
+	if err := db.Migrate(conn, migrationsDir()); err != nil {
 		return err
 	}
 	log.Println("migrations applied")

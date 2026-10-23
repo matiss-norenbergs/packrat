@@ -7,6 +7,14 @@ type User struct {
 	Username     string
 	PasswordHash string
 	CreatedAt    time.Time
+
+	// Two-factor (TOTP) state. The secrets are AES-GCM ciphertext, never plaintext.
+	TOTPSecretEnc  string
+	TOTPPendingEnc string
+	TOTPEnabled    bool
+	TOTPLastStep   int64
+	// SecurityAckAt is when the owner last dismissed the failed-login notice (nil = never).
+	SecurityAckAt *time.Time
 }
 
 type Session struct {
