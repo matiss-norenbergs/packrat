@@ -185,6 +185,9 @@ mod tests {
     #[test]
     fn a_base_override_keeps_the_same_shape() {
         let u = release_manifest_url("http://127.0.0.1:8000/releases", "1.2.3").unwrap();
-        assert_eq!(u.as_str(), "http://127.0.0.1:8000/releases/v1.2.3/latest.json");
+        assert_eq!(
+            u.as_str(),
+            "http://127.0.0.1:8000/releases/v1.2.3/latest.json"
+        );
     }
 }
