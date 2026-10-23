@@ -13,6 +13,9 @@ Maintenance notes:
 -->
 
 ## 2026-10-23
+- **Launch at login (desktop)** — Settings → Desktop gets a "Launch at login" switch (off by default;
+  reflects the OS startup entry) and, while it is on, "Start minimized to tray". Autostart launches
+  pass `--minimized`; a manual launch always shows the window, and so does one with no usable tray.
 - **Active sessions** — Settings → Account lists every signed-in device (browser/OS or desktop app,
   IP, signed in, last active) and can sign out one device or all the others. New
   `GET /auth/sessions`, `DELETE /auth/sessions/:id`, `POST /auth/sessions/revoke-others`; sessions

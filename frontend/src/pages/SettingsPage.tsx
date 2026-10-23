@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { ResolutionTierSlider } from "@/components/ResolutionTierSlider"
 import { ThumbnailFrameRangeSlider } from "@/components/ThumbnailFrameRangeSlider"
 import { RESOLUTION_STEP_LABELS } from "@/lib/resolution"
@@ -56,7 +57,9 @@ import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
 import { useAppUpdate } from "@/hooks/useAppUpdate"
 import { useMatchServerVersion } from "@/hooks/useMatchServerVersion"
 import { compareSemver, isReleaseVersion } from "@/lib/semver"
+import { useAutostart } from "@/hooks/useAutostart"
 import { useCloseToTray } from "@/hooks/useCloseToTray"
+import { useStartMinimized } from "@/hooks/useStartMinimized"
 import { useDesktopNotifications } from "@/hooks/useDesktopNotifications"
 import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/api"
 
@@ -1903,6 +1906,8 @@ function YtDlpTab() {
 // Like Theme/Accent it is a per-device preference — the shell stores it itself, not the server.
 function DesktopTab() {
   const { enabled: closeToTray, setEnabled: setCloseToTray } = useCloseToTray()
+  const { enabled: autostart, setEnabled: setAutostart } = useAutostart()
+  const { enabled: startMinimized, setEnabled: setStartMinimized } = useStartMinimized()
 
   return (
     <div className="max-w-lg space-y-8">
@@ -1922,6 +1927,41 @@ function DesktopTab() {
           choose "Show Packrat" from its menu, to bring the window back; choose "Quit" there to exit
           completely. When off, closing the window quits the app.
         </InfoPopover>
+      </div>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="launch-at-login"
+            checked={autostart === true}
+            disabled={autostart === null}
+            onCheckedChange={setAutostart}
+          />
+          <Label htmlFor="launch-at-login" className="font-normal">
+            Launch at login
+          </Label>
+          <InfoPopover>
+            Starts Packrat when you sign in to this computer. This reflects your system's own startup
+            entry for the app, so it stays correct if you change it there. Off by default.
+          </InfoPopover>
+        </div>
+        {autostart === true && (
+          <div className="flex items-center gap-2 pl-6">
+            <Switch
+              id="start-minimized"
+              checked={startMinimized === true}
+              disabled={startMinimized === null}
+              onCheckedChange={setStartMinimized}
+            />
+            <Label htmlFor="start-minimized" className="font-normal">
+              Start minimized to tray
+            </Label>
+            <InfoPopover>
+              When Packrat starts at login, keep its window hidden and just show the tray icon. Opening
+              the app yourself always shows the window. If the system tray isn't available, the window is
+              shown anyway so the app never disappears.
+            </InfoPopover>
+          </div>
+        )}
       </div>
       <p className="text-sm text-muted-foreground">
         Token storage: {getTokenStorage() === "keychain" ? "OS keychain" : "Local file (keychain unavailable)"}

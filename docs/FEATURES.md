@@ -34,7 +34,13 @@ and the window remembers its size and position. Starting the app a second time j
 brings the existing window forward (single instance). A **tray icon** (left click, or "Show
 Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of
-quitting, so it keeps running. If the server becomes unreachable while the app is open (found out
+quitting, so it keeps running. **Launch at login** (Settings → Desktop, off by default) starts the app
+when you sign in to the computer. The switch shows the operating system's own startup entry (read
+from the system each time, not a copy of our own), so it stays right if you change it elsewhere.
+Once it is on, **Start minimized to tray** (also off by default) makes those automatic launches keep
+the window hidden with just the tray icon; opening the app yourself always shows the window, and if
+the system tray isn't available (for example GNOME without an indicator extension) the window is
+shown anyway so the app never disappears. If the server becomes unreachable while the app is open (found out
 by a failed request or a dropped live-update connection, then confirmed against `/api/health`), a
 "Can't reach the server — retrying…" pill appears at the top with a **Retry now** button; it checks
 again every few seconds, disappears on its own when the server answers, and refreshes the data on
