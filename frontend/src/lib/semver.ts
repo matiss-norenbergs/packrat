@@ -49,3 +49,14 @@ export function compareSemver(a: string | null | undefined, b: string | null | u
 export function serverNewerThanApp(server: string | null | undefined, app: string | null | undefined): boolean {
   return compareSemver(server, app) === 1
 }
+
+// True only when both are valid versions and the app is strictly newer than the server.
+export function appNewerThanServer(server: string | null | undefined, app: string | null | undefined): boolean {
+  return compareSemver(app, server) === 1
+}
+
+// Plain "MAJOR.MINOR.PATCH" — the only shape "Match server version" will act on (no v prefix,
+// pre-release or build suffix). The desktop backend re-validates this before building any URL.
+export function isReleaseVersion(input: string | null | undefined): input is string {
+  return /^\d+\.\d+\.\d+$/.test(input ?? "")
+}
