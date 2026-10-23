@@ -619,7 +619,10 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   "I've saved these codes" is ticked. Once on, the card shows how many recovery codes are left (a
   warning at 2 or fewer) and offers **Regenerate recovery codes** (password + code; the old set stops
   working) and **Disable** (password + a code or recovery code). Logging in then takes the password,
-  then a 6-digit code on a second form (with "Use a recovery code" and Back). The desktop app works
+  then a 6-digit code on a second form (with "Use a recovery code" and Back). Every 6-digit code
+  field (login, enable step 2, disable, regenerate) is six separated digit boxes: digits only, the
+  whole code can be pasted, browsers offer one-time-code autofill, and on the login form the sixth
+  digit submits automatically (Verify stays). Recovery codes are a plain text field. The desktop app works
   the same way. Too many wrong attempts show "Too many attempts — try again in N minutes"; blocks are
   temporary delays, never a permanent lockout.
   If the key can't be read or the authenticator is lost with no recovery codes left, run
