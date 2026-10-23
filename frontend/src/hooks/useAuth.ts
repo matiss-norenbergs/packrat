@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { changePassword, fetchAuthStatus, login, logout, setupAccount } from "@/lib/api"
-import type { AuthStatus, ChangePasswordRequest, LoginRequest, SetupRequest } from "@/types/api"
+import { changePassword, fetchAuthStatus, login, login2fa, logout, setupAccount } from "@/lib/api"
+import type { AuthStatus, ChangePasswordRequest, Login2FARequest, LoginRequest, SetupRequest } from "@/types/api"
 
 export const authStatusQueryKey = ["auth", "status"] as const
 
@@ -32,6 +32,20 @@ export function useLogin() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: LoginRequest) => login(payload),
+    onSuccess: (result) => {
+      // An account with 2FA is not signed in yet: the caller shows the code step instead.
+      if (result.twoFactorRequired) return
+      queryClient.setQueryData<AuthStatus>(authStatusQueryKey, { setupRequired: false, authenticated: true })
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+// Second login step for an account with 2FA: a TOTP code or a recovery code.
+export function useLogin2fa() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: Login2FARequest) => login2fa(payload),
     onSuccess: () => {
       queryClient.setQueryData<AuthStatus>(authStatusQueryKey, { setupRequired: false, authenticated: true })
     },

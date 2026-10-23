@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { backupDownloadUrl, fetchAuthStatus, imageUrl, login, logout, mediaFileUrl, resizedImageSrcSet, fetchLibraryFacets } from "@/lib/api"
+import { backupDownloadUrl, fetchAuthStatus, imageUrl, login, login2fa, logout, mediaFileUrl, rateLimitMessage, resizedImageSrcSet, fetchLibraryFacets } from "@/lib/api"
 import { getServerUrl, getToken, setServerUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
 
 type FetchInit = { credentials?: string; headers: Record<string, string>; method?: string }
@@ -148,5 +148,53 @@ describe("desktop request()", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))
     await expect(logout()).rejects.toThrow()
     expect(getToken()).toBeNull()
+  })
+})
+
+describe("two-factor login", () => {
+  const challenge = { twoFactorRequired: true, challengeToken: "c1", expiresInSeconds: 300 }
+
+  it("web: the password step yields a challenge and stores nothing", async () => {
+    mockFetch(() => ({ status: 200, body: challenge }))
+    await expect(login({ username: "a", password: "b" })).resolves.toEqual(challenge)
+    expect(getToken()).toBeNull()
+  })
+
+  it("desktop: stores the token only from the second step", async () => {
+    enterDesktop()
+    setServerUrl("http://nas:50505")
+    mockFetch(() => ({ status: 200, body: challenge }))
+    await expect(login({ username: "a", password: "b" })).resolves.toMatchObject({ twoFactorRequired: true })
+    expect(getToken()).toBeNull()
+
+    const fetchMock = mockFetch(() => ({ status: 200, body: { token: "tok" } }))
+    await login2fa({ challengeToken: "c1", code: "123456" })
+    expect(getToken()).toBe("tok")
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("http://nas:50505/api/auth/login/2fa")
+    expect(init.headers["X-Client"]).toBe("desktop")
+  })
+
+  it("a finished login reports twoFactorRequired: false", async () => {
+    mockFetch(() => ({ status: 204 }))
+    await expect(login({ username: "a", password: "b" })).resolves.toEqual({ twoFactorRequired: false })
+  })
+
+  it("429s carry the wait; a dead challenge is flagged", async () => {
+    mockFetch(() => ({ status: 429, body: { retryAfterSeconds: 900 } }))
+    await expect(login({ username: "a", password: "b" })).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 900,
+      message: "Too many attempts — try again in 15 minutes",
+    })
+    mockFetch(() => ({ status: 401, body: { error: "expired", challengeExpired: true } }))
+    await expect(login2fa({ challengeToken: "c1", code: "1" })).rejects.toMatchObject({ status: 401, challengeExpired: true })
+  })
+
+  it("rateLimitMessage reads naturally", () => {
+    expect(rateLimitMessage(30)).toBe("Too many attempts — try again in 30 seconds")
+    expect(rateLimitMessage(61)).toBe("Too many attempts — try again in 2 minutes")
+    expect(rateLimitMessage(7200)).toBe("Too many attempts — try again in 2 hours")
+    expect(rateLimitMessage(undefined)).toBe("Too many attempts — try again later")
   })
 })

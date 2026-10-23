@@ -26,6 +26,13 @@ import type {
   BulkRedownloadResponse,
   BulkThumbnailOriginalsResponse,
   ChangePasswordRequest,
+  Login2FARequest,
+  LoginResult,
+  SecurityNotice,
+  TwoFactorDisableRequest,
+  TwoFactorRegenerateRequest,
+  TwoFactorSetup,
+  TwoFactorStatus,
   CheckSubscriptionResult,
   Collection,
   CollectionCoverCandidate,
@@ -114,11 +121,27 @@ function getCookie(name: string): string {
 // to skip retrying a missing item.
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  // Set on a 429: how long the server says to wait.
+  retryAfterSeconds?: number
+  // Set when the pending two-factor login is gone (expired, used up or too many wrong codes).
+  challengeExpired?: boolean
+  constructor(message: string, status: number, extra?: { retryAfterSeconds?: number; challengeExpired?: boolean }) {
     super(message)
     this.name = "ApiError"
     this.status = status
+    this.retryAfterSeconds = extra?.retryAfterSeconds
+    this.challengeExpired = extra?.challengeExpired
   }
+}
+
+// "Too many attempts — try again in 15 minutes" for a 429's Retry-After.
+export function rateLimitMessage(seconds: number | undefined): string {
+  if (!seconds || seconds <= 0) return "Too many attempts — try again later"
+  if (seconds < 60) return `Too many attempts — try again in ${seconds} second${seconds === 1 ? "" : "s"}`
+  const minutes = Math.ceil(seconds / 60)
+  if (minutes < 120) return `Too many attempts — try again in ${minutes} minute${minutes === 1 ? "" : "s"}`
+  const hours = Math.ceil(seconds / 3600)
+  return `Too many attempts — try again in ${hours} hours`
 }
 
 // All JSON API routes live under /api (kept distinct from the frontend's
@@ -168,7 +191,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
     }
     const body = await res.json().catch(() => ({}))
-    throw new ApiError(body.error ?? `${res.status} ${res.statusText}`, res.status)
+    if (res.status === 429) {
+      const header = Number(res.headers?.get?.("Retry-After"))
+      const seconds = typeof body.retryAfterSeconds === "number" ? body.retryAfterSeconds : header > 0 ? header : undefined
+      throw new ApiError(rateLimitMessage(seconds), 429, { retryAfterSeconds: seconds })
+    }
+    throw new ApiError(body.error ?? `${res.status} ${res.statusText}`, res.status, {
+      challengeExpired: body.challengeExpired === true,
+    })
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -196,8 +226,52 @@ export async function setupAccount(payload: SetupRequest): Promise<void> {
   storeSessionToken(await request<{ token?: string } | undefined>("/auth/setup", { method: "POST", body: JSON.stringify(payload) }))
 }
 
-export async function login(payload: LoginRequest): Promise<void> {
-  storeSessionToken(await request<{ token?: string } | undefined>("/auth/login", { method: "POST", body: JSON.stringify(payload) }))
+export async function login(payload: LoginRequest): Promise<LoginResult> {
+  const res = await request<{ token?: string; twoFactorRequired?: boolean; challengeToken?: string; expiresInSeconds?: number } | undefined>(
+    "/auth/login",
+    { method: "POST", body: JSON.stringify(payload) },
+  )
+  // With 2FA on there is no session yet (no cookie, no token — desktop included): nothing to
+  // store until login2fa() succeeds.
+  if (res?.twoFactorRequired && res.challengeToken) {
+    return { twoFactorRequired: true, challengeToken: res.challengeToken, expiresInSeconds: res.expiresInSeconds ?? 300 }
+  }
+  storeSessionToken(res)
+  return { twoFactorRequired: false }
+}
+
+export async function login2fa(payload: Login2FARequest): Promise<void> {
+  storeSessionToken(await request<{ token?: string } | undefined>("/auth/login/2fa", { method: "POST", body: JSON.stringify(payload) }))
+}
+
+export function fetchTwoFactorStatus(): Promise<TwoFactorStatus> {
+  return request<TwoFactorStatus>("/auth/2fa")
+}
+
+export function startTwoFactorSetup(): Promise<TwoFactorSetup> {
+  return request<TwoFactorSetup>("/auth/2fa/setup", { method: "POST", body: "{}" })
+}
+
+export async function enableTwoFactor(code: string): Promise<string[]> {
+  const res = await request<{ recoveryCodes: string[] }>("/auth/2fa/enable", { method: "POST", body: JSON.stringify({ code }) })
+  return res.recoveryCodes
+}
+
+export function disableTwoFactor(payload: TwoFactorDisableRequest): Promise<void> {
+  return request<void>("/auth/2fa/disable", { method: "POST", body: JSON.stringify(payload) })
+}
+
+export async function regenerateRecoveryCodes(payload: TwoFactorRegenerateRequest): Promise<string[]> {
+  const res = await request<{ recoveryCodes: string[] }>("/auth/2fa/recovery-codes", { method: "POST", body: JSON.stringify(payload) })
+  return res.recoveryCodes
+}
+
+export function fetchSecurityNotice(): Promise<SecurityNotice> {
+  return request<SecurityNotice>("/auth/security-notice")
+}
+
+export function ackSecurityNotice(): Promise<void> {
+  return request<void>("/auth/security-notice/ack", { method: "POST", body: "{}" })
 }
 
 export async function logout(): Promise<void> {

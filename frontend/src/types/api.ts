@@ -13,6 +13,45 @@ export interface LoginRequest {
   password: string
 }
 
+// The password step of login: either a finished login (204 / {token}) or, for an account with
+// two-factor auth on, a challenge to complete with login2fa().
+export type LoginResult =
+  | { twoFactorRequired: false }
+  | { twoFactorRequired: true; challengeToken: string; expiresInSeconds: number }
+
+export interface Login2FARequest {
+  challengeToken: string
+  code?: string
+  recoveryCode?: string
+}
+
+export interface TwoFactorStatus {
+  enabled: boolean
+  recoveryCodesRemaining: number
+}
+
+export interface TwoFactorSetup {
+  secret: string
+  otpauthUrl: string
+}
+
+export interface TwoFactorDisableRequest {
+  password: string
+  code?: string
+  recoveryCode?: string
+}
+
+export interface TwoFactorRegenerateRequest {
+  password: string
+  code: string
+}
+
+export interface SecurityNotice {
+  failedAttempts: number
+  since: string
+  lastAttemptAt: string | null
+}
+
 export interface ChangePasswordRequest {
   currentPassword: string
   newPassword: string
