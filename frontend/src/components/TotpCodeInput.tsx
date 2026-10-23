@@ -40,7 +40,7 @@ export function TotpCodeInput({
     >
       <InputOTPGroup className="w-full">
         {Array.from({ length: TOTP_LENGTH }, (_, i) => (
-          <InputOTPSlot key={i} index={i} className="h-11 flex-1 text-lg" />
+          <InputOTPSlot key={i} index={i} className="flex-1" />
         ))}
       </InputOTPGroup>
     </InputOTP>
