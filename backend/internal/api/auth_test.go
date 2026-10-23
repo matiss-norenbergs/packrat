@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +35,7 @@ type authTestEnv struct {
 	deps  *AuthDeps
 	clock *testClock
 	users *repository.UsersRepo
+	conn  *sql.DB
 }
 
 type testClock struct{ t time.Time }
@@ -77,6 +79,9 @@ func newAuthTestEnv(t *testing.T) *authTestEnv {
 	protected.GET("/thing", ok)
 	protected.POST("/thing", ok)
 	protected.PATCH("/auth/password", ChangePassword(deps))
+	protected.GET("/auth/sessions", ListSessions(users))
+	protected.POST("/auth/sessions/revoke-others", RevokeOtherSessions(users))
+	protected.DELETE("/auth/sessions/:id", RevokeSession(users))
 	protected.GET("/auth/2fa", TwoFactorStatus(deps))
 	protected.POST("/auth/2fa/setup", TwoFactorSetup(deps))
 	protected.POST("/auth/2fa/enable", TwoFactorEnable(deps))
@@ -84,7 +89,7 @@ func newAuthTestEnv(t *testing.T) *authTestEnv {
 	protected.POST("/auth/2fa/recovery-codes", TwoFactorRegenerateCodes(deps))
 	protected.GET("/auth/security-notice", SecurityNotice(deps))
 	protected.POST("/auth/security-notice/ack", SecurityNoticeAck(deps))
-	return &authTestEnv{r: r, deps: deps, clock: clock, users: users}
+	return &authTestEnv{r: r, deps: deps, clock: clock, users: users, conn: conn}
 }
 
 type authReq struct {

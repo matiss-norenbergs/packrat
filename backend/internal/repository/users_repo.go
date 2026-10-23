@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -81,10 +83,26 @@ func (r *UsersRepo) Count(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-func (r *UsersRepo) CreateSession(ctx context.Context, token string, userID int64, expiresAt time.Time) error {
-	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)`,
-		token, userID, expiresAt.UTC().Format("2006-01-02 15:04:05"),
+// SessionMeta is what a session records about the device that logged in.
+type SessionMeta struct {
+	Client    string
+	IP        string
+	UserAgent string
+}
+
+const sessionTimeLayout = "2006-01-02 15:04:05"
+
+// SessionTouchInterval is the most often a session's last_seen_at is written.
+const SessionTouchInterval = time.Minute
+
+func (r *UsersRepo) CreateSession(ctx context.Context, token string, userID int64, expiresAt time.Time, meta SessionMeta) error {
+	publicID, err := newSessionPublicID()
+	if err != nil {
+		return fmt.Errorf("creating session id: %w", err)
+	}
+	_, err = r.db.ExecContext(ctx,
+		`INSERT INTO sessions (token, user_id, expires_at, public_id, client, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		token, userID, expiresAt.UTC().Format(sessionTimeLayout), publicID, meta.Client, meta.IP, meta.UserAgent,
 	)
 	if err != nil {
 		return fmt.Errorf("creating session: %w", err)
@@ -92,31 +110,109 @@ func (r *UsersRepo) CreateSession(ctx context.Context, token string, userID int6
 	return nil
 }
 
+// newSessionPublicID is random and unrelated to the token: knowing it reveals nothing about the
+// credential, it only lets the owner name one of their sessions (revoke it).
+func newSessionPublicID() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+const sessionColumns = `token, user_id, expires_at, created_at, COALESCE(public_id, ''), last_seen_at, client, ip, user_agent`
+
+func scanSession(row rowScanner) (*models.Session, error) {
+	var s models.Session
+	var expiresAt, createdAt string
+	var lastSeen sql.NullString
+	if err := row.Scan(&s.Token, &s.UserID, &expiresAt, &createdAt, &s.PublicID, &lastSeen, &s.Client, &s.IP, &s.UserAgent); err != nil {
+		return nil, err
+	}
+	var err error
+	if s.ExpiresAt, err = parseSQLiteTime(expiresAt); err != nil {
+		return nil, err
+	}
+	if s.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return nil, err
+	}
+	if lastSeen.Valid {
+		t, err := parseSQLiteTime(lastSeen.String)
+		if err != nil {
+			return nil, err
+		}
+		s.LastSeenAt = &t
+	}
+	return &s, nil
+}
+
 // GetValidSession looks up a session by token, treating an expired or
 // missing token identically (ErrNotFound) — callers only need to know
 // whether the session is currently usable, not why it isn't.
 func (r *UsersRepo) GetValidSession(ctx context.Context, token string) (*models.Session, error) {
-	var s models.Session
-	var expiresAt, createdAt string
-	err := r.db.QueryRowContext(ctx,
-		`SELECT token, user_id, expires_at, created_at FROM sessions WHERE token = ? AND expires_at > datetime('now')`,
-		token,
-	).Scan(&s.Token, &s.UserID, &expiresAt, &createdAt)
+	s, err := scanSession(r.db.QueryRowContext(ctx,
+		`SELECT `+sessionColumns+` FROM sessions WHERE token = ? AND expires_at > datetime('now')`, token))
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("scanning session: %w", err)
 	}
-	s.ExpiresAt, err = parseSQLiteTime(expiresAt)
+	return s, nil
+}
+
+// TouchSession records activity, but writes at most once per SessionTouchInterval per session
+// (the guard is in the UPDATE, so concurrent requests can't both write).
+func (r *UsersRepo) TouchSession(ctx context.Context, token string, now time.Time) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE sessions SET last_seen_at = ? WHERE token = ? AND (last_seen_at IS NULL OR last_seen_at <= ?)`,
+		now.UTC().Format(sessionTimeLayout), token, now.Add(-SessionTouchInterval).UTC().Format(sessionTimeLayout),
+	)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("touching session: %w", err)
 	}
-	s.CreatedAt, err = parseSQLiteTime(createdAt)
+	return nil
+}
+
+// ListSessions returns the user's unexpired sessions, most recently active first.
+func (r *UsersRepo) ListSessions(ctx context.Context, userID int64) ([]models.Session, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT `+sessionColumns+` FROM sessions WHERE user_id = ? AND expires_at > datetime('now')
+		 ORDER BY COALESCE(last_seen_at, created_at) DESC, created_at DESC`, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listing sessions: %w", err)
 	}
-	return &s, nil
+	defer rows.Close()
+	out := []models.Session{}
+	for rows.Next() {
+		s, err := scanSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scanning session: %w", err)
+		}
+		out = append(out, *s)
+	}
+	return out, rows.Err()
+}
+
+// DeleteSessionByPublicID revokes one of the user's sessions; an unknown id, or one that belongs to
+// another user, is ErrNotFound.
+func (r *UsersRepo) DeleteSessionByPublicID(ctx context.Context, userID int64, publicID string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND public_id = ?`, userID, publicID)
+	if err != nil {
+		return fmt.Errorf("deleting session: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// DeleteOtherSessions revokes every session of the user except the one with keepToken and reports
+// how many went.
+func (r *UsersRepo) DeleteOtherSessions(ctx context.Context, userID int64, keepToken string) (int, error) {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token <> ?`, userID, keepToken)
+	if err != nil {
+		return 0, fmt.Errorf("deleting other sessions: %w", err)
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
 }
 
 // UpdatePasswordHash overwrites the stored bcrypt hash for a user — used by

@@ -115,12 +115,8 @@ func AuthLogin2FA(deps *AuthDeps) gin.HandlerFunc {
 			return
 		}
 
-		token, err := generateSessionToken()
+		token, err := startSession(c, deps.Users, user.ID)
 		if err != nil {
-			internalError(c, err)
-			return
-		}
-		if err := deps.Users.CreateSession(c.Request.Context(), token, user.ID, time.Now().Add(sessionDuration)); err != nil {
 			internalError(c, err)
 			return
 		}

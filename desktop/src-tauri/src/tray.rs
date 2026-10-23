@@ -14,6 +14,39 @@ pub fn show_main_window(app: &AppHandle) {
     }
 }
 
+/// Whether a tray icon can actually be seen. Building one succeeds nearly everywhere, but on Linux
+/// the icon only shows when something on the session bus hosts indicators (a StatusNotifier
+/// watcher — KDE, most panels, GNOME with an extension); without one it is created and invisible.
+#[cfg(target_os = "linux")]
+pub fn is_available() -> bool {
+    use std::time::Duration;
+
+    let Ok(conn) = dbus::blocking::Connection::new_session() else {
+        return false;
+    };
+    let bus = conn.with_proxy(
+        "org.freedesktop.DBus",
+        "/org/freedesktop/DBus",
+        Duration::from_millis(1500),
+    );
+    [
+        "org.kde.StatusNotifierWatcher",
+        "org.freedesktop.StatusNotifierWatcher",
+    ]
+    .iter()
+    .any(|name| {
+        bus.method_call::<(bool,), _, _, _>("org.freedesktop.DBus", "NameHasOwner", (*name,))
+            .map(|(has_owner,)| has_owner)
+            .unwrap_or(false)
+    })
+}
+
+/// Windows and macOS always have a notification area / menu bar.
+#[cfg(not(target_os = "linux"))]
+pub fn is_available() -> bool {
+    true
+}
+
 /// Tray icon: left click (or "Show Packrat") restores the window, "Quit" exits the app for real.
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show Packrat", true, None::<&str>)?;

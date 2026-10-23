@@ -46,6 +46,18 @@ export interface TwoFactorRegenerateRequest {
   code: string
 }
 
+// One signed-in device. `id` is a non-secret handle (never the session token).
+export interface ActiveSession {
+  id: string
+  // "web" | "desktop"; "" for a session from before this was recorded.
+  client: string
+  ip: string
+  userAgent: string
+  createdAt: string
+  lastSeenAt: string
+  current: boolean
+}
+
 export interface SecurityNotice {
   failedAttempts: number
   since: string

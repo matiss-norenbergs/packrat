@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { TotpCodeInput } from "@/components/TotpCodeInput"
 import {
   useDisableTwoFactor,
   useEnableTwoFactor,
@@ -38,8 +39,6 @@ function downloadText(filename: string, text: string) {
   a.click()
   URL.revokeObjectURL(url)
 }
-
-const digitsOnly = (v: string) => v.replace(/\D/g, "").slice(0, 6)
 
 export function TwoFactorCard() {
   const { data: status, isLoading, isError } = useTwoFactorStatus()
@@ -220,17 +219,7 @@ function EnableDialog({ open, onClose }: { open: boolean; onClose: () => void })
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="enable-code">Authentication code</Label>
-              <Input
-                id="enable-code"
-                value={code}
-                onChange={(e) => setCode(digitsOnly(e.target.value))}
-                onKeyDown={(e) => e.key === "Enter" && confirm()}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="123456"
-                className="font-mono tracking-widest"
-                autoFocus
-              />
+              <TotpCodeInput id="enable-code" value={code} onChange={setCode} onEnter={confirm} />
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setStep(1)}>
@@ -420,16 +409,19 @@ function CodeField({
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{useRecovery ? "Recovery code" : "Authentication code"}</Label>
-      <Input
-        id={id}
-        value={code}
-        onChange={(e) => setCode(useRecovery ? e.target.value : digitsOnly(e.target.value))}
-        onKeyDown={(e) => e.key === "Enter" && onEnter()}
-        inputMode={useRecovery ? undefined : "numeric"}
-        autoComplete={useRecovery ? "off" : "one-time-code"}
-        placeholder={useRecovery ? "XXXX-XXXX" : "123456"}
-        className="font-mono"
-      />
+      {useRecovery ? (
+        <Input
+          id={id}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onEnter()}
+          autoComplete="off"
+          placeholder="XXXX-XXXX"
+          className="font-mono"
+        />
+      ) : (
+        <TotpCodeInput id={id} value={code} onChange={setCode} onEnter={onEnter} autoFocus={false} />
+      )}
     </div>
   )
 }

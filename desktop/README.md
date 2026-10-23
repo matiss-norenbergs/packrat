@@ -76,6 +76,18 @@ aren't set up yet.
   because it must be known the moment the close button is pressed; the frontend reads and writes it
   through the `get_close_to_tray`/`set_close_to_tray` commands. On Linux the tray needs a desktop
   that shows app-indicator icons (GNOME needs an extension).
+- **Launch at login** — `tauri-plugin-autostart` (Settings → Desktop → "Launch at login", off by
+  default). The switch reads the OS (`isEnabled`) and never keeps a copy of its own: an XDG autostart
+  `.desktop` file in `~/.config/autostart` on Linux (for an AppImage it points at the AppImage), a
+  `Run` registry value under `HKCU` on Windows, a LaunchAgent on macOS. The entry starts the app with
+  `--minimized`. That argument only matters together with **Start minimized to tray** (second switch,
+  shown while launch-at-login is on, kept in `desktop.json` as `startMinimized`): then the main
+  window is created hidden and the tray icon is the only trace. A launch without the argument (the
+  normal way) always shows the window, and so does one where the tray can't be used — building it
+  failed, or on Linux nothing on the session bus hosts StatusNotifier indicators
+  (`tray::is_available`) — so the app is never invisible. An autostart launch that finds the app
+  already running (single instance) does not raise its window. **Not exercised on Windows or macOS**
+  (see Known limitations).
 - **Reconnect banner** — frontend only (`lib/connection.ts`, `ConnectionBanner`): see
   [`docs/FEATURES.md`](../docs/FEATURES.md#desktop-app-client-mode).
 - **CSP** (`tauri.conf.json`) — scripts and styles are local-only, but `connect-src`/`img-src`/
@@ -135,6 +147,8 @@ update files are only requested by CI (`bundle.createUpdaterArtifacts`).
 
 ## Known limitations
 
+- Launch at login was verified on Linux only (the `.desktop` entry under Xvfb); the Windows registry
+  `Run` value and the macOS LaunchAgent come from the plugin and are untested.
 - Developed and exercised on Linux (WebKitGTK) only; macOS (WKWebView) and Windows (WebView2) are
   untested — in particular download handling, notifications and window-state.
 - No code signing yet (updates are verified by the updater key, but the installers themselves are

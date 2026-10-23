@@ -161,6 +161,9 @@ func SetupRouter(deps Deps) *gin.Engine {
 		}
 
 		api.PATCH("/auth/password", ChangePassword(deps.Auth))
+		api.GET("/auth/sessions", ListSessions(deps.UsersRepo))
+		api.POST("/auth/sessions/revoke-others", RevokeOtherSessions(deps.UsersRepo))
+		api.DELETE("/auth/sessions/:id", RevokeSession(deps.UsersRepo))
 		api.GET("/auth/2fa", TwoFactorStatus(deps.Auth))
 		api.POST("/auth/2fa/setup", TwoFactorSetup(deps.Auth))
 		api.POST("/auth/2fa/enable", TwoFactorEnable(deps.Auth))

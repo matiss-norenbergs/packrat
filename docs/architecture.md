@@ -110,7 +110,10 @@ The app is single-user (no registration beyond a one-time setup wizard) but is f
 session-gated: `RequireAuth` covers every `/api/*` route except `/api/health` and
 `/api/auth/{status,setup,login,login/2fa,logout}`, plus `/media-files/*` and `/ws`. Sessions are opaque
 64-char hex tokens validated against a server-side sessions table (not signed/stateless JWTs),
-30-day expiry, cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`).
+30-day expiry, cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`). Each row also records the
+device that logged in (client, IP, truncated User-Agent), a throttled `last_seen_at`, and a separate
+random `public_id` — the only handle the sessions list/revoke API exposes, so the token never leaves
+the server after login.
 
 `Secure=false` is deliberate, not an oversight — the app is commonly run over plain HTTP on a
 trusted LAN, and requiring HTTPS would break that default deployment. CSRF is handled separately

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Toaster } from "@/components/ui/sonner"
+import { TotpCodeInput } from "@/components/TotpCodeInput"
 import { useAuthStatus, useLogin, useLogin2fa, useSetupAccount } from "@/hooks/useAuth"
 import { ApiError } from "@/lib/api"
 import { getServerUrl, isDesktop, resetServer } from "@/lib/server"
@@ -71,11 +72,14 @@ export function LoginPage() {
 
   const codeReady = useRecovery ? code.trim().length >= 8 : code.length === 6
 
-  const handleCodeSubmit = () => {
-    if (!challenge || !codeReady) return
+  // `filled` is passed by the OTP field's onComplete, since state hasn't caught up with the last digit yet.
+  const handleCodeSubmit = (filled?: string) => {
+    if (!challenge || login2fa.isPending) return
+    if (!useRecovery && (filled ?? code).length !== 6) return
+    if (useRecovery && !codeReady) return
     const payload = useRecovery
       ? { challengeToken: challenge, recoveryCode: code.trim() }
-      : { challengeToken: challenge, code }
+      : { challengeToken: challenge, code: filled ?? code }
     login2fa.mutate(payload, {
       onError: (err) => {
         if (err instanceof ApiError && err.challengeExpired) {
@@ -127,20 +131,17 @@ export function LoginPage() {
                   autoFocus
                 />
               ) : (
-                <Input
+                <TotpCodeInput
                   id="two-factor-code"
                   value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  onKeyDown={(e) => e.key === "Enter" && handleCodeSubmit()}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="123456"
-                  className="font-mono tracking-widest"
-                  autoFocus
+                  onChange={setCode}
+                  onComplete={handleCodeSubmit}
+                  onEnter={() => handleCodeSubmit()}
+                  disabled={login2fa.isPending}
                 />
               )}
             </div>
-            <Button className="w-full" onClick={handleCodeSubmit} disabled={login2fa.isPending || !codeReady}>
+            <Button className="w-full" onClick={() => handleCodeSubmit()} disabled={login2fa.isPending || !codeReady}>
               {login2fa.isPending ? "Please wait…" : "Verify"}
             </Button>
             <div className="flex items-center justify-between text-xs">

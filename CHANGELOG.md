@@ -13,6 +13,17 @@ Maintenance notes:
 -->
 
 ## 2026-10-23
+- **Launch at login (desktop)** — Settings → Desktop gets a "Launch at login" switch (off by default;
+  reflects the OS startup entry) and, while it is on, "Start minimized to tray". Autostart launches
+  pass `--minimized`; a manual launch always shows the window, and so does one with no usable tray.
+- **Active sessions** — Settings → Account lists every signed-in device (browser/OS or desktop app,
+  IP, signed in, last active) and can sign out one device or all the others. New
+  `GET /auth/sessions`, `DELETE /auth/sessions/:id`, `POST /auth/sessions/revoke-others`; sessions
+  now record client, IP, User-Agent and a throttled last-seen time (migration 47) and are identified
+  in the API by a separate non-secret id, never the token.
+- **Separated-digit code input** — 6-digit authenticator codes (login, enabling, disabling and
+  regenerating recovery codes) use one box per digit (shadcn `InputOTP`): paste, autofill, and the
+  login step submits on the sixth digit.
 - **Two-factor auth (TOTP)** — optional, off by default: Settings → Account → Two-factor
   authentication (QR code drawn in the browser, 10 one-time recovery codes shown once). Login becomes
   password → 6-digit code (or recovery code) only for accounts that enable it, in the web UI and the

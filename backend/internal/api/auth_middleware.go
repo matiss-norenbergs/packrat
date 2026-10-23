@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -21,6 +22,9 @@ const (
 )
 
 const authSourceKey = "authSource"
+
+// sessionKey holds the authenticated *models.Session (token included: never serialize or log it).
+const sessionKey = "session"
 
 // desktopClientHeader marks a request from the desktop app (see AuthLogin/AuthSetup): it gets the
 // session token back in the response body instead of cookies, which a cross-origin client can't
@@ -83,7 +87,13 @@ func RequireAuth(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 		c.Set("userID", session.UserID)
+		c.Set(sessionKey, session)
 		c.Set(authSourceKey, source)
+		// last_seen_at is only written when the row we just read is stale, so a busy session costs
+		// one write a minute, not one per request. Best effort: a failed touch never fails the request.
+		if session.LastSeenAt == nil || time.Since(*session.LastSeenAt) >= repository.SessionTouchInterval {
+			_ = usersRepo.TouchSession(c.Request.Context(), session.Token, time.Now())
+		}
 		c.Next()
 	}
 }

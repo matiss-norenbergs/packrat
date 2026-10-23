@@ -34,7 +34,13 @@ and the window remembers its size and position. Starting the app a second time j
 brings the existing window forward (single instance). A **tray icon** (left click, or "Show
 Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of
-quitting, so it keeps running. If the server becomes unreachable while the app is open (found out
+quitting, so it keeps running. **Launch at login** (Settings → Desktop, off by default) starts the app
+when you sign in to the computer. The switch shows the operating system's own startup entry (read
+from the system each time, not a copy of our own), so it stays right if you change it elsewhere.
+Once it is on, **Start minimized to tray** (also off by default) makes those automatic launches keep
+the window hidden with just the tray icon; opening the app yourself always shows the window, and if
+the system tray isn't available (for example GNOME without an indicator extension) the window is
+shown anyway so the app never disappears. If the server becomes unreachable while the app is open (found out
 by a failed request or a dropped live-update connection, then confirmed against `/api/health`), a
 "Can't reach the server — retrying…" pill appears at the top with a **Retry now** button; it checks
 again every few seconds, disappears on its own when the server answers, and refreshes the data on
@@ -619,13 +625,23 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   "I've saved these codes" is ticked. Once on, the card shows how many recovery codes are left (a
   warning at 2 or fewer) and offers **Regenerate recovery codes** (password + code; the old set stops
   working) and **Disable** (password + a code or recovery code). Logging in then takes the password,
-  then a 6-digit code on a second form (with "Use a recovery code" and Back). The desktop app works
+  then a 6-digit code on a second form (with "Use a recovery code" and Back). Every 6-digit code
+  field (login, enable step 2, disable, regenerate) is six separated digit boxes: digits only, the
+  whole code can be pasted, browsers offer one-time-code autofill, and on the login form the sixth
+  digit submits automatically (Verify stays). Recovery codes are a plain text field. The desktop app works
   the same way. Too many wrong attempts show "Too many attempts — try again in N minutes"; blocks are
   temporary delays, never a permanent lockout.
   If the key can't be read or the authenticator is lost with no recovery codes left, run
   `docker exec -it <container> /app/packrat --disable-2fa` (see the README).
   After you sign in, a dismissible notice reports "N failed login attempts since your last login
   (latest: …)" when there were any; dismissing acknowledges them.
+  Below it, an **Active sessions** card lists every signed-in device: device (the desktop app, or
+  browser and OS read loosely from the User-Agent), IP address, signed-in date, last active
+  (relative; "Now" for this device) and a "This device" badge. The row button signs that device out
+  at once, no confirmation (signing out *this* device is a normal logout). **Sign out all other
+  devices** asks first, with the count, and keeps this one; it is disabled when nobody else is
+  signed in. Sessions from before this existed show as "Unknown device". Last-active is recorded at
+  most once a minute per session.
 - **Features** — switches for the optional parts of the app: **Subscriptions**, **File Import**,
   **Compare list** (including its side-by-side player) and **Frame Matching**. All default to on. Off
   means: the sidebar entry and any Library menu entries for it disappear, opening its URL shows a

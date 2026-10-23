@@ -75,15 +75,32 @@ describe("LoginPage with 2FA (web, cookies)", () => {
     expect(input).toHaveFocus()
     expect(screen.queryByText("home")).not.toBeInTheDocument()
 
-    const verify = screen.getByRole("button", { name: "Verify" })
-    expect(verify).toBeDisabled()
-    await user.type(input, "12a345 6")
-    expect(input).toHaveValue("123456")
-    await user.click(verify)
-
+    expect(screen.getByRole("button", { name: "Verify" })).toBeDisabled()
+    // Non-digits are ignored, and the sixth digit submits without pressing Verify.
+    await user.keyboard("12a345 6")
     expect(await screen.findByText("home")).toBeInTheDocument()
     expect(bodyOf(callsTo(fetchMock, "/auth/login/2fa")[0])).toEqual({ challengeToken: "chal-1", code: "123456" })
     expect(getToken()).toBeNull()
+  })
+
+  it("accepts the whole code pasted at once", async () => {
+    const fetchMock = twoFactorServer(() => ({ status: 204 }))
+    page()
+    const user = await enterPassword()
+    await screen.findByLabelText("Authentication code")
+    await user.paste("246810")
+    expect(await screen.findByText("home")).toBeInTheDocument()
+    expect(bodyOf(callsTo(fetchMock, "/auth/login/2fa")[0])).toEqual({ challengeToken: "chal-1", code: "246810" })
+  })
+
+  it("does not submit a partial code", async () => {
+    const fetchMock = twoFactorServer(() => ({ status: 204 }))
+    page()
+    const user = await enterPassword()
+    await screen.findByLabelText("Authentication code")
+    await user.keyboard("12345{Enter}")
+    expect(callsTo(fetchMock, "/auth/login/2fa")).toHaveLength(0)
+    expect(screen.getByRole("button", { name: "Verify" })).toBeDisabled()
   })
 
   it("can use a recovery code instead", async () => {
@@ -110,8 +127,8 @@ describe("LoginPage with 2FA (web, cookies)", () => {
     twoFactorServer(() => ({ status: 401, body: { error: "this login expired - enter your password again", challengeExpired: true } }))
     page()
     const user = await enterPassword()
-    await user.type(await screen.findByLabelText("Authentication code"), "000000")
-    await user.click(screen.getByRole("button", { name: "Verify" }))
+    await screen.findByLabelText("Authentication code")
+    await user.keyboard("000000")
     expect(await screen.findByRole("alert")).toHaveTextContent("enter your password again")
     expect(screen.getByRole("button", { name: "Log in" })).toBeInTheDocument()
   })
@@ -121,8 +138,7 @@ describe("LoginPage with 2FA (web, cookies)", () => {
     page()
     const user = await enterPassword()
     const input = await screen.findByLabelText("Authentication code")
-    await user.type(input, "000000")
-    await user.click(screen.getByRole("button", { name: "Verify" }))
+    await user.keyboard("000000")
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("invalid code"))
     expect(input).toHaveValue("")
     expect(screen.getByRole("button", { name: "Verify" })).toBeInTheDocument()
@@ -166,8 +182,8 @@ describe("LoginPage with 2FA (desktop, bearer token)", () => {
     const user = await enterPassword()
     const input = await screen.findByLabelText("Authentication code")
     expect(getToken()).toBeNull() // the password step alone gives nothing
-    await user.type(input, "654321")
-    await user.click(screen.getByRole("button", { name: "Verify" }))
+    expect(input).toHaveFocus()
+    await user.keyboard("654321")
     expect(await screen.findByText("home")).toBeInTheDocument()
     expect(getToken()).toBe("session-tok")
     expect(bodyOf(callsTo(fetchMock, "/auth/login/2fa")[0])).toEqual({ challengeToken: "chal-1", code: "654321" })

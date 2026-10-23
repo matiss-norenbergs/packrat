@@ -29,6 +29,31 @@ func generateSessionToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// maxUserAgentLen caps the stored User-Agent; it is only shown back to the owner as a device label.
+const maxUserAgentLen = 256
+
+// startSession mints a token and records the session with the device it came from: the client
+// kind (X-Client header), the address and a truncated User-Agent. Returns the token.
+func startSession(c *gin.Context, usersRepo *repository.UsersRepo, userID int64) (string, error) {
+	token, err := generateSessionToken()
+	if err != nil {
+		return "", err
+	}
+	client := "web"
+	if isDesktopClient(c) {
+		client = clientDesktop
+	}
+	ua := c.GetHeader("User-Agent")
+	if r := []rune(ua); len(r) > maxUserAgentLen {
+		ua = string(r[:maxUserAgentLen])
+	}
+	meta := repository.SessionMeta{Client: client, IP: c.ClientIP(), UserAgent: ua}
+	if err := usersRepo.CreateSession(c.Request.Context(), token, userID, time.Now().Add(sessionDuration), meta); err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
 func setSessionCookie(c *gin.Context, token string) {
 	c.SetSameSite(http.SameSiteLaxMode)
 	// Secure is deliberately false: this app is commonly deployed over plain
@@ -107,12 +132,8 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 
-		token, err := generateSessionToken()
+		token, err := startSession(c, usersRepo, user.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if err := usersRepo.CreateSession(c.Request.Context(), token, user.ID, time.Now().Add(sessionDuration)); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -168,12 +189,8 @@ func AuthLogin(deps *AuthDeps) gin.HandlerFunc {
 		}
 		deps.Limiter.Success(c.ClientIP())
 
-		token, err := generateSessionToken()
+		token, err := startSession(c, usersRepo, user.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if err := usersRepo.CreateSession(c.Request.Context(), token, user.ID, time.Now().Add(sessionDuration)); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

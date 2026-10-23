@@ -22,4 +22,13 @@ type Session struct {
 	UserID    int64
 	ExpiresAt time.Time
 	CreatedAt time.Time
+
+	// PublicID identifies the session in the API without exposing the token.
+	PublicID string
+	// LastSeenAt is nil until the first throttled touch after login.
+	LastSeenAt *time.Time
+	// Client is "web" or "desktop"; empty for sessions that predate the metadata columns.
+	Client    string
+	IP        string
+	UserAgent string
 }
