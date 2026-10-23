@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
+	"packrat/backend/internal/ratelimit"
 	"packrat/backend/internal/repository"
 )
 
@@ -121,8 +122,12 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 // AuthLogin validates credentials and starts a session. Bad username and bad
 // password both report the same generic error — never reveal which one was
 // wrong.
-func AuthLogin(usersRepo *repository.UsersRepo) gin.HandlerFunc {
+func AuthLogin(deps *AuthDeps) gin.HandlerFunc {
+	usersRepo := deps.Users
 	return func(c *gin.Context) {
+		if deps.rateLimited(c, ratelimit.KindPassword) {
+			return
+		}
 		var req LoginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -131,6 +136,7 @@ func AuthLogin(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 
 		user, err := usersRepo.GetByUsername(c.Request.Context(), req.Username)
 		if errors.Is(err, repository.ErrNotFound) {
+			deps.fail(c, ratelimit.KindPassword)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 			return
 		}
@@ -139,9 +145,11 @@ func AuthLogin(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 		if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
+			deps.fail(c, ratelimit.KindPassword)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 			return
 		}
+		deps.Limiter.Success(c.ClientIP())
 
 		token, err := generateSessionToken()
 		if err != nil {
@@ -160,8 +168,12 @@ func AuthLogin(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 // current password to be provided and correct — protected routes alone
 // aren't sufficient here since a stolen/left-open session shouldn't be
 // enough on its own to lock the real owner out via a silent password swap.
-func ChangePassword(usersRepo *repository.UsersRepo) gin.HandlerFunc {
+func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
+	usersRepo := deps.Users
 	return func(c *gin.Context) {
+		if deps.rateLimited(c, ratelimit.KindPassword) {
+			return
+		}
 		var req ChangePasswordRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -175,6 +187,7 @@ func ChangePassword(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 		if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)) != nil {
+			deps.fail(c, ratelimit.KindPassword)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
 			return
 		}

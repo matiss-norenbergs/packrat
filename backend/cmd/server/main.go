@@ -23,6 +23,7 @@ import (
 	"packrat/backend/internal/jellyfin"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
+	"packrat/backend/internal/ratelimit"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
 	"packrat/backend/internal/thumbnailenhance"
@@ -317,6 +318,8 @@ func run() error {
 		StaticDir:                         os.Getenv("STATIC_DIR"),
 		HostActions:                       cfg.HostActions,
 		CORSAllowedOrigins:                cfg.CORSAllowedOrigins,
+		TrustedProxies:                    cfg.TrustedProxies,
+		Auth:                              &api.AuthDeps{Users: usersRepo, Limiter: ratelimit.New(nil)},
 	})
 
 	srv := &http.Server{
