@@ -611,7 +611,21 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   restart needed) and a download timeout in minutes (kills and marks failed any download still
   running past the limit; 0 = no limit). Download directory is shown but not editable here (set
   via the `MEDIA_ROOT` environment variable).
-- **Account** — change your password (requires the current one).
+- **Account** — change your password (requires the current one), and a **Two-factor authentication**
+  card. 2FA is optional and off by default; accounts without it log in exactly as before. **Enable**
+  opens a 3-step dialog: (1) scan a QR code (drawn in the browser, always dark on a white tile) or type
+  the key shown in groups of four (Copy button); (2) enter a code from the app to confirm; (3) save
+  the 10 recovery codes — shown once, with Copy and Download, and the dialog can't be closed until
+  "I've saved these codes" is ticked. Once on, the card shows how many recovery codes are left (a
+  warning at 2 or fewer) and offers **Regenerate recovery codes** (password + code; the old set stops
+  working) and **Disable** (password + a code or recovery code). Logging in then takes the password,
+  then a 6-digit code on a second form (with "Use a recovery code" and Back). The desktop app works
+  the same way. Too many wrong attempts show "Too many attempts — try again in N minutes"; blocks are
+  temporary delays, never a permanent lockout.
+  If the key can't be read or the authenticator is lost with no recovery codes left, run
+  `docker exec -it <container> /app/packrat --disable-2fa` (see the README).
+  After you sign in, a dismissible notice reports "N failed login attempts since your last login
+  (latest: …)" when there were any; dismissing acknowledges them.
 - **Features** — switches for the optional parts of the app: **Subscriptions**, **File Import**,
   **Compare list** (including its side-by-side player) and **Frame Matching**. All default to on. Off
   means: the sidebar entry and any Library menu entries for it disappear, opening its URL shows a

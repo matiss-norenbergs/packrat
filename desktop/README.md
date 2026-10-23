@@ -2,7 +2,9 @@
 
 A [Tauri v2](https://tauri.app) shell around the existing `frontend/` — a thin **client** for a
 Packrat server you already run (Docker or native). It bundles no backend, `yt-dlp` or `ffmpeg`: on
-first launch the app asks for the server address, then you sign in as usual. The frontend code is
+first launch the app asks for the server address, then you sign in as usual (with the server's
+optional two-factor auth the password step is followed by a code step; the token is only stored
+after it succeeds). The frontend code is
 shared with the web UI; everything desktop-specific is gated on running inside Tauri
 (`frontend/src/lib/server.ts`), so the Docker-served web app is unchanged.
 
