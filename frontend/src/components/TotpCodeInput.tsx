@@ -31,16 +31,16 @@ export function TotpCodeInput({
       inputMode="numeric"
       autoComplete="one-time-code"
       autoFocus={autoFocus}
-      containerClassName="justify-center"
+      containerClassName="w-full"
       disabled={disabled}
       value={value}
       onChange={onChange}
       onComplete={onComplete}
       onKeyDown={(e) => e.key === "Enter" && onEnter?.()}
     >
-      <InputOTPGroup>
+      <InputOTPGroup className="w-full">
         {Array.from({ length: TOTP_LENGTH }, (_, i) => (
-          <InputOTPSlot key={i} index={i} />
+          <InputOTPSlot key={i} index={i} className="flex-1" />
         ))}
       </InputOTPGroup>
     </InputOTP>
