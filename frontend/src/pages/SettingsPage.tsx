@@ -1924,12 +1924,12 @@ function ShellSettings() {
 
   return (
     <div className="max-w-lg space-y-8">
-      <div className="flex items-center gap-1.5">
-        <Checkbox
+      <div className="flex items-center gap-2">
+        <Switch
           id="close-to-tray"
           checked={closeToTray === true}
           disabled={closeToTray === null}
-          onCheckedChange={(v) => setCloseToTray(v === true)}
+          onCheckedChange={setCloseToTray}
         />
         <Label htmlFor="close-to-tray" className="font-normal">
           Close to tray

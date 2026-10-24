@@ -33,6 +33,9 @@ is the table of profiles: name, address, last used; **Edit** renames a server or
 on this device — a login is never sent to a different address) and **Remove** forgets a server and
 deletes its saved login (asks first; removing the current server goes to the connect screen). An app
 that had one server and login before this existed keeps both: they become the first profile.
+Removing a server or changing its address first asks the old server to end that login (a quick,
+best-effort request with a ~3 s limit — an unreachable server never blocks it), so the session also
+disappears from Settings → Account → Sessions there instead of lingering until it expires.
 
 Unlike the browser, the desktop client authenticates with a bearer token instead of cookies (the
 server's `CORS_ALLOWED_ORIGINS` must include the app's origin — the Tauri defaults are built in).
@@ -44,8 +47,8 @@ token out of readable app data (disk images, backups), not out of reach of malwa
 None of this applies to the web UI, which behaves as before. See "Auth and CSRF" in
 [`api.md`](api.md#auth-and-csrf). The shell lives in [`desktop/`](../desktop/README.md). Inside it,
 http(s) links open in the system browser, desktop notifications go through the OS (Settings toggle
-unchanged), downloads such as backups are saved to your Downloads folder (never overwriting a file;
-see **Downloads** below), and the window remembers its size and position. Starting the app a second time just
+unchanged), downloads such as backups are saved to your Downloads folder (never overwriting a file, and without a
+needless " (1)" added to the name; see **Downloads** below), and the window remembers its size and position. Starting the app a second time just
 brings the existing window forward (single instance). A **tray icon** (left click, or "Show
 Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of
@@ -652,7 +655,9 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   "I've saved these codes" is ticked. Once on, the card shows how many recovery codes are left (a
   warning at 2 or fewer) and offers **Regenerate recovery codes** (password + code; the old set stops
   working) and **Disable** (password + a code or recovery code). Logging in then takes the password,
-  then a 6-digit code on a second form (with "Use a recovery code" and Back). Every 6-digit code
+  then a 6-digit code on a second form (with "Use a recovery code" and Back). A wrong code reads "That code
+  didn't work. Check that your phone's clock is correct and try again." (a wrong recovery code: "That recovery
+  code isn't valid or was already used."), here and in the enable/disable/regenerate dialogs. Every 6-digit code
   field (login, enable step 2, disable, regenerate) is six separated digit boxes: digits only, the
   whole code can be pasted, browsers offer one-time-code autofill, and on the login form the sixth
   digit submits automatically (Verify stays). Recovery codes are a plain text field. The desktop app works

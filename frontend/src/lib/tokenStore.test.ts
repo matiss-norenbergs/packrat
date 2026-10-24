@@ -39,13 +39,19 @@ function saveProfiles(active: string | null, ...ids: string[]) {
   if (active) localStorage.setItem("packrat.activeProfile", active)
 }
 
+const fetchMock = vi.fn()
+
 beforeEach(() => {
   invoke.mockReset()
+  fetchMock.mockReset()
+  fetchMock.mockResolvedValue({ ok: true })
+  vi.stubGlobal("fetch", fetchMock)
   localStorage.clear()
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
 })
 afterEach(() => {
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
+  vi.unstubAllGlobals()
 })
 
 describe("token storage in the shell", () => {
@@ -139,6 +145,60 @@ describe("token storage in the shell", () => {
     expect(kc.secrets).toEqual({ b: "token-b" })
     expect(s.getToken()).toBeNull()
     expect(s.getServerUrl()).toBe("http://elsewhere:2")
+  })
+
+  it("signs out of a non-active server with that profile's own token, read from the keychain", async () => {
+    keychain({ a: "token-a", b: "token-b" })
+    saveProfiles("a", "a", "b")
+    const s = await load()
+    await s.initTokenStore()
+    await s.removeProfile("b")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://b:1/api/auth/logout",
+      expect.objectContaining({ method: "POST", credentials: "omit", headers: { Authorization: "Bearer token-b" } }),
+    )
+  })
+
+  it("signs out of the active server with its cached token, after forgetting it locally", async () => {
+    const kc = keychain({ a: "token-a", b: "token-b" })
+    saveProfiles("a", "a", "b")
+    const s = await load()
+    await s.initTokenStore()
+    let keychainWhenSent: Record<string, string> | undefined
+    fetchMock.mockImplementation(async () => {
+      keychainWhenSent = { ...kc.secrets }
+      return { ok: true }
+    })
+    await s.removeProfile("a")
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://a:1/api/auth/logout",
+      expect.objectContaining({ headers: { Authorization: "Bearer token-a" } }),
+    )
+    // The local login was already gone while the request was in flight, so a slow server can't hold it.
+    expect(keychainWhenSent).toEqual({ b: "token-b" })
+    expect(kc.secrets).toEqual({ b: "token-b" })
+  })
+
+  it("signs out of the OLD address when a profile's address changes", async () => {
+    keychain({ a: "token-a" })
+    saveProfiles("a", "a")
+    const s = await load()
+    await s.initTokenStore()
+    await s.changeProfileUrl("a", "http://elsewhere:2")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe("http://a:1/api/auth/logout")
+    expect(s.getServerUrl()).toBe("http://elsewhere:2")
+  })
+
+  it("has nothing to sign out of when the profile has no login", async () => {
+    keychain({ a: "token-a" })
+    saveProfiles("a", "a", "b")
+    const s = await load()
+    await s.initTokenStore()
+    await s.removeProfile("b")
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(s.getProfiles().map((p) => p.id)).toEqual(["a"])
   })
 
   it("migrates a localStorage token into an empty keychain", async () => {

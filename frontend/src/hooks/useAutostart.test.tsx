@@ -2,12 +2,13 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const isEnabled = vi.fn()
-const enable = vi.fn()
-const disable = vi.fn()
-vi.mock("@tauri-apps/plugin-autostart", () => ({
-  isEnabled: () => isEnabled(),
-  enable: () => enable(),
-  disable: () => disable(),
+const setAutostart = vi.fn()
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (cmd: string, args?: { enabled: boolean }) => {
+    if (cmd === "autostart_is_enabled") return isEnabled()
+    if (cmd === "autostart_set") return setAutostart(args)
+    throw new Error(`unexpected command ${cmd}`)
+  },
 }))
 const toastError = vi.fn()
 vi.mock("sonner", () => ({ toast: { error: (m: string) => toastError(m) } }))
@@ -18,8 +19,7 @@ afterEach(cleanup)
 
 beforeEach(() => {
   isEnabled.mockReset()
-  enable.mockReset()
-  disable.mockReset()
+  setAutostart.mockReset()
   toastError.mockReset()
 })
 
@@ -33,28 +33,28 @@ describe("useAutostart", () => {
 
   it("enables, then re-reads what the OS reports", async () => {
     isEnabled.mockResolvedValueOnce(false).mockResolvedValue(true)
-    enable.mockResolvedValue(undefined)
+    setAutostart.mockResolvedValue(undefined)
     const { result } = renderHook(() => useAutostart())
     await waitFor(() => expect(result.current.enabled).toBe(false))
     await act(() => result.current.setEnabled(true))
-    expect(enable).toHaveBeenCalledTimes(1)
-    expect(disable).not.toHaveBeenCalled()
+    expect(setAutostart).toHaveBeenCalledTimes(1)
+    expect(setAutostart).toHaveBeenCalledWith({ enabled: true })
     expect(result.current.enabled).toBe(true)
   })
 
-  it("disables through the plugin", async () => {
+  it("disables through the shell", async () => {
     isEnabled.mockResolvedValueOnce(true).mockResolvedValue(false)
-    disable.mockResolvedValue(undefined)
+    setAutostart.mockResolvedValue(undefined)
     const { result } = renderHook(() => useAutostart())
     await waitFor(() => expect(result.current.enabled).toBe(true))
     await act(() => result.current.setEnabled(false))
-    expect(disable).toHaveBeenCalledTimes(1)
+    expect(setAutostart).toHaveBeenCalledWith({ enabled: false })
     expect(result.current.enabled).toBe(false)
   })
 
   it("reports a failure and keeps showing the OS state", async () => {
     isEnabled.mockResolvedValue(false)
-    enable.mockRejectedValue(new Error("permission denied"))
+    setAutostart.mockRejectedValue(new Error("permission denied"))
     const { result } = renderHook(() => useAutostart())
     await waitFor(() => expect(result.current.enabled).toBe(false))
     await act(() => result.current.setEnabled(true))

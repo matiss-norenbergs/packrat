@@ -1,6 +1,7 @@
 // No console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod downloads;
 mod match_update;
 mod prefs;
@@ -8,11 +9,12 @@ mod token;
 mod tray;
 
 use tauri::{Manager, WebviewWindowBuilder, WindowEvent};
+#[cfg(not(windows))]
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_window_state::StateFlags;
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // Must be registered first: a second launch hands over to the running instance, which
         // brings its window forward, instead of opening another copy.
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
@@ -20,13 +22,16 @@ fn main() {
             if !prefs::launched_minimized(&args) {
                 tray::show_main_window(app);
             }
-        }))
-        // The "Launch at login" switch (Settings → Desktop) enables/disables this entry; the
-        // argument lets the app tell an autostart launch from a manual one.
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            Some(vec![prefs::MINIMIZED_ARG]),
-        ))
+        }));
+    // The "Launch at login" switch (Settings → Desktop) goes through `autostart.rs`; the plugin's
+    // entry passes an argument so the app can tell an autostart launch from a manual one. Windows
+    // writes its own, correctly quoted `Run` value instead of the plugin's.
+    #[cfg(not(windows))]
+    let builder = builder.plugin(tauri_plugin_autostart::init(
+        MacosLauncher::LaunchAgent,
+        Some(vec![prefs::MINIMIZED_ARG]),
+    ));
+    builder
         // Only the Rust side opens dialogs (downloads.rs); the webview is granted none of its commands.
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
@@ -41,6 +46,8 @@ fn main() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            autostart::autostart_is_enabled,
+            autostart::autostart_set,
             match_update::match_update_check,
             match_update::match_update_install,
             prefs::get_close_to_tray,
@@ -73,6 +80,7 @@ fn main() {
             app.manage(match_update::Pending::default());
             app.manage(downloads::Downloads::default());
             downloads::clear_staging(app.handle());
+            autostart::repair(app.handle());
             app.manage(token::Vault::keychain());
             // A tray that can't be built isn't fatal; it only means the window is always shown.
             let tray_available = match tray::build(app.handle()) {

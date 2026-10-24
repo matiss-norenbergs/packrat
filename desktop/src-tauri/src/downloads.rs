@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -86,6 +86,43 @@ fn unique_path(dir: &Path, name: &OsStr) -> PathBuf {
         .map(|n| dir.join(format!("{stem} ({n}){ext}")))
         .find(|p| !p.exists())
         .expect("an unbounded range always yields a free name")
+}
+
+/// Splits a trailing ` (N)` off the stem: `backup (1).json` gives `Some(("backup", ".json"))`.
+/// Only the last extension counts as the extension; `None` when there is no such suffix.
+fn split_numbered(name: &str) -> Option<(String, String)> {
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) if i > 0 => name.split_at(i),
+        _ => (name, ""),
+    };
+    let stem = stem.strip_suffix(')')?;
+    let open = stem.rfind(" (")?;
+    let digits = &stem[open + 2..];
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) || open == 0 {
+        return None;
+    }
+    Some((stem[..open].to_string(), ext.to_string()))
+}
+
+/// WebView2 makes the suggested name unique against the system Downloads folder before we see it
+/// (`backup.json` → `backup (1).json`). Undo that: strip a trailing ` (N)` only when the
+/// un-numbered name exists in the folder it was numbered against, which proves the webview added
+/// it. A name that really arrives as `report (1).pdf` with no `report.pdf` beside it is kept.
+fn original_name(name: &OsStr, exists: impl Fn(&OsStr) -> bool) -> OsString {
+    let Some(text) = name.to_str() else {
+        return name.to_owned();
+    };
+    match split_numbered(text) {
+        Some((stem, ext)) => {
+            let plain = OsString::from(format!("{stem}{ext}"));
+            if exists(&plain) {
+                plain
+            } else {
+                name.to_owned()
+            }
+        }
+        None => name.to_owned(),
+    }
 }
 
 /// The folder downloads go to: the chosen one while it still exists, else the OS default.
@@ -344,6 +381,10 @@ pub fn on_download<R: Runtime>(
         match event {
             DownloadEvent::Requested { destination, .. } => {
                 if let Some(name) = destination.file_name().map(|n| n.to_owned()) {
+                    let name = match destination.parent() {
+                        Some(dir) => original_name(&name, |n| dir.join(n).exists()),
+                        None => name,
+                    };
                     let prefs = handle.state::<Prefs>();
                     *destination = if prefs.ask_where_to_save() {
                         let staged = handle
@@ -454,6 +495,71 @@ mod tests {
             dir.join("notes (1)")
         );
 
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn orig(name: &str, existing: &[&str]) -> String {
+        original_name(OsStr::new(name), |n| {
+            existing.iter().any(|e| OsStr::new(e) == n)
+        })
+        .to_string_lossy()
+        .into_owned()
+    }
+
+    #[test]
+    fn a_name_without_a_suffix_is_untouched() {
+        assert_eq!(orig("backup.json", &["backup.json"]), "backup.json");
+        assert_eq!(orig("notes", &[]), "notes");
+    }
+
+    #[test]
+    fn a_suffix_the_webview_added_is_stripped() {
+        assert_eq!(orig("backup (1).json", &["backup.json"]), "backup.json");
+        assert_eq!(orig("backup (10).json", &["backup.json"]), "backup.json");
+        assert_eq!(orig("notes (2)", &["notes"]), "notes");
+    }
+
+    #[test]
+    fn a_suffix_nothing_explains_is_kept() {
+        assert_eq!(orig("report (1).pdf", &[]), "report (1).pdf");
+        // Only the numbered sibling exists, not the plain name.
+        assert_eq!(
+            orig("report (1).pdf", &["report (1).pdf", "report (2).pdf"]),
+            "report (1).pdf"
+        );
+    }
+
+    #[test]
+    fn extensions_and_parentheses_are_handled() {
+        assert_eq!(orig("a.tar (1).gz", &["a.tar.gz"]), "a.tar.gz");
+        assert_eq!(orig("a.tar (1).gz", &[]), "a.tar (1).gz");
+        assert_eq!(
+            orig("my.backup (3).json", &["my.backup.json"]),
+            "my.backup.json"
+        );
+        // Nested parentheses: only the last ` (N)` is a suffix.
+        assert_eq!(orig("a (b) (1).txt", &["a (b).txt"]), "a (b).txt");
+        assert_eq!(orig("a (1) (1).txt", &["a (1).txt"]), "a (1).txt");
+        // Not numbers, or not a separate suffix.
+        assert_eq!(orig("a (x).txt", &["a.txt"]), "a (x).txt");
+        assert_eq!(orig("a(1).txt", &["a.txt"]), "a(1).txt");
+        assert_eq!(orig("a ().txt", &["a.txt"]), "a ().txt");
+        assert_eq!(orig(" (1).txt", &[".txt"]), " (1).txt");
+        // A dotfile has no extension.
+        assert_eq!(orig(".env (1)", &[".env"]), ".env");
+    }
+
+    #[test]
+    fn the_numbering_is_checked_against_the_real_folder() {
+        let dir = scratch("orig");
+        std::fs::write(dir.join("backup.json"), "x").unwrap();
+        let name = OsStr::new("backup (1).json");
+        assert_eq!(
+            original_name(name, |n| dir.join(n).exists()),
+            OsString::from("backup.json")
+        );
+        std::fs::remove_file(dir.join("backup.json")).unwrap();
+        assert_eq!(original_name(name, |n| dir.join(n).exists()), name);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

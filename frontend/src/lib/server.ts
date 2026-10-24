@@ -12,6 +12,7 @@ import {
   deleteProfile,
   getActiveProfile,
   getActiveProfileId,
+  getProfiles,
   isAddingServer,
   LEGACY_TOKEN_PROFILE_KEY,
   localTokenKey,
@@ -98,17 +99,44 @@ export function renameProfile(id: string, name: string) {
 }
 
 // Saves a new address for a profile. The old address's login isn't valid for whatever answers at
-// the new one (and must never be sent there), so it is dropped.
+// the new one (and must never be sent there), so the local copy is dropped and the OLD server is
+// asked to end that session (best effort, see signOutOnServer).
 export async function changeProfileUrl(id: string, url: string): Promise<void> {
+  const old = getProfiles().find((p) => p.id === id)
+  const token = old ? await readProfileToken(id) : null
   updateProfile(id, { url })
   await clearProfileToken(id)
+  if (old && token) await signOutOnServer(old.url, token)
 }
 
-// Forgets a server and its login. Removing the active profile leaves the app without a server, so
-// it shows the connect screen. Resolves once the keychain entry is gone.
+// Forgets a server and its login, and asks that server to end the session (best effort).
+// Removing the active profile leaves the app without a server, so it shows the connect screen.
+// The login is gone locally before the request goes out; this resolves once the request has
+// settled (a few seconds at most).
 export async function removeProfile(id: string): Promise<void> {
+  const old = getProfiles().find((p) => p.id === id)
+  const token = old ? await readProfileToken(id) : null
   deleteProfile(id)
   await clearProfileToken(id)
+  if (old && token) await signOutOnServer(old.url, token)
+}
+
+const SIGN_OUT_TIMEOUT_MS = 3000
+
+// Ends `token`'s session on the server at `url` so it doesn't linger in Settings → Account →
+// Sessions until it expires. Never throws and gives up after a few seconds: an unreachable or
+// slow server must not hold up forgetting it. Sent with the profile's own token, to its own address.
+async function signOutOnServer(url: string, token: string): Promise<void> {
+  try {
+    await fetch(`${url}/api/auth/logout`, {
+      method: "POST",
+      credentials: "omit",
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(SIGN_OUT_TIMEOUT_MS),
+    })
+  } catch {
+    // unreachable, timed out or blocked: the local login is dropped regardless
+  }
 }
 
 // Leave the active server (profiles and their logins stay) — the connect screen shows next.
@@ -223,6 +251,18 @@ export function setToken(token: string) {
 export function clearToken() {
   const id = getActiveProfileId()
   if (id) void clearProfileToken(id)
+}
+
+// One profile's login, whether or not it is the active one.
+async function readProfileToken(id: string): Promise<string | null> {
+  const local = read(localTokenKey(id))
+  if (tokenStorage !== "keychain") return local
+  if (tokenCacheFor === id) return tokenCache
+  try {
+    return (await invokeShell?.<string | null>("token_get", { id })) ?? local
+  } catch {
+    return local
+  }
 }
 
 // Drops one profile's login wherever it is kept. Never rejects: a keychain that can't answer has

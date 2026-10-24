@@ -7,7 +7,10 @@ import {
   isDesktop,
   needsServerUrl,
   normalizeServerUrl,
+  changeProfileUrl,
+  getProfiles,
   probeServer,
+  removeProfile,
   resetServer,
   serverUrl,
   setServerUrl,
@@ -100,6 +103,101 @@ describe("desktop", () => {
     expect(getToken()).toBeNull()
     setServerUrl("http://a:1")
     expect(getToken()).toBe("abc")
+  })
+})
+
+describe("signing out on the old server", () => {
+  beforeEach(enterDesktop)
+  const idOf = (url: string) => getProfiles().find((p) => p.url === url)!.id
+
+  // Two servers, each with its own login; `active` is the one the app is on.
+  function twoServers(active: "http://a:1" | "http://b:2") {
+    setServerUrl("http://a:1")
+    setToken("token-a")
+    setServerUrl("http://b:2")
+    setToken("token-b")
+    setServerUrl(active)
+  }
+
+  it("removing the active server signs out on it with its token, then clears the login", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal("fetch", fetchMock)
+    twoServers("http://a:1")
+    const id = idOf("http://a:1")
+    await removeProfile(id)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://a:1/api/auth/logout",
+      expect.objectContaining({ method: "POST", credentials: "omit", headers: { Authorization: "Bearer token-a" } }),
+    )
+    expect(window.localStorage.getItem(`packrat.token.${id}`)).toBeNull()
+    expect(getServerUrl()).toBeNull()
+  })
+
+  it("removing a non-active server uses that server's token, not the active one's", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal("fetch", fetchMock)
+    twoServers("http://a:1")
+    await removeProfile(idOf("http://b:2"))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://b:2/api/auth/logout",
+      expect.objectContaining({ headers: { Authorization: "Bearer token-b" } }),
+    )
+    // The active server's login is untouched.
+    expect(getServerUrl()).toBe("http://a:1")
+    expect(getToken()).toBe("token-a")
+  })
+
+  it("changing the address signs out on the old one and never sends the token to the new one", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal("fetch", fetchMock)
+    twoServers("http://b:2")
+    await changeProfileUrl(idOf("http://b:2"), "http://new:3")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe("http://b:2/api/auth/logout")
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).startsWith("http://new:3"))).toBe(false)
+    expect(getServerUrl()).toBe("http://new:3")
+    expect(getToken()).toBeNull()
+  })
+
+  it("still removes the server when it is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))
+    twoServers("http://a:1")
+    const id = idOf("http://b:2")
+    await expect(removeProfile(id)).resolves.toBeUndefined()
+    expect(getProfiles().map((p) => p.url)).toEqual(["http://a:1"])
+    expect(window.localStorage.getItem(`packrat.token.${id}`)).toBeNull()
+  })
+
+  it("gives up after a few seconds, and the removal still completes", async () => {
+    vi.useFakeTimers()
+    try {
+      // A server that never answers: settles only when the request's abort signal fires.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((_url: string, init: RequestInit) => {
+          return new Promise((_resolve, reject) => {
+            init.signal!.addEventListener("abort", () => reject(new DOMException("timed out", "TimeoutError")))
+          })
+        }),
+      )
+      twoServers("http://a:1")
+      const done = removeProfile(idOf("http://b:2"))
+      await vi.advanceTimersByTimeAsync(3100)
+      await expect(done).resolves.toBeUndefined()
+      expect(getProfiles().map((p) => p.url)).toEqual(["http://a:1"])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("skips the request when the server has no saved login", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    setServerUrl("http://a:1")
+    await removeProfile(idOf("http://a:1"))
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

@@ -106,7 +106,10 @@ isn't wired up yet.
 
 - **Window** — built in `src-tauri/src/main.rs` (not just declared in `tauri.conf.json`) so it can
   carry a download handler: downloads land in the download folder (the OS Downloads folder unless one
-  was chosen in Settings → Desktop → Downloads; never overwriting an existing file), emit `download-started` / `download-finished` events (the frontend turns them into toasts with a
+  was chosen in Settings → Desktop → Downloads; never overwriting an existing file, and keeping the name the server sent: WebView2 numbers a name that
+  exists in the system Downloads folder before we see it — `backup (1).json` — so a trailing ` (N)` is
+  stripped when the un-numbered name exists in the folder it was numbered against, see
+  `downloads::original_name`), emit `download-started` / `download-finished` events (the frontend turns them into toasts with a
   **Show in folder** action — `hooks/useDownloadToasts.ts`, `opener:allow-reveal-item-in-dir`) and
   raise a "Download complete" OS notification only while the window isn't focused.
 - **Save dialog** — with "Ask where to save each download" on (`askWhereToSave` in `desktop.json`,
@@ -133,8 +136,12 @@ isn't wired up yet.
   because it must be known the moment the close button is pressed; the frontend reads and writes it
   through the `get_close_to_tray`/`set_close_to_tray` commands. On Linux the tray needs a desktop
   that shows app-indicator icons (GNOME needs an extension).
-- **Launch at login** — `tauri-plugin-autostart` (Settings → Desktop → "Launch at login", off by
-  default). The switch reads the OS (`isEnabled`) and never keeps a copy of its own: an XDG autostart
+- **Launch at login** — Settings → Desktop → "Launch at login", off by default; the page calls the
+  shell's `autostart_is_enabled` / `autostart_set` commands (`src-tauri/src/autostart.rs`). Linux and macOS
+  use `tauri-plugin-autostart`; Windows writes the `Run` value itself, because the plugin leaves the
+  exe path unquoted, which breaks for a path with a space (`C:\Users\John Smith\…`): the value is
+  `"<exe>" --minimized`, and an unquoted value from an earlier version is rewritten quoted at startup
+  (only if it exists — it never turns the entry on). The switch reads the OS and never keeps a copy of its own: an XDG autostart
   `.desktop` file in `~/.config/autostart` on Linux (for an AppImage it points at the AppImage), a
   `Run` registry value under `HKCU` on Windows, a LaunchAgent on macOS. The entry starts the app with
   `--minimized`. That argument only matters together with **Start minimized to tray** (second switch,
@@ -214,7 +221,8 @@ update files are only requested by CI (`bundle.createUpdaterArtifacts`).
 ## Known limitations
 
 - Launch at login was verified on Linux only (the `.desktop` entry under Xvfb); the Windows registry
-  `Run` value and the macOS LaunchAgent come from the plugin and are untested.
+  `Run` value (our own code since the quoting fix, compile-checked for Windows but not run there) and the
+  macOS LaunchAgent (from the plugin) are untested.
 - The multiple-server keychain handling (per-profile entries, moving the old single entry) and the
   Save dialog / folder picker were exercised on Linux only (Secret Service and the GTK dialogs under
   Xvfb). Windows Credential Manager entries, the Windows Save dialog and WebView2's download events

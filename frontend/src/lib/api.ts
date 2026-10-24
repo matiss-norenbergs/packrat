@@ -241,8 +241,28 @@ export async function login(payload: LoginRequest): Promise<LoginResult> {
   return { twoFactorRequired: false }
 }
 
+// The server answers a wrong second factor with a bare 401 "invalid code". People get a sentence that
+// says what to do about it; other errors (rate limit, expired challenge, wrong password) keep their text.
+export const WRONG_CODE_MESSAGE = "That code didn't work. Check that your phone's clock is correct and try again."
+export const WRONG_RECOVERY_CODE_MESSAGE = "That recovery code isn't valid or was already used."
+
+async function withFriendlyCodeError<T>(call: Promise<T>, recovery: boolean): Promise<T> {
+  try {
+    return await call
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401 && err.message === "invalid code") {
+      throw new ApiError(recovery ? WRONG_RECOVERY_CODE_MESSAGE : WRONG_CODE_MESSAGE, 401)
+    }
+    throw err
+  }
+}
+
 export async function login2fa(payload: Login2FARequest): Promise<void> {
-  storeSessionToken(await request<{ token?: string } | undefined>("/auth/login/2fa", { method: "POST", body: JSON.stringify(payload) }))
+  const res = await withFriendlyCodeError(
+    request<{ token?: string } | undefined>("/auth/login/2fa", { method: "POST", body: JSON.stringify(payload) }),
+    !!payload.recoveryCode,
+  )
+  storeSessionToken(res)
 }
 
 export function fetchTwoFactorStatus(): Promise<TwoFactorStatus> {
@@ -254,16 +274,25 @@ export function startTwoFactorSetup(): Promise<TwoFactorSetup> {
 }
 
 export async function enableTwoFactor(code: string): Promise<string[]> {
-  const res = await request<{ recoveryCodes: string[] }>("/auth/2fa/enable", { method: "POST", body: JSON.stringify({ code }) })
+  const res = await withFriendlyCodeError(
+    request<{ recoveryCodes: string[] }>("/auth/2fa/enable", { method: "POST", body: JSON.stringify({ code }) }),
+    false,
+  )
   return res.recoveryCodes
 }
 
 export function disableTwoFactor(payload: TwoFactorDisableRequest): Promise<void> {
-  return request<void>("/auth/2fa/disable", { method: "POST", body: JSON.stringify(payload) })
+  return withFriendlyCodeError(
+    request<void>("/auth/2fa/disable", { method: "POST", body: JSON.stringify(payload) }),
+    !!payload.recoveryCode,
+  )
 }
 
 export async function regenerateRecoveryCodes(payload: TwoFactorRegenerateRequest): Promise<string[]> {
-  const res = await request<{ recoveryCodes: string[] }>("/auth/2fa/recovery-codes", { method: "POST", body: JSON.stringify(payload) })
+  const res = await withFriendlyCodeError(
+    request<{ recoveryCodes: string[] }>("/auth/2fa/recovery-codes", { method: "POST", body: JSON.stringify(payload) }),
+    false,
+  )
   return res.recoveryCodes
 }
 

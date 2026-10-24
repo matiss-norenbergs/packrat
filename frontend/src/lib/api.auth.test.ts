@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { backupDownloadUrl, fetchAuthStatus, imageUrl, login, login2fa, logout, mediaFileUrl, rateLimitMessage, resizedImageSrcSet, fetchLibraryFacets } from "@/lib/api"
+import { backupDownloadUrl, disableTwoFactor, enableTwoFactor, fetchAuthStatus, regenerateRecoveryCodes, imageUrl, login, login2fa, logout, mediaFileUrl, rateLimitMessage, resizedImageSrcSet, fetchLibraryFacets } from "@/lib/api"
 import { getServerUrl, getToken, setServerUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
 
 type FetchInit = { credentials?: string; headers: Record<string, string>; method?: string }
@@ -189,6 +189,28 @@ describe("two-factor login", () => {
     })
     mockFetch(() => ({ status: 401, body: { error: "expired", challengeExpired: true } }))
     await expect(login2fa({ challengeToken: "c1", code: "1" })).rejects.toMatchObject({ status: 401, challengeExpired: true })
+  })
+
+  it("a wrong code or recovery code gets a friendly message; other errors keep theirs", async () => {
+    const totp = "That code didn't work. Check that your phone's clock is correct and try again."
+    const recovery = "That recovery code isn't valid or was already used."
+    mockFetch(() => ({ status: 401, body: { error: "invalid code" } }))
+    await expect(login2fa({ challengeToken: "c1", code: "000000" })).rejects.toMatchObject({ status: 401, message: totp })
+    await expect(login2fa({ challengeToken: "c1", recoveryCode: "abcd-efgh" })).rejects.toMatchObject({ status: 401, message: recovery })
+    await expect(enableTwoFactor("000000")).rejects.toMatchObject({ message: totp })
+    await expect(disableTwoFactor({ password: "p", code: "000000" })).rejects.toMatchObject({ message: totp })
+    await expect(disableTwoFactor({ password: "p", recoveryCode: "abcd-efgh" })).rejects.toMatchObject({ message: recovery })
+    await expect(regenerateRecoveryCodes({ password: "p", code: "000000" })).rejects.toMatchObject({ message: totp })
+
+    // A wrong password on the same endpoints, an expired challenge and a rate limit are left alone.
+    mockFetch(() => ({ status: 401, body: { error: "incorrect password" } }))
+    await expect(disableTwoFactor({ password: "p", code: "000000" })).rejects.toMatchObject({ message: "incorrect password" })
+    mockFetch(() => ({ status: 401, body: { error: "expired", challengeExpired: true } }))
+    await expect(login2fa({ challengeToken: "c1", code: "1" })).rejects.toMatchObject({ message: "expired", challengeExpired: true })
+    mockFetch(() => ({ status: 429, body: { retryAfterSeconds: 900 } }))
+    await expect(login2fa({ challengeToken: "c1", code: "1" })).rejects.toMatchObject({
+      message: "Too many attempts — try again in 15 minutes",
+    })
   })
 
   it("rateLimitMessage reads naturally", () => {

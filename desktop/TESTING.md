@@ -81,7 +81,7 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-20 | Settings → Desktop → turn **Launch at login** on. | In `regedit`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` has a `Packrat` value whose command ends with `--minimized`. The "Start minimized to tray" switch appears. | Pass 2026-10-24 v0.18.1 — `Packrat REG_SZ C:\Users\…\AppData\Local\Packrat\packrat-desktop.exe --minimized` |
+| W-20 | Settings → Desktop → turn **Launch at login** on. | In `regedit`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` has a `Packrat` value whose command ends with `--minimized` and whose exe path is wrapped in double quotes (`"C:\…\packrat-desktop.exe" --minimized`). The "Start minimized to tray" switch appears. | Pass 2026-10-24 v0.18.1 — `Packrat REG_SZ C:\Users\…\AppData\Local\Packrat\packrat-desktop.exe --minimized` |
 | W-21 | Turn **Start minimized to tray** on, sign out of Windows and back in. | Packrat starts hidden: only the tray icon is visible. | Partial 2026-10-24 v0.18.1 — simulated via the Run command, real Windows logon not tested: window created hidden, tray icon present |
 | W-22 | Turn **Start minimized to tray** off, sign out and back in. | Packrat starts with its window shown. | Partial 2026-10-24 v0.18.1 — simulated via the Run command, real Windows logon not tested: window shown |
 | W-23 | Start the app from the Start menu with the option on. | The window is shown (only an autostart launch hides it). | Pass 2026-10-24 v0.18.1 |
@@ -109,14 +109,14 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 
 ### Downloads and the Save-as dialog
 
-Needs a library item that can be downloaded from the server (Library → item → Download).
+Downloads are done with the backup file: **Backup → Backup History → Download** next to a backup (create one first with **Backup now** if the list is empty).
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-50 | **Ask where to save each download** off. Download an item. | It lands in the Downloads folder (or the folder chosen in Settings) with no dialog; a toast with **Show in folder** appears; the button opens Explorer with the file selected. | Pass 2026-10-24 v0.18.1 — downloaded via Backup → Backup History → Download (no Library item download exists, see Findings) |
-| W-51 | Download the same item again. | A numbered copy (`name (1).ext`) is created; the first file is untouched. | Pass 2026-10-24 v0.18.1 |
+| W-50 | **Ask where to save each download** off. Backup → Backup History → **Download** a backup. | It lands in the Downloads folder (or the folder chosen in Settings) with no dialog, under the server's file name — no " (N)" suffix unless that same name already exists in the TARGET folder; a toast with **Show in folder** appears; the button opens Explorer with the file selected. | Pass 2026-10-24 v0.18.1 — downloaded via Backup → Backup History → Download (no Library item download exists, see Findings) |
+| W-51 | Download the same backup again. | A numbered copy (`name (1).ext`) is created; the first file is untouched. | Pass 2026-10-24 v0.18.1 |
 | W-52 | Switch the window to another app while a larger download runs. | When it finishes, a Windows notification "Download complete" appears. With the window focused, no notification (toast only). | Pass 2026-10-24 v0.18.1 — tested with a 6 KB file, not a larger one |
-| W-53 | Turn **Ask where to save** on, download an item. | The Save dialog opens with the file name filled in and the last/default folder selected; saving creates the file there, and the toast shows its final path. | Pass 2026-10-24 v0.18.1 — but the pre-filled name carries a " (N)" suffix, see Findings |
+| W-53 | Turn **Ask where to save** on, download a backup (Backup → Backup History → **Download**). | The Save dialog opens with the server's file name filled in — it must NOT carry a " (N)" suffix, even if the same name exists in the system Downloads folder (a clash in the folder you save to is the dialog's own overwrite prompt, W-55) — and the last/default folder selected; saving creates the file there, and the toast shows its final path. | Pass 2026-10-24 v0.18.1 — but the pre-filled name carries a " (N)" suffix, see Findings |
 | W-54 | Same, but press Cancel in the dialog. | No file is left anywhere (check the target folder and `%LOCALAPPDATA%\io.github.matiss-norenbergs.packrat\downloads`), and the progress toast is dismissed without an error toast. | Pass 2026-10-24 v0.18.1 |
 | W-55 | Save to an existing name and confirm "replace". | The file is replaced, no stray copy. | Pass 2026-10-24 v0.18.1 |
 | W-56 | Settings → Desktop → Downloads → **Change…**, pick a folder. | The shown path updates; the next download goes there. **Use default** returns to the OS Downloads folder. | Pass 2026-10-24 v0.18.1 — but a file in the chosen (empty) folder got a " (7)" suffix, see Findings |
