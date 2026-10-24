@@ -34,7 +34,7 @@ and what's still deliberately out of scope.
 
 ## Development
 
-Requirements: Go 1.23+, Node 20+, `yt-dlp` and `ffmpeg` on `PATH`.
+Requirements: Go 1.26+ (see `backend/go.mod`), Node 22+, `yt-dlp` and `ffmpeg` on `PATH`.
 
 ```
 cp .env.example .env
@@ -54,6 +54,28 @@ docker compose -f docker/docker-compose.yml up --build
 ```
 
 The app listens on `http://localhost:50505`.
+
+### Configuration
+
+Environment variables (set them in `.env` natively, or under `environment:` in
+`docker/docker-compose.yml`). Everything has a default, so none are required.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `PORT` | `50505` | HTTP port. |
+| `DB_PATH` | `./data/db/packrat.db` | SQLite database file. |
+| `MEDIA_ROOT` | `./data/media` | Where downloaded media lives (the library's root). |
+| `IMAGES_ROOT` | `./data/images` | Generated thumbnails, artist images and collection covers. |
+| `BACKUPS_ROOT` | `./data/backups` | Automatic and manual backup files. |
+| `CACHE_ROOT` | `./data/cache` | Disposable cache of resized images (rebuilt on demand, swept after 7 days unused). |
+| `MAX_CONCURRENT_DOWNLOADS` | `2` | Parallel downloads. Only seeds a fresh database; Settings → General wins afterwards. |
+| `MAX_CONCURRENT_FFMPEG_TRANSCODES` | `2` | Parallel Trim previews. Same: seeds a fresh database. |
+| `YTDLP_PATH`, `FFMPEG_PATH`, `FFPROBE_PATH`, `PIP_PATH` | `yt-dlp`, `ffmpeg`, `ffprobe`, `pip` | Tool locations. The Docker image keeps yt-dlp in a venv under the data volume so "Update yt-dlp" survives restarts. |
+| `STATIC_DIR` | empty | Built frontend to serve (the Docker image sets it; empty in dev, where Vite serves the UI). |
+| `MIGRATIONS_DIR` | `../database/migrations` | Database migrations (the Docker image sets it). |
+| `CORS_ALLOWED_ORIGINS` | the Tauri app origins | Origins allowed to call the API cross-origin (the desktop app). See [`docs/api.md`](docs/api.md#auth-and-csrf). |
+| `TRUSTED_PROXIES`, `PACKRAT_SECRET_KEY` | empty | Login rate limiting and 2FA: see [Security and admin commands](#security-and-admin-commands). |
+| `PACKRAT_ACTION_<N>_*` | none | Optional sidebar "Actions" (see [`docs/FEATURES.md`](docs/FEATURES.md) → Host actions). |
 
 ### Dependabot
 

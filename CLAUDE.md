@@ -10,7 +10,7 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - `docs/FEATURES.md` — page-by-page behavior. **The source of truth for "how should X work".**
 - `docs/architecture.md` — backend package layout, data flow, "Deliberate scope cuts" (check before
   adding something that may have been ruled out on purpose).
-- `docs/api.md` — REST/WS surface (83 KB — grep it by endpoint, don't load it whole).
+- `docs/api.md` — REST/WS surface (~95 KB — grep it by endpoint, don't load it whole).
 - `CHANGELOG.md` — read only the top ~100 lines for recent context.
 - Ignore `../docker-app-plan.md`: the original skeleton-era spec, long outdated.
 - `desktop/README.md` — the Tauri desktop shell (a thin client for a remote server; shares `frontend/`).
@@ -49,10 +49,22 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 ## Conventions (follow these; they're deliberate)
 
 **Process**
-- With every feature/fix, update `docs/FEATURES.md`, `docs/api.md` (if the API changed), and add a
-  bullet under the day's section in `CHANGELOG.md` (newest first; skip pure styling/spacing tweaks
-  unless asked). Don't commit unless asked; when asked, match the repo's style: short subject,
-  bullet body, wrapped at ~72 cols.
+- **Branches:** name them `DDMMYY-short-slug` — the day the work starts (day, month, two-digit year),
+  then a few lowercase words joined by hyphens, e.g. `241026-desktop-e2e` for 24 Oct 2026. Cut each
+  one from an up-to-date `main`, one branch per task; never commit to `main` directly. Open a PR only
+  when asked. (Dependabot's own `dependabot/...` branches are the exception.)
+- **Docs are part of the change.** Whenever a feature is added or behavior changes (UI behavior, API,
+  settings, environment variables, desktop behavior), update the docs in the same branch:
+  `docs/FEATURES.md` (how it behaves), `docs/api.md` (any endpoint, field or setting), `docs/architecture.md`
+  (design decisions, new packages, or something moving in/out of "Deliberate scope cuts"), `README.md`
+  (setup, environment variables), `desktop/README.md` and `desktop/TESTING.md` (desktop changes, and the
+  Windows checklist when a step changes), plus a bullet under the day's section in `CHANGELOG.md`
+  (newest first). Not needed for purely visual fixes (spacing, colors, wording), refactors with no
+  behavior change, or dependency bumps. If you notice a doc that's wrong while you're in there, fix it.
+- **Commits:** commit on your `DDMMYY-slug` branch as the work reaches a stable point and push it — the
+  branch name keeps it separate from `main`. Match the repo's style: short subject, bullet body, wrapped
+  at ~72 cols. Machine-local files stay uncommitted
+  (`backend/run-dev.cmd`, `.claude/`, `docker/docker-compose.local.yml`, `CLAUDE.local.md`).
 - Adding a setting: model const in `models/settings.go`, getter + GET/PATCH wiring in
   `api/settings_handler.go`, DTO fields in `api/dto.go`, TS type in `types/api.ts`, UI in
   `SettingsPage.tsx` (each tab uses the shared `SaveRow`).
@@ -85,8 +97,3 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - yt-dlp cookies: Settings → yt-dlp → "Cookies file" (cookies.txt content, written next to the DB,
   passed via `--cookies`) is the one that works in Docker; "Cookies browser" cannot reach a host
   browser profile from inside the container and is ignored when a file is set.
-
-## Current state
-
-Work up to the "cookies file support & color fix" commit is committed. Uncommitted/untracked here:
-local-only dev tooling (`backend/run-dev.cmd`, `.claude/`) and any local compose network tweaks — don't commit these.

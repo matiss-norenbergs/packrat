@@ -13,6 +13,14 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Docs audit** — checked the docs against the code and filled the gaps: `GET /api/version` (public) and
+  the ~30 Settings fields missing from `api.md`; the **filename template** feature (`{artist}/{title}`
+  tokens, modifiers, subfolders, the collection default) which was implemented but undocumented and listed as
+  a non-feature in `architecture.md`; the collection fields year, sequence range, filename template,
+  "show as single item in Browse" and the ghost/sequence-gap counts; the Privacy master switch, Max
+  Concurrent Transcodes and yt-dlp retries/cookies-file settings; a README configuration table (all
+  environment variables, updated Go/Node versions) and `.env.example`; the packages missing from the
+  backend layout in `architecture.md`. Removed the stale "Current state" section from `CLAUDE.md`.
 - **Friendlier wrong-2FA-code message; Close to tray is a switch** — a wrong authenticator code no longer
   shows the raw "invalid code" (login step and the enable/disable/regenerate dialogs): it says to check the
   phone's clock, or that the recovery code isn't valid or was already used. Settings → Desktop → "Close to

@@ -147,7 +147,7 @@ The live download queue.
     its Season # and Artist defaults (see Collections below); only fills those in, never clears a
     value you've already typed.
   - Video, audio, or **Image**, quality/format, and an optional filename override (defaults to the
-    source's title). Image is for a direct link to a single image file — no `yt-dlp` involved, no
+    source's title; see **Filename Template** below). Image is for a direct link to a single image file — no `yt-dlp` involved, no
     gallery/multi-image support (a real gallery-site integration is a possible future addition, not
     this). The image is re-encoded per Settings → Library → "Image conversion format" (default
     JPEG) and doubles as its own thumbnail.
@@ -164,6 +164,19 @@ The live download queue.
   - **Advanced** section: Title/Artist/Year/Season #/Sequence # overrides (applied once the
     download completes, taking priority over whatever yt-dlp reports), Tags, and a "Generate NFO"
     checkbox (writes a Kodi/Jellyfin-style `.nfo` sidecar alongside the file).
+  - **Filename Template** — names the file (and optionally its subfolders) from the download's own
+    details, e.g. `{artist}/{title}` or `{title} S{season:02}E{sequence:02}`. Tokens: `{title}`,
+    `{uploader}` (also `{channel}`), `{date}` (upload date, `YYYYMMDD`), `{artist}`, `{year}`,
+    `{season}`, `{sequence}`, `{collection}`; click one under the field to insert it, or open the
+    builder next to the field for a live preview using what's already filled in (title, artist,
+    year, season, sequence, collection, plus the video's uploader and date when the preview fetched
+    them). A token with no value is simply left empty (there is no "skip this part if empty"). After a colon a
+    token takes a modifier: digits zero-pad a number (`{season:02}` → `01`), and anything else joins
+    the words of the value (`{artist:.}` → `Rick.Astley`). A `/` makes subfolders inside the
+    collection's folder; each part is cleaned of characters the file system doesn't allow, and parts
+    that end up empty are dropped. Characters that can't be used are flagged under the field. A
+    collection can supply a default template (see Collections), which a template or filename typed
+    here overrides; a plain **Filename** beats both. The Bulk Download rows have the same field.
 - **Bulk Download** — queue several URLs at once from a set of rows (each with its own
   collection/type/quality/format/tags/advanced fields, and its own optional per-row preview), or
   paste a list of URLs (one per line) into a textarea and add them all as rows in one go. Up to 50
@@ -361,6 +374,19 @@ selectable from the New Download dialog so you don't have to re-pick them every 
   placed into that collection, or into any sub-collection that doesn't set its own Artist, defaults
   its own Artist field to this value — this one *does* walk up the collection tree, so a layout
   like `Shows/SomeArtist/Season 2/` still resolves the artist from a few levels above.
+- **Year (optional)** — like Season #: a new download placed directly into this collection defaults
+  its own Year to it.
+- **Sequence range (optional)** — the expected first and last item of the collection (a blank first
+  box means 1). With a range set, the Sequence # fields of items placed here become a picker, the Edit
+  Sequence dialog also shows the slots not filled yet, and the Library's folder tiles warn about numbers
+  that are missing inside the range (a warning icon whose popover lists "Missing seq: …", first ten).
+  Folder tiles also show how many of a collection's files are ghosts.
+- **Filename Template (optional)** — the default [Filename Template](#downloads) for new downloads
+  into this collection (empty means `{title}`). Unlike the other defaults it is applied by the server
+  when a download is queued through the API (New Download, Bulk Download), unless the request names a
+  filename or template of its own; downloads queued by a subscription don't use it.
+- **Show as single item in Browse** — groups everything in the collection and its sub-collections
+  behind one cover tile on the Browse page (a "show"/"album" tile) instead of listing each item.
 - **Jellyfin Library ID (optional)** — only shown when Jellyfin integration is enabled in Settings.
   Links this collection to a specific Jellyfin library so "Refresh after download → Specific
   library" (Settings → Jellyfin) knows which one to rescan when something lands here.
@@ -644,7 +670,10 @@ Two columns: **App Settings** (General, Account, yt-dlp, Appearance) on the left
 Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the right.
 
 - **General** — max concurrent downloads (applies to the live worker pool immediately, no
-  restart needed) and a download timeout in minutes (kills and marks failed any download still
+  restart needed), max concurrent transcodes (how many Trim previews ffmpeg may generate at once;
+  also applies immediately, and both limits survive a restart — the `MAX_CONCURRENT_DOWNLOADS` /
+  `MAX_CONCURRENT_FFMPEG_TRANSCODES` environment variables only seed a fresh database) and a
+  download timeout in minutes (kills and marks failed any download still
   running past the limit; 0 = no limit). Download directory is shown but not editable here (set
   via the `MEDIA_ROOT` environment variable).
 - **Account** — change your password (requires the current one), and a **Two-factor authentication**
@@ -685,7 +714,12 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   its feature off is allowed to finish. AI Enhancement keeps its own switch in its own tab, since it
   also needs a connection set up.
 - **yt-dlp** — shows the installed version and whether a newer one is available on PyPI; one-click
-  update. Also where the cookies browser/profile, proxy, and rate-limit are set. The proxy
+  update. Also where the cookies, proxy, rate limit and retry count are set. **Cookies file** takes the
+  content of a `cookies.txt` (Netscape format), which Packrat writes next to the database and passes to
+  yt-dlp with `--cookies`; this is the option that works in Docker. **Cookies browser/profile** reads a
+  browser profile on the machine running the server — a Docker container can't reach one on the host — and is
+  ignored while a cookies file is set. Retries `0` leaves yt-dlp's
+  defaults; otherwise it is passed as `--retries` and `--fragment-retries`. The proxy
   (`socks5://`/`http://`/`https://`) is used by `yt-dlp` itself and by every image download/preview
   fetch (see Downloads above) — a sidebar dot next to **Downloads** shows its live state at a
   glance: grey (not set), green (reachable), red (configured but not reachable).
@@ -701,8 +735,12 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
 - **Downloads** — default download type and quality for new downloads; "I trust this source" (skip
   the New Download preview fetch and queue immediately); how long to keep the download log
   (Downloads/Logs pages) before automatic pruning, plus a "Clear all now" button.
-- **Privacy** — how strongly private-collection/private-tag thumbnails are blurred (weak / default
-  / strong) until clicked to reveal.
+- **Privacy** — **Enable privacy** is the master switch: while it's off, every privacy feature
+  (blurring, lock icons, the reveal-all button, the Private checkboxes on collections and tags) is
+  hidden app-wide, yet each collection's/tag's own Private flag is kept, so turning it back on
+  restores the blurring exactly. Below it: how strongly private-collection/private-tag thumbnails are
+  blurred (weak / default / strong) until clicked to reveal, and **Show private items unblurred in
+  Browse** (Browse only; Library and Collections keep blurring).
 - **History** — "Anonymize History Links" toggle (see History above); how long to keep history
   entries before automatic pruning, plus a "Clear all now" button.
 - **Library** — resolution and thumbnail quality tiers (the color-coded low/medium/high thresholds

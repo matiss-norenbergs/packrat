@@ -15,9 +15,9 @@ since Gin matches registered routes before falling back to serving `index.html`.
 - **Session**: an opaque 64-char hex token in cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`,
   `Secure=false` — deliberate, since the app is commonly run over plain HTTP on a LAN). 30-day
   expiry, validated server-side against a sessions table — not a signed/stateless token.
-- **`RequireAuth`** gates every `/api/*` route except `/api/health` and
-  `/api/auth/{status,setup,login,login/2fa,logout}`, plus `/media-files/*` and `/ws`. Missing/invalid session
-  → `401`.
+- **`RequireAuth`** gates every `/api/*` route except `/api/health`, `/api/version` and
+  `/api/auth/{status,setup,login,login/2fa,logout}`, and also protects `/media-files/*`,
+  `/local-images/*` and `/ws`. Missing/invalid session → `401`.
 - **CSRF**: double-submit cookie. Cookie `packrat_csrf` (`HttpOnly=false` so JS can read it, same
   value as the session token, set/cleared alongside it on login/setup/logout). Every mutating
   request (anything but GET/HEAD/OPTIONS) under the authenticated `/api` group must echo that value
@@ -53,6 +53,18 @@ since Gin matches registered routes before falling back to serving `index.html`.
 | GET | `/api/health` | public |
 
 `200 {"status":"ok"}`, or `503 {"status":"unhealthy","error":"..."}` on a database ping failure.
+
+## Version
+
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/api/version` | public |
+
+`200 {"version": "0.18.2", "latestVersion": "0.18.2" | null, "updateAvailable": false}`. `version` is
+this build's release version (`"dev"` for a build that wasn't made by the release pipeline).
+`latestVersion` is the newest GitHub release, looked up best effort — `null` when the lookup fails —
+and `updateAvailable` is `version != latestVersion`, always `false` for a `dev` build. The desktop app
+reads it to compare its own version with the server's (see `docs/FEATURES.md` → Desktop app).
 
 ## Auth
 
@@ -162,6 +174,7 @@ since Gin matches registered routes before falling back to serving `index.html`.
   "seasonNumber": null,
   "sequenceNumber": null,
   "filenamePrefix": null,
+  "filenameTemplate": null,
   "tags": ["music", "live"],
   "generateNfo": true
 }
@@ -179,6 +192,21 @@ optional. Notes:
   invalid folder or unknown collection is a `400`, not a later async failure.
 - `title`/`artistId`/`year`/`seasonNumber`/`sequenceNumber`/`filenamePrefix` are **overrides
   applied once the download completes**, taking priority over whatever yt-dlp reports.
+- **Filename** — the final name is chosen in this order: a literal `filename` (used as given,
+  sanitized) beats `filenameTemplate`, which beats `filenamePrefix` (`"<prefix> <title>"`); with none
+  set, yt-dlp's own `%(title)s` naming applies. If neither `filename` nor `filenameTemplate` is
+  given and the request has a `collectionId`, the collection's own `filenameTemplate` is used (see
+  Collections).
+- `filenameTemplate` — a template such as `{artist}/{title}` or `{title} S{season:02}E{sequence:02}`,
+  resolved when the download runs. Tokens: `{title}` (the effective title, i.e. your `title`
+  override or yt-dlp's), `{uploader}` (alias `{channel}`), `{date}` (yt-dlp's upload date,
+  `YYYYMMDD`), `{artist}` (the `artistId` override's name), `{year}` (the `year` override, else the
+  upload year), `{season}`, `{sequence}`, `{collection}` (the collection's name). A token that has no
+  value becomes empty text; there is no conditional logic. A token may carry a modifier after a
+  colon: digits (`{season:02}`) zero-pad a numeric value to that width; anything else
+  (`{artist:.}`) replaces the runs of spaces inside the value with that text (`Rick.Astley`). A `/`
+  in the template makes subfolders inside the collection's folder; every segment is sanitized on its
+  own, and segments that end up empty (or `..`) are dropped.
 - `tags` are applied to the resulting library item on completion (created if missing).
 - Response: `201 {"id": 42}`.
 - **`downloadType=image`**: for a direct link to a single image file — no yt-dlp involved at all,
@@ -221,14 +249,16 @@ URL, also checks for a duplicate already in the library (by URL/video ID).
 
 ```json
 {
-  "title": "Some Video", "uploader": "Some Channel", "duration": 214,
+  "title": "Some Video", "uploader": "Some Channel", "uploadDate": "20240131", "duration": 214,
   "thumbnail": "https://...jpg", "resolution": "1920x1080",
   "isPlaylist": false, "playlistTitle": "", "playlistCount": 0,
   "duplicate": null
 }
 ```
 
-For a playlist URL, `isPlaylist=true` and only `playlistTitle`/`playlistCount` are populated.
+`uploadDate` is yt-dlp's `YYYYMMDD` upload date (`""` if unknown) — it feeds the `{date}` token in the
+filename-template preview. For a playlist URL, `isPlaylist=true` and only `playlistTitle`/`playlistCount`
+are populated.
 
 ### `GET /api/downloads/preview-image?url=...`
 
@@ -786,9 +816,11 @@ candidates), **not** duplicate-video detection. Two independent flows: a single-
 ```json
 {
   "id": 7, "name": "Anime", "parentId": 2, "rootPath": "Anime", "path": "Shows/Anime",
-  "defaultQuality": "1080p", "defaultDownloadType": "video", "isPrivate": false,
-  "seasonNumber": 2, "artistId": null, "itemCount": 12,
-  "effectiveIsPrivate": false, "totalItemCount": 40,
+  "defaultQuality": "1080p", "defaultDownloadType": "video", "filenameTemplate": "{title}",
+  "isPrivate": false, "seasonNumber": 2, "year": null, "sequenceMin": null, "sequenceMax": 12,
+  "artistId": null, "browseAsShow": false, "itemCount": 12,
+  "effectiveIsPrivate": false, "totalItemCount": 40, "ghostItemCount": 1, "totalGhostItemCount": 3,
+  "sequenceGaps": { "min": 1, "max": 12, "count": 3, "missing": [4, 5, 9] },
   "coverImagePath": null, "coverImageSmallPath": null, "coverImageMediumPath": null,
   "latestItemThumbnailPath": "Anime/Season 1/Episode 3.jpg",
   "jellyfinLibraryId": "3c8f6b1a-...", "createdAt": "...", "updatedAt": "..."
@@ -801,6 +833,13 @@ inheritance-aware versions used by things like the Library toolbar's reveal-all 
 `coverImage*Path` are set only once a cover has been explicitly assigned (see below); until then,
 folder/Browse tiles fall back to `latestItemThumbnailPath` — the most-recently-downloaded item's
 thumbnail anywhere in the collection's subtree.
+
+`ghostItemCount`/`totalGhostItemCount` are the placeholder (no-file) subsets of `itemCount`/
+`totalItemCount`, with the same own-versus-rolled-up scoping. `sequenceGaps` summarizes the holes in
+this collection's own sequence numbers and is `null` when there is nothing to report (no range, or
+nothing missing): `min`/`max` are the expected range — the items' lowest and highest sequence number,
+each replaced by the collection's `sequenceMin`/`sequenceMax` when that is set — `count` is the true number of
+missing numbers, and `missing` lists them (capped at the first 50).
 
 ### Cover image
 
@@ -838,8 +877,9 @@ thumbnail anywhere in the collection's subtree.
 ```json
 {
   "name": "Anime", "parentId": 2, "rootPath": "Anime",
-  "defaultQuality": "1080p", "defaultDownloadType": "video", "isPrivate": false,
-  "jellyfinLibraryId": null, "seasonNumber": null, "artistId": null
+  "defaultQuality": "1080p", "defaultDownloadType": "video", "filenameTemplate": "{title}",
+  "isPrivate": false, "jellyfinLibraryId": null, "seasonNumber": null, "year": null,
+  "sequenceMin": null, "sequenceMax": null, "artistId": null, "browseAsShow": false
 }
 ```
 
@@ -852,6 +892,16 @@ uniqueness). Response `201 {"id": 7}`.
   to this value (not inherited by sub-collections).
 - `artistId` — new downloads placed into this collection, or any sub-collection that doesn't set
   its own `artistId`, default their own Artist to this value (walks up the ancestor chain).
+- `year` — new downloads placed directly into this collection default their own Year to this value.
+- `sequenceMin`/`sequenceMax` — the expected range of items (an unset minimum counts as 1 in the UI).
+  They widen the range used for `sequenceGaps`, turn the Sequence # fields into a picker over the
+  range, and let the Edit Sequence dialog show slots that aren't filled yet.
+- `filenameTemplate` — the default Filename Template for new downloads into this collection (same
+  tokens as `POST /api/downloads`); an empty value is stored as `"{title}"`. Applied **server-side**
+  when a download request names this collection and gives neither a `filename` nor its own
+  `filenameTemplate`.
+- `browseAsShow` — the Browse page groups everything in this collection and its sub-collections
+  behind one cover tile instead of listing the items separately.
 
 ### `PATCH /api/collections/:id`
 
@@ -1029,20 +1079,37 @@ list.
 
 ```json
 {
-  "downloadDirectory": "/media", "maxConcurrentDownloads": 3, "downloadTimeoutMinutes": 0,
-  "defaultQuality": "best", "defaultDownloadType": "video", "importIgnoredFolders": [".stfolder"],
-  "historyAnonymizeUrls": false, "historyRetentionDays": 0, "downloadLogRetentionDays": 0,
-  "libraryView": "grid", "librarySortKey": "downloadedAt", "librarySortDir": "desc",
-  "libraryMode": "manage", "libraryPaginationEnabled": false, "libraryPageSize": 48,
-  "dashboardHiddenWidgets": [],
+  "downloadDirectory": "/media", "maxConcurrentDownloads": 2, "maxConcurrentTranscodes": 2,
+  "downloadTimeoutMinutes": 0, "defaultQuality": "best", "defaultDownloadType": "video",
+  "importIgnoredFolders": [], "historyAnonymizeUrls": false, "historyRetentionDays": 0,
+  "downloadLogRetentionDays": 0, "libraryView": "grid", "librarySortKey": "downloadedAt",
+  "librarySortDir": "desc", "libraryMode": "manage", "libraryPaginationEnabled": false,
+  "libraryPageSize": 48, "dashboardHiddenWidgets": [],
   "thumbnailFrameCount": 4, "thumbnailFrameRangeLow": 5, "thumbnailFrameRangeHigh": 100,
-  "privacyBlurStrength": "default", "skipDownloadPreview": false,
+  "imageConvertFormat": "jpg",
+  "privacyEnabled": false, "privacyBlurStrength": "default", "browseIgnorePrivacy": false,
+  "skipDownloadPreview": false,
   "jellyfinEnabled": false, "jellyfinUrl": "", "jellyfinApiKey": "", "jellyfinRefreshMode": "none",
-  "libraryAutoplay": true, "imageConvertFormat": "jpg",
+  "libraryAutoplay": true,
+  "ytdlpCookiesBrowser": "", "ytdlpCookiesProfile": "", "ytdlpCookiesFile": "", "ytdlpProxy": "",
+  "ytdlpRateLimit": "", "ytdlpRetries": 0,
+  "autoBackupIntervalHours": 0, "backupRetentionCount": 14,
+  "resolutionTierMediumEnabled": true, "resolutionThresholdLow": 720, "resolutionThresholdHigh": 2160,
+  "thumbnailResolutionTierMediumEnabled": true, "thumbnailResolutionThresholdLow": 480,
+  "thumbnailResolutionThresholdHigh": 1080,
   "featureSubscriptionsEnabled": true, "featureFrameMatchingEnabled": true,
-  "featureCompareListEnabled": true, "featureFileImportEnabled": true
+  "featureCompareListEnabled": true, "featureFileImportEnabled": true,
+  "thumbnailEnhancementEnabled": false, "thumbnailEnhancementUrl": "",
+  "thumbnailEnhancementUsername": "", "thumbnailEnhancementPassword": "",
+  "thumbnailEnhancementUpscaler": "R-ESRGAN 4x+", "thumbnailEnhancementMinDim": 720,
+  "thumbnailEnhancementFactor": 4, "thumbnailEnhancementTargetMode": "factor",
+  "thumbnailEnhancementTargetDim": 1920, "thumbnailEnhancementScheduleEnabled": true,
+  "thumbnailEnhancementRetentionDays": 0, "thumbnailEnhancementAutoApprove": false,
+  "thumbnailEnhancementAutoOnDownload": false, "thumbnailEnhancementMaxPerSweep": 5
 }
 ```
+
+(The values above are the defaults of a fresh install.)
 
 `feature*Enabled` are the Settings → Features toggles (all default `true`). While one is `false`, every
 route of that feature answers `403 {"error": "<Feature> is turned off in Settings → Features",
@@ -1059,6 +1126,27 @@ gets re-encoded to — matches the existing convention that video/audio thumbnai
 JPEG. `thumbnailFrameRangeLow`/`thumbnailFrameRangeHigh` (percent 0-100, default 5/100) bound which
 portion of a video's duration "Choose from Video"/Quick Grab pick candidate frames from — see the
 Library thumbnail endpoints above.
+
+Other fields, each configured on its own Settings tab (see `docs/FEATURES.md` → Settings):
+
+- `maxConcurrentTranscodes` — how many trim previews (ffmpeg re-encodes) may be generated at once;
+  like `maxConcurrentDownloads` it resizes the live limit immediately and survives a restart. The
+  `MAX_CONCURRENT_FFMPEG_TRANSCODES` environment variable is only the fallback for a fresh database.
+- `privacyEnabled` — master switch of the privacy workflow (blurring, lock icons, the Private
+  checkboxes); a collection's or tag's own Private flag is never changed by it. `privacyBlurStrength`
+  is `"weak"|"default"|"strong"`; `browseIgnorePrivacy` shows private items unblurred on the Browse
+  page only.
+- `ytdlpCookiesBrowser`/`ytdlpCookiesProfile`/`ytdlpCookiesFile`, `ytdlpProxy`, `ytdlpRateLimit` and
+  `ytdlpRetries` (`0` = yt-dlp's defaults, otherwise passed as both `--retries` and `--fragment-retries`) are passed to every yt-dlp call (see the yt-dlp and Proxy
+  sections). A cookies *file* takes precedence over a cookies *browser*.
+- `resolutionTierMediumEnabled`, `resolutionThresholdLow`/`resolutionThresholdHigh` (one of
+  480, 720, 1080, 1440, 2160, 4320) are the low/medium/high colour tiers for video resolution on
+  library cards; the `thumbnailResolution*` trio is the same for thumbnail resolution.
+- `autoBackupIntervalHours` (`0|6|12|24|72|168`) and `backupRetentionCount` are documented under
+  Backup.
+- `thumbnailEnhancement*` configure AI Enhancement (see that section); `thumbnailEnhancementPassword`
+  is returned in plaintext like `jellyfinApiKey`. `thumbnailEnhancementTargetMode` is
+  `"factor"|"resolution"`.
 
 ### `PATCH /api/settings` — every field optional, only provided ones are persisted
 
