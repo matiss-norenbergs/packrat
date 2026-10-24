@@ -223,7 +223,7 @@ export class App {
     // scrolls sideways, which WebDriver can't click reliably).
     await this.click(By.css('[aria-label="Switch server"]'))
     await this.click(By.xpath("//*[@role='menuitem' and contains(normalize-space(.), 'Manage servers')]"))
-    await this.waitForText("Launch at login")
+    await this.waitForText("Startup")
     await this.installHooks()
   }
 

@@ -41,7 +41,7 @@ Unlike the browser, the desktop client authenticates with a bearer token instead
 server's `CORS_ALLOWED_ORIGINS` must include the app's origin — the Tauri defaults are built in).
 The token — one per saved server — is kept in the OS keychain (Windows Credential Manager, macOS
 Keychain, Linux Secret Service) rather than a plain file; where there is no keychain it falls back to the app's local
-storage, and Settings → Desktop says which is in use ("Token storage: OS keychain" / "Local file
+storage, and Settings → Desktop → Servers says which is in use ("Token storage: OS keychain" / "Local file
 (keychain unavailable)"). A login from before this change is migrated automatically. This keeps the
 token out of readable app data (disk images, backups), not out of reach of malware running as you.
 None of this applies to the web UI, which behaves as before. See "Auth and CSRF" in
@@ -52,10 +52,11 @@ needless " (1)" added to the name; see **Downloads** below), and the window reme
 brings the existing window forward (single instance). A **tray icon** (left click, or "Show
 Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of
-quitting, so it keeps running. **Launch at login** (Settings → Desktop, off by default) starts the app
-when you sign in to the computer. The switch shows the operating system's own startup entry (read
-from the system each time, not a copy of our own), so it stays right if you change it elsewhere.
-Once it is on, **Start minimized to tray** (also off by default) makes those automatic launches keep
+quitting, so it keeps running. Settings → Desktop is laid out as cards — Servers, Window and startup, Downloads, Updates — with each
+setting's explanation in an info popover next to its label. The **Startup** select (Settings → Desktop; "Don't start at login" by default) offers
+"Start at login" and "Start at login, hidden in the tray". Whether it starts at login is the operating
+system's own startup entry (read from the system each time, not a copy of our own), so the select stays
+right if you change that elsewhere. The hidden option makes those automatic launches keep
 the window hidden with just the tray icon; opening the app yourself always shows the window, and if
 the system tray isn't available (for example GNOME without an indicator extension) the window is
 shown anyway so the app never disappears. If the server becomes unreachable while the app is open (found out

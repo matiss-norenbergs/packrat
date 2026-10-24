@@ -6,19 +6,30 @@ import { waitFor } from "../lib/proc.mjs"
 import { scenario } from "../lib/scenario.mjs"
 import { ADMIN } from "../lib/server.mjs"
 
-scenario("5. Launch at login creates and removes the autostart entry", async (s) => {
+scenario("5. The Startup select creates and removes the autostart entry", async (s) => {
   const server = await s.server()
   const app = await s.launch()
   await app.connect(server.url, "Test server")
   await app.createAdmin(ADMIN)
   await app.openSettingsDesktopTab()
 
-  assert.deepEqual(autostartEntries(app.home), [], "nothing is registered before the switch is turned on")
-  const toggle = await app.find(By.id("launch-at-login"))
-  await app.driver.wait(async () => toggle.isEnabled(), 10_000)
-  assert.equal(await toggle.getAttribute("aria-checked"), "false")
+  assert.deepEqual(autostartEntries(app.home), [], "nothing is registered before a startup option is chosen")
+  const select = await app.find(By.id("startup"))
+  await app.driver.wait(async () => select.isEnabled(), 10_000)
+  // What the select displays. getText() can come back empty from WebKitWebDriver (and the text is
+  // filled in a moment after the select is enabled), so read textContent and poll.
+  const shown = () => app.driver.executeScript("return (arguments[0].textContent || '').trim()", select)
+  await waitFor("the select to show \"Don't start at login\"", async () => (await shown()) === "Don't start at login", 10_000)
 
-  await toggle.click()
+  // Radix renders the options in a portal, so pick them by role and exact text.
+  const choose = async (label) => {
+    await app.click(By.id("startup"))
+    await app.click(By.xpath(`//*[@role='option' and normalize-space(.)=${JSON.stringify(label)}]`))
+    await waitFor(`the select to show "${label}"`, async () => (await shown()) === label, 10_000)
+  }
+  const startMinimized = async () => (await app.invoke("get_start_minimized")).value
+
+  await choose("Start at login")
   const [entry] = await waitFor(
     "the autostart entry to appear",
     () => {
@@ -27,13 +38,16 @@ scenario("5. Launch at login creates and removes the autostart entry", async (s)
     },
     10_000,
   )
-  assert.match(entry.content, /^Exec=.*--minimized\s*$/m, `autostart entry should start with --minimized:\n${entry.content}`)
-  await waitFor("the switch to turn on", async () => (await toggle.getAttribute("aria-checked")) === "true", 10_000)
-  await app.find(By.id("start-minimized")) // the dependent switch appears
+  assert.match(entry.content, /^Exec=.*--minimized\s*$/m, `autostart entry should start with --minimized:
+${entry.content}`)
+  assert.equal(await startMinimized(), false, "'Start at login' shows the window")
 
-  await toggle.click()
+  await choose("Start at login, hidden in the tray")
+  assert.equal(autostartEntries(app.home).length, 1, "the entry stays when the window is to be hidden")
+  assert.equal(await startMinimized(), true, "'hidden in the tray' sets the shell pref")
+
+  await choose("Don't start at login")
   await waitFor("the autostart entry to go away", () => autostartEntries(app.home).length === 0, 10_000)
-  await waitFor("the switch to turn off", async () => (await toggle.getAttribute("aria-checked")) === "false", 10_000)
 
   assertNoPermissionErrors(await app.record(), await app.bodyText())
   assertCleanLog(app.log())

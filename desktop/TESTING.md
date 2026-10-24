@@ -20,12 +20,13 @@ The end-to-end scenarios (`desktop/e2e/scenarios/`):
    out, log in, restart the app and still be signed in.
 3. **Profiles** — add a second server (a second server instance), switch both ways staying signed in
    on each, rename a profile, remove a profile (its token goes), remove the last one.
-4. **Settings → Desktop / permissions** — the Downloads, Launch-at-login and Updates sections load
+4. **Settings → Desktop / permissions** — the Downloads, Startup and Updates sections load
    with no "not allowed" errors, "Check for updates" runs, and every custom shell command
    (`get/set_close_to_tray`, `…_start_minimized`, `…_ask_where_to_save`, `get/reset/choose_download_folder`,
    `token_*`, `match_update_check/install`) is invoked once. *This is the capability/ACL regression check.*
-5. **Launch at login** — the switch creates `~/.config/autostart/*.desktop` with `--minimized` and
-   removes it again (in a throwaway `HOME`).
+5. **Startup select** — "Start at login" creates `~/.config/autostart/*.desktop` with `--minimized`,
+   "…hidden in the tray" keeps it and sets the shell pref, "Don't start at login" removes it again (in a
+   throwaway `HOME`). *Updated for the select; not yet run in CI.*
 6. **Hidden start without a tray** — `--minimized` + "Start minimized" with no tray available (as in
    CI): the window must still be shown (checked with `xwininfo`, i.e. by the window system).
 
@@ -77,17 +78,17 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 | W-14 | **Upgrade:** install a pre-profiles release (one that stores a single `session-token` entry), log in, then install the current version over it. | The app starts signed in; the old `session-token` entry has moved to `session-token:<id>` and the server appears as a profile. | Not run — needs installing an older pre-profiles release over 0.18.1; waiting for your OK |
 | W-15 | Quit and relaunch. | Still signed in without asking for credentials. | Pass 2026-10-24 v0.18.1 (quit by closing the window with Close to tray off) |
 
-### Launch at login
+### Startup (launch at login)
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-20 | Settings → Desktop → turn **Launch at login** on. | In `regedit`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` has a `Packrat` value whose command ends with `--minimized` and whose exe path is wrapped in double quotes (`"C:\…\packrat-desktop.exe" --minimized`). The "Start minimized to tray" switch appears. | Pass 2026-10-24 v0.18.2 — `Packrat REG_SZ "C:\Users\…\AppData\Local\Packrat\packrat-desktop.exe" --minimized` (quoted); "Start minimized to tray" switch appeared |
-| W-21 | Turn **Start minimized to tray** on, sign out of Windows and back in. | Packrat starts hidden: only the tray icon is visible. | Partial 2026-10-24 v0.18.1 — simulated via the Run command, real Windows logon not tested: window created hidden, tray icon present |
-| W-22 | Turn **Start minimized to tray** off, sign out and back in. | Packrat starts with its window shown. | Partial 2026-10-24 v0.18.1 — simulated via the Run command, real Windows logon not tested: window shown |
-| W-23 | Start the app from the Start menu with the option on. | The window is shown (only an autostart launch hides it). | Pass 2026-10-24 v0.18.1 |
-| W-24 | Turn **Launch at login** off. | The `Run` value is removed; the "Start minimized" switch disappears. | Pass 2026-10-24 v0.18.2 — `Run` value gone, "Start minimized" switch gone |
-| W-25 | Delete the `Run` value in `regedit`, reopen Settings. | The switch is off (it reflects the OS, not a stored copy). | Pass 2026-10-24 v0.18.2 — value deleted with `reg delete`, Settings reopened: switch off |
-| X-1 | With **Launch at login** on, `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Close the app, overwrite the value with the OLD unquoted form (`reg add … /v Packrat /t REG_SZ /d "<path>\packrat-desktop.exe --minimized" /f`), start the app normally, wait a few seconds. Then turn the switch off in the app, close the app and start it again. | The value is `"<path>\packrat-desktop.exe" --minimized` (path in double quotes). After the restart the old unquoted value is rewritten quoted. With the switch off, the value is gone and is NOT recreated by a restart. | Pass 2026-10-24 v0.18.2 — quoted on enable; unquoted value was quoted again ~6 s after start; after switch off + restart no `Packrat` value (app started with the WebView2 debug-port env var set, otherwise a normal start) |
+| W-20 | Settings → Desktop → Startup → choose **Start at login**. | In `regedit`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` has a `Packrat` value whose command ends with `--minimized` and whose exe path is wrapped in double quotes (`"C:\…\packrat-desktop.exe" --minimized`). The select shows "Start at login". | needs re-test after the Startup select (previously passed with the old switch 2026-10-24 v0.18.2) |
+| W-21 | Choose **Start at login, hidden in the tray**, sign out of Windows and back in. | Packrat starts hidden: only the tray icon is visible. | needs re-test after the Startup select (previously partial with the old switch: simulated via the Run command, real logon not tested) |
+| W-22 | Choose **Start at login** (window shown), sign out and back in. | Packrat starts with its window shown. | needs re-test after the Startup select (previously partial with the old switch: simulated via the Run command, real logon not tested) |
+| W-23 | Start the app from the Start menu with **hidden in the tray** selected. | The window is shown (only an autostart launch hides it). | needs re-test after the Startup select |
+| W-24 | Choose **Don't start at login**. | The `Run` value is removed; the select shows "Don't start at login". | needs re-test after the Startup select |
+| W-25 | Delete the `Run` value in `regedit`, reopen Settings. | The select shows "Don't start at login" (it reflects the OS, not a stored copy). | needs re-test after the Startup select |
+| X-1 | With **Start at login** chosen, `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Close the app, overwrite the value with the OLD unquoted form (`reg add … /v Packrat /t REG_SZ /d "<path>\packrat-desktop.exe --minimized" /f`), start the app normally, wait a few seconds. Then choose **Don't start at login** in the app, close the app and start it again. | The value is `"<path>\packrat-desktop.exe" --minimized` (path in double quotes). After the restart the old unquoted value is rewritten quoted. With "Don't start at login", the value is gone and is NOT recreated by a restart. | needs re-test after the Startup select (previously passed 2026-10-24 v0.18.2 — quoted on enable; unquoted value was quoted again ~6 s after start; after turning it off + restart no `Packrat` value (app started with the WebView2 debug-port env var set, otherwise a normal start)) |
 
 ### Tray
 
@@ -106,7 +107,7 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 | --- | --- | --- | --- |
 | W-40 | With the app running (window behind another one), start Packrat again from the Start menu. | No second window/process; the running one comes to the front. | Pass 2026-10-24 v0.18.1 |
 | W-41 | With the app hidden in the tray, start it again. | The hidden window is shown. | Pass 2026-10-24 v0.18.1 |
-| W-42 | With **Launch at login** on and the app running and visible/behind another window, run the `Run` value's command (`Packrat.exe --minimized`) from a terminal. | Nothing is raised or shown; no second instance. | Pass 2026-10-24 v0.18.1 |
+| W-42 | With **Start at login** chosen and the app running and visible/behind another window, run the `Run` value's command (`Packrat.exe --minimized`) from a terminal. | Nothing is raised or shown; no second instance. | Pass 2026-10-24 v0.18.1 |
 
 ### Downloads and the Save-as dialog
 
@@ -204,8 +205,6 @@ screenshots. No failures; the points below are the surprises.
 - **No SmartScreen warning at install** (W-01, tester's report), although the installer is unsigned
   and Smart App Control is on. The app installs and runs fine; the checklist's "SmartScreen warns
   once" doesn't hold on this machine (installer downloaded from the GitHub release).
-- "Close to tray" is a checkbox, while "Launch at login", "Start minimized to tray" and "Ask where to
-  save each download" are switches (cosmetic).
 - The `Run` value's path is unquoted (`C:\Users\…\Packrat\packrat-desktop.exe --minimized`). Fine
   here; a user folder with spaces would rely on Windows' unquoted-path parsing.
 - A wrong 2FA code shows the raw server text "invalid code" (lowercase) as a toast (cosmetic).

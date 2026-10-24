@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Pencil, Plus, Trash2 } from "lucide-react"
+import { Pencil, Plus, Server, Trash2 } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,8 @@ import {
   changeProfileUrl,
   getActiveProfile,
   getProfiles,
+  getTokenStorage,
+  isTauri,
   normalizeServerUrl,
   probeServer,
   reloadApp,
@@ -47,7 +50,7 @@ export function ServersSection() {
   const profiles = getProfiles()
   const activeId = getActiveProfile()?.id
 
-    const confirmRemove = async () => {
+  const confirmRemove = async () => {
     if (!removing) return
     const wasActive = removing.id === activeId
     await removeProfile(removing.id)
@@ -57,74 +60,82 @@ export function ServersSection() {
   }
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h3 className="text-sm font-medium">Servers</h3>
-        <p className="text-sm text-muted-foreground">
-          The Packrat servers this app can connect to. Each keeps its own login.
-        </p>
-      </div>
-      <div>
-        <Button size="sm" variant="outline" onClick={startAddingServer}>
-          <Plus className="h-4 w-4" />
-          Add server…
-        </Button>
-      </div>
-      <Table containerClassName="relative max-h-80 w-full overflow-auto">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Address</TableHead>
-            <TableHead className="text-center">Last used</TableHead>
-            <TableHead className="w-24" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {profiles.length === 0 && (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Server className="h-4 w-4" />
+          Servers
+        </CardTitle>
+        <CardDescription>The Packrat servers this app can connect to. Each keeps its own login.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div>
+          <Button size="sm" variant="outline" onClick={startAddingServer}>
+            <Plus className="h-4 w-4" />
+            Add server…
+          </Button>
+        </div>
+        <Table containerClassName="relative max-h-80 w-full overflow-auto">
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                No saved servers.
-              </TableCell>
+              <TableHead>Name</TableHead>
+              <TableHead>Address</TableHead>
+              <TableHead className="text-center">Last used</TableHead>
+              <TableHead className="w-24" />
             </TableRow>
-          )}
-          {profiles.map((profile) => (
-            <TableRow key={profile.id}>
-              <TableCell>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{profile.name}</span>
-                  {profile.id === activeId && <Badge variant="secondary">Current</Badge>}
-                </div>
-              </TableCell>
-              <TableCell className="break-all font-mono text-xs">{profile.url}</TableCell>
-              <TableCell className="text-center whitespace-nowrap" title={new Date(profile.lastUsedAt).toLocaleString()}>
-                {profile.id === activeId ? "Now" : formatTimeAgo(new Date(profile.lastUsedAt).toISOString())}
-              </TableCell>
-              <TableCell>
-                <div className="flex justify-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Edit ${profile.name}`}
-                    title="Edit"
-                    onClick={() => setEditing(profile)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove ${profile.name}`}
-                    title="Remove"
-                    onClick={() => setRemoving(profile)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {profiles.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  No saved servers.
+                </TableCell>
+              </TableRow>
+            )}
+            {profiles.map((profile) => (
+              <TableRow key={profile.id}>
+                <TableCell>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{profile.name}</span>
+                    {profile.id === activeId && <Badge variant="secondary">Current</Badge>}
+                  </div>
+                </TableCell>
+                <TableCell className="break-all font-mono text-xs">{profile.url}</TableCell>
+                <TableCell className="text-center whitespace-nowrap" title={new Date(profile.lastUsedAt).toLocaleString()}>
+                  {profile.id === activeId ? "Now" : formatTimeAgo(new Date(profile.lastUsedAt).toISOString())}
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Edit ${profile.name}`}
+                      title="Edit"
+                      onClick={() => setEditing(profile)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove ${profile.name}`}
+                      title="Remove"
+                      onClick={() => setRemoving(profile)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {isTauri() && (
+          <p className="text-xs text-muted-foreground">
+            Token storage: {getTokenStorage() === "keychain" ? "OS keychain" : "Local file (keychain unavailable)"}
+          </p>
+        )}
+      </CardContent>
 
       <EditServerDialog
         // Remounted per server so its fields start from that profile.
@@ -155,7 +166,7 @@ export function ServersSection() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Card>
   )
 }
 

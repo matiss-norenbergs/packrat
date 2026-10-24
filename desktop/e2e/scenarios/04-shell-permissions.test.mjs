@@ -20,12 +20,13 @@ scenario("4. Settings → Desktop works without permission errors; every shell c
 
     // The sections render with their data loaded: the switches are enabled only after the
     // `is_enabled` / `get_*` calls resolved.
-    for (const text of ["Downloads", "Launch at login", "Updates", "Close to tray", "Save to"]) {
+    for (const text of ["Downloads", "Startup", "Updates", "Close to tray", "Save to"]) {
       await app.waitForText(text)
     }
     await app.waitForText("Token storage: Local file (keychain unavailable)")
-    await app.waitForText("You have version") // core:app:default → getVersion
-    for (const id of ["close-to-tray", "launch-at-login", "ask-where-to-save"]) {
+    // core:app:default → getVersion
+    await app.driver.wait(async () => /App \d+\.\d+/.test(await app.bodyText()), 20_000, "the app version should show")
+    for (const id of ["close-to-tray", "startup", "ask-where-to-save"]) {
       const el = await app.find(By.id(id))
       const enabled = await app.driver.wait(async () => el.isEnabled(), 10_000).then(() => true, () => false)
       if (!enabled) {

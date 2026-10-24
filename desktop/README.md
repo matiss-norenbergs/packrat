@@ -75,7 +75,7 @@ Each scenario gets a fresh server (temp database/data dirs, free port, `CORS_ALL
 the Tauri origins) and a fresh app profile (a throwaway `HOME`, so the autostart entry, webview storage
 and `desktop.json` never touch the machine). What it covers, and what it can't, is in
 [`TESTING.md`](TESTING.md); in short: launch, connect/sign-up/log in/out, several servers, Settings →
-Desktop with every shell command (the capability check), Launch at login, and "Start minimized" without a
+Desktop with every shell command (the capability check), the Startup select (launch at login), and "Start minimized" without a
 tray. The keychain falls back to `localStorage` there (no Secret Service in CI) — that fallback is what
 gets exercised.
 
@@ -136,16 +136,17 @@ isn't wired up yet.
   because it must be known the moment the close button is pressed; the frontend reads and writes it
   through the `get_close_to_tray`/`set_close_to_tray` commands. On Linux the tray needs a desktop
   that shows app-indicator icons (GNOME needs an extension).
-- **Launch at login** — Settings → Desktop → "Launch at login", off by default; the page calls the
+- **Launch at login** — Settings → Desktop → Startup ("Don't start at login" by default); the page calls the
   shell's `autostart_is_enabled` / `autostart_set` commands (`src-tauri/src/autostart.rs`). Linux and macOS
   use `tauri-plugin-autostart`; Windows writes the `Run` value itself, because the plugin leaves the
   exe path unquoted, which breaks for a path with a space (`C:\Users\John Smith\…`): the value is
   `"<exe>" --minimized`, and an unquoted value from an earlier version is rewritten quoted at startup
-  (only if it exists — it never turns the entry on). The switch reads the OS and never keeps a copy of its own: an XDG autostart
+  (only if it exists — it never turns the entry on). The select reads the OS and never keeps a copy of its own for the login entry: an XDG autostart
   `.desktop` file in `~/.config/autostart` on Linux (for an AppImage it points at the AppImage), a
   `Run` registry value under `HKCU` on Windows, a LaunchAgent on macOS. The entry starts the app with
-  `--minimized`. That argument only matters together with **Start minimized to tray** (second switch,
-  shown while launch-at-login is on, kept in `desktop.json` as `startMinimized`): then the main
+  `--minimized`. That argument only matters together with the **"Start at login, hidden in the tray"**
+  option, which also sets the `startMinimized` pref in `desktop.json` ("Start at login" clears it,
+  "Don't start at login" leaves it alone; the select shows hidden only when both are on): then the main
   window is created hidden and the tray icon is the only trace. A launch without the argument (the
   normal way) always shows the window, and so does one where the tray can't be used — building it
   failed, or on Linux nothing on the session bus hosts StatusNotifier indicators
