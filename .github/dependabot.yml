@@ -27,6 +27,11 @@ updates:
       - dependencies
     commit-message:
       prefix: "Deps"
+    ignore:
+      # Node itself is pinned to 22 (CI, desktop job, Dockerfile); its types should match it.
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
     groups:
       frontend-minor-patch:
         update-types:
@@ -102,6 +107,11 @@ updates:
       - dependencies
     commit-message:
       prefix: "Deps"
+    ignore:
+      # The Node version moves by hand, to an LTS line only (never an odd-numbered release).
+      - dependency-name: "node"
+        update-types:
+          - "version-update:semver-major"
     groups:
       docker-minor-patch:
         update-types:

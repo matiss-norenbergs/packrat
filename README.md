@@ -69,6 +69,9 @@ major bumps are separate PRs. Handling them:
 - Dependabot compares versions semver-style, so a `0.x` "minor" bump can still be breaking.
 - A PR that needs more work can be pushed to directly; `@dependabot rebase` refreshes it, `@dependabot
   ignore this major version` silences a bump you don't want.
+- Major bumps of `node` (Docker image) and `@types/node` are ignored in the config: the Node version
+  moves by hand, to an LTS line, and the types follow it. Add another `ignore` entry there to silence
+  a dependency for good.
 - Merge, don't auto-merge: nothing here enables it.
 
 ### Docker dev container
