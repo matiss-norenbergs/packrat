@@ -33,6 +33,9 @@ is the table of profiles: name, address, last used; **Edit** renames a server or
 on this device — a login is never sent to a different address) and **Remove** forgets a server and
 deletes its saved login (asks first; removing the current server goes to the connect screen). An app
 that had one server and login before this existed keeps both: they become the first profile.
+Removing a server or changing its address first asks the old server to end that login (a quick,
+best-effort request with a ~3 s limit — an unreachable server never blocks it), so the session also
+disappears from Settings → Account → Sessions there instead of lingering until it expires.
 
 Unlike the browser, the desktop client authenticates with a bearer token instead of cookies (the
 server's `CORS_ALLOWED_ORIGINS` must include the app's origin — the Tauri defaults are built in).

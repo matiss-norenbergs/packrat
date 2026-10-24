@@ -144,8 +144,8 @@ export function ServersSection() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {removing?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This forgets the server and deletes this app's saved login for it. The server itself isn't
-              affected.
+              This signs you out of the server (if it can be reached), forgets it and deletes this app's saved
+              login for it. Nothing else on the server is changed.
               {removing?.id === activeId && " It's the server you're connected to, so you'll be taken to the connect screen."}
             </AlertDialogDescription>
           </AlertDialogHeader>

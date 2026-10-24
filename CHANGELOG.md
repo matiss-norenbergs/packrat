@@ -13,6 +13,9 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Removing a server signs out on it (desktop)** — Remove, and Edit → new address, now first send
+  `POST /api/auth/logout` with that profile's own token to the OLD address (3 s limit, failure ignored)
+  before dropping the local login, so the session no longer lingers in Settings → Account → Sessions.
 - **Desktop Windows fixes** — (1) downloads no longer get a bogus " (N)" in the name: WebView2 numbers the
   proposed name against the system Downloads folder, and the shell now strips that suffix when the plain
   name exists there, so a backup saved to another folder keeps its own name; (2) Windows "Launch at login"
