@@ -13,6 +13,16 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Desktop end-to-end tests** — `desktop/e2e/` runs the real Tauri shell (debug build) against a real
+  server under Xvfb via `tauri-driver` + WebKitWebDriver: launch, connect/sign-up/log in and out, several
+  servers (switch/rename/remove), Settings → Desktop with every shell command invoked (catches missing
+  capability permissions), Launch at login (autostart entry), and `--minimized` with no tray (window still
+  shown). New `desktop-e2e.yml` workflow (PRs touching desktop/frontend/backend, non-required) uploads
+  screenshots and logs on failure. `desktop/TESTING.md` lists what CI covers, a manual Windows checklist
+  and the known gaps; platform-support notes added to the READMEs.
+- **Flaky backup test** — `TestBuildApplyLibraryBundle_RoundTrip` assumed the exported item with a URL
+  came first, but two items created in the same second have no guaranteed export order; the test now
+  finds them by title.
 - **Dependabot** — weekly (Monday) dependency PRs for Go, npm (frontend, desktop), Cargo, GitHub Actions
   and the Dockerfile, minor/patch grouped per ecosystem and majors separate; CI skips the Docker Hub
   login for them (no secrets). See README, "Dependabot".

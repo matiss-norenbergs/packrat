@@ -127,6 +127,10 @@ The password is never accepted as a command-line argument. Natively, run `packra
 [`desktop/`](desktop/README.md) is a Tauri shell around the same frontend: a desktop client that
 connects to a Packrat server you already run (it bundles no backend). See its README for building it.
 
+**Platform support:** Windows is the primary target and is tested manually against a
+[checklist](desktop/TESTING.md); Linux has automated end-to-end tests in CI (and is occasionally tried
+by hand); macOS builds in CI but is untested.
+
 ## Jellyfin
 
 The Jellyfin URL (Settings → Jellyfin) must be reachable **from inside the container's network**,
