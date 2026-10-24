@@ -81,12 +81,13 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-20 | Settings → Desktop → turn **Launch at login** on. | In `regedit`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` has a `Packrat` value whose command ends with `--minimized` and whose exe path is wrapped in double quotes (`"C:\…\packrat-desktop.exe" --minimized`). The "Start minimized to tray" switch appears. | Pass 2026-10-24 v0.18.1 — `Packrat REG_SZ C:\Users\…\AppData\Local\Packrat\packrat-desktop.exe --minimized` |
+| W-20 | Settings → Desktop → turn **Launch at login** on. | In `regedit`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` has a `Packrat` value whose command ends with `--minimized` and whose exe path is wrapped in double quotes (`"C:\…\packrat-desktop.exe" --minimized`). The "Start minimized to tray" switch appears. | Pass 2026-10-24 v0.18.2 — `Packrat REG_SZ "C:\Users\…\AppData\Local\Packrat\packrat-desktop.exe" --minimized` (quoted); "Start minimized to tray" switch appeared |
 | W-21 | Turn **Start minimized to tray** on, sign out of Windows and back in. | Packrat starts hidden: only the tray icon is visible. | Partial 2026-10-24 v0.18.1 — simulated via the Run command, real Windows logon not tested: window created hidden, tray icon present |
 | W-22 | Turn **Start minimized to tray** off, sign out and back in. | Packrat starts with its window shown. | Partial 2026-10-24 v0.18.1 — simulated via the Run command, real Windows logon not tested: window shown |
 | W-23 | Start the app from the Start menu with the option on. | The window is shown (only an autostart launch hides it). | Pass 2026-10-24 v0.18.1 |
-| W-24 | Turn **Launch at login** off. | The `Run` value is removed; the "Start minimized" switch disappears. | Pass 2026-10-24 v0.18.1 |
-| W-25 | Delete the `Run` value in `regedit`, reopen Settings. | The switch is off (it reflects the OS, not a stored copy). | Pass 2026-10-24 v0.18.1 |
+| W-24 | Turn **Launch at login** off. | The `Run` value is removed; the "Start minimized" switch disappears. | Pass 2026-10-24 v0.18.2 — `Run` value gone, "Start minimized" switch gone |
+| W-25 | Delete the `Run` value in `regedit`, reopen Settings. | The switch is off (it reflects the OS, not a stored copy). | Pass 2026-10-24 v0.18.2 — value deleted with `reg delete`, Settings reopened: switch off |
+| X-1 | With **Launch at login** on, `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Close the app, overwrite the value with the OLD unquoted form (`reg add … /v Packrat /t REG_SZ /d "<path>\packrat-desktop.exe --minimized" /f`), start the app normally, wait a few seconds. Then turn the switch off in the app, close the app and start it again. | The value is `"<path>\packrat-desktop.exe" --minimized` (path in double quotes). After the restart the old unquoted value is rewritten quoted. With the switch off, the value is gone and is NOT recreated by a restart. | Pass 2026-10-24 v0.18.2 — quoted on enable; unquoted value was quoted again ~6 s after start; after switch off + restart no `Packrat` value (app started with the WebView2 debug-port env var set, otherwise a normal start) |
 
 ### Tray
 
@@ -113,13 +114,13 @@ Downloads are done with the backup file: **Backup → Backup History → Downloa
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-50 | **Ask where to save each download** off. Backup → Backup History → **Download** a backup. | It lands in the Downloads folder (or the folder chosen in Settings) with no dialog, under the server's file name — no " (N)" suffix unless that same name already exists in the TARGET folder; a toast with **Show in folder** appears; the button opens Explorer with the file selected. | Pass 2026-10-24 v0.18.1 — downloaded via Backup → Backup History → Download (no Library item download exists, see Findings) |
-| W-51 | Download the same backup again. | A numbered copy (`name (1).ext`) is created; the first file is untouched. | Pass 2026-10-24 v0.18.1 |
+| W-50 | **Ask where to save each download** off. Backup → Backup History → **Download** a backup. | It lands in the Downloads folder (or the folder chosen in Settings) with no dialog, under the server's file name — no " (N)" suffix unless that same name already exists in the TARGET folder; a toast with **Show in folder** appears; the button opens Explorer with the file selected. | Pass 2026-10-24 v0.18.2 — saved as `backup-20260815-094658-e710.json` in Downloads, no suffix; toast "Saved to …" with **Show in folder** (clicked on the 2nd download: Explorer opened on Downloads with the file selected) |
+| W-51 | Download the same backup again. | A numbered copy (`name (1).ext`) is created; the first file is untouched. | Pass 2026-10-24 v0.18.2 — second download became `… (1).json`, first file untouched |
 | W-52 | Switch the window to another app while a larger download runs. | When it finishes, a Windows notification "Download complete" appears. With the window focused, no notification (toast only). | Pass 2026-10-24 v0.18.1 — tested with a 6 KB file, not a larger one |
-| W-53 | Turn **Ask where to save** on, download a backup (Backup → Backup History → **Download**). | The Save dialog opens with the server's file name filled in — it must NOT carry a " (N)" suffix, even if the same name exists in the system Downloads folder (a clash in the folder you save to is the dialog's own overwrite prompt, W-55) — and the last/default folder selected; saving creates the file there, and the toast shows its final path. | Pass 2026-10-24 v0.18.1 — but the pre-filled name carries a " (N)" suffix, see Findings |
+| W-53 | Turn **Ask where to save** on, download a backup (Backup → Backup History → **Download**). | The Save dialog opens with the server's file name filled in — it must NOT carry a " (N)" suffix, even if the same name exists in the system Downloads folder (a clash in the folder you save to is the dialog's own overwrite prompt, W-55) — and the last/default folder selected; saving creates the file there, and the toast shows its final path. | Pass 2026-10-24 v0.18.2 — Save dialog pre-filled `backup-20260815-094658-e710.json` (no " (N)") although that name existed in Downloads; started in Downloads; saved to another folder, toast showed the final path; the next dialog opened in that folder with the clean name |
 | W-54 | Same, but press Cancel in the dialog. | No file is left anywhere (check the target folder and `%LOCALAPPDATA%\io.github.matiss-norenbergs.packrat\downloads`), and the progress toast is dismissed without an error toast. | Pass 2026-10-24 v0.18.1 |
 | W-55 | Save to an existing name and confirm "replace". | The file is replaced, no stray copy. | Pass 2026-10-24 v0.18.1 |
-| W-56 | Settings → Desktop → Downloads → **Change…**, pick a folder. | The shown path updates; the next download goes there. **Use default** returns to the OS Downloads folder. | Pass 2026-10-24 v0.18.1 — but a file in the chosen (empty) folder got a " (7)" suffix, see Findings |
+| W-56 | Settings → Desktop → Downloads → **Change…**, pick a folder. | The shown path updates; the next download goes there. **Use default** returns to the OS Downloads folder. | Pass 2026-10-24 v0.18.2 — picked an empty folder: path updated, next download landed there as `backup-20260815-094658-e710.json` (no " (N)"); **Use default** returned to `C:\Users\…\Downloads` |
 
 ### Server profiles
 
@@ -132,6 +133,7 @@ Downloads are done with the backup file: **Backup → Backup History → Downloa
 | W-64 | Edit the address to an unreachable one. | The save is refused with an error; nothing changes. | Pass 2026-10-24 v0.18.1 |
 | W-65 | Remove a non-active server. | It disappears; the app stays on the current one. | Pass 2026-10-24 v0.18.1 |
 | W-66 | Remove the active server. | The app returns to "Connect to a server" (other saved servers are offered below the form). | Pass 2026-10-24 v0.18.1 |
+| X-2 | Add a throwaway server profile, log in, note the session in the SERVER's Settings → Account → Sessions (browser). Remove the server in Settings → Desktop → Servers. Repeat with Edit → change the address to another working one (e.g. `127.0.0.1` instead of `localhost`). | The desktop session is gone from the server's Sessions list after the removal, and after the address change. | Pass 2026-10-24 v0.18.2 — checked via the server's sessions API with a web login (not the browser UI): the `desktop` session disappeared after Remove, and again after the address edit (which also dropped the app to the login screen) |
 
 ### Updates
 
@@ -169,6 +171,7 @@ Needs 2FA enabled on the server account (Settings → Account).
 | W-92 | Enter the right code. | Logged in; the token entry appears. | Pass 2026-10-24 v0.18.1 |
 | W-93 | Settings → Account → Sessions. | The desktop app's session is listed and marked as this device. | Pass 2026-10-24 v0.18.1 — "Packrat desktop app on Windows — This device" |
 | W-94 | From a browser, sign in to the same server, open Sessions there and revoke the desktop session. | Within a moment the desktop app falls back to the login screen. | Pass 2026-10-24 v0.18.1 — revoked from a web (cookie + CSRF) login through the API rather than the browser UI; login screen ~12 s later |
+| X-3 | With 2FA enabled on the throwaway account, log in and enter a wrong code. | The message reads "That code didn't work. Check that your phone's clock is correct and try again." (not "invalid code"); boxes stay on the 2FA step. Disable 2FA again afterwards. | Pass 2026-10-24 v0.18.2 — toast showed the new text (shown twice: the code auto-submitted and Verify was pressed as well); 2FA disabled again afterwards |
 
 ### Findings (2026-10-24, v0.18.1)
 
