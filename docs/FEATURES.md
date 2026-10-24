@@ -64,7 +64,10 @@ doesn't nag but returns after the next change to either.
 button. If a newer release exists it offers **Install and restart**, which downloads it, verifies its
 signature against the key built into the app, installs and restarts. Nothing is checked or downloaded
 automatically. On Linux this works for the AppImage only (`.deb`/`.rpm` installs are updated by
-reinstalling). See [`desktop/README.md`](../desktop/README.md#releasing-updates-one-time-setup).
+reinstalling). While an update downloads (either kind) the section shows "Downloading update…" with the
+percent on the right, a progress bar, and "Packrat will restart when it's done." underneath; if the
+download size isn't known the bar sweeps and there's no percent. See
+[`desktop/README.md`](../desktop/README.md#releasing-updates-one-time-setup).
 
 **Match server version** (same section): when the server runs a release version (plain `X.Y.Z`) that
 differs from the app's, **Match server version** installs the app release equal to the server's —
