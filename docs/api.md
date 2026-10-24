@@ -29,7 +29,8 @@ since Gin matches registered routes before falling back to serving `index.html`.
   order bearer → cookie → query; the first valid one wins. A request authenticated by bearer or query
   token **skips the CSRF check** (nothing ambient for a forged request to ride on); a cookie-
   authenticated request is checked exactly as before, whatever other headers it carries. The access
-  log redacts `?token=` values.
+  and panic-recovery logs redact `?token=` values and the `Authorization`, `Cookie` and `X-CSRF-Token`
+  headers.
 - **Getting a token**: send `X-Client: desktop` on `POST /api/auth/login` or `/api/auth/setup`. The
   response is then `200 {"token":"..."}` and **no cookies are set**; without the header the response
   is the usual `204` + cookies. `GET /api/auth/status` and `POST /api/auth/logout` honor a bearer

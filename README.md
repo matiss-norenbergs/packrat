@@ -55,6 +55,22 @@ docker compose -f docker/docker-compose.yml up --build
 
 The app listens on `http://localhost:50505`.
 
+### Dependabot
+
+`.github/dependabot.yml` opens dependency PRs every Monday for Go (`/backend`), npm (`/frontend`,
+`/desktop`), Cargo (`/desktop/src-tauri`), GitHub Actions and the Dockerfile (`/docker`), labelled
+`dependencies` with a `Deps:` subject. Minor and patch bumps come as **one grouped PR per ecosystem**;
+major bumps are separate PRs. Handling them:
+
+- Wait for CI (it runs for Dependabot PRs like any other; the Docker job just skips the Docker Hub
+  login, since Dependabot can't read Actions secrets, and pulls anonymously).
+- Skim the release notes of major bumps, and keep the `tauri*` crates (Cargo) and `@tauri-apps/*`
+  packages (npm) on matching versions, so merge or close those PRs together.
+- Dependabot compares versions semver-style, so a `0.x` "minor" bump can still be breaking.
+- A PR that needs more work can be pushed to directly; `@dependabot rebase` refreshes it, `@dependabot
+  ignore this major version` silences a bump you don't want.
+- Merge, don't auto-merge: nothing here enables it.
+
 ### Docker dev container
 
 `docker/docker-compose.dev.yml` is a Compose override for iterating without a native Go/Node

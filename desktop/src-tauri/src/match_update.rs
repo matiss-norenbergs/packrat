@@ -6,6 +6,7 @@
 //! The version comes from the server, i.e. untrusted input. It is only ever used after
 //! `release_manifest_url` has validated it as plain `MAJOR.MINOR.PATCH` digits, and the download is
 //! still verified against the public key baked into `tauri.conf.json` (`plugins.updater.pubkey`).
+//! The version the manifest then offers must equal the requested one exactly (`ensure_requested`).
 
 use std::sync::Mutex;
 
@@ -72,6 +73,19 @@ fn release_manifest_url(base: &str, version: &str) -> Result<Url, String> {
     Url::parse(&format!("{base}/v{version}/latest.json")).map_err(|e| e.to_string())
 }
 
+/// The manifest chooses which release it offers (its `version` field), so the version it offers must
+/// be exactly the one that was asked for: anything else, including a manifest for a different
+/// release or one with prerelease/build metadata, is refused before it can be installed.
+fn ensure_requested(requested: &str, offered: &str) -> Result<(), String> {
+    if offered == requested {
+        Ok(())
+    } else {
+        Err(format!(
+            "The release manifest for {requested} offers version {offered}; refusing to install it"
+        ))
+    }
+}
+
 fn describe(err: UpdaterError, version: &str) -> String {
     match err {
         UpdaterError::ReleaseNotFound => {
@@ -90,23 +104,31 @@ pub async fn match_update_check(
 ) -> Result<Option<Found>, String> {
     *pending.0.lock().unwrap() = None;
     let url = release_manifest_url(&release_base(), &version)?;
+    let requested = version.clone();
     let updater = app
         .updater_builder()
         .endpoints(vec![url])
         .map_err(|e| describe(e, &version))?
-        // The default only accepts a newer version; this accepts any different one.
-        .version_comparator(|current, update| update.version != current)
+        // The default only accepts a newer version; this accepts any different one (so a
+        // downgrade works), and also a manifest that isn't for the requested version even when it
+        // equals the running one, so `ensure_requested` below reports it instead of it being
+        // mistaken for "already up to date".
+        .version_comparator(move |current, update| {
+            update.version != current || update.version.to_string() != requested
+        })
         .build()
         .map_err(|e| describe(e, &version))?;
     let found = updater.check().await.map_err(|e| describe(e, &version))?;
-    Ok(found.map(|update| {
-        let result = Found {
-            version: update.version.clone(),
-            current_version: update.current_version.clone(),
-        };
-        *pending.0.lock().unwrap() = Some(update);
-        result
-    }))
+    let Some(update) = found else {
+        return Ok(None);
+    };
+    ensure_requested(&version, &update.version)?;
+    let result = Found {
+        version: update.version.clone(),
+        current_version: update.current_version.clone(),
+    };
+    *pending.0.lock().unwrap() = Some(update);
+    Ok(Some(result))
 }
 
 /// Downloads, verifies and installs the update `match_update_check` found. The frontend relaunches
@@ -180,6 +202,31 @@ mod tests {
         ] {
             assert!(url(bad).is_err(), "{bad:?} should be rejected");
         }
+    }
+
+    #[test]
+    fn only_the_requested_version_may_be_offered() {
+        assert!(ensure_requested("0.15.1", "0.15.1").is_ok());
+        for offered in [
+            "0.15.2",      // different patch
+            "0.15.0",      // downgrade past the request
+            "1.15.1",      // different major
+            "0.16.1",      // different minor
+            "0.15.1-rc.1", // prerelease
+            "0.15.1+build5",
+            "v0.15.1",
+            " 0.15.1",
+            "0.15.1\n",
+            "",
+        ] {
+            let err = ensure_requested("0.15.1", offered).unwrap_err();
+            assert!(err.contains("0.15.1") && err.contains("refusing"), "{err}");
+        }
+        // Equality is symmetric in direction: a request for an older release is held to it too.
+        assert!(ensure_requested("0.9.0", "0.9.0").is_ok());
+        assert!(ensure_requested("0.9.0", "0.9.1").is_err());
+        // Metadata on the requested side doesn't loosen the match either.
+        assert!(ensure_requested("0.15.1", "0.15.1+meta").is_err());
     }
 
     #[test]

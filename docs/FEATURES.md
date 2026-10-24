@@ -95,7 +95,8 @@ an upgrade or a downgrade. It first checks that a build is published, then asks 
 (a downgrade warns that older versions may lack features), then downloads with progress and restarts.
 If the versions already agree it says "Matches your server". A server with no published desktop build
 shows "No desktop build is published for server version X"; the download is signature-verified like
-any update. Never automatic; **Check for updates** still looks for the latest release.
+any update, and the release manifest must offer exactly the requested version (otherwise the
+install is refused with an error). Never automatic; **Check for updates** still looks for the latest release.
 
 For development, `VITE_DESKTOP=true npm run dev` runs the client mode in a plain browser (add
 `http://localhost:5173` to `CORS_ALLOWED_ORIGINS` on the server).
