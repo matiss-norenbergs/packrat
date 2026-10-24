@@ -48,6 +48,7 @@ fn main() {
             token::token_get,
             token::token_set,
             token::token_clear,
+            token::token_adopt_legacy,
             token::token_store_kind
         ])
         .on_window_event(|window, event| {

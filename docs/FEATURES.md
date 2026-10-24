@@ -13,16 +13,28 @@ single admin account (there's no multi-user support). See "Auth and CSRF" in
 The same frontend also runs inside a desktop shell (Tauri) as a thin client for a Packrat server you
 already host — there's no bundled backend. On first launch it shows **Connect to a server**: enter
 an address (`192.168.1.20:50505`, or a full `https://…` URL; a bare host defaults to `http://`).
-The app checks `GET /api/health` before saving it, then shows the usual setup/login screen. The
-login screen shows the connected server with a **Change server** link (forgets the server and
-login, keeps the address to prefill the form). If the server can't be reached at startup, a "Can't
-reach the server" screen offers **Retry** and **Change server**. If the server revokes the session
-while the app is open, it drops back to the login screen.
+The app checks `GET /api/health` before saving it, then shows the usual setup/login screen. If the
+server can't be reached at startup, a "Can't reach the server" screen offers **Retry** and **Change
+server**. If the server revokes the session while the app is open, it drops back to the login screen.
+
+**Several servers.** The app keeps a list of saved servers ("profiles": a name, an address and when it
+was last used) and talks to one at a time; each profile has its own login, so switching back to a
+server you were signed in to needs no password. The sidebar footer shows the current server's name
+and version; its menu lists the saved servers (the current one ticked), **Add server…** and **Manage
+servers**. Picking another server reloads the app on it. **Add server…** opens the connect screen
+(address, an optional name — the host if left empty — and a **Cancel** back to the current server;
+connecting to an address that is already saved just switches to it). The login screen's and the
+"Can't reach the server" screen's **Change server** open the same list. Settings → Desktop → **Servers**
+is the table of profiles: name, address, last used; **Edit** renames a server or changes its address
+(the new address is checked against `/api/health` first, and changing it signs you out of that server
+on this device — a login is never sent to a different address) and **Remove** forgets a server and
+deletes its saved login (asks first; removing the current server goes to the connect screen). An app
+that had one server and login before this existed keeps both: they become the first profile.
 
 Unlike the browser, the desktop client authenticates with a bearer token instead of cookies (the
 server's `CORS_ALLOWED_ORIGINS` must include the app's origin — the Tauri defaults are built in).
-The token is kept in the OS keychain (Windows Credential Manager, macOS Keychain, Linux Secret
-Service) rather than a plain file; where there is no keychain it falls back to the app's local
+The token — one per saved server — is kept in the OS keychain (Windows Credential Manager, macOS
+Keychain, Linux Secret Service) rather than a plain file; where there is no keychain it falls back to the app's local
 storage, and Settings → Desktop says which is in use ("Token storage: OS keychain" / "Local file
 (keychain unavailable)"). A login from before this change is migrated automatically. This keeps the
 token out of readable app data (disk images, backups), not out of reach of malware running as you.

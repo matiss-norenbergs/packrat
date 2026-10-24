@@ -7,7 +7,8 @@ import { SecurityNotice } from "@/components/SecurityNotice"
 import { VersionMismatchNotice } from "@/components/VersionMismatchNotice"
 import { useAuthStatus } from "@/hooks/useAuth"
 import { useDownloadToasts } from "@/hooks/useDownloadToasts"
-import { getServerUrl, isDesktop, isTauri, resetServer } from "@/lib/server"
+import { ServerSwitcherMenu } from "@/components/ServerSwitcher"
+import { getActiveProfileName, getServerUrl, isDesktop, isTauri } from "@/lib/server"
 
 // Desktop only: if the very first auth check fails (server down, wrong network), the layouts would
 // otherwise render nothing at all. Show what's wrong and let the user retry or pick another server.
@@ -35,22 +36,23 @@ export function DesktopGate({ children }: { children: ReactNode }) {
             <span className="text-base font-semibold">Packrat</span>
           </div>
           <CardTitle>Can't reach the server</CardTitle>
-          <CardDescription className="break-all">{getServerUrl()}</CardDescription>
+          <CardDescription className="break-all">
+            {getActiveProfileName()} · {getServerUrl()}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex gap-2">
           <Button className="flex-1" onClick={() => refetch()} disabled={isFetching}>
             {isFetching ? "Retrying…" : "Retry"}
           </Button>
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={() => {
-              resetServer()
-              window.location.reload()
-            }}
-          >
-            Change server
-          </Button>
+          <ServerSwitcherMenu
+            side="bottom"
+            align="end"
+            trigger={
+              <Button variant="outline" className="flex-1">
+                Change server
+              </Button>
+            }
+          />
         </CardContent>
       </Card>
     </div>

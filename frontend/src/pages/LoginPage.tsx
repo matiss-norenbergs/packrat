@@ -9,7 +9,8 @@ import { Toaster } from "@/components/ui/sonner"
 import { TotpCodeInput } from "@/components/TotpCodeInput"
 import { useAuthStatus, useLogin, useLogin2fa, useSetupAccount } from "@/hooks/useAuth"
 import { ApiError } from "@/lib/api"
-import { getServerUrl, isDesktop, resetServer } from "@/lib/server"
+import { ServerSwitcherMenu } from "@/components/ServerSwitcher"
+import { getActiveProfileName, getServerUrl, isDesktop } from "@/lib/server"
 
 export function LoginPage() {
   const { data: status, isLoading } = useAuthStatus()
@@ -241,19 +242,17 @@ export function LoginPage() {
           {isDesktop() && (
             <div className="flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
               <span className="min-w-0 truncate" title={getServerUrl() ?? undefined}>
-                {getServerUrl()}
+                {getActiveProfileName() ?? getServerUrl()}
               </span>
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto shrink-0 p-0 text-xs"
-                onClick={() => {
-                  resetServer()
-                  window.location.reload()
-                }}
-              >
-                Change server
-              </Button>
+              <ServerSwitcherMenu
+                side="bottom"
+                align="end"
+                trigger={
+                  <Button variant="link" size="sm" className="h-auto shrink-0 p-0 text-xs">
+                    Change server
+                  </Button>
+                }
+              />
             </div>
           )}
         </CardContent>

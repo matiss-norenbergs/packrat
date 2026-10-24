@@ -94,20 +94,29 @@ aren't set up yet.
   `media-src` allow any `http(s)`/`ws(s)` host because the server address is entered by the user.
   The window only ever loads the bundled frontend, never the server's pages, and the capability file
   (`capabilities/default.json`) grants no remote origins anything.
-- **Auth/storage** — the server address lives in the webview's `localStorage` (not secret). The
-  login **token** lives in the OS secret store — Windows Credential Manager, macOS Keychain, or the
-  Linux Secret Service (GNOME Keyring / KWallet) — under service `io.github.matiss-norenbergs.packrat`,
-  via the `keyring` crate and the `token_get`/`token_set`/`token_clear`/`token_store_kind` commands in
-  `src/token.rs`. The frontend loads it into memory before the first render (`initTokenStore` in
-  `lib/server.ts`, called from `main.tsx`), so `getToken()` stays synchronous. A token left in
-  `localStorage` by an older version is moved into the keychain on first launch. If the keychain is
-  unavailable (typically Linux without a running Secret Service) the token stays in `localStorage`
-  instead of the login being dropped, and Settings → Desktop shows "Token storage: Local file
-  (keychain unavailable)". **What this protects:** the token is no longer a readable file in the app
-  data directory, so it isn't exposed by disk images, backups or syncs of AppData/the home folder.
-  **What it doesn't:** malware already running as your user can ask the keychain for it (as can any
-  app on a session that has the keychain unlocked) — it's the same credential a browser session
-  would hold. Log out (or change server) to discard it.
+- **Auth/storage** — the saved servers ("profiles": `{id, name, url, lastUsedAt}`, plus which one is
+  active) live in the webview's `localStorage` (`packrat.profiles`, `packrat.activeProfile`; not secret
+  — see `lib/serverProfiles.ts`). Switching a profile sets the active one and reloads, so every query
+  starts fresh against that server. Each profile's login **token** lives in the OS secret store —
+  Windows Credential Manager, macOS Keychain, or the Linux Secret Service (GNOME Keyring / KWallet) —
+  under service `io.github.matiss-norenbergs.packrat`, account `session-token:<profile id>`, via the
+  `keyring` crate and the `token_get`/`token_set`/`token_clear`/`token_store_kind` commands in
+  `src/token.rs` (all but the last take the profile id, which is restricted to `[A-Za-z0-9_-]{1,64}`).
+  Tokens are never part of the profile list. The frontend loads the active profile's token into memory
+  before the first render (`initTokenStore` in `lib/server.ts`, called from `main.tsx`), so `getToken()`
+  stays synchronous and never serves another profile's token. **Upgrading** from the single-server
+  version: the old `packrat.serverUrl` becomes the first profile (named after its host, active), a
+  `localStorage` token moves to `packrat.token.<id>`, and the old keychain entry (`session-token`)
+  is moved to that profile's account by `token_adopt_legacy` at startup (idempotent; it keeps its own
+  token if both exist, and a failed move is retried on the next start, still for the first profile).
+  Changing a profile's address or removing it deletes its token. If the keychain is unavailable
+  (typically Linux without a running Secret Service) tokens stay in `localStorage`
+  (`packrat.token.<id>`) instead of the login being dropped, and Settings → Desktop shows "Token
+  storage: Local file (keychain unavailable)". **What this protects:** the token is no longer a readable
+  file in the app data directory, so it isn't exposed by disk images, backups or syncs of AppData/the
+  home folder. **What it doesn't:** malware already running as your user can ask the keychain for it
+  (as can any app on a session that has the keychain unlocked) — it's the same credential a browser
+  session would hold. Log out (or remove the server) to discard it.
 - **Updates** — manual, from Settings → Desktop → **Check for updates**. Nothing contacts GitHub until
   the button is pressed and nothing installs until **Install and restart** is. The app reads
   `latest.json` from the newest GitHub Release, downloads the update for its platform, verifies its

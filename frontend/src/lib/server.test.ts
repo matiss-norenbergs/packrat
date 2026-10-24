@@ -79,7 +79,7 @@ describe("desktop", () => {
     expect(websocketUrl()).toBe("ws://nas:50505/ws")
   })
 
-  it("drops the old token when the server changes, and remembers the address on reset", () => {
+  it("keeps a separate token per server, and resetServer leaves them be", () => {
     setServerUrl("http://a:1")
     setToken("abc")
     setServerUrl("http://a:1")
@@ -91,7 +91,15 @@ describe("desktop", () => {
     resetServer()
     expect(getServerUrl()).toBeNull()
     expect(getToken()).toBeNull()
+    // Both logins survived: coming back to either server finds its own token.
+    setServerUrl("http://a:1")
+    expect(getToken()).toBe("abc")
+    setServerUrl("http://b:2")
+    expect(getToken()).toBe("def")
     clearToken()
+    expect(getToken()).toBeNull()
+    setServerUrl("http://a:1")
+    expect(getToken()).toBe("abc")
   })
 })
 

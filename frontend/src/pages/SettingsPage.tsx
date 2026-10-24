@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/switch"
 import { ResolutionTierSlider } from "@/components/ResolutionTierSlider"
 import { ThumbnailFrameRangeSlider } from "@/components/ThumbnailFrameRangeSlider"
 import { RESOLUTION_STEP_LABELS } from "@/lib/resolution"
-import { getTokenStorage, isTauri } from "@/lib/server"
+import { getTokenStorage, isDesktop, isTauri } from "@/lib/server"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -54,6 +54,7 @@ import {
 } from "@/hooks/useSettings"
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
 import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
+import { ServersSection } from "@/components/settings/ServersSection"
 import { UpdateProgress } from "@/components/settings/UpdateProgress"
 import { useAppUpdate } from "@/hooks/useAppUpdate"
 import { useMatchServerVersion } from "@/hooks/useMatchServerVersion"
@@ -106,7 +107,7 @@ export function SettingsPage() {
   const tabParam = searchParams.get("tab")
   // "desktop" only exists inside the desktop shell; on the web a stale ?tab=desktop falls back.
   const activeTab =
-    (SETTINGS_TABS as readonly string[]).includes(tabParam ?? "") && (tabParam !== "desktop" || isTauri())
+    (SETTINGS_TABS as readonly string[]).includes(tabParam ?? "") && (tabParam !== "desktop" || isDesktop())
       ? tabParam!
       : "general"
 
@@ -141,7 +142,7 @@ export function SettingsPage() {
             <TabsTrigger value="ai-enhance">AI Enhancement</TabsTrigger>
             <TabsTrigger value="ytdlp">yt-dlp</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
-            {isTauri() && <TabsTrigger value="desktop">Desktop</TabsTrigger>}
+            {isDesktop() && <TabsTrigger value="desktop">Desktop</TabsTrigger>}
           </TabsList>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
@@ -184,7 +185,7 @@ export function SettingsPage() {
             <TabsContent value="appearance" className="mt-0 h-full">
               <AppearanceTab />
             </TabsContent>
-            {isTauri() && (
+            {isDesktop() && (
               <TabsContent value="desktop" className="mt-0 h-full">
                 <DesktopTab />
               </TabsContent>
@@ -1903,9 +1904,19 @@ function YtDlpTab() {
   )
 }
 
-// Only reachable inside the desktop app (see the isTauri() checks where the tab is registered).
-// Like Theme/Accent it is a per-device preference — the shell stores it itself, not the server.
+// Only reachable in the desktop app (see the isDesktop() checks where the tab is registered). The
+// server list also works under VITE_DESKTOP in a plain browser; everything else needs the shell.
 function DesktopTab() {
+  return (
+    <div className="max-w-3xl space-y-8">
+      <ServersSection />
+      {isTauri() && <ShellSettings />}
+    </div>
+  )
+}
+
+// Like Theme/Accent these are per-device preferences — the shell stores them itself, not the server.
+function ShellSettings() {
   const { enabled: closeToTray, setEnabled: setCloseToTray } = useCloseToTray()
   const { enabled: autostart, setEnabled: setAutostart } = useAutostart()
   const { enabled: startMinimized, setEnabled: setStartMinimized } = useStartMinimized()
