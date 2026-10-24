@@ -302,12 +302,12 @@ export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogPro
           // lg (or with nothing unsequenced to show), it's the original
           // plain stacked layout, full width, no resize handle.
           return showSplitLayout ? (
-            <ResizablePanelGroup direction="horizontal" className="h-[60vh]">
-              <ResizablePanel defaultSize={65} minSize={40}>
+            <ResizablePanelGroup orientation="horizontal" className="h-[60vh]">
+              <ResizablePanel defaultSize="65%" minSize="40%">
                 {sequencedContent}
               </ResizablePanel>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
+              <ResizablePanel defaultSize="35%" minSize="20%" maxSize="50%">
                 {unsequencedContent}
               </ResizablePanel>
             </ResizablePanelGroup>
