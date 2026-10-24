@@ -10,7 +10,7 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - `docs/FEATURES.md` — page-by-page behavior. **The source of truth for "how should X work".**
 - `docs/architecture.md` — backend package layout, data flow, "Deliberate scope cuts" (check before
   adding something that may have been ruled out on purpose).
-- `docs/api.md` — REST/WS surface (83 KB — grep it by endpoint, don't load it whole).
+- `docs/api.md` — REST/WS surface (~95 KB — grep it by endpoint, don't load it whole).
 - `CHANGELOG.md` — read only the top ~100 lines for recent context.
 - Ignore `../docker-app-plan.md`: the original skeleton-era spec, long outdated.
 - `desktop/README.md` — the Tauri desktop shell (a thin client for a remote server; shares `frontend/`).
@@ -85,8 +85,3 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - yt-dlp cookies: Settings → yt-dlp → "Cookies file" (cookies.txt content, written next to the DB,
   passed via `--cookies`) is the one that works in Docker; "Cookies browser" cannot reach a host
   browser profile from inside the container and is ignored when a file is set.
-
-## Current state
-
-Work up to the "cookies file support & color fix" commit is committed. Uncommitted/untracked here:
-local-only dev tooling (`backend/run-dev.cmd`, `.claude/`) and any local compose network tweaks — don't commit these.

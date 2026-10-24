@@ -116,7 +116,7 @@ frame resolution in a grid of small tiles (`aspect-video`).
 
 | Surface | File | Notes |
 |---|---|---|
-| Pick-from-folder dialogs | `ArtistDialog.tsx:282`, `CollectionCoverDialog.tsx:69` | arbitrary user files via `mediaFileUrl(c.relPath)`; unbounded source size; no write path, so live resizing is the only clean fix |
+| Pick-from-folder dialogs | `ArtistDialog.tsx:282`, ~~`CollectionCoverDialog.tsx:69`~~ | arbitrary user files via `mediaFileUrl(c.relPath)`; unbounded source size; no write path, so live resizing is the only clean fix. **Collection cover picker: done** (Part 3). The artist picker's candidates are the artist's own library thumbnails (~100-300 KB), so it was left alone |
 | AI compare dialog | `CompareThumbnailDialog.tsx:59,94,172` | full size on purpose (wipe comparison at full resolution) — leave |
 | Gallery viewer | `ThumbnailGalleryViewerDialog.tsx:136` | full size on purpose — leave |
 | Frame matching review | `FrameMatchingPage.tsx:351` | reference and found frames, full size |

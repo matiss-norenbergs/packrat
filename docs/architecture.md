@@ -40,7 +40,18 @@ backend/
     thumbnailenhance/        AI upscale/sharpen via a self-hosted Stable Diffusion instance
     hostactions/             env-defined sidebar "Actions" (PACKRAT_ACTION_<N>_*): fixed HTTP
                              requests, e.g. to tools/sd-launcher; never editable from the UI
+    nametemplate/            filename templates: {artist}/{title}-style tokens → sanitized path segments
+    features/                the optional-feature toggles (Settings → Features) the API and sweeps consult
+    strayfiles/              finds files on disk no DB record references (Settings → Library → Find
+                             Stray Files); report-only until a delete is requested
+    ratelimit/               in-memory throttling of failed logins (delays only; see Login throttling)
+    twofactor/               TOTP, secret-at-rest encryption, recovery codes, login challenges
+    admincmd/                host-side recovery commands (--reset-password, --disable-2fa)
+    version/                 the release version, stamped at build time
 ```
+
+`backend/cmd/server` also holds `admin.go` (the recovery-command entry point) and `backend/cmd/framematch-bench`
+is a standalone tool for measuring the frame matcher; it never touches the app's data.
 
 ## API routes live under `/api`
 
@@ -358,9 +369,13 @@ being silently retried on every future check and never surfacing anywhere.
 
 ## Collection-level defaults for new downloads
 
-Two optional collection fields exist purely to save repetitive manual entry when adding files to a
-collection, applied client-side when a collection is picked in the download dialogs — neither is
-enforced server-side:
+Optional collection fields exist to save repetitive manual entry when adding files to a collection.
+`seasonNumber` and `artistId` (below) and `year` (direct only, like the season) are applied
+client-side when a collection is picked in the download dialogs and are not enforced server-side.
+The collection's **`filenameTemplate`** is different: `POST /api/downloads` applies it server-side
+whenever the request names the collection and carries neither a literal filename nor a template of its
+own (an explicit choice at request time always wins); that is the shared enqueue path of the single and
+batch endpoints, so subscription-queued downloads don't get it. The two season/artist rules:
 
 - **`seasonNumber`** — **direct only**. A download placed into a collection with this set
   defaults its own Season # to it; a sub-collection with no season of its own is *not* defaulted
@@ -447,9 +462,10 @@ resolution without needing per-feature scheduling infrastructure.
 
 Still intentionally out of scope, not forgotten:
 
-- **No filename templating engine.** The original spec's `{title}/{channel}/{date}` template
-  variables are not implemented. A blank filename uses yt-dlp's native `%(title)s`; a provided
-  filename is used literally (sanitized).
+- **No conditional logic in filename templates.** Templates (`{artist}/{title}`, see
+  `internal/nametemplate`) only substitute `{variable}` tokens and split on `/`; there is no "drop
+  this segment if `{sequence}` is blank". A blank filename and template uses yt-dlp's native
+  `%(title)s`; a literal filename is used as given (sanitized).
 - **No multi-user support.** One user account, created once via the setup wizard; there is no
   invite/second-account flow, and `POST /api/auth/setup` permanently 409s after the first user
   exists.
