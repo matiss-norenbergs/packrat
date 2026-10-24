@@ -1856,7 +1856,7 @@ function YtDlpTab() {
 // server list also works under VITE_DESKTOP in a plain browser; everything else needs the shell.
 function DesktopTab() {
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-3xl space-y-6 pb-6">
       <ServersSection />
       {isTauri() && <ShellSettings />}
     </div>
