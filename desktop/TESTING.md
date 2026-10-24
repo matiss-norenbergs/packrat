@@ -61,51 +61,51 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-01 | Install and start Packrat. | The window opens on "Connect to a server". SmartScreen warns once (installer is unsigned) — expected. | |
-| W-02 | Enter the server address (e.g. `192.168.1.20:50505`) and press Connect. | The login page (or "Create admin account" on a fresh server) for that server appears; the server's name is shown under the form. | |
-| W-03 | Enter a wrong address (`192.168.1.20:1`) and press Connect. | An error is shown under the field; nothing is saved. | |
-| W-04 | Log in. | The dashboard opens; no "can't reach the server" or CORS-style error. | |
+| W-01 | Install and start Packrat. | The window opens on "Connect to a server". SmartScreen warns once (installer is unsigned) — expected. | Pass 2026-10-24 v0.18.1 — window opens on "Connect to a server"; but SmartScreen did **not** warn at install (tester's report), see Findings |
+| W-02 | Enter the server address (e.g. `192.168.1.20:50505`) and press Connect. | The login page (or "Create admin account" on a fresh server) for that server appears; the server's name is shown under the form. | Pass 2026-10-24 v0.18.1 (fresh :51201 server showed "Create admin account") |
+| W-03 | Enter a wrong address (`192.168.1.20:1`) and press Connect. | An error is shown under the field; nothing is saved. | Pass 2026-10-24 v0.18.1 — "Couldn't reach the server…" under the field; localStorage empty |
+| W-04 | Log in. | The dashboard opens; no "can't reach the server" or CORS-style error. | Pass 2026-10-24 v0.18.1 |
 
 ### Keychain (Windows Credential Manager)
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-10 | After W-04, open Credential Manager → Windows Credentials. | An entry for the service `io.github.matiss-norenbergs.packrat` with the user name `session-token:<profile id>` exists. Settings → Desktop shows "Token storage: OS keychain". | |
-| W-11 | Add a second server (W-60) and log in. | A second entry `session-token:<other id>` appears; the first is unchanged. | |
-| W-12 | Remove the second server in Settings → Desktop → Servers. | Its Credential Manager entry disappears; the first remains. | |
-| W-13 | Edit a server's address (Settings → Desktop → Servers → Edit). | The app signs out of that server; its entry is gone. Logging in again creates a new one. | |
-| W-14 | **Upgrade:** install a pre-profiles release (one that stores a single `session-token` entry), log in, then install the current version over it. | The app starts signed in; the old `session-token` entry has moved to `session-token:<id>` and the server appears as a profile. | |
-| W-15 | Quit and relaunch. | Still signed in without asking for credentials. | |
+| W-10 | After W-04, open Credential Manager → Windows Credentials. | An entry for the service `io.github.matiss-norenbergs.packrat` with the user name `session-token:<profile id>` exists. Settings → Desktop shows "Token storage: OS keychain". | Pass 2026-10-24 v0.18.1 — Windows Credentials: user `session-token:<id>`, target `session-token:<id>.io.github.matiss-norenbergs.packrat` |
+| W-11 | Add a second server (W-60) and log in. | A second entry `session-token:<other id>` appears; the first is unchanged. | Pass 2026-10-24 v0.18.1 |
+| W-12 | Remove the second server in Settings → Desktop → Servers. | Its Credential Manager entry disappears; the first remains. | Pass 2026-10-24 v0.18.1 |
+| W-13 | Edit a server's address (Settings → Desktop → Servers → Edit). | The app signs out of that server; its entry is gone. Logging in again creates a new one. | Pass 2026-10-24 v0.18.1 |
+| W-14 | **Upgrade:** install a pre-profiles release (one that stores a single `session-token` entry), log in, then install the current version over it. | The app starts signed in; the old `session-token` entry has moved to `session-token:<id>` and the server appears as a profile. | Not run — needs installing an older pre-profiles release over 0.18.1; waiting for your OK |
+| W-15 | Quit and relaunch. | Still signed in without asking for credentials. | Pass 2026-10-24 v0.18.1 (quit by closing the window with Close to tray off) |
 
 ### Launch at login
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-20 | Settings → Desktop → turn **Launch at login** on. | In `regedit`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` has a `Packrat` value whose command ends with `--minimized`. The "Start minimized to tray" switch appears. | |
-| W-21 | Turn **Start minimized to tray** on, sign out of Windows and back in. | Packrat starts hidden: only the tray icon is visible. | |
-| W-22 | Turn **Start minimized to tray** off, sign out and back in. | Packrat starts with its window shown. | |
-| W-23 | Start the app from the Start menu with the option on. | The window is shown (only an autostart launch hides it). | |
-| W-24 | Turn **Launch at login** off. | The `Run` value is removed; the "Start minimized" switch disappears. | |
-| W-25 | Delete the `Run` value in `regedit`, reopen Settings. | The switch is off (it reflects the OS, not a stored copy). | |
+| W-20 | Settings → Desktop → turn **Launch at login** on. | In `regedit`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` has a `Packrat` value whose command ends with `--minimized`. The "Start minimized to tray" switch appears. | Pass 2026-10-24 v0.18.1 — `Packrat REG_SZ C:\Users\…\AppData\Local\Packrat\packrat-desktop.exe --minimized` |
+| W-21 | Turn **Start minimized to tray** on, sign out of Windows and back in. | Packrat starts hidden: only the tray icon is visible. | Partial 2026-10-24 v0.18.1 — simulated via the Run command, real Windows logon not tested: window created hidden, tray icon present |
+| W-22 | Turn **Start minimized to tray** off, sign out and back in. | Packrat starts with its window shown. | Partial 2026-10-24 v0.18.1 — simulated via the Run command, real Windows logon not tested: window shown |
+| W-23 | Start the app from the Start menu with the option on. | The window is shown (only an autostart launch hides it). | Pass 2026-10-24 v0.18.1 |
+| W-24 | Turn **Launch at login** off. | The `Run` value is removed; the "Start minimized" switch disappears. | Pass 2026-10-24 v0.18.1 |
+| W-25 | Delete the `Run` value in `regedit`, reopen Settings. | The switch is off (it reflects the OS, not a stored copy). | Pass 2026-10-24 v0.18.1 |
 
 ### Tray
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-30 | Look at the notification area. | A Packrat icon with the tooltip "Packrat". | |
-| W-31 | With **Close to tray** on (default), press the window's close button. | The window hides; the icon stays; the process keeps running. | |
-| W-32 | Left-click the tray icon. | The window is restored and focused. | |
-| W-33 | Hide the window again, right-click the icon → **Show Packrat**. | The window is restored. | |
-| W-34 | Right-click the icon → **Quit**. | The app exits completely (no `Packrat` process in Task Manager). | |
-| W-35 | Turn **Close to tray** off, press close. | The app exits. Relaunch and turn it back on afterwards. | |
+| W-30 | Look at the notification area. | A Packrat icon with the tooltip "Packrat". | Pass 2026-10-24 v0.18.1 — icon sits in the hidden-icons overflow (Windows 11 default); tooltip "Packrat" seen on hover |
+| W-31 | With **Close to tray** on (default), press the window's close button. | The window hides; the icon stays; the process keeps running. | Pass 2026-10-24 v0.18.1 |
+| W-32 | Left-click the tray icon. | The window is restored and focused. | Pass 2026-10-24 v0.18.1 (left click sent as UI Automation Invoke on the overflow icon) |
+| W-33 | Hide the window again, right-click the icon → **Show Packrat**. | The window is restored. | Pass 2026-10-24 v0.18.1 (checked by hand: the menu appears and Show Packrat restores the window) |
+| W-34 | Right-click the icon → **Quit**. | The app exits completely (no `Packrat` process in Task Manager). | Pass 2026-10-24 v0.18.1 (Quit clicked by hand; no `packrat-desktop` or app WebView2 process left) |
+| W-35 | Turn **Close to tray** off, press close. | The app exits. Relaunch and turn it back on afterwards. | Pass 2026-10-24 v0.18.1 |
 
 ### Single instance
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-40 | With the app running (window behind another one), start Packrat again from the Start menu. | No second window/process; the running one comes to the front. | |
-| W-41 | With the app hidden in the tray, start it again. | The hidden window is shown. | |
-| W-42 | With **Launch at login** on and the app running and visible/behind another window, run the `Run` value's command (`Packrat.exe --minimized`) from a terminal. | Nothing is raised or shown; no second instance. | |
+| W-40 | With the app running (window behind another one), start Packrat again from the Start menu. | No second window/process; the running one comes to the front. | Pass 2026-10-24 v0.18.1 |
+| W-41 | With the app hidden in the tray, start it again. | The hidden window is shown. | Pass 2026-10-24 v0.18.1 |
+| W-42 | With **Launch at login** on and the app running and visible/behind another window, run the `Run` value's command (`Packrat.exe --minimized`) from a terminal. | Nothing is raised or shown; no second instance. | Pass 2026-10-24 v0.18.1 |
 
 ### Downloads and the Save-as dialog
 
@@ -113,25 +113,25 @@ Needs a library item that can be downloaded from the server (Library → item �
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-50 | **Ask where to save each download** off. Download an item. | It lands in the Downloads folder (or the folder chosen in Settings) with no dialog; a toast with **Show in folder** appears; the button opens Explorer with the file selected. | |
-| W-51 | Download the same item again. | A numbered copy (`name (1).ext`) is created; the first file is untouched. | |
-| W-52 | Switch the window to another app while a larger download runs. | When it finishes, a Windows notification "Download complete" appears. With the window focused, no notification (toast only). | |
-| W-53 | Turn **Ask where to save** on, download an item. | The Save dialog opens with the file name filled in and the last/default folder selected; saving creates the file there, and the toast shows its final path. | |
-| W-54 | Same, but press Cancel in the dialog. | No file is left anywhere (check the target folder and `%LOCALAPPDATA%\io.github.matiss-norenbergs.packrat\downloads`), and the progress toast is dismissed without an error toast. | |
-| W-55 | Save to an existing name and confirm "replace". | The file is replaced, no stray copy. | |
-| W-56 | Settings → Desktop → Downloads → **Change…**, pick a folder. | The shown path updates; the next download goes there. **Use default** returns to the OS Downloads folder. | |
+| W-50 | **Ask where to save each download** off. Download an item. | It lands in the Downloads folder (or the folder chosen in Settings) with no dialog; a toast with **Show in folder** appears; the button opens Explorer with the file selected. | Pass 2026-10-24 v0.18.1 — downloaded via Backup → Backup History → Download (no Library item download exists, see Findings) |
+| W-51 | Download the same item again. | A numbered copy (`name (1).ext`) is created; the first file is untouched. | Pass 2026-10-24 v0.18.1 |
+| W-52 | Switch the window to another app while a larger download runs. | When it finishes, a Windows notification "Download complete" appears. With the window focused, no notification (toast only). | Pass 2026-10-24 v0.18.1 — tested with a 6 KB file, not a larger one |
+| W-53 | Turn **Ask where to save** on, download an item. | The Save dialog opens with the file name filled in and the last/default folder selected; saving creates the file there, and the toast shows its final path. | Pass 2026-10-24 v0.18.1 — but the pre-filled name carries a " (N)" suffix, see Findings |
+| W-54 | Same, but press Cancel in the dialog. | No file is left anywhere (check the target folder and `%LOCALAPPDATA%\io.github.matiss-norenbergs.packrat\downloads`), and the progress toast is dismissed without an error toast. | Pass 2026-10-24 v0.18.1 |
+| W-55 | Save to an existing name and confirm "replace". | The file is replaced, no stray copy. | Pass 2026-10-24 v0.18.1 |
+| W-56 | Settings → Desktop → Downloads → **Change…**, pick a folder. | The shown path updates; the next download goes there. **Use default** returns to the OS Downloads folder. | Pass 2026-10-24 v0.18.1 — but a file in the chosen (empty) folder got a " (7)" suffix, see Findings |
 
 ### Server profiles
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-60 | Sidebar server switcher → **Add server…**, connect the second server, log in. | Both servers are listed with a check on the current one. | |
-| W-61 | Switch between them with the switcher. | The app reloads on each and stays signed in; data is that server's. | |
-| W-62 | Settings → Desktop → Servers → Edit → change the name. | The new name shows in the list and the switcher without a reload. | |
-| W-63 | Edit the address to a working one, save. | The address is checked first; on success the app signs out of that server (token dropped). | |
-| W-64 | Edit the address to an unreachable one. | The save is refused with an error; nothing changes. | |
-| W-65 | Remove a non-active server. | It disappears; the app stays on the current one. | |
-| W-66 | Remove the active server. | The app returns to "Connect to a server" (other saved servers are offered below the form). | |
+| W-60 | Sidebar server switcher → **Add server…**, connect the second server, log in. | Both servers are listed with a check on the current one. | Pass 2026-10-24 v0.18.1 |
+| W-61 | Switch between them with the switcher. | The app reloads on each and stays signed in; data is that server's. | Pass 2026-10-24 v0.18.1 |
+| W-62 | Settings → Desktop → Servers → Edit → change the name. | The new name shows in the list and the switcher without a reload. | Pass 2026-10-24 v0.18.1 |
+| W-63 | Edit the address to a working one, save. | The address is checked first; on success the app signs out of that server (token dropped). | Pass 2026-10-24 v0.18.1 |
+| W-64 | Edit the address to an unreachable one. | The save is refused with an error; nothing changes. | Pass 2026-10-24 v0.18.1 |
+| W-65 | Remove a non-active server. | It disappears; the app stays on the current one. | Pass 2026-10-24 v0.18.1 |
+| W-66 | Remove the active server. | The app returns to "Connect to a server" (other saved servers are offered below the form). | Pass 2026-10-24 v0.18.1 |
 
 ### Updates
 
@@ -140,23 +140,23 @@ Needs a published release newer than the installed build, or an older/newer serv
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-70 | Settings → Desktop → Updates → **Check for updates** on the newest release. | "You're up to date." | |
-| W-71 | With an older installed build, **Check for updates**. | "Version X is available" with release notes; nothing is installed yet. | |
-| W-72 | Press **Install and restart**. | Progress is shown; the installer runs passively; the app restarts on the new version. | |
-| W-73 | Connect to a server running a **newer** release than the app; press **Match server version**. | A confirmation names both versions; confirming installs and restarts on the server's version. | |
-| W-74 | Connect to a server running an **older** release; press **Match server version**. | The confirmation warns it is an older version; confirming downgrades. | |
-| W-75 | Connect to a server whose version has no desktop build. | "No desktop build is published for server version …"; nothing changes. | |
-| W-76 | After an update, check the Updates section. | "You have version <new>", and "Matches your server" when equal. | |
+| W-70 | Settings → Desktop → Updates → **Check for updates** on the newest release. | "You're up to date." | Pass 2026-10-24 v0.18.1 |
+| W-71 | With an older installed build, **Check for updates**. | "Version X is available" with release notes; nothing is installed yet. | Not run — would install a new build; waiting for my OK |
+| W-72 | Press **Install and restart**. | Progress is shown; the installer runs passively; the app restarts on the new version. | Not run — would install a new build; waiting for my OK |
+| W-73 | Connect to a server running a **newer** release than the app; press **Match server version**. | A confirmation names both versions; confirming installs and restarts on the server's version. | Not run — would install a new build; waiting for my OK (also: no release newer than 0.18.1 exists) |
+| W-74 | Connect to a server running an **older** release; press **Match server version**. | The confirmation warns it is an older version; confirming downgrades. | Partial 2026-10-24 v0.18.1 — against a 0.18.0 server the confirmation reads "Install an older version? This replaces v0.18.1 with the older v0.18.0…"; Cancel pressed, downgrade not installed |
+| W-75 | Connect to a server whose version has no desktop build. | "No desktop build is published for server version …"; nothing changes. | Pass 2026-10-24 v0.18.1 — 0.14.0 server: "Couldn't check for a matching version: No desktop build is published for server version 0.14.0" |
+| W-76 | After an update, check the Updates section. | "You have version <new>", and "Matches your server" when equal. | Partial 2026-10-24 v0.18.1 — no update done; against a 0.18.1 server it shows "You have version 0.18.1." and "Matches your server." |
 
 ### Server version and connection notices
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-80 | Connect to a server whose version differs from the app's. | The version-mismatch notice appears with a way to match (and can be dismissed). | |
-| W-81 | Connect to a server of the same version. | No notice. | |
-| W-82 | While signed in, stop the server. | The reconnect banner appears after a moment (with **Retry now**) and keeps retrying. | |
-| W-83 | Start the server again. | The banner clears by itself and the app works without a restart. | |
-| W-84 | Quit, stop the server, relaunch. | "Can't reach the server" with **Retry** and **Change server**; Retry works once the server is back. | |
+| W-80 | Connect to a server whose version differs from the app's. | The version-mismatch notice appears with a way to match (and can be dismissed). | Pass 2026-10-24 v0.18.1 — 0.18.0 server: "Your app (v0.18.1) is newer than your server (v0.18.0)…" with Open settings and Dismiss; dismissal survives a reload |
+| W-81 | Connect to a server of the same version. | No notice. | Pass 2026-10-24 v0.18.1 |
+| W-82 | While signed in, stop the server. | The reconnect banner appears after a moment (with **Retry now**) and keeps retrying. | Pass 2026-10-24 v0.18.1 — "Can't reach the server — retrying…" with Retry now, immediately after the container stopped |
+| W-83 | Start the server again. | The banner clears by itself and the app works without a restart. | Pass 2026-10-24 v0.18.1 — cleared within ~8 s of the restart |
+| W-84 | Quit, stop the server, relaunch. | "Can't reach the server" with **Retry** and **Change server**; Retry works once the server is back. | Pass 2026-10-24 v0.18.1 |
 
 ### Two-factor login and sessions
 
@@ -164,11 +164,52 @@ Needs 2FA enabled on the server account (Settings → Account).
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-90 | Log out, log in with username and password. | A second step asks for the 6-digit code (OTP boxes: typing advances, pasting a full code fills all boxes). | |
-| W-91 | Enter a wrong code. | An error; the boxes clear; the token is not stored (Credential Manager unchanged). | |
-| W-92 | Enter the right code. | Logged in; the token entry appears. | |
-| W-93 | Settings → Account → Sessions. | The desktop app's session is listed and marked as this device. | |
-| W-94 | From a browser, sign in to the same server, open Sessions there and revoke the desktop session. | Within a moment the desktop app falls back to the login screen. | |
+| W-90 | Log out, log in with username and password. | A second step asks for the 6-digit code (OTP boxes: typing advances, pasting a full code fills all boxes). | Pass 2026-10-24 v0.18.1 — a pasted full code fills and auto-submits |
+| W-91 | Enter a wrong code. | An error; the boxes clear; the token is not stored (Credential Manager unchanged). | Pass 2026-10-24 v0.18.1 — toast "invalid code", boxes cleared, no new Credential Manager entry |
+| W-92 | Enter the right code. | Logged in; the token entry appears. | Pass 2026-10-24 v0.18.1 |
+| W-93 | Settings → Account → Sessions. | The desktop app's session is listed and marked as this device. | Pass 2026-10-24 v0.18.1 — "Packrat desktop app on Windows — This device" |
+| W-94 | From a browser, sign in to the same server, open Sessions there and revoke the desktop session. | Within a moment the desktop app falls back to the login screen. | Pass 2026-10-24 v0.18.1 — revoked from a web (cookie + CSRF) login through the API rather than the browser UI; login screen ~12 s later |
+
+### Findings (2026-10-24, v0.18.1)
+
+Run on Windows 11 Pro 25H2 (build 26200.9711), Smart App Control **on**, against the installed
+v0.18.1 release. Servers: the `packrat-dev` container (version `dev`) and throwaway containers of the
+published 0.18.1, 0.18.0 and 0.14.0 images. The webview was driven through WebView2 remote debugging
+(`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`, real mouse/key input events);
+native windows (Save dialog, folder picker, tray, notifications) through UI Automation/Win32 and
+screenshots. No failures; the points below are the surprises.
+
+- **Pre-filled / saved file names get a needless " (N)" suffix** (W-53, W-54, W-56). The number is
+  computed against the *system* Downloads folder, not where the file goes. With **Ask where to save**
+  on and `backup-20260815-094658-e710.json` … `(5).json` already in Downloads, the Save dialog
+  offered `backup-20260815-094658-e710 (6).json` (the staged file was already
+  `…\downloads\0\backup-…-e710 (6).json`). After saving one copy to another folder, the next dialog
+  opened in that folder (empty) still offering `… (7).json`. With the dialog off and **Save to** set
+  to an empty folder, the file was saved as `…\dl-folder\backup-20260815-094658-e710 (7).json`.
+  Expected: the server's file name (FEATURES.md: "with the server's file name filled in"; "A file
+  with the same name is never overwritten: it gets a number added", i.e. only on a clash in the
+  target folder).
+- **Checklist precondition doesn't match the app:** v0.18.1 has no "Library → item → Download"
+  (save to this computer) action; the Library item menu only has server-side **Redownload**. The
+  Downloads items were run with Backup → Backup History → Download (a server file behind
+  `<a download>`), which goes through the same download handler.
+- **Removing a server or changing its address leaves its server-side session alive.** The local
+  token is deleted as expected, but the session stays valid on the server: after W-63, server B
+  still listed the earlier desktop session (last seen at the address change); after removing server
+  C (W-65), its session was still listed on C. The Remove dialog says "The server itself isn't
+  affected", so this may be intended; W-13's "the app signs out of that server" reads stronger.
+- **No SmartScreen warning at install** (W-01, tester's report), although the installer is unsigned
+  and Smart App Control is on. The app installs and runs fine; the checklist's "SmartScreen warns
+  once" doesn't hold on this machine (installer downloaded from the GitHub release).
+- "Close to tray" is a checkbox, while "Launch at login", "Start minimized to tray" and "Ask where to
+  save each download" are switches (cosmetic).
+- The `Run` value's path is unquoted (`C:\Users\…\Packrat\packrat-desktop.exe --minimized`). Fine
+  here; a user folder with spaces would rely on Windows' unquoted-path parsing.
+- A wrong 2FA code shows the raw server text "invalid code" (lowercase) as a toast (cosmetic).
+- Test-method notes, not app bugs: a *script-generated* click on a second download made WebView2
+  show "http://tauri.localhost wants to Download multiple files [Block] [Allow]"; real mouse clicks
+  never triggered it (six downloads in a row). The automated tray right-click (W-33) landed on the
+  tooltip instead of the icon; done by hand, the menu works.
 
 ## 3. Known gaps
 
