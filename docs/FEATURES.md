@@ -676,8 +676,11 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   download timeout in minutes (kills and marks failed any download still
   running past the limit; 0 = no limit). Download directory is shown but not editable here (set
   via the `MEDIA_ROOT` environment variable).
-- **Account** — change your password (requires the current one), and a **Two-factor authentication**
-  card. 2FA is optional and off by default; accounts without it log in exactly as before. **Enable**
+- **Account** — three cards of the same width, top to bottom: **Active sessions**, **Two-factor
+  authentication** and **Password**. **Change password** opens a dialog (current, new, confirm; the
+  new one needs 8+ characters and a matching confirmation, Enter submits, fields are cleared whenever
+  the dialog closes, and a successful change closes it with a "Password changed" toast; the current
+  password must be right). 2FA is optional and off by default; accounts without it log in exactly as before. **Enable**
   opens a 3-step dialog: (1) scan a QR code (drawn in the browser, always dark on a white tile) or type
   the key shown in groups of four (Copy button); (2) enter a code from the app to confirm; (3) save
   the 10 recovery codes — shown once, with Copy and Download, and the dialog can't be closed until
