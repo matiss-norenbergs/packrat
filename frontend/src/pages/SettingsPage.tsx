@@ -1908,7 +1908,7 @@ function ShellSettings() {
               </>
             }
           >
-            <Select value={startup ?? undefined} disabled={startup === null} onValueChange={(v) => setStartup(v as StartupMode)}>
+            <Select value={startup ?? ""} disabled={startup === null} onValueChange={(v) => setStartup(v as StartupMode)}>
               <SelectTrigger id="startup" className="w-full sm:w-64">
                 <SelectValue />
               </SelectTrigger>
