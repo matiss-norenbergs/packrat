@@ -15,12 +15,14 @@ function Progress({
         "relative flex h-1 w-full items-center overflow-x-hidden rounded-full bg-muted",
         className
       )}
+      value={value}
       {...props}
     >
+      {/* value === null: unknown total, so a bar sweeps back and forth instead of filling. */}
       <ProgressPrimitive.Indicator
         data-slot="progress-indicator"
-        className="size-full flex-1 bg-primary transition-all"
-        style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
+        className={cn("size-full flex-1 bg-primary", value === null ? "w-1/3 flex-none animate-progress-indeterminate" : "transition-all")}
+        style={value === null ? undefined : { transform: `translateX(-${100 - (value || 0)}%)` }}
       />
     </ProgressPrimitive.Root>
   )

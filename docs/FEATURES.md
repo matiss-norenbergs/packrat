@@ -13,24 +13,36 @@ single admin account (there's no multi-user support). See "Auth and CSRF" in
 The same frontend also runs inside a desktop shell (Tauri) as a thin client for a Packrat server you
 already host — there's no bundled backend. On first launch it shows **Connect to a server**: enter
 an address (`192.168.1.20:50505`, or a full `https://…` URL; a bare host defaults to `http://`).
-The app checks `GET /api/health` before saving it, then shows the usual setup/login screen. The
-login screen shows the connected server with a **Change server** link (forgets the server and
-login, keeps the address to prefill the form). If the server can't be reached at startup, a "Can't
-reach the server" screen offers **Retry** and **Change server**. If the server revokes the session
-while the app is open, it drops back to the login screen.
+The app checks `GET /api/health` before saving it, then shows the usual setup/login screen. If the
+server can't be reached at startup, a "Can't reach the server" screen offers **Retry** and **Change
+server**. If the server revokes the session while the app is open, it drops back to the login screen.
+
+**Several servers.** The app keeps a list of saved servers ("profiles": a name, an address and when it
+was last used) and talks to one at a time; each profile has its own login, so switching back to a
+server you were signed in to needs no password. The sidebar footer shows the current server's name
+and version; its menu lists the saved servers (the current one ticked), **Add server…** and **Manage
+servers**. Picking another server reloads the app on it. **Add server…** opens the connect screen
+(address, an optional name — the host if left empty — and a **Cancel** back to the current server;
+connecting to an address that is already saved just switches to it). The login screen's and the
+"Can't reach the server" screen's **Change server** open the same list. Settings → Desktop → **Servers**
+is the table of profiles: name, address, last used; **Edit** renames a server or changes its address
+(the new address is checked against `/api/health` first, and changing it signs you out of that server
+on this device — a login is never sent to a different address) and **Remove** forgets a server and
+deletes its saved login (asks first; removing the current server goes to the connect screen). An app
+that had one server and login before this existed keeps both: they become the first profile.
 
 Unlike the browser, the desktop client authenticates with a bearer token instead of cookies (the
 server's `CORS_ALLOWED_ORIGINS` must include the app's origin — the Tauri defaults are built in).
-The token is kept in the OS keychain (Windows Credential Manager, macOS Keychain, Linux Secret
-Service) rather than a plain file; where there is no keychain it falls back to the app's local
+The token — one per saved server — is kept in the OS keychain (Windows Credential Manager, macOS
+Keychain, Linux Secret Service) rather than a plain file; where there is no keychain it falls back to the app's local
 storage, and Settings → Desktop says which is in use ("Token storage: OS keychain" / "Local file
 (keychain unavailable)"). A login from before this change is migrated automatically. This keeps the
 token out of readable app data (disk images, backups), not out of reach of malware running as you.
 None of this applies to the web UI, which behaves as before. See "Auth and CSRF" in
 [`api.md`](api.md#auth-and-csrf). The shell lives in [`desktop/`](../desktop/README.md). Inside it,
 http(s) links open in the system browser, desktop notifications go through the OS (Settings toggle
-unchanged), backup downloads are saved to the OS Downloads folder (never overwriting a file),
-and the window remembers its size and position. Starting the app a second time just
+unchanged), downloads such as backups are saved to your Downloads folder (never overwriting a file;
+see **Downloads** below), and the window remembers its size and position. Starting the app a second time just
 brings the existing window forward (single instance). A **tray icon** (left click, or "Show
 Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of
@@ -49,7 +61,15 @@ screen.
 **Downloads** show a toast: "Downloading <file>…" turns into "Saved to <path>" with a **Show in
 folder** button (or "Download failed"). The OS "Download complete" notification is only sent when
 the window isn't focused (hidden to the tray, minimized or behind another app), so you don't get
-both. The browser keeps its own download UI.
+both. The browser keeps its own download UI. Settings → Desktop → **Downloads** has two settings:
+**Save to** shows the folder downloads go to (your system's Downloads folder until you pick one
+with **Change…**, a native folder picker; **Use default** goes back; a chosen folder that no longer
+exists falls back to the default), and **Ask where to save each download** (off by default — then
+nothing changes from the above). With it on, every download opens the system's Save dialog with
+the server's file name filled in, starting in the folder you last saved to (the **Save to** folder
+the first time). The file is fetched first and the dialog appears once it's complete; cancelling
+the dialog discards the file and shows no message, and a failed fetch shows "Download failed" with
+nothing left behind. Both settings are per computer, kept by the shell.
 
 **Version mismatch notices**: after login, if the server's version (`GET /api/version`) differs from
 the app's, a dismissible notice with an **Open settings** button appears. Server newer: "Your server
@@ -64,7 +84,10 @@ doesn't nag but returns after the next change to either.
 button. If a newer release exists it offers **Install and restart**, which downloads it, verifies its
 signature against the key built into the app, installs and restarts. Nothing is checked or downloaded
 automatically. On Linux this works for the AppImage only (`.deb`/`.rpm` installs are updated by
-reinstalling). See [`desktop/README.md`](../desktop/README.md#releasing-updates-one-time-setup).
+reinstalling). While an update downloads (either kind) the section shows "Downloading update…" with the
+percent on the right, a progress bar, and "Packrat will restart when it's done." underneath; if the
+download size isn't known the bar sweeps and there's no percent. See
+[`desktop/README.md`](../desktop/README.md#releasing-updates-one-time-setup).
 
 **Match server version** (same section): when the server runs a release version (plain `X.Y.Z`) that
 differs from the app's, **Match server version** installs the app release equal to the server's —

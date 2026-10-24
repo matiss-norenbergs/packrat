@@ -5,7 +5,7 @@ import { ThemeProvider } from "next-themes"
 import { DesktopGate } from "@/components/DesktopGate"
 import { authStatusQueryKey } from "@/hooks/useAuth"
 import { queryClient } from "@/lib/queryClient"
-import { needsServerUrl, UNAUTHORIZED_EVENT } from "@/lib/server"
+import { showsConnectScreen, UNAUTHORIZED_EVENT } from "@/lib/server"
 import { ConnectPage } from "@/pages/ConnectPage"
 import { router } from "@/routes"
 // Side-effect only — applies the saved accent color to <html> as soon as
@@ -26,8 +26,8 @@ function App() {
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
   }, [])
 
-  // Desktop with no server chosen yet: nothing to render the router against.
-  if (needsServerUrl()) {
+  // Desktop with no server chosen yet (or "Add server…"): nothing to render the router against.
+  if (showsConnectScreen()) {
     return (
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <ConnectPage />

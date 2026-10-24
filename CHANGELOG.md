@@ -12,6 +12,20 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-24
+- **Save-as dialog for downloads (desktop)** — Settings → Desktop → Downloads: "Ask where to save each
+  download" (off by default) opens the native Save dialog for every download (file name filled in,
+  starting in the last folder used; cancelling discards the file), and "Save to" picks the folder
+  downloads go to instead of the OS Downloads folder.
+- **Multiple servers (desktop)** — the app can save several Packrat servers and switch between them
+  from the sidebar footer (current server's name and version, with Add server… / Manage servers),
+  staying signed in per server: each profile has its own keychain token (`session-token:<id>`).
+  Settings → Desktop → Servers renames, re-addresses (re-checked first) and removes servers. An
+  existing single server and login are migrated into the first profile.
+- **Update progress text (desktop)** — the installing state in Settings → Desktop now shows
+  "Downloading update…" with the percent, a progress bar and the restart notice on separate lines
+  (indeterminate bar when the size is unknown) instead of one run-on sentence.
+
 ## 2026-10-23
 - **Launch at login (desktop)** — Settings → Desktop gets a "Launch at login" switch (off by default;
   reflects the OS startup entry) and, while it is on, "Start minimized to tray". Autostart launches

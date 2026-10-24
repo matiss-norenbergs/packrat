@@ -17,7 +17,8 @@ import {
   ImageUp,
   ScanSearch,
 } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
+import { SidebarServerSwitcher } from "@/components/ServerSwitcher"
 import { PackratLogo } from "@/components/PackratLogo"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -60,6 +61,7 @@ const navItems = [
 
 export function SidebarContent() {
   const logout = useLogout()
+  const navigate = useNavigate()
   const { data: settings } = useSettings()
 
   // A nav item tagged requiresSetting only shows once that setting is known
@@ -95,6 +97,7 @@ export function SidebarContent() {
         ))}
       </nav>
       <HostActionsMenu />
+      <SidebarServerSwitcher onManage={() => navigate("/settings?tab=desktop")} />
       <AppVersionLine />
       <VersionLine />
       <div className="px-2 py-2">

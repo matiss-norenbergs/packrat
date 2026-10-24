@@ -27,6 +27,8 @@ fn main() {
             MacosLauncher::LaunchAgent,
             Some(vec![prefs::MINIMIZED_ARG]),
         ))
+        // Only the Rust side opens dialogs (downloads.rs); the webview is granted none of its commands.
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -45,9 +47,15 @@ fn main() {
             prefs::set_close_to_tray,
             prefs::get_start_minimized,
             prefs::set_start_minimized,
+            prefs::get_ask_where_to_save,
+            prefs::set_ask_where_to_save,
+            downloads::get_download_folder,
+            downloads::choose_download_folder,
+            downloads::reset_download_folder,
             token::token_get,
             token::token_set,
             token::token_clear,
+            token::token_adopt_legacy,
             token::token_store_kind
         ])
         .on_window_event(|window, event| {
@@ -63,6 +71,8 @@ fn main() {
         .setup(|app| {
             app.manage(prefs::load(app.handle()));
             app.manage(match_update::Pending::default());
+            app.manage(downloads::Downloads::default());
+            downloads::clear_staging(app.handle());
             app.manage(token::Vault::keychain());
             // A tray that can't be built isn't fatal; it only means the window is always shown.
             let tray_available = match tray::build(app.handle()) {

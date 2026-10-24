@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }))
 const reveal = vi.fn()
 vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: (p: string) => reveal(p) }))
-const { toast } = vi.hoisted(() => ({ toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+const { toast } = vi.hoisted(() => ({ toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() } }))
 vi.mock("sonner", () => ({ toast }))
 
 import { useDownloadToasts } from "@/hooks/useDownloadToasts"
@@ -59,6 +59,31 @@ describe("useDownloadToasts", () => {
       handlers["download-started"]({ payload: { filename: "b.json", path: "/dl/b.json" } })
       handlers["download-finished"]({ payload: { path: null, success: false } })
       expect(toast.error).toHaveBeenCalledWith("Download failed", expect.objectContaining({ id: "/dl/b.json" }))
+    })
+
+    it("settles the toast named by the event when the file was saved somewhere else", async () => {
+      renderHook(() => useDownloadToasts())
+      await waitFor(() => expect(handlers["download-finished"]).toBeDefined())
+      handlers["download-started"]({ payload: { filename: "b.json", path: "/cache/0/b.json" } })
+      handlers["download-started"]({ payload: { filename: "c.json", path: "/cache/1/c.json" } })
+      handlers["download-finished"]({
+        payload: { path: "/home/me/c.json", id: "/cache/1/c.json", success: true, cancelled: false },
+      })
+      const [message, options] = toast.success.mock.calls[0]
+      expect(message).toBe("Saved to /home/me/c.json")
+      expect(options.id).toBe("/cache/1/c.json") // not the older b.json toast
+    })
+
+    it("just dismisses the toast when the Save dialog was cancelled", async () => {
+      renderHook(() => useDownloadToasts())
+      await waitFor(() => expect(handlers["download-finished"]).toBeDefined())
+      handlers["download-started"]({ payload: { filename: "b.json", path: "/cache/0/b.json" } })
+      handlers["download-finished"]({
+        payload: { path: null, id: "/cache/0/b.json", success: false, cancelled: true },
+      })
+      expect(toast.dismiss).toHaveBeenCalledWith("/cache/0/b.json")
+      expect(toast.success).not.toHaveBeenCalled()
+      expect(toast.error).not.toHaveBeenCalled()
     })
 
     it("stops listening on unmount", async () => {

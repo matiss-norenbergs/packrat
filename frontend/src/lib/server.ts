@@ -2,32 +2,38 @@
 // origin, so every URL stays relative and auth is the session cookie. In the desktop app (Tauri)
 // the page is served from the app bundle and the user points it at a Packrat server, so URLs are
 // prefixed with that server's address and auth is a bearer token (see backend/internal/api/
-// auth_middleware.go). Everything here is a no-op on the web.
+// auth_middleware.go). The desktop app keeps a list of servers ("profiles", lib/serverProfiles.ts)
+// with one active at a time and a login token per profile. Everything here is a no-op on the web.
 
-const SERVER_URL_KEY = "packrat.serverUrl"
-const LAST_SERVER_URL_KEY = "packrat.lastServerUrl"
-const TOKEN_KEY = "packrat.token"
+import {
+  activateProfile,
+  addProfile,
+  deactivateProfile,
+  deleteProfile,
+  getActiveProfile,
+  getActiveProfileId,
+  isAddingServer,
+  LEGACY_TOKEN_PROFILE_KEY,
+  localTokenKey,
+  read,
+  updateProfile,
+  write,
+} from "@/lib/serverProfiles"
+
+export {
+  deriveProfileName,
+  getActiveProfile,
+  getLastServerUrl,
+  getProfiles,
+  isAddingServer,
+  setAddingServer,
+  subscribeProfiles,
+  type ServerProfile,
+} from "@/lib/serverProfiles"
 
 // Fired when the server rejects the desktop client's token, so the app can fall back to the login
 // screen (see App.tsx).
 export const UNAUTHORIZED_EVENT = "packrat:unauthorized"
-
-function read(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function write(key: string, value: string | null) {
-  try {
-    if (value === null) window.localStorage.removeItem(key)
-    else window.localStorage.setItem(key, value)
-  } catch {
-    // storage unavailable — the app just won't remember the server/login across restarts
-  }
-}
 
 // True only inside the real Tauri shell — where its plugins (notifications, opening links in the
 // system browser) exist. isDesktop() is also true under VITE_DESKTOP, which has no plugins.
@@ -59,38 +65,71 @@ export function normalizeServerUrl(input: string): string | null {
   return `${url.origin}${url.pathname.replace(/\/+$/, "")}`
 }
 
+// Switching or (re)connecting a server restarts the page so the router, auth check and every query
+// start fresh against it. A function of its own so tests can stand in for it.
+export function reloadApp() {
+  window.location.reload()
+}
+
+// The address of the active server profile. Desktop only.
 export function getServerUrl(): string | null {
-  return read(SERVER_URL_KEY)
+  return getActiveProfile()?.url ?? null
 }
 
-// Switching servers drops the old server's token — it isn't valid anywhere else.
-export function setServerUrl(url: string) {
-  if (getServerUrl() !== url) clearToken()
-  write(SERVER_URL_KEY, url)
-  write(LAST_SERVER_URL_KEY, url)
+export function getActiveProfileName(): string | null {
+  return getActiveProfile()?.name ?? null
 }
 
-// "Change server": forgets the server and token, but remembers the address to prefill the form.
+// Makes `url` the active server — reusing the profile that already has this address, else adding
+// one — without touching any token: each profile keeps its own login. The app reloads afterwards.
+export function setServerUrl(url: string, name?: string) {
+  activateProfile(addProfile(url, name).id)
+}
+
+// Switching profiles: callers reload afterwards and the app comes back signed in with that
+// profile's own token. Nothing is cleared.
+export function switchProfile(id: string) {
+  activateProfile(id)
+}
+
+export function renameProfile(id: string, name: string) {
+  const trimmed = name.trim()
+  if (trimmed) updateProfile(id, { name: trimmed })
+}
+
+// Saves a new address for a profile. The old address's login isn't valid for whatever answers at
+// the new one (and must never be sent there), so it is dropped.
+export async function changeProfileUrl(id: string, url: string): Promise<void> {
+  updateProfile(id, { url })
+  await clearProfileToken(id)
+}
+
+// Forgets a server and its login. Removing the active profile leaves the app without a server, so
+// it shows the connect screen. Resolves once the keychain entry is gone.
+export async function removeProfile(id: string): Promise<void> {
+  deleteProfile(id)
+  await clearProfileToken(id)
+}
+
+// Leave the active server (profiles and their logins stay) — the connect screen shows next.
 export function resetServer() {
-  clearToken()
-  write(SERVER_URL_KEY, null)
-}
-
-export function getLastServerUrl(): string {
-  return read(LAST_SERVER_URL_KEY) ?? ""
+  deactivateProfile()
 }
 
 // Where the login token lives. In the Tauri shell it goes to the OS keychain (Windows Credential
-// Manager, macOS Keychain, Linux Secret Service) so it isn't a plain file in the app's data
-// directory; getToken() stays synchronous by reading an in-memory copy that initTokenStore()
-// fills before the first render. If the keychain is unavailable, or the browser/VITE_DESKTOP path
-// is in use, it stays in localStorage — a login is never dropped silently.
+// Manager, macOS Keychain, Linux Secret Service), one entry per profile id, so it isn't a plain
+// file in the app's data directory; getToken() stays synchronous by reading an in-memory copy of
+// the active profile's token that initTokenStore() fills before the first render. If the keychain
+// is unavailable, or the browser/VITE_DESKTOP path is in use, it stays in localStorage
+// (packrat.token.<id>) — a login is never dropped silently.
 export type TokenStorage = "keychain" | "local"
 
 type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>
 
 let tokenStorage: TokenStorage = "local"
 let tokenCache: string | null = null
+// Which profile tokenCache belongs to; a cache for another profile is never served.
+let tokenCacheFor: string | null = null
 let invokeShell: Invoke | null = null
 
 // Settles once the token is loaded (immediately on the web). Anything that fires an authenticated
@@ -107,8 +146,13 @@ export function getTokenStorage(): TokenStorage {
 }
 
 // Tauri only; awaited in main.tsx before rendering. Moves a pre-keychain localStorage token into the
-// keychain (existing logins survive the upgrade) and loads the token into memory.
+// keychain (existing logins survive the upgrade) and loads the active profile's token into memory.
 export async function initTokenStore(): Promise<void> {
+  if (isDesktop()) {
+    // The app start counts as using the active server (Settings → Servers → Last used).
+    const active = getActiveProfileId()
+    if (active) activateProfile(active)
+  }
   if (!isTauri()) return
   try {
     await loadToken()
@@ -121,17 +165,33 @@ async function loadToken() {
   try {
     const { invoke } = await import("@tauri-apps/api/core")
     if ((await invoke<TokenStorage>("token_store_kind")) !== "keychain") return
-    let token = await invoke<string | null>("token_get")
-    const legacy = read(TOKEN_KEY)
-    if (legacy) {
-      if (!token) {
-        await invoke("token_set", { token: legacy })
-        token = legacy
+    // From before profiles: the single keychain entry belongs to the first profile. A failure
+    // keeps the flag, so the next start retries.
+    const legacyId = read(LEGACY_TOKEN_PROFILE_KEY)
+    if (legacyId) {
+      try {
+        await invoke("token_adopt_legacy", { id: legacyId })
+        write(LEGACY_TOKEN_PROFILE_KEY, null)
+      } catch {
+        // retried next start
       }
-      write(TOKEN_KEY, null)
+    }
+    const id = getActiveProfileId()
+    let token: string | null = null
+    if (id) {
+      token = await invoke<string | null>("token_get", { id })
+      const local = read(localTokenKey(id))
+      if (local) {
+        if (!token) {
+          await invoke("token_set", { id, token: local })
+          token = local
+        }
+        write(localTokenKey(id), null)
+      }
     }
     invokeShell = invoke as Invoke
     tokenCache = token
+    tokenCacheFor = id
     tokenStorage = "keychain"
   } catch {
     // keychain unusable — keep using localStorage
@@ -141,29 +201,55 @@ async function loadToken() {
 // The keychain stopped answering mid-session: keep the login in localStorage instead of losing it.
 function fallBackToLocal() {
   tokenStorage = "local"
-  write(TOKEN_KEY, tokenCache)
+  if (tokenCacheFor && tokenCache) write(localTokenKey(tokenCacheFor), tokenCache)
 }
 
 export function getToken(): string | null {
-  return tokenStorage === "keychain" ? tokenCache : read(TOKEN_KEY)
+  const id = getActiveProfileId()
+  if (!id) return null
+  if (tokenStorage !== "keychain") return read(localTokenKey(id))
+  return tokenCacheFor === id ? tokenCache : null
 }
 
 export function setToken(token: string) {
-  if (tokenStorage !== "keychain") return write(TOKEN_KEY, token)
+  const id = getActiveProfileId()
+  if (!id) return
+  if (tokenStorage !== "keychain") return write(localTokenKey(id), token)
   tokenCache = token
-  invokeShell?.("token_set", { token }).catch(fallBackToLocal)
+  tokenCacheFor = id
+  invokeShell?.("token_set", { id, token }).catch(fallBackToLocal)
 }
 
 export function clearToken() {
-  if (tokenStorage !== "keychain") return write(TOKEN_KEY, null)
-  tokenCache = null
-  write(TOKEN_KEY, null)
-  invokeShell?.("token_clear").catch(() => {})
+  const id = getActiveProfileId()
+  if (id) void clearProfileToken(id)
+}
+
+// Drops one profile's login wherever it is kept. Never rejects: a keychain that can't answer has
+// nothing we could delete anyway.
+async function clearProfileToken(id: string): Promise<void> {
+  write(localTokenKey(id), null)
+  if (tokenCacheFor === id) {
+    tokenCache = null
+    tokenCacheFor = null
+  }
+  if (tokenStorage === "keychain") {
+    try {
+      await invokeShell?.("token_clear", { id })
+    } catch {
+      // see above
+    }
+  }
 }
 
 // The desktop app has no server to talk to until the user has entered one.
 export function needsServerUrl(): boolean {
   return isDesktop() && !getServerUrl()
+}
+
+// The connect screen replaces the app: no server yet, or "Add server…" was chosen.
+export function showsConnectScreen(): boolean {
+  return needsServerUrl() || (isDesktop() && isAddingServer())
 }
 
 // Prefix for fetch URLs: "" on the web (same origin), the server address on desktop.
