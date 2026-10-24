@@ -10,6 +10,9 @@ single admin account (there's no multi-user support). See "Auth and CSRF" in
 
 ## Desktop app (client mode)
 
+Platform support and testing: Windows is the primary target (tested by hand against a checklist), Linux
+has end-to-end tests in CI, macOS is untested — see [`desktop/TESTING.md`](../desktop/TESTING.md).
+
 The same frontend also runs inside a desktop shell (Tauri) as a thin client for a Packrat server you
 already host — there's no bundled backend. On first launch it shows **Connect to a server**: enter
 an address (`192.168.1.20:50505`, or a full `https://…` URL; a bare host defaults to `http://`).

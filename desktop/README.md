@@ -8,6 +8,10 @@ after it succeeds). The frontend code is
 shared with the web UI; everything desktop-specific is gated on running inside Tauri
 (`frontend/src/lib/server.ts`), so the Docker-served web app is unchanged.
 
+**Platform support:** **Windows** is the primary target and is tested manually — the checklist is in
+[`TESTING.md`](TESTING.md). **Linux** has automated end-to-end tests in CI ([below](#end-to-end-tests))
+and is occasionally tried by hand. **macOS** builds in CI but is untested.
+
 ## Prerequisites
 
 - Node 22+ and a Rust toolchain (`rustup`, stable).
@@ -48,6 +52,8 @@ platforms come from CI:
 
 - **Every PR** (`ci.yml`, `desktop` job, Linux): `cargo fmt --check`, `cargo clippy -D warnings` and
   `cargo test`, so the Rust side can't silently break.
+- **PRs touching `desktop/`, `frontend/` or `backend/`** (`desktop-e2e.yml`, Linux): the end-to-end
+  suite below, which runs the real app. Kept out of `ci.yml` and **not a required check** for now.
 - **Releases** (`release.yml` → `desktop.yml`): after the Docker image is published, the installers
   are built on Linux (`.deb`, `.rpm`, `.AppImage`), Windows (`.msi`, `.exe`) and macOS (`.dmg`, Apple
   silicon and Intel) and attached to the same GitHub Release. The release version is stamped into
@@ -58,6 +64,43 @@ platforms come from CI:
 The installers are **unsigned**: Windows SmartScreen and macOS Gatekeeper will warn on first launch
 (macOS: right-click → Open). Signing/notarization and the auto-updater need certificates/keys and
 aren't set up yet.
+
+## End-to-end tests
+
+`e2e/` holds a self-contained suite (its own `package.json`; nothing in `frontend/` or the release
+build depends on it) that launches the real shell — a debug build — against a real Packrat server and
+drives it through the official Tauri WebDriver route: `tauri-driver` + WebKitWebDriver under Xvfb,
+with [selenium-webdriver](https://www.npmjs.com/package/selenium-webdriver) and Node's test runner.
+Each scenario gets a fresh server (temp database/data dirs, free port, `CORS_ALLOWED_ORIGINS` listing
+the Tauri origins) and a fresh app profile (a throwaway `HOME`, so the autostart entry, webview storage
+and `desktop.json` never touch the machine). What it covers, and what it can't, is in
+[`TESTING.md`](TESTING.md); in short: launch, connect/sign-up/log in/out, several servers, Settings →
+Desktop with every shell command (the capability check), Launch at login, and "Start minimized" without a
+tray. The keychain falls back to `localStorage` there (no Secret Service in CI) — that fallback is what
+gets exercised.
+
+**Run it locally (Linux):**
+
+```
+sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev   libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev xvfb x11-utils webkit2gtk-driver
+cargo install tauri-driver --locked
+(cd ../frontend && npm ci) && npm ci && (cd e2e && npm ci)
+cd e2e && xvfb-run -a --server-args="-screen 0 1920x1080x24" npm test
+```
+
+`npm test` builds the Go server and the debug app first (needs Go and Rust), then runs the six
+scenarios one after another; `E2E_SKIP_BUILD=1` reuses the previous build and
+`npm test -- --test-name-pattern=autostart` runs one. On a failure, `e2e/artifacts/<scenario>/` has
+`failure-*.png`, the page's HTML and recorded errors/commands, the app log and each server's log (CI
+uploads that folder as the `desktop-e2e-artifacts` artifact). On a non-Linux machine, `e2e/Dockerfile` is
+a ready-made Linux environment (`docker build -t packrat-desktop-e2e e2e`, then run
+`xvfb-run -a npm test` inside it with the repo mounted at `/repo` and `docker run --init`, which reaps the
+leftover browser processes; keep `node_modules` and `target/` off
+the bind mount, e.g. on named volumes, or it is very slow).
+
+The platform-specific bits (driver binary, autostart location, window check) are isolated in
+`e2e/lib/platform.mjs`, so the same scenarios could run on Windows (WebView2 via `msedgedriver`) — that
+isn't wired up yet.
 
 ## How it fits together
 

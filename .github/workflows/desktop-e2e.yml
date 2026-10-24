@@ -1,0 +1,97 @@
+name: Desktop e2e
+
+# Runs the real Tauri desktop shell (a debug build) against a real Packrat server under Xvfb, driven
+# through tauri-driver + WebKitWebDriver, to catch what the unit tests and clippy in ci.yml cannot:
+# missing capability permissions, startup panics, shell <-> server problems. Linux only — see
+# desktop/TESTING.md for what is and isn't covered per platform.
+#
+# Deliberately NOT part of ci.yml and meant to stay a non-required check for now: a failure shows up
+# red on the PR, but branch protection (managed outside this repo) should not depend on it yet.
+# Nothing here uses repository secrets, so Dependabot PRs run it like any other.
+on:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "frontend/**"
+      - "backend/**"
+      - "database/**"
+      - ".github/workflows/desktop-e2e.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      # Bump to rebuild the cached tauri-driver binary.
+      TAURI_DRIVER_VERSION: "2.1.0"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+            desktop/e2e/package-lock.json
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev \
+            xvfb x11-utils webkit2gtk-driver
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          key: e2e
+
+      - name: Cache tauri-driver
+        id: tauri-driver
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/tauri-driver
+          key: tauri-driver-${{ runner.os }}-${{ env.TAURI_DRIVER_VERSION }}
+
+      - name: Install tauri-driver
+        if: steps.tauri-driver.outputs.cache-hit != 'true'
+        run: cargo install tauri-driver --locked --version "$TAURI_DRIVER_VERSION"
+
+      - run: npm ci
+        working-directory: frontend
+      - run: npm ci
+        working-directory: desktop
+      - run: npm ci
+        working-directory: desktop/e2e
+
+      # Builds the server and the debug app, then runs the scenarios (see desktop/e2e/run.mjs).
+      - name: Run the e2e suite
+        working-directory: desktop/e2e
+        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" npm test
+
+      - name: Upload screenshots and logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-e2e-artifacts
+          path: desktop/e2e/artifacts/
+          if-no-files-found: ignore
+          retention-days: 14

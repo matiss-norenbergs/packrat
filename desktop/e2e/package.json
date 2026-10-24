@@ -1,0 +1,13 @@
+{
+  "name": "packrat-desktop-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "End-to-end tests of the Packrat desktop shell (tauri-driver + WebDriver). Not part of any build.",
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "dependencies": {
+    "selenium-webdriver": "^4.51.0"
+  }
+}
