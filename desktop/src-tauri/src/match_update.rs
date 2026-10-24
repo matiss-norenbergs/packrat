@@ -114,7 +114,7 @@ pub async fn match_update_check(
         // equals the running one, so `ensure_requested` below reports it instead of it being
         // mistaken for "already up to date".
         .version_comparator(move |current, update| {
-            update.version != current || update.version != requested
+            update.version != current || update.version.to_string() != requested
         })
         .build()
         .map_err(|e| describe(e, &version))?;
