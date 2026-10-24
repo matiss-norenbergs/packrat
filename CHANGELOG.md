@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Settings → Desktop redesigned (desktop app)** — the tab now uses the same width and cards as the Account tab
+  (Servers, Window and startup, Downloads, Updates), with setting descriptions shown instead of hidden in
+  info popovers. A single **Startup** select ("Don't start at login" / "Start at login" / "Start at login,
+  hidden in the tray") replaces the "Launch at login" and "Start minimized to tray" switches.
 - **Security: the CSRF cookie no longer carries the session token** — `packrat_csrf` (readable by script)
   used to hold the same value as the `HttpOnly` `packrat_session`, so any XSS could read a working 30-day
   credential from `document.cookie` and replay it as a bearer token. It is now its own random value.

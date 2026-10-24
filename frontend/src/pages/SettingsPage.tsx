@@ -12,13 +12,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { AppWindow, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { ResolutionTierSlider } from "@/components/ResolutionTierSlider"
 import { ThumbnailFrameRangeSlider } from "@/components/ThumbnailFrameRangeSlider"
 import { RESOLUTION_STEP_LABELS } from "@/lib/resolution"
-import { getTokenStorage, isDesktop, isTauri } from "@/lib/server"
+import { isDesktop, isTauri } from "@/lib/server"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -60,9 +62,9 @@ import { UpdateProgress } from "@/components/settings/UpdateProgress"
 import { useAppUpdate } from "@/hooks/useAppUpdate"
 import { useMatchServerVersion } from "@/hooks/useMatchServerVersion"
 import { compareSemver, isReleaseVersion } from "@/lib/semver"
-import { useAutostart } from "@/hooks/useAutostart"
 import { useCloseToTray } from "@/hooks/useCloseToTray"
-import { useStartMinimized } from "@/hooks/useStartMinimized"
+import { useStartup, type StartupMode } from "@/hooks/useStartup"
+import { SettingRow } from "@/components/settings/SettingRow"
 import { useDesktopNotifications } from "@/hooks/useDesktopNotifications"
 import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/api"
 
@@ -1854,7 +1856,7 @@ function YtDlpTab() {
 // server list also works under VITE_DESKTOP in a plain browser; everything else needs the shell.
 function DesktopTab() {
   return (
-    <div className="max-w-3xl space-y-8">
+    <div className="max-w-3xl space-y-6">
       <ServersSection />
       {isTauri() && <ShellSettings />}
     </div>
@@ -1864,69 +1866,64 @@ function DesktopTab() {
 // Like Theme/Accent these are per-device preferences — the shell stores them itself, not the server.
 function ShellSettings() {
   const { enabled: closeToTray, setEnabled: setCloseToTray } = useCloseToTray()
-  const { enabled: autostart, setEnabled: setAutostart } = useAutostart()
-  const { enabled: startMinimized, setEnabled: setStartMinimized } = useStartMinimized()
+  const { mode: startup, setMode: setStartup } = useStartup()
 
   return (
-    <div className="max-w-lg space-y-8">
-      <div className="flex items-center gap-2">
-        <Switch
-          id="close-to-tray"
-          checked={closeToTray === true}
-          disabled={closeToTray === null}
-          onCheckedChange={setCloseToTray}
-        />
-        <Label htmlFor="close-to-tray" className="font-normal">
-          Close to tray
-        </Label>
-        <InfoPopover>
-          When on, the window's close button hides Packrat to the system tray instead of quitting, so
-          it keeps running (and can still raise download notifications). Click the tray icon, or
-          choose "Show Packrat" from its menu, to bring the window back; choose "Quit" there to exit
-          completely. When off, closing the window quits the app.
-        </InfoPopover>
-      </div>
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Switch
-            id="launch-at-login"
-            checked={autostart === true}
-            disabled={autostart === null}
-            onCheckedChange={setAutostart}
-          />
-          <Label htmlFor="launch-at-login" className="font-normal">
-            Launch at login
-          </Label>
-          <InfoPopover>
-            Starts Packrat when you sign in to this computer. This reflects your system's own startup
-            entry for the app, so it stays correct if you change it there. Off by default.
-          </InfoPopover>
-        </div>
-        {autostart === true && (
-          <div className="flex items-center gap-2 pl-6">
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AppWindow className="h-4 w-4" />
+            Window and startup
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="divide-y">
+          <SettingRow
+            label="Close to tray"
+            htmlFor="close-to-tray"
+            description={
+              <>
+                When on, the window's close button hides Packrat to the system tray instead of quitting, so it
+                keeps running (and can still raise download notifications). Click the tray icon, or choose "Show
+                Packrat" from its menu, to bring the window back; choose "Quit" there to exit completely. When
+                off, closing the window quits the app.
+              </>
+            }
+          >
             <Switch
-              id="start-minimized"
-              checked={startMinimized === true}
-              disabled={startMinimized === null}
-              onCheckedChange={setStartMinimized}
+              id="close-to-tray"
+              checked={closeToTray === true}
+              disabled={closeToTray === null}
+              onCheckedChange={setCloseToTray}
             />
-            <Label htmlFor="start-minimized" className="font-normal">
-              Start minimized to tray
-            </Label>
-            <InfoPopover>
-              When Packrat starts at login, keep its window hidden and just show the tray icon. Opening
-              the app yourself always shows the window. If the system tray isn't available, the window is
-              shown anyway so the app never disappears.
-            </InfoPopover>
-          </div>
-        )}
-      </div>
+          </SettingRow>
+          <SettingRow
+            label="Startup"
+            htmlFor="startup"
+            description={
+              <>
+                Whether Packrat starts when you sign in to this computer. "Hidden in the tray" keeps the window
+                out of the way and shows only the tray icon; if the system tray isn't available the window is
+                shown anyway. Opening the app yourself always shows the window.
+              </>
+            }
+          >
+            <Select value={startup ?? undefined} disabled={startup === null} onValueChange={(v) => setStartup(v as StartupMode)}>
+              <SelectTrigger id="startup" className="w-full sm:w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">Don't start at login</SelectItem>
+                <SelectItem value="shown">Start at login</SelectItem>
+                <SelectItem value="hidden">Start at login, hidden in the tray</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+        </CardContent>
+      </Card>
       <DownloadsSection />
-      <p className="text-sm text-muted-foreground">
-        Token storage: {getTokenStorage() === "keychain" ? "OS keychain" : "Local file (keychain unavailable)"}
-      </p>
       <UpdatesSection />
-    </div>
+    </>
   )
 }
 
@@ -1958,14 +1955,19 @@ function UpdatesSection() {
   const matches = canMatch && compareSemver(serverVersion, currentVersion) === 0
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h3 className="text-sm font-medium">Updates</h3>
-        <p className="text-sm text-muted-foreground">
-          {currentVersion ? `You have version ${currentVersion}.` : "Checking your version…"}
-        </p>
-        {serverVersion && <p className="text-sm text-muted-foreground">Server version: {serverVersion}</p>}
-      </div>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4" />
+          Updates
+        </CardTitle>
+        <CardDescription>
+          {currentVersion
+            ? `App ${currentVersion}${serverVersion ? ` · Server ${serverVersion}` : ""}`
+            : "Checking your version…"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
 
       {state.status === "available" ? (
         <div className="space-y-2 rounded-md border p-3 text-sm">
@@ -2032,7 +2034,8 @@ function UpdatesSection() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
 
