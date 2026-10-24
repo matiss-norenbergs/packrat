@@ -54,6 +54,7 @@ import {
 } from "@/hooks/useSettings"
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
 import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
+import { UpdateProgress } from "@/components/settings/UpdateProgress"
 import { useAppUpdate } from "@/hooks/useAppUpdate"
 import { useMatchServerVersion } from "@/hooks/useMatchServerVersion"
 import { compareSemver, isReleaseVersion } from "@/lib/semver"
@@ -2036,16 +2037,9 @@ function UpdatesSection() {
           </div>
         ))}
 
-      {(state.status === "installing" || match.state.status === "installing") && (
-        <p className="text-sm text-muted-foreground">
-          {(() => {
-            const p = state.status === "installing" ? state : match.state.status === "installing" ? match.state : null
-            return p?.total
-              ? `Downloading… ${Math.min(100, Math.round((p.downloaded / p.total) * 100))}%`
-              : "Downloading…"
-          })()}{" "}
-          Packrat will restart when it's done.
-        </p>
+      {state.status === "installing" && <UpdateProgress downloaded={state.downloaded} total={state.total} />}
+      {match.state.status === "installing" && (
+        <UpdateProgress downloaded={match.state.downloaded} total={match.state.total} />
       )}
       {state.status === "upToDate" && <p className="text-sm text-muted-foreground">You're up to date.</p>}
       {state.status === "error" && (

@@ -7,6 +7,11 @@
 
 @theme inline {
     --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+    --animate-progress-indeterminate: progress-indeterminate 1.4s ease-in-out infinite;
+    @keyframes progress-indeterminate {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(300%); }
+    }
     @keyframes caret-blink {
         0%,
         70%,
