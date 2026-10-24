@@ -13,6 +13,9 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Panic logs redact credentials** � the server runs Gin in debug mode, where a recovered panic logs
+  the request (raw `?token=` query, `Cookie` and CSRF header; only `Authorization` was masked). Recovery now
+  goes through the same redaction as the access log. The client still gets an empty 500.
 - **Save-as dialog for downloads (desktop)** — Settings → Desktop → Downloads: "Ask where to save each
   download" (off by default) opens the native Save dialog for every download (file name filled in,
   starting in the last folder used; cancelling discards the file), and "Save to" picks the folder

@@ -93,12 +93,13 @@ func setTrustedProxies(r *gin.Engine, proxies []string) error {
 }
 
 func SetupRouter(deps Deps) *gin.Engine {
-	// gin.Default() with the access logger swapped for one that redacts ?token= (see logger.go).
+	// gin.Default() with the access logger and panic recovery swapped for ones that redact
+	// credentials (see logger.go, recovery.go).
 	r := gin.New()
 	if err := setTrustedProxies(r, deps.TrustedProxies); err != nil {
 		log.Fatalf("invalid trusted proxies: %v", err)
 	}
-	r.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: redactingLogFormatter}), gin.Recovery())
+	r.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: redactingLogFormatter}), recovery())
 	r.Use(CORS(deps.CORSAllowedOrigins))
 	// Known Items entries whose source has no native video ID key by their
 	// full URL instead (see subscriptions.sourceID) — that URL travels as
