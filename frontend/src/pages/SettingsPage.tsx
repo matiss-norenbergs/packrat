@@ -1881,7 +1881,7 @@ function ShellSettings() {
           <SettingRow
             label="Close to tray"
             htmlFor="close-to-tray"
-            description={
+            info={
               <>
                 When on, the window's close button hides Packrat to the system tray instead of quitting, so it
                 keeps running (and can still raise download notifications). Click the tray icon, or choose "Show
@@ -1900,7 +1900,7 @@ function ShellSettings() {
           <SettingRow
             label="Startup"
             htmlFor="startup"
-            description={
+            info={
               <>
                 Whether Packrat starts when you sign in to this computer. "Hidden in the tray" keeps the window
                 out of the way and shows only the tray icon; if the system tray isn't available the window is

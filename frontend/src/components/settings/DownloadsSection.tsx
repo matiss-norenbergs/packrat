@@ -26,11 +26,11 @@ export function DownloadsSection() {
         <SettingRow
           label="Ask where to save each download"
           htmlFor="ask-where-to-save"
-          description="Opens your system's Save dialog for every download, with the file name filled in and starting in the folder you last saved to. The file is fetched first and the dialog appears once it's complete; cancelling it discards the file. Off by default: downloads go straight to the folder below."
+          info="Opens your system's Save dialog for every download, with the file name filled in and starting in the folder you last saved to. The file is fetched first and the dialog appears once it's complete; cancelling it discards the file. Off by default: downloads go straight to the folder below."
         >
           <Switch id="ask-where-to-save" checked={ask === true} disabled={ask === null} onCheckedChange={setAsk} />
         </SettingRow>
-        <div className="space-y-1.5 pt-4">
+        <div className="space-y-1.5 pt-3">
           <Label>Save to</Label>
           <div className="flex items-center gap-2">
             <span
