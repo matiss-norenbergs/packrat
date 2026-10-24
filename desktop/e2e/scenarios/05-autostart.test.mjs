@@ -16,13 +16,16 @@ scenario("5. The Startup select creates and removes the autostart entry", async 
   assert.deepEqual(autostartEntries(app.home), [], "nothing is registered before a startup option is chosen")
   const select = await app.find(By.id("startup"))
   await app.driver.wait(async () => select.isEnabled(), 10_000)
-  assert.equal(await select.getText(), "Don't start at login")
+  // What the select displays. getText() can come back empty from WebKitWebDriver (and the text is
+  // filled in a moment after the select is enabled), so read textContent and poll.
+  const shown = () => app.driver.executeScript("return (arguments[0].textContent || '').trim()", select)
+  await waitFor("the select to show \"Don't start at login\"", async () => (await shown()) === "Don't start at login", 10_000)
 
   // Radix renders the options in a portal, so pick them by role and exact text.
   const choose = async (label) => {
     await app.click(By.id("startup"))
     await app.click(By.xpath(`//*[@role='option' and normalize-space(.)=${JSON.stringify(label)}]`))
-    await waitFor(`the select to show "${label}"`, async () => (await select.getText()) === label, 10_000)
+    await waitFor(`the select to show "${label}"`, async () => (await shown()) === label, 10_000)
   }
   const startMinimized = async () => (await app.invoke("get_start_minimized")).value
 
