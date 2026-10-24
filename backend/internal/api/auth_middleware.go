@@ -89,6 +89,7 @@ func RequireAuth(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 		c.Set("userID", session.UserID)
 		c.Set(sessionKey, session)
 		c.Set(authSourceKey, source)
+		healLegacyCSRFCookie(c, session.Token, source)
 		// last_seen_at is only written when the row we just read is stale, so a busy session costs
 		// one write a minute, not one per request. Best effort: a failed touch never fails the request.
 		if session.LastSeenAt == nil || time.Since(*session.LastSeenAt) >= repository.SessionTouchInterval {

@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Security: the CSRF cookie no longer carries the session token** — `packrat_csrf` (readable by script)
+  used to hold the same value as the `HttpOnly` `packrat_session`, so any XSS could read a working 30-day
+  credential from `document.cookie` and replay it as a bearer token. It is now its own random value.
+  Existing browser sessions are healed in place on their next page load (no re-login); see `api.md` → Auth and CSRF.
 - **Docs audit** — checked the docs against the code and filled the gaps: `GET /api/version` (public) and
   the ~30 Settings fields missing from `api.md`; the **filename template** feature (`{artist}/{title}`
   tokens, modifiers, subfolders, the collection default) which was implemented but undocumented and listed as

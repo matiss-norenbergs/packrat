@@ -18,10 +18,17 @@ since Gin matches registered routes before falling back to serving `index.html`.
 - **`RequireAuth`** gates every `/api/*` route except `/api/health`, `/api/version` and
   `/api/auth/{status,setup,login,login/2fa,logout}`, and also protects `/media-files/*`,
   `/local-images/*` and `/ws`. Missing/invalid session → `401`.
-- **CSRF**: double-submit cookie. Cookie `packrat_csrf` (`HttpOnly=false` so JS can read it, same
-  value as the session token, set/cleared alongside it on login/setup/logout). Every mutating
-  request (anything but GET/HEAD/OPTIONS) under the authenticated `/api` group must echo that value
-  back in an `X-CSRF-Token` header, or the request gets a `403`.
+- **CSRF**: double-submit cookie. Cookie `packrat_csrf` (`HttpOnly=false` so JS can read it) holds
+  its own random value (32 bytes from `crypto/rand`, hex), generated per web login/setup/2FA login and
+  set alongside the session cookie with the same `SameSite`/`Secure`/path/lifetime; it is cleared with
+  it on logout and when you revoke your own session. It is **never** the session token or derived
+  from it, because script can read it and the session cookie is `HttpOnly` precisely so it can't.
+  Every mutating request (anything but GET/HEAD/OPTIONS) under the authenticated `/api` group must
+  echo that value back in an `X-CSRF-Token` header (compared in constant time), or the request gets a
+  `403`. **Healing:** sessions created before this change still have a CSRF cookie equal to their
+  session token; the first cookie-authenticated `GET`/`HEAD` (in practice `GET /api/auth/status` on
+  page load) replaces it with a fresh random value via `Set-Cookie`, with no re-login. Mutations never
+  rotate it. The web client replays a mutation once if the cookie changed under it and it got a `403`.
 - **Bearer tokens (desktop client)**: the web UI uses the cookies above; a cross-origin client (the
   desktop app) can't rely on them, so `RequireAuth` also accepts the same session token as
   `Authorization: Bearer <token>` — and, for **GET/HEAD only**, as a `?token=` query parameter, which
