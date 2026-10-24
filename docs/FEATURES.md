@@ -53,7 +53,7 @@ brings the existing window forward (single instance). A **tray icon** (left clic
 Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of
 quitting, so it keeps running. Settings → Desktop is laid out as cards — Servers, Window and startup, Downloads, Updates — with each
-setting's description shown under its label. The **Startup** select (Settings → Desktop; "Don't start at login" by default) offers
+setting's explanation in an info popover next to its label. The **Startup** select (Settings → Desktop; "Don't start at login" by default) offers
 "Start at login" and "Start at login, hidden in the tray". Whether it starts at login is the operating
 system's own startup entry (read from the system each time, not a copy of our own), so the select stays
 right if you change that elsewhere. The hidden option makes those automatic launches keep

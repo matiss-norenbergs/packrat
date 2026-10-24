@@ -88,7 +88,7 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 | W-23 | Start the app from the Start menu with **hidden in the tray** selected. | The window is shown (only an autostart launch hides it). | needs re-test after the Startup select |
 | W-24 | Choose **Don't start at login**. | The `Run` value is removed; the select shows "Don't start at login". | needs re-test after the Startup select |
 | W-25 | Delete the `Run` value in `regedit`, reopen Settings. | The select shows "Don't start at login" (it reflects the OS, not a stored copy). | needs re-test after the Startup select |
-| X-1 | With **Start at login** chosen, `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Close the app, overwrite the value with the OLD unquoted form (`reg add … /v Packrat /t REG_SZ /d "<path>\packrat-desktop.exe --minimized" /f`), start the app normally, wait a few seconds. Then choose **Don't start at login** in the app, close the app and start it again. | The value is `"<path>\packrat-desktop.exe" --minimized` (path in double quotes). After the restart the old unquoted value is rewritten quoted. With "Don't start at login", the value is gone and is NOT recreated by a restart. | Pass 2026-10-24 v0.18.2 — quoted on enable; unquoted value was quoted again ~6 s after start; after turning it off + restart no `Packrat` value (app started with the WebView2 debug-port env var set, otherwise a normal start) |
+| X-1 | With **Start at login** chosen, `reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Close the app, overwrite the value with the OLD unquoted form (`reg add … /v Packrat /t REG_SZ /d "<path>\packrat-desktop.exe --minimized" /f`), start the app normally, wait a few seconds. Then choose **Don't start at login** in the app, close the app and start it again. | The value is `"<path>\packrat-desktop.exe" --minimized` (path in double quotes). After the restart the old unquoted value is rewritten quoted. With "Don't start at login", the value is gone and is NOT recreated by a restart. | needs re-test after the Startup select (previously passed 2026-10-24 v0.18.2 — quoted on enable; unquoted value was quoted again ~6 s after start; after turning it off + restart no `Packrat` value (app started with the WebView2 debug-port env var set, otherwise a normal start)) |
 
 ### Tray
 
@@ -205,8 +205,6 @@ screenshots. No failures; the points below are the surprises.
 - **No SmartScreen warning at install** (W-01, tester's report), although the installer is unsigned
   and Smart App Control is on. The app installs and runs fine; the checklist's "SmartScreen warns
   once" doesn't hold on this machine (installer downloaded from the GitHub release).
-- (Old) "Close to tray" was a checkbox while the other options were switches; Settings → Desktop was
-  redesigned (cards, one "Startup" select) and needs a fresh look on Windows.
 - The `Run` value's path is unquoted (`C:\Users\…\Packrat\packrat-desktop.exe --minimized`). Fine
   here; a user folder with spaces would rely on Windows' unquoted-path parsing.
 - A wrong 2FA code shows the raw server text "invalid code" (lowercase) as a toast (cosmetic).

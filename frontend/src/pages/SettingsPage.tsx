@@ -1969,71 +1969,71 @@ function UpdatesSection() {
       </CardHeader>
       <CardContent className="space-y-3">
 
-      {state.status === "available" ? (
-        <div className="space-y-2 rounded-md border p-3 text-sm">
-          <p>
-            Version <span className="font-medium">{state.version}</span> is available.
-          </p>
-          {state.notes && <p className="text-muted-foreground">{state.notes}</p>}
-          <Button size="sm" onClick={install}>
-            Install and restart
-          </Button>
-        </div>
-      ) : (
-        <Button size="sm" variant="outline" onClick={check} disabled={busy}>
-          {state.status === "checking" ? "Checking…" : "Check for updates"}
-        </Button>
-      )}
-
-      {canMatch &&
-        (matches ? (
-          <p className="text-sm text-muted-foreground">Matches your server.</p>
-        ) : (
-          <div className="space-y-1">
-            <Button size="sm" variant="outline" onClick={() => match.check(serverVersion)} disabled={busy}>
-              {match.state.status === "checking" ? "Checking…" : "Match server version"}
+        {state.status === "available" ? (
+          <div className="space-y-2 rounded-md border p-3 text-sm">
+            <p>
+              Version <span className="font-medium">{state.version}</span> is available.
+            </p>
+            {state.notes && <p className="text-muted-foreground">{state.notes}</p>}
+            <Button size="sm" onClick={install}>
+              Install and restart
             </Button>
-            <p className="text-sm text-muted-foreground">Install v{serverVersion} to match your server.</p>
           </div>
-        ))}
+        ) : (
+          <Button size="sm" variant="outline" onClick={check} disabled={busy}>
+            {state.status === "checking" ? "Checking…" : "Check for updates"}
+          </Button>
+        )}
 
-      {state.status === "installing" && <UpdateProgress downloaded={state.downloaded} total={state.total} />}
-      {match.state.status === "installing" && (
-        <UpdateProgress downloaded={match.state.downloaded} total={match.state.total} />
-      )}
-      {state.status === "upToDate" && <p className="text-sm text-muted-foreground">You're up to date.</p>}
-      {state.status === "error" && (
-        <p className="text-sm text-destructive">
-          {state.during === "check" ? "Couldn't check for updates" : "Couldn't install the update"}: {state.message}
-        </p>
-      )}
-      {match.state.status === "error" && (
-        <p className="text-sm text-destructive">
-          {match.state.during === "check" ? "Couldn't check for a matching version" : "Couldn't install the update"}:{" "}
-          {match.state.message}
-        </p>
-      )}
+        {canMatch &&
+          (matches ? (
+            <p className="text-sm text-muted-foreground">Matches your server.</p>
+          ) : (
+            <div className="space-y-1">
+              <Button size="sm" variant="outline" onClick={() => match.check(serverVersion)} disabled={busy}>
+                {match.state.status === "checking" ? "Checking…" : "Match server version"}
+              </Button>
+              <p className="text-sm text-muted-foreground">Install v{serverVersion} to match your server.</p>
+            </div>
+          ))}
 
-      <AlertDialog open={match.state.status === "confirm"} onOpenChange={(open) => !open && match.cancel()}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {match.state.status === "confirm" &&
-                (match.state.downgrade ? "Install an older version?" : `Install v${match.state.version}?`)}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {match.state.status === "confirm" &&
-                (match.state.downgrade
-                  ? `This replaces v${match.state.currentVersion} with the older v${match.state.version}. It matches your server, but older versions may lack features you're used to.`
-                  : `This replaces v${match.state.currentVersion} with v${match.state.version} to match your server. Packrat will restart when it's done.`)}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={match.install}>Install and restart</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {state.status === "installing" && <UpdateProgress downloaded={state.downloaded} total={state.total} />}
+        {match.state.status === "installing" && (
+          <UpdateProgress downloaded={match.state.downloaded} total={match.state.total} />
+        )}
+        {state.status === "upToDate" && <p className="text-sm text-muted-foreground">You're up to date.</p>}
+        {state.status === "error" && (
+          <p className="text-sm text-destructive">
+            {state.during === "check" ? "Couldn't check for updates" : "Couldn't install the update"}: {state.message}
+          </p>
+        )}
+        {match.state.status === "error" && (
+          <p className="text-sm text-destructive">
+            {match.state.during === "check" ? "Couldn't check for a matching version" : "Couldn't install the update"}:{" "}
+            {match.state.message}
+          </p>
+        )}
+
+        <AlertDialog open={match.state.status === "confirm"} onOpenChange={(open) => !open && match.cancel()}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {match.state.status === "confirm" &&
+                  (match.state.downgrade ? "Install an older version?" : `Install v${match.state.version}?`)}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {match.state.status === "confirm" &&
+                  (match.state.downgrade
+                    ? `This replaces v${match.state.currentVersion} with the older v${match.state.version}. It matches your server, but older versions may lack features you're used to.`
+                    : `This replaces v${match.state.currentVersion} with v${match.state.version} to match your server. Packrat will restart when it's done.`)}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={match.install}>Install and restart</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   )
