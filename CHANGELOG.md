@@ -13,7 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
-- **Panic logs redact credentials** � the server runs Gin in debug mode, where a recovered panic logs
+- **Match server version refuses a mismatched manifest (desktop)** — the version the release manifest
+  offers must now equal the requested server version exactly, for upgrades and downgrades alike;
+  otherwise the install is refused with an error instead of installing another (still signed) release.
+- **Panic logs redact credentials** — the server runs Gin in debug mode, where a recovered panic logs
   the request (raw `?token=` query, `Cookie` and CSRF header; only `Authorization` was masked). Recovery now
   goes through the same redaction as the access log. The client still gets an empty 500.
 - **Save-as dialog for downloads (desktop)** — Settings → Desktop → Downloads: "Ask where to save each
