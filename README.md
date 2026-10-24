@@ -23,7 +23,8 @@ AI-powered thumbnail upscaling via a self-hosted Stable Diffusion instance, and 
 CSRF protection are all implemented. See [`docs/FEATURES.md`](docs/FEATURES.md)
 for a page-by-page guide to everything that's implemented, [`docs/api.md`](docs/api.md) for the
 full REST/WebSocket surface, and [`docs/architecture.md`](docs/architecture.md) for how it's built
-and what's still deliberately out of scope.
+and what's still deliberately out of scope. Ideas that might come someday are parked in
+[`docs/TODO.md`](docs/TODO.md).
 
 ## Stack
 
