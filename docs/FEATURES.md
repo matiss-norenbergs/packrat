@@ -44,8 +44,8 @@ token out of readable app data (disk images, backups), not out of reach of malwa
 None of this applies to the web UI, which behaves as before. See "Auth and CSRF" in
 [`api.md`](api.md#auth-and-csrf). The shell lives in [`desktop/`](../desktop/README.md). Inside it,
 http(s) links open in the system browser, desktop notifications go through the OS (Settings toggle
-unchanged), downloads such as backups are saved to your Downloads folder (never overwriting a file;
-see **Downloads** below), and the window remembers its size and position. Starting the app a second time just
+unchanged), downloads such as backups are saved to your Downloads folder (never overwriting a file, and without a
+needless " (1)" added to the name; see **Downloads** below), and the window remembers its size and position. Starting the app a second time just
 brings the existing window forward (single instance). A **tray icon** (left click, or "Show
 Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of

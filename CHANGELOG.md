@@ -13,6 +13,12 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Desktop Windows fixes** — (1) downloads no longer get a bogus " (N)" in the name: WebView2 numbers the
+  proposed name against the system Downloads folder, and the shell now strips that suffix when the plain
+  name exists there, so a backup saved to another folder keeps its own name; (2) Windows "Launch at login"
+  writes the `Run` value quoted (`"<exe>" --minimized`, so a path with a space starts at login) and
+  rewrites an unquoted value from an earlier version at startup; the switch now goes through the
+  shell's own `autostart_*` commands.
 - **Desktop end-to-end tests** — `desktop/e2e/` runs the real Tauri shell (debug build) against a real
   server under Xvfb via `tauri-driver` + WebKitWebDriver: launch, connect/sign-up/log in and out, several
   servers (switch/rename/remove), Settings → Desktop with every shell command invoked (catches missing

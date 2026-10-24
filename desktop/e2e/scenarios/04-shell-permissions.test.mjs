@@ -7,7 +7,7 @@ import { scenario } from "../lib/scenario.mjs"
 import { ADMIN } from "../lib/server.mjs"
 
 // The capability/ACL regression check: Settings → Desktop exercises the plugin commands the webview
-// is granted (autostart, app version, updater, …) and every custom shell command is called once.
+// is granted (app version, updater, …) and every custom shell command is called once.
 scenario("4. Settings → Desktop works without permission errors; every shell command answers", async (s) => {
   const server = await s.server()
   const release = await startMockRelease({ "0.0.1": "9.9.9", "9.9.9": "9.9.9" })
@@ -45,7 +45,7 @@ scenario("4. Settings → Desktop works without permission errors; every shell c
 
     const record = await app.record()
     assertNoPermissionErrors(record, await app.bodyText())
-    for (const cmd of ["get_close_to_tray", "get_download_folder", "plugin:autostart|is_enabled"]) {
+    for (const cmd of ["get_close_to_tray", "get_download_folder", "autostart_is_enabled"]) {
       assert.ok(record.invokes.some((i) => i.cmd === cmd && i.ok), `the page should have called ${cmd} successfully`)
     }
 
