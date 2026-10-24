@@ -69,9 +69,10 @@ the `Run` command; a real sign-out/sign-in of Windows wasn't tested).
 - **Edit Sequence dialog (S).** The left panel's 40% minimum can't be reached because the right panel's
   50% maximum limits it first (that was already the case before the library upgrade); one of the two
   limits is pointless.
-- **Image loading (S to M).** From [`live-image-resize.md`](live-image-resize.md): `loading="lazy"` and
-  `decoding="async"` on the tile images; live resizing for the pick-from-folder dialogs and the Frame
-  Matching review page; an optional size cap with eviction for the resized-image cache if it grows large.
+- **Image loading (S to M).** From [`live-image-resize.md`](live-image-resize.md): tiles and the cover
+  picker already use lazy loading and live resizing. What's left: the Frame Matching review page still loads
+  full-size reference/found frames, and the resized-image cache has no size cap (age-based eviction only; a cap
+  with LRU eviction is the possible next step if it grows large). The artist image picker was left alone on purpose.
 
 ## Dependencies
 
