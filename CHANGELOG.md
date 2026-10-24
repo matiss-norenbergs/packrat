@@ -13,6 +13,9 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Dependabot** — weekly (Monday) dependency PRs for Go, npm (frontend, desktop), Cargo, GitHub Actions
+  and the Dockerfile, minor/patch grouped per ecosystem and majors separate; CI skips the Docker Hub
+  login for them (no secrets). See README, "Dependabot".
 - **Match server version refuses a mismatched manifest (desktop)** — the version the release manifest
   offers must now equal the requested server version exactly, for upgrades and downgrades alike;
   otherwise the install is refused with an error instead of installing another (still signed) release.

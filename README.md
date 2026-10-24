@@ -64,8 +64,7 @@ major bumps are separate PRs. Handling them:
 
 - Wait for CI (it runs for Dependabot PRs like any other; the Docker job just skips the Docker Hub
   login, since Dependabot can't read Actions secrets, and pulls anonymously).
-- Read the release notes of anything touching yt-dlp-adjacent code, `gin`, `modernc.org/sqlite`,
-  React/Vite/Tailwind, and especially Tauri: keep the `tauri*` crates (Cargo) and `@tauri-apps/*`
+- Skim the release notes of major bumps, and keep the `tauri*` crates (Cargo) and `@tauri-apps/*`
   packages (npm) on matching versions, so merge or close those PRs together.
 - Dependabot compares versions semver-style, so a `0.x` "minor" bump can still be breaking.
 - A PR that needs more work can be pushed to directly; `@dependabot rebase` refreshes it, `@dependabot
