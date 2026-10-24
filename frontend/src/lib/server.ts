@@ -99,25 +99,26 @@ export function renameProfile(id: string, name: string) {
 }
 
 // Saves a new address for a profile. The old address's login isn't valid for whatever answers at
-// the new one (and must never be sent there), so the old server is asked to end that session first
-// (best effort) and the local copy is dropped.
+// the new one (and must never be sent there), so the local copy is dropped and the OLD server is
+// asked to end that session (best effort, see signOutOnServer).
 export async function changeProfileUrl(id: string, url: string): Promise<void> {
   const old = getProfiles().find((p) => p.id === id)
   const token = old ? await readProfileToken(id) : null
   updateProfile(id, { url })
-  if (old && token) await signOutOnServer(old.url, token)
   await clearProfileToken(id)
+  if (old && token) await signOutOnServer(old.url, token)
 }
 
-// Forgets a server and its login, ending that session on the server first (best effort).
+// Forgets a server and its login, and asks that server to end the session (best effort).
 // Removing the active profile leaves the app without a server, so it shows the connect screen.
-// Resolves once the keychain entry is gone.
+// The login is gone locally before the request goes out; this resolves once the request has
+// settled (a few seconds at most).
 export async function removeProfile(id: string): Promise<void> {
   const old = getProfiles().find((p) => p.id === id)
   const token = old ? await readProfileToken(id) : null
   deleteProfile(id)
-  if (old && token) await signOutOnServer(old.url, token)
   await clearProfileToken(id)
+  if (old && token) await signOutOnServer(old.url, token)
 }
 
 const SIGN_OUT_TIMEOUT_MS = 3000

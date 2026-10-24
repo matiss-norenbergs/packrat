@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Friendlier wrong-2FA-code message; Close to tray is a switch** — a wrong authenticator code no longer
+  shows the raw "invalid code" (login step and the enable/disable/regenerate dialogs): it says to check the
+  phone's clock, or that the recovery code isn't valid or was already used. Settings → Desktop → "Close to
+  tray" is now a switch like the other options.
 - **Removing a server signs out on it (desktop)** — Remove, and Edit → new address, now first send
   `POST /api/auth/logout` with that profile's own token to the OLD address (3 s limit, failure ignored)
   before dropping the local login, so the session no longer lingers in Settings → Account → Sessions.

@@ -160,14 +160,14 @@ describe("token storage in the shell", () => {
     )
   })
 
-  it("signs out of the active server with its cached token, and only then forgets it", async () => {
+  it("signs out of the active server with its cached token, after forgetting it locally", async () => {
     const kc = keychain({ a: "token-a", b: "token-b" })
     saveProfiles("a", "a", "b")
     const s = await load()
     await s.initTokenStore()
-    let tokenWhenSent: string | undefined
+    let keychainWhenSent: Record<string, string> | undefined
     fetchMock.mockImplementation(async () => {
-      tokenWhenSent = kc.secrets.a
+      keychainWhenSent = { ...kc.secrets }
       return { ok: true }
     })
     await s.removeProfile("a")
@@ -175,7 +175,8 @@ describe("token storage in the shell", () => {
       "http://a:1/api/auth/logout",
       expect.objectContaining({ headers: { Authorization: "Bearer token-a" } }),
     )
-    expect(tokenWhenSent).toBe("token-a")
+    // The local login was already gone while the request was in flight, so a slow server can't hold it.
+    expect(keychainWhenSent).toEqual({ b: "token-b" })
     expect(kc.secrets).toEqual({ b: "token-b" })
   })
 

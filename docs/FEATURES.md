@@ -655,7 +655,9 @@ Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the ri
   "I've saved these codes" is ticked. Once on, the card shows how many recovery codes are left (a
   warning at 2 or fewer) and offers **Regenerate recovery codes** (password + code; the old set stops
   working) and **Disable** (password + a code or recovery code). Logging in then takes the password,
-  then a 6-digit code on a second form (with "Use a recovery code" and Back). Every 6-digit code
+  then a 6-digit code on a second form (with "Use a recovery code" and Back). A wrong code reads "That code
+  didn't work. Check that your phone's clock is correct and try again." (a wrong recovery code: "That recovery
+  code isn't valid or was already used."), here and in the enable/disable/regenerate dialogs. Every 6-digit code
   field (login, enable step 2, disable, regenerate) is six separated digit boxes: digits only, the
   whole code can be pasted, browsers offer one-time-code autofill, and on the login form the sixth
   digit submits automatically (Verify stays). Recovery codes are a plain text field. The desktop app works

@@ -87,6 +87,14 @@ describe("ServersSection", () => {
     await editAddress("Work", "elsewhere:1")
     await waitFor(() => expect(getProfiles().find((p) => p.id === work.id)?.url).toBe("http://elsewhere:1"))
     expect(fetchMock).toHaveBeenCalledWith("http://elsewhere:1/api/health", expect.anything())
+    // The old server is told to end that login, with that server's token; the new one never sees it.
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://packrat.work.example/api/auth/logout",
+      expect.objectContaining({ method: "POST", headers: { Authorization: "Bearer old" } }),
+    )
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("http://elsewhere:1")).map(([url]) => url)).toEqual([
+      "http://elsewhere:1/api/health",
+    ])
     expect(localStorage.getItem(`packrat.token.${work.id}`)).toBeNull()
     expect(reloadApp).not.toHaveBeenCalled() // not the active server
   })
@@ -111,6 +119,7 @@ describe("ServersSection", () => {
   it("asks before removing, then deletes the server and its token", async () => {
     const { work } = setup()
     localStorage.setItem(`packrat.token.${work.id}`, "work-token")
+    const fetchMock = mockFetch(() => ({ status: 204 }))
     renderWithProviders(<ServersSection />)
     const user = userEvent.setup()
     await user.click(screen.getByRole("button", { name: "Remove Work" }))
@@ -119,6 +128,10 @@ describe("ServersSection", () => {
     expect(getProfiles()).toHaveLength(2) // nothing yet
     await user.click(within(dialog).getByRole("button", { name: "Remove" }))
     await waitFor(() => expect(getProfiles().map((p) => p.name)).toEqual(["Home"]))
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://packrat.work.example/api/auth/logout",
+      expect.objectContaining({ method: "POST", headers: { Authorization: "Bearer work-token" } }),
+    )
     expect(localStorage.getItem(`packrat.token.${work.id}`)).toBeNull()
     expect(getActiveProfile()?.name).toBe("Home")
     expect(reloadApp).not.toHaveBeenCalled()

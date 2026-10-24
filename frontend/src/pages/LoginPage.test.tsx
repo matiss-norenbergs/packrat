@@ -115,6 +115,16 @@ describe("LoginPage with 2FA (web, cookies)", () => {
     expect(bodyOf(callsTo(fetchMock, "/auth/login/2fa")[0])).toEqual({ challengeToken: "chal-1", recoveryCode: "k7f2-9qxm" })
   })
 
+  it("a wrong recovery code gets its own friendly message", async () => {
+    twoFactorServer(() => ({ status: 401, body: { error: "invalid code" } }))
+    page()
+    const user = await enterPassword()
+    await user.click(await screen.findByRole("button", { name: "Use a recovery code" }))
+    await user.type(screen.getByLabelText("Recovery code"), "k7f2-9qxm")
+    await user.click(screen.getByRole("button", { name: "Verify" }))
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("That recovery code isn't valid or was already used."))
+  })
+
   it("Back returns to the password step", async () => {
     twoFactorServer(() => ({ status: 204 }))
     page()
@@ -139,7 +149,9 @@ describe("LoginPage with 2FA (web, cookies)", () => {
     const user = await enterPassword()
     const input = await screen.findByLabelText("Authentication code")
     await user.keyboard("000000")
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith("invalid code"))
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("That code didn't work. Check that your phone's clock is correct and try again."),
+    )
     expect(input).toHaveValue("")
     expect(screen.getByRole("button", { name: "Verify" })).toBeInTheDocument()
   })

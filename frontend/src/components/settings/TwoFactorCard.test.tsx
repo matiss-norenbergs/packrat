@@ -67,7 +67,9 @@ describe("TwoFactorCard", () => {
     expect(input).toHaveAttribute("autocomplete", "one-time-code")
     await user.type(input, "000000")
     await user.click(screen.getByRole("button", { name: "Verify and enable" }))
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith("invalid code"))
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("That code didn't work. Check that your phone's clock is correct and try again."),
+    )
     expect(screen.queryByTestId("recovery-codes")).not.toBeInTheDocument()
 
     // ...the right one shows the recovery codes.
