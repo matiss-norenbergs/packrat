@@ -61,8 +61,10 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
   Windows checklist when a step changes), plus a bullet under the day's section in `CHANGELOG.md`
   (newest first). Not needed for purely visual fixes (spacing, colors, wording), refactors with no
   behavior change, or dependency bumps. If you notice a doc that's wrong while you're in there, fix it.
-- Don't commit unless asked; when asked, match the repo's style: short subject, bullet body, wrapped at
-  ~72 cols.
+- **Commits:** commit on your `DDMMYY-slug` branch as the work reaches a stable point and push it — the
+  branch name keeps it separate from `main`. Match the repo's style: short subject, bullet body, wrapped
+  at ~72 cols. Machine-local files stay uncommitted
+  (`backend/run-dev.cmd`, `.claude/`, `docker/docker-compose.local.yml`, `CLAUDE.local.md`).
 - Adding a setting: model const in `models/settings.go`, getter + GET/PATCH wiring in
   `api/settings_handler.go`, DTO fields in `api/dto.go`, TS type in `types/api.ts`, UI in
   `SettingsPage.tsx` (each tab uses the shared `SaveRow`).
