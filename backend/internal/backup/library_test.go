@@ -105,7 +105,19 @@ func TestBuildApplyLibraryBundle_RoundTrip(t *testing.T) {
 	if len(bundle.LibraryItems) != 2 {
 		t.Fatalf("expected both items exported (URL-less items aren't dropped), got %d: %+v", len(bundle.LibraryItems), bundle.LibraryItems)
 	}
-	item := bundle.LibraryItems[0]
+	// Both rows are created within the same second, so the export order (newest
+	// downloaded_at first) is not guaranteed — look items up by title.
+	byTitle := map[string]LibraryItemEntry{}
+	for _, e := range bundle.LibraryItems {
+		byTitle[e.Title] = e
+	}
+	item, ok := byTitle["Song"]
+	if !ok {
+		t.Fatalf("expected the item with a URL to be exported, got %+v", bundle.LibraryItems)
+	}
+	if noURL, ok := byTitle["No URL"]; !ok || noURL.OriginalURL != "" {
+		t.Fatalf("expected the URL-less item to be exported without a URL, got %+v", bundle.LibraryItems)
+	}
 	if item.OriginalURL != url || item.ArtistName != "Test Artist" || len(item.CollectionPath) != 1 || item.CollectionPath[0] != "Music" {
 		t.Fatalf("unexpected exported item: %+v", item)
 	}

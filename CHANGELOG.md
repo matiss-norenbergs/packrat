@@ -13,6 +13,9 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Flaky backup test** — `TestBuildApplyLibraryBundle_RoundTrip` assumed the exported item with a URL
+  came first, but two items created in the same second have no guaranteed export order; the test now
+  finds them by title.
 - **Dependabot** — weekly (Monday) dependency PRs for Go, npm (frontend, desktop), Cargo, GitHub Actions
   and the Dockerfile, minor/patch grouped per ecosystem and majors separate; CI skips the Docker Hub
   login for them (no secrets). See README, "Dependabot".
