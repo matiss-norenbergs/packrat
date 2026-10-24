@@ -61,7 +61,7 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 
 | ID | Steps | Expected | Result |
 | --- | --- | --- | --- |
-| W-01 | Install and start Packrat. | The window opens on "Connect to a server". SmartScreen warns once (installer is unsigned) — expected. | Needs human — window opens on "Connect to a server" (verified, 2026-10-24 v0.18.1); the SmartScreen warning at install was not observed by me (app was pre-installed) |
+| W-01 | Install and start Packrat. | The window opens on "Connect to a server". SmartScreen warns once (installer is unsigned) — expected. | Pass 2026-10-24 v0.18.1 — window opens on "Connect to a server"; but SmartScreen did **not** warn at install (tester's report), see Findings |
 | W-02 | Enter the server address (e.g. `192.168.1.20:50505`) and press Connect. | The login page (or "Create admin account" on a fresh server) for that server appears; the server's name is shown under the form. | Pass 2026-10-24 v0.18.1 (fresh :51201 server showed "Create admin account") |
 | W-03 | Enter a wrong address (`192.168.1.20:1`) and press Connect. | An error is shown under the field; nothing is saved. | Pass 2026-10-24 v0.18.1 — "Couldn't reach the server…" under the field; localStorage empty |
 | W-04 | Log in. | The dashboard opens; no "can't reach the server" or CORS-style error. | Pass 2026-10-24 v0.18.1 |
@@ -95,8 +95,8 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 | W-30 | Look at the notification area. | A Packrat icon with the tooltip "Packrat". | Pass 2026-10-24 v0.18.1 — icon sits in the hidden-icons overflow (Windows 11 default); tooltip "Packrat" seen on hover |
 | W-31 | With **Close to tray** on (default), press the window's close button. | The window hides; the icon stays; the process keeps running. | Pass 2026-10-24 v0.18.1 |
 | W-32 | Left-click the tray icon. | The window is restored and focused. | Pass 2026-10-24 v0.18.1 (left click sent as UI Automation Invoke on the overflow icon) |
-| W-33 | Hide the window again, right-click the icon → **Show Packrat**. | The window is restored. | Needs human — a synthetic right-click on the icon (two tries) opened no menu; likely the injected input, not confirmed either way |
-| W-34 | Right-click the icon → **Quit**. | The app exits completely (no `Packrat` process in Task Manager). | Needs human — same as W-33 (tray menu not reachable from automation) |
+| W-33 | Hide the window again, right-click the icon → **Show Packrat**. | The window is restored. | Pass 2026-10-24 v0.18.1 (checked by hand: the menu appears and Show Packrat restores the window) |
+| W-34 | Right-click the icon → **Quit**. | The app exits completely (no `Packrat` process in Task Manager). | Pass 2026-10-24 v0.18.1 (Quit clicked by hand; no `packrat-desktop` or app WebView2 process left) |
 | W-35 | Turn **Close to tray** off, press close. | The app exits. Relaunch and turn it back on afterwards. | Pass 2026-10-24 v0.18.1 |
 
 ### Single instance
@@ -198,17 +198,18 @@ screenshots. No failures; the points below are the surprises.
   still listed the earlier desktop session (last seen at the address change); after removing server
   C (W-65), its session was still listed on C. The Remove dialog says "The server itself isn't
   affected", so this may be intended; W-13's "the app signs out of that server" reads stronger.
-- **Tray context menu not reachable from automation** (W-33, W-34): a synthetic right-click on the
-  overflow icon (tooltip shown, so the cursor was on it) opened no menu in two tries. Left-click
-  (W-32) works. Not confirmed as a bug; needs a manual check.
+- **No SmartScreen warning at install** (W-01, tester's report), although the installer is unsigned
+  and Smart App Control is on. The app installs and runs fine; the checklist's "SmartScreen warns
+  once" doesn't hold on this machine (installer downloaded from the GitHub release).
 - "Close to tray" is a checkbox, while "Launch at login", "Start minimized to tray" and "Ask where to
   save each download" are switches (cosmetic).
 - The `Run` value's path is unquoted (`C:\Users\…\Packrat\packrat-desktop.exe --minimized`). Fine
   here; a user folder with spaces would rely on Windows' unquoted-path parsing.
 - A wrong 2FA code shows the raw server text "invalid code" (lowercase) as a toast (cosmetic).
-- Test-method note, not an app bug: a *script-generated* click on a second download made WebView2
-  show "http://tauri.localhost wants to Download multiple files [Block] [Allow]". Real mouse clicks
-  never triggered it (six downloads in a row).
+- Test-method notes, not app bugs: a *script-generated* click on a second download made WebView2
+  show "http://tauri.localhost wants to Download multiple files [Block] [Allow]"; real mouse clicks
+  never triggered it (six downloads in a row). The automated tray right-click (W-33) landed on the
+  tooltip instead of the icon; done by hand, the menu works.
 
 ## 3. Known gaps
 
