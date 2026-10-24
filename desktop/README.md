@@ -62,10 +62,24 @@ aren't set up yet.
 ## How it fits together
 
 - **Window** — built in `src-tauri/src/main.rs` (not just declared in `tauri.conf.json`) so it can
-  carry a download handler: backup downloads land in the OS Downloads folder (never overwriting an
-  existing file), emit `download-started` / `download-finished` events (the frontend turns them into
-  toasts with a **Show in folder** action — `hooks/useDownloadToasts.ts`, `opener:allow-reveal-item-in-dir`)
-  and raise a "Download complete" OS notification only while the window isn't focused.
+  carry a download handler: downloads land in the download folder (the OS Downloads folder unless one
+  was chosen in Settings → Desktop → Downloads; never overwriting an existing file), emit `download-started` / `download-finished` events (the frontend turns them into toasts with a
+  **Show in folder** action — `hooks/useDownloadToasts.ts`, `opener:allow-reveal-item-in-dir`) and
+  raise a "Download complete" OS notification only while the window isn't focused.
+- **Save dialog** — with "Ask where to save each download" on (`askWhereToSave` in `desktop.json`,
+  like `downloadDir` / `lastSaveDir` read by the Rust side at download time), the download callback
+  can't wait for a dialog: the webview calls it on its own thread, which the dialog needs, and the
+  destination has to be named before it returns. So the file is fetched into a per-download folder
+  under the app cache directory (`…/downloads/<n>/<name>`; works for `blob:` downloads too, which
+  can't be re-requested), and when it finishes `tauri-plugin-dialog`'s non-blocking `save_file`
+  opens the native Save dialog (file name filled in, starting in `lastSaveDir`, else the download
+  folder). Its answer moves the file (copy-and-delete across drives, replacing a file the dialog
+  already confirmed) and emits `download-finished` with the final `path` and the `id` of the toast
+  that started it; a dismissed dialog deletes the staged file and emits `cancelled: true`, which
+  the frontend turns into just dismissing the toast. The staging folder is emptied at startup, so a
+  quit or crash mid-download or mid-dialog leaves nothing behind. The webview is not granted any
+  `dialog:*` permission (the folder picker for **Change…** is also opened from Rust): the plugin is
+  only for the shell's own use.
 - **Plugins** — `notification` (OS notifications; the webview's own `Notification` API is unreliable
   across the three webviews), `opener` (http(s) links open in the system browser —
   `frontend/src/lib/desktop.ts`), `window-state` (remembers size/position), `single-instance` (a
@@ -158,6 +172,11 @@ update files are only requested by CI (`bundle.createUpdaterArtifacts`).
 
 - Launch at login was verified on Linux only (the `.desktop` entry under Xvfb); the Windows registry
   `Run` value and the macOS LaunchAgent come from the plugin and are untested.
+- The multiple-server keychain handling (per-profile entries, moving the old single entry) and the
+  Save dialog / folder picker were exercised on Linux only (Secret Service and the GTK dialogs under
+  Xvfb). Windows Credential Manager entries, the Windows Save dialog and WebView2's download events
+  (including whether it reports the same path it was given, which the staging step relies on — a
+  canonical-path fallback covers spelling differences) and macOS are untested.
 - Developed and exercised on Linux (WebKitGTK) only; macOS (WKWebView) and Windows (WebView2) are
   untested — in particular download handling, notifications and window-state.
 - No code signing yet (updates are verified by the updater key, but the installers themselves are

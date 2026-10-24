@@ -54,6 +54,7 @@ import {
 } from "@/hooks/useSettings"
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
 import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
+import { DownloadsSection } from "@/components/settings/DownloadsSection"
 import { ServersSection } from "@/components/settings/ServersSection"
 import { UpdateProgress } from "@/components/settings/UpdateProgress"
 import { useAppUpdate } from "@/hooks/useAppUpdate"
@@ -1975,6 +1976,7 @@ function ShellSettings() {
           </div>
         )}
       </div>
+      <DownloadsSection />
       <p className="text-sm text-muted-foreground">
         Token storage: {getTokenStorage() === "keychain" ? "OS keychain" : "Local file (keychain unavailable)"}
       </p>

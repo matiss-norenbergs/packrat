@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-24
+- **Save-as dialog for downloads (desktop)** — Settings → Desktop → Downloads: "Ask where to save each
+  download" (off by default) opens the native Save dialog for every download (file name filled in,
+  starting in the last folder used; cancelling discards the file), and "Save to" picks the folder
+  downloads go to instead of the OS Downloads folder.
 - **Multiple servers (desktop)** — the app can save several Packrat servers and switch between them
   from the sidebar footer (current server's name and version, with Add server… / Manage servers),
   staying signed in per server: each profile has its own keychain token (`session-token:<id>`).

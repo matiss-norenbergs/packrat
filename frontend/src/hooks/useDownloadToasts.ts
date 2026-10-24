@@ -9,11 +9,16 @@ interface Started {
 
 interface Finished {
   path: string | null
+  // The path of the matching download-started event, when the file ended up somewhere else (it was
+  // fetched aside and then saved where the user chose).
+  id?: string | null
+  // The Save dialog was dismissed: nothing was saved, and nothing failed either.
+  cancelled?: boolean
   success: boolean
 }
 
-// Desktop shell only. The shell saves downloads (e.g. backups) into the OS Downloads folder and
-// reports them with `download-started` / `download-finished` events (src-tauri/src/downloads.rs),
+// Desktop shell only. The shell saves downloads (e.g. backups) into the download folder — or where
+// the Save dialog says, if the user asked to be asked — and reports them with `download-started` / `download-finished` events (src-tauri/src/downloads.rs),
 // so every download gets feedback no matter which link started it. The browser keeps its own
 // download UI and never loads any of this.
 export function useDownloadToasts() {
@@ -32,9 +37,12 @@ export function useDownloadToasts() {
           toast.loading(`Downloading ${payload.filename}…`, { id: payload.path, duration: Infinity })
         })
         const finished = await listen<Finished>("download-finished", ({ payload }) => {
-          const at = payload.path ? inFlight.indexOf(payload.path) : -1
-          const id = at >= 0 ? inFlight.splice(at, 1)[0] : (inFlight.shift() ?? payload.path ?? undefined)
-          if (payload.success && payload.path) {
+          const key = payload.id ?? payload.path
+          const at = key ? inFlight.indexOf(key) : -1
+          const id = at >= 0 ? inFlight.splice(at, 1)[0] : (inFlight.shift() ?? key ?? undefined)
+          if (payload.cancelled) {
+            if (id) toast.dismiss(id)
+          } else if (payload.success && payload.path) {
             const path = payload.path
             toast.success(`Saved to ${path}`, {
               id,

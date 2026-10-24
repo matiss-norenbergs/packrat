@@ -41,8 +41,8 @@ token out of readable app data (disk images, backups), not out of reach of malwa
 None of this applies to the web UI, which behaves as before. See "Auth and CSRF" in
 [`api.md`](api.md#auth-and-csrf). The shell lives in [`desktop/`](../desktop/README.md). Inside it,
 http(s) links open in the system browser, desktop notifications go through the OS (Settings toggle
-unchanged), backup downloads are saved to the OS Downloads folder (never overwriting a file),
-and the window remembers its size and position. Starting the app a second time just
+unchanged), downloads such as backups are saved to your Downloads folder (never overwriting a file;
+see **Downloads** below), and the window remembers its size and position. Starting the app a second time just
 brings the existing window forward (single instance). A **tray icon** (left click, or "Show
 Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of
@@ -61,7 +61,15 @@ screen.
 **Downloads** show a toast: "Downloading <file>…" turns into "Saved to <path>" with a **Show in
 folder** button (or "Download failed"). The OS "Download complete" notification is only sent when
 the window isn't focused (hidden to the tray, minimized or behind another app), so you don't get
-both. The browser keeps its own download UI.
+both. The browser keeps its own download UI. Settings → Desktop → **Downloads** has two settings:
+**Save to** shows the folder downloads go to (your system's Downloads folder until you pick one
+with **Change…**, a native folder picker; **Use default** goes back; a chosen folder that no longer
+exists falls back to the default), and **Ask where to save each download** (off by default — then
+nothing changes from the above). With it on, every download opens the system's Save dialog with
+the server's file name filled in, starting in the folder you last saved to (the **Save to** folder
+the first time). The file is fetched first and the dialog appears once it's complete; cancelling
+the dialog discards the file and shows no message, and a failed fetch shows "Download failed" with
+nothing left behind. Both settings are per computer, kept by the shell.
 
 **Version mismatch notices**: after login, if the server's version (`GET /api/version`) differs from
 the app's, a dismissible notice with an **Open settings** button appears. Server newer: "Your server
