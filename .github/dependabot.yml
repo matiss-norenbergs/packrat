@@ -1,0 +1,94 @@
+# Weekly dependency PRs. Minor + patch bumps arrive as one grouped PR per ecosystem; major bumps
+# stay separate so they can be reviewed on their own. See README, "Dependabot".
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: "/backend"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "Deps"
+    groups:
+      go-minor-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "Deps"
+    groups:
+      frontend-minor-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: npm
+    directory: "/desktop"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "Deps"
+    groups:
+      desktop-minor-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: cargo
+    directory: "/desktop/src-tauri"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "Deps"
+    groups:
+      desktop-rust-minor-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "Deps"
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: docker
+    directory: "/docker"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "Deps"
+    groups:
+      docker-minor-patch:
+        update-types:
+          - minor
+          - patch
