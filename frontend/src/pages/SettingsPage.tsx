@@ -37,7 +37,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { FeatureKey } from "@/hooks/useFeature"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
-import { useChangePassword } from "@/hooks/useAuth"
 import { useClearDownloadLog } from "@/hooks/useDownloads"
 import { useClearHistory } from "@/hooks/useHistory"
 import { StrayFilesRow } from "@/components/settings/StrayFilesRow"
@@ -55,6 +54,7 @@ import {
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
 import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
 import { DownloadsSection } from "@/components/settings/DownloadsSection"
+import { PasswordCard } from "@/components/settings/PasswordCard"
 import { ServersSection } from "@/components/settings/ServersSection"
 import { UpdateProgress } from "@/components/settings/UpdateProgress"
 import { useAppUpdate } from "@/hooks/useAppUpdate"
@@ -328,66 +328,11 @@ function GeneralTab() {
 }
 
 function AccountTab() {
-  const changePassword = useChangePassword()
-
-  const [currentPassword, setCurrentPassword] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-
-  const mismatch = confirmPassword.length > 0 && newPassword !== confirmPassword
-  const canSubmit = currentPassword.length > 0 && newPassword.length >= 8 && !mismatch
-
-  const handleSubmit = () => {
-    if (!canSubmit) return
-    changePassword.mutate(
-      { currentPassword, newPassword },
-      {
-        onSuccess: () => {
-          setCurrentPassword("")
-          setNewPassword("")
-          setConfirmPassword("")
-        },
-      },
-    )
-  }
-
   return (
-    <div className="max-w-3xl">
-      <div className="max-w-lg space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="current-password">Current Password</Label>
-          <Input
-            id="current-password"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="new-password">New Password</Label>
-          <Input
-            id="new-password"
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="confirm-password">Confirm New Password</Label>
-          <Input
-            id="confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-          {mismatch && <p className="text-xs text-destructive">Passwords don't match</p>}
-        </div>
-        <Button onClick={handleSubmit} disabled={!canSubmit || changePassword.isPending}>
-          {changePassword.isPending ? "Saving…" : "Change Password"}
-        </Button>
-        <TwoFactorCard />
-      </div>
+    <div className="max-w-3xl space-y-6">
       <SessionsCard />
+      <TwoFactorCard />
+      <PasswordCard />
     </div>
   )
 }

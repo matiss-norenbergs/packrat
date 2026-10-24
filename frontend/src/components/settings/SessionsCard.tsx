@@ -33,7 +33,7 @@ export function SessionsCard() {
     revoke.mutate(s, { onSuccess: () => !s.current && toast.success(`Signed out ${describeDevice(s.client, s.userAgent)}`) })
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MonitorSmartphone className="h-4 w-4" />

@@ -47,7 +47,7 @@ export function TwoFactorCard() {
   const [regenerateOpen, setRegenerateOpen] = useState(false)
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShieldCheck className="h-4 w-4" />
