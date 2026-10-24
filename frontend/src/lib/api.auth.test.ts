@@ -44,6 +44,28 @@ describe("web request()", () => {
     expect(init.headers["X-Client"]).toBeUndefined()
   })
 
+  it("replays a mutation once when the CSRF cookie was rotated under it", async () => {
+    document.cookie = "packrat_csrf=old"
+    let calls = 0
+    const fetchMock = mockFetch((_url, init) => {
+      calls++
+      if (calls === 1) {
+        document.cookie = "packrat_csrf=new" // the server's healing Set-Cookie landing mid-flight
+        return { status: 403, body: { error: "invalid or missing CSRF token" } }
+      }
+      return { status: init.headers["X-CSRF-Token"] === "new" ? 204 : 403 }
+    })
+    await login({ username: "a", password: "b" })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("does not replay a 403 when the CSRF cookie did not change", async () => {
+    document.cookie = "packrat_csrf=same"
+    const fetchMock = mockFetch(() => ({ status: 403, body: { error: "invalid or missing CSRF token" } }))
+    await expect(login({ username: "a", password: "b" })).rejects.toMatchObject({ status: 403 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it("login makes the same call and stores nothing", async () => {
     const fetchMock = mockFetch(() => ({ status: 204 }))
     await login({ username: "a", password: "b" })

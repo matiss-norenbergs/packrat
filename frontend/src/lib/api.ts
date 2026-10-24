@@ -164,27 +164,36 @@ async function fetchServer(input: string, init: RequestInit): Promise<Response> 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const desktop = isDesktop()
   const token = desktop ? getToken() : null
-  const res = await fetchServer(
-    `${apiBase()}/api${path}`,
-    desktop
-      ? {
-          // Cross-origin client: a bearer token instead of cookies + CSRF header, which a
-          // different-origin page can neither store nor read (see lib/server.ts).
-          ...init,
-          credentials: "omit",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Client": "desktop",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...init?.headers,
+  const send = (csrf: string) =>
+    fetchServer(
+      `${apiBase()}/api${path}`,
+      desktop
+        ? {
+            // Cross-origin client: a bearer token instead of cookies + CSRF header, which a
+            // different-origin page can neither store nor read (see lib/server.ts).
+            ...init,
+            credentials: "omit",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Client": "desktop",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              ...init?.headers,
+            },
+          }
+        : {
+            ...init,
+            credentials: "include",
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf, ...init?.headers },
           },
-        }
-      : {
-          ...init,
-          credentials: "include",
-          headers: { "Content-Type": "application/json", "X-CSRF-Token": getCookie("packrat_csrf"), ...init?.headers },
-        },
-  )
+    )
+  const csrfSent = desktop ? "" : getCookie("packrat_csrf")
+  let res = await send(csrfSent)
+  // The server swaps a pre-fix CSRF cookie (one that equalled the session token) for a random one
+  // on a GET. A mutation that read the old value just before that landed is refused once with 403;
+  // if the cookie really did change meanwhile, replay it with the new value.
+  if (!desktop && res.status === 403 && csrfSent && getCookie("packrat_csrf") !== csrfSent) {
+    res = await send(getCookie("packrat_csrf"))
+  }
   if (!res.ok) {
     // /auth/* answers 401 for a wrong password, which isn't an expired session.
     if (desktop && res.status === 401 && !path.startsWith("/auth/")) {

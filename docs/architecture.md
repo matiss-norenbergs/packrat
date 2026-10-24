@@ -129,7 +129,10 @@ the server after login.
 `Secure=false` is deliberate, not an oversight — the app is commonly run over plain HTTP on a
 trusted LAN, and requiring HTTPS would break that default deployment. CSRF is handled separately
 via a double-submit cookie (`packrat_csrf`, readable by JS, echoed back as `X-CSRF-Token` on every
-mutating request) rather than relying on cookie security flags alone. See
+mutating request) rather than relying on cookie security flags alone. Its value is an independent
+random string, never the session token: the cookie is script-readable, so sharing the secret would
+hand any XSS a working session credential (it is also accepted as a bearer token). Pre-fix sessions
+are healed on their next cookie-authenticated GET (`healLegacyCSRFCookie`). See
 [`api.md`](api.md#auth-and-csrf) for the full mechanics.
 
 The same session token can also be presented as a bearer token (or, GET-only, a `?token=` query

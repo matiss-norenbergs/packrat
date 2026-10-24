@@ -63,15 +63,21 @@ func setSessionCookie(c *gin.Context, token string) {
 }
 
 // respondWithSession hands a freshly created session to the client. The web UI gets its session
-// and CSRF cookies (204); the desktop app, which is cross-origin and can't rely on cookies, asks
-// for the token in the body via the X-Client: desktop header and sends it as a bearer token.
+// cookie plus an independent random CSRF cookie (204); the desktop app, which is cross-origin and
+// can't rely on cookies, asks for the token in the body via the X-Client: desktop header and sends
+// it as a bearer token.
 func respondWithSession(c *gin.Context, token string) {
 	if isDesktopClient(c) {
 		c.JSON(http.StatusOK, TokenResponse{Token: token})
 		return
 	}
+	csrf, err := generateCSRFToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	setSessionCookie(c, token)
-	setCSRFCookie(c, token)
+	setCSRFCookie(c, csrf)
 	c.Status(http.StatusNoContent)
 }
 
@@ -95,7 +101,10 @@ func AuthStatus(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 
-		_, _, authenticated := resolveSession(c, usersRepo)
+		session, source, authenticated := resolveSession(c, usersRepo)
+		if authenticated {
+			healLegacyCSRFCookie(c, session.Token, source)
+		}
 		c.JSON(http.StatusOK, AuthStatusResponse{SetupRequired: false, Authenticated: authenticated})
 	}
 }
