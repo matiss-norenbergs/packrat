@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { AppWindow, Cookie, Download, FileImage, Gauge, Globe, History as HistoryIcon, Image as ImageIcon, Maximize2, Package, Play, Plug, RefreshCw, ScrollText, Server, Sparkles, Wrench } from "lucide-react"
+import { AppWindow, Archive, Bell, Cookie, Download, FileImage, Gauge, Globe, HardDrive, History as HistoryIcon, Image as ImageIcon, Lock, Maximize2, Package, Palette, Play, Plug, Puzzle, RefreshCw, ScrollText, Server, SlidersHorizontal, Sparkles, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -263,62 +263,69 @@ function GeneralTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="flex min-h-full flex-col space-y-4">
-      <div className="max-w-lg space-y-4">
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="download-directory"
-          info={<>Set via the <code>MEDIA_ROOT</code> environment variable — not editable here.</>}
-        >
-          Download Directory
-        </FieldLabel>
-        <Input id="download-directory" value={settings.downloadDirectory} disabled />
-      </div>
+    <div className="flex min-h-full flex-col">
+      <div className="max-w-3xl space-y-6 pb-6">
+        <SettingsCard icon={HardDrive} title="Storage">
+          <div className="max-w-lg space-y-4">
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="download-directory"
+                info={<>Set via the <code>MEDIA_ROOT</code> environment variable — not editable here.</>}
+              >
+                Download Directory
+              </FieldLabel>
+              <Input id="download-directory" value={settings.downloadDirectory} disabled />
+            </div>
+          </div>
+        </SettingsCard>
 
-      <div className="space-y-2">
-        <Label htmlFor="max-concurrent">Max Concurrent Downloads</Label>
-        <Input
-          id="max-concurrent"
-          type="number"
-          min="1"
-          value={maxConcurrent}
-          onChange={(e) => setMaxConcurrent(e.target.value)}
-        />
-      </div>
+        <SettingsCard icon={SlidersHorizontal} title="Limits">
+          <div className="max-w-lg space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="max-concurrent">Max Concurrent Downloads</Label>
+              <Input
+                id="max-concurrent"
+                type="number"
+                min="1"
+                value={maxConcurrent}
+                onChange={(e) => setMaxConcurrent(e.target.value)}
+              />
+            </div>
 
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="max-concurrent-transcodes"
-          info="Caps how many trim previews can be generated (ffmpeg re-encodes) at the same time — separate from the download limit above, since trimming is triggered on demand rather than queued."
-        >
-          Max Concurrent Transcodes
-        </FieldLabel>
-        <Input
-          id="max-concurrent-transcodes"
-          type="number"
-          min="1"
-          value={maxConcurrentTranscodes}
-          onChange={(e) => setMaxConcurrentTranscodes(e.target.value)}
-        />
-      </div>
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="max-concurrent-transcodes"
+                info="Caps how many trim previews can be generated (ffmpeg re-encodes) at the same time — separate from the download limit above, since trimming is triggered on demand rather than queued."
+              >
+                Max Concurrent Transcodes
+              </FieldLabel>
+              <Input
+                id="max-concurrent-transcodes"
+                type="number"
+                min="1"
+                value={maxConcurrentTranscodes}
+                onChange={(e) => setMaxConcurrentTranscodes(e.target.value)}
+              />
+            </div>
 
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="download-timeout"
-          info="Kills and marks failed any download still running past this limit. 0 = no limit."
-        >
-          Download Timeout (minutes)
-        </FieldLabel>
-        <Input
-          id="download-timeout"
-          type="number"
-          min="0"
-          placeholder="No limit"
-          value={downloadTimeout}
-          onChange={(e) => setDownloadTimeout(e.target.value)}
-        />
-      </div>
-
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="download-timeout"
+                info="Kills and marks failed any download still running past this limit. 0 = no limit."
+              >
+                Download Timeout (minutes)
+              </FieldLabel>
+              <Input
+                id="download-timeout"
+                type="number"
+                min="0"
+                placeholder="No limit"
+                value={downloadTimeout}
+                onChange={(e) => setDownloadTimeout(e.target.value)}
+              />
+            </div>
+          </div>
+        </SettingsCard>
       </div>
       <SaveRow
         dirty={dirty}
@@ -497,31 +504,39 @@ function NotificationsTab() {
   const { enabled: desktopNotifications, setEnabled: setDesktopNotifications } = useDesktopNotifications()
 
   return (
-    <div className="max-w-lg space-y-4">
-      <div className="flex items-center gap-1.5">
-        <Checkbox
-          id="desktop-notifications"
-          checked={desktopNotifications}
-          onCheckedChange={(v) => setDesktopNotifications(v === true)}
-        />
-        <Label htmlFor="desktop-notifications" className="font-normal">
-          Desktop notifications
-        </Label>
-        <InfoPopover>
-          Shows a browser/OS notification for notification-worthy events (currently: a download
-          completing/failing/being cancelled, a thumbnail finishing AI Enhancement, a Frame Match
-          being found, a scheduled subscription check finding new items, or a scheduled backup
-          failing) — on top of the in-app toast, which always shows regardless of this setting
-          for downloads (the rest skip the toast and use only the desktop notification — either
-          because they already show live status on their own page, like Enhancement/Frame Match,
-          or because a manual trigger of the same action already gets synchronous feedback, like
-          "Check now"/a manual backup). Only fires while you're away from this tab (it's
-          backgrounded, minimized, or the window isn't focused) — the toast already covers the
-          case where you're looking at it. A personal per-browser preference (like Theme), not
-          synced across devices. Turning this on prompts for
-          notification permission if you haven't granted or denied it yet.
-        </InfoPopover>
-      </div>
+    <div className="max-w-3xl space-y-6">
+      <SettingsCard
+        icon={Bell}
+        title="Desktop notifications"
+        description="A personal preference stored on this device only."
+      >
+        <div className="max-w-lg space-y-4">
+          <div className="flex items-center gap-1.5">
+            <Checkbox
+              id="desktop-notifications"
+              checked={desktopNotifications}
+              onCheckedChange={(v) => setDesktopNotifications(v === true)}
+            />
+            <Label htmlFor="desktop-notifications" className="font-normal">
+              Desktop notifications
+            </Label>
+            <InfoPopover>
+              Shows a browser/OS notification for notification-worthy events (currently: a download
+              completing/failing/being cancelled, a thumbnail finishing AI Enhancement, a Frame Match
+              being found, a scheduled subscription check finding new items, or a scheduled backup
+              failing) — on top of the in-app toast, which always shows regardless of this setting
+              for downloads (the rest skip the toast and use only the desktop notification — either
+              because they already show live status on their own page, like Enhancement/Frame Match,
+              or because a manual trigger of the same action already gets synchronous feedback, like
+              "Check now"/a manual backup). Only fires while you're away from this tab (it's
+              backgrounded, minimized, or the window isn't focused) — the toast already covers the
+              case where you're looking at it. A personal per-browser preference (like Theme), not
+              synced across devices. Turning this on prompts for
+              notification permission if you haven't granted or denied it yet.
+            </InfoPopover>
+          </div>
+        </div>
+      </SettingsCard>
     </div>
   )
 }
@@ -871,26 +886,29 @@ function FeaturesTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="flex min-h-full flex-col space-y-4">
-      <div className="max-w-lg space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Turn off the parts of Packrat you don't use. A disabled feature disappears from the menu and its
-          background work stops, but its data is never deleted — turning it back on restores everything.
-          AI Enhancement has its own switch in the AI Enhancement tab.
-        </p>
-        {FEATURE_TOGGLES.map(({ key, label, info }) => (
-          <div key={key} className="flex items-center gap-1.5">
-            <Checkbox
-              id={key}
-              checked={values[key]}
-              onCheckedChange={(v) => setValues({ ...values, [key]: v === true })}
-            />
-            <Label htmlFor={key} className="font-normal">
-              {label}
-            </Label>
-            <InfoPopover>{info}</InfoPopover>
+    <div className="flex min-h-full flex-col">
+      <div className="max-w-3xl space-y-6 pb-6">
+        <SettingsCard
+          icon={Puzzle}
+          title="Optional features"
+          description="Turn off the parts of Packrat you don't use. A disabled feature disappears from the menu and its background work stops, but its data is never deleted — turning it back on restores everything. AI Enhancement has its own switch in the AI Enhancement tab."
+        >
+          <div className="max-w-lg space-y-4">
+            {FEATURE_TOGGLES.map(({ key, label, info }) => (
+              <div key={key} className="flex items-center gap-1.5">
+                <Checkbox
+                  id={key}
+                  checked={values[key]}
+                  onCheckedChange={(v) => setValues({ ...values, [key]: v === true })}
+                />
+                <Label htmlFor={key} className="font-normal">
+                  {label}
+                </Label>
+                <InfoPopover>{info}</InfoPopover>
+              </div>
+            ))}
           </div>
-        ))}
+        </SettingsCard>
       </div>
       <SaveRow
         dirty={dirty}
@@ -926,59 +944,62 @@ function PrivacyTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="flex min-h-full flex-col space-y-4">
-      <div className="max-w-lg space-y-4">
-      <div className="flex items-center gap-1.5">
-        <Checkbox id="privacy-enabled" checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
-        <Label htmlFor="privacy-enabled" className="font-normal">
-          Enable privacy
-        </Label>
-        <InfoPopover>
-          Master switch for the whole privacy workflow. When off, every privacy feature
-          (blurring, lock icons, the reveal-all button, the Private checkboxes on
-          collections/tags) is hidden app-wide — but a collection or tag's own Private
-          value is never changed, so turning this back on restores blurring exactly where
-          it was.
-        </InfoPopover>
-      </div>
+    <div className="flex min-h-full flex-col">
+      <div className="max-w-3xl space-y-6 pb-6">
+        <SettingsCard icon={Lock} title="Privacy">
+          <div className="max-w-lg space-y-4">
+            <div className="flex items-center gap-1.5">
+              <Checkbox id="privacy-enabled" checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
+              <Label htmlFor="privacy-enabled" className="font-normal">
+                Enable privacy
+              </Label>
+              <InfoPopover>
+                Master switch for the whole privacy workflow. When off, every privacy feature
+                (blurring, lock icons, the reveal-all button, the Private checkboxes on
+                collections/tags) is hidden app-wide — but a collection or tag's own Private
+                value is never changed, so turning this back on restores blurring exactly where
+                it was.
+              </InfoPopover>
+            </div>
 
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="privacy-blur-strength"
-          info="How strongly thumbnails in private collections are blurred until clicked to reveal."
-        >
-          Private Collection Blur Strength
-        </FieldLabel>
-        <Select value={blurStrength} onValueChange={setBlurStrength} disabled={!enabled}>
-          <SelectTrigger id="privacy-blur-strength" className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {BLUR_STRENGTH_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="privacy-blur-strength"
+                info="How strongly thumbnails in private collections are blurred until clicked to reveal."
+              >
+                Private Collection Blur Strength
+              </FieldLabel>
+              <Select value={blurStrength} onValueChange={setBlurStrength} disabled={!enabled}>
+                <SelectTrigger id="privacy-blur-strength" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BLUR_STRENGTH_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      <div className="flex items-center gap-1.5">
-        <Checkbox
-          id="browse-ignore-privacy"
-          checked={browseIgnorePrivacy}
-          disabled={!enabled}
-          onCheckedChange={(v) => setBrowseIgnorePrivacy(v === true)}
-        />
-        <Label htmlFor="browse-ignore-privacy" className="font-normal">
-          Show private items unblurred in Browse
-        </Label>
-        <InfoPopover>
-          Only affects the Browse page — Library and Collections keep blurring private
-          items as usual.
-        </InfoPopover>
-      </div>
-
+            <div className="flex items-center gap-1.5">
+              <Checkbox
+                id="browse-ignore-privacy"
+                checked={browseIgnorePrivacy}
+                disabled={!enabled}
+                onCheckedChange={(v) => setBrowseIgnorePrivacy(v === true)}
+              />
+              <Label htmlFor="browse-ignore-privacy" className="font-normal">
+                Show private items unblurred in Browse
+              </Label>
+              <InfoPopover>
+                Only affects the Browse page — Library and Collections keep blurring private
+                items as usual.
+              </InfoPopover>
+            </div>
+          </div>
+        </SettingsCard>
       </div>
       <SaveRow
         dirty={dirty}
@@ -1013,61 +1034,67 @@ function HistoryTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="flex min-h-full flex-col space-y-4">
-      <div className="max-w-lg space-y-4">
-      <div className="flex items-center gap-1.5">
-        <Checkbox id="history-anonymize" checked={anonymize} onCheckedChange={(v) => setAnonymize(v === true)} />
-        <Label htmlFor="history-anonymize" className="font-normal">
-          Anonymize History Links
-        </Label>
-        <InfoPopover>
-          Replaces links on the History page with a hash — the actual file/download is
-          unaffected, and Retry still works.
-        </InfoPopover>
-      </div>
+    <div className="flex min-h-full flex-col">
+      <div className="max-w-3xl space-y-6 pb-6">
+        <SettingsCard icon={HistoryIcon} title="History">
+          <div className="max-w-lg space-y-4">
+            <div className="flex items-center gap-1.5">
+              <Checkbox id="history-anonymize" checked={anonymize} onCheckedChange={(v) => setAnonymize(v === true)} />
+              <Label htmlFor="history-anonymize" className="font-normal">
+                Anonymize History Links
+              </Label>
+              <InfoPopover>
+                Replaces links on the History page with a hash — the actual file/download is
+                unaffected, and Retry still works.
+              </InfoPopover>
+            </div>
 
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="history-retention"
-          info="History entries older than this are deleted automatically. Doesn't affect your library files or downloads — only the History page's log."
-        >
-          Keep history for
-        </FieldLabel>
-        <Select value={retentionDays} onValueChange={setRetentionDays}>
-          <SelectTrigger id="history-retention" className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {RETENTION_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="history-retention"
+                info="History entries older than this are deleted automatically. Doesn't affect your library files or downloads — only the History page's log."
+              >
+                Keep history for
+              </FieldLabel>
+              <Select value={retentionDays} onValueChange={setRetentionDays}>
+                <SelectTrigger id="history-retention" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RETENTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button variant="outline" size="sm" disabled={clearHistory.isPending}>
-            Clear all now
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete all history entries?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Removes every entry from the History page right now, regardless of age.
-              Doesn't affect your library files or downloads.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => clearHistory.mutate()}>Delete all</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+            <div className="flex items-center gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={clearHistory.isPending}>
+                    Clear all now
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete all history entries?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Removes every entry from the History page right now, regardless of age.
+                      Doesn't affect your library files or downloads.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => clearHistory.mutate()}>Delete all</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <span className="text-xs text-muted-foreground">Runs immediately; not part of Save.</span>
+            </div>
+          </div>
+        </SettingsCard>
       </div>
       <SaveRow
         dirty={dirty}
@@ -1120,49 +1147,52 @@ function BackupTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="flex min-h-full flex-col space-y-4">
-      <div className="max-w-lg space-y-4">
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="auto-backup-interval"
-          info="Saves a full snapshot of your settings and library data under the Backup page. Off by default."
-        >
-          Back up automatically
-        </FieldLabel>
-        <Select value={intervalHours} onValueChange={setIntervalHours}>
-          <SelectTrigger id="auto-backup-interval" className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {AUTO_BACKUP_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="backup-retention-count"
-          info="How many backups (scheduled and manual) to keep on disk before the oldest are automatically deleted. Unlimited keeps every backup ever made — make sure you have the disk space."
-        >
-          Keep
-        </FieldLabel>
-        <Select value={retentionCount} onValueChange={setRetentionCount}>
-          <SelectTrigger id="backup-retention-count" className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {BACKUP_RETENTION_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
+    <div className="flex min-h-full flex-col">
+      <div className="max-w-3xl space-y-6 pb-6">
+        <SettingsCard icon={Archive} title="Automatic backups">
+          <div className="max-w-lg space-y-4">
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="auto-backup-interval"
+                info="Saves a full snapshot of your settings and library data under the Backup page. Off by default."
+              >
+                Back up automatically
+              </FieldLabel>
+              <Select value={intervalHours} onValueChange={setIntervalHours}>
+                <SelectTrigger id="auto-backup-interval" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AUTO_BACKUP_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="backup-retention-count"
+                info="How many backups (scheduled and manual) to keep on disk before the oldest are automatically deleted. Unlimited keeps every backup ever made — make sure you have the disk space."
+              >
+                Keep
+              </FieldLabel>
+              <Select value={retentionCount} onValueChange={setRetentionCount}>
+                <SelectTrigger id="backup-retention-count" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BACKUP_RETENTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </SettingsCard>
       </div>
       <SaveRow
         dirty={dirty}
@@ -2109,41 +2139,45 @@ function AppearanceTab() {
   const { accent, setAccent } = useAccentColor()
 
   return (
-    <div className="max-w-lg space-y-6">
-      <div className="space-y-2">
-        <Label>Theme</Label>
-        <Select value={theme ?? "system"} onValueChange={setTheme}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="light">Light</SelectItem>
-            <SelectItem value="dark">Dark</SelectItem>
-            <SelectItem value="system">System</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label>Primary color</Label>
-        <Select value={accent} onValueChange={(v) => setAccent(v as AccentColor)}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ACCENT_COLOR_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                <span className="flex items-center gap-2">
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-full"
-                    style={{ backgroundColor: opt.swatch }}
-                  />
-                  {opt.label}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+    <div className="max-w-3xl space-y-6">
+      <SettingsCard icon={Palette} title="Appearance" description="A personal preference stored on this device only.">
+        <div className="max-w-lg space-y-6">
+            <div className="space-y-2">
+              <Label>Theme</Label>
+              <Select value={theme ?? "system"} onValueChange={setTheme}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Primary color</Label>
+              <Select value={accent} onValueChange={(v) => setAccent(v as AccentColor)}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACCENT_COLOR_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: opt.swatch }}
+                        />
+                        {opt.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+        </div>
+      </SettingsCard>
     </div>
   )
 }
