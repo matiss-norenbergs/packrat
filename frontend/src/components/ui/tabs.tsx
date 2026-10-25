@@ -13,6 +13,15 @@ function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive
 // Room kept clear of the floating buttons when a tab is scrolled into view.
 const EDGE_INSET = 56
 
+// Approximate line height used to turn line-mode wheel deltas (e.g. Firefox with a notched mouse) into pixels.
+const WHEEL_LINE_PX = 16
+
+function wheelDeltaPx(e: WheelEvent, pageSize: number): number {
+  if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) return e.deltaY * WHEEL_LINE_PX
+  if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) return e.deltaY * pageSize
+  return e.deltaY
+}
+
 function scrollBehavior(): ScrollBehavior {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
 }
@@ -71,7 +80,7 @@ function TabsList({ className, ...props }: Omit<React.ComponentProps<typeof Tabs
       const atEnd = list.scrollLeft >= max - 1 && e.deltaY > 0
       if (atStart || atEnd) return
       e.preventDefault()
-      list.scrollLeft += e.deltaY
+      list.scrollLeft += wheelDeltaPx(e, list.clientWidth)
     }
     list.addEventListener("wheel", onWheel, { passive: false })
 

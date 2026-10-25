@@ -97,7 +97,24 @@ describe("TabsList scroll buttons", () => {
     expect(mid.defaultPrevented).toBe(true)
     expect(list.scrollLeft).toBe(140)
 
+    // Line and page deltas are converted to pixels (16px per line, a page is the row's width).
+    setLayout(list, { scrollWidth: 800, clientWidth: 300, scrollLeft: 100 })
+    const lines = new WheelEvent("wheel", { deltaY: 3, deltaMode: WheelEvent.DOM_DELTA_LINE, cancelable: true })
+    list.dispatchEvent(lines)
+    expect(lines.defaultPrevented).toBe(true)
+    expect(list.scrollLeft).toBe(148)
+
+    setLayout(list, { scrollWidth: 800, clientWidth: 300, scrollLeft: 100 })
+    const pages = new WheelEvent("wheel", { deltaY: 1, deltaMode: WheelEvent.DOM_DELTA_PAGE, cancelable: true })
+    list.dispatchEvent(pages)
+    expect(list.scrollLeft).toBe(400)
+
+    // Edge checks depend only on the sign, whatever the unit.
     setLayout(list, { scrollWidth: 800, clientWidth: 300, scrollLeft: 500 })
+    const atEndLines = new WheelEvent("wheel", { deltaY: 3, deltaMode: WheelEvent.DOM_DELTA_LINE, cancelable: true })
+    list.dispatchEvent(atEndLines)
+    expect(atEndLines.defaultPrevented).toBe(false)
+
     const atEnd = new WheelEvent("wheel", { deltaY: 40, cancelable: true })
     list.dispatchEvent(atEnd)
     expect(atEnd.defaultPrevented).toBe(false)
