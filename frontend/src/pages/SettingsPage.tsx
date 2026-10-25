@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { AppWindow, RefreshCw } from "lucide-react"
+import { AppWindow, Download, FileImage, Gauge, Image as ImageIcon, Play, RefreshCw, ScrollText, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -24,6 +24,7 @@ import { isDesktop, isTauri } from "@/lib/server"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { SettingsCard } from "@/components/settings/SettingsCard"
 import { SessionsCard } from "@/components/settings/SessionsCard"
 import { TwoFactorCard } from "@/components/settings/TwoFactorCard"
 import { Label } from "@/components/ui/label"
@@ -376,98 +377,108 @@ function DownloadsTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="flex min-h-full flex-col space-y-4">
-      <div className="max-w-lg space-y-4">
-      <div className="flex gap-4">
-        <div className="flex-1 space-y-2">
-          <Label>Default Type</Label>
-          <Select value={defaultDownloadType} onValueChange={(v) => setDefaultDownloadType(v as DownloadType)}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="video">Video</SelectItem>
-              <SelectItem value="audio">Audio</SelectItem>
-              <SelectItem value="image">Image</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex-1 space-y-2">
-          <Label>Default Quality</Label>
-          <Select value={defaultQuality} onValueChange={(v) => setDefaultQuality(v as VideoQuality)}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {VIDEO_QUALITIES.map((q) => (
-                <SelectItem key={q} value={q}>
-                  {q}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+    <div className="flex min-h-full flex-col">
+      <div className="max-w-3xl space-y-6 pb-6">
+        <SettingsCard icon={Download} title="New downloads">
+          <div className="max-w-lg space-y-4">
+            <div className="flex gap-4">
+              <div className="flex-1 space-y-2">
+                <Label>Default Type</Label>
+                <Select value={defaultDownloadType} onValueChange={(v) => setDefaultDownloadType(v as DownloadType)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="video">Video</SelectItem>
+                    <SelectItem value="audio">Audio</SelectItem>
+                    <SelectItem value="image">Image</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label>Default Quality</Label>
+                <Select value={defaultQuality} onValueChange={(v) => setDefaultQuality(v as VideoQuality)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VIDEO_QUALITIES.map((q) => (
+                      <SelectItem key={q} value={q}>
+                        {q}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-      <div className="flex items-center gap-1.5">
-        <Checkbox
-          id="skip-download-preview"
-          checked={skipDownloadPreview}
-          onCheckedChange={(v) => setSkipDownloadPreview(v === true)}
-        />
-        <Label htmlFor="skip-download-preview" className="font-normal">
-          I trust this source (skip preview)
-        </Label>
-        <InfoPopover>
-          Skips the thumbnail/title preview in the New Download dialog and queues
-          immediately. Shown by default so you can catch a bad URL before it fails in the
-          queue.
-        </InfoPopover>
-      </div>
+            <div className="flex items-center gap-1.5">
+              <Checkbox
+                id="skip-download-preview"
+                checked={skipDownloadPreview}
+                onCheckedChange={(v) => setSkipDownloadPreview(v === true)}
+              />
+              <Label htmlFor="skip-download-preview" className="font-normal">
+                I trust this source (skip preview)
+              </Label>
+              <InfoPopover>
+                Skips the thumbnail/title preview in the New Download dialog and queues
+                immediately. Shown by default so you can catch a bad URL before it fails in the
+                queue.
+              </InfoPopover>
+            </div>
+          </div>
+        </SettingsCard>
 
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="download-log-retention"
-          info="Entries older than this are deleted automatically from the Downloads and Logs pages. Only completed/failed/cancelled entries are ever removed — anything still queued or in progress is never touched, regardless of age."
-        >
-          Keep download log for
-        </FieldLabel>
-        <Select value={logRetentionDays} onValueChange={setLogRetentionDays}>
-          <SelectTrigger id="download-log-retention" className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {RETENTION_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+        <SettingsCard icon={ScrollText} title="Download log">
+          <div className="max-w-lg space-y-4">
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="download-log-retention"
+                info="Entries older than this are deleted automatically from the Downloads and Logs pages. Only completed/failed/cancelled entries are ever removed — anything still queued or in progress is never touched, regardless of age."
+              >
+                Keep download log for
+              </FieldLabel>
+              <Select value={logRetentionDays} onValueChange={setLogRetentionDays}>
+                <SelectTrigger id="download-log-retention" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RETENTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button variant="outline" size="sm" disabled={clearDownloadLog.isPending}>
-            Clear all now
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete all download log entries?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Removes every completed/failed/cancelled entry from the Downloads and Logs
-              pages right now, regardless of age. Anything still queued or in progress is
-              left untouched.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => clearDownloadLog.mutate()}>Delete all</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+            <div className="flex flex-wrap items-center gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={clearDownloadLog.isPending}>
+                    Clear all now
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete all download log entries?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Removes every completed/failed/cancelled entry from the Downloads and Logs
+                      pages right now, regardless of age. Anything still queued or in progress is
+                      left untouched.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => clearDownloadLog.mutate()}>Delete all</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <span className="text-xs text-muted-foreground">Runs immediately; not part of Save.</span>
+            </div>
+          </div>
+        </SettingsCard>
       </div>
       <SaveRow
         dirty={dirty}
@@ -574,221 +585,228 @@ function LibraryTab() {
   const thumbHighLabel = RESOLUTION_STEP_LABELS[thumbHigh] ?? `${thumbHigh}p`
 
   return (
-    <div className="flex min-h-full flex-col space-y-4">
-      <div className="max-w-lg space-y-6">
-      <div className="space-y-2">
-        <div className="flex items-center gap-1.5">
-          <Label>Image derivatives</Label>
-          <InfoPopover>
-            Generates small/medium-size versions of library thumbnails, artist images, and
-            collection covers, so most of the app loads a much smaller file instead of the
-            original. Only needed once for items that predate this feature (or after resetting
-            the images folder) — anything downloaded or edited afterward gets this
-            automatically. Independent of the settings below — runs immediately, not part of
-            Save.
-          </InfoPopover>
-        </div>
-        {backfillStatus?.running ? (
-          <p className="text-sm text-muted-foreground">
-            Running… library {backfillStatus.libraryProcessed} processed
-            {backfillStatus.libraryFailed > 0 ? ` (${backfillStatus.libraryFailed} failed)` : ""}, artists{" "}
-            {backfillStatus.artistProcessed} processed
-            {backfillStatus.artistFailed > 0 ? ` (${backfillStatus.artistFailed} failed)` : ""}, covers{" "}
-            {backfillStatus.coverProcessed} processed
-            {backfillStatus.coverFailed > 0 ? ` (${backfillStatus.coverFailed} failed)` : ""}.
-          </p>
-        ) : backfillStatus?.finishedAt ? (
-          <p className="text-sm text-muted-foreground">
-            Last run: library {backfillStatus.libraryProcessed}/{backfillStatus.libraryFailed} failed, artists{" "}
-            {backfillStatus.artistProcessed}/{backfillStatus.artistFailed} failed, covers{" "}
-            {backfillStatus.coverProcessed}/{backfillStatus.coverFailed} failed.
-          </p>
-        ) : null}
-        <Button
-          variant="outline"
-          onClick={() => startBackfill.mutate()}
-          disabled={startBackfill.isPending || backfillStatus?.running}
-        >
-          {backfillStatus?.running ? "Running…" : "Backfill Images"}
-        </Button>
-      </div>
-
-      <div className="space-y-2 border-t pt-4">
-        <div className="flex items-center gap-1.5">
-          <Label>Library maintenance</Label>
-          <InfoPopover>
-            Checks every non-ghost item's file against disk and converts any that are missing
-            (deleted, moved, or renamed outside the app) into ghost placeholders — the DB row,
-            tags, and metadata are kept, "Download now" fills it back in. On-demand only, not
-            scheduled. "Find Stray Files" is the inverse: it lists files on disk that no database
-            record references (leftover thumbnails, orphaned sidecars, abandoned temp files) so you
-            can review and delete them.
-          </InfoPopover>
-        </div>
-        <Button variant="outline" onClick={() => scanMissing.mutate()} disabled={scanMissing.isPending}>
-          {scanMissing.isPending ? "Scanning…" : "Scan for Missing Files"}
-        </Button>
-        <StrayFilesRow />
-      </div>
-
-      <div className="space-y-4 border-t pt-4">
-        <h3 className="text-sm font-medium">Resolution tiers</h3>
-        <div className="flex items-center gap-1.5">
-          <Checkbox id="resolution-medium-enabled" checked={mediumEnabled} onCheckedChange={(v) => setMediumEnabled(v === true)} />
-          <Label htmlFor="resolution-medium-enabled" className="font-normal">
-            Use medium tier
-          </Label>
-          <InfoPopover>
-            When off, resolution is split into just low/high. The medium threshold is kept
-            (not discarded) so turning this back on restores it.
-          </InfoPopover>
-        </div>
-
-        <div className="space-y-1.5">
-          <FieldLabel
-            htmlFor="resolution-tier-slider"
-            info="Colors the Resolution value in Library's Details mode, Compare Metadata, and the New Download preview according to which tier a file's resolution falls into."
-          >
-            Quality tiers
-          </FieldLabel>
-          <ResolutionTierSlider
-            mediumEnabled={mediumEnabled}
-            low={low}
-            high={high}
-            onCommit={(newLow, newHigh) => {
-              setLow(newLow)
-              setHigh(newHigh)
-            }}
-          />
-          <p className="text-xs text-muted-foreground">
-            {mediumEnabled
-              ? `Low: ≤${lowLabel} · Medium: ${lowLabel}–${highLabel} · High: ≥${highLabel}`
-              : `Low: <${highLabel} · High: ≥${highLabel}`}
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-4 border-t pt-4">
-        <h3 className="text-sm font-medium">Thumbnails</h3>
-        <div className="space-y-2">
-          <FieldLabel
-            htmlFor="thumbnail-frame-count"
-            info="How many frame options to offer when picking a thumbnail from a video."
-          >
-            "Choose from Video" frame count
-          </FieldLabel>
-          <Select value={String(frameCount)} onValueChange={(v) => setFrameCount(Number(v))}>
-            <SelectTrigger id="thumbnail-frame-count" className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {FRAME_COUNT_OPTIONS.map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1.5">
-          <FieldLabel
-            htmlFor="thumbnail-frame-range-slider"
-            info="Which portion of the video, by duration, candidate frames are picked from. Narrowing this away from the default skips more of the intro/outro; the low end defaults to 5% to avoid a likely-blank opening frame."
-          >
-            "Choose from Video" pick range
-          </FieldLabel>
-          <ThumbnailFrameRangeSlider
-            low={frameRangeLow}
-            high={frameRangeHigh}
-            onCommit={(newLow, newHigh) => {
-              setFrameRangeLow(newLow)
-              setFrameRangeHigh(newHigh)
-            }}
-          />
-          <p className="text-xs text-muted-foreground">
-            {frameRangeLow}% – {frameRangeHigh}% of the video's duration
-          </p>
-        </div>
-
-        <div className="space-y-2">
+    <div className="flex min-h-full flex-col">
+      <div className="max-w-3xl space-y-6 pb-6">
+        <SettingsCard icon={Play} title="Player">
           <div className="flex items-center gap-1.5">
-            <Checkbox
-              id="thumbnail-resolution-medium-enabled"
-              checked={thumbMediumEnabled}
-              onCheckedChange={(v) => setThumbMediumEnabled(v === true)}
-            />
-            <Label htmlFor="thumbnail-resolution-medium-enabled" className="font-normal">
-              Use medium tier
+            <Checkbox id="library-autoplay" checked={autoplay} onCheckedChange={(v) => setAutoplay(v === true)} />
+            <Label htmlFor="library-autoplay" className="font-normal">
+              Autoplay
             </Label>
             <InfoPopover>
-              When off, thumbnail resolution is split into just low/high. The medium threshold
-              is kept (not discarded) so turning this back on restores it.
+              Starts playback immediately when opening a library item — including a private one,
+              right after you reveal it. Volume is remembered automatically between plays.
             </InfoPopover>
           </div>
+        </SettingsCard>
 
-          <div className="space-y-1.5">
-            <FieldLabel
-              htmlFor="thumbnail-resolution-tier-slider"
-              info="Colors the Thumbnail resolution value in Library's Details mode according to which tier a thumbnail's resolution falls into. Separate from the video tiers above — thumbnails rarely exceed 1080p, so the defaults are lower."
-            >
-              Thumbnail quality tiers
-            </FieldLabel>
-            <ResolutionTierSlider
-              mediumEnabled={thumbMediumEnabled}
-              low={thumbLow}
-              high={thumbHigh}
-              onCommit={(newLow, newHigh) => {
-                setThumbLow(newLow)
-                setThumbHigh(newHigh)
-              }}
-            />
-            <p className="text-xs text-muted-foreground">
-              {thumbMediumEnabled
-                ? `Low: ≤${thumbLowLabel} · Medium: ${thumbLowLabel}–${thumbHighLabel} · High: ≥${thumbHighLabel}`
-                : `Low: <${thumbHighLabel} · High: ≥${thumbHighLabel}`}
-            </p>
+        <SettingsCard icon={Gauge} title="Resolution tiers">
+          <div className="max-w-lg space-y-4">
+            <div className="flex items-center gap-1.5">
+              <Checkbox id="resolution-medium-enabled" checked={mediumEnabled} onCheckedChange={(v) => setMediumEnabled(v === true)} />
+              <Label htmlFor="resolution-medium-enabled" className="font-normal">
+                Use medium tier
+              </Label>
+              <InfoPopover>
+                When off, resolution is split into just low/high. The medium threshold is kept
+                (not discarded) so turning this back on restores it.
+              </InfoPopover>
+            </div>
+
+            <div className="space-y-1.5">
+              <FieldLabel
+                htmlFor="resolution-tier-slider"
+                info="Colors the Resolution value in Library's Details mode, Compare Metadata, and the New Download preview according to which tier a file's resolution falls into."
+              >
+                Quality tiers
+              </FieldLabel>
+              <ResolutionTierSlider
+                mediumEnabled={mediumEnabled}
+                low={low}
+                high={high}
+                onCommit={(newLow, newHigh) => {
+                  setLow(newLow)
+                  setHigh(newHigh)
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {mediumEnabled
+                  ? `Low: ≤${lowLabel} · Medium: ${lowLabel}–${highLabel} · High: ≥${highLabel}`
+                  : `Low: <${highLabel} · High: ≥${highLabel}`}
+              </p>
+            </div>
           </div>
-        </div>
-      </div>
+        </SettingsCard>
 
-      <div className="space-y-2 border-t pt-4">
-        <h3 className="text-sm font-medium">Images</h3>
-        <div className="space-y-2">
-          <FieldLabel
-            htmlFor="image-convert-format"
-            info="What format a downloaded image gets converted to. Original keeps whatever format the source served."
-          >
-            Image conversion format
-          </FieldLabel>
-          <Select value={imageConvertFormat} onValueChange={(v) => setImageConvertFormat(v as typeof imageConvertFormat)}>
-            <SelectTrigger id="image-convert-format" className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="original">Original</SelectItem>
-              <SelectItem value="jpg">JPEG</SelectItem>
-              <SelectItem value="png">PNG</SelectItem>
-              <SelectItem value="webp">WebP</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+        <SettingsCard icon={ImageIcon} title="Thumbnails">
+          <div className="max-w-lg space-y-4">
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="thumbnail-frame-count"
+                info="How many frame options to offer when picking a thumbnail from a video."
+              >
+                "Choose from Video" frame count
+              </FieldLabel>
+              <Select value={String(frameCount)} onValueChange={(v) => setFrameCount(Number(v))}>
+                <SelectTrigger id="thumbnail-frame-count" className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FRAME_COUNT_OPTIONS.map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      <div className="space-y-2 border-t pt-4">
-        <h3 className="text-sm font-medium">Player</h3>
-        <div className="flex items-center gap-1.5">
-          <Checkbox id="library-autoplay" checked={autoplay} onCheckedChange={(v) => setAutoplay(v === true)} />
-          <Label htmlFor="library-autoplay" className="font-normal">
-            Autoplay
-          </Label>
-          <InfoPopover>
-            Starts playback immediately when opening a library item — including a private one,
-            right after you reveal it. Volume is remembered automatically between plays.
-          </InfoPopover>
-        </div>
-      </div>
+            <div className="space-y-1.5">
+              <FieldLabel
+                htmlFor="thumbnail-frame-range-slider"
+                info="Which portion of the video, by duration, candidate frames are picked from. Narrowing this away from the default skips more of the intro/outro; the low end defaults to 5% to avoid a likely-blank opening frame."
+              >
+                "Choose from Video" pick range
+              </FieldLabel>
+              <ThumbnailFrameRangeSlider
+                low={frameRangeLow}
+                high={frameRangeHigh}
+                onCommit={(newLow, newHigh) => {
+                  setFrameRangeLow(newLow)
+                  setFrameRangeHigh(newHigh)
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {frameRangeLow}% – {frameRangeHigh}% of the video's duration
+              </p>
+            </div>
 
+            <div className="space-y-4 border-t pt-4">
+              <div className="flex items-center gap-1.5">
+                <Checkbox
+                  id="thumbnail-resolution-medium-enabled"
+                  checked={thumbMediumEnabled}
+                  onCheckedChange={(v) => setThumbMediumEnabled(v === true)}
+                />
+                <Label htmlFor="thumbnail-resolution-medium-enabled" className="font-normal">
+                  Use medium tier
+                </Label>
+                <InfoPopover>
+                  When off, thumbnail resolution is split into just low/high. The medium threshold
+                  is kept (not discarded) so turning this back on restores it.
+                </InfoPopover>
+              </div>
+
+              <div className="space-y-1.5">
+                <FieldLabel
+                  htmlFor="thumbnail-resolution-tier-slider"
+                  info="Colors the Thumbnail resolution value in Library's Details mode according to which tier a thumbnail's resolution falls into. Separate from the video tiers above — thumbnails rarely exceed 1080p, so the defaults are lower."
+                >
+                  Thumbnail quality tiers
+                </FieldLabel>
+                <ResolutionTierSlider
+                  mediumEnabled={thumbMediumEnabled}
+                  low={thumbLow}
+                  high={thumbHigh}
+                  onCommit={(newLow, newHigh) => {
+                    setThumbLow(newLow)
+                    setThumbHigh(newHigh)
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {thumbMediumEnabled
+                    ? `Low: ≤${thumbLowLabel} · Medium: ${thumbLowLabel}–${thumbHighLabel} · High: ≥${thumbHighLabel}`
+                    : `Low: <${thumbHighLabel} · High: ≥${thumbHighLabel}`}
+                </p>
+              </div>
+            </div>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard icon={FileImage} title="Images">
+          <div className="space-y-2">
+            <FieldLabel
+              htmlFor="image-convert-format"
+              info="What format a downloaded image gets converted to. Original keeps whatever format the source served."
+            >
+              Image conversion format
+            </FieldLabel>
+            <Select value={imageConvertFormat} onValueChange={(v) => setImageConvertFormat(v as typeof imageConvertFormat)}>
+              <SelectTrigger id="image-convert-format" className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="original">Original</SelectItem>
+                <SelectItem value="jpg">JPEG</SelectItem>
+                <SelectItem value="png">PNG</SelectItem>
+                <SelectItem value="webp">WebP</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard
+          icon={Wrench}
+          title="Library maintenance"
+          description="These run immediately and are not part of Save."
+        >
+          <div className="max-w-lg space-y-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Label>Image derivatives</Label>
+                <InfoPopover>
+                  Generates small/medium-size versions of library thumbnails, artist images, and
+                  collection covers, so most of the app loads a much smaller file instead of the
+                  original. Only needed once for items that predate this feature (or after resetting
+                  the images folder) — anything downloaded or edited afterward gets this
+                  automatically. Independent of the other settings — runs immediately, not part of
+                  Save.
+                </InfoPopover>
+              </div>
+              {backfillStatus?.running ? (
+                <p className="text-sm text-muted-foreground">
+                  Running… library {backfillStatus.libraryProcessed} processed
+                  {backfillStatus.libraryFailed > 0 ? ` (${backfillStatus.libraryFailed} failed)` : ""}, artists{" "}
+                  {backfillStatus.artistProcessed} processed
+                  {backfillStatus.artistFailed > 0 ? ` (${backfillStatus.artistFailed} failed)` : ""}, covers{" "}
+                  {backfillStatus.coverProcessed} processed
+                  {backfillStatus.coverFailed > 0 ? ` (${backfillStatus.coverFailed} failed)` : ""}.
+                </p>
+              ) : backfillStatus?.finishedAt ? (
+                <p className="text-sm text-muted-foreground">
+                  Last run: library {backfillStatus.libraryProcessed}/{backfillStatus.libraryFailed} failed, artists{" "}
+                  {backfillStatus.artistProcessed}/{backfillStatus.artistFailed} failed, covers{" "}
+                  {backfillStatus.coverProcessed}/{backfillStatus.coverFailed} failed.
+                </p>
+              ) : null}
+              <Button
+                variant="outline"
+                onClick={() => startBackfill.mutate()}
+                disabled={startBackfill.isPending || backfillStatus?.running}
+              >
+                {backfillStatus?.running ? "Running…" : "Backfill Images"}
+              </Button>
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center gap-1.5">
+                <Label>Missing and stray files</Label>
+                <InfoPopover>
+                  Checks every non-ghost item's file against disk and converts any that are missing
+                  (deleted, moved, or renamed outside the app) into ghost placeholders — the DB row,
+                  tags, and metadata are kept, "Download now" fills it back in. On-demand only, not
+                  scheduled. "Find Stray Files" is the inverse: it lists files on disk that no database
+                  record references (leftover thumbnails, orphaned sidecars, abandoned temp files) so you
+                  can review and delete them.
+                </InfoPopover>
+              </div>
+              <Button variant="outline" onClick={() => scanMissing.mutate()} disabled={scanMissing.isPending}>
+                {scanMissing.isPending ? "Scanning…" : "Scan for Missing Files"}
+              </Button>
+              <StrayFilesRow />
+            </div>
+          </div>
+        </SettingsCard>
       </div>
       <SaveRow
         dirty={dirty}
