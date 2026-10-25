@@ -759,7 +759,7 @@ function LibraryTab() {
                   collection covers, so most of the app loads a much smaller file instead of the
                   original. Only needed once for items that predate this feature (or after resetting
                   the images folder) — anything downloaded or edited afterward gets this
-                  automatically. Independent of the settings below — runs immediately, not part of
+                  automatically. Independent of the other settings — runs immediately, not part of
                   Save.
                 </InfoPopover>
               </div>
@@ -790,7 +790,7 @@ function LibraryTab() {
 
             <div className="space-y-2 border-t pt-4">
               <div className="flex items-center gap-1.5">
-                <Label>Library maintenance</Label>
+                <Label>Missing and stray files</Label>
                 <InfoPopover>
                   Checks every non-ghost item's file against disk and converts any that are missing
                   (deleted, moved, or renamed outside the app) into ghost placeholders — the DB row,
