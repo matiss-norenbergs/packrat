@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { readOverflow } from "@/hooks/useHorizontalOverflow"
 
 interface ItemMetrics {
   stride: number // item width + the flex gap between items
@@ -97,13 +98,9 @@ interface ScrollState {
 }
 
 function readScrollState(el: HTMLDivElement): ScrollState {
-  const canScroll = el.scrollWidth > el.clientWidth + 1
-  const maxScroll = el.scrollWidth - el.clientWidth
   const stops = getStops(el)
   return {
-    canScroll,
-    canScrollLeft: canScroll && el.scrollLeft > 1,
-    canScrollRight: canScroll && el.scrollLeft < maxScroll - 1,
+    ...readOverflow(el),
     segmentCount: stops.length,
     currentSegment: nearestStopIndex(el.scrollLeft, stops),
   }
