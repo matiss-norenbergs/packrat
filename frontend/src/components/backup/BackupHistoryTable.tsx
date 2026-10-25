@@ -186,8 +186,6 @@ export function BackupHistoryTable() {
     await queryClient.invalidateQueries({ queryKey: backupHistoryQueryKey })
   }
 
-  const deleteLabel = size > 1 ? `Delete ${size}` : "Delete"
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -250,7 +248,7 @@ export function BackupHistoryTable() {
               onClick={() => setDeleteIds(selectedRows.map((entry) => entry.id))}
             >
               <Trash2 />
-              {deleteLabel}
+              Delete
             </Button>
           </TooltipTrigger>
           <TooltipContent>{deleteReason ?? (size > 1 ? `Delete ${size} backups` : "Delete this backup")}</TooltipContent>
@@ -342,7 +340,7 @@ export function BackupHistoryTable() {
               disabled={size === 0}
               onClick={() => setDeleteIds(selectedRows.map((entry) => entry.id))}
             >
-              <Trash2 /> {size > 1 ? `Delete ${size} backups` : "Delete"}
+              <Trash2 /> {size > 1 ? `Delete (${size})` : "Delete"}
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>

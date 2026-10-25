@@ -88,7 +88,7 @@ describe("BackupHistoryTable", () => {
 
     fireEvent.mouseDown(rowEls()[1], { button: 0, ctrlKey: true }) // several
     for (const n of [/preview/i, /download/i, /restore/i]) expect(toolbarBtn(n).hasAttribute("disabled")).toBe(true)
-    expect(toolbarBtn(/delete 2/i).hasAttribute("disabled")).toBe(false)
+    expect(toolbarBtn(/^delete$/i).hasAttribute("disabled")).toBe(false)
   })
 
   it("shows file actions in the context menu only for one successful row", async () => {
@@ -112,7 +112,7 @@ describe("BackupHistoryTable", () => {
     pick(0)
     fireEvent.mouseDown(rowEls()[1], { button: 0, ctrlKey: true })
     fireEvent.contextMenu(rowEls()[1])
-    expect(await screen.findByRole("menuitem", { name: /delete 2 backups/i })).toBeTruthy()
+    expect(await screen.findByRole("menuitem", { name: /^delete (2)$/i })).toBeTruthy()
     expect(screen.queryByRole("menuitem", { name: /preview/i })).toBeNull()
   })
 
@@ -121,7 +121,7 @@ describe("BackupHistoryTable", () => {
     renderWithProviders(<BackupHistoryTable />)
     pick(0)
     fireEvent.mouseDown(rowEls()[2], { button: 0, shiftKey: true })
-    await user.click(toolbarBtn(/delete 3/i))
+    await user.click(toolbarBtn(/^delete$/i))
     const dialog = await screen.findByRole("alertdialog")
     expect(within(dialog).getByText("Delete 3 backups?")).toBeTruthy()
     await user.click(within(dialog).getByRole("button", { name: "Delete" }))
@@ -149,7 +149,7 @@ describe("BackupHistoryTable", () => {
     renderWithProviders(<BackupHistoryTable />)
     pick(0)
     fireEvent.mouseDown(rowEls()[1], { button: 0, shiftKey: true })
-    await user.click(toolbarBtn(/delete 2/i))
+    await user.click(toolbarBtn(/^delete$/i))
     await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }))
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("Deleted 1, 1 failed"))
     expect(toastSuccess).not.toHaveBeenCalled()
