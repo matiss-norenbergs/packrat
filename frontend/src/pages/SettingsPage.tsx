@@ -681,7 +681,7 @@ function LibraryTab() {
               </p>
             </div>
 
-            <div className="space-y-2 border-t pt-4">
+            <div className="space-y-4 border-t pt-4">
               <div className="flex items-center gap-1.5">
                 <Checkbox
                   id="thumbnail-resolution-medium-enabled"
