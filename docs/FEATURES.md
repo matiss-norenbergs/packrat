@@ -523,8 +523,8 @@ or just as a safety net.
   without one are always created as [ghosts](#ghost-items)), or **"Import as ghost items"** to
   recreate everything as a placeholder instead of downloading anything. Tags on redownloaded items
   aren't automatically reapplied — retag them once the redownload finishes.
-- **Full Backup** card — imports a combined settings + library file in one action (get one from a
-  Backup History row's Download button, on this install or another). Same Preview and
+- **Full Backup** card — imports a combined settings + library file in one action (get one by
+  selecting a backup in Backup History and using Download, on this install or another). Same Preview and
   download-vs-ghost-placeholder choice as Library Data, applied to both halves at once. Plain
   Settings-only or Library-only files can also be dropped onto the Settings/Library cards
   respectively — each just extracts its own half.
@@ -536,9 +536,17 @@ Backup) and pick an interval (6h/12h/24h/3 days/weekly) and it periodically writ
 settings+library snapshot to disk in the background, no action needed. Every attempt — scheduled or
 from **"Run Backup Now"** — is logged in a history table (including failures, so it doubles as a
 health check), each row showing when it ran, what triggered it, and counts of what it captured.
-From a row you can **Download** the file, **Preview** its contents without downloading, or
-**Restore** it directly back into this install (same download-vs-ghost-placeholder choice as a
-manual import). Old backups are pruned automatically past a configurable retention count (default
+A toolbar above the table holds **Run Backup Now** plus **Preview**, **Download**, **Restore** and
+**Delete**; it stays visible (buttons disabled) when the list is empty. Rows are selectable like the
+other tables — checkbox column, click, drag, shift-click range, ctrl/cmd-click — and right-clicking a
+row selects it (a selected row keeps the whole selection) and opens a context menu with the same
+actions. Preview (contents without downloading), Download and Restore (straight back into this
+install, same download-vs-ghost-placeholder choice as a manual import) work on exactly one selected
+row that has a file; they're disabled with a tooltip otherwise (and hidden from the context menu).
+**Delete** works on any selection, failed rows included, always after a confirmation showing the
+count (it permanently deletes the backup files), and reports one summary toast ("Deleted 3
+backups" / "Deleted 2, 1 failed").
+Old backups are pruned automatically past a configurable retention count (default
 14; set to unlimited to keep everything). Scheduled/automatic backups are always unencrypted —
 there's nowhere to type a password unattended — use the plain Export cards above if you need a
 password-protected file to store off-site.

@@ -125,15 +125,19 @@ export function useRunManualBackup() {
   })
 }
 
-export function useDeleteBackupHistoryEntry() {
+// `silent` leaves toasts and the list refetch to the caller — used when deleting several
+// entries at once, so the caller can report one summary instead of one toast per entry.
+export function useDeleteBackupHistoryEntry({ silent = false }: { silent?: boolean } = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: deleteBackupHistoryEntry,
     onSuccess: () => {
+      if (silent) return
       queryClient.invalidateQueries({ queryKey: backupHistoryQueryKey })
       toast.success("Backup deleted")
     },
     onError: (err: Error) => {
+      if (silent) return
       toast.error(`Delete failed: ${err.message}`)
     },
   })
