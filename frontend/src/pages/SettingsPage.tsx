@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { AppWindow, Download, FileImage, Gauge, Image as ImageIcon, Play, RefreshCw, ScrollText, Wrench } from "lucide-react"
+import { AppWindow, Cookie, Download, FileImage, Gauge, Globe, History as HistoryIcon, Image as ImageIcon, Maximize2, Package, Play, Plug, RefreshCw, ScrollText, Server, Sparkles, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -1202,76 +1202,86 @@ function JellyfinTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="flex min-h-full flex-col space-y-4">
-      <div className="max-w-lg space-y-4">
-      <div className="flex items-center gap-1.5">
-        <Checkbox id="jellyfin-enabled" checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
-        <Label htmlFor="jellyfin-enabled" className="font-normal">
-          Enable Jellyfin
-        </Label>
-        <InfoPopover>
-          Lets you manually trigger a library rescan below, and controls the automatic
-          refresh option underneath.
-        </InfoPopover>
-      </div>
+    <div className="flex min-h-full flex-col">
+      <div className="max-w-3xl space-y-6 pb-6">
+        <SettingsCard icon={Plug} title="Connection">
+          <div className="max-w-lg space-y-4">
+            <div className="flex items-center gap-1.5">
+              <Checkbox id="jellyfin-enabled" checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
+              <Label htmlFor="jellyfin-enabled" className="font-normal">
+                Enable Jellyfin
+              </Label>
+              <InfoPopover>
+                Lets you manually trigger a library rescan below, and controls the automatic
+                refresh option underneath.
+              </InfoPopover>
+            </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="jellyfin-url">URL</Label>
-        <Input
-          id="jellyfin-url"
-          placeholder="http://jellyfin:8096"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          disabled={!enabled}
-        />
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="jellyfin-url">URL</Label>
+              <Input
+                id="jellyfin-url"
+                placeholder="http://jellyfin:8096"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                disabled={!enabled}
+              />
+            </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="jellyfin-api-key">API Key</Label>
-        <Input
-          id="jellyfin-api-key"
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          disabled={!enabled}
-        />
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="jellyfin-api-key">API Key</Label>
+              <Input
+                id="jellyfin-api-key"
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                disabled={!enabled}
+              />
+            </div>
+          </div>
+        </SettingsCard>
 
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="jellyfin-refresh-mode"
-          info={
-            <>
-              "Specific library" refreshes only the Jellyfin library linked to the download's
-              collection (set per-collection in Collections → Edit) — downloads in a
-              collection with no library linked, or uncategorized downloads, don't trigger
-              anything. A burst of downloads within a short window is coalesced into a single
-              rescan.
-            </>
-          }
-        >
-          Refresh after download
-        </FieldLabel>
-        <Select value={refreshMode} onValueChange={setRefreshMode} disabled={!enabled}>
-          <SelectTrigger id="jellyfin-refresh-mode" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Nothing</SelectItem>
-            <SelectItem value="entire">Entire library</SelectItem>
-            <SelectItem value="specific">Specific library</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+        <SettingsCard icon={RefreshCw} title="Library refresh">
+          <div className="max-w-lg space-y-4">
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="jellyfin-refresh-mode"
+                info={
+                  <>
+                    "Specific library" refreshes only the Jellyfin library linked to the download's
+                    collection (set per-collection in Collections → Edit) — downloads in a
+                    collection with no library linked, or uncategorized downloads, don't trigger
+                    anything. A burst of downloads within a short window is coalesced into a single
+                    rescan.
+                  </>
+                }
+              >
+                Refresh after download
+              </FieldLabel>
+              <Select value={refreshMode} onValueChange={setRefreshMode} disabled={!enabled}>
+                <SelectTrigger id="jellyfin-refresh-mode" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nothing</SelectItem>
+                  <SelectItem value="entire">Entire library</SelectItem>
+                  <SelectItem value="specific">Specific library</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-      <Button
-        variant="outline"
-        onClick={() => rescan.mutate()}
-        disabled={!enabled || !url || !apiKey || rescan.isPending}
-      >
-        {rescan.isPending ? "Rescanning…" : "Rescan Library Now"}
-      </Button>
-
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => rescan.mutate()}
+                disabled={!enabled || !url || !apiKey || rescan.isPending}
+              >
+                {rescan.isPending ? "Rescanning…" : "Rescan Library Now"}
+              </Button>
+              <span className="text-xs text-muted-foreground">Runs immediately; not part of Save.</span>
+            </div>
+          </div>
+        </SettingsCard>
       </div>
       <SaveRow
         dirty={dirty}
@@ -1446,236 +1456,258 @@ function ThumbnailEnhancementTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="flex min-h-full flex-col space-y-4">
-      <div className="max-w-lg space-y-4">
-      <div className="flex items-center gap-1.5">
-        <Checkbox id="thumb-enhance-enabled" checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
-        <Label htmlFor="thumb-enhance-enabled" className="font-normal">
-          Enable AI thumbnail enhancement
-        </Label>
-        <InfoPopover>
-          Upscales low-resolution library thumbnails using a local Stable Diffusion WebUI
-          (AUTOMATIC1111-compatible) instance you run yourself — nothing is sent anywhere
-          outside your own network. That instance must be started with the{" "}
-          <code>--api</code> flag; if it also uses <code>--api-auth</code>, fill in the
-          username/password below to match.
-        </InfoPopover>
-      </div>
+    <div className="flex min-h-full flex-col">
+      <div className="max-w-3xl space-y-6 pb-6">
+        <SettingsCard icon={Sparkles} title="AI Enhancement">
+          <div className="max-w-lg space-y-4">
+            <div className="flex items-center gap-1.5">
+              <Checkbox id="thumb-enhance-enabled" checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
+              <Label htmlFor="thumb-enhance-enabled" className="font-normal">
+                Enable AI thumbnail enhancement
+              </Label>
+              <InfoPopover>
+                Upscales low-resolution library thumbnails using a local Stable Diffusion WebUI
+                (AUTOMATIC1111-compatible) instance you run yourself — nothing is sent anywhere
+                outside your own network. That instance must be started with the{" "}
+                <code>--api</code> flag; if it also uses <code>--api-auth</code>, fill in the
+                username/password below to match.
+              </InfoPopover>
+            </div>
 
-      <div className="flex items-center gap-1.5">
-        <Checkbox
-          id="thumb-enhance-schedule-enabled"
-          checked={scheduleEnabled}
-          onCheckedChange={(v) => setScheduleEnabled(v === true)}
-          disabled={!enabled}
-        />
-        <Label htmlFor="thumb-enhance-schedule-enabled" className="font-normal">
-          Run automatically every hour
-        </Label>
-        <InfoPopover>
-          Turn this off to only enhance thumbnails when you click "Enhance Now" on the AI
-          Enhancement page — the feature stays available, it just never runs in the background.
-        </InfoPopover>
-      </div>
+            <div className="flex items-center gap-1.5">
+              <Checkbox
+                id="thumb-enhance-schedule-enabled"
+                checked={scheduleEnabled}
+                onCheckedChange={(v) => setScheduleEnabled(v === true)}
+                disabled={!enabled}
+              />
+              <Label htmlFor="thumb-enhance-schedule-enabled" className="font-normal">
+                Run automatically every hour
+              </Label>
+              <InfoPopover>
+                Turn this off to only enhance thumbnails when you click "Enhance Now" on the AI
+                Enhancement page — the feature stays available, it just never runs in the background.
+              </InfoPopover>
+            </div>
 
-      <div className="flex items-center gap-1.5">
-        <Checkbox
-          id="thumb-enhance-auto-approve"
-          checked={autoApprove}
-          onCheckedChange={(v) => setAutoApprove(v === true)}
-          disabled={!enabled}
-        />
-        <Label htmlFor="thumb-enhance-auto-approve" className="font-normal">
-          Auto-approve enhanced thumbnails
-        </Label>
-        <InfoPopover>
-          Skips saving the original thumbnail — the enhanced version just takes its place, with
-          no Compare/Revert available for that item afterward. Applies to every enhancement,
-          however it's triggered (manual, scheduled, or on new downloads).
-        </InfoPopover>
-      </div>
+            <div className="flex items-center gap-1.5">
+              <Checkbox
+                id="thumb-enhance-auto-approve"
+                checked={autoApprove}
+                onCheckedChange={(v) => setAutoApprove(v === true)}
+                disabled={!enabled}
+              />
+              <Label htmlFor="thumb-enhance-auto-approve" className="font-normal">
+                Auto-approve enhanced thumbnails
+              </Label>
+              <InfoPopover>
+                Skips saving the original thumbnail — the enhanced version just takes its place, with
+                no Compare/Revert available for that item afterward. Applies to every enhancement,
+                however it's triggered (manual, scheduled, or on new downloads).
+              </InfoPopover>
+            </div>
 
-      <div className="flex items-center gap-1.5">
-        <Checkbox
-          id="thumb-enhance-auto-on-download"
-          checked={autoOnDownload}
-          onCheckedChange={(v) => setAutoOnDownload(v === true)}
-          disabled={!enabled}
-        />
-        <Label htmlFor="thumb-enhance-auto-on-download" className="font-normal">
-          Enhance new downloads automatically
-        </Label>
-        <InfoPopover>
-          Enhances a freshly-downloaded item's thumbnail right after the download finishes, if
-          it's below the minimum dimension below — no need to wait for the hourly sweep. Only
-          applies to fresh downloads, not redownloads.
-        </InfoPopover>
-      </div>
+            <div className="flex items-center gap-1.5">
+              <Checkbox
+                id="thumb-enhance-auto-on-download"
+                checked={autoOnDownload}
+                onCheckedChange={(v) => setAutoOnDownload(v === true)}
+                disabled={!enabled}
+              />
+              <Label htmlFor="thumb-enhance-auto-on-download" className="font-normal">
+                Enhance new downloads automatically
+              </Label>
+              <InfoPopover>
+                Enhances a freshly-downloaded item's thumbnail right after the download finishes, if
+                it's below the minimum dimension below — no need to wait for the hourly sweep. Only
+                applies to fresh downloads, not redownloads.
+              </InfoPopover>
+            </div>
+          </div>
+        </SettingsCard>
 
-      <div className="space-y-2">
-        <Label htmlFor="thumb-enhance-url">Stable Diffusion WebUI URL</Label>
-        <Input
-          id="thumb-enhance-url"
-          placeholder="http://127.0.0.1:7860"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          disabled={!enabled}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="thumb-enhance-username">Username</Label>
-        <Input
-          id="thumb-enhance-username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          disabled={!enabled}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="thumb-enhance-password">Password</Label>
-        <Input
-          id="thumb-enhance-password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={!enabled}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="thumb-enhance-upscaler">Upscaler model</Label>
-        <UpscalerField
-          id="thumb-enhance-upscaler"
-          value={upscaler}
-          onChange={setUpscaler}
-          url={url}
-          username={username}
-          password={password}
-          disabled={!enabled}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="thumb-enhance-target-mode"
-          info="Multiply keeps the same aspect ratio scaled up by a fixed amount (e.g. 4x turns 480x270 into 1920x1080). Target size instead aims for a specific longest-side pixel count regardless of how small the original is, so a 240p and a 480p thumbnail both end up the same size."
+        <SettingsCard
+          icon={Server}
+          title="Stable Diffusion connection"
+          description="Loading models runs immediately; it is not part of Save."
         >
-          Scaling
-        </FieldLabel>
-        <Select value={targetMode} onValueChange={(v) => setTargetMode(v as "factor" | "resolution")} disabled={!enabled}>
-          <SelectTrigger id="thumb-enhance-target-mode" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="factor">Multiply by a factor</SelectItem>
-            <SelectItem value="resolution">Scale to a target size</SelectItem>
-          </SelectContent>
-        </Select>
-        {targetMode === "factor" ? (
-          <PresetOrCustomNumberField
-            value={factor}
-            onChange={setFactor}
-            presets={[2, 3, 4]}
-            min={1}
-            disabled={!enabled}
-          />
-        ) : (
-          <PresetOrCustomNumberField
-            value={targetDim}
-            onChange={setTargetDim}
-            presets={[1280, 1920, 2560, 3840]}
-            min={1}
-            disabled={!enabled}
-          />
-        )}
-      </div>
+          <div className="max-w-lg space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="thumb-enhance-url">Stable Diffusion WebUI URL</Label>
+              <Input
+                id="thumb-enhance-url"
+                placeholder="http://127.0.0.1:7860"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                disabled={!enabled}
+              />
+            </div>
 
-      <div className="space-y-2">
-        <FieldLabel htmlFor="thumb-enhance-min-dim" info="A thumbnail is only enhanced if its longest side is below this many pixels — already-good thumbnails are left alone.">
-          Minimum dimension (px)
-        </FieldLabel>
-        <PresetOrCustomNumberField
-          id="thumb-enhance-min-dim"
-          value={minDimNum || 0}
-          onChange={(v) => setMinDim(String(v))}
-          presets={[480, 720, 1080, 1440, 2160]}
-          min={1}
-          disabled={!enabled}
-        />
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="thumb-enhance-username">Username</Label>
+              <Input
+                id="thumb-enhance-username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                disabled={!enabled}
+              />
+            </div>
 
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="thumb-enhance-max-per-sweep"
-          info="Caps how many thumbnails one batch run (a scheduled sweep or 'Enhance Now') processes at once, so a large backlog can't tie up a slow local upscaler indefinitely. Doesn't limit enhancing one specific item directly from the eligible-items dialog."
-        >
-          Max per batch run
-        </FieldLabel>
-        <PresetOrCustomNumberField
-          id="thumb-enhance-max-per-sweep"
-          value={maxPerSweep}
-          onChange={setMaxPerSweep}
-          presets={[5, 10, 20, 50]}
-          min={1}
-          disabled={!enabled}
-        />
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="thumb-enhance-password">Password</Label>
+              <Input
+                id="thumb-enhance-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={!enabled}
+              />
+            </div>
 
-      <div className="space-y-2">
-        <FieldLabel
-          htmlFor="thumb-enhance-retention"
-          info="AI Enhancement history entries older than this are deleted automatically. Doesn't affect your library thumbnails — only the AI Enhancement page's history log (and, for an item's last remaining entry, its stored original backup)."
-        >
-          Keep history for
-        </FieldLabel>
-        <Select value={retentionDays} onValueChange={setRetentionDays}>
-          <SelectTrigger id="thumb-enhance-retention" className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {RETENTION_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="thumb-enhance-upscaler">Upscaler model</Label>
+              <UpscalerField
+                id="thumb-enhance-upscaler"
+                value={upscaler}
+                onChange={setUpscaler}
+                url={url}
+                username={username}
+                password={password}
+                disabled={!enabled}
+              />
+            </div>
+          </div>
+        </SettingsCard>
 
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button variant="outline" size="sm" disabled={clearThumbnailEnhancementHistory.isPending}>
-            Clear All History
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete all AI Enhancement history?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Removes every entry from the AI Enhancement page's history right now, and frees
-              every stored original-thumbnail backup along with it — Compare/Revert won't be
-              available for any item afterward. Doesn't affect current thumbnails.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => clearThumbnailEnhancementHistory.mutate()}>
-              Delete all
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <SettingsCard icon={Maximize2} title="Upscaling">
+          <div className="max-w-lg space-y-4">
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="thumb-enhance-target-mode"
+                info="Multiply keeps the same aspect ratio scaled up by a fixed amount (e.g. 4x turns 480x270 into 1920x1080). Target size instead aims for a specific longest-side pixel count regardless of how small the original is, so a 240p and a 480p thumbnail both end up the same size."
+              >
+                Scaling
+              </FieldLabel>
+              <Select value={targetMode} onValueChange={(v) => setTargetMode(v as "factor" | "resolution")} disabled={!enabled}>
+                <SelectTrigger id="thumb-enhance-target-mode" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="factor">Multiply by a factor</SelectItem>
+                  <SelectItem value="resolution">Scale to a target size</SelectItem>
+                </SelectContent>
+              </Select>
+              {targetMode === "factor" ? (
+                <PresetOrCustomNumberField
+                  value={factor}
+                  onChange={setFactor}
+                  presets={[2, 3, 4]}
+                  min={1}
+                  disabled={!enabled}
+                />
+              ) : (
+                <PresetOrCustomNumberField
+                  value={targetDim}
+                  onChange={setTargetDim}
+                  presets={[1280, 1920, 2560, 3840]}
+                  min={1}
+                  disabled={!enabled}
+                />
+              )}
+            </div>
 
-      <p className="text-sm text-muted-foreground">
-        Manually run enhancements and view history on the{" "}
-        <Link to="/thumbnail-enhancement" className="underline underline-offset-2 hover:text-foreground">
-          AI Enhancement page
-        </Link>
-        .
-      </p>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="thumb-enhance-min-dim" info="A thumbnail is only enhanced if its longest side is below this many pixels — already-good thumbnails are left alone.">
+                Minimum dimension (px)
+              </FieldLabel>
+              <PresetOrCustomNumberField
+                id="thumb-enhance-min-dim"
+                value={minDimNum || 0}
+                onChange={(v) => setMinDim(String(v))}
+                presets={[480, 720, 1080, 1440, 2160]}
+                min={1}
+                disabled={!enabled}
+              />
+            </div>
 
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="thumb-enhance-max-per-sweep"
+                info="Caps how many thumbnails one batch run (a scheduled sweep or 'Enhance Now') processes at once, so a large backlog can't tie up a slow local upscaler indefinitely. Doesn't limit enhancing one specific item directly from the eligible-items dialog."
+              >
+                Max per batch run
+              </FieldLabel>
+              <PresetOrCustomNumberField
+                id="thumb-enhance-max-per-sweep"
+                value={maxPerSweep}
+                onChange={setMaxPerSweep}
+                presets={[5, 10, 20, 50]}
+                min={1}
+                disabled={!enabled}
+              />
+            </div>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard icon={HistoryIcon} title="History">
+          <div className="max-w-lg space-y-4">
+            <div className="space-y-2">
+              <FieldLabel
+                htmlFor="thumb-enhance-retention"
+                info="AI Enhancement history entries older than this are deleted automatically. Doesn't affect your library thumbnails — only the AI Enhancement page's history log (and, for an item's last remaining entry, its stored original backup)."
+              >
+                Keep history for
+              </FieldLabel>
+              <Select value={retentionDays} onValueChange={setRetentionDays}>
+                <SelectTrigger id="thumb-enhance-retention" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RETENTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={clearThumbnailEnhancementHistory.isPending}>
+                    Clear All History
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete all AI Enhancement history?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Removes every entry from the AI Enhancement page's history right now, and frees
+                      every stored original-thumbnail backup along with it — Compare/Revert won't be
+                      available for any item afterward. Doesn't affect current thumbnails.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => clearThumbnailEnhancementHistory.mutate()}>
+                      Delete all
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <span className="text-xs text-muted-foreground">Runs immediately; not part of Save.</span>
+            </div>
+          </div>
+        </SettingsCard>
+
+        <p className="text-sm text-muted-foreground">
+          Manually run enhancements and view history on the{" "}
+          <Link to="/thumbnail-enhancement" className="underline underline-offset-2 hover:text-foreground">
+            AI Enhancement page
+          </Link>
+          .
+        </p>
       </div>
       <SaveRow
         dirty={dirty}
@@ -1724,141 +1756,156 @@ function YtDlpTab() {
   const dirty = Object.keys(payload).length > 0
 
   return (
-    <div className="flex min-h-full flex-col space-y-4">
-      <div className="max-w-lg space-y-4">
-      {isLoading || !data ? (
-        <Skeleton className="h-16 w-full" />
-      ) : (
-        <>
-          <div className="space-y-1 text-sm">
-            <p>
-              Current version: <span className="font-mono">{data.currentVersion}</span>
-            </p>
-            {data.updateAvailable ? (
-              <p className="text-amber-600">
-                Update available: <span className="font-mono">{data.latestVersion}</span>
-              </p>
+    <div className="flex min-h-full flex-col">
+      <div className="max-w-3xl space-y-6 pb-6">
+        <SettingsCard icon={Package} title="yt-dlp version">
+          <div className="max-w-lg space-y-4">
+            {isLoading || !data ? (
+              <Skeleton className="h-16 w-full" />
             ) : (
-              <p className="text-muted-foreground">
-                Up to date{data.latestVersion ? "" : " (couldn't check latest)"}.
-              </p>
+              <>
+                <div className="space-y-1 text-sm">
+                  <p>
+                    Current version: <span className="font-mono">{data.currentVersion}</span>
+                  </p>
+                  {data.updateAvailable ? (
+                    <p className="text-warning">
+                      Update available: <span className="font-mono">{data.latestVersion}</span>
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      Up to date{data.latestVersion ? "" : " (couldn't check latest)"}.
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button variant="outline" onClick={() => update.mutate()} disabled={update.isPending}>
+                    {update.isPending ? "Updating…" : "Update yt-dlp"}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">Runs immediately; not part of Save.</span>
+                </div>
+              </>
             )}
           </div>
-          <Button variant="outline" onClick={() => update.mutate()} disabled={update.isPending}>
-            {update.isPending ? "Updating…" : "Update yt-dlp"}
-          </Button>
-        </>
-      )}
+        </SettingsCard>
 
-      {settingsLoading || !settings ? (
-        <Skeleton className="h-40 w-full" />
-      ) : (
-        <div className="space-y-4 border-t pt-4">
-          <div className="space-y-2">
-            <FieldLabel
-              htmlFor="ytdlp-cookies-file"
-              info="Paste or upload a Netscape-format cookies.txt (exported from your browser with an extension like 'Get cookies.txt'). Unlike Cookies browser below, this works in Docker — yt-dlp reads the file directly instead of needing a real browser profile on the same machine. Takes priority over Cookies browser when both are set."
-            >
-              Cookies file
-            </FieldLabel>
-            <Textarea
-              id="ytdlp-cookies-file"
-              placeholder="# Netscape HTTP Cookie File&#10;.youtube.com	TRUE	/	TRUE	...	..."
-              className="h-28 font-mono text-xs"
-              value={cookiesFile}
-              onChange={(e) => setCookiesFile(e.target.value)}
-            />
-            <div className="flex items-center gap-2">
-              <Input
-                type="file"
-                accept=".txt,text/plain"
-                className="h-8 max-w-64"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0]
-                  if (!file) return
-                  setCookiesFile(await file.text())
-                  e.target.value = ""
-                }}
-              />
-              {cookiesFile && (
-                <Button variant="ghost" size="sm" onClick={() => setCookiesFile("")}>
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
+        {settingsLoading || !settings ? (
+          <Skeleton className="h-40 w-full" />
+        ) : (
+          <>
+            <SettingsCard icon={Cookie} title="Cookies">
+              <div className="max-w-lg space-y-4">
+                <div className="space-y-2">
+                  <FieldLabel
+                    htmlFor="ytdlp-cookies-file"
+                    info="Paste or upload a Netscape-format cookies.txt (exported from your browser with an extension like 'Get cookies.txt'). Unlike Cookies browser below, this works in Docker — yt-dlp reads the file directly instead of needing a real browser profile on the same machine. Takes priority over Cookies browser when both are set."
+                  >
+                    Cookies file
+                  </FieldLabel>
+                  <Textarea
+                    id="ytdlp-cookies-file"
+                    placeholder="# Netscape HTTP Cookie File&#10;.youtube.com	TRUE	/	TRUE	...	..."
+                    className="h-28 font-mono text-xs"
+                    value={cookiesFile}
+                    onChange={(e) => setCookiesFile(e.target.value)}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="file"
+                      accept=".txt,text/plain"
+                      className="h-8 max-w-64"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        setCookiesFile(await file.text())
+                        e.target.value = ""
+                      }}
+                    />
+                    {cookiesFile && (
+                      <Button variant="ghost" size="sm" onClick={() => setCookiesFile("")}>
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </div>
 
-          <div className="space-y-2">
-            <FieldLabel
-              htmlFor="ytdlp-cookies-browser"
-              info={
-                cookiesFile
-                  ? "Ignored while a cookies file is set above. Reads cookies directly from an installed browser's profile — only works when yt-dlp runs on the same machine as that browser, not in Docker."
-                  : "Reads cookies directly from an installed browser's profile — only works when yt-dlp runs on the same machine as that browser (not in Docker). Prefer Cookies file above for a container deployment."
-              }
-            >
-              Cookies browser
-            </FieldLabel>
-            <Select value={cookiesBrowser} onValueChange={setCookiesBrowser} disabled={!!cookiesFile}>
-              <SelectTrigger id="ytdlp-cookies-browser" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_COOKIES_BROWSER}>None</SelectItem>
-                {YTDLP_COOKIE_BROWSERS.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {b[0].toUpperCase() + b.slice(1)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+                <div className="space-y-2">
+                  <FieldLabel
+                    htmlFor="ytdlp-cookies-browser"
+                    info={
+                      cookiesFile
+                        ? "Ignored while a cookies file is set above. Reads cookies directly from an installed browser's profile — only works when yt-dlp runs on the same machine as that browser, not in Docker."
+                        : "Reads cookies directly from an installed browser's profile — only works when yt-dlp runs on the same machine as that browser (not in Docker). Prefer Cookies file above for a container deployment."
+                    }
+                  >
+                    Cookies browser
+                  </FieldLabel>
+                  <Select value={cookiesBrowser} onValueChange={setCookiesBrowser} disabled={!!cookiesFile}>
+                    <SelectTrigger id="ytdlp-cookies-browser" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_COOKIES_BROWSER}>None</SelectItem>
+                      {YTDLP_COOKIE_BROWSERS.map((b) => (
+                        <SelectItem key={b} value={b}>
+                          {b[0].toUpperCase() + b.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="ytdlp-cookies-profile">Profile (optional)</Label>
-            <Input
-              id="ytdlp-cookies-profile"
-              placeholder="e.g. Default"
-              value={cookiesProfile}
-              onChange={(e) => setCookiesProfile(e.target.value)}
-              disabled={cookiesBrowser === NO_COOKIES_BROWSER || !!cookiesFile}
-            />
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ytdlp-cookies-profile">Profile (optional)</Label>
+                  <Input
+                    id="ytdlp-cookies-profile"
+                    placeholder="e.g. Default"
+                    value={cookiesProfile}
+                    onChange={(e) => setCookiesProfile(e.target.value)}
+                    disabled={cookiesBrowser === NO_COOKIES_BROWSER || !!cookiesFile}
+                  />
+                </div>
+              </div>
+            </SettingsCard>
 
-          <div className="space-y-2">
-            <Label htmlFor="ytdlp-proxy">Proxy</Label>
-            <Input
-              id="ytdlp-proxy"
-              placeholder="e.g. socks5://127.0.0.1:1080"
-              value={proxy}
-              onChange={(e) => setProxy(e.target.value)}
-            />
-          </div>
+            <SettingsCard icon={Globe} title="Network">
+              <div className="max-w-lg space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ytdlp-proxy">Proxy</Label>
+                  <Input
+                    id="ytdlp-proxy"
+                    placeholder="e.g. socks5://127.0.0.1:1080"
+                    value={proxy}
+                    onChange={(e) => setProxy(e.target.value)}
+                  />
+                </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="ytdlp-rate-limit">Rate limit</Label>
-              <Input
-                id="ytdlp-rate-limit"
-                placeholder="e.g. 500K"
-                value={rateLimit}
-                onChange={(e) => setRateLimit(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ytdlp-retries">Retries</Label>
-              <Input
-                id="ytdlp-retries"
-                type="number"
-                min="0"
-                placeholder="10 (yt-dlp default)"
-                value={retries}
-                onChange={(e) => setRetries(e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ytdlp-rate-limit">Rate limit</Label>
+                    <Input
+                      id="ytdlp-rate-limit"
+                      placeholder="e.g. 500K"
+                      value={rateLimit}
+                      onChange={(e) => setRateLimit(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ytdlp-retries">Retries</Label>
+                    <Input
+                      id="ytdlp-retries"
+                      type="number"
+                      min="0"
+                      placeholder="10 (yt-dlp default)"
+                      value={retries}
+                      onChange={(e) => setRetries(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </SettingsCard>
+          </>
+        )}
       </div>
       <SaveRow
         dirty={dirty}
