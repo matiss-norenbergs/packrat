@@ -112,7 +112,7 @@ describe("BackupHistoryTable", () => {
     pick(0)
     fireEvent.mouseDown(rowEls()[1], { button: 0, ctrlKey: true })
     fireEvent.contextMenu(rowEls()[1])
-    expect(await screen.findByRole("menuitem", { name: /^delete (2)$/i })).toBeTruthy()
+    expect(await screen.findByRole("menuitem", { name: /^delete \(2\)$/i })).toBeTruthy()
     expect(screen.queryByRole("menuitem", { name: /preview/i })).toBeNull()
   })
 
