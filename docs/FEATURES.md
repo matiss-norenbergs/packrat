@@ -675,8 +675,10 @@ This compares images (perceptual hashing across the whole video, refined around 
 
 ## Settings
 
-Two columns: **App Settings** (General, Account, yt-dlp, Appearance) on the left, **Content
-Settings** (Downloads, Privacy, History, Thumbnails, Player, Jellyfin) on the right.
+Settings is a row of tabs — General, Account, Downloads, Library, Features, Privacy, History,
+Backup, Jellyfin, Notifications, AI Enhancement, yt-dlp, Appearance (and Desktop in the desktop
+app). Each tab groups its controls into cards, with one Save per tab where it has one (the
+Notifications and Appearance tabs are per-device preferences that apply immediately).
 
 - **General** — max concurrent downloads (applies to the live worker pool immediately, no
   restart needed), max concurrent transcodes (how many Trim previews ffmpeg may generate at once;
