@@ -131,7 +131,7 @@ export function SettingsPage() {
           a bounded height to scroll within, and just grows the whole page
           instead (a classic flexbox-overflow gotcha). */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="min-h-0 flex-1">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="min-h-0 flex-1 gap-0">
           <TabsList className="shrink-0 px-4">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="account">Account</TabsTrigger>
