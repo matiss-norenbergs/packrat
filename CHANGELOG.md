@@ -12,6 +12,12 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-25
+- **Backup History toolbar and selection** — the per-row action icons are replaced by a toolbar (Run Backup Now,
+  Preview, Download, Restore, Delete) and selectable rows with a right-click menu, like the other tables. Preview,
+  Download and Restore act on one selected backup; Delete takes any selection (with a count confirmation and one
+  summary toast).
+
 ## 2026-10-24
 - **Settings → Desktop redesigned (desktop app)** — the tab now uses the same width and cards as the Account tab
   (Servers, Window and startup, Downloads, Updates), with each setting's explanation in an info popover

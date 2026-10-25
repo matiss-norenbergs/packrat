@@ -473,8 +473,8 @@ function FullBackupCard() {
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
             Import a full backup file — settings and library data together, both applied in one
-            action. Get one from a Backup History row's Download button (on this install or
-            another).
+            action. Get one by selecting a backup in Backup History and using Download (on this
+            install or another).
           </p>
           <Input ref={fileInputRef} type="file" accept="application/json" onChange={handleFileChange} />
           {needsPassword && (
