@@ -523,7 +523,7 @@ or just as a safety net.
   without one are always created as [ghosts](#ghost-items)), or **"Import as ghost items"** to
   recreate everything as a placeholder instead of downloading anything. Tags on redownloaded items
   aren't automatically reapplied — retag them once the redownload finishes.
-- **Full Backup** card — imports a combined settings + library file in one action (get one from a
+- **Full Backup** card — imports a combined settings + library file in one action (get one by
   selecting a backup in Backup History and using Download, on this install or another). Same Preview and
   download-vs-ghost-placeholder choice as Library Data, applied to both halves at once. Plain
   Settings-only or Library-only files can also be dropped onto the Settings/Library cards
@@ -545,7 +545,8 @@ install, same download-vs-ghost-placeholder choice as a manual import) work on e
 row that has a file; they're disabled with a tooltip otherwise (and hidden from the context menu).
 **Delete** works on any selection, failed rows included, always after a confirmation showing the
 count (it permanently deletes the backup files), and reports one summary toast ("Deleted 3
-backups" / "Deleted 2, 1 failed"). Old backups are pruned automatically past a configurable retention count (default
+backups" / "Deleted 2, 1 failed").
+Old backups are pruned automatically past a configurable retention count (default
 14; set to unlimited to keep everything). Scheduled/automatic backups are always unencrypted —
 there's nowhere to type a password unattended — use the plain Export cards above if you need a
 password-protected file to store off-site.
