@@ -22,7 +22,7 @@ COPY backend/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X packrat/backend/internal/version.Version=${VERSION}" -o /packrat ./cmd/server
 
 # ---- Stage 3: runtime ----
-FROM python:3.12-alpine AS runtime
+FROM python:3.15-alpine AS runtime
 RUN apk add --no-cache ffmpeg ca-certificates tzdata wget
 
 RUN addgroup -S packrat && adduser -S packrat -G packrat
