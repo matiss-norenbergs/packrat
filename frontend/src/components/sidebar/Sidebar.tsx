@@ -78,38 +78,42 @@ export function SidebarContent() {
 
   return (
     <>
-      <div className="flex items-center gap-2 px-4 py-4">
+      <div className="flex shrink-0 items-center gap-2 px-4 py-4">
         <PackratLogo className="h-5 w-5 shrink-0" />
         <span className="text-base font-semibold text-sidebar-foreground">Packrat</span>
       </div>
-      <div className="px-2 pb-2">
-        <Link
-          to="/browse"
-          className="flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          <MonitorPlay className="h-4 w-4" />
-          Browse Library
-        </Link>
+      <div className="-mt-1 min-h-0 flex-1 overflow-y-auto pt-1 scrollbar-thin">
+        <div className="px-2 pb-2">
+          <Link
+            to="/browse"
+            className="flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <MonitorPlay className="h-4 w-4" />
+            Browse Library
+          </Link>
+        </div>
+        <nav className="flex flex-col gap-1 px-2">
+          {visibleNavItems.map((item) => (
+            <NavItem key={item.to} {...item} />
+          ))}
+        </nav>
       </div>
-      <nav className="flex flex-1 flex-col gap-1 px-2">
-        {visibleNavItems.map((item) => (
-          <NavItem key={item.to} {...item} />
-        ))}
-      </nav>
-      <HostActionsMenu />
-      <SidebarServerSwitcher onManage={() => navigate("/settings?tab=desktop")} />
-      <AppVersionLine />
-      <VersionLine />
-      <div className="px-2 py-2">
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-2 text-sidebar-foreground"
-          disabled={logout.isPending}
-          onClick={() => logout.mutate()}
-        >
-          <LogOut className="h-4 w-4" />
-          Log out
-        </Button>
+      <div className="shrink-0">
+        <HostActionsMenu />
+        <SidebarServerSwitcher onManage={() => navigate("/settings?tab=desktop")} />
+        <AppVersionLine />
+        <VersionLine />
+        <div className="px-2 py-2">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 text-sidebar-foreground"
+            disabled={logout.isPending}
+            onClick={() => logout.mutate()}
+          >
+            <LogOut className="h-4 w-4" />
+            Log out
+          </Button>
+        </div>
       </div>
     </>
   )
