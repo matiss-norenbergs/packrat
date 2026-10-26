@@ -131,11 +131,19 @@ isn't wired up yet.
   `frontend/src/lib/desktop.ts`), `window-state` (remembers size/position), `single-instance` (a
   second launch focuses the running window instead of opening another).
 - **Tray and close-to-tray** — `src/tray.rs` builds the tray icon (left click or "Show Packrat"
-  restores the window, "Quit" exits). The "Close to tray" preference (Settings → Desktop, default
-  on) is kept by the Rust side in `desktop.json` in the app config directory (`src/prefs.rs`),
-  because it must be known the moment the close button is pressed; the frontend reads and writes it
-  through the `get_close_to_tray`/`set_close_to_tray` commands. On Linux the tray needs a desktop
-  that shows app-indicator icons (GNOME needs an extension).
+  restores the window, "Quit" exits). With saved servers the menu starts with a **Servers** submenu
+  (the active one checked, the tooltip reads "Packrat — <name>"); picking one shows the window and
+  emits `tray-switch-server` with the profile id, and `frontend/src/hooks/useTrayServers.ts`
+  switches through the same `openProfile` as the sidebar switcher. Profiles stay in the webview's
+  localStorage, so the frontend pushes `{servers: [{id, name}], activeId}` to the `tray_set_servers`
+  command on start and on every profile change; Rust rebuilds the whole menu (`tray.set_menu`, since
+  in-place updates are unreliable on Linux) and ignores ids outside `[A-Za-z0-9_-]{1,64}`. Listening
+  needs only `core:default`. The webview keeps running while the window is hidden, which is why this
+  works in close-to-tray. The "Close to tray" preference (Settings → Desktop, default on) is kept by
+  the Rust side in `desktop.json` in the app config directory (`src/prefs.rs`), because it must be
+  known the moment the close button is pressed; the frontend reads and writes it through the
+  `get_close_to_tray`/`set_close_to_tray` commands. On Linux the tray needs a desktop that shows
+  app-indicator icons (GNOME needs an extension).
 - **Launch at login** — Settings → Desktop → Startup ("Don't start at login" by default); the page calls the
   shell's `autostart_is_enabled` / `autostart_set` commands (`src-tauri/src/autostart.rs`). Linux and macOS
   use `tauri-plugin-autostart`; Windows writes the `Run` value itself, because the plugin leaves the

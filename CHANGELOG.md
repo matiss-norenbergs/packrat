@@ -12,6 +12,11 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-26
+- **Switch servers from the tray (desktop)** — the tray menu gets a Servers submenu (current server checked, name
+  in the tooltip); picking one shows the window and switches like the sidebar switcher. Also fixes the profile
+  change notification firing before the active server was stored, and not firing when it was deactivated.
+
 ## 2026-10-25
 - **Backup History toolbar and selection** — the per-row action icons are replaced by a toolbar (Run Backup Now,
   Preview, Download, Restore, Delete) and selectable rows with a right-click menu, like the other tables. Preview,

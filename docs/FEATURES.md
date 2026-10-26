@@ -50,7 +50,9 @@ http(s) links open in the system browser, desktop notifications go through the O
 unchanged), downloads such as backups are saved to your Downloads folder (never overwriting a file, and without a
 needless " (1)" added to the name; see **Downloads** below), and the window remembers its size and position. Starting the app a second time just
 brings the existing window forward (single instance). A **tray icon** (left click, or "Show
-Packrat" in its menu, restores the window; "Quit" exits) goes with **Close to tray** — Settings →
+Packrat" in its menu, restores the window; "Quit" exits; with saved servers its menu also has a **Servers**
+submenu — the current one checked, and the tooltip names it — where picking one switches to that server and
+shows the window) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of
 quitting, so it keeps running. Settings → Desktop is laid out as cards — Servers, Window and startup, Downloads, Updates — with each
 setting's explanation in an info popover next to its label. The **Startup** select (Settings → Desktop; "Don't start at login" by default) offers
