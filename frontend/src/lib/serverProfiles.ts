@@ -153,13 +153,15 @@ export function addProfile(url: string, name?: string): ServerProfile {
 export function activateProfile(id: string) {
   const profiles = getProfiles()
   if (!profiles.some((p) => p.id === id)) return
-  save(profiles.map((p) => (p.id === id ? { ...p, lastUsedAt: Date.now() } : p)))
+  // The active id is written first: `save` notifies subscribers synchronously and they read it.
   write(ACTIVE_KEY, id)
+  save(profiles.map((p) => (p.id === id ? { ...p, lastUsedAt: Date.now() } : p)))
 }
 
 /** No active server: the app shows the connect screen. Profiles and their tokens stay. */
 export function deactivateProfile() {
   write(ACTIVE_KEY, null)
+  window.dispatchEvent(new Event(CHANGED_EVENT))
 }
 
 export function updateProfile(id: string, changes: Partial<Pick<ServerProfile, "name" | "url">>) {
@@ -169,8 +171,8 @@ export function updateProfile(id: string, changes: Partial<Pick<ServerProfile, "
 
 /** Forgets the profile (its token is the caller's to clear — see removeProfile in server.ts). */
 export function deleteProfile(id: string) {
-  save(getProfiles().filter((p) => p.id !== id))
   if (read(ACTIVE_KEY) === id) write(ACTIVE_KEY, null)
+  save(getProfiles().filter((p) => p.id !== id))
 }
 
 export function getLastServerUrl(): string {

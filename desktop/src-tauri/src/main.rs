@@ -63,7 +63,8 @@ fn main() {
             token::token_set,
             token::token_clear,
             token::token_adopt_legacy,
-            token::token_store_kind
+            token::token_store_kind,
+            tray::tray_set_servers
         ])
         .on_window_event(|window, event| {
             // With "close to tray" on, the close button hides the window and the app keeps running

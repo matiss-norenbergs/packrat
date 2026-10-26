@@ -4,6 +4,7 @@ import { RouterProvider } from "react-router-dom"
 import { ThemeProvider } from "next-themes"
 import { DesktopGate } from "@/components/DesktopGate"
 import { authStatusQueryKey } from "@/hooks/useAuth"
+import { useTrayServers } from "@/hooks/useTrayServers"
 import { queryClient } from "@/lib/queryClient"
 import { showsConnectScreen, UNAUTHORIZED_EVENT } from "@/lib/server"
 import { ConnectPage } from "@/pages/ConnectPage"
@@ -15,6 +16,8 @@ import { router } from "@/routes"
 import "@/hooks/useAccentColor"
 
 function App() {
+  useTrayServers()
+
   // Desktop only: the server rejected our token (revoked/expired session) — drop to the login
   // screen the same way a logout does, rather than leaving a page full of failing requests.
   useEffect(() => {

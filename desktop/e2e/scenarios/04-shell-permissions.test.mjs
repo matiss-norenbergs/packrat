@@ -67,6 +67,11 @@ scenario("4. Settings → Desktop works without permission errors; every shell c
       await ok(set, { enabled: before })
     }
 
+    // tray_set_servers rebuilds the tray menu; clicks on it can't be driven in CI. A bad id is
+    // dropped, not an error.
+    await ok("tray_set_servers", { servers: [{ id: "a1", name: "A" }, { id: "bad id", name: "B" }], activeId: "a1" })
+    await ok("tray_set_servers", { servers: [], activeId: null })
+
     const folder = await ok("get_download_folder")
     assert.equal(typeof folder.path, "string")
     assert.equal((await ok("reset_download_folder")).isDefault, true)
