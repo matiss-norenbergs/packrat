@@ -82,7 +82,7 @@ export function SidebarContent() {
         <PackratLogo className="h-5 w-5 shrink-0" />
         <span className="text-base font-semibold text-sidebar-foreground">Packrat</span>
       </div>
-      <div className="-mt-1 min-h-0 flex-1 overflow-y-auto pt-1 scrollbar-thin">
+      <div className="-mb-1 -mt-1 min-h-0 flex-1 overflow-y-auto pb-1 pt-1 scrollbar-thin">
         <div className="px-2 pb-2">
           <Link
             to="/browse"
