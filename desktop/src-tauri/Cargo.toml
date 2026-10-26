@@ -30,7 +30,7 @@ dbus = "0.9"
 tauri-plugin-autostart = "2"
 
 [target.'cfg(windows)'.dependencies]
-windows-registry = "0.6"
+windows-registry = "0.100"
 windows-result = "0.4"
 
 [profile.release]
