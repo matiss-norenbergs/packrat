@@ -99,9 +99,9 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 | W-32 | Left-click the tray icon. | The window is restored and focused. | Pass 2026-10-24 v0.18.1 (left click sent as UI Automation Invoke on the overflow icon) |
 | W-33 | Hide the window again, right-click the icon → **Show Packrat**. | The window is restored. | Pass 2026-10-24 v0.18.1 (checked by hand: the menu appears and Show Packrat restores the window) |
 | W-34 | Right-click the icon → **Quit**. | The app exits completely (no `Packrat` process in Task Manager). | Pass 2026-10-24 v0.18.1 (Quit clicked by hand; no `packrat-desktop` or app WebView2 process left) |
+| W-35 | Turn **Close to tray** off, press close. | The app exits. Relaunch and turn it back on afterwards. | Pass 2026-10-24 v0.18.1 |
 | W-36 | With two or more servers saved, right-click the tray icon, hover the tooltip, open **Servers**. | The menu starts with **Servers**, then a separator, **Show Packrat**, **Quit**. The active server has a check mark and the tooltip reads "Packrat — <its name>". With no server (connect screen) there is no submenu and the tooltip is "Packrat". | not tested yet |
 | W-37 | Hide the window to the tray, pick another server in **Servers**; then pick the already-checked one. | The window is shown and focused and the app reloads on the picked server without asking to sign in; the check mark and tooltip move to it. Picking the active one only shows the window. | not tested yet |
-| W-35 | Turn **Close to tray** off, press close. | The app exits. Relaunch and turn it back on afterwards. | Pass 2026-10-24 v0.18.1 |
 
 ### Single instance
 

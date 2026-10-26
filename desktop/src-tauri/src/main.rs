@@ -83,6 +83,8 @@ fn main() {
             downloads::clear_staging(app.handle());
             autostart::repair(app.handle());
             app.manage(token::Vault::keychain());
+            // Registered before the tray is built: `tray_set_servers` needs it even when the tray fails.
+            app.manage(tray::TrayServers::default());
             // A tray that can't be built isn't fatal; it only means the window is always shown.
             let tray_available = match tray::build(app.handle()) {
                 Ok(()) => tray::is_available(),
