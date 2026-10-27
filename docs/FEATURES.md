@@ -681,6 +681,7 @@ Settings is a row of tabs — General, Account, Downloads, Library, Features, Pr
 Backup, Jellyfin, Notifications, AI Enhancement, yt-dlp, Appearance (and Desktop in the desktop
 app). Each tab groups its controls into cards, with one Save per tab where it has one (the
 Notifications and Appearance tabs are per-device preferences that apply immediately).
+If the settings can't be loaded, a tab shows an error with a **Retry** button instead of its form.
 
 - **General** — max concurrent downloads (applies to the live worker pool immediately, no
   restart needed), max concurrent transcodes (how many Trim previews ffmpeg may generate at once;

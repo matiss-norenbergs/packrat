@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { History as HistoryIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -7,28 +6,35 @@ import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { useClearHistory } from "@/hooks/useHistory"
-import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
-import type { UpdateSettingsRequest } from "@/types/api"
+import { useUpdateSettings } from "@/hooks/useSettings"
+import type { Settings, UpdateSettingsRequest } from "@/types/api"
 import { SaveRow } from "@/components/settings/SaveRow"
 import { RETENTION_OPTIONS } from "@/components/settings/retention"
+import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
+import { useSettingsDraft } from "@/hooks/useSettingsDraft"
+
+function toForm(s: Settings) {
+  return {
+    anonymize: s.historyAnonymizeUrls,
+    retentionDays: String(s.historyRetentionDays),
+  }
+}
 
 export function HistoryTab() {
-  const { data: settings, isLoading } = useSettings()
+  return (
+    <SettingsTabLoader skeletonClassName="h-20 w-full max-w-lg">
+      {(settings) => <HistoryTabBody settings={settings} />}
+    </SettingsTabLoader>
+  )
+}
+
+function HistoryTabBody({ settings }: { settings: Settings }) {
   const updateSettings = useUpdateSettings()
   const clearHistory = useClearHistory()
-
-  const [anonymize, setAnonymize] = useState(false)
-  const [retentionDays, setRetentionDays] = useState("7")
-
-  useEffect(() => {
-    if (!settings) return
-    setAnonymize(settings.historyAnonymizeUrls)
-    setRetentionDays(String(settings.historyRetentionDays))
-  }, [settings])
-
-  if (isLoading || !settings) return <Skeleton className="h-20 w-full max-w-lg" />
+  const { field, afterSave } = useSettingsDraft(settings, toForm)
+  const [anonymize, setAnonymize] = field("anonymize")
+  const [retentionDays, setRetentionDays] = field("retentionDays")
 
   const payload: UpdateSettingsRequest = {}
   if (anonymize !== settings.historyAnonymizeUrls) payload.historyAnonymizeUrls = anonymize
@@ -103,7 +109,7 @@ export function HistoryTab() {
         dirty={dirty}
         isPending={updateSettings.isPending}
         isSuccess={updateSettings.isSuccess}
-        onSave={() => updateSettings.mutate(payload)}
+        onSave={() => updateSettings.mutate(payload, { onSuccess: afterSave })}
       />
     </div>
   )

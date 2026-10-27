@@ -26,9 +26,11 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: UpdateSettingsRequest) => updateSettings(payload),
+    // The refetch is returned so the mutation stays pending until the cache holds the
+    // stored values; a tab's per-call onSuccess then sees fresh data (see useSettingsDraft).
     onSuccess: () => {
       toast.success("Settings saved")
-      queryClient.invalidateQueries({ queryKey: settingsQueryKey })
+      return queryClient.invalidateQueries({ queryKey: settingsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to save settings: ${err.message}`),
   })

@@ -13,6 +13,9 @@ Maintenance notes:
 -->
 
 ## 2026-10-27
+- **Settings tabs show an error when settings can't be loaded** — a tab whose settings request fails now shows
+  a short message with a Retry button instead of a skeleton forever. Tab forms also no longer copy server data
+  into state, so a background refresh can't overwrite what you're typing.
 - **Images card moved to Settings → Downloads** — the image conversion format setting only affects image
   downloads, so it now sits in its own card in the Downloads tab (after New downloads) instead of Library.
 

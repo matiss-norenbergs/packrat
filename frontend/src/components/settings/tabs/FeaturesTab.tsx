@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react"
 import { Puzzle } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { InfoPopover } from "@/components/ui/info-popover"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { Label } from "@/components/ui/label"
-import { Skeleton } from "@/components/ui/skeleton"
 import type { FeatureKey } from "@/hooks/useFeature"
-import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
-import type { UpdateSettingsRequest } from "@/types/api"
+import { useUpdateSettings } from "@/hooks/useSettings"
+import type { Settings, UpdateSettingsRequest } from "@/types/api"
 import { SaveRow } from "@/components/settings/SaveRow"
+import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
+import { useSettingsDraft } from "@/hooks/useSettingsDraft"
 
 const FEATURE_TOGGLES: {
   key: FeatureKey
@@ -37,18 +37,21 @@ const FEATURE_TOGGLES: {
   },
 ]
 
+function toForm(s: Settings) {
+  return Object.fromEntries(FEATURE_TOGGLES.map((f) => [f.key, s[f.key]])) as Record<FeatureKey, boolean>
+}
+
 export function FeaturesTab() {
-  const { data: settings, isLoading } = useSettings()
+  return (
+    <SettingsTabLoader skeletonClassName="h-20 w-full max-w-lg">
+      {(settings) => <FeaturesTabBody settings={settings} />}
+    </SettingsTabLoader>
+  )
+}
+
+function FeaturesTabBody({ settings }: { settings: Settings }) {
   const updateSettings = useUpdateSettings()
-
-  const [values, setValues] = useState<Record<FeatureKey, boolean> | null>(null)
-
-  useEffect(() => {
-    if (!settings) return
-    setValues(Object.fromEntries(FEATURE_TOGGLES.map((f) => [f.key, settings[f.key]])) as Record<FeatureKey, boolean>)
-  }, [settings])
-
-  if (isLoading || !settings || !values) return <Skeleton className="h-20 w-full max-w-lg" />
+  const { form: values, set, afterSave } = useSettingsDraft(settings, toForm)
 
   const payload: UpdateSettingsRequest = {}
   for (const { key } of FEATURE_TOGGLES) {
@@ -70,7 +73,7 @@ export function FeaturesTab() {
                 <Checkbox
                   id={key}
                   checked={values[key]}
-                  onCheckedChange={(v) => setValues({ ...values, [key]: v === true })}
+                  onCheckedChange={(v) => set(key, v === true)}
                 />
                 <Label htmlFor={key} className="font-normal">
                   {label}
@@ -85,7 +88,7 @@ export function FeaturesTab() {
         dirty={dirty}
         isPending={updateSettings.isPending}
         isSuccess={updateSettings.isSuccess}
-        onSave={() => updateSettings.mutate(payload)}
+        onSave={() => updateSettings.mutate(payload, { onSuccess: afterSave })}
       />
     </div>
   )

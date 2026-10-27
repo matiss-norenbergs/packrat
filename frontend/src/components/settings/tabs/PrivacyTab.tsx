@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react"
 import { Lock } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
-import type { UpdateSettingsRequest } from "@/types/api"
+import { useUpdateSettings } from "@/hooks/useSettings"
+import type { Settings, UpdateSettingsRequest } from "@/types/api"
 import { SaveRow } from "@/components/settings/SaveRow"
+import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
+import { useSettingsDraft } from "@/hooks/useSettingsDraft"
 
 const BLUR_STRENGTH_OPTIONS: { value: string; label: string }[] = [
   { value: "weak", label: "Weak" },
@@ -16,22 +16,28 @@ const BLUR_STRENGTH_OPTIONS: { value: string; label: string }[] = [
   { value: "strong", label: "Strong" },
 ]
 
+function toForm(s: Settings) {
+  return {
+    enabled: s.privacyEnabled,
+    blurStrength: s.privacyBlurStrength,
+    browseIgnorePrivacy: s.browseIgnorePrivacy,
+  }
+}
+
 export function PrivacyTab() {
-  const { data: settings, isLoading } = useSettings()
+  return (
+    <SettingsTabLoader skeletonClassName="h-20 w-full max-w-lg">
+      {(settings) => <PrivacyTabBody settings={settings} />}
+    </SettingsTabLoader>
+  )
+}
+
+function PrivacyTabBody({ settings }: { settings: Settings }) {
   const updateSettings = useUpdateSettings()
-
-  const [enabled, setEnabled] = useState(false)
-  const [blurStrength, setBlurStrength] = useState("default")
-  const [browseIgnorePrivacy, setBrowseIgnorePrivacy] = useState(false)
-
-  useEffect(() => {
-    if (!settings) return
-    setEnabled(settings.privacyEnabled)
-    setBlurStrength(settings.privacyBlurStrength)
-    setBrowseIgnorePrivacy(settings.browseIgnorePrivacy)
-  }, [settings])
-
-  if (isLoading || !settings) return <Skeleton className="h-20 w-full max-w-lg" />
+  const { field, afterSave } = useSettingsDraft(settings, toForm)
+  const [enabled, setEnabled] = field("enabled")
+  const [blurStrength, setBlurStrength] = field("blurStrength")
+  const [browseIgnorePrivacy, setBrowseIgnorePrivacy] = field("browseIgnorePrivacy")
 
   const payload: UpdateSettingsRequest = {}
   if (enabled !== settings.privacyEnabled) payload.privacyEnabled = enabled
@@ -101,7 +107,7 @@ export function PrivacyTab() {
         dirty={dirty}
         isPending={updateSettings.isPending}
         isSuccess={updateSettings.isSuccess}
-        onSave={() => updateSettings.mutate(payload)}
+        onSave={() => updateSettings.mutate(payload, { onSuccess: afterSave })}
       />
     </div>
   )

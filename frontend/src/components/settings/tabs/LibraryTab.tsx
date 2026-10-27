@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import { Gauge, Image as ImageIcon, Play, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -9,48 +8,55 @@ import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { StrayFilesRow } from "@/components/settings/StrayFilesRow"
 import { useScanMissingLibraryFiles } from "@/hooks/useLibrary"
-import { useImageBackfillStatus, useSettings, useStartImageBackfill, useUpdateSettings } from "@/hooks/useSettings"
-import type { UpdateSettingsRequest } from "@/types/api"
+import { useImageBackfillStatus, useStartImageBackfill, useUpdateSettings } from "@/hooks/useSettings"
+import type { Settings, UpdateSettingsRequest } from "@/types/api"
 import { SaveRow } from "@/components/settings/SaveRow"
+import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
+import { useSettingsDraft } from "@/hooks/useSettingsDraft"
 
 const FRAME_COUNT_OPTIONS = [2, 4, 6, 8, 12, 24]
 
+function toForm(s: Settings) {
+  return {
+    mediumEnabled: s.resolutionTierMediumEnabled,
+    low: s.resolutionThresholdLow,
+    high: s.resolutionThresholdHigh,
+    thumbMediumEnabled: s.thumbnailResolutionTierMediumEnabled,
+    thumbLow: s.thumbnailResolutionThresholdLow,
+    thumbHigh: s.thumbnailResolutionThresholdHigh,
+    frameCount: s.thumbnailFrameCount,
+    frameRangeLow: s.thumbnailFrameRangeLow,
+    frameRangeHigh: s.thumbnailFrameRangeHigh,
+    autoplay: s.libraryAutoplay,
+  }
+}
+
 export function LibraryTab() {
-  const { data: settings, isLoading } = useSettings()
+  return (
+    <SettingsTabLoader skeletonClassName="h-40 w-full max-w-lg">
+      {(settings) => <LibraryTabBody settings={settings} />}
+    </SettingsTabLoader>
+  )
+}
+
+function LibraryTabBody({ settings }: { settings: Settings }) {
   const updateSettings = useUpdateSettings()
   const { data: backfillStatus } = useImageBackfillStatus()
   const startBackfill = useStartImageBackfill()
   const scanMissing = useScanMissingLibraryFiles()
-
-  const [mediumEnabled, setMediumEnabled] = useState(true)
-  const [low, setLow] = useState(720)
-  const [high, setHigh] = useState(2160)
-  const [thumbMediumEnabled, setThumbMediumEnabled] = useState(true)
-  const [thumbLow, setThumbLow] = useState(480)
-  const [thumbHigh, setThumbHigh] = useState(1080)
-  const [frameCount, setFrameCount] = useState(4)
-  const [frameRangeLow, setFrameRangeLow] = useState(5)
-  const [frameRangeHigh, setFrameRangeHigh] = useState(100)
-  const [autoplay, setAutoplay] = useState(false)
-
-  useEffect(() => {
-    if (!settings) return
-    setMediumEnabled(settings.resolutionTierMediumEnabled)
-    setLow(settings.resolutionThresholdLow)
-    setHigh(settings.resolutionThresholdHigh)
-    setThumbMediumEnabled(settings.thumbnailResolutionTierMediumEnabled)
-    setThumbLow(settings.thumbnailResolutionThresholdLow)
-    setThumbHigh(settings.thumbnailResolutionThresholdHigh)
-    setFrameCount(settings.thumbnailFrameCount)
-    setFrameRangeLow(settings.thumbnailFrameRangeLow)
-    setFrameRangeHigh(settings.thumbnailFrameRangeHigh)
-    setAutoplay(settings.libraryAutoplay)
-  }, [settings])
-
-  if (isLoading || !settings) return <Skeleton className="h-40 w-full max-w-lg" />
+  const { field, afterSave } = useSettingsDraft(settings, toForm)
+  const [mediumEnabled, setMediumEnabled] = field("mediumEnabled")
+  const [low, setLow] = field("low")
+  const [high, setHigh] = field("high")
+  const [thumbMediumEnabled, setThumbMediumEnabled] = field("thumbMediumEnabled")
+  const [thumbLow, setThumbLow] = field("thumbLow")
+  const [thumbHigh, setThumbHigh] = field("thumbHigh")
+  const [frameCount, setFrameCount] = field("frameCount")
+  const [frameRangeLow, setFrameRangeLow] = field("frameRangeLow")
+  const [frameRangeHigh, setFrameRangeHigh] = field("frameRangeHigh")
+  const [autoplay, setAutoplay] = field("autoplay")
 
   const payload: UpdateSettingsRequest = {}
   if (mediumEnabled !== settings.resolutionTierMediumEnabled) payload.resolutionTierMediumEnabled = mediumEnabled
@@ -277,7 +283,7 @@ export function LibraryTab() {
         dirty={dirty}
         isPending={updateSettings.isPending}
         isSuccess={updateSettings.isSuccess}
-        onSave={() => updateSettings.mutate(payload)}
+        onSave={() => updateSettings.mutate(payload, { onSuccess: afterSave })}
       />
     </div>
   )

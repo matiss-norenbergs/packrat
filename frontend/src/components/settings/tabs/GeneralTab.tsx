@@ -1,30 +1,36 @@
-import { useEffect, useState } from "react"
 import { HardDrive, SlidersHorizontal } from "lucide-react"
 import { FieldLabel } from "@/components/ui/info-popover"
 import { Input } from "@/components/ui/input"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { Label } from "@/components/ui/label"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
-import type { UpdateSettingsRequest } from "@/types/api"
+import { useUpdateSettings } from "@/hooks/useSettings"
+import type { Settings, UpdateSettingsRequest } from "@/types/api"
 import { SaveRow } from "@/components/settings/SaveRow"
+import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
+import { useSettingsDraft } from "@/hooks/useSettingsDraft"
+
+function toForm(s: Settings) {
+  return {
+    maxConcurrent: String(s.maxConcurrentDownloads),
+    maxConcurrentTranscodes: String(s.maxConcurrentTranscodes),
+    downloadTimeout: String(s.downloadTimeoutMinutes),
+  }
+}
 
 export function GeneralTab() {
-  const { data: settings, isLoading } = useSettings()
+  return (
+    <SettingsTabLoader skeletonClassName="h-24 w-full max-w-lg">
+      {(settings) => <GeneralTabBody settings={settings} />}
+    </SettingsTabLoader>
+  )
+}
+
+function GeneralTabBody({ settings }: { settings: Settings }) {
   const updateSettings = useUpdateSettings()
-
-  const [maxConcurrent, setMaxConcurrent] = useState("")
-  const [maxConcurrentTranscodes, setMaxConcurrentTranscodes] = useState("")
-  const [downloadTimeout, setDownloadTimeout] = useState("")
-
-  useEffect(() => {
-    if (!settings) return
-    setMaxConcurrent(String(settings.maxConcurrentDownloads))
-    setMaxConcurrentTranscodes(String(settings.maxConcurrentTranscodes))
-    setDownloadTimeout(String(settings.downloadTimeoutMinutes))
-  }, [settings])
-
-  if (isLoading || !settings) return <Skeleton className="h-24 w-full max-w-lg" />
+  const { field, afterSave } = useSettingsDraft(settings, toForm)
+  const [maxConcurrent, setMaxConcurrent] = field("maxConcurrent")
+  const [maxConcurrentTranscodes, setMaxConcurrentTranscodes] = field("maxConcurrentTranscodes")
+  const [downloadTimeout, setDownloadTimeout] = field("downloadTimeout")
 
   const payload: UpdateSettingsRequest = {}
   const n = Number(maxConcurrent)
@@ -104,7 +110,7 @@ export function GeneralTab() {
         dirty={dirty}
         isPending={updateSettings.isPending}
         isSuccess={updateSettings.isSuccess}
-        onSave={() => updateSettings.mutate(payload)}
+        onSave={() => updateSettings.mutate(payload, { onSuccess: afterSave })}
       />
     </div>
   )

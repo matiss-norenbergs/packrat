@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import { Plug, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -7,30 +6,37 @@ import { Input } from "@/components/ui/input"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useRescanJellyfinLibrary, useSettings, useUpdateSettings } from "@/hooks/useSettings"
-import type { UpdateSettingsRequest } from "@/types/api"
+import { useRescanJellyfinLibrary, useUpdateSettings } from "@/hooks/useSettings"
+import type { Settings, UpdateSettingsRequest } from "@/types/api"
 import { SaveRow } from "@/components/settings/SaveRow"
+import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
+import { useSettingsDraft } from "@/hooks/useSettingsDraft"
+
+function toForm(s: Settings) {
+  return {
+    enabled: s.jellyfinEnabled,
+    url: s.jellyfinUrl,
+    apiKey: s.jellyfinApiKey,
+    refreshMode: s.jellyfinRefreshMode || "none",
+  }
+}
 
 export function JellyfinTab() {
-  const { data: settings, isLoading } = useSettings()
+  return (
+    <SettingsTabLoader skeletonClassName="h-40 w-full max-w-lg">
+      {(settings) => <JellyfinTabBody settings={settings} />}
+    </SettingsTabLoader>
+  )
+}
+
+function JellyfinTabBody({ settings }: { settings: Settings }) {
   const updateSettings = useUpdateSettings()
   const rescan = useRescanJellyfinLibrary()
-
-  const [enabled, setEnabled] = useState(false)
-  const [url, setUrl] = useState("")
-  const [apiKey, setApiKey] = useState("")
-  const [refreshMode, setRefreshMode] = useState("none")
-
-  useEffect(() => {
-    if (!settings) return
-    setEnabled(settings.jellyfinEnabled)
-    setUrl(settings.jellyfinUrl)
-    setApiKey(settings.jellyfinApiKey)
-    setRefreshMode(settings.jellyfinRefreshMode || "none")
-  }, [settings])
-
-  if (isLoading || !settings) return <Skeleton className="h-40 w-full max-w-lg" />
+  const { field, afterSave } = useSettingsDraft(settings, toForm)
+  const [enabled, setEnabled] = field("enabled")
+  const [url, setUrl] = field("url")
+  const [apiKey, setApiKey] = field("apiKey")
+  const [refreshMode, setRefreshMode] = field("refreshMode")
 
   const payload: UpdateSettingsRequest = {}
   if (enabled !== settings.jellyfinEnabled) payload.jellyfinEnabled = enabled
@@ -125,7 +131,7 @@ export function JellyfinTab() {
         dirty={dirty}
         isPending={updateSettings.isPending}
         isSuccess={updateSettings.isSuccess}
-        onSave={() => updateSettings.mutate(payload)}
+        onSave={() => updateSettings.mutate(payload, { onSuccess: afterSave })}
       />
     </div>
   )

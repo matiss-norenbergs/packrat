@@ -67,7 +67,7 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
   (`backend/run-dev.cmd`, `.claude/`, `docker/docker-compose.local.yml`, `CLAUDE.local.md`).
 - Adding a setting: model const in `models/settings.go`, getter + GET/PATCH wiring in
   `api/settings_handler.go`, DTO fields in `api/dto.go`, TS type in `types/api.ts`, UI in
-  the tab's file in `components/settings/tabs/` (each tab uses the shared `SaveRow`).
+  the tab's file in `components/settings/tabs/` (each tab is wrapped in `SettingsTabLoader`, keeps its edits in `useSettingsDraft` and ends with the shared `SaveRow`).
 
 **Frontend UI**
 - Pages: `flex h-full min-h-0 flex-col gap-6`; header + toolbar are `shrink-0`; only the content

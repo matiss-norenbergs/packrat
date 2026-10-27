@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { History as HistoryIcon, Maximize2, Server, Sparkles } from "lucide-react"
@@ -10,12 +9,13 @@ import { SettingsCard } from "@/components/settings/SettingsCard"
 import { Label } from "@/components/ui/label"
 import { PresetOrCustomNumberField } from "@/components/ui/preset-or-custom-number-field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
+import { useUpdateSettings } from "@/hooks/useSettings"
 import { useClearThumbnailEnhancementHistory, useThumbnailUpscalers } from "@/hooks/useThumbnailEnhancement"
-import type { UpdateSettingsRequest } from "@/types/api"
+import type { Settings, UpdateSettingsRequest } from "@/types/api"
 import { SaveRow } from "@/components/settings/SaveRow"
 import { RETENTION_OPTIONS } from "@/components/settings/retention"
+import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
+import { useSettingsDraft } from "@/hooks/useSettingsDraft"
 
 // UpscalerField starts as a plain text input (the free-text value already
 // saved, or nothing yet) — clicking "Load models" queries the currently
@@ -111,45 +111,51 @@ function UpscalerField({
   )
 }
 
+function toForm(s: Settings) {
+  return {
+    enabled: s.thumbnailEnhancementEnabled,
+    url: s.thumbnailEnhancementUrl,
+    username: s.thumbnailEnhancementUsername,
+    password: s.thumbnailEnhancementPassword,
+    upscaler: s.thumbnailEnhancementUpscaler,
+    minDim: String(s.thumbnailEnhancementMinDim),
+    targetMode: s.thumbnailEnhancementTargetMode,
+    factor: s.thumbnailEnhancementFactor,
+    targetDim: s.thumbnailEnhancementTargetDim,
+    scheduleEnabled: s.thumbnailEnhancementScheduleEnabled,
+    retentionDays: String(s.thumbnailEnhancementRetentionDays),
+    autoApprove: s.thumbnailEnhancementAutoApprove,
+    autoOnDownload: s.thumbnailEnhancementAutoOnDownload,
+    maxPerSweep: s.thumbnailEnhancementMaxPerSweep,
+  }
+}
+
 export function ThumbnailEnhancementTab() {
-  const { data: settings, isLoading } = useSettings()
+  return (
+    <SettingsTabLoader skeletonClassName="h-40 w-full max-w-lg">
+      {(settings) => <ThumbnailEnhancementTabBody settings={settings} />}
+    </SettingsTabLoader>
+  )
+}
+
+function ThumbnailEnhancementTabBody({ settings }: { settings: Settings }) {
   const updateSettings = useUpdateSettings()
   const clearThumbnailEnhancementHistory = useClearThumbnailEnhancementHistory()
-
-  const [enabled, setEnabled] = useState(false)
-  const [url, setUrl] = useState("")
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
-  const [upscaler, setUpscaler] = useState("")
-  const [minDim, setMinDim] = useState("")
-  const [targetMode, setTargetMode] = useState<"factor" | "resolution">("factor")
-  const [factor, setFactor] = useState(4)
-  const [targetDim, setTargetDim] = useState(1920)
-  const [scheduleEnabled, setScheduleEnabled] = useState(true)
-  const [retentionDays, setRetentionDays] = useState("0")
-  const [autoApprove, setAutoApprove] = useState(false)
-  const [autoOnDownload, setAutoOnDownload] = useState(false)
-  const [maxPerSweep, setMaxPerSweep] = useState(5)
-
-  useEffect(() => {
-    if (!settings) return
-    setEnabled(settings.thumbnailEnhancementEnabled)
-    setUrl(settings.thumbnailEnhancementUrl)
-    setUsername(settings.thumbnailEnhancementUsername)
-    setPassword(settings.thumbnailEnhancementPassword)
-    setUpscaler(settings.thumbnailEnhancementUpscaler)
-    setMinDim(String(settings.thumbnailEnhancementMinDim))
-    setTargetMode(settings.thumbnailEnhancementTargetMode)
-    setFactor(settings.thumbnailEnhancementFactor)
-    setTargetDim(settings.thumbnailEnhancementTargetDim)
-    setScheduleEnabled(settings.thumbnailEnhancementScheduleEnabled)
-    setRetentionDays(String(settings.thumbnailEnhancementRetentionDays))
-    setAutoApprove(settings.thumbnailEnhancementAutoApprove)
-    setAutoOnDownload(settings.thumbnailEnhancementAutoOnDownload)
-    setMaxPerSweep(settings.thumbnailEnhancementMaxPerSweep)
-  }, [settings])
-
-  if (isLoading || !settings) return <Skeleton className="h-40 w-full max-w-lg" />
+  const { field, afterSave } = useSettingsDraft(settings, toForm)
+  const [enabled, setEnabled] = field("enabled")
+  const [url, setUrl] = field("url")
+  const [username, setUsername] = field("username")
+  const [password, setPassword] = field("password")
+  const [upscaler, setUpscaler] = field("upscaler")
+  const [minDim, setMinDim] = field("minDim")
+  const [targetMode, setTargetMode] = field("targetMode")
+  const [factor, setFactor] = field("factor")
+  const [targetDim, setTargetDim] = field("targetDim")
+  const [scheduleEnabled, setScheduleEnabled] = field("scheduleEnabled")
+  const [retentionDays, setRetentionDays] = field("retentionDays")
+  const [autoApprove, setAutoApprove] = field("autoApprove")
+  const [autoOnDownload, setAutoOnDownload] = field("autoOnDownload")
+  const [maxPerSweep, setMaxPerSweep] = field("maxPerSweep")
 
   const minDimNum = parseInt(minDim, 10)
 
@@ -437,7 +443,7 @@ export function ThumbnailEnhancementTab() {
         dirty={dirty}
         isPending={updateSettings.isPending}
         isSuccess={updateSettings.isSuccess}
-        onSave={() => updateSettings.mutate(payload)}
+        onSave={() => updateSettings.mutate(payload, { onSuccess: afterSave })}
       />
     </div>
   )

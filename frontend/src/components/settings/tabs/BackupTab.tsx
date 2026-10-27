@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react"
 import { Archive } from "lucide-react"
 import { FieldLabel } from "@/components/ui/info-popover"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
-import type { UpdateSettingsRequest } from "@/types/api"
+import { useUpdateSettings } from "@/hooks/useSettings"
+import type { Settings, UpdateSettingsRequest } from "@/types/api"
 import { SaveRow } from "@/components/settings/SaveRow"
+import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
+import { useSettingsDraft } from "@/hooks/useSettingsDraft"
 
 const AUTO_BACKUP_OPTIONS: { value: string; label: string }[] = [
   { value: "0", label: "Off" },
@@ -26,20 +26,26 @@ const BACKUP_RETENTION_OPTIONS: { value: string; label: string }[] = [
   { value: "0", label: "Unlimited" },
 ]
 
+function toForm(s: Settings) {
+  return {
+    intervalHours: String(s.autoBackupIntervalHours),
+    retentionCount: String(s.backupRetentionCount),
+  }
+}
+
 export function BackupTab() {
-  const { data: settings, isLoading } = useSettings()
+  return (
+    <SettingsTabLoader skeletonClassName="h-16 w-full max-w-lg">
+      {(settings) => <BackupTabBody settings={settings} />}
+    </SettingsTabLoader>
+  )
+}
+
+function BackupTabBody({ settings }: { settings: Settings }) {
   const updateSettings = useUpdateSettings()
-
-  const [intervalHours, setIntervalHours] = useState("0")
-  const [retentionCount, setRetentionCount] = useState("30")
-
-  useEffect(() => {
-    if (!settings) return
-    setIntervalHours(String(settings.autoBackupIntervalHours))
-    setRetentionCount(String(settings.backupRetentionCount))
-  }, [settings])
-
-  if (isLoading || !settings) return <Skeleton className="h-16 w-full max-w-lg" />
+  const { field, afterSave } = useSettingsDraft(settings, toForm)
+  const [intervalHours, setIntervalHours] = field("intervalHours")
+  const [retentionCount, setRetentionCount] = field("retentionCount")
 
   const payload: UpdateSettingsRequest = {}
   const interval = Number(intervalHours)
@@ -100,7 +106,7 @@ export function BackupTab() {
         dirty={dirty}
         isPending={updateSettings.isPending}
         isSuccess={updateSettings.isSuccess}
-        onSave={() => updateSettings.mutate(payload)}
+        onSave={() => updateSettings.mutate(payload, { onSuccess: afterSave })}
       />
     </div>
   )

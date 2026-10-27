@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Download, FileImage, ScrollText } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -7,36 +6,43 @@ import { FieldLabel, InfoPopover } from "@/components/ui/info-popover"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { useClearDownloadLog } from "@/hooks/useDownloads"
-import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
-import type { DownloadType, UpdateSettingsRequest, VideoQuality } from "@/types/api"
+import { useUpdateSettings } from "@/hooks/useSettings"
+import type { DownloadType, Settings, UpdateSettingsRequest, VideoQuality } from "@/types/api"
 import { SaveRow } from "@/components/settings/SaveRow"
 import { RETENTION_OPTIONS } from "@/components/settings/retention"
+import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
+import { useSettingsDraft } from "@/hooks/useSettingsDraft"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
 
+function toForm(s: Settings) {
+  return {
+    defaultQuality: s.defaultQuality as VideoQuality,
+    defaultDownloadType: s.defaultDownloadType,
+    skipDownloadPreview: s.skipDownloadPreview,
+    logRetentionDays: String(s.downloadLogRetentionDays),
+    imageConvertFormat: s.imageConvertFormat,
+  }
+}
+
 export function DownloadsTab() {
-  const { data: settings, isLoading } = useSettings()
+  return (
+    <SettingsTabLoader skeletonClassName="h-24 w-full max-w-lg">
+      {(settings) => <DownloadsTabBody settings={settings} />}
+    </SettingsTabLoader>
+  )
+}
+
+function DownloadsTabBody({ settings }: { settings: Settings }) {
   const updateSettings = useUpdateSettings()
   const clearDownloadLog = useClearDownloadLog()
-
-  const [defaultQuality, setDefaultQuality] = useState<VideoQuality>("best")
-  const [defaultDownloadType, setDefaultDownloadType] = useState<DownloadType>("video")
-  const [skipDownloadPreview, setSkipDownloadPreview] = useState(false)
-  const [logRetentionDays, setLogRetentionDays] = useState("7")
-  const [imageConvertFormat, setImageConvertFormat] = useState<"original" | "jpg" | "png" | "webp">("jpg")
-
-  useEffect(() => {
-    if (!settings) return
-    setDefaultQuality(settings.defaultQuality as VideoQuality)
-    setDefaultDownloadType(settings.defaultDownloadType)
-    setSkipDownloadPreview(settings.skipDownloadPreview)
-    setLogRetentionDays(String(settings.downloadLogRetentionDays))
-    setImageConvertFormat(settings.imageConvertFormat)
-  }, [settings])
-
-  if (isLoading || !settings) return <Skeleton className="h-24 w-full max-w-lg" />
+  const { field, afterSave } = useSettingsDraft(settings, toForm)
+  const [defaultQuality, setDefaultQuality] = field("defaultQuality")
+  const [defaultDownloadType, setDefaultDownloadType] = field("defaultDownloadType")
+  const [skipDownloadPreview, setSkipDownloadPreview] = field("skipDownloadPreview")
+  const [logRetentionDays, setLogRetentionDays] = field("logRetentionDays")
+  const [imageConvertFormat, setImageConvertFormat] = field("imageConvertFormat")
 
   const payload: UpdateSettingsRequest = {}
   if (defaultQuality !== settings.defaultQuality) payload.defaultQuality = defaultQuality
@@ -177,7 +183,7 @@ export function DownloadsTab() {
         dirty={dirty}
         isPending={updateSettings.isPending}
         isSuccess={updateSettings.isSuccess}
-        onSave={() => updateSettings.mutate(payload)}
+        onSave={() => updateSettings.mutate(payload, { onSuccess: afterSave })}
       />
     </div>
   )
