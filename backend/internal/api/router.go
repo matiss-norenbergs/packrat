@@ -37,6 +37,7 @@ type Deps struct {
 	ArtistsRepo                       *repository.ArtistsRepo
 	CompareListRepo                   *repository.CompareListRepo
 	UsersRepo                         *repository.UsersRepo
+	UserPreferencesRepo               *repository.UserPreferencesRepo
 	BackupHistoryRepo                 *repository.BackupHistoryRepo
 	SubscriptionsRepo                 *repository.SubscriptionsRepo
 	ThumbnailEnhancementHistoryRepo   *repository.ThumbnailEnhancementHistoryRepo
@@ -165,6 +166,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/auth/sessions", ListSessions(deps.UsersRepo))
 		api.POST("/auth/sessions/revoke-others", RevokeOtherSessions(deps.UsersRepo))
 		api.DELETE("/auth/sessions/:id", RevokeSession(deps.UsersRepo))
+		api.GET("/auth/preferences", GetPreferences(deps.UserPreferencesRepo))
+		api.PATCH("/auth/preferences", UpdatePreferences(deps.UserPreferencesRepo))
 		api.GET("/auth/2fa", TwoFactorStatus(deps.Auth))
 		api.POST("/auth/2fa/setup", TwoFactorSetup(deps.Auth))
 		api.POST("/auth/2fa/enable", TwoFactorEnable(deps.Auth))
