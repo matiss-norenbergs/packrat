@@ -88,7 +88,9 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
   from the 8-hue reference palette, validated with the dataviz skill's `validate_palette.js`
   (both light and dark). Changing an accent's primary means re-deriving and re-validating its set.
 - `DialogContent` width overrides need the `sm:` prefix (`sm:max-w-2xl`) or they silently no-op.
-- Client-only preferences (theme, accent, desktop notifications) live in localStorage, not Settings.
+- Client-only preferences (e.g. desktop notifications) live in localStorage, not Settings. Theme and accent are
+  per user account (`user_preferences`, `GET/PATCH /api/auth/preferences`, instant-apply via `useAppearance`);
+  their localStorage values are only a pre-paint cache, never the source of truth once signed in.
 
 **Backend**
 - yt-dlp/ffmpeg are always subprocesses, never reimplemented. Image downloads (`downloadType=image`)

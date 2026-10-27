@@ -1,9 +1,10 @@
-import { useTheme } from "next-themes"
 import { Palette } from "lucide-react"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useAccentColor, type AccentColor } from "@/hooks/useAccentColor"
+import type { AccentColor } from "@/hooks/useAccentColor"
+import { useAppearance } from "@/hooks/useAppearance"
+import type { ThemePreference } from "@/types/api"
 
 const ACCENT_COLOR_OPTIONS: { value: AccentColor; label: string; swatch: string }[] = [
   { value: "default", label: "Default", swatch: "oklch(0.534 0.288 293)" },
@@ -18,16 +19,15 @@ const ACCENT_COLOR_OPTIONS: { value: AccentColor; label: string; swatch: string 
 ]
 
 export function AppearanceTab() {
-  const { theme, setTheme } = useTheme()
-  const { accent, setAccent } = useAccentColor()
+  const { theme, accent, setTheme, setAccent } = useAppearance()
 
   return (
     <div className="max-w-3xl space-y-6">
-      <SettingsCard icon={Palette} title="Appearance" description="A personal preference stored on this device only.">
+      <SettingsCard icon={Palette} title="Appearance" description="Saved to your account and applied instantly.">
         <div className="max-w-lg space-y-6">
             <div className="space-y-2">
               <Label>Theme</Label>
-              <Select value={theme ?? "system"} onValueChange={setTheme}>
+              <Select value={theme} onValueChange={(v) => setTheme(v as ThemePreference)}>
                 <SelectTrigger className="w-48">
                   <SelectValue />
                 </SelectTrigger>

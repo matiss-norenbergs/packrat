@@ -115,6 +115,12 @@ type SessionsResponse struct {
 	Sessions []SessionResponse `json:"sessions"`
 }
 
+// UserPreferencesResponse is the signed-in user's appearance preferences; both are always present.
+type UserPreferencesResponse struct {
+	Theme  string `json:"theme"`
+	Accent string `json:"accent"`
+}
+
 type RevokeOthersResponse struct {
 	Revoked int `json:"revoked"`
 }

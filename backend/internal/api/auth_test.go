@@ -82,6 +82,8 @@ func newAuthTestEnv(t *testing.T) *authTestEnv {
 	protected.GET("/auth/sessions", ListSessions(users))
 	protected.POST("/auth/sessions/revoke-others", RevokeOtherSessions(users))
 	protected.DELETE("/auth/sessions/:id", RevokeSession(users))
+	protected.GET("/auth/preferences", GetPreferences(repository.NewUserPreferencesRepo(conn)))
+	protected.PATCH("/auth/preferences", UpdatePreferences(repository.NewUserPreferencesRepo(conn)))
 	protected.GET("/auth/2fa", TwoFactorStatus(deps))
 	protected.POST("/auth/2fa/setup", TwoFactorSetup(deps))
 	protected.POST("/auth/2fa/enable", TwoFactorEnable(deps))

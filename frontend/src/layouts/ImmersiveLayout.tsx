@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom"
 import { Toaster } from "@/components/ui/sonner"
 import { useAuthStatus } from "@/hooks/useAuth"
+import { useSyncAppearance } from "@/hooks/useAppearance"
 import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
 
 // No Sidebar/MobileNav/BrowseHeader — just the auth guard and full-viewport
@@ -22,6 +23,7 @@ export function ImmersiveLayout() {
 
 function AuthedImmersiveLayout() {
   useDownloadsSocket()
+  useSyncAppearance() // authenticated-only, like the socket: applies the account's theme/accent on this page too
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">

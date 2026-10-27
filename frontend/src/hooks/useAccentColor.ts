@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react"
+import { useSyncExternalStore } from "react"
+import type { AccentPreference } from "@/types/api"
 
-// Client-side only, same as the light/dark/system theme choice (next-themes,
-// see App.tsx) — a personal browser preference, not something that needs a
-// backend Settings round-trip.
-export type AccentColor = "default" | "blue" | "red" | "green" | "yellow" | "mono"
+// Applies the accent color to <html> and caches it in localStorage. The cache is only there so the
+// right color is on screen before the first paint (and on the logged-out pages); the account's
+// saved value lives on the server and is synced in by useAppearance. Same split as the theme
+// (next-themes, see App.tsx).
+export type AccentColor = AccentPreference
 
 const STORAGE_KEY = "packrat-accent-color"
 const ACCENT_COLORS: readonly AccentColor[] = ["default", "blue", "red", "green", "yellow", "mono"]
@@ -13,10 +15,11 @@ function isAccentColor(value: string | null): value is AccentColor {
 }
 
 function readStoredAccent(): AccentColor {
-  return isAccentColor(localStorage.getItem(STORAGE_KEY)) ? (localStorage.getItem(STORAGE_KEY) as AccentColor) : "default"
+  const stored = localStorage.getItem(STORAGE_KEY)
+  return isAccentColor(stored) ? stored : "default"
 }
 
-function applyAccent(accent: AccentColor) {
+export function applyAccent(accent: AccentColor) {
   if (accent === "default") {
     document.documentElement.removeAttribute("data-accent")
   } else {
@@ -27,19 +30,29 @@ function applyAccent(accent: AccentColor) {
 // Applied once at module load (this file is imported from App.tsx, ahead of
 // the first render) so the saved accent is already on <html> before
 // anything paints — no flash of the default color on a hard refresh.
-applyAccent(readStoredAccent())
+let current = readStoredAccent()
+applyAccent(current)
+
+const listeners = new Set<() => void>()
+
+// Applies the accent, refreshes the cache and tells every mounted useAccentColor.
+export function setAccentLocally(next: AccentColor) {
+  current = next
+  try {
+    localStorage.setItem(STORAGE_KEY, next)
+  } catch {
+    // storage unavailable — the accent still applies for this page load
+  }
+  applyAccent(next)
+  listeners.forEach((l) => l())
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener)
+  return () => void listeners.delete(listener)
+}
 
 export function useAccentColor() {
-  const [accent, setAccentState] = useState<AccentColor>(readStoredAccent)
-
-  useEffect(() => {
-    applyAccent(accent)
-  }, [accent])
-
-  function setAccent(next: AccentColor) {
-    localStorage.setItem(STORAGE_KEY, next)
-    setAccentState(next)
-  }
-
-  return { accent, setAccent }
+  const accent = useSyncExternalStore(subscribe, () => current)
+  return { accent, setAccent: setAccentLocally }
 }

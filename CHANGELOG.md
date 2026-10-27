@@ -13,6 +13,12 @@ Maintenance notes:
 -->
 
 ## 2026-10-27
+- **Theme and accent color are saved to your account** — Settings → Appearance now saves to the server per
+  user account (`GET/PATCH /api/auth/preferences`, new `user_preferences` table) and applies instantly, with no
+  Save button, so the look follows you across browsers and devices (on desktop each saved server has its own).
+  localStorage stays as a pre-paint cache. Not part of backups. Existing browser-only choices are **not**
+  migrated: on first login after this update everyone gets System / Default and that overwrites the device
+  cache once — re-pick your theme and color after updating.
 - **Settings tabs show an error when settings can't be loaded** — a tab whose settings request fails now shows
   a short message with a Retry button instead of a skeleton forever. Tab forms also no longer copy server data
   into state, so a background refresh can't overwrite what you're typing.
