@@ -12,6 +12,13 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-27
+- **Settings tabs show an error when settings can't be loaded** — a tab whose settings request fails now shows
+  a short message with a Retry button instead of a skeleton forever. Tab forms also no longer copy server data
+  into state, so a background refresh can't overwrite what you're typing.
+- **Images card moved to Settings → Downloads** — the image conversion format setting only affects image
+  downloads, so it now sits in its own card in the Downloads tab (after New downloads) instead of Library.
+
 ## 2026-10-26
 - **Switch servers from the tray (desktop)** — the tray menu gets a Servers submenu (current server checked, name
   in the tooltip); picking one shows the window and switches like the sidebar switcher. Also fixes the profile

@@ -220,7 +220,7 @@ optional. Notes:
   no gallery/multi-image support. Skips the metadata-fetch step entirely (the title falls back to
   the URL's last path segment, then the raw URL). The plain HTTP GET is routed through the
   `ytdlp_proxy` setting exactly like yt-dlp itself (see Proxy, below). The downloaded file is
-  optionally re-encoded per the `imageConvertFormat` setting (Settings → Library; global only, no
+  optionally re-encoded per the `imageConvertFormat` setting (Settings → Downloads → Images; global only, no
   per-download override) and doubles as its own thumbnail — no separate sidecar. Quality/audio
   fields are ignored. A URL whose response isn't a recognized `image/*` Content-Type fails fast
   instead of writing a misleadingly-named file.
@@ -1128,8 +1128,8 @@ immediately. Turning Subscriptions from off to on also triggers an immediate swe
 
 `downloadDirectory` and `maxConcurrentDownloads` reflect live config/worker-pool state, not just
 the last saved DB value. `jellyfinApiKey` is returned in plaintext, not masked. `imageConvertFormat`
-(`"original"|"jpg"|"png"|"webp"`, default `"jpg"`) is the format every `downloadType=image` download
-gets re-encoded to — matches the existing convention that video/audio thumbnails always normalize to
+(`"original"|"jpg"|"png"|"webp"`, default `"jpg"`; edited in Settings → Downloads → Images) is the format every
+`downloadType=image` download gets re-encoded to — matches the existing convention that video/audio thumbnails always normalize to
 JPEG. `thumbnailFrameRangeLow`/`thumbnailFrameRangeHigh` (percent 0-100, default 5/100) bound which
 portion of a video's duration "Choose from Video"/Quick Grab pick candidate frames from — see the
 Library thumbnail endpoints above.
