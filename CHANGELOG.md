@@ -12,6 +12,10 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-27
+- **Images card moved to Settings → Downloads** — the image conversion format setting only affects image
+  downloads, so it now sits in its own card in the Downloads tab (after New downloads) instead of Library.
+
 ## 2026-10-26
 - **Switch servers from the tray (desktop)** — the tray menu gets a Servers submenu (current server checked, name
   in the tooltip); picking one shows the window and switches like the sidebar switcher. Also fixes the profile

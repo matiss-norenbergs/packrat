@@ -152,7 +152,7 @@ The live download queue.
   - Video, audio, or **Image**, quality/format, and an optional filename override (defaults to the
     source's title; see **Filename Template** below). Image is for a direct link to a single image file — no `yt-dlp` involved, no
     gallery/multi-image support (a real gallery-site integration is a possible future addition, not
-    this). The image is re-encoded per Settings → Library → "Image conversion format" (default
+    this). The image is re-encoded per Settings → Downloads → "Image conversion format" (default
     JPEG) and doubles as its own thumbnail.
   - A live preview card (thumbnail/title/uploader/duration for video/audio; the image itself for
     Image) fetches before you submit, unless "I trust this source" is enabled in Settings →
@@ -750,7 +750,9 @@ Notifications and Appearance tabs are per-device preferences that apply immediat
   the same regardless of which accent is active.
 - **Downloads** — default download type and quality for new downloads; "I trust this source" (skip
   the New Download preview fetch and queue immediately); how long to keep the download log
-  (Downloads/Logs pages) before automatic pruning, plus a "Clear all now" button.
+  (Downloads/Logs pages) before automatic pruning, plus a "Clear all now" button. An **Images** card
+  (between New downloads and Download log) sets the **Image conversion format** — Original/JPEG/PNG/WebP,
+  what every new `downloadType=image` download gets re-encoded to (default JPEG).
 - **Privacy** — **Enable privacy** is the master switch: while it's off, every privacy feature
   (blurring, lock icons, the reveal-all button, the Private checkboxes on collections and tags) is
   hidden app-wide, yet each collection's/tag's own Private flag is kept, so turning it back on
@@ -767,9 +769,7 @@ Notifications and Appearance tabs are per-device preferences that apply immediat
   plays); **Backfill Images** — a one-click background job that generates missing thumbnail/artist
   image/collection-cover derivatives for anything that predates them, and backfills stored
   thumbnail width/height for older items so the "Thumbnail resolution" field is accurate without a
-  live image fetch (safe to re-run, a progress readout updates while it's running); **Image
-  conversion format** — Original/JPEG/PNG/WebP, what every new `downloadType=image` download gets
-  re-encoded to (default JPEG); **Scan for Missing Files** — checks every item's file against disk
+  live image fetch (safe to re-run, a progress readout updates while it's running); **Scan for Missing Files** — checks every item's file against disk
   and converts anything gone into a [ghost placeholder](#ghost-items) (manual only, never
   scheduled); **Find Stray Files** — the inverse: lists files on disk that no database record
   references and lets you delete them (see below).

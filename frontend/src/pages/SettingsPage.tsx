@@ -364,6 +364,7 @@ function DownloadsTab() {
   const [defaultDownloadType, setDefaultDownloadType] = useState<DownloadType>("video")
   const [skipDownloadPreview, setSkipDownloadPreview] = useState(false)
   const [logRetentionDays, setLogRetentionDays] = useState("7")
+  const [imageConvertFormat, setImageConvertFormat] = useState<"original" | "jpg" | "png" | "webp">("jpg")
 
   useEffect(() => {
     if (!settings) return
@@ -371,6 +372,7 @@ function DownloadsTab() {
     setDefaultDownloadType(settings.defaultDownloadType)
     setSkipDownloadPreview(settings.skipDownloadPreview)
     setLogRetentionDays(String(settings.downloadLogRetentionDays))
+    setImageConvertFormat(settings.imageConvertFormat)
   }, [settings])
 
   if (isLoading || !settings) return <Skeleton className="h-24 w-full max-w-lg" />
@@ -381,6 +383,7 @@ function DownloadsTab() {
   if (skipDownloadPreview !== settings.skipDownloadPreview) payload.skipDownloadPreview = skipDownloadPreview
   const retention = Number(logRetentionDays)
   if (retention !== settings.downloadLogRetentionDays) payload.downloadLogRetentionDays = retention
+  if (imageConvertFormat !== settings.imageConvertFormat) payload.imageConvertFormat = imageConvertFormat
   const dirty = Object.keys(payload).length > 0
 
   return (
@@ -434,6 +437,28 @@ function DownloadsTab() {
                 queue.
               </InfoPopover>
             </div>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard icon={FileImage} title="Images">
+          <div className="space-y-2">
+            <FieldLabel
+              htmlFor="image-convert-format"
+              info="What format a downloaded image gets converted to. Original keeps whatever format the source served."
+            >
+              Image conversion format
+            </FieldLabel>
+            <Select value={imageConvertFormat} onValueChange={(v) => setImageConvertFormat(v as typeof imageConvertFormat)}>
+              <SelectTrigger id="image-convert-format" className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="original">Original</SelectItem>
+                <SelectItem value="jpg">JPEG</SelectItem>
+                <SelectItem value="png">PNG</SelectItem>
+                <SelectItem value="webp">WebP</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </SettingsCard>
 
@@ -560,7 +585,6 @@ function LibraryTab() {
   const [frameRangeLow, setFrameRangeLow] = useState(5)
   const [frameRangeHigh, setFrameRangeHigh] = useState(100)
   const [autoplay, setAutoplay] = useState(false)
-  const [imageConvertFormat, setImageConvertFormat] = useState<"original" | "jpg" | "png" | "webp">("jpg")
 
   useEffect(() => {
     if (!settings) return
@@ -574,7 +598,6 @@ function LibraryTab() {
     setFrameRangeLow(settings.thumbnailFrameRangeLow)
     setFrameRangeHigh(settings.thumbnailFrameRangeHigh)
     setAutoplay(settings.libraryAutoplay)
-    setImageConvertFormat(settings.imageConvertFormat)
   }, [settings])
 
   if (isLoading || !settings) return <Skeleton className="h-40 w-full max-w-lg" />
@@ -591,7 +614,6 @@ function LibraryTab() {
   if (frameRangeLow !== settings.thumbnailFrameRangeLow) payload.thumbnailFrameRangeLow = frameRangeLow
   if (frameRangeHigh !== settings.thumbnailFrameRangeHigh) payload.thumbnailFrameRangeHigh = frameRangeHigh
   if (autoplay !== settings.libraryAutoplay) payload.libraryAutoplay = autoplay
-  if (imageConvertFormat !== settings.imageConvertFormat) payload.imageConvertFormat = imageConvertFormat
   const dirty = Object.keys(payload).length > 0
 
   const lowLabel = RESOLUTION_STEP_LABELS[low] ?? `${low}p`
@@ -735,28 +757,6 @@ function LibraryTab() {
                 </p>
               </div>
             </div>
-          </div>
-        </SettingsCard>
-
-        <SettingsCard icon={FileImage} title="Images">
-          <div className="space-y-2">
-            <FieldLabel
-              htmlFor="image-convert-format"
-              info="What format a downloaded image gets converted to. Original keeps whatever format the source served."
-            >
-              Image conversion format
-            </FieldLabel>
-            <Select value={imageConvertFormat} onValueChange={(v) => setImageConvertFormat(v as typeof imageConvertFormat)}>
-              <SelectTrigger id="image-convert-format" className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="original">Original</SelectItem>
-                <SelectItem value="jpg">JPEG</SelectItem>
-                <SelectItem value="png">PNG</SelectItem>
-                <SelectItem value="webp">WebP</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </SettingsCard>
 
