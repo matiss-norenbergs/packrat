@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-27
+- **Reveal-all is now one floating button** — the eye toggle moved out of the Library and Compare list
+  toolbars into a floating button at the bottom-left (Library, library item and Compare list pages). It only
+  appears when privacy is on and something is private, and stays on while navigating between those pages
+  (still reset by a reload). The Compare list no longer shows a disabled one when privacy is off.
 - **Theme and accent color are saved to your account** — Settings → Appearance now saves to the server per
   user account (`GET/PATCH /api/auth/preferences`, new `user_preferences` table) and applies instantly, with no
   Save button, so the look follows you across browsers and devices (on desktop each saved server has its own).

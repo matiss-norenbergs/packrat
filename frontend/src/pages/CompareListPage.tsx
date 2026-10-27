@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Eye, EyeOff, Play, Trash2 } from "lucide-react"
+import { Play, Trash2 } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,35 +13,20 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { CompareListTile } from "@/components/library/CompareListTile"
-import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllContext"
+import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
 import { useCompareList, useClearCompareList, useRemoveFromCompareList } from "@/hooks/useCompareList"
 import { useIdSelection } from "@/hooks/useIdSelection"
 
 const MAX_PLAYABLE = 6
 
-// Wraps the actual content in RevealAllProvider — the reveal-all button
-// below needs useRevealAll(), which only works from a descendant of the
-// provider, not the same component that creates it.
 export function CompareListPage() {
-  return (
-    <RevealAllProvider>
-      <CompareListPageContent />
-    </RevealAllProvider>
-  )
-}
-
-function CompareListPageContent() {
   const { data: items, isLoading, isError, error } = useCompareList()
   const { selected, isSelected, toggle, size } = useIdSelection()
   const removeFromCompareList = useRemoveFromCompareList()
   const clearCompareList = useClearCompareList()
-  const { revealAll, toggleRevealAll } = useRevealAll()
   const navigate = useNavigate()
   const [clearOpen, setClearOpen] = useState(false)
-
-  const hasBlurred = (items ?? []).some((item) => item.blurred)
 
   const handlePlay = () => {
     navigate(`/compare-list/play?items=${[...selected].join(",")}`)
@@ -49,6 +34,7 @@ function CompareListPageContent() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
+      <RevealAllFloatingAction />
       <div className="shrink-0">
         <h1 className="text-2xl font-semibold">Compare list</h1>
         <p className="text-sm text-muted-foreground">
@@ -92,14 +78,6 @@ function CompareListPageContent() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant={revealAll ? "secondary" : "outline"} size="icon" disabled={!hasBlurred} onClick={toggleRevealAll}>
-              {revealAll ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{revealAll ? "Hide all private items" : "Reveal all private items"}</TooltipContent>
-        </Tooltip>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

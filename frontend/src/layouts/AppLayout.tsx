@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react"
 import { Navigate, Outlet, useLocation } from "react-router-dom"
+import { FloatingActionDock } from "@/components/FloatingActionDock"
+import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { MobileNav } from "@/components/sidebar/MobileNav"
 import { Sidebar } from "@/components/sidebar/Sidebar"
 import { Toaster } from "@/components/ui/sonner"
@@ -36,13 +38,19 @@ function AuthedAppLayout() {
   }, [location.pathname])
 
   return (
-    <div className="flex h-screen w-full flex-col bg-background text-foreground md:flex-row">
-      <MobileNav />
-      <Sidebar />
-      <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
-        <Outlet />
-      </main>
-      <Toaster />
-    </div>
+    // One RevealAllProvider for every page under this layout, so reveal-all
+    // survives in-app navigation (still in-memory only: a reload resets it).
+    <RevealAllProvider>
+      <FloatingActionDock>
+        <div className="flex h-screen w-full flex-col bg-background text-foreground md:flex-row">
+          <MobileNav />
+          <Sidebar />
+          <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
+            <Outlet />
+          </main>
+          <Toaster />
+        </div>
+      </FloatingActionDock>
+    </RevealAllProvider>
   )
 }

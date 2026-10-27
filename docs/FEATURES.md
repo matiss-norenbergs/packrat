@@ -447,9 +447,23 @@ once and toggle fullscreen. Two playback options (remembered per-browser): **Pre
 every file aggressively as soon as the page opens rather than waiting for Play, and **Wait for
 ready** disables "Play all" until every file has buffered enough to play without stalling.
 
-The toolbar (Play selected → Clear list → reveal/hide private items) stays visible even with an
+The toolbar (Play selected → Clear list) stays visible even with an
 empty list — its buttons disable instead of disappearing. **Clear list** asks for confirmation
 before removing every item (your library files are unaffected either way).
+
+Private items are blurred here too; the [reveal-all floating button](#reveal-all-floating-button) toggles them.
+
+## Reveal-all floating button
+
+A round eye button floats at the bottom-left of the content area (clear of the sidebar on desktop) on
+the **Library**, **library item** and **Compare list** pages. It appears only when **Enable privacy** is
+on *and* something is actually private (a private collection with items, or a private tag in use) —
+otherwise it is hidden, not disabled. Click it to reveal every blurred item on the page (the icon
+becomes a crossed-out eye, the button is filled, and the tooltip reads "Hide all private items"); click
+again to blur them all back, which also re-blurs anything you had revealed one by one. The state is
+shared across those pages, so it stays on while you move Library → item → Compare list, but it is
+in-memory only: a reload, a new tab or switching desktop servers resets everything to blurred. It is not
+shown on other pages (Dashboard, Settings, Browse, the compare player).
 
 ## Import
 
@@ -760,7 +774,7 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   (between New downloads and Download log) sets the **Image conversion format** — Original/JPEG/PNG/WebP,
   what every new `downloadType=image` download gets re-encoded to (default JPEG).
 - **Privacy** — **Enable privacy** is the master switch: while it's off, every privacy feature
-  (blurring, lock icons, the reveal-all button, the Private checkboxes on collections and tags) is
+  (blurring, lock icons, the reveal-all floating button, the Private checkboxes on collections and tags) is
   hidden app-wide, yet each collection's/tag's own Private flag is kept, so turning it back on
   restores the blurring exactly. Below it: how strongly private-collection/private-tag thumbnails are
   blurred (weak / default / strong) until clicked to reveal, and **Show private items unblurred in
