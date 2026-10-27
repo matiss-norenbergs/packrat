@@ -188,7 +188,7 @@ account. `models.UserPreferenceSpecs` is the single allowlist (keys, allowed val
 `GET/PATCH /api/auth/preferences`. Like 2FA data they are not in any backup bundle (pinned by a test).
 On the client the server is the source of truth once signed in, while localStorage (next-themes' own
 key, `packrat-accent-color`) is only a cache read before first paint and on the logged-out pages, so
-nothing flashes. `useSyncAppearance`, mounted in the authenticated layout only, applies the server
+nothing flashes. `useSyncAppearance`, mounted in every authenticated layout (management, Browse and the compare player) and never on logged-out pages, applies the server
 values on the **first fetch that completes after mount** — never on a later refetch, so a slow
 response can't overwrite a choice just made — which also refreshes the cache. Changes apply locally
 at once and PATCH only the changed key; a failed save toasts and keeps the local value. There is no

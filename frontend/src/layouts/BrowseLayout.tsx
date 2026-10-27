@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { matchPath, Navigate, Outlet, useLocation } from "react-router-dom"
 import { Toaster } from "@/components/ui/sonner"
 import { useAuthStatus } from "@/hooks/useAuth"
+import { useSyncAppearance } from "@/hooks/useAppearance"
 import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
 import { BrowseHeader } from "@/components/browse/BrowseHeader"
 import { MiniPlayerProvider } from "@/components/browse/MiniPlayerContext"
@@ -26,6 +27,7 @@ export function BrowseLayout() {
 // as AppLayout's AuthedAppLayout split.
 function AuthedBrowseLayout() {
   useDownloadsSocket()
+  useSyncAppearance() // same rationale: /browse can be the first page opened, so it applies the account's theme/accent too
   const location = useLocation()
 
   // This layout scrolls the document itself (no internal main scroll

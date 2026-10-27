@@ -3,7 +3,9 @@ import { toast } from "sonner"
 import { fetchPreferences, updatePreferences } from "@/lib/api"
 import type { UserPreferences } from "@/types/api"
 
-export const preferencesQueryKey = ["auth", "preferences"] as const
+// Not under "auth": markLoggedOut and the 401 handler keep that key family (the auth-status query) and
+// drop everything else, so the previous account's preferences must not live there.
+export const preferencesQueryKey = ["preferences"] as const
 
 // Only call from the authenticated layout; `enabled` lets callers hold it off.
 export function usePreferences(enabled = true) {
