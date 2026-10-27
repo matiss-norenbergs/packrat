@@ -680,7 +680,8 @@ This compares images (perceptual hashing across the whole video, refined around 
 Settings is a row of tabs — General, Account, Downloads, Library, Features, Privacy, History,
 Backup, Jellyfin, Notifications, AI Enhancement, yt-dlp, Appearance (and Desktop in the desktop
 app). Each tab groups its controls into cards, with one Save per tab where it has one (the
-Notifications and Appearance tabs are per-device preferences that apply immediately).
+Notifications tab is a per-device preference and Appearance is saved to your account; both apply
+immediately).
 If the settings can't be loaded, a tab shows an error with a **Retry** button instead of its form.
 
 - **General** — max concurrent downloads (applies to the live worker pool immediately, no
@@ -744,8 +745,12 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   (Default/Blue/Red/Green/Yellow/Monochrome — Monochrome is black in light mode, white in dark)
   applied to buttons, badges, switches, the sidebar/login logo, and the Dashboard's charts (the
   primary series tracks the chosen accent; the other series get their own hand-picked, colorblind-
-  validated palette per accent). Default matches the app's own logo purple. Both are browser-local
-  preferences — no backend round-trip, same as any other client-only setting. Status indicators
+  validated palette per accent). Default matches the app's own logo purple. Both are saved to
+  the signed-in **account** (not the browser) and apply instantly — there is no Save button; if the
+  background save fails a toast says so and the choice stays applied on this device. They follow the
+  account across browsers and devices: after signing in, the server's values are applied once per
+  page load. An account that never chose gets System / Default. On desktop each saved server has
+  its own account, so each has its own appearance (switching servers can change the look). Status indicators
   (Completed/Success/Done tags, "update available" dots, resolution/quality-tier colors) are
   deliberately **not** themed by the accent — they always use a fixed green/amber/red so they read
   the same regardless of which accent is active.

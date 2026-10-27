@@ -180,6 +180,20 @@ only from setup (no user yet, so no 2FA possible), a login of a non-2FA account,
 The public `/auth/status` reveals nothing about 2FA. Backups are built from settings and library
 tables only, so they never contain 2FA secrets, recovery hashes or the key (pinned by a test).
 
+### Appearance preferences
+Theme and accent live in `user_preferences(user_id, key, value, updated_at)` — user-scoped
+(`ON DELETE CASCADE`, like `sessions`), unlike the global `settings` table, so they follow the
+account. `models.UserPreferenceSpecs` is the single allowlist (keys, allowed values, defaults);
+`UserPreferencesRepo` fills defaults for unset keys, so a new key needs no migration. Served by
+`GET/PATCH /api/auth/preferences`. Like 2FA data they are not in any backup bundle (pinned by a test).
+On the client the server is the source of truth once signed in, while localStorage (next-themes' own
+key, `packrat-accent-color`) is only a cache read before first paint and on the logged-out pages, so
+nothing flashes. `useSyncAppearance`, mounted in the authenticated layout only, applies the server
+values on the **first fetch that completes after mount** — never on a later refetch, so a slow
+response can't overwrite a choice just made — which also refreshes the cache. Changes apply locally
+at once and PATCH only the changed key; a failed save toasts and keeps the local value. There is no
+migration of old browser values: an account with nothing stored gets the defaults.
+
 Failed attempts are stored (time, IP, step; pruned after 30 days) in `login_failures` and exposed to
 the owner after login as the dismissible "N failed login attempts since your last login" notice.
 
@@ -471,7 +485,8 @@ Still intentionally out of scope, not forgotten:
   `%(title)s`; a literal filename is used as given (sanitized).
 - **No multi-user support.** One user account, created once via the setup wizard; there is no
   invite/second-account flow, and `POST /api/auth/setup` permanently 409s after the first user
-  exists.
+  exists. (`user_preferences` is already user-scoped, so a future multi-user change won't need to
+  rework it.)
 - **No permanent lockouts or distributed rate limiting.** Failed logins are throttled (see "Login
   throttling" above) but only ever delayed, in memory per process; there is no account lock and no
   shared store. WebSocket has no origin restriction (`CheckOrigin` always returns true) beyond the
