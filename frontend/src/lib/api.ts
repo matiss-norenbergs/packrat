@@ -102,6 +102,7 @@ import type {
   UpdateLibraryProgressRequest,
   UpdateSettingsRequest,
   UpdateTagRequest,
+  UserPreferences,
   YtDlpVersionInfo,
 } from "@/types/api"
 
@@ -337,6 +338,14 @@ export async function logout(): Promise<void> {
     // Even if the server can't be reached, the desktop client must not stay signed in locally.
     if (isDesktop()) clearToken()
   }
+}
+
+export function fetchPreferences(): Promise<UserPreferences> {
+  return request<UserPreferences>("/auth/preferences")
+}
+
+export function updatePreferences(payload: Partial<UserPreferences>): Promise<UserPreferences> {
+  return request<UserPreferences>("/auth/preferences", { method: "PATCH", body: JSON.stringify(payload) })
 }
 
 export function changePassword(payload: ChangePasswordRequest): Promise<void> {

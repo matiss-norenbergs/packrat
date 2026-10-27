@@ -9,7 +9,7 @@ import { queryClient } from "@/lib/queryClient"
 import { showsConnectScreen, UNAUTHORIZED_EVENT } from "@/lib/server"
 import { ConnectPage } from "@/pages/ConnectPage"
 import { router } from "@/routes"
-// Side-effect only — applies the saved accent color to <html> as soon as
+// Side-effect only — applies the cached accent color to <html> as soon as
 // this module evaluates (before first paint), regardless of whether the
 // Settings page (the only place useAccentColor's hook is actually called)
 // has been visited yet.

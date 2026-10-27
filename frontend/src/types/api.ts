@@ -64,6 +64,14 @@ export interface SecurityNotice {
   lastAttemptAt: string | null
 }
 
+// Per-account appearance, stored on the server (GET/PATCH /auth/preferences).
+export type ThemePreference = "light" | "dark" | "system"
+export type AccentPreference = "default" | "blue" | "red" | "green" | "yellow" | "mono"
+export interface UserPreferences {
+  theme: ThemePreference
+  accent: AccentPreference
+}
+
 export interface ChangePasswordRequest {
   currentPassword: string
   newPassword: string
