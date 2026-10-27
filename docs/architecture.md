@@ -475,6 +475,22 @@ than two independently-configurable settings — `historyRetentionDays` (History
 configurable subscription/backup interval is 6h, so checking hourly is more than sufficient
 resolution without needing per-feature scheduling infrastructure.
 
+## Floating action dock
+
+`components/FloatingActionDock.tsx` is a reusable slot for floating buttons. `<FloatingActionDock>`
+is mounted once per layout (only `AppLayout` for now) wrapping the page content; it renders a fixed
+container (bottom-left of the content area, `md:left` past the 14rem sidebar, `z-40` — above content,
+below dialogs `z-50` and banners `z-[100]`, `flex-col-reverse` so the first action is at the bottom,
+`pointer-events-none` except on the buttons, `empty:hidden`) and exposes that DOM node through context.
+Pages/features render `<FloatingAction icon label onClick active? order? />`, which portals a round icon
+button into the node (state-backed callback ref, so it works on the first render); mounting adds the
+button, unmounting removes it, and without a dock above it renders nothing. The dock owns all
+positioning, so features never position themselves. `RevealAllFloatingAction` is the first user.
+
+`AppLayout` also mounts a single `RevealAllProvider`, so reveal-all (in-memory only) survives
+navigation between Library, library item and Compare list pages; those pages no longer create their
+own provider. Browse and the compare player still use their own per-page providers and have no dock.
+
 ## Deliberate scope cuts
 
 Still intentionally out of scope, not forgotten:
