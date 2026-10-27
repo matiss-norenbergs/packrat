@@ -6,8 +6,6 @@ import {
   Calendar,
   Columns3,
   Download,
-  Eye,
-  EyeOff,
   FileImage,
   FilePlus2,
   FileX,
@@ -80,7 +78,6 @@ import { BulkSetYearDialog } from "./BulkSetYearDialog"
 import { BulkSharpenThumbnailsDialog } from "./BulkSharpenThumbnailsDialog"
 import { EditSequenceDialog } from "./EditSequenceDialog"
 import { LIBRARY_COLUMNS, useLibraryColumns } from "./LibraryColumnsContext"
-import { useRevealAll } from "./RevealAllContext"
 import { useSelection } from "./SelectionContext"
 
 const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
@@ -112,7 +109,6 @@ export function LibraryToolbar() {
   const compareListEnabled = useFeatureEnabled("featureCompareListEnabled")
   const frameMatchingEnabled = useFeatureEnabled("featureFrameMatchingEnabled")
   const updateSettings = useUpdateSettings()
-  const { revealAll, toggleRevealAll } = useRevealAll()
   const { selectionActive, approxCount, clear } = useSelection()
   const { visibleColumns, toggleColumn } = useLibraryColumns()
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
@@ -151,22 +147,6 @@ export function LibraryToolbar() {
   const view =
     settings?.libraryView === "folders" ? "folders" : settings?.libraryView === "list" ? "list" : "grid"
   const mode = (settings?.libraryMode as "manage" | "details") || "manage"
-  // Whether anything in the library is currently blurred — either a whole
-  // collection (itself or an inherited ancestor) is private and has at
-  // least one item somewhere under it, using the inheritance-aware
-  // effectiveIsPrivate/totalItemCount fields (a private *parent* used purely
-  // for organization has itemCount 0 of its own, with its items living in a
-  // non-private child that only inherits — the raw isPrivate/itemCount alone
-  // would always read as "nothing blurred" in that normal nested-collection
-  // setup) — or a private tag is applied to at least one item, independent
-  // of any collection (backend's blurred computation ORs both sources
-  // together; this needs to match, or a lone private-tagged item in an
-  // otherwise-public collection leaves the reveal button permanently
-  // disabled with no way to un-blur it).
-  const hasBlurred =
-    !!settings?.privacyEnabled &&
-    ((collections ?? []).some((c) => c.effectiveIsPrivate && c.totalItemCount > 0) ||
-      (allTags ?? []).some((t) => t.isPrivate && t.usageCount > 0))
   const search = searchParams.get("q") ?? ""
   const [searchInput, setSearchInput] = useState(search)
   const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
@@ -448,22 +428,6 @@ export function LibraryToolbar() {
       </div>
 
       <div className="h-6 w-px bg-border" />
-
-      {settings?.privacyEnabled && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={revealAll ? "secondary" : "outline"}
-              size="icon"
-              disabled={!hasBlurred}
-              onClick={toggleRevealAll}
-            >
-              {revealAll ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{revealAll ? "Hide all private items" : "Reveal all private items"}</TooltipContent>
-        </Tooltip>
-      )}
 
       <Popover open={settingsPopoverOpen} onOpenChange={openSettingsPopover}>
         <PopoverTrigger asChild>

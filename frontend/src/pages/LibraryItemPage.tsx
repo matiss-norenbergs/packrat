@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { isLibraryItemNotFound, useLibraryItem } from "@/hooks/useLibrary"
 import { LibraryItemDetail } from "@/components/library/LibraryItemDetail"
-import { RevealAllProvider } from "@/components/library/RevealAllContext"
+import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
 
 export function LibraryItemPage() {
   const { id } = useParams<{ id: string }>()
@@ -61,13 +61,14 @@ export function LibraryItemPage() {
   }
 
   return (
-    <RevealAllProvider>
+    <>
+      <RevealAllFloatingAction />
       <LibraryItemDetail
         item={item}
         backTo={backTo}
         basePath="/library"
         playerHeightClass="h-[calc(100vh-3.5rem)] md:h-screen"
       />
-    </RevealAllProvider>
+    </>
   )
 }
