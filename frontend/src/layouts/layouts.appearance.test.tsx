@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, render, waitFor } from "@testing-library/react"
 import { ThemeProvider } from "next-themes"
-import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { RouterProvider, createMemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AppLayout } from "@/layouts/AppLayout"
 import { BrowseLayout } from "@/layouts/BrowseLayout"
@@ -31,18 +31,19 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+// A data router, like the app's: AppLayout's RevealAllProvider reads useMatches().
 function renderLayout(layout: React.ReactElement, client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  const router = createMemoryRouter(
+    [
+      { element: layout, children: [{ path: "/x", element: <div>page</div> }] },
+      { path: "/login", element: <div>login page</div> },
+    ],
+    { initialEntries: ["/x"] },
+  )
   return render(
     <QueryClientProvider client={client}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <MemoryRouter initialEntries={["/x"]}>
-          <Routes>
-            <Route element={layout}>
-              <Route path="/x" element={<div>page</div>} />
-            </Route>
-            <Route path="/login" element={<div>login page</div>} />
-          </Routes>
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </ThemeProvider>
     </QueryClientProvider>,
   )
