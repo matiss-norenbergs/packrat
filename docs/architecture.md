@@ -503,11 +503,14 @@ button, unmounting removes it, and without a dock above it renders nothing. The 
 positioning, so features never position themselves. `RevealAllFloatingAction` is the first user.
 
 `AppLayout` also mounts a single `RevealAllProvider`, so reveal-all (in-memory only) survives
-navigation between Library, library item and Compare list pages; those pages no longer create their
+navigation between Library, library item, Compare list and Downloads pages; those pages no longer create their
 own provider. The shared provider (`clearOnNavigate`) clears individually revealed items when the matched route changes (moving to a
 different page); moving between items of the same page (`/library/1` -> `/library/2`, e.g. the "More from this
 collection" strip), query-string changes and the Library view mode keep them, and reveal-all persists. It keys on
 `useMatches()`, so it needs a data router (the app's `createBrowserRouter`). Browse and the compare player still use their own per-page providers and have no dock.
+The provider's reveal set is keyed by plain numbers: library item ids (positive integers), Browse show tiles
+(negated collection ids) and Downloads rows, which use `downloadRevealKey(id)` in `lib/revealKeys.ts`
+(`id + 0.5`, never an integer, so it can't collide with either).
 
 ## Deliberate scope cuts
 

@@ -17,6 +17,7 @@ import { BulkDownloadDialog } from "@/components/downloads/BulkDownloadDialog"
 import { CANCELLABLE_STATUSES } from "@/components/downloads/DownloadQueueItem"
 import { DownloadQueueList } from "@/components/downloads/DownloadQueueList"
 import { NewDownloadDialog } from "@/components/downloads/NewDownloadDialog"
+import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { useBulkDeleteDownloads, useDownloads } from "@/hooks/useDownloads"
 import { getPageNumbers } from "@/lib/pagination"
@@ -158,6 +159,7 @@ export function DownloadsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
       <h1 className="shrink-0 text-2xl font-semibold">Downloads</h1>
+      <RevealAllFloatingAction />
 
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <div className="flex">

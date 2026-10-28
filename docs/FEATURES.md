@@ -194,6 +194,13 @@ The live download queue.
   - Once it reaches a terminal state (completed/failed/cancelled/interrupted), the button instead
     **removes it from the queue list** (with a confirmation) — this only deletes the queue-history
     row, never the downloaded file itself.
+  - Rows of private collections (or with private tags) are blurred with a hashed title while
+    **Enable privacy** is on. Clicking a row's title or thumbnail reveals just that row; the
+    [reveal-all floating button](#reveal-all-floating-button) reveals all of them. Revealed rows stay
+    revealed across pages of the list, but re-blur when you leave the page. The button
+    follows the same rule as everywhere else, so one edge case: a download queued into a brand-new,
+    still *empty* private collection is blurred, but the button stays hidden until that collection has
+    an item (clicking the row still works).
 
 If the backend process restarts mid-download, anything left `queued`/`downloading`/etc. is marked
 `interrupted` on the next startup — nothing is silently auto-resumed; retry it manually (from
@@ -456,12 +463,12 @@ Private items are blurred here too; the [reveal-all floating button](#reveal-all
 ## Reveal-all floating button
 
 A round eye button floats at the bottom-left of the content area (clear of the sidebar on desktop) on
-the **Library**, **library item** and **Compare list** pages. It appears only when **Enable privacy** is
+the **Library**, **library item**, **Compare list** and **Downloads** pages. It appears only when **Enable privacy** is
 on *and* something is actually private (a private collection with items, or a private tag in use) —
 otherwise it is hidden, not disabled. Click it to reveal every blurred item on the page (the icon
 becomes a crossed-out eye, the button is filled, and the tooltip reads "Hide all private items"); click
 again to blur them all back, which also re-blurs anything you had revealed one by one. The state is
-shared across those pages, so it stays on while you move Library → item → Compare list, but it is
+shared across those pages, so it stays on while you move Library → item → Compare list → Downloads, but it is
 in-memory only: a reload, a new tab or switching desktop servers resets everything to blurred. It is not
 shown on other pages (Dashboard, Settings, Browse, the compare player).
 
