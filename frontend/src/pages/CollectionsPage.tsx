@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
 import { CollapsiblePanel } from "@/components/CollapsiblePanel"
 import { CollectionDialog } from "@/components/collections/CollectionDialog"
 import { CollectionInfoPanel } from "@/components/collections/CollectionInfoPanel"
@@ -142,6 +143,7 @@ export function CollectionsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
       <h1 className="shrink-0 text-2xl font-semibold">Collections</h1>
+      <RevealAllFloatingAction />
 
       <div
         className={cn(
@@ -270,8 +272,8 @@ export function CollectionsPage() {
           </div>
 
           {!isLoading && data && data.length > 0 && total > 0 && (
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-              <span className="text-sm text-muted-foreground">
+            <div className="flex shrink-0 flex-wrap-reverse items-center justify-between gap-2">
+              <span className="flex min-h-9 items-center pl-12 text-sm text-muted-foreground md:min-h-0">
                 {total} top-level {total === 1 ? "collection" : "collections"} ({totalAllLevels} total)
               </span>
               <div className="flex items-center gap-1">

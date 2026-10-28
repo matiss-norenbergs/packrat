@@ -122,3 +122,18 @@ export function topLevelAncestor(collections: Collection[], collectionId: number
   }
   return current
 }
+
+// Nearest ancestor (excluding the collection itself) whose own Private flag is
+// set — names where an inherited-private collection gets its privacy from.
+// Null when no ancestor in the chain is flagged.
+export function nearestPrivateAncestor(collections: Collection[], collectionId: number): Collection | null {
+  const byId = new Map(collections.map((c) => [c.id, c]))
+  const seen = new Set<number>([collectionId])
+  let current = byId.get(collectionId)
+  while (current?.parentId != null && !seen.has(current.parentId)) {
+    seen.add(current.parentId)
+    current = byId.get(current.parentId)
+    if (current?.isPrivate) return current
+  }
+  return null
+}

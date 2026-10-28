@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react"
 import { ImageIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { useRevealAll } from "@/components/library/RevealAllContext"
 import { useArtists } from "@/hooks/useArtists"
+import { useCollections } from "@/hooks/useCollections"
 import { useSettings } from "@/hooks/useSettings"
 import { collectionMediumCoverUrl } from "@/lib/api"
+import { nearestPrivateAncestor } from "@/lib/collectionTree"
+import { collectionRevealKey } from "@/lib/revealKeys"
 import { cn } from "@/lib/utils"
 import type { Collection } from "@/types/api"
 
@@ -24,13 +28,8 @@ export function CollectionInfoPanel({
 }) {
   const { data: settings } = useSettings()
   const { data: artists } = useArtists()
-  const [coverRevealed, setCoverRevealed] = useState(false)
-
-  // Selecting a different (or no) collection should never carry over the
-  // previous one's reveal state.
-  useEffect(() => {
-    setCoverRevealed(false)
-  }, [collection?.id])
+  const { data: collections } = useCollections()
+  const { isRevealed, toggleItem } = useRevealAll()
 
   if (!collection) {
     return (
@@ -44,8 +43,15 @@ export function CollectionInfoPanel({
   const coverUrl = collectionMediumCoverUrl(collection)
   // The master privacy switch (Settings) disables every blur app-wide even
   // when a collection's own Private flag is still set underneath — same
-  // gating the rest of the app uses.
-  const isPrivate = !!settings?.privacyEnabled && collection.isPrivate
+  // gating the rest of the app uses. Privacy inherits down the tree, so the
+  // cover blurs on effectiveIsPrivate (own flag or any private ancestor).
+  const privacyOn = !!settings?.privacyEnabled
+  const isBlurred = privacyOn && collection.effectiveIsPrivate
+  const privateAncestor =
+    privacyOn && !collection.isPrivate && collection.effectiveIsPrivate
+      ? nearestPrivateAncestor(collections ?? [], collection.id)
+      : null
+  const revealKey = collectionRevealKey(collection.id)
   const gaps = collection.sequenceGaps
 
   return (
@@ -56,9 +62,9 @@ export function CollectionInfoPanel({
           {coverUrl ? (
             <BlurredThumbnail
               src={coverUrl}
-              blurred={isPrivate}
-              revealed={coverRevealed}
-              onToggleReveal={() => setCoverRevealed((v) => !v)}
+              blurred={isBlurred}
+              revealed={isRevealed(revealKey)}
+              onToggleReveal={() => toggleItem(revealKey)}
               className="h-full w-full object-cover"
             />
           ) : (
@@ -74,7 +80,11 @@ export function CollectionInfoPanel({
         <InfoRow label="Folder" value={collection.rootPath} mono />
         <InfoRow label="Type" value={capitalize(collection.defaultDownloadType)} />
         <InfoRow label="Quality" value={capitalize(collection.defaultQuality)} />
-        <BadgeRow label="Private" value={isPrivate} />
+        <PrivateRow
+          own={privacyOn && collection.isPrivate}
+          inherited={privacyOn && !collection.isPrivate && collection.effectiveIsPrivate}
+          ancestorName={privateAncestor?.name}
+        />
         <BadgeRow label="Show as single item in Browse" value={collection.browseAsShow} />
         <InfoRow label="Artist" value={artistName} />
         <InfoRow label="Year" value={collection.year != null ? String(collection.year) : undefined} />
@@ -141,6 +151,27 @@ function BadgeRow({ label, value }: { label: string; value: boolean }) {
         >
           {value ? "Yes" : "No"}
         </Badge>
+      </dd>
+    </div>
+  )
+}
+
+// Own flag -> Yes; only inherited from an ancestor -> a neutral "Inherited"
+// badge whose tooltip names the nearest private ancestor; neither -> No.
+function PrivateRow({ own, inherited, ancestorName }: { own: boolean; inherited: boolean; ancestorName?: string }) {
+  if (!inherited) return <BadgeRow label="Private" value={own} />
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <dt className="shrink-0 text-muted-foreground">Private</dt>
+      <dd>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Badge variant="secondary">Inherited</Badge>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{ancestorName ? `Inherited from ${ancestorName}` : "Inherited from a private parent"}</TooltipContent>
+        </Tooltip>
       </dd>
     </div>
   )
