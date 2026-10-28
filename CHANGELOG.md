@@ -13,6 +13,9 @@ Maintenance notes:
 -->
 
 ## 2026-10-28
+- **Leaving a page re-blurs items revealed one by one** — since reveal-all moved into the shared provider,
+  items (and the strip below them) revealed individually stayed unblurred after navigating away, e.g. back to
+  the Library from an item page. They now reset on every route change; the reveal-all button still persists.
 - **Library item responses apply the privacy rule consistently** — the thumbnail, file import and ghost
   endpoints used to compute `blurred` on their own: the thumbnail and import responses ignored the privacy
   master switch (an item in a private collection answered `blurred: true` with privacy off; import also ignored

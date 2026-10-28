@@ -39,8 +39,9 @@ function AuthedAppLayout() {
 
   return (
     // One RevealAllProvider for every page under this layout, so reveal-all
-    // survives in-app navigation (still in-memory only: a reload resets it).
-    <RevealAllProvider>
+    // survives in-app navigation (still in-memory only: a reload resets it);
+    // individually revealed items are cleared on every route change.
+    <RevealAllProvider clearOnNavigate>
       <FloatingActionDock>
         <div className="flex h-screen w-full flex-col bg-background text-foreground md:flex-row">
           <MobileNav />
