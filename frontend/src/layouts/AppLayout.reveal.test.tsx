@@ -30,6 +30,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+// The stand-in "item" page reads the shared provider to exercise its same-route/clearOnNavigate semantics.
+// The real LibraryItemPage owns its own provider instead; see pages/LibraryItemPage.reveal.test.tsx.
 const IDS = [1, 2, 3]
 
 function Page({ name }: { name: string }) {

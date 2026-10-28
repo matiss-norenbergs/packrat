@@ -463,14 +463,21 @@ Private items are blurred here too; the [reveal-all floating button](#reveal-all
 ## Reveal-all floating button
 
 A round eye button floats at the bottom-left of the content area (clear of the sidebar on desktop) on
-the **Library**, **library item**, **Compare list** and **Downloads** pages. It appears only when **Enable privacy** is
+the **Library**, **Compare list** and **Downloads** pages. It appears only when **Enable privacy** is
 on *and* something is actually private (a private collection with items, or a private tag in use) —
 otherwise it is hidden, not disabled. Click it to reveal every blurred item on the page (the icon
 becomes a crossed-out eye, the button is filled, and the tooltip reads "Hide all private items"); click
 again to blur them all back, which also re-blurs anything you had revealed one by one. The state is
-shared across those pages, so it stays on while you move Library → item → Compare list → Downloads, but it is
+shared across those pages, so it stays on while you move Library → Compare list → Downloads, but it is
 in-memory only: a reload, a new tab or switching desktop servers resets everything to blurred. It is not
-shown on other pages (Dashboard, Settings, Browse, the compare player).
+shown on other pages (Dashboard, Settings, Browse, the compare player, library item pages).
+
+The **library item page** (`/library/:id`, opened from a card's Play button or a strip tile) is independent of
+the button: a private item always opens locked ("This item is private"), even with reveal-all on; clicking the
+panel reveals the item and its "More from this collection" strip, and the reveal carries across the strip's
+siblings, but leaving the page re-locks it (there is no re-hide control on the page, like Browse). Opening a
+library item page also **switches reveal-all off**, so going back to the Library finds everything blurred again
+and the button inactive.
 
 ## Import
 
