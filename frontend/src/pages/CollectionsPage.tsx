@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
 import { CollapsiblePanel } from "@/components/CollapsiblePanel"
 import { CollectionDialog } from "@/components/collections/CollectionDialog"
 import { CollectionInfoPanel } from "@/components/collections/CollectionInfoPanel"
@@ -142,6 +143,7 @@ export function CollectionsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
       <h1 className="shrink-0 text-2xl font-semibold">Collections</h1>
+      <RevealAllFloatingAction />
 
       <div
         className={cn(

@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-28
+- **Reveal-all button on the Collections page; child collections' covers now blur** — the info panel's cover
+  follows the floating reveal-all button (click still reveals just that collection's cover) and now blurs for
+  collections that inherit privacy from a private parent, not only ones flagged private themselves. The panel's
+  Private row shows an "Inherited" label (tooltip: "Inherited from <nearest private ancestor>") for those.
 - **Library item page no longer has the reveal-all button** — a private item always opens locked (click to reveal it and
   its strip, like Browse), and opening the page turns reveal-all off, so the Library is blurred again when you go back.
 - **Reveal-all button on the Downloads page** — queue rows now follow the floating reveal-all button like the

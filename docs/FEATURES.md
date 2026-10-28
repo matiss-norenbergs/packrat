@@ -376,7 +376,15 @@ selectable from the New Download dialog so you don't have to re-pick them every 
 - Collections nest (sub-collections), shown as a tree; a collection's position in the tree is
   fixed at creation and can't be moved later.
 - **Private** — marking a collection private blurs thumbnails for everything in it (and its
-  sub-collections) throughout the app, shown with a lock icon in the tree.
+  sub-collections) throughout the app, shown with a lock icon in the tree (own flag only, not
+  inherited). In the info panel the cover blurs for private **and** inherited-private collections (a
+  child of a private parent), and the **Private** row reads "Yes" for an own flag, an "Inherited" badge
+  (tooltip "Inherited from <nearest private ancestor>") when it only comes from an ancestor, or "No".
+  Click the cover to reveal or hide just that collection's cover, or use the
+  [reveal-all floating button](#reveal-all-floating-button); a revealed cover stays revealed per
+  collection while you select other collections and come back, until you leave the page. The button
+  only reveals what the open panel shows — with the panel closed there is nothing for it to reveal.
+  The edit dialog's own cover always starts blurred and ignores reveal-all.
 - **Season # (optional)** — set once on a collection that holds a single TV-style season of files.
   A new download placed *directly* into that collection defaults its own Season # field to this
   value (not inherited by sub-collections — it's a direct match, not a tree search).
@@ -463,7 +471,8 @@ Private items are blurred here too; the [reveal-all floating button](#reveal-all
 ## Reveal-all floating button
 
 A round eye button floats at the bottom-left of the content area (clear of the sidebar on desktop) on
-the **Library**, **Compare list** and **Downloads** pages. It appears only when **Enable privacy** is
+the **Library**, **Compare list**, **Downloads** and **Collections** pages (on Collections it reveals the
+selected collection's cover in the info panel, the only blurred imagery there). It appears only when **Enable privacy** is
 on *and* something is actually private (a private collection with items, or a private tag in use) —
 otherwise it is hidden, not disabled. Click it to reveal every blurred item on the page (the icon
 becomes a crossed-out eye, the button is filled, and the tooltip reads "Hide all private items"); click
