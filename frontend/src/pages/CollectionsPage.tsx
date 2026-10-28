@@ -272,8 +272,8 @@ export function CollectionsPage() {
           </div>
 
           {!isLoading && data && data.length > 0 && total > 0 && (
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-              <span className="text-sm text-muted-foreground">
+            <div className="flex shrink-0 flex-wrap-reverse items-center justify-between gap-2">
+              <span className="flex min-h-9 items-center pl-12 text-sm text-muted-foreground md:min-h-0">
                 {total} top-level {total === 1 ? "collection" : "collections"} ({totalAllLevels} total)
               </span>
               <div className="flex items-center gap-1">
