@@ -1,4 +1,4 @@
-import { Link, Outlet, RouterProvider, createMemoryRouter } from "react-router-dom"
+import { Link, MemoryRouter, Outlet, RouterProvider, createMemoryRouter } from "react-router-dom"
 import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it } from "vitest"
@@ -103,5 +103,50 @@ describe("RevealAllProvider route changes", () => {
     await click("toggle1")
     await go("other")
     expect(shown()).toBe("1")
+  })
+})
+
+describe("RevealAllProvider.hideAll", () => {
+  function HideProbe() {
+    const { hideAll } = useRevealAll()
+    return <button onClick={hideAll}>hide</button>
+  }
+  function renderBoth() {
+    return render(
+      <RevealAllProvider>
+        <Probe />
+        <HideProbe />
+      </RevealAllProvider>,
+      { wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter> },
+    )
+  }
+
+  it("turns reveal-all off and clears individual reveals", async () => {
+    renderBoth()
+    await click("toggle1")
+    await click("all")
+    expect(revealAllOnPage()).toBe("on")
+    await click("hide")
+    expect(revealAllOnPage()).toBe("off")
+    expect(shown()).toBe("none")
+  })
+
+  it("clears individual reveals when reveal-all is already off, and is idempotent", async () => {
+    renderBoth()
+    await click("toggle1")
+    await click("hide")
+    await click("hide")
+    expect(revealAllOnPage()).toBe("off")
+    expect(shown()).toBe("none")
+  })
+
+  it("leaves toggleRevealAll working afterwards", async () => {
+    renderBoth()
+    await click("hide")
+    await click("all")
+    expect(revealAllOnPage()).toBe("on")
+    expect(shown()).toBe("1,2,3")
+    await click("all")
+    expect(revealAllOnPage()).toBe("off")
   })
 })

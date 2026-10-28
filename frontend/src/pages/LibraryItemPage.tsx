@@ -1,9 +1,10 @@
+import { useEffect } from "react"
 import { Link, useLocation, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { isLibraryItemNotFound, useLibraryItem } from "@/hooks/useLibrary"
 import { LibraryItemDetail } from "@/components/library/LibraryItemDetail"
-import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
+import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllContext"
 
 export function LibraryItemPage() {
   const { id } = useParams<{ id: string }>()
@@ -13,6 +14,12 @@ export function LibraryItemPage() {
   // carries router state, so this correctly falls back to the plain
   // library page in that case.
   const backTo = (location.state as { from?: string } | null)?.from || "/library"
+  // Read the SHARED context here, above the page's own provider below (anything
+  // rendered under that one only sees the nested state). Opening this page ends
+  // reveal-all; mount-only, so strip navigation (same route, new id) doesn't redo it.
+  const { hideAll } = useRevealAll()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => hideAll(), [])
   const { data, isLoading, error } = useLibraryItem(Number(id))
   // A deleted item's refetch 404s while react-query still holds the last
   // good copy — don't keep rendering it.
@@ -61,14 +68,15 @@ export function LibraryItemPage() {
   }
 
   return (
-    <>
-      <RevealAllFloatingAction />
+    // Own provider (like Browse), no clearOnNavigate: always opens locked,
+    // independent of the shared reveal-all, and has no re-hide control.
+    <RevealAllProvider>
       <LibraryItemDetail
         item={item}
         backTo={backTo}
         basePath="/library"
         playerHeightClass="h-[calc(100vh-3.5rem)] md:h-screen"
       />
-    </>
+    </RevealAllProvider>
   )
 }

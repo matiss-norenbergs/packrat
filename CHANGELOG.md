@@ -13,6 +13,8 @@ Maintenance notes:
 -->
 
 ## 2026-10-28
+- **Library item page no longer has the reveal-all button** — a private item always opens locked (click to reveal it and
+  its strip, like Browse), and opening the page turns reveal-all off, so the Library is blurred again when you go back.
 - **Reveal-all button on the Downloads page** — queue rows now follow the floating reveal-all button like the
   Library does; clicking a row's title or thumbnail still reveals just that row, and revealed rows now stay
   revealed across pages of the list until you leave the page.

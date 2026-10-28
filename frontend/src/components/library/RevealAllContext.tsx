@@ -7,6 +7,7 @@ interface RevealAllContextValue {
   toggleItem: (id: number) => void
   revealItems: (ids: number[]) => void
   toggleRevealAll: () => void
+  hideAll: () => void
 }
 
 const RevealAllContext = createContext<RevealAllContextValue>({
@@ -15,6 +16,7 @@ const RevealAllContext = createContext<RevealAllContextValue>({
   toggleItem: () => {},
   revealItems: () => {},
   toggleRevealAll: () => {},
+  hideAll: () => {},
 })
 
 // Session-only (not persisted): centralizes every card's reveal state here
@@ -43,6 +45,13 @@ export function RevealAllProvider({ children, clearOnNavigate = false }: { child
     })
   }
 
+  // Explicit OFF (unlike the toggle): used by the library item page, whose
+  // visit ends reveal-all. Idempotent, so calling it twice is harmless.
+  const hideAll = () => {
+    setRevealAll(false)
+    setRevealedIds((prev) => (prev.size ? new Set() : prev))
+  }
+
   const toggleItem = (id: number) => {
     setRevealedIds((prev) => {
       const next = new Set(prev)
@@ -62,7 +71,7 @@ export function RevealAllProvider({ children, clearOnNavigate = false }: { child
   const isRevealed = (id: number) => revealAll || revealedIds.has(id)
 
   return (
-    <RevealAllContext.Provider value={{ revealAll, isRevealed, toggleItem, revealItems, toggleRevealAll }}>
+    <RevealAllContext.Provider value={{ revealAll, isRevealed, toggleItem, revealItems, toggleRevealAll, hideAll }}>
       {clearOnNavigate && <ClearOnRouteChange onChange={() => setRevealedIds((prev) => (prev.size ? new Set() : prev))} />}
       {children}
     </RevealAllContext.Provider>
