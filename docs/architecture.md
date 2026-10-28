@@ -516,6 +516,8 @@ The provider's reveal set is keyed by plain numbers: library item ids (positive 
 (negated collection ids) and Downloads rows, which use `downloadRevealKey(id)` in `lib/revealKeys.ts`
 (`id + 0.5`, never an integer, so it can't collide with either) and the Collections info panel's cover, which
 uses `collectionRevealKey(id)` (`id + 0.25`, a non-integer that never ends in .5, so it is distinct from all three).
+The panel is a single focused view, so it drops its key (`hideItem(key)` from an effect cleanup) when the selection
+changes or the panel closes; reveal-all is unaffected.
 The panel blurs on `effectiveIsPrivate` and finds the "Inherited from …" ancestor with `nearestPrivateAncestor`
 (`lib/collectionTree.ts`).
 

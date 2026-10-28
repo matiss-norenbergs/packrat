@@ -13,6 +13,9 @@ Maintenance notes:
 -->
 
 ## 2026-10-28
+- **Collections info panel: a revealed cover lasts only while that collection stays selected** — a cover revealed
+  by click is blurred again when you select another collection, clear the selection or close the panel, instead of
+  being remembered per collection until you leave the page. Reveal-all is unchanged.
 - **Reveal-all button on the Collections page; child collections' covers now blur** — the info panel's cover
   follows the floating reveal-all button (click still reveals just that collection's cover) and now blurs for
   collections that inherit privacy from a private parent, not only ones flagged private themselves. The panel's

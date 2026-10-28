@@ -381,9 +381,10 @@ selectable from the New Download dialog so you don't have to re-pick them every 
   child of a private parent), and the **Private** row reads "Yes" for an own flag, an "Inherited" badge
   (tooltip "Inherited from <nearest private ancestor>") when it only comes from an ancestor, or "No".
   Click the cover to reveal or hide just that collection's cover, or use the
-  [reveal-all floating button](#reveal-all-floating-button); a revealed cover stays revealed per
-  collection while you select other collections and come back, until you leave the page. The button
-  only reveals what the open panel shows — with the panel closed there is nothing for it to reveal.
+  [reveal-all floating button](#reveal-all-floating-button). A cover revealed by click lasts only
+  while that collection stays selected and the panel stays open: selecting another collection, clearing or
+  multi-selecting, or closing the panel drops it, so every selection starts blurred (with reveal-all on,
+  each cover shows revealed as you select). The button only reveals what the open panel shows — with the panel closed there is nothing for it to reveal.
   The edit dialog's own cover always starts blurred and ignores reveal-all.
 - **Season # (optional)** — set once on a collection that holds a single TV-style season of files.
   A new download placed *directly* into that collection defaults its own Season # field to this

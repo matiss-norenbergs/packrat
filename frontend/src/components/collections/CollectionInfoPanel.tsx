@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { ImageIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -29,7 +30,18 @@ export function CollectionInfoPanel({
   const { data: settings } = useSettings()
   const { data: artists } = useArtists()
   const { data: collections } = useCollections()
-  const { isRevealed, toggleItem } = useRevealAll()
+  const { isRevealed, toggleItem, hideItem } = useRevealAll()
+
+  // The panel is a single focused view, so a cover revealed by click lasts
+  // only while that collection stays selected: the cleanup runs when the
+  // selection moves on (or empties) and when the panel closes. Reveal-all is
+  // untouched. Harmless under StrictMode's extra mount/cleanup (nothing is
+  // revealed yet).
+  const panelKey = collection ? collectionRevealKey(collection.id) : null
+  useEffect(() => {
+    if (panelKey == null) return
+    return () => hideItem(panelKey)
+  }, [panelKey, hideItem])
 
   if (!collection) {
     return (

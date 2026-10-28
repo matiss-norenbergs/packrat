@@ -150,3 +150,51 @@ describe("RevealAllProvider.hideAll", () => {
     expect(revealAllOnPage()).toBe("off")
   })
 })
+
+describe("RevealAllProvider.hideItem", () => {
+  function HideItemProbe() {
+    const { hideItem } = useRevealAll()
+    return <button onClick={() => hideItem(1)}>hideItem1</button>
+  }
+  function renderItem() {
+    return render(
+      <RevealAllProvider>
+        <Probe />
+        <HideItemProbe />
+      </RevealAllProvider>,
+      { wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter> },
+    )
+  }
+
+  it("removes only that key and is idempotent", async () => {
+    renderItem()
+    await click("toggle1")
+    await click("reveal23")
+    expect(shown()).toBe("1,2,3")
+    await click("hideItem1")
+    expect(shown()).toBe("2,3")
+    await click("hideItem1")
+    expect(shown()).toBe("2,3")
+  })
+
+  it("leaves reveal-all untouched", async () => {
+    renderItem()
+    await click("toggle1")
+    await click("all")
+    await click("hideItem1")
+    expect(revealAllOnPage()).toBe("on")
+    expect(shown()).toBe("1,2,3")
+    await click("all")
+    expect(shown()).toBe("none")
+  })
+
+  it("default context hideItem is a no-op", async () => {
+    function Bare() {
+      const { hideItem } = useRevealAll()
+      return <button onClick={() => hideItem(1)}>bare</button>
+    }
+    render(<Bare />)
+    await click("bare")
+    expect(screen.getByRole("button", { name: "bare" })).toBeInTheDocument()
+  })
+})
