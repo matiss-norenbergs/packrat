@@ -17,6 +17,7 @@ import { BulkDownloadDialog } from "@/components/downloads/BulkDownloadDialog"
 import { CANCELLABLE_STATUSES } from "@/components/downloads/DownloadQueueItem"
 import { DownloadQueueList } from "@/components/downloads/DownloadQueueList"
 import { NewDownloadDialog } from "@/components/downloads/NewDownloadDialog"
+import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { useBulkDeleteDownloads, useDownloads } from "@/hooks/useDownloads"
 import { getPageNumbers } from "@/lib/pagination"
@@ -158,6 +159,7 @@ export function DownloadsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
       <h1 className="shrink-0 text-2xl font-semibold">Downloads</h1>
+      <RevealAllFloatingAction />
 
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <div className="flex">
@@ -266,8 +268,8 @@ export function DownloadsPage() {
       </div>
 
       {!isLoading && total > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <span className="text-sm text-muted-foreground">
+        <div className="flex shrink-0 flex-wrap-reverse items-center justify-between gap-2">
+          <span className="flex min-h-9 items-center pl-12 text-sm text-muted-foreground md:min-h-0">
             {total} {total === 1 ? "download" : "downloads"}
           </span>
           <div className="flex items-center gap-1">

@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -6,7 +5,9 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useRevealAll } from "@/components/library/RevealAllContext"
 import { useCancelDownload } from "@/hooks/useDownloads"
+import { downloadRevealKey } from "@/lib/revealKeys"
 import { formatDownloadStatus, formatEta, formatSpeed, hashText } from "@/lib/utils"
 import type { Download } from "@/types/api"
 
@@ -37,8 +38,10 @@ export function DownloadQueueItem({
   onMouseEnter: () => void
 }) {
   const cancelDownload = useCancelDownload()
-  const [revealed, setRevealed] = useState(false)
-  const toggleReveal = () => setRevealed((v) => !v)
+  const { isRevealed, toggleItem } = useRevealAll()
+  const revealKey = downloadRevealKey(download.id)
+  const revealed = isRevealed(revealKey)
+  const toggleReveal = () => toggleItem(revealKey)
   const cancellable = CANCELLABLE_STATUSES.has(download.status)
   const displayName = download.title ?? download.url
 

@@ -13,6 +13,9 @@ Maintenance notes:
 -->
 
 ## 2026-10-28
+- **Reveal-all button on the Downloads page** — queue rows now follow the floating reveal-all button like the
+  Library does; clicking a row's title or thumbnail still reveals just that row, and revealed rows now stay
+  revealed across pages of the list until you leave the page.
 - **Leaving a page re-blurs items revealed one by one** — since reveal-all moved into the shared provider,
   items (and the strip below them) revealed individually stayed unblurred after navigating away, e.g. back to
   the Library from an item page. They now reset when you move to a different page (not when clicking through
