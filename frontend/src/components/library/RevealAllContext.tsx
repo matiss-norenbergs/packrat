@@ -1,5 +1,5 @@
 import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { useLocation } from "react-router-dom"
+import { useMatches } from "react-router-dom"
 
 interface RevealAllContextValue {
   revealAll: boolean
@@ -25,8 +25,11 @@ const RevealAllContext = createContext<RevealAllContextValue>({
 // revealed rather than leaving them stuck open.
 //
 // With `clearOnNavigate` (the shared AppLayout provider) the individually
-// revealed items are also dropped whenever the route pathname changes, so
+// revealed items are also dropped whenever the matched route changes, so
 // they behave as if each page had its own provider; reveal-all itself is kept.
+// "Route change" means a different matched route, not a different URL: moving
+// between items of the same page (/library/1 -> /library/2, e.g. via the
+// "More from this collection" strip) keeps the reveals. Needs a data router.
 // Per-page providers (Browse, compare player) omit it and are unchanged.
 export function RevealAllProvider({ children, clearOnNavigate = false }: { children: ReactNode; clearOnNavigate?: boolean }) {
   const [revealAll, setRevealAll] = useState(false)
@@ -60,7 +63,7 @@ export function RevealAllProvider({ children, clearOnNavigate = false }: { child
 
   return (
     <RevealAllContext.Provider value={{ revealAll, isRevealed, toggleItem, revealItems, toggleRevealAll }}>
-      {clearOnNavigate && <ClearOnPathChange onChange={() => setRevealedIds((prev) => (prev.size ? new Set() : prev))} />}
+      {clearOnNavigate && <ClearOnRouteChange onChange={() => setRevealedIds((prev) => (prev.size ? new Set() : prev))} />}
       {children}
     </RevealAllContext.Provider>
   )
@@ -71,14 +74,16 @@ export function useRevealAll() {
 }
 
 // Layout effect so the re-blur lands before the new page paints (no flash of
-// still-revealed items). Only the pathname matters: query-string changes
-// (search, filters, sort) and the Library view mode keep the reveals.
-function ClearOnPathChange({ onChange }: { onChange: () => void }) {
-  const { pathname } = useLocation()
-  const previous = useRef(pathname)
+// still-revealed items). Keyed on the id of the deepest matched route: params
+// (/library/:id), the query string (search, filters, sort) and the Library
+// view mode all leave it unchanged, so they keep the reveals.
+function ClearOnRouteChange({ onChange }: { onChange: () => void }) {
+  const matches = useMatches()
+  const routeId = matches[matches.length - 1]?.id
+  const previous = useRef(routeId)
   useLayoutEffect(() => {
-    if (previous.current === pathname) return
-    previous.current = pathname
+    if (previous.current === routeId) return
+    previous.current = routeId
     onChange()
   })
   return null

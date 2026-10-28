@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { ThemeProvider } from "next-themes"
-import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
+import { Link, RouterProvider, createMemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useRevealAll } from "@/components/library/RevealAllContext"
 import { AppLayout } from "@/layouts/AppLayout"
@@ -32,30 +32,38 @@ afterEach(() => {
 
 const IDS = [1, 2, 3]
 
-function Page({ name, to }: { name: string; to: string }) {
+function Page({ name }: { name: string }) {
   const { isRevealed, toggleItem, revealItems, toggleRevealAll } = useRevealAll()
   return (
     <div>
       <span data-testid={name}>{IDS.filter(isRevealed).join(",") || "none"}</span>
       <button onClick={() => { toggleItem(1); revealItems([2, 3]) }}>reveal</button>
       <button onClick={toggleRevealAll}>all</button>
-      <Link to={to}>go</Link>
+      <Link to="/library">library</Link>
+      <Link to="/library/2">sibling</Link>
+      <Link to="/compare-list">compare</Link>
     </div>
   )
 }
 
 function renderApp() {
+  const router = createMemoryRouter(
+    [
+      {
+        element: <AppLayout />,
+        children: [
+          { path: "/library/:id", element: <Page name="item" /> },
+          { path: "/library", element: <Page name="library" /> },
+          { path: "/compare-list", element: <Page name="compare" /> },
+        ],
+      },
+    ],
+    { initialEntries: ["/library/1"] },
+  )
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <MemoryRouter initialEntries={["/library/1"]}>
-          <Routes>
-            <Route element={<AppLayout />}>
-              <Route path="/library/:id" element={<Page name="item" to="/library" />} />
-              <Route path="/library" element={<Page name="library" to="/library/1" />} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </ThemeProvider>
     </QueryClientProvider>,
   )
@@ -63,22 +71,45 @@ function renderApp() {
 
 const click = (name: string) => userEvent.click(screen.getByRole("button", { name }))
 
+const link = (name: string) => userEvent.click(screen.getByRole("link", { name }))
+const ready = () => waitFor(() => expect(screen.getByTestId("item")).toBeTruthy())
+
 describe("AppLayout reveal state across navigation", () => {
-  it("re-blurs an item and its siblings revealed on the item page once the user leaves it", async () => {
+  it("keeps the item and its siblings revealed when clicking through the strip (same route)", async () => {
     renderApp()
-    await waitFor(() => expect(screen.getByTestId("item")).toBeTruthy())
+    await ready()
+    await click("reveal")
+    await link("sibling")
+    expect(screen.getByTestId("item").textContent).toBe("1,2,3")
+  })
+
+  it("re-blurs the item and its siblings once the user leaves the item page", async () => {
+    renderApp()
+    await ready()
     await click("reveal")
     expect(screen.getByTestId("item").textContent).toBe("1,2,3")
-    await userEvent.click(screen.getByRole("link", { name: "go" }))
+    await link("library")
     expect(screen.getByTestId("library").textContent).toBe("none")
   })
 
-  it("keeps everything revealed on both pages while reveal-all is on", async () => {
+  it("re-blurs when moving from the library to another page", async () => {
     renderApp()
-    await waitFor(() => expect(screen.getByTestId("item")).toBeTruthy())
+    await ready()
+    await link("library")
+    await click("reveal")
+    await link("compare")
+    expect(screen.getByTestId("compare").textContent).toBe("none")
+  })
+
+  it("keeps everything revealed on every page while reveal-all is on", async () => {
+    renderApp()
+    await ready()
     await click("all")
+    await link("sibling")
     expect(screen.getByTestId("item").textContent).toBe("1,2,3")
-    await userEvent.click(screen.getByRole("link", { name: "go" }))
+    await link("library")
     expect(screen.getByTestId("library").textContent).toBe("1,2,3")
+    await link("compare")
+    expect(screen.getByTestId("compare").textContent).toBe("1,2,3")
   })
 })
