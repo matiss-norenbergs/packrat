@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
@@ -72,7 +74,7 @@ func (f *privacyFixture) setPrivacy(on bool) {
 
 func (f *privacyFixture) collection(name string, parent *int64, private bool) *int64 {
 	f.t.Helper()
-	id, err := f.collections.Create(f.ctx, &models.Collection{Name: name, ParentID: parent, IsPrivate: private})
+	id, err := f.collections.Create(f.ctx, &models.Collection{Name: name, RootPath: name, ParentID: parent, IsPrivate: private})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -120,11 +122,29 @@ func (f *privacyFixture) get(id int64) models.LibraryItem {
 // JSON body into out.
 func serve(t *testing.T, mount func(r *gin.Engine), method, url string, out any) *httptest.ResponseRecorder {
 	t.Helper()
+	return serveJSON(t, mount, method, url, nil, out)
+}
+
+// serveJSON is serve with a JSON request body (nil = none).
+func serveJSON(t *testing.T, mount func(r *gin.Engine), method, url string, body any, out any) *httptest.ResponseRecorder {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	mount(r)
+	var reader io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reader = bytes.NewReader(raw)
+	}
+	req := httptest.NewRequest(method, url, reader)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(method, url, nil))
+	r.ServeHTTP(w, req)
 	if out != nil && w.Body.Len() > 0 {
 		if err := json.Unmarshal(w.Body.Bytes(), out); err != nil {
 			t.Fatalf("decoding %s %s response %q: %v", method, url, w.Body.String(), err)

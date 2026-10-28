@@ -206,7 +206,7 @@ func SetLibraryThumbnailGalleryFavorite(galleryRepo *repository.ThumbnailGallery
 // item's active thumbnail — the gallery-side equivalent of SetLibraryThumbnail,
 // reusing the same writeThumbnailAndRespond finish (derivatives, stale
 // AI-enhancement backup cleanup, response shape).
-func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *repository.LibraryRepo, galleryRepo *repository.ThumbnailGalleryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
+func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *repository.LibraryRepo, galleryRepo *repository.ThumbnailGalleryRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -261,7 +261,7 @@ func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, 
 			return
 		}
 
-		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, originalsRepo, galleryRepo, id, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
+		writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, id, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
 	}
 }
 

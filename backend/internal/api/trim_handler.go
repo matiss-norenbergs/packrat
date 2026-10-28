@@ -145,7 +145,7 @@ func resolveTrimPreviewPath(mediaRoot, previewPath string) (string, error) {
 
 // AcceptLibraryItemTrim overwrites the item's media file with the
 // already-generated preview and updates the stored duration/size to match.
-func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath string, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, galleryRepo *repository.ThumbnailGalleryRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
+func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath string, ytdlp *downloader.YtDlpService, responder *ItemResponder) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -202,38 +202,12 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 			return
 		}
 
-		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), settingsRepo)
+		resp, err := responder.Response(c.Request.Context(), *updated)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		var blurred bool
-		if privacyEnabled && updated.CollectionID != nil {
-			blurred, err = collectionsRepo.IsPrivate(c.Request.Context(), *updated.CollectionID)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-		}
-		tags, err := tagsRepo.TagsForLibraryItem(c.Request.Context(), id)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if !blurred && privacyEnabled {
-			blurred, err = tagsRepo.HasPrivateTag(c.Request.Context(), tags)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-		}
-
-		galleryCount, err := galleryRepo.CountByLibraryItemID(c.Request.Context(), id)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, galleryCount, mediaRoot))
+		c.JSON(http.StatusOK, resp)
 	}
 }
 
