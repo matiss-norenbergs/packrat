@@ -107,7 +107,7 @@ describe("CollectionInfoPanel privacy", () => {
     expect(blurred()).toBe(false)
   })
 
-  it("click reveals and hides; the reveal is kept per collection across selection", async () => {
+  it("a click reveal lasts only while that collection stays selected", async () => {
     const user = userEvent.setup()
     renderPanel(GRAND)
     await waitFor(() => expect(blurred()).toBe(true))
@@ -115,10 +115,52 @@ describe("CollectionInfoPanel privacy", () => {
     expect(blurred()).toBe(false)
     await user.click(screen.getByText("select Heat"))
     expect(blurred()).toBe(true)
+    await user.click(cover())
+    expect(blurred()).toBe(false)
     await user.click(screen.getByText("select Movies"))
+    expect(blurred()).toBe(true)
+    await user.click(cover())
     expect(blurred()).toBe(false)
     await user.click(cover())
     expect(blurred()).toBe(true)
+  })
+
+  it("a click reveal is dropped when the panel closes and reopens", async () => {
+    const user = userEvent.setup()
+    serve()
+    function Toggle() {
+      const [open, setOpen] = useState(true)
+      return (
+        <>
+          <button onClick={() => setOpen((o) => !o)}>toggle panel</button>
+          {open && <CollectionInfoPanel collection={GRAND} selectedCount={1} />}
+        </>
+      )
+    }
+    renderWithProviders(
+      <TooltipProvider>
+        <RevealAllProvider>
+          <Toggle />
+        </RevealAllProvider>
+      </TooltipProvider>,
+    )
+    await waitFor(() => expect(blurred()).toBe(true))
+    await user.click(cover())
+    expect(blurred()).toBe(false)
+    await user.click(screen.getByText("toggle panel"))
+    await user.click(screen.getByText("toggle panel"))
+    await waitFor(() => expect(blurred()).toBe(true))
+  })
+
+  it("reveal-all keeps each selected cover revealed across selection changes", async () => {
+    const user = userEvent.setup()
+    renderPanel(GRAND)
+    await waitFor(() => expect(blurred()).toBe(true))
+    await user.click(screen.getByText("toggle all"))
+    for (const name of ["Heat", "Action", "Movies"]) {
+      await user.click(screen.getByText(`select ${name}`))
+      expect(blurred()).toBe(false)
+    }
   })
 
   it("reveal-all reveals and turning it off re-blurs, including individual reveals", async () => {

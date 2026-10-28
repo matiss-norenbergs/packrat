@@ -1,10 +1,11 @@
-import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { useMatches } from "react-router-dom"
 
 interface RevealAllContextValue {
   revealAll: boolean
   isRevealed: (id: number) => boolean
   toggleItem: (id: number) => void
+  hideItem: (id: number) => void
   revealItems: (ids: number[]) => void
   toggleRevealAll: () => void
   hideAll: () => void
@@ -14,6 +15,7 @@ const RevealAllContext = createContext<RevealAllContextValue>({
   revealAll: false,
   isRevealed: () => false,
   toggleItem: () => {},
+  hideItem: () => {},
   revealItems: () => {},
   toggleRevealAll: () => {},
   hideAll: () => {},
@@ -61,6 +63,18 @@ export function RevealAllProvider({ children, clearOnNavigate = false }: { child
     })
   }
 
+  // Drops one individually revealed key; leaves reveal-all and every other key
+  // alone, and is a no-op when the key isn't revealed. Stable identity so
+  // effects can depend on it.
+  const hideItem = useCallback((id: number) => {
+    setRevealedIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }, [])
+
   // Additive only — used to bring a whole collection along when its main
   // item is revealed, without disturbing anything a user already toggled
   // individually elsewhere.
@@ -71,7 +85,7 @@ export function RevealAllProvider({ children, clearOnNavigate = false }: { child
   const isRevealed = (id: number) => revealAll || revealedIds.has(id)
 
   return (
-    <RevealAllContext.Provider value={{ revealAll, isRevealed, toggleItem, revealItems, toggleRevealAll, hideAll }}>
+    <RevealAllContext.Provider value={{ revealAll, isRevealed, toggleItem, hideItem, revealItems, toggleRevealAll, hideAll }}>
       {clearOnNavigate && <ClearOnRouteChange onChange={() => setRevealedIds((prev) => (prev.size ? new Set() : prev))} />}
       {children}
     </RevealAllContext.Provider>
