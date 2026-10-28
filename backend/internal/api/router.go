@@ -136,6 +136,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		public.POST("/auth/logout", AuthLogout(deps.UsersRepo))
 	}
 
+	itemResponder := NewItemResponder(deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailGalleryRepo, deps.MediaRoot)
+
 	api := r.Group("/api")
 	api.Use(RequireAuth(deps.UsersRepo), RequireCSRF())
 	{
@@ -184,7 +186,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		}
 
 		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
-		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo, deps.SettingsRepo))
+		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.SettingsRepo))
 		api.POST("/downloads/preview", PreviewDownloadMetadata(deps.YtDlp, deps.LibraryRepo))
 		api.GET("/downloads/preview-image", PreviewImage(deps.SettingsRepo))
 		api.POST("/downloads/playlist", CreatePlaylistDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo, deps.LibraryRepo, deps.HistoryRepo, deps.YtDlp))
@@ -193,9 +195,9 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/downloads/:id", DeleteDownload(deps.DownloadsRepo))
 		api.POST("/downloads/clear-log", ClearDownloadLog(deps.DownloadsRepo))
 
-		api.GET("/library", ListLibrary(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo, deps.MediaRoot))
+		api.GET("/library", ListLibrary(deps.LibraryRepo, itemResponder))
 		api.GET("/library/facets", GetLibraryFacets(deps.LibraryRepo))
-		api.GET("/library/:id", GetLibraryItem(deps.LibraryRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo, deps.MediaRoot))
+		api.GET("/library/:id", GetLibraryItem(deps.LibraryRepo, itemResponder))
 		api.POST("/library/ghost", CreateGhostLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.ImagesRoot, deps.YtDlp, deps.TagsRepo))
 		api.DELETE("/library/:id/file", DeleteLibraryItemFile(deps.LibraryRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.MediaRoot, deps.ImagesRoot))
 		api.POST("/library/scan-missing", ScanMissingLibraryFiles(deps.MediaRoot, deps.LibraryRepo))
@@ -256,7 +258,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/tags/:id", DeleteTag(deps.TagsRepo))
 		api.POST("/tags/bulk-delete", BulkDeleteTags(deps.DB, deps.TagsRepo))
 
-		api.GET("/compare-list", compareListOnly, ListCompareList(deps.CompareListRepo, deps.TagsRepo, deps.CollectionsRepo, deps.ThumbnailGalleryRepo, deps.SettingsRepo, deps.MediaRoot))
+		api.GET("/compare-list", compareListOnly, ListCompareList(deps.CompareListRepo, itemResponder))
 		api.POST("/compare-list", compareListOnly, AddToCompareList(deps.CompareListRepo))
 		api.DELETE("/compare-list/:id", compareListOnly, RemoveFromCompareList(deps.CompareListRepo))
 		api.DELETE("/compare-list", compareListOnly, ClearCompareList(deps.CompareListRepo))

@@ -2,9 +2,14 @@ package api
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/models"
@@ -15,6 +20,7 @@ import (
 // path needs, with small seed helpers. Shared by the privacy tests.
 type privacyFixture struct {
 	t           *testing.T
+	conn        *sql.DB
 	ctx         context.Context
 	settings    *repository.SettingsRepo
 	collections *repository.CollectionsRepo
@@ -41,6 +47,7 @@ func newPrivacyFixture(t *testing.T) *privacyFixture {
 	}
 	return &privacyFixture{
 		t:           t,
+		conn:        conn,
 		ctx:         context.Background(),
 		settings:    repository.NewSettingsRepo(conn),
 		collections: repository.NewCollectionsRepo(conn),
@@ -107,4 +114,50 @@ func (f *privacyFixture) get(id int64) models.LibraryItem {
 		f.t.Fatal(err)
 	}
 	return *item
+}
+
+// serve performs a request against a router built by mount and decodes the
+// JSON body into out.
+func serve(t *testing.T, mount func(r *gin.Engine), method, url string, out any) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	mount(r)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(method, url, nil))
+	if out != nil && w.Body.Len() > 0 {
+		if err := json.Unmarshal(w.Body.Bytes(), out); err != nil {
+			t.Fatalf("decoding %s %s response %q: %v", method, url, w.Body.String(), err)
+		}
+	}
+	return w
+}
+
+// privacyScenario seeds the shared cases the handler tests check: an item in
+// a child collection whose parent is private (child itself is not), an item
+// with a private tag only, and a plain item.
+type privacyScenario struct {
+	inPrivateParent, privateTagged, plain int64
+	child                                 *int64
+}
+
+func (f *privacyFixture) scenario() privacyScenario {
+	parent := f.collection("parent", nil, true)
+	child := f.collection("child", parent, false)
+	f.tag("secret", true)
+	return privacyScenario{
+		inPrivateParent: f.item("in-parent", child),
+		privateTagged:   f.item("tagged", nil, "secret"),
+		plain:           f.item("plain", nil),
+		child:           child,
+	}
+}
+
+// blurredByID flattens a list of item responses to id -> blurred.
+func blurredByID(items []LibraryItemResponse) map[int64]bool {
+	m := make(map[int64]bool, len(items))
+	for _, it := range items {
+		m[it.ID] = it.Blurred
+	}
+	return m
 }
