@@ -285,14 +285,29 @@ in the same `LibraryRepo.Query` method.
 
 ## Privacy: private collections and private tags
 
-An item is `blurred` if **either** of two independent things is true: its collection (or an
-ancestor collection) is marked private, or any tag assigned to it is marked private. Collection
-privacy is inheritance-aware (`CollectionsRepo.IsPrivate`/`effectivePrivacyMap`, walking the
-`parentId` chain); tag privacy has no hierarchy to walk — a tag is just private or not
-(`TagsRepo.HasPrivateTag`). Both are OR'd together at read time in `ListLibrary`,
-`RefreshLibraryItemMetadata`, and the thumbnail handlers, so blur status always reflects current
-collection/tag state rather than being cached on the item row. The compare list endpoint
-(`ListCompareList`) reuses this exact same resolution, so a private item shows blurred in the
+An item is `blurred` if the privacy master switch (`privacy_enabled`) is on **and** either of two
+independent things is true: its collection (or an ancestor collection) is marked private, or any tag
+assigned to it is marked private. Collection privacy is inheritance-aware (`effectivePrivacyMap`
+over the full collections list, resolving the `parentId` chain); tag privacy has no hierarchy — a
+tag is just private or not. Blur status is computed at read time from current collection/tag state,
+never cached on the item row.
+
+That decision lives in exactly one place: `ItemPrivacy.Blurred(collectionID, tagNames)`
+(`internal/api/item_privacy.go`), loaded once per request with `LoadItemPrivacy` (master switch,
+effective collection privacy, private tag names). It returns false whenever privacy is off, so no
+endpoint can leak a blur flag with the switch off. Every endpoint that returns library items builds
+its response through `ItemResponder` (`Responses` for lists, `Response` for one item), which
+batch-loads tags and gallery counts and applies the resolver: `GET /api/library` and
+`/library/:id`, the compare list, refresh-metadata, trim accept, the thumbnail writes
+(`writeThumbnailAndRespond`, shared by thumbnail set/quick-grab/redownload, gallery apply and
+frame-match accept), file import and ghost creation. Single-item responses re-read the item's tags
+from the DB, so they reflect what was actually stored.
+
+The downloads list is the one deliberate exception to the *tags* half of the rule: queue rows blur
+by collection only (`Blurred(d.CollectionID, nil)`), because a download has no tags until it
+completes into a library item. It still gets the master switch and ancestor handling from the same
+resolver. The collections list's `effectiveIsPrivate` uses `effectivePrivacyMap` directly (it is
+not an item response). The compare list shares all of this, so a private item shows blurred in the
 compare grid too, gated by the same reveal-all mechanism.
 
 ## Ghost items are not a separate table

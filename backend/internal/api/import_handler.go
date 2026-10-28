@@ -112,7 +112,7 @@ func resolveCollectionPathStatus(cols []models.Collection, segments []string) (c
 // image if one exists, else — only if originalUrl was given — a best-effort
 // yt-dlp thumbnail-only fetch), and creates the library row. Never triggers
 // a real download or a full metadata refresh.
-func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, ytdlp *downloader.YtDlpService, ffprobePath string) gin.HandlerFunc {
+func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, ytdlp *downloader.YtDlpService, ffprobePath string, responder *ItemResponder) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
@@ -225,17 +225,12 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 			return
 		}
 
-		var blurred bool
-		if created.CollectionID != nil {
-			blurred, err = collectionsRepo.IsPrivate(ctx, *created.CollectionID)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+		resp, err := responder.Response(ctx, *created)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
-		// galleryCount is always 0 here — this item was just created above,
-		// so no gallery row could possibly reference its id yet.
-		c.JSON(http.StatusCreated, toLibraryItemResponse(*created, blurred, []string{}, 0, mediaRoot))
+		c.JSON(http.StatusCreated, resp)
 	}
 }
 

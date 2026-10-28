@@ -25,7 +25,7 @@ import (
 // to "" (the same empty-string sentinel LibraryRepo.ClearFile uses) and
 // status to "ghost" — both columns are NOT NULL but otherwise
 // unconstrained, so this needs no schema change to store.
-func CreateGhostLibraryItem(libraryRepo *repository.LibraryRepo, mediaRoot, imagesRoot string, ytdlp *downloader.YtDlpService, tagsRepo *repository.TagsRepo) gin.HandlerFunc {
+func CreateGhostLibraryItem(libraryRepo *repository.LibraryRepo, imagesRoot string, ytdlp *downloader.YtDlpService, tagsRepo *repository.TagsRepo, responder *ItemResponder) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
@@ -76,9 +76,12 @@ func CreateGhostLibraryItem(libraryRepo *repository.LibraryRepo, mediaRoot, imag
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		// galleryCount is always 0 here — this item was just created above,
-		// so no gallery row could possibly reference its id yet.
-		c.JSON(http.StatusCreated, toLibraryItemResponse(*created, false, req.Tags, 0, mediaRoot))
+		resp, err := responder.Response(ctx, *created)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusCreated, resp)
 	}
 }
 

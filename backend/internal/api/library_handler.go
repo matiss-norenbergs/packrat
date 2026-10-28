@@ -51,7 +51,7 @@ func writeRenamePairError(c *gin.Context, err error) {
 // the "pagination is opt-in, default off" behavior in Settings. collectionIds
 // is a separate IN-match filter (used to resolve a bulk-selected folder plus
 // its nested subcollections) that takes precedence over collectionId.
-func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, galleryRepo *repository.ThumbnailGalleryRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
+func ListLibrary(repo *repository.LibraryRepo, responder *ItemResponder) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		q := repository.LibraryQuery{
 			Search:  c.Query("q"),
@@ -119,50 +119,10 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 			return
 		}
 
-		cols, err := collectionsRepo.List(c.Request.Context())
+		out, err := responder.Responses(c.Request.Context(), rows)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
-		}
-		privacy := effectivePrivacyMap(cols)
-
-		ids := make([]int64, len(rows))
-		for i, item := range rows {
-			ids[i] = item.ID
-		}
-		tagsByID, err := tagsRepo.TagsByLibraryIDs(c.Request.Context(), ids)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		privateTagNames, err := tagsRepo.PrivateTagNames(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), settingsRepo)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		galleryCountByID, err := galleryRepo.CountsByLibraryItemIDs(c.Request.Context(), ids)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		out := make([]LibraryItemResponse, 0, len(rows))
-		for _, item := range rows {
-			blurred := privacyEnabled && item.CollectionID != nil && privacy[*item.CollectionID]
-			if !blurred && privacyEnabled {
-				for _, t := range tagsByID[item.ID] {
-					if privateTagNames[t] {
-						blurred = true
-						break
-					}
-				}
-			}
-			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID], galleryCountByID[item.ID], mediaRoot))
 		}
 		c.JSON(http.StatusOK, LibraryListResponse{Items: out, Total: total})
 	}
@@ -173,7 +133,7 @@ func ListLibrary(repo *repository.LibraryRepo, collectionsRepo *repository.Colle
 // for a caller that needs one item's full response shape (e.g. checking its
 // privacy status before showing its title in a desktop notification)
 // without fetching/filtering the whole list.
-func GetLibraryItem(repo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, galleryRepo *repository.ThumbnailGalleryRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
+func GetLibraryItem(repo *repository.LibraryRepo, responder *ItemResponder) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -190,46 +150,12 @@ func GetLibraryItem(repo *repository.LibraryRepo, collectionsRepo *repository.Co
 			return
 		}
 
-		cols, err := collectionsRepo.List(c.Request.Context())
+		resp, err := responder.Response(c.Request.Context(), *item)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		privacy := effectivePrivacyMap(cols)
-
-		ids := []int64{id}
-		tagsByID, err := tagsRepo.TagsByLibraryIDs(c.Request.Context(), ids)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		privateTagNames, err := tagsRepo.PrivateTagNames(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), settingsRepo)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		galleryCountByID, err := galleryRepo.CountsByLibraryItemIDs(c.Request.Context(), ids)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		blurred := privacyEnabled && item.CollectionID != nil && privacy[*item.CollectionID]
-		if !blurred && privacyEnabled {
-			for _, t := range tagsByID[item.ID] {
-				if privateTagNames[t] {
-					blurred = true
-					break
-				}
-			}
-		}
-
-		c.JSON(http.StatusOK, toLibraryItemResponse(*item, blurred, tagsByID[item.ID], galleryCountByID[item.ID], mediaRoot))
+		c.JSON(http.StatusOK, resp)
 	}
 }
 
@@ -728,7 +654,7 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 // RefreshLibraryItemMetadata re-fetches yt-dlp metadata for the item's
 // original URL and updates the display fields — it never touches the
 // media file or thumbnail already on disk.
-func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, galleryRepo *repository.ThumbnailGalleryRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
+func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, tagsRepo *repository.TagsRepo, responder *ItemResponder, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -779,44 +705,18 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 			return
 		}
 
-		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), settingsRepo)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		var blurred bool
-		if privacyEnabled && updated.CollectionID != nil {
-			blurred, err = collectionsRepo.IsPrivate(c.Request.Context(), *updated.CollectionID)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-		}
-		tags, err := tagsRepo.TagsForLibraryItem(c.Request.Context(), id)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if !blurred && privacyEnabled {
-			blurred, err = tagsRepo.HasPrivateTag(c.Request.Context(), tags)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-		}
-
 		if updated.GenerateNFO && updated.Path != "" {
 			if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, updated); err != nil {
 				log.Printf("library: writing nfo for %d failed: %v", id, err)
 			}
 		}
 
-		galleryCount, err := galleryRepo.CountByLibraryItemID(c.Request.Context(), id)
+		resp, err := responder.Response(c.Request.Context(), *updated)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, galleryCount, mediaRoot))
+		c.JSON(http.StatusOK, resp)
 	}
 }
 

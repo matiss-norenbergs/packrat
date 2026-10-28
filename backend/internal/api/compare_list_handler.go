@@ -13,7 +13,7 @@ import (
 // ListCompareList returns every item currently on the compare list, oldest
 // added first — the same tag/privacy resolution ListLibrary does, so a
 // private item shows blurred here exactly like everywhere else.
-func ListCompareList(repo *repository.CompareListRepo, tagsRepo *repository.TagsRepo, collectionsRepo *repository.CollectionsRepo, galleryRepo *repository.ThumbnailGalleryRepo, settingsRepo *repository.SettingsRepo, mediaRoot string) gin.HandlerFunc {
+func ListCompareList(repo *repository.CompareListRepo, responder *ItemResponder) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
@@ -21,50 +21,10 @@ func ListCompareList(repo *repository.CompareListRepo, tagsRepo *repository.Tags
 			return
 		}
 
-		cols, err := collectionsRepo.List(c.Request.Context())
+		out, err := responder.Responses(c.Request.Context(), rows)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
-		}
-		privacy := effectivePrivacyMap(cols)
-
-		ids := make([]int64, len(rows))
-		for i, item := range rows {
-			ids[i] = item.ID
-		}
-		tagsByID, err := tagsRepo.TagsByLibraryIDs(c.Request.Context(), ids)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		privateTagNames, err := tagsRepo.PrivateTagNames(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), settingsRepo)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		galleryCountByID, err := galleryRepo.CountsByLibraryItemIDs(c.Request.Context(), ids)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		out := make([]LibraryItemResponse, 0, len(rows))
-		for _, item := range rows {
-			blurred := privacyEnabled && item.CollectionID != nil && privacy[*item.CollectionID]
-			if !blurred && privacyEnabled {
-				for _, t := range tagsByID[item.ID] {
-					if privateTagNames[t] {
-						blurred = true
-						break
-					}
-				}
-			}
-			out = append(out, toLibraryItemResponse(item, blurred, tagsByID[item.ID], galleryCountByID[item.ID], mediaRoot))
 		}
 		c.JSON(http.StatusOK, out)
 	}

@@ -137,7 +137,7 @@ func resolveDuration(ctx context.Context, known *int, mediaAbs, ffprobePath stri
 // RedownloadLibraryThumbnail re-fetches just the thumbnail image from the
 // item's original URL, overwriting whatever is there now — reuses the same
 // YtDlpService.FetchThumbnail already used by Import.
-func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, galleryRepo *repository.ThumbnailGalleryRepo) gin.HandlerFunc {
+func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -174,13 +174,13 @@ func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 			return
 		}
 
-		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, originalsRepo, galleryRepo, id, mediaRoot, imagesRoot, ytdlp.FFmpegPath, thumbPath)
+		writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, id, mediaRoot, imagesRoot, ytdlp.FFmpegPath, thumbPath)
 	}
 }
 
 // QuickGrabLibraryThumbnail extracts one frame from the video file at a
 // random timestamp and immediately makes it the thumbnail.
-func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, ffprobePath string, settingsRepo *repository.SettingsRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, galleryRepo *repository.ThumbnailGalleryRepo) gin.HandlerFunc {
+func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, ffprobePath string, settingsRepo *repository.SettingsRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -230,7 +230,7 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 			return
 		}
 
-		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, originalsRepo, galleryRepo, id, mediaRoot, imagesRoot, ytdlp.FFmpegPath, thumbAbs)
+		writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, id, mediaRoot, imagesRoot, ytdlp.FFmpegPath, thumbAbs)
 	}
 }
 
@@ -458,7 +458,7 @@ func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.Lib
 // thumbnail — the finalize step for the "choose from video" flow (the
 // frontend sends back exactly the bytes it displayed, so no server-side
 // temp state is needed in between).
-func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, galleryRepo *repository.ThumbnailGalleryRepo) gin.HandlerFunc {
+func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *repository.LibraryRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -500,7 +500,7 @@ func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *
 			return
 		}
 
-		writeThumbnailAndRespond(c, libraryRepo, collectionsRepo, tagsRepo, originalsRepo, galleryRepo, id, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
+		writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, id, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
 	}
 }
 
@@ -560,7 +560,7 @@ func DeleteLibraryItemThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 	}
 }
 
-func writeThumbnailAndRespond(c *gin.Context, libraryRepo *repository.LibraryRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, galleryRepo *repository.ThumbnailGalleryRepo, id int64, mediaRoot, imagesRoot, ffmpegPath, thumbAbs string) {
+func writeThumbnailAndRespond(c *gin.Context, libraryRepo *repository.LibraryRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, id int64, mediaRoot, imagesRoot, ffmpegPath, thumbAbs string) {
 	ctx := c.Request.Context()
 
 	existing, err := libraryRepo.Get(ctx, id)
@@ -621,30 +621,10 @@ func writeThumbnailAndRespond(c *gin.Context, libraryRepo *repository.LibraryRep
 		return
 	}
 
-	var blurred bool
-	if updated.CollectionID != nil {
-		blurred, err = collectionsRepo.IsPrivate(ctx, *updated.CollectionID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-	}
-	tags, err := tagsRepo.TagsForLibraryItem(ctx, id)
+	resp, err := responder.Response(ctx, *updated)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if !blurred {
-		blurred, err = tagsRepo.HasPrivateTag(ctx, tags)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-	}
-	galleryCount, err := galleryRepo.CountByLibraryItemID(ctx, id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, toLibraryItemResponse(*updated, blurred, tags, galleryCount, mediaRoot))
+	c.JSON(http.StatusOK, resp)
 }

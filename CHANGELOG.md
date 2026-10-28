@@ -12,6 +12,14 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-28
+- **Library item responses apply the privacy rule consistently** — the thumbnail, file import and ghost
+  endpoints used to compute `blurred` on their own: the thumbnail and import responses ignored the privacy
+  master switch (an item in a private collection answered `blurred: true` with privacy off; import also ignored
+  tags), and ghost creation always answered `false`. Every endpoint that returns a library item now goes through
+  one resolver (master switch AND private collection/ancestor OR private tag). No JSON or route changes; the UI
+  already refetched after these calls, so nothing visible changes.
+
 ## 2026-10-27
 - **Reveal-all is now one floating button** — the eye toggle moved out of the Library and Compare list
   toolbars into a floating button at the bottom-left (Library, library item and Compare list pages). It only

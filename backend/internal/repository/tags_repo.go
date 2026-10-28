@@ -352,31 +352,6 @@ func (r *TagsRepo) PrivateTagNames(ctx context.Context) (map[string]bool, error)
 	return out, rows.Err()
 }
 
-// HasPrivateTag reports whether any of the given tag names is currently
-// marked private — the single-item counterpart to PrivateTagNames, used by
-// response-building call sites that already have one item's tag names in
-// hand (e.g. after refreshing metadata or setting a thumbnail) rather than
-// a whole list.
-func (r *TagsRepo) HasPrivateTag(ctx context.Context, names []string) (bool, error) {
-	if len(names) == 0 {
-		return false, nil
-	}
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(names)), ",")
-	args := make([]any, len(names))
-	for i, n := range names {
-		args[i] = n
-	}
-	var exists int
-	err := r.db.QueryRowContext(ctx, `SELECT 1 FROM tags WHERE is_private = 1 AND name IN (`+placeholders+`) LIMIT 1`, args...).Scan(&exists)
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("checking private tags: %w", err)
-	}
-	return true, nil
-}
-
 // TagsForLibraryItem is a single-item convenience wrapper around
 // TagsByLibraryIDs for call sites that already have exactly one id.
 func (r *TagsRepo) TagsForLibraryItem(ctx context.Context, id int64) ([]string, error) {

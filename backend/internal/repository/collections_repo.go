@@ -282,26 +282,6 @@ func (r *CollectionsRepo) ResolvePath(ctx context.Context, id int64) (string, er
 	return path.Join(segments...), nil
 }
 
-// IsPrivate reports whether the collection identified by id, or any of its
-// ancestors, is marked private — privacy inherits down the tree, so marking
-// a top-level collection private covers every collection nested under it
-// too. Used for single-item responses where fetching the whole collections
-// list (see effectivePrivacyMap in the api package) would be overkill.
-func (r *CollectionsRepo) IsPrivate(ctx context.Context, id int64) (bool, error) {
-	currentID := &id
-	for currentID != nil {
-		c, err := r.Get(ctx, *currentID)
-		if err != nil {
-			return false, err
-		}
-		if c.IsPrivate {
-			return true, nil
-		}
-		currentID = c.ParentID
-	}
-	return false, nil
-}
-
 // EnsureChain walks segments (folder names from the media root down,
 // e.g. from a scanned file's on-disk location) and returns the id of the
 // leaf collection, creating any collections along the way that don't

@@ -256,7 +256,8 @@ running:
 
 `status` is one of `queued`, `fetching_metadata`, `downloading`, `processing`, `completed`,
 `failed`, `cancelled`, `interrupted`. `percent` is forced to `100` once `status=completed`.
-`blurred` is true if the item's collection (or an ancestor) is private.
+`blurred` is true if privacy is enabled and the download's collection (or an ancestor) is private
+(collection only — a queued download has no tags yet).
 
 ### `POST /api/downloads/preview`
 
@@ -448,8 +449,11 @@ Response is always a wrapper, even with no pagination:
 }
 ```
 
-`blurred` is true if the item's collection (or an ancestor) is private, **or** any of its tags is
-marked private. `tags` is never `null` — `[]` if none. `mediaType` is `"video"`, `"audio"`, or
+`blurred` is true if privacy is enabled (Settings → Privacy master switch) **and** the item's
+collection (or an ancestor) is private, **or** any of its tags is marked private; it is always `false`
+when privacy is off. The rule is the same in every endpoint that returns a library item (list, get-one,
+compare list, refresh-metadata, trim accept, thumbnail set/redownload/quick-grab/gallery apply/frame-match
+accept, file import, ghost creation). `tags` is never `null` — `[]` if none. `mediaType` is `"video"`, `"audio"`, or
 `null` (unset ghost items only — see Ghost items below). `status` is `"completed"` for a real
 downloaded/imported item or `"ghost"` for a placeholder with no file.
 
