@@ -1014,7 +1014,7 @@ Identical pattern to Tags, minus `isPrivate`, plus an optional image gallery.
 |---|---|---|
 | GET | `/api/artists` | List all artists |
 | POST | `/api/artists` | Create an artist |
-| PATCH | `/api/artists/:id` | Rename an artist |
+| PATCH | `/api/artists/:id` | Update an artist (name, birthday, private flag) |
 | DELETE | `/api/artists/:id` | Delete an artist (and its gallery images on disk) |
 | POST | `/api/artists/bulk-delete` | Delete many at once (gallery images removed after commit) |
 | GET | `/api/artists/:id/image-candidates` | Suggest images from this artist's own library items |
@@ -1024,8 +1024,11 @@ Identical pattern to Tags, minus `isPrivate`, plus an optional image gallery.
 | POST | `/api/artists/:id/images/:imageId/select` | Set a gallery image as the display picture |
 | DELETE | `/api/artists/:id/selected-image` | Clear the display picture (gallery image itself untouched) |
 
-`Artist`: `{id, name, birthday, selectedImagePath, createdAt, usageCount}`. Body: `{ "name": "..." }`.
-`409` on name conflict. Deleting an artist referenced elsewhere doesn't fail — the foreign key is
+`Artist`: `{id, name, birthday, selectedImagePath, isPrivate, createdAt, usageCount}`. Create body:
+`{ "name": "...", "birthday"?: "YYYY-MM-DD" | null, "isPrivate"?: bool }` (`isPrivate` defaults to `false`).
+Update (`PATCH`) body: the same fields, but an **omitted `isPrivate` leaves the stored flag unchanged**, so
+older clients that don't send it can't reset it. `isPrivate` is the raw flag (like collections); the UI only
+acts on it while `privacyEnabled` is on. `409` on name conflict. Deleting an artist referenced elsewhere doesn't fail — the foreign key is
 `ON DELETE SET NULL`. `birthday` is a nullable date-only string (`"1990-01-01"`); `selectedImagePath`
 is a nullable relative path pointing at one of the artist's own gallery images (see below).
 

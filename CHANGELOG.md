@@ -13,6 +13,10 @@ Maintenance notes:
 -->
 
 ## 2026-10-29
+- **Artists can be marked Private** — new `isPrivate` flag (migration 000049; the artist dialog checkbox and a lock
+  column appear with privacy on). A private artist's images in the Artists page's right-hand panel are blurred,
+  revealed per artist by click or by the floating reveal-all button (which the Artists page now has; private artists
+  also count towards showing it). Backups don't carry the flag yet.
 - **AI Enhancement page hashes private item titles** — the history table and the "Enhancing: …" line show a hashed
   title for items of private collections or with private tags, revealed only by the floating reveal-all button (no
   click-to-reveal; the page now has the button). The history list API gained a per-entry `blurred` flag.

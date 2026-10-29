@@ -285,6 +285,11 @@ in the same `LibraryRepo.Query` method.
 
 ## Privacy: private collections and private tags
 
+Artists have the same explicit flag (`artists.is_private`, migration 000049; `PATCH` with the field omitted means
+unchanged), but it is deliberately narrow: only the Artists page's right-hand image panel blurs on it (frontend-gated
+on `privacyEnabled && artist.isPrivate`; the API returns the raw flag). No item response, Browse or dialog uses it, and
+library backups don't carry it yet (restore creates public artists; see `TODO.md`).
+
 An item is `blurred` if the privacy master switch (`privacy_enabled`) is on **and** either of two
 independent things is true: its collection (or an ancestor collection) is marked private, or any tag
 assigned to it is marked private. Collection privacy is inheritance-aware (`effectivePrivacyMap`
@@ -521,9 +526,12 @@ and calls `hideAll()` from a mount-only effect, so opening the page switches the
 The provider's reveal set is keyed by plain numbers: library item ids (positive integers), Browse show tiles
 (negated collection ids) and Downloads rows, which use `downloadRevealKey(id)` in `lib/revealKeys.ts`
 (`id + 0.5`, never an integer, so it can't collide with either) and the Collections info panel's cover, which
-uses `collectionRevealKey(id)` (`id + 0.25`, a non-integer that never ends in .5, so it is distinct from all three).
-The panel is a single focused view, so it drops its key (`hideItem(key)` from an effect cleanup) when the selection
+uses `collectionRevealKey(id)` (`id + 0.25`, a non-integer that never ends in .5, so it is distinct from all three),
+and the Artists image panel, which uses `artistRevealKey(id)` (`id + 0.75`, likewise distinct), one key shared by all of
+that artist's panel images.
+Both panels are a single focused view, so they drop their key (`hideItem(key)` from an effect cleanup) when the selection
 changes or the panel closes; reveal-all is unaffected.
+`useHasPrivateContent` (the one rule behind the floating button) also counts any artist with `isPrivate`.
 The panel blurs on `effectiveIsPrivate` and finds the "Inherited from …" ancestor with `nearestPrivateAncestor`
 (`lib/collectionTree.ts`).
 
