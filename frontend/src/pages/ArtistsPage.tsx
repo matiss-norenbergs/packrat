@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { format, parseISO } from "date-fns"
-import { ImageIcon, Pencil, Plus, Search, Trash2, X } from "lucide-react"
+import { ImageIcon, Lock, Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -18,13 +18,18 @@ import {
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { BlurredThumbnail } from "@/components/BlurredThumbnail"
+import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
+import { useRevealAll } from "@/components/library/RevealAllContext"
 import { ArtistDialog } from "@/components/artists/ArtistDialog"
 import { CollapsiblePanel } from "@/components/CollapsiblePanel"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { usePersistedOpen } from "@/hooks/usePersistedOpen"
 import { useArtistImages, useArtists, useBulkDeleteArtists } from "@/hooks/useArtists"
+import { useSettings } from "@/hooks/useSettings"
 import { imageUrl } from "@/lib/api"
 import { getPageNumbers } from "@/lib/pagination"
+import { artistRevealKey } from "@/lib/revealKeys"
 import { calculateAge, cn } from "@/lib/utils"
 import type { Artist } from "@/types/api"
 
@@ -41,6 +46,8 @@ export function ArtistsPage() {
   const [search, setSearch] = useState("")
   const [panelOpen, setPanelOpen] = usePersistedOpen("packrat:artists-panel-open", true)
   const bulkDeleteArtists = useBulkDeleteArtists()
+  const { data: settings } = useSettings()
+  const privacyEnabled = !!settings?.privacyEnabled
 
   // Drag-to-select: mousedown on a row starts the drag and anchors the
   // range; mouseenter on subsequent rows while the button is held extends
@@ -168,6 +175,7 @@ export function ArtistsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
       <h1 className="shrink-0 text-2xl font-semibold">Artists</h1>
+      <RevealAllFloatingAction />
 
       <div
         className={cn(
@@ -280,6 +288,7 @@ export function ArtistsPage() {
                         <TableHead>Name</TableHead>
                         <TableHead className="text-center">Birthday</TableHead>
                         <TableHead className="text-center">Usage</TableHead>
+                        {privacyEnabled && <TableHead className="text-center">Private</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -288,6 +297,7 @@ export function ArtistsPage() {
                           key={artist.id}
                           artist={artist}
                           selected={isSelected(artist.id)}
+                          privacyEnabled={privacyEnabled}
                           onSelectedChange={() => toggle(artist.id)}
                           onMouseDown={(e) => handleRowMouseDown(e, artist.id)}
                           onMouseEnter={() => handleRowMouseEnter(artist.id)}
@@ -315,8 +325,8 @@ export function ArtistsPage() {
           </div>
 
           {!isLoading && data && data.length > 0 && total > 0 && (
-            <div className="flex shrink-0 items-center justify-between">
-              <span className="text-sm text-muted-foreground">
+            <div className="flex shrink-0 flex-wrap-reverse items-center justify-between gap-2">
+              <span className="flex min-h-9 items-center pl-12 text-sm text-muted-foreground md:min-h-0">
                 {total} {total === 1 ? "artist" : "artists"}
               </span>
               <div className="flex items-center gap-1">
@@ -356,7 +366,7 @@ export function ArtistsPage() {
   )
 }
 
-function ArtistImagesPanel({
+export function ArtistImagesPanel({
   artist,
   selectedCount,
   panelOpen,
@@ -366,6 +376,19 @@ function ArtistImagesPanel({
   panelOpen: boolean
 }) {
   const { data: images, isLoading } = useArtistImages(artist?.id ?? 0, artist != null && panelOpen)
+  const { data: settings } = useSettings()
+  const { isRevealed, toggleItem, hideItem } = useRevealAll()
+
+  // One reveal key per artist, shared by every image in the panel. A reveal
+  // by click lasts only while this artist stays selected and the panel stays
+  // open — the cleanup runs when the selection moves on, empties or
+  // multi-selects, and when the panel closes (same as CollectionInfoPanel).
+  // Reveal-all is untouched.
+  const panelKey = artist && panelOpen ? artistRevealKey(artist.id) : null
+  useEffect(() => {
+    if (panelKey == null) return
+    return () => hideItem(panelKey)
+  }, [panelKey, hideItem])
 
   if (!artist) {
     return (
@@ -389,6 +412,15 @@ function ArtistImagesPanel({
   }
 
   const otherImages = (images ?? []).filter((img) => img.relativePath !== artist.selectedImagePath)
+  // The master privacy switch disables every blur even when the artist's own
+  // flag is still set underneath.
+  const isBlurred = !!settings?.privacyEnabled && artist.isPrivate
+  const revealKey = artistRevealKey(artist.id)
+  const revealProps = {
+    blurred: isBlurred,
+    revealed: isRevealed(revealKey),
+    onToggleReveal: () => toggleItem(revealKey),
+  }
 
   return (
     <div className="space-y-4">
@@ -396,7 +428,11 @@ function ArtistImagesPanel({
         <h2 className="mb-2 truncate text-sm font-medium">{artist.name}</h2>
         <div className="aspect-square w-full overflow-hidden rounded-md border bg-muted">
           {artist.selectedImagePath ? (
-            <img src={imageUrl(artist.selectedImagePath)} alt="" className="h-full w-full object-cover" />
+            <BlurredThumbnail
+              src={imageUrl(artist.selectedImagePath)}
+              className="h-full w-full object-cover"
+              {...revealProps}
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <ImageIcon className="h-12 w-12 text-muted-foreground/40" />
@@ -411,7 +447,11 @@ function ArtistImagesPanel({
           <div className="grid grid-cols-3 gap-2">
             {otherImages.map((img) => (
               <div key={img.id} className="aspect-square overflow-hidden rounded-md border">
-                <img src={imageUrl(img.relativePath)} alt="" className="h-full w-full object-cover" />
+                <BlurredThumbnail
+                  src={imageUrl(img.relativePath)}
+                  className="h-full w-full object-cover"
+                  {...revealProps}
+                />
               </div>
             ))}
           </div>
@@ -424,12 +464,14 @@ function ArtistImagesPanel({
 function ArtistRow({
   artist,
   selected,
+  privacyEnabled,
   onSelectedChange,
   onMouseDown,
   onMouseEnter,
 }: {
   artist: Artist
   selected: boolean
+  privacyEnabled: boolean
   onSelectedChange: () => void
   onMouseDown: (e: React.MouseEvent) => void
   onMouseEnter: () => void
@@ -461,6 +503,11 @@ function ArtistRow({
           {artist.usageCount} item{artist.usageCount === 1 ? "" : "s"}
         </Badge>
       </TableCell>
+      {privacyEnabled && (
+        <TableCell className="text-center">
+          {artist.isPrivate && <Lock className="mx-auto h-3.5 w-3.5 text-muted-foreground" aria-label="Private" />}
+        </TableCell>
+      )}
     </TableRow>
   )
 }

@@ -1,3 +1,4 @@
+import { useArtists } from "@/hooks/useArtists"
 import { useCollections } from "@/hooks/useCollections"
 import { useSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
@@ -12,14 +13,17 @@ import { useTags } from "@/hooks/useTags"
 // setup) — or a private tag is applied to at least one item, independent
 // of any collection (backend's blurred computation ORs both sources
 // together; this needs to match, or a lone private-tagged item in an
-// otherwise-public collection would have no way to be revealed).
+// otherwise-public collection would have no way to be revealed) — or any
+// artist is private (its Artists page panel images are blurred).
 export function useHasPrivateContent() {
   const { data: settings } = useSettings()
   const { data: collections } = useCollections()
   const { data: allTags } = useTags()
+  const { data: artists } = useArtists()
   return (
     !!settings?.privacyEnabled &&
     ((collections ?? []).some((c) => c.effectiveIsPrivate && c.totalItemCount > 0) ||
-      (allTags ?? []).some((t) => t.isPrivate && t.usageCount > 0))
+      (allTags ?? []).some((t) => t.isPrivate && t.usageCount > 0) ||
+      (artists ?? []).some((a) => a.isPrivate))
   )
 }

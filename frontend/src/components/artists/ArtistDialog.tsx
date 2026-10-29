@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { format, parseISO } from "date-fns"
 import { CalendarIcon, ImageIcon, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
 import {
   Dialog,
@@ -26,6 +27,7 @@ import {
   useSelectArtistImage,
   useUpdateArtist,
 } from "@/hooks/useArtists"
+import { useSettings } from "@/hooks/useSettings"
 import { imageUrl, mediaFileUrl } from "@/lib/api"
 import { calculateAge, cn } from "@/lib/utils"
 import type { Artist } from "@/types/api"
@@ -40,10 +42,12 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
   const isEdit = artist != null
   const [name, setName] = useState(artist?.name ?? "")
   const [birthday, setBirthday] = useState(artist?.birthday ?? "")
+  const [isPrivate, setIsPrivate] = useState(artist?.isPrivate ?? false)
   const [birthdayOpen, setBirthdayOpen] = useState(false)
   const [showCandidates, setShowCandidates] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const { data: settings } = useSettings()
   const createArtist = useCreateArtist()
   const updateArtist = useUpdateArtist()
   const pending = createArtist.isPending || updateArtist.isPending
@@ -64,6 +68,7 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
     if (open) {
       setName(artist?.name ?? "")
       setBirthday(artist?.birthday ?? "")
+      setIsPrivate(artist?.isPrivate ?? false)
       setShowCandidates(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -72,7 +77,7 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
   const handleSubmit = () => {
     const trimmed = name.trim()
     if (!trimmed) return
-    const payload = { name: trimmed, birthday: birthday || null }
+    const payload = { name: trimmed, birthday: birthday || null, isPrivate }
 
     if (isEdit) {
       updateArtist.mutate({ id: artist.id, payload }, { onSuccess: () => onOpenChange(false) })
@@ -196,6 +201,19 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
               </Popover>
               {birthday && <p className="text-sm text-muted-foreground">Age: {calculateAge(birthday)}</p>}
             </div>
+            {settings?.privacyEnabled && (
+              <div className="flex items-start gap-2">
+                <Checkbox id="artist-private" checked={isPrivate} onCheckedChange={(v) => setIsPrivate(v === true)} />
+                <div className="space-y-1">
+                  <Label htmlFor="artist-private" className="font-normal">
+                    Private
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Blurs this artist's images in the Artists page's image panel.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

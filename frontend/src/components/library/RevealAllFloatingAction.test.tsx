@@ -13,11 +13,12 @@ const PRIVATE_COLLECTION = { id: 1, effectiveIsPrivate: true, totalItemCount: 3 
 const PUBLIC_COLLECTION = { id: 2, effectiveIsPrivate: false, totalItemCount: 3 }
 const EMPTY_PRIVATE_COLLECTION = { id: 3, effectiveIsPrivate: true, totalItemCount: 0 }
 
-function serve(opts: { privacy: boolean; collections?: object[]; tags?: object[] }) {
+function serve(opts: { privacy: boolean; collections?: object[]; tags?: object[]; artists?: object[] }) {
   return mockFetch((url) => {
     if (url.endsWith("/settings")) return { status: 200, body: { privacyEnabled: opts.privacy } }
     if (url.endsWith("/collections")) return { status: 200, body: opts.collections ?? [] }
     if (url.endsWith("/tags")) return { status: 200, body: opts.tags ?? [] }
+    if (url.endsWith("/artists")) return { status: 200, body: opts.artists ?? [] }
     return { status: 404 }
   })
 }
@@ -43,7 +44,7 @@ describe("RevealAllFloatingAction", () => {
   it("is hidden when privacy is off", async () => {
     const fetchFn = serve({ privacy: false, collections: [PRIVATE_COLLECTION] })
     renderWithProviders(<Harness />)
-    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(4))
     await new Promise((r) => setTimeout(r, 20))
     expect(button()).toBeNull()
   })
@@ -55,7 +56,7 @@ describe("RevealAllFloatingAction", () => {
       tags: [{ id: 1, isPrivate: true, usageCount: 0 }],
     })
     renderWithProviders(<Harness />)
-    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(4))
     await new Promise((r) => setTimeout(r, 20))
     expect(button()).toBeNull()
   })
@@ -68,6 +69,12 @@ describe("RevealAllFloatingAction", () => {
 
   it("is shown for a private tag in use", async () => {
     serve({ privacy: true, tags: [{ id: 1, isPrivate: true, usageCount: 2 }] })
+    renderWithProviders(<Harness />)
+    expect(await screen.findByRole("button", { name: "Reveal all private items" })).toBeInTheDocument()
+  })
+
+  it("is shown for a private artist alone", async () => {
+    serve({ privacy: true, artists: [{ id: 1, name: "A", isPrivate: true }] })
     renderWithProviders(<Harness />)
     expect(await screen.findByRole("button", { name: "Reveal all private items" })).toBeInTheDocument()
   })

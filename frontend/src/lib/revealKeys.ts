@@ -5,10 +5,16 @@
 // ...) and can therefore never equal either of the other two. The Collections
 // info panel's cover is a fourth: collection ids offset by a quarter (1.25,
 // 2.25, ...), non-integer and never ending in .5, so distinct from all three.
+// The Artists page's image panel is a fifth: artist ids offset by three
+// quarters (1.75, 2.75, ...), likewise distinct from the other four.
 export function downloadRevealKey(downloadId: number): number {
   return downloadId + 0.5
 }
 
 export function collectionRevealKey(collectionId: number): number {
   return collectionId + 0.25
+}
+
+export function artistRevealKey(artistId: number): number {
+  return artistId + 0.75
 }
