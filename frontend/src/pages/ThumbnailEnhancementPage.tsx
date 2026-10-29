@@ -27,6 +27,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
+import { useRevealAll } from "@/components/library/RevealAllContext"
+import { useLibraryItem } from "@/hooks/useLibrary"
 import { EligibleItemsDialog } from "@/components/thumbnailenhance/EligibleItemsDialog"
 import { CompareThumbnailDialog } from "@/components/thumbnailenhance/CompareThumbnailDialog"
 import {
@@ -43,7 +46,7 @@ import { useIdSelection } from "@/hooks/useIdSelection"
 import { useSettings } from "@/hooks/useSettings"
 import { enhancementStatusColor, type EnhancementStatusColor } from "@/lib/enhancementStatus"
 import { getPageNumbers } from "@/lib/pagination"
-import { cn, formatBytes } from "@/lib/utils"
+import { cn, formatBytes, hashText } from "@/lib/utils"
 import type { ThumbnailEnhancementHistoryEntry, ThumbnailEnhancementStatus } from "@/types/api"
 
 function dimensions(width: number | null, height: number | null): string {
@@ -107,12 +110,35 @@ function RevertedBadge({ revertedAt }: { revertedAt: string }) {
   )
 }
 
+// Titles of private items are hashed unless reveal-all is on (the floating
+// button is the only way to reveal them on this page; no per-row click).
+function entryTitle(entry: ThumbnailEnhancementHistoryEntry, revealAll: boolean): string {
+  return entry.blurred && !revealAll ? hashText(entry.itemTitle) : entry.itemTitle
+}
+
 function ItemTitleCell({ entry }: { entry: ThumbnailEnhancementHistoryEntry }) {
+  const { revealAll } = useRevealAll()
+  if (entry.blurred && !revealAll) return <span>{hashText(entry.itemTitle)}</span>
   if (entry.libraryItemId == null) return <span>{entry.itemTitle}</span>
   return (
     <Link to={`/library/${entry.libraryItemId}`} className="underline underline-offset-2 hover:text-foreground">
       {entry.itemTitle}
     </Link>
+  )
+}
+
+// The live "Enhancing:" line. The enhance_progress event carries no privacy
+// flag, so it is looked up via the single-item fetch; until that answers (or
+// if it fails) the title stays hashed.
+function ActiveItemLine({ libraryItemId, itemTitle }: { libraryItemId: number; itemTitle: string }) {
+  const { revealAll } = useRevealAll()
+  const item = useLibraryItem(libraryItemId)
+  const hidden = !revealAll && (item.isError || !item.data || item.data.blurred)
+  return (
+    <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      Enhancing: {hidden ? hashText(itemTitle) : itemTitle}
+    </p>
   )
 }
 
@@ -204,6 +230,7 @@ export function ThumbnailEnhancementPage() {
   const pageSize = 25
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const activeItem = useThumbnailEnhancementActiveItem()
+  const { revealAll } = useRevealAll()
 
   const runNow = useRunThumbnailEnhancementNow()
   const bulkDelete = useBulkDeleteThumbnailEnhancementHistoryEntries()
@@ -342,6 +369,7 @@ export function ThumbnailEnhancementPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
+      <RevealAllFloatingAction />
       <div className="flex shrink-0 items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -353,10 +381,7 @@ export function ThumbnailEnhancementPage() {
             instance. Configure this in Settings → AI Enhancement.
           </p>
           {activeItem.data && (
-            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Enhancing: {activeItem.data.itemTitle}
-            </p>
+            <ActiveItemLine libraryItemId={activeItem.data.libraryItemId} itemTitle={activeItem.data.itemTitle} />
           )}
         </div>
       </div>
@@ -527,7 +552,7 @@ export function ThumbnailEnhancementPage() {
                         <Checkbox
                           checked={isSelected(entry.id)}
                           onCheckedChange={() => toggle(entry.id)}
-                          aria-label={`Select ${entry.itemTitle}`}
+                          aria-label={`Select ${entryTitle(entry, revealAll)}`}
                         />
                       </TableCell>
                       <TableCell>
@@ -593,8 +618,8 @@ export function ThumbnailEnhancementPage() {
       </div>
 
       {!isLoading && history && history.length > 0 && (
-        <div className="flex shrink-0 items-center justify-between">
-          <span className="text-sm text-muted-foreground">
+        <div className="flex shrink-0 flex-wrap-reverse items-center justify-between gap-2">
+          <span className="flex min-h-9 items-center pl-12 text-sm text-muted-foreground md:min-h-0">
             {total} {total === 1 ? "entry" : "entries"}
           </span>
           <div className="flex items-center gap-1">

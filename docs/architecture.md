@@ -310,6 +310,11 @@ resolver. The collections list's `effectiveIsPrivate` uses `effectivePrivacyMap`
 not an item response). The compare list shares all of this, so a private item shows blurred in the
 compare grid too, gated by the same reveal-all mechanism.
 
+The AI Enhancement history list (`GET /api/thumbnail-enhancement/history`) carries `blurred` from the same
+resolver (loaded once per request, tags batched for the page's items; the handler takes the collections/tags
+repos, `thumbnailenhance.Deps` is unchanged). The "Enhancing:" header has no flag in the `enhance_progress`
+event, so it asks the single-item endpoint (`useLibraryItem`) and fails closed (hashed) until that answers.
+
 ## Ghost items are not a separate table
 
 A ghost item is just a `library` row with `status="ghost"` and empty `filename`/`path` (the same
@@ -500,7 +505,8 @@ below dialogs `z-50` and banners `z-[100]`, `flex-col-reverse` so the first acti
 Pages/features render `<FloatingAction icon label onClick active? order? />`, which portals a round icon
 button into the node (state-backed callback ref, so it works on the first render); mounting adds the
 button, unmounting removes it, and without a dock above it renders nothing. The dock owns all
-positioning, so features never position themselves. `RevealAllFloatingAction` is the first user.
+positioning, so features never position themselves. `RevealAllFloatingAction` is the first user; the AI Enhancement page also uses it and reads only the provider's
+`revealAll` flag (no per-item keys, no click-to-reveal).
 
 `AppLayout` also mounts a single `RevealAllProvider`, so reveal-all (in-memory only) survives
 navigation between Library, Compare list, Downloads and Collections pages; those pages no longer create their

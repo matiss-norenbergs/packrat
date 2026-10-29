@@ -1084,6 +1084,9 @@ export interface ThumbnailEnhancementHistoryEntry {
   // setting) or "sharpen" (denoise/detail pass only, output stays the same
   // size — manual-only, from the Library toolbar or an item's Thumbnail menu).
   mode: "upscale" | "sharpen"
+  // Same rule as LibraryItem.blurred for the item's current collection/tags;
+  // false when privacy is off or the item was deleted (libraryItemId null).
+  blurred: boolean
 }
 
 // ThumbnailEnhancementHistoryListResponse is the paginated wrapper around

@@ -1665,9 +1665,13 @@ type ThumbnailEnhancementHistoryResponse struct {
 	// Mode is per-row historical fact — "upscale" | "sharpen". See
 	// models.ThumbnailEnhancementHistoryEntry.Mode.
 	Mode string `json:"mode"`
+	// Blurred follows the library-item rule (ItemPrivacy.Blurred) for the
+	// item's *current* collection/tags; false when privacy is off or the
+	// item no longer exists (LibraryItemID nil).
+	Blurred bool `json:"blurred"`
 }
 
-func toThumbnailEnhancementHistoryResponse(e models.ThumbnailEnhancementHistoryEntry, hasBackup bool, originalPath, enhancedPath *string) ThumbnailEnhancementHistoryResponse {
+func toThumbnailEnhancementHistoryResponse(e models.ThumbnailEnhancementHistoryEntry, hasBackup, blurred bool, originalPath, enhancedPath *string) ThumbnailEnhancementHistoryResponse {
 	var revertedAt *string
 	if e.RevertedAt != nil {
 		s := e.RevertedAt.Format(time.RFC3339)
@@ -1692,6 +1696,7 @@ func toThumbnailEnhancementHistoryResponse(e models.ThumbnailEnhancementHistoryE
 		RevertedAt:            revertedAt,
 		TriggerType:           e.TriggerType,
 		Mode:                  e.Mode,
+		Blurred:               blurred,
 	}
 }
 

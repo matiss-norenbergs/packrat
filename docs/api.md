@@ -1769,7 +1769,7 @@ Fixed page size 25:
       "createdAt": "2026-08-22T10:00:00Z", "hasOriginalBackup": true,
       "originalThumbnailPath": "thumbnail-backups/118/orig.webp",
       "enhancedThumbnailPath": "Music Videos/Some Video.jpg",
-      "revertedAt": null, "triggerType": "manual", "mode": "upscale"
+      "revertedAt": null, "triggerType": "manual", "mode": "upscale", "blurred": false
     }
   ],
   "total": 214
@@ -1781,6 +1781,9 @@ Fixed page size 25:
 reflect the item's *current* live state, not this specific row — only the most recent success per
 item is eligible for Compare/Revert. `originalThumbnailPath` is served via `/local-images/*`,
 `enhancedThumbnailPath` via `/media-files/*` — different roots.
+`blurred` follows the same rule as library items (the shared `ItemPrivacy` resolver, applied to the
+item's *current* collection and tags): `false` when privacy is off, and `false` when the item no
+longer exists (`libraryItemId` is `null`). The `q` filter still matches real titles.
 
 `DELETE .../history/:id` — `404`/`204`. `POST .../history/bulk-delete` — `{"ids":[...]}` →
 `200 {"deleted": n}` (unknown ids skipped). `POST .../history/clear` — `200 {"deleted": n}`.
