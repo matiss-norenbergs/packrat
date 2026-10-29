@@ -868,19 +868,25 @@ type ArtistResponse struct {
 	Name              string  `json:"name"`
 	SelectedImagePath *string `json:"selectedImagePath"`
 	// Birthday is a date-only string ("2006-01-02"), nil when unset.
-	Birthday   *string `json:"birthday"`
-	CreatedAt  string  `json:"createdAt"`
-	UsageCount int     `json:"usageCount"`
+	Birthday *string `json:"birthday"`
+	// IsPrivate is the raw flag; the frontend only acts on it while the
+	// privacy master switch is on.
+	IsPrivate  bool   `json:"isPrivate"`
+	CreatedAt  string `json:"createdAt"`
+	UsageCount int    `json:"usageCount"`
 }
 
 type CreateArtistRequest struct {
-	Name     string  `json:"name" binding:"required"`
-	Birthday *string `json:"birthday"`
+	Name      string  `json:"name" binding:"required"`
+	Birthday  *string `json:"birthday"`
+	IsPrivate bool    `json:"isPrivate"`
 }
 
 type UpdateArtistRequest struct {
 	Name     string  `json:"name" binding:"required"`
 	Birthday *string `json:"birthday"`
+	// IsPrivate nil (field omitted) means "leave unchanged".
+	IsPrivate *bool `json:"isPrivate"`
 }
 
 func toArtistResponse(a models.ArtistWithCount) ArtistResponse {
@@ -889,6 +895,7 @@ func toArtistResponse(a models.ArtistWithCount) ArtistResponse {
 		Name:              a.Name,
 		SelectedImagePath: a.SelectedImagePath,
 		Birthday:          a.Birthday,
+		IsPrivate:         a.IsPrivate,
 		CreatedAt:         a.CreatedAt.Format(timeFormat),
 		UsageCount:        a.UsageCount,
 	}

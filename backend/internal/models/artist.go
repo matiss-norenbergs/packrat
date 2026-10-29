@@ -9,7 +9,10 @@ type Artist struct {
 	// Birthday, when set, is a date-only string ("2006-01-02") — never a
 	// full timestamp, since a birthday has no meaningful time-of-day or
 	// timezone component.
-	Birthday  *string
+	Birthday *string
+	// IsPrivate marks the artist as private: the Artists page blurs the
+	// images in its right-hand panel (when the privacy master switch is on).
+	IsPrivate bool
 	CreatedAt time.Time
 }
 
@@ -20,6 +23,7 @@ type ArtistWithCount struct {
 	Name              string
 	SelectedImagePath *string
 	Birthday          *string
+	IsPrivate         bool
 	CreatedAt         time.Time
 	UsageCount        int
 }
