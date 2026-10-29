@@ -472,7 +472,7 @@ Private items are blurred here too; the [reveal-all floating button](#reveal-all
 ## Reveal-all floating button
 
 A round eye button floats at the bottom-left of the content area (clear of the sidebar on desktop) on
-the **Library**, **Compare list**, **Downloads** and **Collections** pages (on Collections it reveals the
+the **Library**, **Compare list**, **Downloads**, **Collections** and **AI Enhancement** pages (on Collections it reveals the
 selected collection's cover in the info panel, the only blurred imagery there). It appears only when **Enable privacy** is
 on *and* something is actually private (a private collection with items, or a private tag in use) —
 otherwise it is hidden, not disabled. Click it to reveal every blurred item on the page (the icon
@@ -642,7 +642,14 @@ model, scaling mode, minimum-dimension threshold below which a thumbnail is cons
   Fresh downloads only, not redownloads.
 - **History** — every attempted item (success or failure) is logged with before/after dimensions
   and file size, the failure reason if any, and which of the three triggers above caused it. "Clear
-  All History" (Settings → AI Enhancement) wipes the whole log at once.
+  All History" (Settings → AI Enhancement) wipes the whole log at once. With privacy on, the item
+  titles of private items (private or inherited-private collection, or a private tag; judged by the
+  item's current state) are hashed in the history table and in the live "Enhancing: …" line (which
+  stays hashed until the item's privacy is known) and are revealed **only** by the
+  [reveal-all floating button](#reveal-all-floating-button) — there is no click-to-reveal here, and a
+  hashed title is plain text rather than a link. Rows whose item was deleted are never hashed. The
+  Eligible Items and Compare dialogs and the search box are not blurred (yet): search still matches
+  real titles.
 - **Compare / Revert** — a successful enhancement keeps the pre-enhancement thumbnail as a backup
   (unless "Auto-approve enhanced thumbnails" is on, which skips the backup entirely — no
   Compare/Revert for that item afterward). From the history table's Compare action: "Keep Original"

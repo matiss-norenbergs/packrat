@@ -12,6 +12,11 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-29
+- **AI Enhancement page hashes private item titles** — the history table and the "Enhancing: …" line show a hashed
+  title for items of private collections or with private tags, revealed only by the floating reveal-all button (no
+  click-to-reveal; the page now has the button). The history list API gained a per-entry `blurred` flag.
+
 ## 2026-10-28
 - **Collections info panel: a revealed cover lasts only while that collection stays selected** — a cover revealed
   by click is blurred again when you select another collection, clear the selection or close the panel, instead of
