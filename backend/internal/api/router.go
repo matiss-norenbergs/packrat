@@ -325,7 +325,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 			FFmpegPath:    deps.YtDlp.FFmpegPath,
 			Broadcaster:   deps.Broadcaster,
 		}
-		api.GET("/thumbnail-enhancement/history", ListThumbnailEnhancementHistory(enhanceDeps))
+		api.GET("/thumbnail-enhancement/history", ListThumbnailEnhancementHistory(enhanceDeps, deps.CollectionsRepo, deps.TagsRepo))
 		api.DELETE("/thumbnail-enhancement/history/:id", DeleteThumbnailEnhancementHistoryEntry(enhanceDeps))
 		api.POST("/thumbnail-enhancement/history/bulk-delete", BulkDeleteThumbnailEnhancementHistoryEntries(enhanceDeps))
 		api.POST("/thumbnail-enhancement/history/clear", ClearThumbnailEnhancementHistory(enhanceDeps))

@@ -29,8 +29,10 @@ const thumbnailEnhancementHistoryPageSize = 25
 // table — a searched/filtered/paginated page of attempted items, most
 // recent first. Enriches each returned row with the item's *current* backup
 // state (has one? what are the compare-dialog image paths?) via one extra
-// bulk query each, rather than an N+1 lookup per row.
-func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFunc {
+// bulk query each, rather than an N+1 lookup per row. Each row also carries
+// `blurred` for its item's current collection/tags (one ItemPrivacy load and
+// one batched tags query per request).
+func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
@@ -70,10 +72,29 @@ func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFunc
 			itemsByID[item.ID] = item
 		}
 
+		itemIDs := make([]int64, 0, len(entries))
+		for _, e := range entries {
+			if e.LibraryItemID != nil {
+				if _, ok := itemsByID[*e.LibraryItemID]; ok {
+					itemIDs = append(itemIDs, *e.LibraryItemID)
+				}
+			}
+		}
+		tagsByID, err := tagsRepo.TagsByLibraryIDs(ctx, itemIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		privacy, err := LoadItemPrivacy(ctx, deps.SettingsRepo, collectionsRepo, tagsRepo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
 		originalPathCache := make(map[int64]string, len(withBackup))
 		out := make([]ThumbnailEnhancementHistoryResponse, 0, len(entries))
 		for _, e := range entries {
-			var hasBackup bool
+			var hasBackup, blurred bool
 			var originalPath, enhancedPath *string
 			if e.LibraryItemID != nil {
 				// Only the single most recent success row for this item gets
@@ -83,6 +104,7 @@ func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFunc
 				// so diffing the backup against them would be misleading.
 				hasBackup = withBackup[*e.LibraryItemID] && latestSuccessID[*e.LibraryItemID] == e.ID
 				if item, ok := itemsByID[*e.LibraryItemID]; ok {
+					blurred = privacy.Blurred(item.CollectionID, tagsByID[item.ID])
 					// The raw sidecar file, not a downscaled WebP tier — the
 					// whole point of Compare is judging the actual
 					// enhancement result, so it needs to match originalPath's
@@ -105,7 +127,7 @@ func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFunc
 					originalPath = &path
 				}
 			}
-			out = append(out, toThumbnailEnhancementHistoryResponse(e, hasBackup, originalPath, enhancedPath))
+			out = append(out, toThumbnailEnhancementHistoryResponse(e, hasBackup, blurred, originalPath, enhancedPath))
 		}
 		c.JSON(http.StatusOK, ThumbnailEnhancementHistoryListResponse{Entries: out, Total: total})
 	}
