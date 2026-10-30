@@ -55,7 +55,7 @@ export function TagsPage() {
             key: "private",
             header: "Private",
             type: "icon",
-            cell: (t) => t.isPrivate && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label="Private" />,
+            cell: (t) => t.isPrivate && <Lock className="h-3.5 w-3.5 text-primary" aria-label="Private" />,
           } satisfies ColumnDef<Tag>,
         ]
       : []),

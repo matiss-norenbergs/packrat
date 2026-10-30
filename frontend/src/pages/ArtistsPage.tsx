@@ -510,7 +510,7 @@ function ArtistRow({
       </TableCell>
       {privacyEnabled && (
         <TableCell className="text-center">
-          {artist.isPrivate && <Lock className="mx-auto h-3.5 w-3.5 text-muted-foreground" aria-label="Private" />}
+          {artist.isPrivate && <Lock className="mx-auto h-3.5 w-3.5 text-primary" aria-label="Private" />}
         </TableCell>
       )}
     </TableRow>

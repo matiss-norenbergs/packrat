@@ -169,7 +169,7 @@ function CollectionNode({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span>
-                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Lock className="h-3.5 w-3.5 text-primary" />
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>Private</TooltipContent>
