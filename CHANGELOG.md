@@ -12,6 +12,11 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-30
+- **Artists and Collections side panels are resizable** — drag the panel's left edge (or focus it and use the keyboard;
+  double-click or Enter resets to 320px). Limits are 280px and 50% of the content row; the width is remembered per page
+  in the browser. Phones keep the fixed width.
+
 ## 2026-10-29
 - **Artists can be marked Private** — new `isPrivate` flag (migration 000049; the artist dialog checkbox and a lock
   column appear with privacy on). A private artist's images in the Artists page's right-hand panel are blurred,

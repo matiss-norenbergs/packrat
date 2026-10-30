@@ -358,7 +358,12 @@ export function ArtistsPage() {
           )}
         </div>
 
-        <CollapsiblePanel open={panelOpen} onOpenChange={setPanelOpen} label="artist images panel">
+        <CollapsiblePanel
+          open={panelOpen}
+          onOpenChange={setPanelOpen}
+          label="artist images panel"
+          widthStorageKey="packrat:artists-panel-width"
+        >
           <ArtistImagesPanel artist={editTarget} selectedCount={size} panelOpen={panelOpen} />
         </CollapsiblePanel>
       </div>
