@@ -420,6 +420,7 @@ original file — removing the cover reverts the tile to the automatic fallback.
 tiles are served as small resized WebPs (`GET /api/image`, `srcset` 320/480/720 px) rather than the
 raw files, so a folder of large images no longer loads at full size just to show thumbnails; the
 original is the fallback if a resize fails.
+- **Resizable side panel.** The right-hand panel's left edge is a drag handle (from the `md` breakpoint up): drag it, or Tab to it and use ←/→ (16px, Shift = 64px), Home (minimum), End (maximum) and Enter to reset. Width is limited to 280px minimum and 50% of the content row; double-click the handle or press Enter to reset to 320px. The width is remembered per page in the browser (not on the server); a window too narrow for it clamps the panel narrower for as long as it stays narrow, and growing back restores the remembered width. Phones keep the fixed 320px panel, no handle.
 
 ## Tags
 
@@ -458,6 +459,7 @@ display picture (shown wherever the artist is represented, e.g. Browse). Add ima
 candidates (thumbnails already used by that artist's own library items) or by uploading directly.
 Removing the currently-selected image automatically clears the selection (falls back to an
 auto-picked image); removing any other gallery image is unaffected.
+- **Resizable side panel.** The right-hand panel's left edge is a drag handle (from the `md` breakpoint up): drag it, or Tab to it and use ←/→ (16px, Shift = 64px), Home (minimum), End (maximum) and Enter to reset. Width is limited to 280px minimum and 50% of the content row; double-click the handle or press Enter to reset to 320px. The width is remembered per page in the browser (not on the server); a window too narrow for it clamps the panel narrower for as long as it stays narrow, and growing back restores the remembered width. Phones keep the fixed 320px panel, no handle.
 
 ## Compare list
 

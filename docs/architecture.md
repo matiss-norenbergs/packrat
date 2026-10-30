@@ -535,6 +535,18 @@ changes or the panel closes; reveal-all is unaffected.
 The panel blurs on `effectiveIsPrivate` and finds the "Inherited from …" ancestor with `nearestPrivateAncestor`
 (`lib/collectionTree.ts`).
 
+## Resizable side panel (`CollapsiblePanel`)
+
+The Artists and Collections right-hand panels share `CollapsiblePanel`. From `md` up its left edge is a drag/keyboard
+handle. The width is a **pixel value the user chose**, remembered per page in localStorage (`usePersistedWidth`;
+keys `packrat:artists-panel-width` / `packrat:collections-panel-width`; written when a drag ends and on each keyboard or
+reset change, invalid stored values ignored). It is clamped to 280px..50% of the row only **at render time**, so the
+stored value is never overwritten by the clamp: shrinking the window narrows the panel, growing it restores the
+remembered width. The 50% is resolved by measuring the flex row with a `ResizeObserver` (a percentage inside the
+animating wrapper would resolve against the wrong box) and exposing the pixels as `--panel-w`; below `md` the classes
+ignore it and keep the fixed `w-80`. The slide animation and fixed-width inner container are unchanged; the width
+transition is switched off only while dragging.
+
 ## Deliberate scope cuts
 
 Still intentionally out of scope, not forgotten:
