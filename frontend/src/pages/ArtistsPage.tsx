@@ -406,8 +406,8 @@ export function ArtistImagesPanel({
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="aspect-square w-full rounded-md" />
-        <div className="grid grid-cols-3 gap-2">
+        <Skeleton className="aspect-square w-full max-w-[300px] rounded-md" />
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-2">
           <Skeleton className="aspect-square rounded-md" />
           <Skeleton className="aspect-square rounded-md" />
           <Skeleton className="aspect-square rounded-md" />
@@ -431,7 +431,7 @@ export function ArtistImagesPanel({
     <div className="space-y-4">
       <div>
         <h2 className="mb-2 truncate text-sm font-medium">{artist.name}</h2>
-        <div className="aspect-square w-full overflow-hidden rounded-md border bg-muted">
+        <div className="aspect-square w-full max-w-[300px] overflow-hidden rounded-md border bg-muted">
           {artist.selectedImagePath ? (
             <BlurredThumbnail
               src={imageUrl(artist.selectedImagePath)}
@@ -449,7 +449,7 @@ export function ArtistImagesPanel({
       {otherImages.length > 0 && (
         <div>
           <h3 className="mb-2 text-xs font-medium text-muted-foreground">Other images</h3>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-2">
             {otherImages.map((img) => (
               <div key={img.id} className="aspect-square overflow-hidden rounded-md border">
                 <BlurredThumbnail

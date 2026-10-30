@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { PANEL_DEFAULT_WIDTH, PANEL_MIN_WIDTH, usePersistedWidth } from "@/hooks/usePersistedWidth"
+import { usePersistedWidth } from "@/hooks/usePersistedWidth"
 
 interface CollapsiblePanelProps {
   open: boolean
@@ -12,9 +12,18 @@ interface CollapsiblePanelProps {
   label: string
   // localStorage key remembering the width the user dragged the panel to.
   widthStorageKey: string
+  // Smallest width in px.
+  minWidth?: number
+  // Largest width as a fraction of the flex row the panel sits in.
+  maxRatio?: number
+  // Width in px when the user hasn't chosen one.
+  defaultWidth?: number
   children: React.ReactNode
 }
 
+const DEFAULT_MIN_WIDTH = 280
+const DEFAULT_MAX_RATIO = 0.5
+const DEFAULT_WIDTH = 500
 const KEY_STEP = 16
 const KEY_STEP_SHIFT = 64
 
@@ -27,15 +36,24 @@ const KEY_STEP_SHIFT = 64
 //
 // From md up the open panel is resizable by dragging (or focusing and
 // keyboarding) its left edge. The remembered width is a pixel value the user
-// chose; it is clamped to [280px, 50% of the row] only when rendering and is
+// chose; it is clamped to [minWidth, maxRatio of the row] only when rendering and is
 // never overwritten by that clamp, so a window shrink and regrow restores it.
 // The 50% resolves against the flex row, which an element nested inside the
 // width-animating wrapper can't do, so the row is measured with a
 // ResizeObserver and the clamp is computed in pixels. The result is exposed as
 // the --panel-w CSS variable on the outer item; below md the classes ignore it
 // and keep the fixed w-80, with no handle.
-export function CollapsiblePanel({ open, onOpenChange, label, widthStorageKey, children }: CollapsiblePanelProps) {
-  const [stored, setStored] = usePersistedWidth(widthStorageKey)
+export function CollapsiblePanel({
+  open,
+  onOpenChange,
+  label,
+  widthStorageKey,
+  minWidth = DEFAULT_MIN_WIDTH,
+  maxRatio = DEFAULT_MAX_RATIO,
+  defaultWidth = DEFAULT_WIDTH,
+  children,
+}: CollapsiblePanelProps) {
+  const [stored, setStored] = usePersistedWidth(widthStorageKey, defaultWidth)
   const [rowWidth, setRowWidth] = useState<number | null>(null)
   const [dragWidth, setDragWidth] = useState<number | null>(null)
   const outerRef = useRef<HTMLDivElement>(null)
@@ -60,14 +78,16 @@ export function CollapsiblePanel({ open, onOpenChange, label, widthStorageKey, c
   // Restore body styles if unmounted mid-drag.
   useLayoutEffect(() => () => dragCleanup.current?.(), [])
 
-  const min = PANEL_MIN_WIDTH
-  // If half the row is below the minimum, the minimum wins.
-  const max = rowWidth === null ? Infinity : Math.max(min, Math.floor(rowWidth / 2))
+  const min = minWidth
+  // If the row share is below the minimum, the minimum wins.
+  const max = rowWidth === null ? Infinity : Math.max(min, Math.floor(rowWidth * maxRatio))
   const clamp = (w: number) => Math.round(Math.min(max, Math.max(min, w)))
   const width = clamp(dragWidth ?? stored)
   const dragging = dragWidth !== null
 
   const commit = (w: number) => setStored(clamp(w))
+  // Forget the remembered width so the panel follows defaultWidth again.
+  const reset = () => setStored(null)
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 && e.pointerType === "mouse") return
@@ -123,8 +143,9 @@ export function CollapsiblePanel({ open, onOpenChange, label, widthStorageKey, c
         next = max === Infinity ? width : max
         break
       case "Enter":
-        next = PANEL_DEFAULT_WIDTH
-        break
+        e.preventDefault()
+        reset()
+        return
       default:
         return
     }
@@ -190,7 +211,7 @@ export function CollapsiblePanel({ open, onOpenChange, label, widthStorageKey, c
             onPointerMove={onPointerMove}
             onPointerUp={(e) => endDrag(e, true)}
             onPointerCancel={(e) => endDrag(e, false)}
-            onDoubleClick={() => commit(PANEL_DEFAULT_WIDTH)}
+            onDoubleClick={reset}
             onKeyDown={onKeyDown}
             className={cn(
               "group absolute inset-y-0 left-0 z-10 hidden w-2 cursor-col-resize touch-none select-none outline-none md:block",

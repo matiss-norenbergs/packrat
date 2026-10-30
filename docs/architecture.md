@@ -539,8 +539,11 @@ The panel blurs on `effectiveIsPrivate` and finds the "Inherited from …" ances
 
 The Artists and Collections right-hand panels share `CollapsiblePanel`. From `md` up its left edge is a drag/keyboard
 handle. The width is a **pixel value the user chose**, remembered per page in localStorage (`usePersistedWidth`;
-keys `packrat:artists-panel-width` / `packrat:collections-panel-width`; written when a drag ends and on each keyboard or
-reset change, invalid stored values ignored). It is clamped to 280px..50% of the row only **at render time**, so the
+keys `packrat:artists-panel-width` / `packrat:collections-panel-width`; written when a drag ends and on each keyboard
+change, invalid stored values ignored). Reset (double-click / Enter) **removes the key** (`set(null)`) rather
+than persisting the default, so the panel follows `defaultWidth` again, including a future change to it. Sizing is
+configurable via props `minWidth` (280px), `maxRatio` (0.5 of the row) and `defaultWidth` (500px). The width is
+clamped to `minWidth..maxRatio × row` (the minimum wins if it exceeds the share; the default is clamped too) only **at render time**, so the
 stored value is never overwritten by the clamp: shrinking the window narrows the panel, growing it restores the
 remembered width. The 50% is resolved by measuring the flex row with a `ResizeObserver` (a percentage inside the
 animating wrapper would resolve against the wrong box) and exposing the pixels as `--panel-w`; below `md` the classes
