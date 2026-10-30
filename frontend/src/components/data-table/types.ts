@@ -29,3 +29,34 @@ export interface SelectionColumnConfig {
   /** Replaces the select-all checkbox (multi) or the empty header cell (single). */
   header?: ReactNode
 }
+
+export type ContextMenuItemDef<T> =
+  | {
+      key: string
+      label: ReactNode
+      icon?: ReactNode
+      destructive?: boolean
+      disabled?: boolean
+      /** Receives the rows the menu was opened on (the whole selection when right-clicking a selected row). */
+      onSelect: (rows: T[]) => void
+    }
+  | { key: string; separator: true }
+
+export interface SearchConfig {
+  /** Seeds the input; the table keeps its own input state and calls onChange debounced. */
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  /** Default 300. */
+  debounceMs?: number
+}
+
+export interface PaginationConfig {
+  /** 1-based. */
+  page: number
+  pageSize: number
+  /** Total rows across all pages (after filtering); the page owns the slicing. */
+  total: number
+  onPageChange: (page: number) => void
+  itemLabel: { singular: string; plural: string }
+}
