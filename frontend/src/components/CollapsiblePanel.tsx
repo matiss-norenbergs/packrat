@@ -41,6 +41,10 @@ export function CollapsiblePanel({ open, onOpenChange, label, widthStorageKey, c
   const outerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const dragCleanup = useRef<(() => void) | null>(null)
+  // Where the pointer grabbed the handle, relative to the panel's left edge,
+  // so the width doesn't jump by that offset on press; `moved` keeps a plain
+  // click from committing a (possibly clamped) width.
+  const grab = useRef({ offset: 0, moved: false })
 
   useLayoutEffect(() => {
     const row = outerRef.current?.parentElement
@@ -67,8 +71,10 @@ export function CollapsiblePanel({ open, onOpenChange, label, widthStorageKey, c
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 && e.pointerType === "mouse") return
-    const right = panelRef.current?.getBoundingClientRect().right
-    if (right === undefined) return
+    const rect = panelRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const right = rect.right
+    grab.current = { offset: e.clientX - rect.left, moved: false }
     e.preventDefault()
     const handle = e.currentTarget
     handle.setPointerCapture?.(e.pointerId)
@@ -81,19 +87,20 @@ export function CollapsiblePanel({ open, onOpenChange, label, widthStorageKey, c
       document.body.style.cursor = prevCursor
       dragCleanup.current = null
     }
-    setDragWidth(clamp(right - e.clientX))
+    setDragWidth(clamp(right - e.clientX + grab.current.offset))
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!dragging) return
     const right = panelRef.current?.getBoundingClientRect().right
     if (right === undefined) return
-    setDragWidth(clamp(right - e.clientX))
+    grab.current.moved = true
+    setDragWidth(clamp(right - e.clientX + grab.current.offset))
   }
 
   function endDrag(e: React.PointerEvent<HTMLDivElement>, apply: boolean) {
     if (dragWidth === null) return
-    if (apply) commit(dragWidth)
+    if (apply && grab.current.moved) commit(dragWidth)
     setDragWidth(null)
     dragCleanup.current?.()
     e.currentTarget.releasePointerCapture?.(e.pointerId)

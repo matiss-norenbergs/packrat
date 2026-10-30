@@ -20,8 +20,10 @@ beforeEach(() => {
     const isRow = this.dataset.testid === "row"
     const isPanel = this.className.includes("overflow-hidden")
     const width = isRow ? rowWidth : 0
+    // The panel wrapper's width follows the rendered --panel-w, as in a real layout.
+    const panelWidth = isPanel ? parseFloat(this.parentElement!.style.getPropertyValue("--panel-w")) : width
     const right = isPanel ? PANEL_RIGHT : width
-    return { x: 0, y: 0, top: 0, left: right - width, bottom: 0, right, width, height: 0, toJSON: () => ({}) }
+    return { x: 0, y: 0, top: 0, left: right - panelWidth, bottom: 0, right, width, height: 0, toJSON: () => ({}) }
   })
   vi.stubGlobal(
     "ResizeObserver",
@@ -178,6 +180,46 @@ describe("CollapsiblePanel", () => {
     expect(localStorage.getItem(KEY)).toBe("450")
     expect(container.querySelector(".overflow-hidden")!.className).not.toContain("transition-none")
     expect(document.body.style.userSelect).toBe("")
+  })
+
+  it("does not nudge the width on a press-and-release inside the handle", () => {
+    localStorage.setItem(KEY, "400")
+    const { container } = renderPanel()
+    pointer(handle(), "pointerdown", 605) // 5px right of the panel's left edge (600)
+    expect(widthVar(container)).toBe("400px")
+    pointer(handle(), "pointerup", 605)
+    expect(widthVar(container)).toBe("400px")
+    expect(localStorage.getItem(KEY)).toBe("400")
+  })
+
+  it("does not overwrite a clamped stored width on a plain click", () => {
+    localStorage.setItem(KEY, "700") // rendered clamped to 500
+    renderPanel()
+    pointer(handle(), "pointerdown", 505)
+    pointer(handle(), "pointerup", 505)
+    expect(localStorage.getItem(KEY)).toBe("700")
+  })
+
+  it("resizes by exactly the pointer travel when grabbed at an offset", () => {
+    const { container } = renderPanel()
+    pointer(handle(), "pointerdown", 685) // 5px inside the left edge (680)
+    pointer(handle(), "pointermove", 645) // 40px left
+    expect(widthVar(container)).toBe("360px")
+    pointer(handle(), "pointermove", 725) // 40px right of the grab point
+    expect(widthVar(container)).toBe("280px")
+    pointer(handle(), "pointermove", 645)
+    pointer(handle(), "pointerup", 645)
+    expect(widthVar(container)).toBe("360px")
+    expect(localStorage.getItem(KEY)).toBe("360")
+  })
+
+  it("still clamps at the limits with a grab offset", () => {
+    const { container } = renderPanel()
+    pointer(handle(), "pointerdown", 685)
+    pointer(handle(), "pointermove", 0)
+    expect(widthVar(container)).toBe("500px")
+    pointer(handle(), "pointermove", 990)
+    expect(widthVar(container)).toBe("280px")
   })
 
   it("keeps independent widths for panels with different keys", () => {
