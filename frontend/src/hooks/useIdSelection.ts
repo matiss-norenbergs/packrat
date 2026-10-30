@@ -34,3 +34,5 @@ export function useIdSelection<T = number>() {
     active: selected.size > 0,
   }
 }
+
+export type IdSelection<T = number> = ReturnType<typeof useIdSelection<T>>

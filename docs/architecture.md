@@ -550,6 +550,52 @@ animating wrapper would resolve against the wrong box) and exposing the pixels a
 ignore it and keep the fixed `w-80`. The slide animation and fixed-width inner container are unchanged; the width
 transition is switched off only while dragging.
 
+## List tables (`DataTable`)
+
+`components/data-table/` is the shared list-table component; `TagsPage` is the first page on it. **The component owns**
+the table chrome and the interaction logic that used to be copy-pasted per page: the column model, alignment, widths and
+scroll, the checkbox/radio column, click / ctrl / shift / drag selection (`useTableSelection`, on top of a *controlled*
+`useIdSelection` the page passes as `selectionState`, so its toolbar reads the same state), the context menu (including
+the Radix remount-key workaround), the debounced search box, the pagination footer (`TablePagination`), and the
+loading / error / empty states. **The page owns** the data: fetching, filtering, slicing the current page (`rows` is only
+the visible page), resetting the page/selection when the search changes, and what the actions do. It is generic over the
+row type and the id type (number or string).
+
+- **Columns** (`ColumnDef<T>`): `key`, `header`, `cell(row)` (any React), `type` (text/number/date/status/icon/switch),
+  optional `align`, `width`, `minWidth`, `flex`, `headerClassName`, `cellClassName`. The `type` presets enforce the repo's
+  alignment rule for header and cells alike: date/status/switch/icon centre, number right, text left; `align` overrides.
+  `icon` cells are wrapped in a flex box so bare (display:block) SVGs centre without `mx-auto`.
+- **Selection** (`"multi" | "single" | "none"`): the selection column is generated (default 32px, `selectionColumn` to
+  tweak). `multi` = checkboxes + select-all, plain click selects one row, ctrl/cmd toggles, shift ranges, mouse-drag ranges
+  (window-level mouseup). `single` = radios inside a `radiogroup` wrapping the content region, a click selects only that
+  row, no drag/shift/ctrl. Right-clicking an unselected row replaces the selection with it; right-clicking a selected
+  row keeps a multi-selection; the header/empty area opens nothing.
+- **Widths**: with no `width` anywhere the table keeps the browser's auto layout (identical to the pre-component look).
+  Any `width` switches to `table-layout: fixed` with a `<colgroup>`; the table's min-width is the sum of the columns'
+  base widths (`width ?? minWidth ?? 120`), so a narrower container scrolls horizontally inside the single scroll
+  container (sticky header stays). Spare space goes to the `flex` columns, or — if none is flagged — to the **last column**,
+  so there is never an empty strip.
+- **Footer**: shown whenever `pagination` is set, except while loading or on error — including at 0 results ("0 tags",
+  one disabled page). In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
+  clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
+  `onPageChange(lastPage)`, so pages need no clamping code.
+- **Client-side mode**: for pages whose data is fully loaded, pass **all** rows plus `pageSize`, `itemLabel` and/or
+  `search.match(row, query)` and the table does what the page used to: it owns the query and page state, filters
+  (the query is trimmed and lowercased once; an empty query means no filter), slices the current page, resets to
+  page 1 when the query changes, clears the selection on a page or query change (selection is scoped to what's
+  visible), and feeds the footer (total = filtered count; the clamp above covers a shrinking list). `empty` may be a
+  function of the query (as typed) to tell "nothing yet" from "no match"; the toolbar slots also get `query` and
+  `total`. **`match` must have a stable identity** (module-level function or `useCallback`), or the filter memo
+  re-runs every render. Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
+  `search.onChange` owned by the page); the two modes are selected by whether `pageSize`/`match` is given.
+- **Layout**: the component renders a `flex min-h-0 flex-1 flex-col gap-6` block (toolbar and footer `shrink-0`, only the
+  content region scrolls), meant to sit under the page title in the usual page column.
+- **Why no virtualization / sorting / resizing yet**: pages are paginated at 50 rows, so virtualization would add
+  complexity for no gain; sorting, drag-resize and column show/hide are possible later because columns are data, but
+  nothing needs them today.
+- **Why Collections doesn't use it**: it renders a tree (expand/collapse, nesting, drag to re-parent), which a flat
+  row model doesn't fit; its cells could use the same primitives but the table itself stays bespoke.
+
 ## Deliberate scope cuts
 
 Still intentionally out of scope, not forgotten:
