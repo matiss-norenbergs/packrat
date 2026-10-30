@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -20,11 +20,18 @@ export interface SlotContext<T, Id extends RowId> {
   selection: IdSelection<Id>
   /** The selected rows that are on the current page. */
   selectedRows: T[]
+  /** The active search query as typed (debounced). */
+  query: string
+  /** Rows across all pages after filtering (the footer total). */
+  total: number
 }
 export type Slot<T, Id extends RowId> = ReactNode | ((ctx: SlotContext<T, Id>) => ReactNode)
 
 export interface DataTableProps<T, Id extends RowId = number> {
-  /** The CURRENT page's rows — filtering and slicing stay in the page. */
+  /**
+   * Controlled mode (default): the CURRENT page's rows — the page owns filtering and slicing (use for server paging).
+   * Client-side mode (`pageSize` and/or `search.match` given): ALL rows; the table filters, pages and resets for you.
+   */
   rows: T[]
   getRowId: (row: T) => Id
   columns: ColumnDef<T>[]
@@ -39,8 +46,13 @@ export interface DataTableProps<T, Id extends RowId = number> {
   toolbar?: Slot<T, Id>
   /** Right side of the toolbar, rendered before the search box. */
   filters?: Slot<T, Id>
-  search?: SearchConfig
+  search?: SearchConfig<T>
+  /** Controlled mode only: footer state owned by the page. */
   pagination?: PaginationConfig
+  /** Client-side mode: rows per page (50 by repo convention). Without it all filtered rows are shown. */
+  pageSize?: number
+  /** Client-side mode: footer label; the footer is shown only when `pageSize` and `itemLabel` are both set. */
+  itemLabel?: { singular: string; plural: string }
   /** Right-click menu, built from the rows it applies to. Right-clicking the header or an empty area opens nothing. */
   contextMenu?: (rows: T[]) => ContextMenuItemDef<T>[]
   onRowClick?: (row: T, e: MouseEvent<HTMLTableRowElement>) => void
@@ -50,8 +62,8 @@ export interface DataTableProps<T, Id extends RowId = number> {
   loadingRows?: number
   /** Replaces the table (e.g. a load failure message). */
   error?: ReactNode
-  /** Shown instead of the table when there are no rows. */
-  empty?: ReactNode
+  /** Shown instead of the table when there are no rows; a function receives the active query ("" when none). */
+  empty?: ReactNode | ((query: string) => ReactNode)
   rowClassName?: (row: T) => string | undefined
   className?: string
   /** Replaces the scroll container's classes entirely (see Table in components/ui/table.tsx). */
@@ -61,7 +73,7 @@ export interface DataTableProps<T, Id extends RowId = number> {
 const CONTAINER_CLASS = "h-full overflow-auto rounded-md border"
 
 export function DataTable<T, Id extends RowId = number>({
-  rows,
+  rows: allRows,
   getRowId,
   columns,
   selection: mode = "none",
@@ -71,7 +83,9 @@ export function DataTable<T, Id extends RowId = number>({
   toolbar,
   filters,
   search,
-  pagination,
+  pagination: controlledPagination,
+  pageSize,
+  itemLabel,
   contextMenu,
   onRowClick,
   onRowDoubleClick,
@@ -85,6 +99,36 @@ export function DataTable<T, Id extends RowId = number>({
 }: DataTableProps<T, Id>) {
   const ownSelection = useIdSelection<Id>()
   const selection = selectionState ?? ownSelection
+
+  // Client-side mode. The query/page reset and the selection clear happen in the event
+  // handlers that change them (selection is scoped to what's visible), not in effects.
+  const match = search?.match
+  const clientMode = pageSize != null || match != null
+  const [rawQuery, setRawQuery] = useState(search?.value ?? "")
+  const [page, setPage] = useState(1)
+  const normalizedQuery = rawQuery.trim().toLowerCase()
+  const filtered = useMemo(
+    () => (clientMode && match && normalizedQuery ? allRows.filter((r) => match(r, normalizedQuery)) : allRows),
+    [clientMode, match, normalizedQuery, allRows],
+  )
+  const rows = clientMode && pageSize != null ? filtered.slice((page - 1) * pageSize, page * pageSize) : clientMode ? filtered : allRows
+  const handleSearchChange = (value: string) => {
+    search?.onChange?.(value)
+    if (!clientMode || value === rawQuery) return
+    setRawQuery(value)
+    setPage(1)
+    selection.clear()
+  }
+  const goToPage = (p: number) => {
+    setPage(p)
+    selection.clear()
+  }
+  const pagination: PaginationConfig | undefined = clientMode
+    ? pageSize != null && itemLabel
+      ? { page, pageSize, total: filtered.length, onPageChange: goToPage, itemLabel }
+      : undefined
+    : controlledPagination
+  const query = clientMode ? rawQuery : (search?.value ?? "")
   const { onRowMouseDown, onRowMouseEnter } = useTableSelection({ rows, getRowId, mode, selection })
 
   const selectable = mode !== "none"
@@ -141,7 +185,7 @@ export function DataTable<T, Id extends RowId = number>({
   }
 
   const selectedRows = rows.filter((r) => selection.isSelected(getRowId(r)))
-  const slotCtx = { selection, selectedRows }
+  const slotCtx = { selection, selectedRows, query, total: pagination?.total ?? rows.length }
   const renderSlot = (slot: Slot<T, Id>) => (typeof slot === "function" ? slot(slotCtx) : slot)
 
   let content: ReactNode
@@ -156,7 +200,7 @@ export function DataTable<T, Id extends RowId = number>({
   } else if (error) {
     content = error
   } else if (rows.length === 0) {
-    content = empty ?? null
+    content = typeof empty === "function" ? empty(query) : (empty ?? null)
   } else {
     const table = (
       <Table
@@ -274,7 +318,14 @@ export function DataTable<T, Id extends RowId = number>({
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {toolbar != null && renderSlot(toolbar)}
           {filters != null && <div className="ml-auto flex flex-wrap items-center gap-2">{renderSlot(filters)}</div>}
-          {search && <TableSearch {...search} className={filters == null ? "ml-auto" : undefined} />}
+          {search && (
+            <TableSearch
+              {...search}
+              value={clientMode ? rawQuery : search.value}
+              onChange={handleSearchChange}
+              className={filters == null ? "ml-auto" : undefined}
+            />
+          )}
         </div>
       )}
       {mode === "single" ? (

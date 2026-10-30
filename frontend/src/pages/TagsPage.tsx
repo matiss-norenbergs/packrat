@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useState } from "react"
 import { Lock, Pencil, Plus, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,8 @@ import type { Tag } from "@/types/api"
 
 const PAGE_SIZE = 50
 
+const matchTag = (t: Tag, q: string) => t.name.toLowerCase().includes(q)
+
 export function TagsPage() {
   const { data: settings } = useSettings()
   const { data, isLoading, isError, error } = useTags()
@@ -30,33 +32,10 @@ export function TagsPage() {
   const [newTagOpen, setNewTagOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [page, setPage] = useState(1)
-  const [search, setSearch] = useState("")
   const bulkDeleteTags = useBulkDeleteTags()
 
   const privacyEnabled = !!settings?.privacyEnabled
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return data ?? []
-    return (data ?? []).filter((t) => t.name.toLowerCase().includes(q))
-  }, [data, search])
-  const total = filtered.length
-  const pageData = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const editTarget = size === 1 ? data?.find((t) => selected.has(t.id)) : undefined
-
-  // The selection is scoped to what's currently visible on this page — a
-  // stale id from a previous page/search shouldn't silently ride along once
-  // the rows it referred to are no longer on screen.
-  useEffect(() => {
-    clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, search])
-
-  // A search that shrinks the result set out from under the current page
-  // number would otherwise show an empty page instead of snapping back.
-  useEffect(() => {
-    setPage(1)
-  }, [search])
 
   const columns: ColumnDef<Tag>[] = [
     { key: "name", header: "Name", cell: (t) => t.name, cellClassName: "font-medium" },
@@ -100,7 +79,7 @@ export function TagsPage() {
       <h1 className="shrink-0 text-2xl font-semibold">Tags</h1>
 
       <DataTable
-        rows={pageData}
+        rows={data ?? []}
         getRowId={(t) => t.id}
         columns={columns}
         selection="multi"
@@ -108,17 +87,18 @@ export function TagsPage() {
         getRowLabel={(t) => `Select ${t.name}`}
         loading={isLoading}
         error={isError ? <p className="text-sm text-destructive">Failed to load tags: {(error as Error).message}</p> : undefined}
-        empty={
+        empty={(query) =>
           !data || data.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No tags yet. Create one, or add tags directly from a library item's edit dialog.
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">No tags match "{search}".</p>
+            <p className="text-sm text-muted-foreground">No tags match "{query}".</p>
           )
         }
-        search={{ value: search, onChange: setSearch, placeholder: "Search tags…" }}
-        pagination={{ page, pageSize: PAGE_SIZE, total, onPageChange: setPage, itemLabel: { singular: "tag", plural: "tags" } }}
+        search={{ value: "", match: matchTag, placeholder: "Search tags…" }}
+        pageSize={PAGE_SIZE}
+        itemLabel={{ singular: "tag", plural: "tags" }}
         contextMenu={contextMenu}
         toolbar={
           <>

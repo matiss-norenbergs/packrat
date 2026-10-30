@@ -42,10 +42,17 @@ export type ContextMenuItemDef<T> =
     }
   | { key: string; separator: true }
 
-export interface SearchConfig {
+export interface SearchConfig<T = unknown> {
   /** Seeds the input; the table keeps its own input state and calls onChange debounced. */
   value: string
-  onChange: (value: string) => void
+  /** Controlled mode: the page filters on this. Optional in client-side mode (the table filters itself). */
+  onChange?: (value: string) => void
+  /**
+   * Client-side mode: does `row` match? `query` is already trimmed and lowercased and never empty (an empty
+   * query means no filter). MUST have a stable identity (module-level function or useCallback), otherwise the
+   * filter memo re-runs on every render.
+   */
+  match?: (row: T, query: string) => boolean
   placeholder?: string
   /** Default 300. */
   debounceMs?: number

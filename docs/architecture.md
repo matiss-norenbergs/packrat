@@ -579,6 +579,15 @@ row type and the id type (number or string).
   one disabled page). In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
   clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
   `onPageChange(lastPage)`, so pages need no clamping code.
+- **Client-side mode**: for pages whose data is fully loaded, pass **all** rows plus `pageSize`, `itemLabel` and/or
+  `search.match(row, query)` and the table does what the page used to: it owns the query and page state, filters
+  (the query is trimmed and lowercased once; an empty query means no filter), slices the current page, resets to
+  page 1 when the query changes, clears the selection on a page or query change (selection is scoped to what's
+  visible), and feeds the footer (total = filtered count; the clamp above covers a shrinking list). `empty` may be a
+  function of the query (as typed) to tell "nothing yet" from "no match"; the toolbar slots also get `query` and
+  `total`. **`match` must have a stable identity** (module-level function or `useCallback`), or the filter memo
+  re-runs every render. Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
+  `search.onChange` owned by the page); the two modes are selected by whether `pageSize`/`match` is given.
 - **Layout**: the component renders a `flex min-h-0 flex-1 flex-col gap-6` block (toolbar and footer `shrink-0`, only the
   content region scrolls), meant to sit under the page title in the usual page column.
 - **Why no virtualization / sorting / resizing yet**: pages are paginated at 50 rows, so virtualization would add

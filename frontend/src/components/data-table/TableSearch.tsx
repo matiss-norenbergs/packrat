@@ -3,7 +3,6 @@ import { Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import type { SearchConfig } from "./types"
 
 // The input updates immediately; onChange (what the page filters on) is debounced so fast
 // typing doesn't re-filter/re-paginate on every keystroke. Clearing applies immediately.
@@ -13,7 +12,13 @@ export function TableSearch({
   placeholder = "Search…",
   debounceMs = 300,
   className,
-}: SearchConfig & { className?: string }) {
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  debounceMs?: number
+  className?: string
+}) {
   const [input, setInput] = useState(value)
   const [prevValue, setPrevValue] = useState(value)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
