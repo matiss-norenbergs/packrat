@@ -452,6 +452,9 @@ export interface Artist {
   selectedImagePath: string | null
   // Date-only string ("2006-01-02"), null when unset.
   birthday: string | null
+  // Raw flag; only acted on (blur in the Artists page image panel) while
+  // the privacy master switch is on.
+  isPrivate: boolean
   createdAt: string
   usageCount: number
 }
@@ -459,11 +462,14 @@ export interface Artist {
 export interface CreateArtistRequest {
   name: string
   birthday?: string | null
+  isPrivate?: boolean
 }
 
 export interface UpdateArtistRequest {
   name: string
   birthday?: string | null
+  // Omitted means unchanged on the server.
+  isPrivate?: boolean
 }
 
 export interface ArtistImage {

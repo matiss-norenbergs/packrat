@@ -443,6 +443,15 @@ collection's Artist default — see Collections above).
   from every item that had it (items themselves are untouched, they just lose the artist link) and
   removes the artist's gallery images from disk.
 - Select multiple artists to bulk-delete.
+- **Private flag** — with **Enable privacy** on, the artist dialog has a **Private** checkbox and the table gets a
+  **Private** column (lock icon, private artists only). A private artist's images in the page's right-hand panel
+  (the display picture and the "Other images" thumbnails) are blurred; clicking any one of them reveals/hides all
+  of that artist's panel images together. The reveal lasts only while that artist stays selected and the panel stays
+  open (selecting another artist, clearing or multi-selecting, or closing the panel re-blurs). The
+  [reveal-all floating button](#reveal-all-floating-button) reveals them too, and turning it off re-blurs
+  everything, including click-revealed images. Only those panel images are affected: the artist dialog's images, the
+  Browse artist page and artist names stay as they are. Library backups don't carry the flag yet (see
+  [`TODO.md`](TODO.md)).
 
 **Image gallery (optional)** — build a gallery of images for an artist and pick one as their
 display picture (shown wherever the artist is represented, e.g. Browse). Add images from suggested
@@ -472,9 +481,9 @@ Private items are blurred here too; the [reveal-all floating button](#reveal-all
 ## Reveal-all floating button
 
 A round eye button floats at the bottom-left of the content area (clear of the sidebar on desktop) on
-the **Library**, **Compare list**, **Downloads**, **Collections** and **AI Enhancement** pages (on Collections it reveals the
-selected collection's cover in the info panel, the only blurred imagery there). It appears only when **Enable privacy** is
-on *and* something is actually private (a private collection with items, or a private tag in use) —
+the **Library**, **Compare list**, **Downloads**, **Collections**, **Artists** and **AI Enhancement** pages (on Collections it reveals the
+selected collection's cover in the info panel, the only blurred imagery there; on Artists, the selected artist's panel images). It appears only when **Enable privacy** is
+on *and* something is actually private (a private collection with items, a private tag in use, or a private artist) —
 otherwise it is hidden, not disabled. Click it to reveal every blurred item on the page (the icon
 becomes a crossed-out eye, the button is filled, and the tooltip reads "Hide all private items"); click
 again to blur them all back, which also re-blurs anything you had revealed one by one. The state is

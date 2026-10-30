@@ -74,6 +74,13 @@ the `Run` command; a real sign-out/sign-in of Windows wasn't tested).
   full-size reference/found frames, and the resized-image cache has no size cap (age-based eviction only; a cap
   with LRU eviction is the possible next step if it grows large). The artist image picker was left alone on purpose.
 
+## Backups
+
+- **Artist privacy, birthday and images in backups (S to M).** Library backups only carry artist *names*
+  (the bundle's `artists` list is plain strings), so a restore loses the artist private flag, birthday and images.
+  Carrying the flag needs an object form for that list with a backward-compatible import (old bundles with bare
+  strings must keep importing).
+
 ## Dependencies
 
 - **Node 22 to the next LTS (S).** Moved by hand across the Dockerfile and the three workflows (Dependabot

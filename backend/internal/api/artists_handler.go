@@ -53,7 +53,7 @@ func CreateArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
 			return
 		}
 
-		artist, err := repo.Create(c.Request.Context(), req.Name, req.Birthday)
+		artist, err := repo.CreateWithPrivacy(c.Request.Context(), req.Name, req.Birthday, req.IsPrivate)
 		if err != nil {
 			if errors.Is(err, repository.ErrArtistNameInUse) {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -85,7 +85,7 @@ func UpdateArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
 			return
 		}
 
-		if err := repo.Update(c.Request.Context(), id, req.Name, req.Birthday); err != nil {
+		if err := repo.Update(c.Request.Context(), id, req.Name, req.Birthday, req.IsPrivate); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
 				return

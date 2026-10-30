@@ -48,15 +48,22 @@ func (r *ArtistsRepo) nameInUse(ctx context.Context, name string, excludeID int6
 	return true, nil
 }
 
+// Create adds a public artist — for callers that don't care about privacy
+// (e.g. backup restore); CreateWithPrivacy takes the flag explicitly.
 func (r *ArtistsRepo) Create(ctx context.Context, name string, birthday *string) (*models.Artist, error) {
+	return r.CreateWithPrivacy(ctx, name, birthday, false)
+}
+
+// CreateWithPrivacy adds an artist with an explicit privacy flag.
+func (r *ArtistsRepo) CreateWithPrivacy(ctx context.Context, name string, birthday *string, isPrivate bool) (*models.Artist, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.createLocked(ctx, name, birthday)
+	return r.createLocked(ctx, name, birthday, isPrivate)
 }
 
 // createLocked performs the actual check-then-insert; callers must already
 // hold r.mu.
-func (r *ArtistsRepo) createLocked(ctx context.Context, name string, birthday *string) (*models.Artist, error) {
+func (r *ArtistsRepo) createLocked(ctx context.Context, name string, birthday *string, isPrivate bool) (*models.Artist, error) {
 	inUse, err := r.nameInUse(ctx, name, 0)
 	if err != nil {
 		return nil, err
@@ -65,7 +72,7 @@ func (r *ArtistsRepo) createLocked(ctx context.Context, name string, birthday *s
 		return nil, ErrArtistNameInUse
 	}
 
-	res, err := r.db.ExecContext(ctx, `INSERT INTO artists (name, birthday) VALUES (?, ?)`, name, birthday)
+	res, err := r.db.ExecContext(ctx, `INSERT INTO artists (name, birthday, is_private) VALUES (?, ?, ?)`, name, birthday, isPrivate)
 	if err != nil {
 		return nil, fmt.Errorf("inserting artist: %w", err)
 	}
@@ -79,8 +86,8 @@ func (r *ArtistsRepo) createLocked(ctx context.Context, name string, birthday *s
 func (r *ArtistsRepo) Get(ctx context.Context, id int64) (*models.Artist, error) {
 	var a models.Artist
 	var createdAt string
-	err := r.db.QueryRowContext(ctx, `SELECT id, name, selected_image_path, birthday, created_at FROM artists WHERE id = ?`, id).
-		Scan(&a.ID, &a.Name, &a.SelectedImagePath, &a.Birthday, &createdAt)
+	err := r.db.QueryRowContext(ctx, `SELECT id, name, selected_image_path, birthday, is_private, created_at FROM artists WHERE id = ?`, id).
+		Scan(&a.ID, &a.Name, &a.SelectedImagePath, &a.Birthday, &a.IsPrivate, &createdAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -98,7 +105,7 @@ func (r *ArtistsRepo) Get(ctx context.Context, id int64) (*models.Artist, error)
 // ordered by name — used by the Artists management page.
 func (r *ArtistsRepo) List(ctx context.Context) ([]models.ArtistWithCount, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT a.id, a.name, a.selected_image_path, a.birthday, a.created_at, COUNT(l.id) AS usage_count
+		SELECT a.id, a.name, a.selected_image_path, a.birthday, a.is_private, a.created_at, COUNT(l.id) AS usage_count
 		FROM artists a
 		LEFT JOIN library l ON l.artist_id = a.id
 		GROUP BY a.id
@@ -112,7 +119,7 @@ func (r *ArtistsRepo) List(ctx context.Context) ([]models.ArtistWithCount, error
 	for rows.Next() {
 		var a models.ArtistWithCount
 		var createdAt string
-		if err := rows.Scan(&a.ID, &a.Name, &a.SelectedImagePath, &a.Birthday, &createdAt, &a.UsageCount); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.SelectedImagePath, &a.Birthday, &a.IsPrivate, &createdAt, &a.UsageCount); err != nil {
 			return nil, fmt.Errorf("scanning artist: %w", err)
 		}
 		a.CreatedAt, err = parseSQLiteTime(createdAt)
@@ -221,8 +228,10 @@ func (r *ArtistsRepo) DeleteImage(ctx context.Context, imageID int64) (string, e
 // Update overwrites an artist's name and birthday together — the Artist
 // dialog's one save action covers both fields, so there's no need for two
 // separate narrow updates the way SetSelectedImage is split out (that one's
-// driven by a different, image-picker-specific action).
-func (r *ArtistsRepo) Update(ctx context.Context, id int64, newName string, birthday *string) error {
+// driven by a different, image-picker-specific action). isPrivate nil
+// leaves the privacy flag unchanged, so clients that don't know about it
+// can't reset it.
+func (r *ArtistsRepo) Update(ctx context.Context, id int64, newName string, birthday *string, isPrivate *bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -237,7 +246,7 @@ func (r *ArtistsRepo) Update(ctx context.Context, id int64, newName string, birt
 		return ErrArtistNameInUse
 	}
 
-	res, err := r.db.ExecContext(ctx, `UPDATE artists SET name = ?, birthday = ? WHERE id = ?`, newName, birthday, id)
+	res, err := r.db.ExecContext(ctx, `UPDATE artists SET name = ?, birthday = ?, is_private = COALESCE(?, is_private) WHERE id = ?`, newName, birthday, isPrivate, id)
 	if err != nil {
 		return fmt.Errorf("updating artist: %w", err)
 	}
