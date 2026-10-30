@@ -305,7 +305,12 @@ export function CollectionsPage() {
           )}
         </div>
 
-        <CollapsiblePanel open={panelOpen} onOpenChange={setPanelOpen} label="collection details panel">
+        <CollapsiblePanel
+          open={panelOpen}
+          onOpenChange={setPanelOpen}
+          label="collection details panel"
+          widthStorageKey="packrat:collections-panel-width"
+        >
           {panelOpen && <CollectionInfoPanel collection={editTarget} selectedCount={size} />}
         </CollapsiblePanel>
       </div>
