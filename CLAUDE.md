@@ -75,8 +75,13 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - Toolbar: action buttons left (primary action first, buttons carry lucide icons), filter/search on
   the right (`ml-auto`, filter before search). Bulk/destructive actions get an `AlertDialog`
   confirmation showing the count; single-item actions don't.
-- Tables with selection: checkbox column + `useIdSelection` with drag/shift/ctrl-click, context menu
-  where actions exist, pagination via `getPageNumbers`, 50 rows/page.
+- **New list/table pages use `DataTable`** (`components/data-table`, see `docs/architecture.md`); don't
+  hand-roll a table. It enforces the next rules itself: checkbox/radio column on `useIdSelection` with
+  drag/shift/ctrl-click, context menu, `getPageNumbers` footer, alignment presets (column `type`), sticky
+  header in one scroll container. Pages still own filtering/slicing and use 50 rows/page. Existing pages
+  move over as they're touched; Collections (a tree) stays bespoke.
+- Hand-rolled tables with selection (until migrated): checkbox column + `useIdSelection` with
+  drag/shift/ctrl-click, context menu where actions exist, `getPageNumbers`, 50 rows/page.
 - Column alignment (global rule): date / status-tag / switch / icon columns centered, numeric
   (counts, sizes, durations, dimensions) right-aligned, everything else left. Bare SVG icons are
   `display:block` under Tailwind preflight — `text-center` won't center them; use `mx-auto`.
