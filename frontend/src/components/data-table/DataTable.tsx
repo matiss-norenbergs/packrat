@@ -266,7 +266,7 @@ export function DataTable<T, Id extends RowId = number>({
   const selectedId = mode === "single" ? pageIds.find((id) => selection.selected.has(id)) : undefined
 
   const hasToolbar = toolbar != null || filters != null || search != null
-  const showPagination = pagination != null && !loading && !error && pagination.total > 0
+  const showPagination = pagination != null && !loading && !error
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col gap-6", className)}>
@@ -292,7 +292,7 @@ export function DataTable<T, Id extends RowId = number>({
       ) : (
         region
       )}
-      {showPagination && <TablePagination {...pagination} />}
+      {showPagination && <TablePagination {...pagination} selectedCount={mode === "multi" ? selectedRows.length : 0} />}
     </div>
   )
 }

@@ -575,6 +575,10 @@ row type and the id type (number or string).
   base widths (`width ?? minWidth ?? 120`), so a narrower container scrolls horizontally inside the single scroll
   container (sticky header stays). Spare space goes to the `flex` columns, or — if none is flagged — to the **last column**,
   so there is never an empty strip.
+- **Footer**: shown whenever `pagination` is set, except while loading or on error — including at 0 results ("0 tags",
+  one disabled page). In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
+  clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
+  `onPageChange(lastPage)`, so pages need no clamping code.
 - **Layout**: the component renders a `flex min-h-0 flex-1 flex-col gap-6` block (toolbar and footer `shrink-0`, only the
   content region scrolls), meant to sit under the page title in the usual page column.
 - **Why no virtualization / sorting / resizing yet**: pages are paginated at 50 rows, so virtualization would add

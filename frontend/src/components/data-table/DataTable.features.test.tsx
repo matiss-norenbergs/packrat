@@ -149,11 +149,63 @@ describe("TablePagination", () => {
     expect(onPageChange.mock.calls.map((c) => c[0])).toEqual([3, 1, 4])
   })
 
-  it("is rendered by DataTable only when there is something to page", () => {
+  it("stays visible at total 0 as a single disabled page", () => {
+    render(<Table pagination={{ ...base, page: 1, total: 0, onPageChange: () => {} }} rows={[]} />)
+    expect(screen.getByText("0 tags")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "page")
+  })
+
+  it("snaps back to the last valid page, once", () => {
+    const onPageChange = vi.fn()
+    const { rerender } = render(<TablePagination {...base} page={2} total={50} onPageChange={onPageChange} />)
+    expect(onPageChange).toHaveBeenCalledTimes(1)
+    expect(onPageChange).toHaveBeenCalledWith(1)
+    rerender(<TablePagination {...base} page={1} total={50} onPageChange={onPageChange} />)
+    expect(onPageChange).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not clamp a valid page", () => {
+    const onPageChange = vi.fn()
+    render(<TablePagination {...base} page={2} total={51} onPageChange={onPageChange} />)
+    expect(onPageChange).not.toHaveBeenCalled()
+  })
+
+  it("does not clamp while DataTable hides the footer (loading or error)", () => {
+    const onPageChange = vi.fn()
+    const pagination = { ...base, page: 3, total: 10, onPageChange }
+    const { rerender } = render(<Table pagination={pagination} loading />)
+    rerender(<Table pagination={pagination} error={<p>x</p>} />)
+    expect(onPageChange).not.toHaveBeenCalled()
+  })
+
+  it("shows the selected count after the label only in multi mode", () => {
+    const pagination = { ...base, page: 1, total: 4, onPageChange: () => {} }
+    const { rerender } = render(<Table selection="multi" pagination={pagination} />)
+    expect(screen.getByText("4 tags")).toBeInTheDocument()
+    fireEvent.mouseDown(row("A"))
+    fireEvent.mouseUp(window)
+    expect(screen.getByText("4 tags · 1 selected")).toBeInTheDocument()
+    fireEvent.mouseDown(row("C"), { ctrlKey: true })
+    fireEvent.mouseDown(row("D"), { ctrlKey: true })
+    expect(screen.getByText("4 tags · 3 selected")).toBeInTheDocument()
+    fireEvent.mouseDown(row("A"), { ctrlKey: true })
+    fireEvent.mouseDown(row("C"), { ctrlKey: true })
+    fireEvent.mouseDown(row("D"), { ctrlKey: true })
+    expect(screen.getByText("4 tags")).toBeInTheDocument()
+    rerender(<Table selection="single" pagination={pagination} />)
+    fireEvent.mouseDown(row("B"))
+    expect(screen.getByText("4 tags")).toBeInTheDocument()
+    rerender(<Table selection="none" pagination={pagination} />)
+    expect(screen.getByText("4 tags")).toBeInTheDocument()
+  })
+
+  it("is hidden by DataTable while loading or on error", () => {
     const pagination = { ...base, page: 1, total: 4, onPageChange: () => {} }
     const { rerender } = render(<Table pagination={pagination} />)
     expect(screen.getByText("4 tags")).toBeInTheDocument()
-    rerender(<Table pagination={{ ...pagination, total: 0 }} rows={[]} />)
+    rerender(<Table pagination={{ ...pagination, total: 0 }} rows={[]} error={<p>Boom</p>} />)
     expect(screen.queryByRole("button", { name: "Next" })).toBeNull()
     rerender(<Table pagination={pagination} loading />)
     expect(screen.queryByRole("button", { name: "Next" })).toBeNull()
