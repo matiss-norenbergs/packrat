@@ -446,7 +446,7 @@ collection's Artist default — see Collections above).
 - Select multiple artists to bulk-delete.
 - **Panel images** — the display picture is at most 300px square, left-aligned, and shrinks with the panel when it is
   narrower than that (no overflow); the "Other images" thumbnails sit in an auto-fill grid of square tiles
-  (about 72–110px), so the column count grows with the panel width (about 3 at 280px, 5 at 500px, 6 at 584px).
+  (about 72–110px), so the column count grows with the panel width (about 3 at 280px, 6 at 500px, 7 at 584px).
 - **Private flag** — with **Enable privacy** on, the artist dialog has a **Private** checkbox and the table gets a
   **Private** column (lock icon, private artists only). A private artist's images in the page's right-hand panel
   (the display picture and the "Other images" thumbnails) are blurred; clicking any one of them reveals/hides all
