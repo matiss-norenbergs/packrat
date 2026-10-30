@@ -1,32 +1,33 @@
 import { useCallback, useState } from "react"
 
-// Panel width limits, in px. The minimum and default are fixed; the maximum is
-// half of the row the panel sits in (applied by the panel at render time).
-export const PANEL_MIN_WIDTH = 280
-export const PANEL_DEFAULT_WIDTH = 320
-
-function readWidth(key: string, defaultValue: number): number {
+function readWidth(key: string): number | null {
   try {
-    const n = Number(localStorage.getItem(key))
-    return Number.isFinite(n) && n > 0 ? n : defaultValue
+    const raw = localStorage.getItem(key)
+    if (raw === null) return null
+    const n = Number(raw)
+    return Number.isFinite(n) && n > 0 ? n : null
   } catch {
-    return defaultValue
+    return null
   }
 }
 
 // Persists a pixel width (a resizable side panel) to localStorage under
 // `key`. Read once at mount; invalid stored values (non-numbers, NaN, zero,
-// negatives) fall back to `defaultValue`. Unlike usePersistedOpen the write
-// happens in the setter, not an effect, so callers decide when to persist
-// (e.g. on pointer release rather than on every pointer move).
-export function usePersistedWidth(key: string, defaultValue: number = PANEL_DEFAULT_WIDTH): [number, (w: number) => void] {
-  const [value, setValue] = useState(() => readWidth(key, defaultValue))
+// negatives) are ignored and the value resolves to `defaultValue`, as it does
+// while nothing is stored. Unlike usePersistedOpen the write happens in the
+// setter, not an effect, so callers decide when to persist (e.g. on pointer
+// release rather than on every pointer move). Setting `null` removes the
+// stored key, so the value follows `defaultValue` again (including a changed
+// default) rather than freezing today's default into storage.
+export function usePersistedWidth(key: string, defaultValue: number): [number, (w: number | null) => void] {
+  const [stored, setStored] = useState<number | null>(() => readWidth(key))
 
   const set = useCallback(
-    (w: number) => {
-      setValue(w)
+    (w: number | null) => {
+      setStored(w)
       try {
-        localStorage.setItem(key, String(w))
+        if (w === null) localStorage.removeItem(key)
+        else localStorage.setItem(key, String(w))
       } catch {
         // storage unavailable: the width still applies for this session
       }
@@ -34,5 +35,5 @@ export function usePersistedWidth(key: string, defaultValue: number = PANEL_DEFA
     [key],
   )
 
-  return [value, set]
+  return [stored ?? defaultValue, set]
 }

@@ -13,8 +13,12 @@ Maintenance notes:
 -->
 
 ## 2026-10-30
+- **Side panel sizing is configurable, opens at 500px, and reset forgets the width** — `CollapsiblePanel` takes
+  `minWidth` / `maxRatio` / `defaultWidth` (280px / 50% / 500px). Double-click or Enter now clears the remembered width
+  instead of saving the default. In the Artists panel the display picture is at most 300px (shrinking with the panel)
+  and the other images wrap in an auto-fill grid, so wider panels show more columns.
 - **Artists and Collections side panels are resizable** — drag the panel's left edge (or focus it and use the keyboard;
-  double-click or Enter resets to 320px). Limits are 280px and 50% of the content row; the width is remembered per page
+  double-click or Enter resets to the default). Limits are 280px and 50% of the content row; the width is remembered per page
   in the browser. Phones keep the fixed width.
 
 ## 2026-10-29

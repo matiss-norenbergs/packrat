@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CollapsiblePanel } from "@/components/CollapsiblePanel"
@@ -43,14 +44,16 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function panel(key = KEY, open = true, label = "artist images panel") {
+function panel(key = KEY, open = true, label = "artist images panel", props: SizingProps = {}) {
   return (
-    <CollapsiblePanel open={open} onOpenChange={() => {}} label={label} widthStorageKey={key}>
+    <CollapsiblePanel open={open} onOpenChange={() => {}} label={label} widthStorageKey={key} {...props}>
       <p>content</p>
     </CollapsiblePanel>
   )
 }
-const renderPanel = (key = KEY, open = true) => render(<div data-testid="row">{panel(key, open)}</div>)
+type SizingProps = Pick<ComponentProps<typeof CollapsiblePanel>, "minWidth" | "maxRatio" | "defaultWidth">
+const renderPanel = (key = KEY, open = true, props: SizingProps = {}) =>
+  render(<div data-testid="row">{panel(key, open, undefined, props)}</div>)
 const outer = (c: HTMLElement) => c.querySelector<HTMLElement>(".relative.shrink-0")!
 const widthVar = (c: HTMLElement) => outer(c).style.getPropertyValue("--panel-w")
 const handle = () => screen.getByRole("separator", { name: "Resize artist images panel" })
@@ -74,9 +77,9 @@ describe("CollapsiblePanel", () => {
     expect(container.querySelector(".overflow-hidden")!.className).toContain("w-80 md:w-(--panel-w)")
   })
 
-  it("defaults to 320px", () => {
+  it("defaults to 500px", () => {
     const { container } = renderPanel()
-    expect(widthVar(container)).toBe("320px")
+    expect(widthVar(container)).toBe("500px")
   })
 
   it("renders a stored 400px width", () => {
@@ -121,34 +124,36 @@ describe("CollapsiblePanel", () => {
     expect(wrapper.className).not.toContain("md:w-(--panel-w)")
   })
 
-  it("resets to 320 and stores it on double-click", () => {
+  it("resets to the default and removes the stored key on double-click", () => {
     localStorage.setItem(KEY, "450")
     const { container } = renderPanel()
+    expect(widthVar(container)).toBe("450px")
     fireEvent.doubleClick(handle())
-    expect(widthVar(container)).toBe("320px")
-    expect(localStorage.getItem(KEY)).toBe("320")
+    expect(widthVar(container)).toBe("500px")
+    expect(localStorage.getItem(KEY)).toBeNull()
   })
 
   it("handles keyboard resizing and persists each change", () => {
     const { container } = renderPanel()
-    fireEvent.keyDown(handle(), { key: "ArrowLeft" })
-    expect(widthVar(container)).toBe("336px")
-    fireEvent.keyDown(handle(), { key: "ArrowLeft", shiftKey: true })
-    expect(widthVar(container)).toBe("400px")
     fireEvent.keyDown(handle(), { key: "ArrowRight" })
-    expect(widthVar(container)).toBe("384px")
-    expect(localStorage.getItem(KEY)).toBe("384")
+    expect(widthVar(container)).toBe("484px")
     fireEvent.keyDown(handle(), { key: "ArrowRight", shiftKey: true })
-    expect(widthVar(container)).toBe("320px")
+    expect(widthVar(container)).toBe("420px")
+    fireEvent.keyDown(handle(), { key: "ArrowLeft" })
+    expect(widthVar(container)).toBe("436px")
+    expect(localStorage.getItem(KEY)).toBe("436")
+    fireEvent.keyDown(handle(), { key: "ArrowLeft", shiftKey: true })
+    expect(widthVar(container)).toBe("500px")
     fireEvent.keyDown(handle(), { key: "Home" })
     expect(widthVar(container)).toBe("280px")
     expect(localStorage.getItem(KEY)).toBe("280")
     fireEvent.keyDown(handle(), { key: "End" })
     expect(widthVar(container)).toBe("500px")
     expect(localStorage.getItem(KEY)).toBe("500")
+    fireEvent.keyDown(handle(), { key: "Home" })
     fireEvent.keyDown(handle(), { key: "Enter" })
-    expect(widthVar(container)).toBe("320px")
-    expect(localStorage.getItem(KEY)).toBe("320")
+    expect(widthVar(container)).toBe("500px")
+    expect(localStorage.getItem(KEY)).toBeNull()
   })
 
   it("clamps keyboard steps at the limits", () => {
@@ -163,8 +168,8 @@ describe("CollapsiblePanel", () => {
 
   it("follows a pointer drag live and persists only on release", () => {
     const { container } = renderPanel()
-    pointer(handle(), "pointerdown", 680)
-    expect(widthVar(container)).toBe("320px")
+    pointer(handle(), "pointerdown", 500)
+    expect(widthVar(container)).toBe("500px")
     pointer(handle(), "pointermove", 600)
     expect(widthVar(container)).toBe("400px")
     expect(container.querySelector(".overflow-hidden")!.className).toContain("transition-none")
@@ -201,6 +206,7 @@ describe("CollapsiblePanel", () => {
   })
 
   it("resizes by exactly the pointer travel when grabbed at an offset", () => {
+    localStorage.setItem(KEY, "320")
     const { container } = renderPanel()
     pointer(handle(), "pointerdown", 685) // 5px inside the left edge (680)
     pointer(handle(), "pointermove", 645) // 40px left
@@ -214,6 +220,7 @@ describe("CollapsiblePanel", () => {
   })
 
   it("still clamps at the limits with a grab offset", () => {
+    localStorage.setItem(KEY, "320")
     const { container } = renderPanel()
     pointer(handle(), "pointerdown", 685)
     pointer(handle(), "pointermove", 0)
@@ -232,5 +239,75 @@ describe("CollapsiblePanel", () => {
     fireEvent.keyDown(screen.getAllByRole("separator")[0], { key: "Home" })
     expect(localStorage.getItem("test:a")).toBe("280")
     expect(localStorage.getItem("test:b")).toBe("450")
+  })
+
+  it("does not write storage on a press-and-release at the default width", () => {
+    renderPanel()
+    pointer(handle(), "pointerdown", 505)
+    pointer(handle(), "pointerup", 505)
+    expect(localStorage.getItem(KEY)).toBeNull()
+  })
+
+  describe("sizing props", () => {
+    const props = { minWidth: 200, maxRatio: 0.6, defaultWidth: 350 }
+
+    it("uses defaultWidth when nothing is stored, and reports aria values", () => {
+      const { container } = renderPanel(KEY, true, props)
+      expect(widthVar(container)).toBe("350px")
+      expect(handle()).toHaveAttribute("aria-valuenow", "350")
+      expect(handle()).toHaveAttribute("aria-valuemin", "200")
+      expect(handle()).toHaveAttribute("aria-valuemax", "600")
+    })
+
+    it("clamps drags to the custom min and max", () => {
+      const { container } = renderPanel(KEY, true, props)
+      pointer(handle(), "pointerdown", 650)
+      pointer(handle(), "pointermove", 0)
+      expect(widthVar(container)).toBe("600px")
+      pointer(handle(), "pointermove", 990)
+      expect(widthVar(container)).toBe("200px")
+    })
+
+    it("maps Home/End to the custom min/max", () => {
+      const { container } = renderPanel(KEY, true, props)
+      fireEvent.keyDown(handle(), { key: "Home" })
+      expect(widthVar(container)).toBe("200px")
+      expect(localStorage.getItem(KEY)).toBe("200")
+      fireEvent.keyDown(handle(), { key: "End" })
+      expect(widthVar(container)).toBe("600px")
+      expect(localStorage.getItem(KEY)).toBe("600")
+    })
+
+    it("clamps defaultWidth into [min, max] at render", () => {
+      const high = renderPanel(KEY, true, { defaultWidth: 900 })
+      expect(widthVar(high.container)).toBe("500px")
+      high.unmount()
+      const low = renderPanel(KEY, true, { defaultWidth: 100 })
+      expect(widthVar(low.container)).toBe("280px")
+    })
+
+    it("raises the max to the min when minWidth exceeds the row share", () => {
+      const { container } = renderPanel(KEY, true, { minWidth: 700, maxRatio: 0.5 })
+      expect(widthVar(container)).toBe("700px")
+      expect(handle()).toHaveAttribute("aria-valuemax", "700")
+    })
+
+    it("lets a stored custom width win over the default", () => {
+      localStorage.setItem(KEY, "420")
+      const { container } = renderPanel(KEY, true, props)
+      expect(widthVar(container)).toBe("420px")
+    })
+
+    it("resets a custom width to the prop default and removes the key", () => {
+      localStorage.setItem(KEY, "420")
+      const { container } = renderPanel(KEY, true, props)
+      fireEvent.doubleClick(handle())
+      expect(widthVar(container)).toBe("350px")
+      expect(localStorage.getItem(KEY)).toBeNull()
+      fireEvent.keyDown(handle(), { key: "End" })
+      fireEvent.keyDown(handle(), { key: "Enter" })
+      expect(widthVar(container)).toBe("350px")
+      expect(localStorage.getItem(KEY)).toBeNull()
+    })
   })
 })

@@ -420,7 +420,7 @@ original file — removing the cover reverts the tile to the automatic fallback.
 tiles are served as small resized WebPs (`GET /api/image`, `srcset` 320/480/720 px) rather than the
 raw files, so a folder of large images no longer loads at full size just to show thumbnails; the
 original is the fallback if a resize fails.
-- **Resizable side panel.** The right-hand panel's left edge is a drag handle (from the `md` breakpoint up): drag it, or Tab to it and use ←/→ (16px, Shift = 64px), Home (minimum), End (maximum) and Enter to reset. Width is limited to 280px minimum and 50% of the content row; double-click the handle or press Enter to reset to 320px. The width is remembered per page in the browser (not on the server); a window too narrow for it clamps the panel narrower for as long as it stays narrow, and growing back restores the remembered width. Phones keep the fixed 320px panel, no handle.
+- **Resizable side panel.** The right-hand panel's left edge is a drag handle (from the `md` breakpoint up): drag it, or Tab to it and use ←/→ (16px, Shift = 64px), Home (minimum), End (maximum) and Enter to reset. Width is limited to 280px minimum and 50% of the content row; with nothing remembered the panel opens at 500px; double-click the handle or press Enter to reset to that default, which also clears the remembered width. The width is remembered per page in the browser (not on the server); a window too narrow for it clamps the panel narrower for as long as it stays narrow, and growing back restores the remembered width. Phones keep the fixed 320px panel, no handle.
 
 ## Tags
 
@@ -444,6 +444,9 @@ collection's Artist default — see Collections above).
   from every item that had it (items themselves are untouched, they just lose the artist link) and
   removes the artist's gallery images from disk.
 - Select multiple artists to bulk-delete.
+- **Panel images** — the display picture is at most 300px square, left-aligned, and shrinks with the panel when it is
+  narrower than that (no overflow); the "Other images" thumbnails sit in an auto-fill grid of square tiles
+  (about 72–110px), so the column count grows with the panel width (about 3 at 280px, 5 at 500px, 6 at 584px).
 - **Private flag** — with **Enable privacy** on, the artist dialog has a **Private** checkbox and the table gets a
   **Private** column (lock icon, private artists only). A private artist's images in the page's right-hand panel
   (the display picture and the "Other images" thumbnails) are blurred; clicking any one of them reveals/hides all
@@ -459,7 +462,7 @@ display picture (shown wherever the artist is represented, e.g. Browse). Add ima
 candidates (thumbnails already used by that artist's own library items) or by uploading directly.
 Removing the currently-selected image automatically clears the selection (falls back to an
 auto-picked image); removing any other gallery image is unaffected.
-- **Resizable side panel.** The right-hand panel's left edge is a drag handle (from the `md` breakpoint up): drag it, or Tab to it and use ←/→ (16px, Shift = 64px), Home (minimum), End (maximum) and Enter to reset. Width is limited to 280px minimum and 50% of the content row; double-click the handle or press Enter to reset to 320px. The width is remembered per page in the browser (not on the server); a window too narrow for it clamps the panel narrower for as long as it stays narrow, and growing back restores the remembered width. Phones keep the fixed 320px panel, no handle.
+- **Resizable side panel.** The right-hand panel's left edge is a drag handle (from the `md` breakpoint up): drag it, or Tab to it and use ←/→ (16px, Shift = 64px), Home (minimum), End (maximum) and Enter to reset. Width is limited to 280px minimum and 50% of the content row; with nothing remembered the panel opens at 500px; double-click the handle or press Enter to reset to that default, which also clears the remembered width. The width is remembered per page in the browser (not on the server); a window too narrow for it clamps the panel narrower for as long as it stays narrow, and growing back restores the remembered width. Phones keep the fixed 320px panel, no handle.
 
 ## Compare list
 
