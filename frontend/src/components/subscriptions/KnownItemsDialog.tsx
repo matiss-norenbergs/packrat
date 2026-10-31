@@ -176,8 +176,7 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
           selection="multi"
           selectionState={selection}
           getRowLabel={getEntryLabel}
-          // No footer while there are no entries (the box shows the empty message instead).
-          pageSize={entries && entries.length > 0 ? PAGE_SIZE : undefined}
+          pageSize={PAGE_SIZE}
           itemLabel={ITEM_LABEL}
           resetKey={subscription.id}
           loading={isLoading}

@@ -116,7 +116,8 @@ describe("KnownItemsDialog table", () => {
     const msg = screen.getByText("No known items yet.")
     expect(msg).toHaveClass("text-center")
     expect(box(msg)).toHaveClass("h-[60vh]", "overflow-hidden", "rounded-md", "border")
-    expect(screen.queryByText("0 items")).toBeNull() // no footer for an empty list
+    expect(screen.getByText("0 items")).toBeInTheDocument() // the footer stays for an empty list
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
 
     entries = [entry("a")]
     rerender(ui())
@@ -139,6 +140,23 @@ describe("KnownItemsDialog table", () => {
     expect(screen.getByText("45 items")).toBeInTheDocument() // selection cleared on a page change
     await user.click(screen.getByRole("button", { name: "3" }))
     expect(rowEls()).toHaveLength(5)
+  })
+
+  it("stays in the same mode while data arrives (loading -> empty -> loaded)", () => {
+    const { rerender } = renderDialog()
+    pick(0)
+    expect(screen.getByText("4 items · 1 selected")).toBeInTheDocument()
+    loading = true
+    rerender(ui())
+    expect(screen.queryByText(/^d+ items?/)).toBeNull()
+    loading = false
+    entries = []
+    rerender(ui())
+    expect(screen.getByText("0 items")).toBeInTheDocument()
+    entries = Array.from({ length: 45 }, (_, i) => entry(`v${i}`))
+    rerender(ui())
+    expect(rowEls()).toHaveLength(20) // paged right away, no controlled-mode flash of 45 rows
+    expect(screen.getByText("45 items")).toBeInTheDocument()
   })
 
   it("uses the singular for one item and drops the old top-right selection text", () => {
