@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { memo, useMemo, useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -11,8 +11,10 @@ import type { IdSelection } from "@/hooks/useIdSelection"
 import { cn } from "@/lib/utils"
 import { TablePagination } from "./TablePagination"
 import { TableSearch } from "./TableSearch"
+import { isRowEventIgnored } from "./interactive"
 import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, computeLayout, resolveAlign } from "./columns"
 import type { ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
+import { useEvent } from "./useEvent"
 import { useTableSelection } from "./useTableSelection"
 import type { SelectionMode } from "./useTableSelection"
 
@@ -34,6 +36,11 @@ export interface DataTableProps<T, Id extends RowId = number> {
    */
   rows: T[]
   getRowId: (row: T) => Id
+  /**
+   * Memoize this (`useMemo`, with correct deps) or define it at module level: rows are `React.memo`'d and a
+   * new `columns` array re-renders every row and cell on every render of the page. Row/cell handlers and
+   * `rowClassName` are fine inline.
+   */
   columns: ColumnDef<T>[]
   /** Default "none". The checkbox / radio column is generated, not part of `columns`. */
   selection?: SelectionMode
@@ -69,6 +76,106 @@ export interface DataTableProps<T, Id extends RowId = number> {
   /** Replaces the scroll container's classes entirely (see Table in components/ui/table.tsx). */
   containerClassName?: string
 }
+
+// Rendered inside ContextMenuContent, which Radix only mounts while the menu is open, so the page's
+// builder runs on demand instead of on every table render.
+function ContextMenuItems<T, Id extends RowId>({
+  rows,
+  getRowId,
+  ids,
+  build,
+}: {
+  rows: T[]
+  getRowId: (row: T) => Id
+  ids: Id[]
+  build: (rows: T[]) => ContextMenuItemDef<T>[]
+}) {
+  const menuRows = rows.filter((r) => ids.includes(getRowId(r)))
+  return build(menuRows).map((item) =>
+    "separator" in item ? (
+      <ContextMenuSeparator key={item.key} />
+    ) : (
+      <ContextMenuItem
+        key={item.key}
+        variant={item.destructive ? "destructive" : "default"}
+        disabled={item.disabled}
+        onClick={() => item.onSelect(menuRows)}
+      >
+        {item.icon}
+        {item.label}
+      </ContextMenuItem>
+    ),
+  )
+}
+
+interface DataTableRowProps<T, Id extends RowId> {
+  row: T
+  id: Id
+  selected: boolean
+  mode: SelectionMode
+  columns: ColumnDef<T>[]
+  className: string
+  label: string
+  onMouseDown: (e: MouseEvent, id: Id) => void
+  onMouseEnter: (id: Id) => void
+  onToggle: (id: Id) => void
+  onClick: (row: T, e: MouseEvent<HTMLTableRowElement>) => void
+  onDoubleClick: (row: T, e: MouseEvent<HTMLTableRowElement>) => void
+}
+
+// Memoized so a selection change or a drag re-renders only the rows whose `selected` flipped, not every row and
+// cell. Everything it receives is primitive or has a stable identity (the parent's handlers go through useEvent;
+// `columns` is the page's to memoize — see DataTableProps.columns).
+function DataTableRowImpl<T, Id extends RowId>({
+  row,
+  id,
+  selected,
+  mode,
+  columns,
+  className,
+  label,
+  onMouseDown,
+  onMouseEnter,
+  onToggle,
+  onClick,
+  onDoubleClick,
+}: DataTableRowProps<T, Id>) {
+  const selectable = mode !== "none"
+  return (
+    <TableRow
+      data-row-id={String(id)}
+      data-state={selected ? "selected" : undefined}
+      aria-selected={selectable ? selected : undefined}
+      className={className}
+      onMouseDown={selectable ? (e) => onMouseDown(e, id) : undefined}
+      onMouseEnter={selectable ? () => onMouseEnter(id) : undefined}
+      onClick={(e) => !isRowEventIgnored(e) && onClick(row, e)}
+      onDoubleClick={(e) => !isRowEventIgnored(e) && onDoubleClick(row, e)}
+    >
+      {selectable && (
+        <TableCell className={cn("text-center", mode === "single" && "pr-0")}>
+          {mode === "multi" ? (
+            <Checkbox checked={selected} onCheckedChange={() => onToggle(id)} aria-label={label} />
+          ) : (
+            <RadioGroupItem value={String(id)} aria-label={label} />
+          )}
+        </TableCell>
+      )}
+      {columns.map((c) => {
+        const align = resolveAlign(c)
+        // Bare SVGs are display:block under preflight, so text-center can't centre
+        // them; icon cells get a flex wrapper instead of every page needing mx-auto.
+        const cell = c.cell(row)
+        return (
+          <TableCell key={c.key} className={cn(ALIGN_CLASS[align], c.cellClassName)}>
+            {c.type === "icon" ? <div className={cn("flex items-center", JUSTIFY_CLASS[align])}>{cell}</div> : cell}
+          </TableCell>
+        )
+      })}
+    </TableRow>
+  )
+}
+const DataTableRow = memo(DataTableRowImpl) as typeof DataTableRowImpl
 
 const CONTAINER_CLASS = "h-full overflow-auto rounded-md border"
 
@@ -130,6 +237,11 @@ export function DataTable<T, Id extends RowId = number>({
     : controlledPagination
   const query = clientMode ? rawQuery : (search?.value ?? "")
   const { onRowMouseDown, onRowMouseEnter } = useTableSelection({ rows, getRowId, mode, selection })
+
+  // Stable wrappers around the page's (usually inline) handlers, so they never defeat the row memo.
+  const toggleRow = useEvent((id: Id) => selection.toggle(id))
+  const handleRowClick = useEvent((row: T, e: MouseEvent<HTMLTableRowElement>) => onRowClick?.(row, e))
+  const handleRowDoubleClick = useEvent((row: T, e: MouseEvent<HTMLTableRowElement>) => onRowDoubleClick?.(row, e))
 
   const selectable = mode !== "none"
   const selectionWidth = selectionColumn?.width ?? SELECTION_COLUMN_WIDTH
@@ -236,40 +348,22 @@ export function DataTable<T, Id extends RowId = number>({
         <TableBody>
           {rows.map((row) => {
             const id = getRowId(row)
-            const selected = selection.isSelected(id)
             return (
-              <TableRow
+              <DataTableRow
                 key={String(id)}
-                data-row-id={String(id)}
-                data-state={selected ? "selected" : undefined}
-                aria-selected={selectable ? selected : undefined}
+                row={row}
+                id={id}
+                selected={selection.isSelected(id)}
+                mode={mode}
+                columns={columns}
                 className={cn(selectable ? "cursor-default select-none" : onRowClick && "cursor-pointer", rowClassName?.(row))}
-                onMouseDown={selectable ? (e) => onRowMouseDown(e, id) : undefined}
-                onMouseEnter={selectable ? () => onRowMouseEnter(id) : undefined}
-                onClick={onRowClick ? (e) => onRowClick(row, e) : undefined}
-                onDoubleClick={onRowDoubleClick ? (e) => onRowDoubleClick(row, e) : undefined}
-              >
-                {selectable && (
-                  <TableCell className={cn("text-center", mode === "single" && "pr-0")}>
-                    {mode === "multi" ? (
-                      <Checkbox checked={selected} onCheckedChange={() => selection.toggle(id)} aria-label={rowLabel(row, id)} />
-                    ) : (
-                      <RadioGroupItem value={String(id)} aria-label={rowLabel(row, id)} />
-                    )}
-                  </TableCell>
-                )}
-                {columns.map((c) => {
-                  const align = resolveAlign(c)
-                  // Bare SVGs are display:block under preflight, so text-center can't centre
-                  // them; icon cells get a flex wrapper instead of every page needing mx-auto.
-                  const cell = c.cell(row)
-                  return (
-                    <TableCell key={c.key} className={cn(ALIGN_CLASS[align], c.cellClassName)}>
-                      {c.type === "icon" ? <div className={cn("flex items-center", JUSTIFY_CLASS[align])}>{cell}</div> : cell}
-                    </TableCell>
-                  )
-                })}
-              </TableRow>
+                label={rowLabel(row, id)}
+                onMouseDown={onRowMouseDown}
+                onMouseEnter={onRowMouseEnter}
+                onToggle={toggleRow}
+                onClick={handleRowClick}
+                onDoubleClick={handleRowDoubleClick}
+              />
             )
           })}
         </TableBody>
@@ -284,21 +378,7 @@ export function DataTable<T, Id extends RowId = number>({
           {table}
         </ContextMenuTrigger>
         <ContextMenuContent key={contextMenuAnchorKey}>
-          {contextMenu(rows.filter((r) => contextIds.includes(getRowId(r)))).map((item) =>
-            "separator" in item ? (
-              <ContextMenuSeparator key={item.key} />
-            ) : (
-              <ContextMenuItem
-                key={item.key}
-                variant={item.destructive ? "destructive" : "default"}
-                disabled={item.disabled}
-                onClick={() => item.onSelect(rows.filter((r) => contextIds.includes(getRowId(r))))}
-              >
-                {item.icon}
-                {item.label}
-              </ContextMenuItem>
-            ),
-          )}
+          <ContextMenuItems rows={rows} getRowId={getRowId} ids={contextIds} build={contextMenu} />
         </ContextMenuContent>
       </ContextMenu>
     ) : (
@@ -320,9 +400,10 @@ export function DataTable<T, Id extends RowId = number>({
           {filters != null && <div className="ml-auto flex flex-wrap items-center gap-2">{renderSlot(filters)}</div>}
           {search && (
             <TableSearch
-              {...search}
-              value={clientMode ? rawQuery : search.value}
+              value={clientMode ? rawQuery : (search.value ?? "")}
               onChange={handleSearchChange}
+              placeholder={search.placeholder}
+              debounceMs={search.debounceMs}
               className={filters == null ? "ml-auto" : undefined}
             />
           )}

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { MouseEvent } from "react"
 import type { IdSelection } from "@/hooks/useIdSelection"
+import { isRowEventIgnored } from "./interactive"
+import { useEvent } from "./useEvent"
 import type { RowId } from "./types"
 
 export type SelectionMode = "multi" | "single" | "none"
@@ -19,11 +21,14 @@ interface Options<T, Id extends RowId> {
 // later rows while the button is held extends the selection from the anchor
 // to the row under the cursor (a window-level mouseup ends the drag even when
 // released outside the table). Plain click selects only that row, ctrl/cmd
-// toggles it, shift selects the range from the anchor. Checkbox clicks are
-// left alone — they toggle without clearing via the checkbox's own handler.
+// toggles it, shift selects the range from the anchor. Presses on interactive
+// elements inside the row (checkbox, button, link, input, …, see
+// INTERACTIVE_SELECTOR) and events from portals are left alone — the checkbox
+// toggles without clearing via its own handler.
 // single: a click selects only that row; no drag, ctrl or shift.
 export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, selection }: Options<T, Id>) {
   const { selectAll, selectOnly, toggle } = selection
+  const current = selection.selected
   const [isDragging, setIsDragging] = useState(false)
   const anchorRef = useRef<Id | null>(null)
 
@@ -34,22 +39,27 @@ export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, s
     return () => window.removeEventListener("mouseup", onMouseUp)
   }, [isDragging])
 
-  const rangeIds = useCallback(
-    (anchorId: Id, targetId: Id) => {
-      const ids = rows.map(getRowId)
-      const anchorIdx = ids.indexOf(anchorId)
-      const targetIdx = ids.indexOf(targetId)
-      if (anchorIdx === -1 || targetIdx === -1) return null
-      const [start, end] = anchorIdx < targetIdx ? [anchorIdx, targetIdx] : [targetIdx, anchorIdx]
-      return ids.slice(start, end + 1)
-    },
-    [rows, getRowId],
-  )
+  const rangeIds = (anchorId: Id, targetId: Id) => {
+    const ids = rows.map(getRowId)
+    const anchorIdx = ids.indexOf(anchorId)
+    const targetIdx = ids.indexOf(targetId)
+    if (anchorIdx === -1 || targetIdx === -1) return null
+    const [start, end] = anchorIdx < targetIdx ? [anchorIdx, targetIdx] : [targetIdx, anchorIdx]
+    return ids.slice(start, end + 1)
+  }
 
-  const onRowMouseDown = (e: MouseEvent, id: Id) => {
+  // A drag fires mouseenter on every row crossed; setting an identical selection would still allocate a new
+  // Set and re-render the table, so only write when the range actually differs.
+  const selectRange = (ids: Id[]) => {
+    if (ids.length === current.size && ids.every((id) => current.has(id))) return
+    selectAll(ids)
+  }
+
+  // Stable identities (they read the latest rows/selection) so memoized rows aren't re-rendered by new handlers.
+  const onRowMouseDown = useEvent((e: MouseEvent, id: Id) => {
     if (mode === "none" || e.button !== 0) return
-    // Checkbox / radio keep their own behavior (and native focus).
-    if ((e.target as HTMLElement).closest('[role="checkbox"], [role="radio"]')) return
+    // Checkbox / radio / buttons / inputs / portal content keep their own behavior (and native focus).
+    if (isRowEventIgnored(e)) return
     e.preventDefault() // avoid native text-selection while dragging/shift-clicking
 
     if (mode === "single") {
@@ -60,7 +70,7 @@ export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, s
     if (e.shiftKey && anchorRef.current != null) {
       const ids = rangeIds(anchorRef.current, id)
       if (ids) {
-        selectAll(ids)
+        selectRange(ids)
         return
       }
     }
@@ -74,13 +84,13 @@ export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, s
     anchorRef.current = id
     setIsDragging(true)
     selectOnly(id)
-  }
+  })
 
-  const onRowMouseEnter = (id: Id) => {
+  const onRowMouseEnter = useEvent((id: Id) => {
     if (mode !== "multi" || !isDragging || anchorRef.current == null) return
     const ids = rangeIds(anchorRef.current, id)
-    if (ids) selectAll(ids)
-  }
+    if (ids) selectRange(ids)
+  })
 
   return { onRowMouseDown, onRowMouseEnter }
 }

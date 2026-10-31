@@ -43,8 +43,8 @@ export type ContextMenuItemDef<T> =
   | { key: string; separator: true }
 
 export interface SearchConfig<T = unknown> {
-  /** Seeds the input; the table keeps its own input state and calls onChange debounced. */
-  value: string
+  /** Seeds the input (default ""); the table keeps its own input state and calls onChange debounced. */
+  value?: string
   /** Controlled mode: the page filters on this. Optional in client-side mode (the table filters itself). */
   onChange?: (value: string) => void
   /**

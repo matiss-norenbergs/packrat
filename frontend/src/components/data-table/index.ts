@@ -1,6 +1,7 @@
 export { DataTable } from "./DataTable"
 export type { DataTableProps, Slot, SlotContext } from "./DataTable"
 export { TablePagination } from "./TablePagination"
+export { INTERACTIVE_SELECTOR } from "./interactive"
 export { useTableSelection } from "./useTableSelection"
 export type { SelectionMode } from "./useTableSelection"
 export type {
