@@ -536,7 +536,7 @@ function DataTableView<T, Id extends RowId = number>({
   const pending = Boolean(loading || error)
 
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col gap-6", className)}>
+    <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col gap-6", className)}>
       {hasToolbar && (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {toolbar != null && renderSlot(toolbar)}

@@ -163,6 +163,11 @@ describe("DataTable widths", () => {
     expect(renders).toBe(2)
   })
 
+  it("lets the root shrink below the table's min-width so the scroll container scrolls (grid parents such as dialogs)", () => {
+    const { container } = render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a" })]} />)
+    expect(container.firstElementChild).toHaveClass("min-w-0", "min-h-0", "flex-1")
+  })
+
   it("uses the table scroll container with a sticky header", () => {
     const { container } = render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a" })]} />)
     expect(container.querySelector("[data-slot=table-container]")).toHaveClass("h-full", "overflow-auto")
