@@ -522,6 +522,8 @@ renders nothing but portaled buttons (and is `empty:hidden`). `lib/dockClearance
 (so every `DataTable` page) and the hand-rolled footers of Downloads and Collections use them, so the
 count label shifts when the button appears or disappears and is not indented otherwise. Needs `:has()` (Chromium 105+,
 Safari 15.4+, Firefox 121+), which covers the web UI and the desktop webviews; older engines just get no indent.
+The variant does not apply inside dialogs or alert dialogs (`&:not([role="dialog"] *, [role="alertdialog"] *)`): they are
+portaled above the dock, so a table in a dialog never gets the dock indent.
 jsdom can't evaluate `:has`, so tests assert the class strings (and that the dock is `:empty` without a button).
 
 `AppLayout` also mounts a single `RevealAllProvider`, so reveal-all (in-memory only) survives
