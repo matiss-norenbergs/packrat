@@ -574,6 +574,18 @@ table's own search, via `resetKey`) and `FrameMatchingPage` (no search at all) a
 no `pagination` or `search`, `className="gap-4"` (tailwind-merge lets it beat the default `gap-6`) and a `containerClassName` equal
 to the plain `Table` default (`relative w-full overflow-x-auto`, no border, no `h-full`) so the card keeps its height; the
 toolbar is the `toolbar` slot and the context menu is built from the rows it was opened on (file actions only for one backup that has a file).
+The Settings cards follow the same recipe with no toolbar at all: `SessionsCard` and `ServersSection` pass `className="gap-0"`
+and the card's own `containerClassName="relative max-h-80 w-full overflow-auto"` (controlled mode, `selection="none"`), keep the surrounding
+buttons outside the table, and list the cell dependencies (`isPending`, the active profile id) in the `columns` memo; `ServersSection`'s
+`empty` node replaces the whole table, header included. **Dialogs**: `EligibleItemsDialog` (controlled, all rows, multi selection),
+`KnownItemsDialog` (client mode, 20 per page, `resetKey` = the subscription id) and `StrayFilesRow` (client mode, 50 per page,
+`hideSinglePageFooter`, `resetKey` bumped by every scan) put the table in the dialog with `className="gap-4"` (the dialog's own
+spacing instead of `gap-6`), the action buttons in the `toolbar` slot and the bordered box in `regionClassName`: a fixed
+`h-[60vh] flex-none overflow-hidden rounded-md border` (Known items, so the dialog never resizes between loading / empty /
+loaded) or a capped `flex max-h-[60vh] flex-col overflow-hidden rounded-md border` (Eligible) with `containerClassName="min-h-0 flex-1
+overflow-auto"`, and the skeletons come from `loadingContent`. A box whose parent has no definite height (the Stray files
+dialog, only a `max-h`) must be a flex column all the way down (`min-h-0 flex-1` at every level) because `h-full` would resolve to
+`auto` there and the table would be clipped instead of scrolling.
 **The component owns**
 the table chrome and the interaction logic that used to be copy-pasted per page: the column model, alignment, widths and
 scroll, the checkbox/radio column, click / ctrl / shift / drag selection (`useTableSelection`, on top of a *controlled*
