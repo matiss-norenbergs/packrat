@@ -61,7 +61,8 @@ const select = (title: string) => {
 }
 const isSelected = (title: string) => row(title).getAttribute("data-state") === "selected"
 const viewLog = () => screen.getByRole("button", { name: "View log" })
-const tip = () => screen.getByTestId("tip").textContent
+// The Table layout button has a tooltip too: this is the View log button's (the first one in the toolbar).
+const tip = () => screen.getAllByTestId("tip")[0].textContent
 const renderPage = () => renderWithProviders(<LogsPage />)
 
 async function chooseStatus(label: string) {

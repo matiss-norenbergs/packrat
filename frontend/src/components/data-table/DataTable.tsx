@@ -1,5 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
+import { ArrowDown, ArrowUp } from "lucide-react"
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -17,7 +18,9 @@ import { ButtonGroup } from "@/components/ui/button-group"
 import { ColumnsMenu, LayoutPopover } from "./TableLayoutControls"
 import { isRowEventIgnored } from "./interactive"
 import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, computeLayout, resolveAlign } from "./columns"
-import type { ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
+import type { ColumnAlign, ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
+import { cycleLayoutSort, effectiveSort, sortRows } from "./sorting"
+import type { SortDir, SortState } from "./sorting"
 import { useEvent } from "./useEvent"
 import { useTableSelection } from "./useTableSelection"
 import type { SelectionMode } from "./useTableSelection"
@@ -95,22 +98,32 @@ export interface DataTableProps<T, Id extends RowId = number> {
   containerClassName?: string
   /**
    * Stable id that lets the user save this table's layout (hidden columns) to their account: adds the Layout
-   * popover next to the Columns menu. Needs at least one `hideable` column. Not for tables in dialogs.
+   * popover (Save / Restore / Clear) at the end of the toolbar, with the Columns menu when there are hideable
+   * columns. Needs at least one `hideable` or `sortValue` column. Not for tables in dialogs.
    */
   tableId?: string
   /**
    * Controlled layout: when both are passed the page owns the working layout (what the user has now, never saved
    * automatically) and DataTable only reads it and reports edits. Without them DataTable keeps it internally.
-   * Only `hidden` is edited here; `sort` and `widths` are carried through untouched.
+   * `hidden` and `sort` are edited here; `widths` is carried through untouched. In controlled-rows (server) mode the table never sorts rows: read `layout.sort` (or the default) and sort on the server.
    */
   layout?: TableLayout
   onLayoutChange?: (layout: TableLayout) => void
+  /**
+   * The table's natural order, shown while the user has not picked another sort (and the one a sort cycle returns to).
+   * Set it only where it reproduces the order of `rows` exactly; leave it unset for "whatever order `rows` has".
+   */
+  defaultSort?: SortState
 }
 
 /** What the table needs from its layout state; built by the wrappers at the bottom of the file. */
 interface LayoutCtl {
   hidden: ReadonlySet<string>
   toggle: (key: string) => void
+  /** The sort shown: the working one, else the default, else none. */
+  sort?: SortState
+  /** A header click: moves the sort of that column one step along the cycle (see `nextSort`). */
+  toggleSort: (key: string) => void
   /** The saved layouts have not arrived yet: the table shows its loading state instead of flashing the defaults. */
   pending?: boolean
   /** Present when the table has a tableId. */
@@ -219,6 +232,42 @@ const DataTableRow = memo(DataTableRowImpl) as typeof DataTableRowImpl
 
 const CONTAINER_CLASS = "h-full overflow-auto rounded-md border"
 
+// The header of a sortable column, drawn like the Library list's (label, arrow next to it). A right-aligned column
+// puts the arrow before the label so the label stays flush right; a centered one keeps a spacer of the arrow's
+// width on the other side so the label stays centered whether or not the arrow shows.
+function SortButton({ align, dir, onClick, children }: { align: ColumnAlign; dir: SortDir | undefined; onClick: () => void; children: ReactNode }) {
+  const Arrow = dir === "asc" ? ArrowUp : ArrowDown
+  const arrow = dir ? <Arrow className="h-3 w-3 shrink-0" /> : <span className="h-3 w-3 shrink-0" />
+  return (
+    <button
+      type="button"
+      className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      onClick={onClick}
+    >
+      {align === "right" ? (dir ? arrow : null) : align === "center" ? <span className="h-3 w-3 shrink-0" /> : null}
+      {children}
+      {align === "right" ? null : align === "center" ? arrow : dir ? arrow : null}
+    </button>
+  )
+}
+
+// Runs `resetPage` while rendering (a state adjustment, no extra commit) and `clear` in a layout effect (before paint)
+// when `value` changes (`Object.is`); an unchanged value does nothing. Not on mount.
+function useResetOnChange(value: unknown, resetPage: () => void, clear: () => void) {
+  const [seen, setSeen] = useState(value)
+  if (!Object.is(seen, value)) {
+    setSeen(value)
+    resetPage()
+  }
+  const cleared = useRef(value)
+  const clearLatest = useEvent(clear)
+  useLayoutEffect(() => {
+    if (Object.is(cleared.current, value)) return
+    cleared.current = value
+    clearLatest()
+  }, [value, clearLatest])
+}
+
 function DataTableView<T, Id extends RowId = number>({
   layoutCtl,
   rows: allRows,
@@ -262,7 +311,16 @@ function DataTableView<T, Id extends RowId = number>({
     () => (clientMode && match && normalizedQuery ? allRows.filter((r) => match(r, normalizedQuery)) : allRows),
     [clientMode, match, normalizedQuery, allRows],
   )
-  const rows = clientMode && pageSize != null ? filtered.slice((page - 1) * pageSize, page * pageSize) : clientMode ? filtered : allRows
+  // Sorting happens here only in client-side mode, on the filtered rows and before paging, so ranges and drags
+  // follow the displayed order. A controlled (server) table never sorts: the page reads the sort from the layout.
+  const sort = layoutCtl?.sort
+  const sortValue = sort ? columns.find((c) => c.key === sort.key)?.sortValue : undefined
+  const sortDir = sort?.dir
+  const sorted = useMemo(
+    () => (clientMode && sortValue && sortDir ? sortRows(filtered, sortValue, sortDir) : filtered),
+    [clientMode, sortValue, sortDir, filtered],
+  )
+  const rows = clientMode && pageSize != null ? sorted.slice((page - 1) * pageSize, page * pageSize) : clientMode ? sorted : allRows
   const handleSearchChange = (value: string) => {
     search?.onChange?.(value)
     if (!clientMode || value === rawQuery) return
@@ -274,18 +332,11 @@ function DataTableView<T, Id extends RowId = number>({
   // by adjusting state during render (no extra commit). The selection belongs to the page when it passes
   // `selectionState`, and updating another component while rendering is not allowed, so it is cleared in a
   // layout effect (applied before paint).
-  const [seenResetKey, setSeenResetKey] = useState(resetKey)
-  if (!Object.is(seenResetKey, resetKey)) {
-    setSeenResetKey(resetKey)
-    setPage(1)
-  }
+  // The same goes for a sort change, however it came about (header click, Restore, Clear, a saved layout arriving):
+  // the effective sort is part of the key. Only client-side mode resets; a controlled page does its own.
   const clearSelection = useEvent(() => selection.clear())
-  const clearedForKey = useRef(resetKey)
-  useLayoutEffect(() => {
-    if (Object.is(clearedForKey.current, resetKey)) return
-    clearedForKey.current = resetKey
-    clearSelection()
-  }, [resetKey, clearSelection])
+  useResetOnChange(resetKey, () => setPage(1), clearSelection)
+  useResetOnChange(sort ? `${sort.key}:${sort.dir}` : "", () => clientMode && setPage(1), () => clientMode && clearSelection())
   const goToPage = (p: number) => {
     setPage(p)
     selection.clear()
@@ -402,13 +453,22 @@ function DataTableView<T, Id extends RowId = number>({
             {selectable && <TableHead className="w-8 text-center">{selectionHeader}</TableHead>}
             {visibleColumns.map((c) => {
               const align = resolveAlign(c)
+              const sortable = layoutCtl != null && c.sortValue != null
+              const dir = sort?.key === c.key ? sort.dir : undefined
               return (
                 <TableHead
                   key={c.key}
                   className={cn(ALIGN_CLASS[align], c.headerClassName)}
                   style={c.minWidth != null ? { minWidth: c.minWidth } : undefined}
+                  aria-sort={sortable ? (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none") : undefined}
                 >
-                  {c.header}
+                  {sortable ? (
+                    <SortButton align={align} dir={dir} onClick={() => layoutCtl.toggleSort(c.key)}>
+                      {c.header}
+                    </SortButton>
+                  ) : (
+                    c.header
+                  )}
                 </TableHead>
               )
             })}
@@ -462,7 +522,8 @@ function DataTableView<T, Id extends RowId = number>({
     ? columns.filter((c) => c.hideable).map((c) => ({ key: c.key, label: columnLabel(c), visible: !layoutCtl.hidden.has(c.key) }))
     : []
   const hasColumnsMenu = layoutCtl != null && columnItems.length > 0
-  const hasToolbar = toolbar != null || filters != null || search != null || hasColumnsMenu
+  const hasLayoutButton = layoutCtl?.saved != null
+  const hasToolbar = toolbar != null || filters != null || search != null || hasColumnsMenu || hasLayoutButton
   // The first element on the right edge takes the spare space (ml-auto); filters, search, then the Columns / Layout group.
   const rightStart = filters != null ? "filters" : search ? "search" : "group"
   const showPagination = pagination != null
@@ -483,9 +544,9 @@ function DataTableView<T, Id extends RowId = number>({
               className={rightStart === "search" ? "ml-auto" : undefined}
             />
           )}
-          {hasColumnsMenu && (
+          {(hasColumnsMenu || hasLayoutButton) && (
             <ButtonGroup className={rightStart === "group" ? "ml-auto" : undefined}>
-              <ColumnsMenu items={columnItems} onToggle={layoutCtl.toggle} />
+              {hasColumnsMenu && <ColumnsMenu items={columnItems} onToggle={layoutCtl.toggle} />}
               {layoutCtl.saved && (
                 <LayoutPopover
                   dirty={layoutCtl.saved.dirty}
@@ -528,6 +589,10 @@ function defaultLayout<T>(columns: ColumnDef<T>[]): TableLayout {
   return hidden.length ? { v: 1, hidden } : { v: 1 }
 }
 
+function defaultLayoutSort(layout: TableLayout, defaultSort: SortState | undefined) {
+  return effectiveSort(layout.sort, defaultSort)
+}
+
 function toggleHidden(layout: TableLayout, key: string): TableLayout {
   const hidden = new Set(layout.hidden ?? [])
   if (!hidden.delete(key)) hidden.add(key)
@@ -537,13 +602,16 @@ function toggleHidden(layout: TableLayout, key: string): TableLayout {
 
 // Layout state with a tableId: the account's saved layout, a working copy, and Save / Restore / Clear.
 function DataTableWithSavedLayout<T, Id extends RowId>({ tableId, layout, onLayoutChange, ...props }: DataTableProps<T, Id> & { tableId: string }) {
-  const { columns } = props
+  const { columns, defaultSort } = props
   const defaults = useMemo(() => defaultLayout(columns), [columns])
   const knownKeys = useMemo(() => columns.map((c) => c.key), [columns])
   const hideableKeys = useMemo(() => columns.filter((c) => c.hideable).map((c) => c.key), [columns])
+  const sortableKeys = useMemo(() => columns.filter((c) => c.sortValue).map((c) => c.key), [columns])
   const state = useTableLayout(tableId, defaults, {
     knownKeys,
     hideableKeys,
+    sortableKeys,
+    defaultSort,
     controlled: layout && onLayoutChange ? { working: layout, onChange: onLayoutChange } : undefined,
   })
   const { working, setWorking, dirty, hasSaved, save, restore, clear } = state
@@ -552,6 +620,8 @@ function DataTableWithSavedLayout<T, Id extends RowId>({ tableId, layout, onLayo
     hidden: new Set(working.hidden ?? []),
     pending: !state.ready,
     toggle: (key) => setWorking((prev) => toggleHidden(prev, key)),
+    sort: defaultLayoutSort(working, defaultSort),
+    toggleSort: (key) => setWorking((prev) => cycleLayoutSort(prev, key, defaultSort)),
     saved: { dirty, hasSaved, save: () => void save(), restore, clear: () => void clear() },
   }
   return <DataTableView {...props} loading={props.loading || ctl.pending} layoutCtl={ctl} />
@@ -564,13 +634,20 @@ function DataTableWithLocalLayout<T, Id extends RowId>({ layout, onLayoutChange,
   const controlled = layout != null && onLayoutChange != null
   const working = controlled ? layout : (own ?? defaultLayout(columns))
   const setWorking = controlled ? onLayoutChange : setOwn
-  const ctl: LayoutCtl = { hidden: new Set(working.hidden ?? []), toggle: (key) => setWorking(toggleHidden(working, key)) }
+  const { defaultSort } = props
+  const ctl: LayoutCtl = {
+    hidden: new Set(working.hidden ?? []),
+    toggle: (key) => setWorking(toggleHidden(working, key)),
+    sort: defaultLayoutSort(working, defaultSort),
+    toggleSort: (key) => setWorking(cycleLayoutSort(working, key, defaultSort)),
+  }
   return <DataTableView {...props} layoutCtl={ctl} />
 }
 
 export function DataTable<T, Id extends RowId = number>(props: DataTableProps<T, Id>) {
   const { columns, tableId } = props
-  const hideable = columns.some((c) => c.hideable)
+  // A hideable or a sortable column makes the table keep a layout (the Columns menu needs a hideable one).
+  const hasLayout = columns.some((c) => c.hideable || c.sortValue)
   useEffect(() => {
     if (!import.meta.env.DEV) return
     for (const c of columns) {
@@ -579,7 +656,7 @@ export function DataTable<T, Id extends RowId = number>(props: DataTableProps<T,
       }
     }
   }, [columns])
-  if (!hideable) return <DataTableView {...props} layoutCtl={null} />
+  if (!hasLayout) return <DataTableView {...props} layoutCtl={null} />
   if (tableId) return <DataTableWithSavedLayout {...props} tableId={tableId} />
   return <DataTableWithLocalLayout {...props} />
 }

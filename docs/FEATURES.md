@@ -440,7 +440,8 @@ new download via the Advanced section, or bulk-assigned to a selection on the Li
 A simple named list, assignable to library items and downloads (manually, or auto-filled from a
 collection's Artist default — see Collections above).
 
-- Create/rename/delete from the Artists page; usage count shown per artist; deleting one clears it
+- Create/rename/delete from the Artists page; the Name, Birthday and Usage headers sort the list (the default order is the
+  server's, by name); usage count shown per artist; deleting one clears it
   from every item that had it (items themselves are untouched, they just lose the artist link) and
   removes the artist's gallery images from disk.
 - Select multiple artists to bulk-delete.
@@ -531,7 +532,8 @@ or downloaded by some other tool) — brings them into the Library without re-do
 A permanent record of every download attempt — completed, failed, or cancelled — that is never
 removed when the corresponding entry is deleted from the Downloads queue.
 
-- Shows title/URL, status, timestamp, and the error message for failures.
+- Shows title/URL, status, timestamp, and the error message for failures. The Title, Status and Date headers sort the list
+  (newest first by default) and **Table layout** can save that choice; see [Table layouts](#table-layouts).
 - **Retry** re-queues a fresh download for any non-completed entry (failed/cancelled/interrupted),
   reusing the original type/quality/format/collection/filename where the source download record
   still exists.
@@ -552,7 +554,8 @@ log for" in Settings → Downloads) as the Downloads queue's own history, just p
 debugging rather than as a live control panel.
 
 - Free-text search matches against title/URL and the captured command; a status filter narrows
-  the list to one download status.
+  the list to one download status. The Title, Status, Date and Retries headers sort what is left (newest first by
+  default) and **Table layout** can save that; see [Table layouts](#table-layouts).
 - Select a single row (click, or right-click to select-and-open its context menu) and hit
   **View log** — in the toolbar or the context menu — for its full detail: command, exit code, and
   the stdout/stderr tails in scrollable monospace blocks, each with its own copy-to-clipboard
@@ -609,19 +612,29 @@ password-protected file to store off-site.
 
 ## Table layouts
 
-Lists built on the shared table component can let you choose which columns to show. Two icon-only buttons sit at the right end
-of the table's toolbar, after the search box (and only on tables that offer them):
+Lists built on the shared table component can let you choose which columns to show and how to sort. Up to two icon-only buttons
+sit at the right end of the table's toolbar, after the search box (only on tables that offer them):
 
 - **Columns** — a checkbox list of the columns that can be hidden. Ticking or unticking applies instantly, and the list stays open
   so you can change several.
-- **Table layout** — a popover with **Save**, **Restore** and **Clear saved layout**. A small dot on the button means the table
-  currently differs from what you last saved (or from the defaults if you never saved). Save is enabled only then; it stores
+- **Sorting** — a column whose header is a button is sortable (Artists: Name, Birthday, Usage; Subscriptions: Title, Collection,
+  Known items, Last checked; History: Title, Status, Date; Logs: Title, Status, Date, Retries). Click it to sort ascending, again
+  for descending, and a third time to go back to the table's default order. An arrow next to the label shows the direction (before
+  the label in right-aligned columns). On History and Logs the default order is newest first, so Date toggles between the two
+  directions and every other column returns to newest first. Text sorts case-insensitively with numbers in order ("File 2"
+  before "File 10"); rows without a value (no birthday, a subscription that was never checked) always come last, whichever
+  direction. Rows that tie keep their order. The sort covers all pages (it applies after search and filters, before paging); a
+  new sort returns to page 1 and clears the selection. Headers are keyboard accessible (Tab to one, Enter or Space).
+- **Table layout** — a popover with **Save**, **Restore** and **Clear saved layout**; it covers the hidden columns and the sort
+  alike. A small dot on the button means the table currently differs from what you last saved (or from the defaults if you never
+  saved). Save is enabled only then; it stores
   your layout on your account (it follows you to other browsers and the desktop app) and a "Layout saved" toast appears once
   the server has confirmed it. **Restore saved** (**Restore defaults** when nothing is saved) puts the table back to that
-  baseline with no toast. **Clear saved layout** (enabled only when one exists) deletes it and shows the default columns.
+  baseline with no toast. **Clear saved layout** (enabled only when one exists) deletes it and shows the default columns and order.
 - Nothing is saved on its own: leaving the page and coming back shows your saved layout, or the defaults, again. The Layout
-  button appears only on tables that save a layout (Artists, Subscriptions); other tables with the Columns button forget the
-  choice when you leave the page.
+  button appears only on tables that save a layout (Artists, Subscriptions, History, Logs); other tables with the Columns button
+  or sortable headers forget the choice when you leave the page. Tables with neither look as before. History has no hideable
+  column, so it only gets the Table layout button.
 - While a list is loading, or failed to load, its footer still shows: a "—" instead of the count and a disabled pager, so
   the page (and dialogs such as Known items) keep their height.
 
@@ -641,6 +654,7 @@ back manually.
   the whole back catalog, only uploads from that point forward.
 - **Columns and layout** — Collection, Known items, Last checked and Auto-download can be hidden and the choice saved
   (Title and Enabled always show); see [Table layouts](#table-layouts).
+- The Title, Collection, Known items and Last checked headers sort the table (a subscription that was never checked is always last).
 - The subscriptions table shows known-item count (with a "+N new" badge when there's anything
   unseen), last-checked time (with the error, if the last check failed), auto-download status, and
   an Enabled toggle — disabling only pauses the scheduled checks, "Check now" still works.

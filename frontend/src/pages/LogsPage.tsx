@@ -42,12 +42,14 @@ const columns: ColumnDef<LogEntry>[] = [
   {
     key: "title",
     header: "Title",
+    sortValue: (entry) => entry.title ?? entry.url,
     cell: (entry) => <p className="max-w-xs truncate font-medium">{entry.title ?? entry.url}</p>,
   },
   {
     key: "status",
     header: "Status",
     type: "status",
+    sortValue: (entry) => formatDownloadStatus(entry.status),
     cell: (entry) => <Badge variant={STATUS_VARIANT[entry.status] ?? "outline"}>{formatDownloadStatus(entry.status)}</Badge>,
   },
   {
@@ -55,6 +57,7 @@ const columns: ColumnDef<LogEntry>[] = [
     header: "Date",
     type: "date",
     cellClassName: "text-muted-foreground",
+    sortValue: (entry) => new Date(entry.createdAt),
     cell: (entry) => new Date(entry.createdAt).toLocaleString(),
   },
   {
@@ -62,6 +65,7 @@ const columns: ColumnDef<LogEntry>[] = [
     header: "Retries",
     type: "number",
     cellClassName: "text-muted-foreground",
+    sortValue: (entry) => entry.retryCount,
     cell: (entry) => (entry.retryCount > 0 ? entry.retryCount : "—"),
   },
 ]
@@ -103,6 +107,8 @@ export function LogsPage() {
         rows={rows}
         getRowId={(entry) => entry.id}
         columns={columns}
+        tableId="logs"
+        defaultSort={{ key: "date", dir: "desc" }}
         selection="multi"
         selectionState={selection}
         getRowLabel={(entry) => `Select ${entry.title ?? entry.url}`}

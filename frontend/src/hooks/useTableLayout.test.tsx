@@ -54,6 +54,14 @@ describe("normalizeTableLayout", () => {
     )
     expect(out).toEqual({ v: 1, hidden: ["usage"], widths: { name: 80 } })
   })
+
+  it("keeps a sort of a sortable column, drops one equal to the default or on a column that is not sortable", () => {
+    const opts = { knownKeys: KEYS, sortableKeys: ["name", "usage"], defaultSort: { key: "usage", dir: "desc" as const } }
+    expect(normalizeTableLayout({ v: 1, sort: { key: "name", dir: "asc" } }, opts)).toEqual({ v: 1, sort: { key: "name", dir: "asc" } })
+    expect(normalizeTableLayout({ v: 1, sort: { key: "usage", dir: "desc" } }, opts)).toEqual({ v: 1 })
+    expect(normalizeTableLayout({ v: 1, sort: { key: "usage", dir: "asc" } }, opts)).toEqual({ v: 1, sort: { key: "usage", dir: "asc" } })
+    expect(normalizeTableLayout({ v: 1, sort: { key: "birthday", dir: "asc" } }, opts)).toEqual({ v: 1 })
+  })
 })
 
 describe("useTableLayout", () => {

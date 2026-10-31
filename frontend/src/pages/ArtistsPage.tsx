@@ -49,7 +49,7 @@ export function ArtistsPage() {
 
   const columns = useMemo<ColumnDef<Artist>[]>(
     () => [
-      { key: "name", header: "Name", cell: (a) => a.name, cellClassName: "font-medium" },
+      { key: "name", header: "Name", cell: (a) => a.name, cellClassName: "font-medium", sortValue: (a) => a.name },
       {
         key: "birthday",
         header: "Birthday",
@@ -57,6 +57,7 @@ export function ArtistsPage() {
         hideable: true,
         type: "date",
         cellClassName: "text-muted-foreground",
+        sortValue: (a) => (a.birthday ? parseISO(a.birthday) : null),
         cell: (a) =>
           a.birthday ? (
             <>
@@ -72,6 +73,7 @@ export function ArtistsPage() {
         label: "Usage",
         hideable: true,
         type: "status",
+        sortValue: (a) => a.usageCount,
         cell: (a) => (
           <Badge variant="outline">
             {a.usageCount} item{a.usageCount === 1 ? "" : "s"}

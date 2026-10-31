@@ -71,7 +71,8 @@ const select = (title: string) => {
   fireEvent.mouseUp(window)
 }
 const isSelected = (title: string) => row(title).getAttribute("data-state") === "selected"
-const toolbarButton = (name: string) => screen.getByRole("button", { name })
+// "Known items" is also a sortable column header, so skip buttons inside the table.
+const toolbarButton = (name: string) => screen.getAllByRole("button", { name }).find((b) => !b.closest("table"))!
 
 describe("SubscriptionsPage table", () => {
   it("renders every column: title + url, collection fallback, known items, last checked, auto-download, enabled", async () => {
