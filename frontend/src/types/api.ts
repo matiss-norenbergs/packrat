@@ -72,6 +72,16 @@ export interface UserPreferences {
   accent: AccentPreference
 }
 
+// A table's saved layout (GET/PUT /auth/table-layouts). Sort and widths are in the schema for the
+// sorting and column-resize features; DataTable currently edits only `hidden` and carries the rest through.
+export interface TableLayout {
+  v: 1
+  sort?: { key: string; dir: "asc" | "desc" }
+  hidden?: string[]
+  widths?: Record<string, number>
+}
+export type TableLayouts = Record<string, TableLayout>
+
 export interface ChangePasswordRequest {
   currentPassword: string
   newPassword: string

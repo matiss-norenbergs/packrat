@@ -103,6 +103,8 @@ import type {
   UpdateSettingsRequest,
   UpdateTagRequest,
   UserPreferences,
+  TableLayout,
+  TableLayouts,
   YtDlpVersionInfo,
 } from "@/types/api"
 
@@ -346,6 +348,18 @@ export function fetchPreferences(): Promise<UserPreferences> {
 
 export function updatePreferences(payload: Partial<UserPreferences>): Promise<UserPreferences> {
   return request<UserPreferences>("/auth/preferences", { method: "PATCH", body: JSON.stringify(payload) })
+}
+
+export async function fetchTableLayouts(): Promise<TableLayouts> {
+  return (await request<{ layouts: TableLayouts }>("/auth/table-layouts")).layouts
+}
+
+export function saveTableLayout(tableId: string, layout: TableLayout): Promise<TableLayout> {
+  return request<TableLayout>(`/auth/table-layouts/${encodeURIComponent(tableId)}`, { method: "PUT", body: JSON.stringify(layout) })
+}
+
+export function deleteTableLayout(tableId: string): Promise<void> {
+  return request<void>(`/auth/table-layouts/${encodeURIComponent(tableId)}`, { method: "DELETE" })
 }
 
 export function changePassword(payload: ChangePasswordRequest): Promise<void> {
