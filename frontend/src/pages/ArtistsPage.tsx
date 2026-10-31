@@ -53,6 +53,8 @@ export function ArtistsPage() {
       {
         key: "birthday",
         header: "Birthday",
+        label: "Birthday",
+        hideable: true,
         type: "date",
         cellClassName: "text-muted-foreground",
         cell: (a) =>
@@ -67,6 +69,8 @@ export function ArtistsPage() {
       {
         key: "usage",
         header: "Usage",
+        label: "Usage",
+        hideable: true,
         type: "status",
         cell: (a) => (
           <Badge variant="outline">
@@ -117,6 +121,7 @@ export function ArtistsPage() {
           rows={data ?? []}
           getRowId={(a) => a.id}
           columns={columns}
+          tableId="artists"
           selection="multi"
           selectionState={selection}
           getRowLabel={(a) => `Select ${a.name}`}
