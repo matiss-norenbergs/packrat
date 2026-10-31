@@ -2,7 +2,8 @@ import { useEffect, useState } from "react"
 import { Link, useLocation, useSearchParams } from "react-router-dom"
 import { ArrowDown, ArrowUp } from "lucide-react"
 import { useLibraryQuery } from "@/hooks/useLibrary"
-import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
+import { useSettings } from "@/hooks/useSettings"
+import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
@@ -27,7 +28,6 @@ const MAX_VISIBLE_TAGS = 3
 
 export function LibraryListView() {
   const { data: settings, isLoading: settingsLoading } = useSettings()
-  const updateSettings = useUpdateSettings()
   const [searchParams] = useSearchParams()
   const location = useLocation()
   const [page, setPage] = useState(1)
@@ -36,8 +36,8 @@ export function LibraryListView() {
   const { visibleColumns } = useLibraryColumns()
 
   const search = searchParams.get("q") ?? ""
-  const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
-  const sortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
+  const { sort, ready: sortReady, setSort } = useLibrarySort()
+  const { key: sortKey, dir: sortDir } = sort
   const collectionId = searchParams.get("collection")
   const year = searchParams.get("year")
   const tagNames = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
@@ -61,17 +61,17 @@ export function LibraryListView() {
     sortDir,
     page: paginationEnabled ? page : undefined,
     pageSize: paginationEnabled ? pageSize : undefined,
-  })
+  }, sortReady)
 
   const handleSort = (key: LibrarySortKey) => {
     if (sortKey === key) {
-      updateSettings.mutate({ librarySortDir: sortDir === "asc" ? "desc" : "asc" })
+      setSort({ key, dir: sortDir === "asc" ? "desc" : "asc" })
     } else {
-      updateSettings.mutate({ librarySortKey: key, librarySortDir: "asc" })
+      setSort({ key, dir: "asc" })
     }
   }
 
-  if (isLoading || settingsLoading) {
+  if (isLoading || settingsLoading || !sortReady) {
     return (
       <div className="space-y-2">
         <Skeleton className="h-8 w-full" />

@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useCollections } from "@/hooks/useCollections"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { useSettings } from "@/hooks/useSettings"
+import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { buildCollectionTree, findNodeById } from "@/lib/collectionTree"
 import type { Collection } from "@/types/api"
 import { CollectionFolderTile } from "./CollectionFolderTile"
@@ -35,8 +36,8 @@ export function LibraryFolderView() {
   const currentIdParam = searchParams.get("collection")
   const currentId = currentIdParam ? Number(currentIdParam) : null
   const search = searchParams.get("q") ?? ""
-  const sortKey = settings?.librarySortKey || "downloadedAt"
-  const sortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
+  const { sort, ready: sortReady } = useLibrarySort()
+  const { key: sortKey, dir: sortDir } = sort
   const tagNames = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
   const hideGhosts = searchParams.get("hideGhosts") === "true"
   const paginationEnabled = settings?.libraryPaginationEnabled ?? false
@@ -63,9 +64,9 @@ export function LibraryFolderView() {
     sortDir,
     page: paginationEnabled ? page : undefined,
     pageSize: paginationEnabled ? pageSize : undefined,
-  })
+  }, sortReady)
 
-  if (collectionsLoading || itemsLoading || settingsLoading) {
+  if (collectionsLoading || itemsLoading || settingsLoading || !sortReady) {
     return (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <Skeleton className="aspect-video w-full" />

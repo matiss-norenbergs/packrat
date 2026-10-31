@@ -58,6 +58,7 @@ import {
 import { useCollections } from "@/hooks/useCollections"
 import { useLibraryFacets } from "@/hooks/useLibrary"
 import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
+import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { useTags } from "@/hooks/useTags"
 import { sortCollectionsByPath } from "@/lib/collectionTree"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
@@ -149,8 +150,8 @@ export function LibraryToolbar() {
   const mode = (settings?.libraryMode as "manage" | "details") || "manage"
   const search = searchParams.get("q") ?? ""
   const [searchInput, setSearchInput] = useState(search)
-  const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
-  const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
+  const { sort, setSort } = useLibrarySort()
+  const { key: sortKey, dir: sortDir } = sort
   const collectionId = searchParams.get("collection") ?? NONE
   const year = searchParams.get("year") ?? NONE
   const selectedTags = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
@@ -240,7 +241,7 @@ export function LibraryToolbar() {
 
   const applyFilters = () => {
     if (draftSortKey !== sortKey || draftSortDir !== sortDir) {
-      updateSettings.mutate({ librarySortKey: draftSortKey, librarySortDir: draftSortDir })
+      setSort({ key: draftSortKey, dir: draftSortDir })
     }
     const next = new URLSearchParams(searchParams)
     for (const [key, value] of [
