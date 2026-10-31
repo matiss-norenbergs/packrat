@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react"
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -60,6 +60,12 @@ export interface DataTableProps<T, Id extends RowId = number> {
   pageSize?: number
   /** Client-side mode: footer label; the footer is shown only when `pageSize` and `itemLabel` are both set. */
   itemLabel?: { singular: string; plural: string }
+  /**
+   * Client-side mode: for a filter the page applies to `rows` itself (e.g. a status Select). When this value changes
+   * the table goes back to page 1 and clears the selection, like it does for its own search. Compared with
+   * `Object.is`; an unchanged value does nothing.
+   */
+  resetKey?: unknown
   /** Right-click menu, built from the rows it applies to. Right-clicking the header or an empty area opens nothing. */
   contextMenu?: (rows: T[]) => ContextMenuItemDef<T>[]
   onRowClick?: (row: T, e: MouseEvent<HTMLTableRowElement>) => void
@@ -193,6 +199,7 @@ export function DataTable<T, Id extends RowId = number>({
   pagination: controlledPagination,
   pageSize,
   itemLabel,
+  resetKey,
   contextMenu,
   onRowClick,
   onRowDoubleClick,
@@ -226,6 +233,22 @@ export function DataTable<T, Id extends RowId = number>({
     setPage(1)
     selection.clear()
   }
+  // A page-owned filter changes `rows` from outside, so there is no handler to hook into: the page snaps back
+  // by adjusting state during render (no extra commit). The selection belongs to the page when it passes
+  // `selectionState`, and updating another component while rendering is not allowed, so it is cleared in a
+  // layout effect (applied before paint).
+  const [seenResetKey, setSeenResetKey] = useState(resetKey)
+  if (!Object.is(seenResetKey, resetKey)) {
+    setSeenResetKey(resetKey)
+    setPage(1)
+  }
+  const clearSelection = useEvent(() => selection.clear())
+  const clearedForKey = useRef(resetKey)
+  useLayoutEffect(() => {
+    if (Object.is(clearedForKey.current, resetKey)) return
+    clearedForKey.current = resetKey
+    clearSelection()
+  }, [resetKey, clearSelection])
   const goToPage = (p: number) => {
     setPage(p)
     selection.clear()

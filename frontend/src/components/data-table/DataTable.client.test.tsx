@@ -162,6 +162,62 @@ describe("DataTable client-side mode", () => {
   })
 })
 
+describe("DataTable resetKey", () => {
+  // A page-owned filter (here: parity) changes `rows` from outside; resetKey tells the table about it.
+  function Filtered({ initialKey = "all" }: { initialKey?: string }) {
+    const [filter, setFilter] = useState(initialKey)
+    const rows = filter === "all" ? ROWS : ROWS.filter((r) => r.id % 2 === 1)
+    return (
+      <>
+        <button onClick={() => setFilter("odd")}>odd</button>
+        <button onClick={() => setFilter("all")}>all</button>
+        <button onClick={() => setFilter((f) => f)}>same</button>
+        <Harness rows={rows} resetKey={filter} onSel={(ids) => (sel = ids.join(","))} />
+      </>
+    )
+  }
+  let sel = ""
+  beforeEach(() => {
+    sel = ""
+  })
+
+  it("goes back to page 1 and clears the selection when the key changes", () => {
+    render(<Filtered />)
+    fireEvent.click(screen.getByRole("button", { name: "2" }))
+    fireEvent.mouseDown(row("Item 4"))
+    fireEvent.mouseUp(window)
+    expect(sel).toBe("4")
+    fireEvent.click(screen.getByText("odd"))
+    expect(names()).toEqual(["Item 1", "Café Beta", "Item 5"])
+    expect(screen.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "page")
+    expect(sel).toBe("")
+  })
+
+  it("does nothing when the key is unchanged", () => {
+    render(<Filtered />)
+    fireEvent.click(screen.getByRole("button", { name: "2" }))
+    fireEvent.mouseDown(row("Item 4"))
+    fireEvent.mouseUp(window)
+    fireEvent.click(screen.getByText("same"))
+    expect(names()).toEqual(["Item 4", "Item 5", "Item 6"])
+    expect(sel).toBe("4")
+  })
+
+  it("works together with search", () => {
+    render(<Filtered />)
+    type("item")
+    fireEvent.click(screen.getByRole("button", { name: "2" }))
+    fireEvent.mouseDown(row("Item 5"))
+    fireEvent.mouseUp(window)
+    expect(sel).toBe("5")
+    fireEvent.click(screen.getByText("odd"))
+    // The query survives, only the page and the selection reset: odd rows matching "item" are 1, 5, 7.
+    expect(screen.getByPlaceholderText("Search…")).toHaveValue("item")
+    expect(names()).toEqual(["Item 1", "Item 5", "Item 7"])
+    expect(sel).toBe("")
+  })
+})
+
 describe("DataTable footer dock clearance", () => {
   // jsdom can't evaluate :has(), so assert the class strings; the browser applies them via the
   // dock-occupied variant (styles/globals.css) only while the floating dock holds a button.

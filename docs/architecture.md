@@ -568,7 +568,13 @@ transition is switched off only while dragging.
 hover-popover button inside rows) and for the **stable-handler rule** below. `ThumbnailEnhancementPage` (AI Enhancement history) is the
 reference for **controlled (server-side) mode**: the server filters and pages, so the page owns the search / filter / page
 state, feeds `rows` (the current page) and `pagination`, and clears its own selection when any of them changes, while
-`DataTable` debounces the search box and renders the footer. **The component owns**
+`DataTable` debounces the search box and renders the footer. `HistoryPage`, `LogsPage` (a page-owned status Select next to the
+table's own search, via `resetKey`) and `FrameMatchingPage` (no search at all) are client-mode pages as well. The Backup page's
+`BackupHistoryTable` is the reference for a table **embedded in a card** rather than filling a page column: controlled mode with
+no `pagination` or `search`, `className="gap-4"` (tailwind-merge lets it beat the default `gap-6`) and a `containerClassName` equal
+to the plain `Table` default (`relative w-full overflow-x-auto`, no border, no `h-full`) so the card keeps its height; the
+toolbar is the `toolbar` slot and the context menu is built from the rows it was opened on (file actions only for one backup that has a file).
+**The component owns**
 the table chrome and the interaction logic that used to be copy-pasted per page: the column model, alignment, widths and
 scroll, the checkbox/radio column, click / ctrl / shift / drag selection (`useTableSelection`, on top of a *controlled*
 `useIdSelection` the page passes as `selectionState`, so its toolbar reads the same state), the context menu (including
@@ -622,7 +628,11 @@ row type and the id type (number or string).
   visible), and feeds the footer (total = filtered count; the clamp above covers a shrinking list). `empty` may be a
   function of the query (as typed) to tell "nothing yet" from "no match"; the toolbar slots also get `query` and
   `total`. **`match` must have a stable identity** (module-level function or `useCallback`), or the filter memo
-  re-runs every render. Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
+  re-runs every render. **`resetKey`** is for a filter the page applies to `rows` itself (Logs' status Select): when its
+  value changes (`Object.is`) the table goes back to page 1 and clears the selection, exactly as for its own search. The page
+  reset is a state adjustment during render (no extra commit); the selection (the page's, via `selectionState`) is cleared in
+  a layout effect, because updating another component while rendering is not allowed. An unchanged key does nothing.
+  Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
   `search.onChange` owned by the page; `search.value` is optional, it only seeds the input). In controlled mode the
   table does **not** reset the page or the selection: the page does both in its handlers/effects (AI Enhancement: `search.onChange`
   sets the query and page 1, each filter `onValueChange` sets page 1, and an effect clears the selection on a page / search /
