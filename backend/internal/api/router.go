@@ -38,6 +38,7 @@ type Deps struct {
 	CompareListRepo                   *repository.CompareListRepo
 	UsersRepo                         *repository.UsersRepo
 	UserPreferencesRepo               *repository.UserPreferencesRepo
+	UserTableLayoutsRepo              *repository.UserTableLayoutsRepo
 	BackupHistoryRepo                 *repository.BackupHistoryRepo
 	SubscriptionsRepo                 *repository.SubscriptionsRepo
 	ThumbnailEnhancementHistoryRepo   *repository.ThumbnailEnhancementHistoryRepo
@@ -170,6 +171,9 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/auth/sessions/:id", RevokeSession(deps.UsersRepo))
 		api.GET("/auth/preferences", GetPreferences(deps.UserPreferencesRepo))
 		api.PATCH("/auth/preferences", UpdatePreferences(deps.UserPreferencesRepo))
+		api.GET("/auth/table-layouts", GetTableLayouts(deps.UserTableLayoutsRepo))
+		api.PUT("/auth/table-layouts/:tableId", PutTableLayout(deps.UserTableLayoutsRepo))
+		api.DELETE("/auth/table-layouts/:tableId", DeleteTableLayout(deps.UserTableLayoutsRepo))
 		api.GET("/auth/2fa", TwoFactorStatus(deps.Auth))
 		api.POST("/auth/2fa/setup", TwoFactorSetup(deps.Auth))
 		api.POST("/auth/2fa/enable", TwoFactorEnable(deps.Auth))

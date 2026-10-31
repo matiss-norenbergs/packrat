@@ -88,6 +88,9 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
 | POST | `/api/auth/sessions/revoke-others` | session + CSRF |
 | GET | `/api/auth/preferences` | session |
 | PATCH | `/api/auth/preferences` | session + CSRF |
+| GET | `/api/auth/table-layouts` | session |
+| PUT | `/api/auth/table-layouts/:tableId` | session + CSRF |
+| DELETE | `/api/auth/table-layouts/:tableId` | session + CSRF |
 | GET | `/api/auth/2fa` | session |
 | POST | `/api/auth/2fa/setup` | session + CSRF |
 | POST | `/api/auth/2fa/enable` | session + CSRF |
@@ -144,6 +147,24 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
   non-string value or one outside the lists above (nothing is applied), and for an empty body
   (`{}` is not a no-op). The account always comes from the session, never the request. These are
   per account and not part of the global Settings or any backup.
+- **`GET /api/auth/table-layouts`** — every saved table layout of the signed-in account in one response:
+  `{ "layouts": { "<tableId>": <layout>, ... } }` (`{ "layouts": {} }` when none). The client fetches
+  this once and caches it.
+- **`PUT /api/auth/table-layouts/:tableId`** — the body is the layout; it replaces the whole layout of
+  that table and the stored (canonical) layout is returned. A layout is a JSON object with **only** these
+  fields (unknown fields are rejected): `v` (required, must be `1`), `sort` (optional
+  `{ "key": <colKey>, "dir": "asc"|"desc" }`, both required), `hidden` (optional array of `<colKey>`,
+  unique, at most 64) and `widths` (optional object `<colKey>` → integer 24–2000, at most 64 entries).
+  `<colKey>` matches `^[A-Za-z0-9_-]{1,64}$`; `tableId` matches `^[a-z0-9][a-z0-9-]{0,63}$`. The body is
+  at most 4 KB. `400` with `{ "error" }` for any violation (a non-object body, a wrong type, a fractional
+  number, an invalid `tableId`, an oversized body) and nothing is stored. Canonical form: fixed field
+  order (`v`, `sort`, `hidden`, `widths`), `hidden` sorted, `widths` keys sorted, and empty or `null`
+  optional fields omitted. At most 100 tables can have a saved layout per account: saving a *new*
+  `tableId` beyond that is `409`; updating an existing one is always allowed.
+- **`DELETE /api/auth/table-layouts/:tableId`** — `204`, also when nothing was saved for that table
+  (idempotent); `400` for an invalid `tableId`.
+  Table layouts are per account (always the session's, never a request value, and the same on the
+  desktop bearer-token path) and not part of the global Settings, exports or any backup.
 - **`GET /api/auth/2fa`** — `{ "enabled": bool, "recoveryCodesRemaining": n }`.
 - **`POST /api/auth/2fa/setup`** — no body; creates a *pending* secret (replacing any earlier one) and
   returns `{ "secret": "<base32>", "otpauthUrl": "otpauth://totp/Packrat:<username>?..." }`. `409` if

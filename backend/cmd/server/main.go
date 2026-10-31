@@ -309,6 +309,7 @@ func run() error {
 		CompareListRepo:                   compareListRepo,
 		UsersRepo:                         usersRepo,
 		UserPreferencesRepo:               repository.NewUserPreferencesRepo(conn),
+		UserTableLayoutsRepo:              repository.NewUserTableLayoutsRepo(conn),
 		BackupHistoryRepo:                 backupHistoryRepo,
 		SubscriptionsRepo:                 subscriptionsRepo,
 		ThumbnailEnhancementHistoryRepo:   thumbnailEnhancementHistoryRepo,
