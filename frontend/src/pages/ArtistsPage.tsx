@@ -56,6 +56,7 @@ export function ArtistsPage() {
         label: "Birthday",
         hideable: true,
         type: "date",
+        width: 200,
         cellClassName: "text-muted-foreground",
         sortValue: (a) => (a.birthday ? parseISO(a.birthday) : null),
         cell: (a) =>

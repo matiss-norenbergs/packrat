@@ -257,11 +257,12 @@ export function ThumbnailEnhancementPage() {
   // state setter (stable), so the columns are built once.
   const columns = useMemo<ColumnDef<ThumbnailEnhancementHistoryEntry>[]>(
     () => [
-      { key: "item", header: "Item", cell: (e) => <ItemTitleCell entry={e} /> },
+      { key: "item", header: "Item", flex: true, cell: (e) => <ItemTitleCell entry={e} /> },
       {
         key: "status",
         header: "Status",
         type: "status",
+        width: 160,
         cell: (e) => (
           <div className="flex items-center justify-center gap-1.5">
             {e.revertedAt ? (
@@ -297,6 +298,7 @@ export function ThumbnailEnhancementPage() {
         key: "dimensions",
         header: "Dimensions",
         type: "number",
+        width: 190,
         cell: (e) =>
           `${dimensions(e.originalWidth, e.originalHeight)} → ${dimensions(e.enhancedWidth, e.enhancedHeight)}`,
       },
@@ -304,6 +306,7 @@ export function ThumbnailEnhancementPage() {
         key: "size",
         header: "Size",
         type: "number",
+        width: 160,
         cell: (e) =>
           `${e.originalSizeBytes != null ? formatBytes(e.originalSizeBytes) : "—"} → ${e.enhancedSizeBytes != null ? formatBytes(e.enhancedSizeBytes) : "—"}`,
       },
@@ -312,6 +315,7 @@ export function ThumbnailEnhancementPage() {
         key: "actions",
         header: "Actions",
         type: "icon",
+        width: 80,
         cell: (e) =>
           e.hasOriginalBackup && (
             <Tooltip>

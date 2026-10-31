@@ -17,11 +17,12 @@ import { TableSearch } from "./TableSearch"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ColumnsMenu, LayoutPopover } from "./TableLayoutControls"
 import { isRowEventIgnored } from "./interactive"
-import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, computeLayout, resolveAlign } from "./columns"
+import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, clipClass, computeLayout, resolveAlign } from "./columns"
 import type { ColumnAlign, ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
 import { cycleLayoutSort, effectiveSort, sortRows } from "./sorting"
 import type { SortDir, SortState } from "./sorting"
 import { useEvent } from "./useEvent"
+import { useOverflowTooltip } from "./useOverflowTooltip"
 import { useTableSelection } from "./useTableSelection"
 import type { SelectionMode } from "./useTableSelection"
 
@@ -167,6 +168,8 @@ interface DataTableRowProps<T, Id extends RowId> {
   selected: boolean
   mode: SelectionMode
   columns: ColumnDef<T>[]
+  /** Ends the row with an empty filler cell (the table has no flex column). */
+  filler: boolean
   className: string
   label: string
   onMouseDown: (e: MouseEvent, id: Id) => void
@@ -185,6 +188,7 @@ function DataTableRowImpl<T, Id extends RowId>({
   selected,
   mode,
   columns,
+  filler,
   className,
   label,
   onMouseDown,
@@ -220,11 +224,12 @@ function DataTableRowImpl<T, Id extends RowId>({
         // them; icon cells get a flex wrapper instead of every page needing mx-auto.
         const cell = c.cell(row)
         return (
-          <TableCell key={c.key} className={cn(ALIGN_CLASS[align], c.cellClassName)}>
+          <TableCell key={c.key} data-col={c.key} className={cn(ALIGN_CLASS[align], clipClass(c), c.cellClassName)}>
             {c.type === "icon" ? <div className={cn("flex items-center", JUSTIFY_CLASS[align])}>{cell}</div> : cell}
           </TableCell>
         )
       })}
+      {filler && <TableCell aria-hidden className="p-0" />}
     </TableRow>
   )
 }
@@ -241,11 +246,11 @@ function SortButton({ align, dir, onClick, children }: { align: ColumnAlign; dir
   return (
     <button
       type="button"
-      className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="inline-flex max-w-full cursor-pointer select-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       onClick={onClick}
     >
       {align === "right" ? (dir ? arrow : null) : align === "center" ? <span className="h-3 w-3 shrink-0" /> : null}
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
       {align === "right" ? null : align === "center" ? arrow : dir ? arrow : null}
     </button>
   )
@@ -367,6 +372,7 @@ function DataTableView<T, Id extends RowId = number>({
   const layout = computeLayout(visibleColumns, selectable ? selectionWidth : null)
 
   const pageIds = rows.map(getRowId)
+  const overflowTip = useOverflowTooltip(visibleColumns, (id) => rows.find((r) => String(getRowId(r)) === id))
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selection.selected.has(id))
   const someSelected = pageIds.some((id) => selection.selected.has(id)) && !allSelected
 
@@ -437,20 +443,19 @@ function DataTableView<T, Id extends RowId = number>({
     const table = (
       <Table
         containerClassName={containerClassName ?? CONTAINER_CLASS}
-        className={layout.fixed ? "table-fixed" : undefined}
-        style={layout.minWidth != null ? { minWidth: layout.minWidth } : undefined}
+        className="table-fixed"
+        style={{ minWidth: layout.minWidth }}
       >
-        {layout.fixed && (
-          <colgroup>
-            {selectable && <col style={{ width: selectionWidth }} />}
-            {visibleColumns.map((c, i) => (
-              <col key={c.key} style={layout.colWidths[i] != null ? { width: layout.colWidths[i] } : undefined} />
-            ))}
-          </colgroup>
-        )}
+        <colgroup>
+          {selectable && <col style={{ width: selectionWidth }} />}
+          {visibleColumns.map((c, i) => (
+            <col key={c.key} style={layout.colWidths[i] != null ? { width: layout.colWidths[i] } : undefined} />
+          ))}
+          {layout.filler && <col />}
+        </colgroup>
         <TableHeader>
           <TableRow>
-            {selectable && <TableHead className="w-8 text-center">{selectionHeader}</TableHead>}
+            {selectable && <TableHead className="text-center">{selectionHeader}</TableHead>}
             {visibleColumns.map((c) => {
               const align = resolveAlign(c)
               const sortable = layoutCtl != null && c.sortValue != null
@@ -458,8 +463,7 @@ function DataTableView<T, Id extends RowId = number>({
               return (
                 <TableHead
                   key={c.key}
-                  className={cn(ALIGN_CLASS[align], c.headerClassName)}
-                  style={c.minWidth != null ? { minWidth: c.minWidth } : undefined}
+                  className={cn(ALIGN_CLASS[align], clipClass(c), c.headerClassName)}
                   aria-sort={sortable ? (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none") : undefined}
                 >
                   {sortable ? (
@@ -472,9 +476,10 @@ function DataTableView<T, Id extends RowId = number>({
                 </TableHead>
               )
             })}
+            {layout.filler && <TableHead aria-hidden className="p-0" />}
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody {...overflowTip.bodyProps}>
           {rows.map((row) => {
             const id = getRowId(row)
             return (
@@ -485,6 +490,7 @@ function DataTableView<T, Id extends RowId = number>({
                 selected={selection.isSelected(id)}
                 mode={mode}
                 columns={visibleColumns}
+                filler={layout.filler}
                 className={cn(selectable ? "cursor-default select-none" : onRowClick && "cursor-pointer", rowClassName?.(row))}
                 label={rowLabel(row, id)}
                 onMouseDown={onRowMouseDown}
@@ -530,7 +536,7 @@ function DataTableView<T, Id extends RowId = number>({
   const pending = Boolean(loading || error)
 
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col gap-6", className)}>
+    <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col gap-6", className)}>
       {hasToolbar && (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {toolbar != null && renderSlot(toolbar)}
@@ -575,6 +581,7 @@ function DataTableView<T, Id extends RowId = number>({
       ) : (
         region
       )}
+      {overflowTip.node}
       {showPagination && <TablePagination {...pagination} selectedCount={mode === "multi" ? selectedRows.length : 0} loading={pending} />}
     </div>
   )

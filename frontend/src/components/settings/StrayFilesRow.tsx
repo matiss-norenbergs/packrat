@@ -27,19 +27,20 @@ const entryKey = (e: StrayFileEntry) => `${e.root}:${e.path}`
 const entryLabel = (e: StrayFileEntry) => `Select ${e.path}`
 
 const columns: ColumnDef<StrayFileEntry>[] = [
-  { key: "root", header: "Root", cellClassName: "text-muted-foreground", cell: (e) => e.root },
+  { key: "root", header: "Root", width: 100, cellClassName: "text-muted-foreground", cell: (e) => e.root },
   {
     key: "path",
     header: "Path",
-    cellClassName: "max-w-[280px] truncate font-medium",
-    cell: (e) => <span title={e.path}>{e.path}</span>,
+    cellClassName: "font-medium",
+    cell: (e) => e.path,
   },
-  { key: "reason", header: "Reason", cellClassName: "text-muted-foreground", cell: (e) => e.reason },
+  { key: "reason", header: "Reason", width: 160, cellClassName: "text-muted-foreground", cell: (e) => e.reason },
   { key: "size", header: "Size", type: "number", cellClassName: "text-muted-foreground", cell: (e) => formatBytes(e.sizeBytes) },
   {
     key: "modified",
     header: "Modified",
     type: "date",
+    width: 120,
     cellClassName: "text-muted-foreground",
     cell: (e) => new Date(e.modifiedAt).toLocaleDateString(),
   },

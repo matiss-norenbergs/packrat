@@ -45,7 +45,7 @@ const columnsButton = () => screen.queryByRole("button", { name: "Columns" })
 const group = () => screen.getByRole("group")
 const layoutButton = () => screen.queryByRole("button", { name: "Table layout" })
 // Read from the DOM: while a Radix menu is open everything outside it is aria-hidden.
-const headers = () => Array.from(document.querySelectorAll("th")).map((h) => h.textContent)
+const headers = () => Array.from(document.querySelectorAll("th:not([aria-hidden])")).map((h) => h.textContent)
 
 beforeEach(() => {
   api.fetchTableLayouts.mockReset().mockResolvedValue({})
@@ -86,7 +86,7 @@ describe("DataTable columns menu", () => {
     expect(columnsButton()).toBeInTheDocument()
     expect(layoutButton()).toBeNull()
     expect(headers()).toEqual(["Name", "Birthday", "Used"])
-    expect(document.querySelectorAll("col")).toHaveLength(3)
+    expect(document.querySelectorAll("col")).toHaveLength(4)
 
     const menu = await openColumns(user)
     expect(within(menu).getAllByRole("menuitemcheckbox").map((i) => i.textContent)).toEqual(["Birthday", "Usage"]) // label beats header; Name is not offered
@@ -95,13 +95,13 @@ describe("DataTable columns menu", () => {
     expect(headers()).toEqual(["Name", "Used"])
     expect(screen.queryByText("Bday1")).toBeNull()
     expect(screen.getByText("Usage1")).toBeInTheDocument()
-    expect(document.querySelectorAll("col")).toHaveLength(2)
+    expect(document.querySelectorAll("col")).toHaveLength(3) // 2 columns + the filler
     expect(within(screen.getByRole("menu")).getByRole("menuitemcheckbox", { name: "Birthday" })).toHaveAttribute("aria-checked", "false")
 
     await user.click(within(screen.getByRole("menu")).getByRole("menuitemcheckbox", { name: "Birthday" }))
     expect(headers()).toEqual(["Name", "Birthday", "Used"])
     expect(screen.getByText("Bday1")).toBeInTheDocument()
-    expect(document.querySelectorAll("col")).toHaveLength(3)
+    expect(document.querySelectorAll("col")).toHaveLength(4)
   })
 
   it("fixed-layout width follows the visible columns only", async () => {

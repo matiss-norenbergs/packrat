@@ -124,7 +124,7 @@ describe("SubscriptionsPage table", () => {
     expect(classes(5)).toContain("text-center")
     expect(classes(6)).toContain("text-center")
     expect(classes(1)).not.toMatch(/text-(right|center)/)
-    expect(within(row("Alpha")).getByText("https://example.com/alpha").closest("td")).toHaveClass("max-w-64")
+    expect(within(row("Alpha")).getByText("https://example.com/alpha").closest("td")).not.toHaveClass("max-w-64")
   })
 
   it("searches by title and by url, case-insensitively", async () => {

@@ -14,12 +14,24 @@ export interface ColumnDef<T> {
   type?: ColumnType
   /** Overrides the alignment preset for the header and the cells. */
   align?: ColumnAlign
-  /** Exact column width in px. Any column with a width switches the table to a fixed layout. */
+  /** Exact column width in px; default by `type` (text 200, number 110, date 180, status 130, icon 64, switch 96). */
   width?: number
-  /** Lower bound in px; also the base width of a width-less column in a fixed layout. */
+  /** Lower bound in px (default 48); the column is never laid out narrower. */
   minWidth?: number
-  /** This column absorbs spare space when the table is wider than the sum of its columns. */
+  /**
+   * Opt-in: this column absorbs the spare width, and the table then has no filler column. A flex column gets no colgroup
+   * width, so with several of them the browser splits the spare width EQUALLY between them, not in proportion to their
+   * `width`. A flex column's `width` counts toward the table's minimum width (the horizontal scroll threshold), but it is
+   * only guaranteed as a floor when it is the table's single flex column: with several, an equal share can be narrower
+   * than one column's `width`. Use one flex column per table.
+   */
   flex?: boolean
+  /** Opt-out: no tooltip with the full text when this column's cells are cut off. */
+  tooltip?: false
+  /** The tooltip's text for a cut-off cell of this row, instead of the cell's rendered text. */
+  tooltipText?: (row: T) => string
+  /** The cells of this column may wrap onto several lines (the row grows) instead of being cut off with an ellipsis. */
+  wrap?: boolean
   headerClassName?: string
   cellClassName?: string
   /** Opt-in: the Columns menu lets the user hide this column. Default false (never hideable). */

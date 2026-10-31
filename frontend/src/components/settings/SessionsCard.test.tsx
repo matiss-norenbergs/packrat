@@ -87,7 +87,7 @@ describe("SessionsCard", () => {
     expect(cells[4]).toHaveClass("text-center")
     expect(within(cells[4]).getByRole("button").parentElement).toHaveClass("flex", "justify-center") // icon cells centre their content
     expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Device", "IP address", "Signed in", "Last active", ""])
-    expect(screen.getAllByRole("columnheader")[4]).toHaveClass("w-10")
+    expect(screen.getAllByRole("columnheader")[4]).not.toHaveClass("w-10")
     expect(screen.getByRole("table").parentElement).toHaveClass("max-h-80", "overflow-auto")
   })
 

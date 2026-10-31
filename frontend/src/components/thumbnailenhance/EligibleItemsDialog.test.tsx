@@ -57,7 +57,7 @@ describe("EligibleItemsDialog", () => {
 
     const first = within(rowEls()[0]).getAllByRole("cell")
     expect(within(first[1]).getByRole("link", { name: "Item 1" })).toHaveAttribute("href", "/library/1")
-    expect(first[1]).toHaveClass("max-w-[280px]", "truncate")
+    expect(first[1]).toHaveClass("overflow-hidden", "text-ellipsis", "whitespace-nowrap")
     expect(first[2]).toHaveTextContent("Ann")
     expect(first[2]).toHaveClass("text-muted-foreground")
     expect(first[3]).toHaveTextContent("Mix")

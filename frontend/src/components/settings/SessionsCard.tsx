@@ -44,6 +44,8 @@ export function SessionsCard() {
       {
         key: "device",
         header: "Device",
+        wrap: true,
+        flex: true,
         cell: (s) => (
           <div className="flex flex-wrap items-center gap-2">
             <span title={s.userAgent || undefined}>{describeDevice(s.client, s.userAgent)}</span>
@@ -56,21 +58,20 @@ export function SessionsCard() {
         key: "signedIn",
         header: "Signed in",
         type: "date",
-        cellClassName: "whitespace-nowrap",
+        width: 110,
         cell: (s) => <span title={new Date(s.createdAt).toLocaleString()}>{new Date(s.createdAt).toLocaleDateString()}</span>,
       },
       {
         key: "lastActive",
         header: "Last active",
         type: "date",
-        cellClassName: "whitespace-nowrap",
+        width: 120,
         cell: (s) => <span title={new Date(s.lastSeenAt).toLocaleString()}>{s.current ? "Now" : formatTimeAgo(s.lastSeenAt)}</span>,
       },
       {
         key: "actions",
         header: "",
         type: "icon",
-        headerClassName: "w-10",
         cell: (s) => {
           const device = describeDevice(s.client, s.userAgent)
           return (

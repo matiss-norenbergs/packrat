@@ -36,7 +36,6 @@ const columns: ColumnDef<ThumbnailEnhancementEligibleItem>[] = [
   {
     key: "item",
     header: "Item",
-    cellClassName: "max-w-[280px] truncate",
     cell: (item) => (
       <Link to={`/library/${item.libraryItemId}`} className="font-medium underline-offset-2 hover:underline">
         {item.itemTitle}
@@ -56,6 +55,7 @@ const columns: ColumnDef<ThumbnailEnhancementEligibleItem>[] = [
     key: "status",
     header: "Status",
     type: "status",
+    width: 140,
     cell: (item) =>
       item.isProcessing ? (
         <Badge variant="secondary" className="gap-1">

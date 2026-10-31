@@ -84,6 +84,7 @@ const columns: ColumnDef<FrameMatchQueueItem>[] = [
     key: "state",
     header: "State",
     type: "status",
+    width: 200,
     cell: (item) => (
       <div className="flex items-center justify-center gap-1.5">
         <Badge variant={stateBadgeVariant(item.state)} className="capitalize">

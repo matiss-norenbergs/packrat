@@ -86,7 +86,7 @@ describe("KnownItemsDialog table", () => {
 
     const cells = (i: number) => within(rowEls()[i]).getAllByRole("cell")
     expect(cells(0)[1]).toHaveTextContent("Video a")
-    expect(cells(0)[1]).toHaveClass("max-w-[360px]", "truncate", "font-medium")
+    expect(cells(0)[1]).toHaveClass("overflow-hidden", "text-ellipsis", "whitespace-nowrap", "font-medium")
     expect(cells(0)[2]).toHaveTextContent("1:05")
     expect(cells(0)[2]).toHaveClass("text-right", "text-muted-foreground")
     expect(cells(0)[3]).toHaveTextContent(new Date("2026-09-01T00:00:00Z").toLocaleDateString())

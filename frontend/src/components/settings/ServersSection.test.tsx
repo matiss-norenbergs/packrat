@@ -60,7 +60,7 @@ describe("ServersSection", () => {
     const headers = screen.getAllByRole("columnheader")
     expect(headers.map((h) => h.textContent)).toEqual(["Name", "Address", "Last used", ""])
     expect(headers[2]).toHaveClass("text-center")
-    expect(headers[3]).toHaveClass("w-24")
+    expect(document.querySelectorAll("col")[3]).toHaveStyle({ width: "96px" })
     const cells = within(screen.getAllByRole("row")[2]).getAllByRole("cell")
     expect(cells[1]).toHaveClass("break-all", "font-mono", "text-xs")
     expect(cells[2]).toHaveClass("text-center", "whitespace-nowrap")

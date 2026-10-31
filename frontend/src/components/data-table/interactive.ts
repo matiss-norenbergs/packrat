@@ -5,9 +5,10 @@ import type { SyntheticEvent } from "react"
  * drag, or fire onRowClick / onRowDoubleClick. Custom interactive cells that don't match (a clickable div,
  * a third-party widget) opt out with a `data-no-row-select` attribute on the element or an ancestor in the cell.
  */
-export const INTERACTIVE_SELECTOR = [
+const LINK_SELECTOR = "a[href]"
+
+const CONTROL_SELECTORS = [
   "button",
-  "a[href]",
   "input",
   "select",
   "textarea",
@@ -18,7 +19,12 @@ export const INTERACTIVE_SELECTOR = [
   '[role="combobox"]',
   '[role="menuitem"]',
   "[data-no-row-select]",
-].join(", ")
+]
+
+export const INTERACTIVE_SELECTOR = [LINK_SELECTOR, ...CONTROL_SELECTORS].join(", ")
+
+/** Interactive content that keeps a cell from showing the overflow tooltip: everything except plain links. */
+export const TOOLTIP_BLOCKING_SELECTOR = CONTROL_SELECTORS.join(", ")
 
 /**
  * True when a row-level pointer event should be left to its target: it came through a React portal (the DOM

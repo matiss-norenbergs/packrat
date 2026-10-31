@@ -35,7 +35,7 @@ const COLUMNS: ColumnDef<Row>[] = [
 ]
 const LABEL = { singular: "item", plural: "items" }
 // The name column is the third from last (a selection checkbox column may precede it).
-const names = () => screen.getAllByRole("row").slice(1).map((r) => Array.from(r.querySelectorAll("td")).at(-3)!.textContent)
+const names = () => screen.getAllByRole("row").slice(1).map((r) => Array.from(r.querySelectorAll("td:not([aria-hidden])")).at(-3)!.textContent)
 
 function wrap(children: ReactNode, saved: TableLayouts = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -230,7 +230,7 @@ describe("DataTable sortable headers", () => {
     ]
     render(wrap(<Client tableId="t" columns={cols} />))
     const kids = (n: string) =>
-      Array.from(sortButton(n).childNodes).map((c) => (c.nodeType === 3 ? "text" : (c as Element).tagName.toLowerCase() === "svg" ? "arrow" : "spacer"))
+      Array.from(sortButton(n).childNodes).map((c) => ((c as Element).classList.contains("truncate") ? "text" : (c as Element).tagName.toLowerCase() === "svg" ? "arrow" : "spacer"))
     click("Left")
     expect(kids("Left")).toEqual(["text", "arrow"])
     expect(kids("Center")).toEqual(["spacer", "text", "spacer"])

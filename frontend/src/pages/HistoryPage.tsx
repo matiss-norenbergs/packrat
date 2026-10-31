@@ -41,7 +41,7 @@ const columns: ColumnDef<HistoryItem>[] = [
   {
     key: "thumbnail",
     header: "",
-    headerClassName: "w-16",
+    width: 80,
     cell: (item) => (
       <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-muted">
         {item.thumbnail ? (
@@ -57,13 +57,15 @@ const columns: ColumnDef<HistoryItem>[] = [
   {
     key: "title",
     header: "Title",
+    width: 280,
+    flex: true,
     sortValue: (item) => item.title ?? item.url,
     cell: (item) => (
       <>
-        <p className="max-w-xs truncate font-medium">{item.title ?? item.url}</p>
+        <p className="truncate font-medium">{item.title ?? item.url}</p>
         {(item.status === "failed" || item.status === "duplicate") && item.errorMessage && (
           <p
-            className={`max-w-xs truncate text-xs ${item.status === "failed" ? "text-destructive" : "text-muted-foreground"}`}
+            className={`truncate text-xs ${item.status === "failed" ? "text-destructive" : "text-muted-foreground"}`}
           >
             {item.errorMessage}
           </p>

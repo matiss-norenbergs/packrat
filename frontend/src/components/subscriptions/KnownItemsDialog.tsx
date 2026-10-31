@@ -37,7 +37,9 @@ const columns: ColumnDef<SubscriptionEntry>[] = [
   {
     key: "title",
     header: "Title",
-    cellClassName: "max-w-[360px] truncate font-medium",
+    width: 300,
+    flex: true,
+    cellClassName: "font-medium",
     cell: (entry) => (entry.url !== "" ? entry.title : "Unknown"),
   },
   {
@@ -58,6 +60,7 @@ const columns: ColumnDef<SubscriptionEntry>[] = [
     key: "status",
     header: "Status",
     type: "status",
+    width: 150,
     cell: (entry) => {
       const isKnownEntry = entry.url !== ""
       return entry.linkedLibraryItemId != null ? (
