@@ -739,7 +739,7 @@ row type and the id type (number or string).
   prop), including while loading and on error, so the page (and a dialog) never changes height between states. Then it shows
   a placeholder ("—" instead of the count, no "· N selected", Previous/Next and the current page button disabled) and
   `TablePagination` skips its clamp (`loading` prop), otherwise a table on page 3 would snap to page 1 while its total is 0.
-  A single page or an empty table shows "0 tags" and one disabled page. In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
+  A single page or an empty table shows "0 tags" and one disabled page. In `multi` mode it appends "· N selected" (selected rows on the current page); **`selectedCount?: number`** replaces that number (0 shows nothing) for a page whose selection spans more than the rows shown and has its own count (the Library list view passes the toolbar's). `TablePagination`
   clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
   `onPageChange(lastPage)`, so pages need no clamping code. **Dock clearance is automatic**: the footer
   carries the `dock-occupied:` variants of the clearance classes (`lib/dockClearance.ts`: row `flex-wrap-reverse gap-2`,
@@ -794,7 +794,10 @@ row type and the id type (number or string).
   asc → desc → off, a default column toggles between its two directions and any other column cycles asc → desc → default.
   An explicit sort equal to the default is stored as no sort. **Normalization** (`normalizeTableLayout`): a `sort` is dropped
   when equal to `defaultSort` or when its column is not sortable / does not exist, so a saved layout without `sort` means "default
-  order" and layouts saved before sorting existed keep working. **Header**: a sortable header is a `button type="button"` inside the
+  order" and layouts saved before sorting existed keep working. **`extraSortKeys?: string[]`** lists sort keys that are valid in the layout
+  without being columns (a server sort the page offers elsewhere, e.g. the Library's `filename` and `sequenceNumber`): with a `tableId` they are added to
+  the known and sortable keys fed to normalization, so a layout sorted by one is kept, is dirty against another sort and is saved; no header shows an arrow
+  and nothing is sorted by it (a controlled table never sorts anyway), and the next header click moves on to that column ascending. **Header**: a sortable header is a `button type="button"` inside the
   `th` (with `aria-sort`), drawn like the Library list: an `ArrowUp` / `ArrowDown` (`h-3 w-3`) after the label, before it in
   right-aligned columns so the label stays flush right, and centered columns keep a spacer of the arrow's width on the other
   side so the label stays centered. A sort change, however it came about (click, Restore, Clear, a saved layout arriving), goes

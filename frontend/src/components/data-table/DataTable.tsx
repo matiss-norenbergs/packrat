@@ -126,6 +126,18 @@ export interface DataTableProps<T, Id extends RowId = number> {
    * (dimming) is the page's job, through `rowClassName`.
    */
   isRowSelectable?: (row: T) => boolean
+  /**
+   * Replaces the footer's "· N selected" count (default: the selected, selectable rows on the current page). For a page
+   * whose selection spans more than the rows shown (e.g. it persists across pages) and has its own number to show.
+   * 0 shows nothing.
+   */
+  selectedCount?: number
+  /**
+   * Sort keys that are valid in the layout without being columns (a server sort the page offers elsewhere, e.g. in its
+   * own dialog). With a `tableId` they survive normalization, so a layout sorted by one of them is kept, counts as
+   * dirty and is saved; no column shows an arrow and the table sorts nothing by it.
+   */
+  extraSortKeys?: string[]
 }
 
 /** What the table needs from its layout state; built by the wrappers at the bottom of the file. */
@@ -340,6 +352,7 @@ function DataTableView<T, Id extends RowId = number>({
   regionClassName,
   containerClassName,
   isRowSelectable,
+  selectedCount,
 }: DataTableProps<T, Id> & { layoutCtl: LayoutCtl | null }) {
   const ownSelection = useIdSelection<Id>()
   const selection = selectionState ?? ownSelection
@@ -664,7 +677,7 @@ function DataTableView<T, Id extends RowId = number>({
         region
       )}
       {overflowTip.node}
-      {showPagination && <TablePagination {...pagination} selectedCount={mode === "multi" ? selectedRows.length : 0} loading={pending} />}
+      {showPagination && <TablePagination {...pagination} selectedCount={selectedCount ?? (mode === "multi" ? selectedRows.length : 0)} loading={pending} />}
     </div>
   )
 }
@@ -699,11 +712,14 @@ function toggleHidden(layout: TableLayout, key: string): TableLayout {
 
 // Layout state with a tableId: the account's saved layout, a working copy, and Save / Restore / Clear.
 function DataTableWithSavedLayout<T, Id extends RowId>({ tableId, layout, onLayoutChange, ...props }: DataTableProps<T, Id> & { tableId: string }) {
-  const { columns, defaultSort } = props
+  const { columns, defaultSort, extraSortKeys } = props
   const defaults = useMemo(() => defaultLayout(columns), [columns])
-  const knownKeys = useMemo(() => columns.map((c) => c.key), [columns])
+  // Extra sort keys are known too, so a layout sorted by one is not stripped; they are not columns, so nothing else uses them.
+  const extraSig = extraSortKeys?.join("\0")
+  const extraKeys = useMemo(() => (extraSig ? extraSig.split("\0") : []), [extraSig])
+  const knownKeys = useMemo(() => [...columns.map((c) => c.key), ...extraKeys], [columns, extraKeys])
   const hideableKeys = useMemo(() => columns.filter((c) => c.hideable).map((c) => c.key), [columns])
-  const sortableKeys = useMemo(() => columns.filter((c) => c.sortValue).map((c) => c.key), [columns])
+  const sortableKeys = useMemo(() => [...columns.filter((c) => c.sortValue).map((c) => c.key), ...extraKeys], [columns, extraKeys])
   // Default and minimum of every column the user can resize: what `widths` is normalized against.
   const resizableWidths = useMemo(
     () => Object.fromEntries(columns.filter(isResizable).map((c) => [c.key, { default: columnWidth(c), min: columnMinWidth(c) }])),
