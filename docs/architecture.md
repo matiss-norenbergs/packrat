@@ -622,7 +622,11 @@ row type and the id type (number or string).
   visible), and feeds the footer (total = filtered count; the clamp above covers a shrinking list). `empty` may be a
   function of the query (as typed) to tell "nothing yet" from "no match"; the toolbar slots also get `query` and
   `total`. **`match` must have a stable identity** (module-level function or `useCallback`), or the filter memo
-  re-runs every render. Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
+  re-runs every render. **`resetKey`** is for a filter the page applies to `rows` itself (Logs' status Select): when its
+  value changes (`Object.is`) the table goes back to page 1 and clears the selection, exactly as for its own search. The page
+  reset is a state adjustment during render (no extra commit); the selection (the page's, via `selectionState`) is cleared in
+  a layout effect, because updating another component while rendering is not allowed. An unchanged key does nothing.
+  Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
   `search.onChange` owned by the page; `search.value` is optional, it only seeds the input). In controlled mode the
   table does **not** reset the page or the selection: the page does both in its handlers/effects (AI Enhancement: `search.onChange`
   sets the query and page 1, each filter `onValueChange` sets page 1, and an effect clears the selection on a page / search /
