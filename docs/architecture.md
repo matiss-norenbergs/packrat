@@ -519,7 +519,7 @@ custom variant `dock-occupied`: `body:has([data-slot="floating-action-dock"]:not
 because the dock is a *sibling* of the layout content, not an ancestor of any footer; `:empty` works because the dock
 renders nothing but portaled buttons (and is `empty:hidden`). `lib/dockClearance.ts` exports the two class strings
 (`DOCK_FOOTER_ROW`, `DOCK_FOOTER_LABEL`; the `pl-12` is the button size plus gap, defined only there). `TablePagination`
-(so every `DataTable` page) and the hand-rolled footers of Downloads, Collections and AI Enhancement use them, so the
+(so every `DataTable` page) and the hand-rolled footers of Downloads and Collections use them, so the
 count label shifts when the button appears or disappears and is not indented otherwise. Needs `:has()` (Chromium 105+,
 Safari 15.4+, Firefox 121+), which covers the web UI and the desktop webviews; older engines just get no indent.
 jsdom can't evaluate `:has`, so tests assert the class strings (and that the dock is `:empty` without a button).
@@ -565,7 +565,10 @@ transition is switched off only while dragging.
 
 `components/data-table/` is the shared list-table component; `TagsPage` is the reference migration and `ArtistsPage` (the table beside its `CollapsiblePanel`, passing
 `className="overflow-hidden"`) is on it too, as is `SubscriptionsPage` — the reference for **interactive cells** (a `Switch` and a
-hover-popover button inside rows) and for the **stable-handler rule** below. **The component owns**
+hover-popover button inside rows) and for the **stable-handler rule** below. `ThumbnailEnhancementPage` (AI Enhancement history) is the
+reference for **controlled (server-side) mode**: the server filters and pages, so the page owns the search / filter / page
+state, feeds `rows` (the current page) and `pagination`, and clears its own selection when any of them changes, while
+`DataTable` debounces the search box and renders the footer. **The component owns**
 the table chrome and the interaction logic that used to be copy-pasted per page: the column model, alignment, widths and
 scroll, the checkbox/radio column, click / ctrl / shift / drag selection (`useTableSelection`, on top of a *controlled*
 `useIdSelection` the page passes as `selectionState`, so its toolbar reads the same state), the context menu (including
@@ -620,7 +623,10 @@ row type and the id type (number or string).
   function of the query (as typed) to tell "nothing yet" from "no match"; the toolbar slots also get `query` and
   `total`. **`match` must have a stable identity** (module-level function or `useCallback`), or the filter memo
   re-runs every render. Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
-  `search.onChange` owned by the page; `search.value` is optional, it only seeds the input); the two modes are selected by whether `pageSize`/`match` is given.
+  `search.onChange` owned by the page; `search.value` is optional, it only seeds the input). In controlled mode the
+  table does **not** reset the page or the selection: the page does both in its handlers/effects (AI Enhancement: `search.onChange`
+  sets the query and page 1, each filter `onValueChange` sets page 1, and an effect clears the selection on a page / search /
+  filter change). `empty` should be a node there (the function form only receives the seed `search.value`, not the page's query); the two modes are selected by whether `pageSize`/`match` is given.
 - **Layout**: the component renders a `flex min-h-0 flex-1 flex-col gap-6` block (toolbar and footer `shrink-0`, only the
   content region scrolls), meant to sit under the page title in the usual page column.
 - **Why no virtualization / sorting / resizing yet**: pages are paginated at 50 rows, so virtualization would add
