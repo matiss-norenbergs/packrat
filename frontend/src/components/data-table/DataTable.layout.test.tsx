@@ -1,7 +1,7 @@
 import { useState } from "react"
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
@@ -289,15 +289,44 @@ describe("DataTable while the saved layouts are still loading", () => {
     expect(screen.getByText("2 rows")).toBeInTheDocument()
   })
 
-  it("falls back to the defaults when the layouts cannot be fetched", async () => {
-    api.fetchTableLayouts.mockRejectedValue(new Error("down"))
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  it.each([
+    ["the endpoint answers 404", new Error("Not found")],
+    ["the network fails", new TypeError("Failed to fetch")],
+  ])("falls back to the defaults after one request when %s, without waiting for retries", async (_name, failure) => {
+    api.fetchTableLayouts.mockRejectedValue(failure)
+    // The app's QueryClient defaults (3 retries with backoff), not the retry-free one the other tests use.
+    const client = new QueryClient()
+    render(
+      <QueryClientProvider client={client}>
+        <DataTable
+          rows={ROWS}
+          getRowId={(r) => r.id}
+          columns={columns()}
+          tableId="t"
+          pageSize={50}
+          itemLabel={{ singular: "row", plural: "rows" }}
+        />
+      </QueryClientProvider>,
+    )
+    // Retries would take about 7 s; 1 s is plenty for the single failed request.
+    await waitFor(() => expect(headers()).toEqual(["Name", "Birthday", "Used"]), { timeout: 1000 })
+    expect(screen.getByText("2 rows")).toBeInTheDocument() // footer is not stuck on the placeholder
+    expect(document.querySelector("[data-slot=skeleton]")).toBeNull()
+    expect(api.fetchTableLayouts).toHaveBeenCalledTimes(1)
+  })
+
+  it("adopts a later successful fetch after a failure when the user has not edited", async () => {
+    api.fetchTableLayouts.mockRejectedValueOnce(new Error("Not found"))
+    const client = new QueryClient()
     render(
       <QueryClientProvider client={client}>
         <DataTable rows={ROWS} getRowId={(r) => r.id} columns={columns()} tableId="t" />
       </QueryClientProvider>,
     )
-    await waitFor(() => expect(headers()).toEqual(["Name", "Birthday", "Used"]))
+    await waitFor(() => expect(headers()).toEqual(["Name", "Birthday", "Used"]), { timeout: 1000 })
+    api.fetchTableLayouts.mockResolvedValue({ t: { v: 1, hidden: ["usage"] } })
+    await act(() => client.refetchQueries({ queryKey: tableLayoutsQueryKey }))
+    await waitFor(() => expect(headers()).toEqual(["Name", "Birthday"]))
   })
 })
 

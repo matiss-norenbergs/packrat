@@ -13,7 +13,9 @@ export const tableLayoutsQueryKey = ["tableLayouts"] as const
 // AppLayout mounts it so the data is there before the first table renders; every useTableLayout
 // reads the same cache entry. Only call from the authenticated layouts.
 export function useTableLayouts() {
-  return useQuery({ queryKey: tableLayoutsQueryKey, queryFn: fetchTableLayouts, staleTime: Infinity })
+  // No retries: tables wait for this query, so a failure (an older server without the endpoint, a transient error)
+  // must fall back to the default layout after one quick request, not after the default 3 backed-off retries.
+  return useQuery({ queryKey: tableLayoutsQueryKey, queryFn: fetchTableLayouts, staleTime: Infinity, retry: false })
 }
 
 export interface TableLayoutOptions {
