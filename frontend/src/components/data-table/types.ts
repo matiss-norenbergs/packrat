@@ -14,11 +14,11 @@ export interface ColumnDef<T> {
   type?: ColumnType
   /** Overrides the alignment preset for the header and the cells. */
   align?: ColumnAlign
-  /** Exact column width in px. Any column with a width switches the table to a fixed layout. */
+  /** Exact column width in px; default by `type` (text 200, number 110, date 180, status 130, icon 64, switch 96). */
   width?: number
-  /** Lower bound in px; also the base width of a width-less column in a fixed layout. */
+  /** Lower bound in px (default 48); the column is never laid out narrower. */
   minWidth?: number
-  /** This column absorbs spare space when the table is wider than the sum of its columns. */
+  /** Opt-in: this column absorbs the spare width (its `width` is then its minimum); with one, the table has no filler column. */
   flex?: boolean
   headerClassName?: string
   cellClassName?: string

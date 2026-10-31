@@ -200,7 +200,7 @@ describe("BackupHistoryTable as a DataTable", () => {
     expect(headers[5]).toHaveClass("text-right")
     expect(headers[2].className).not.toMatch(/text-(right|center)/)
     expect(headers[4].className).not.toMatch(/text-(right|center)/)
-    expect(screen.getByRole("table")).not.toHaveClass("table-fixed")
+    expect(screen.getByRole("table")).toHaveClass("table-fixed")
 
     const ok = rowEls()[0]
     expect(within(ok).getByText(new Date(history[0].createdAt).toLocaleString())).toBeTruthy()

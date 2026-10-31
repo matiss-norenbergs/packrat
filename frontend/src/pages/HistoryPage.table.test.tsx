@@ -65,12 +65,10 @@ describe("HistoryPage table", () => {
     await screen.findByText("Alpha")
     const headers = screen.getAllByRole("columnheader")
     expect(headers.map((h) => h.textContent)).toEqual(["", "", "Title", "Status", "Date"])
-    expect(headers[1]).toHaveClass("w-16")
     expect(headers[3]).toHaveClass("text-center")
     expect(headers[4]).toHaveClass("text-center")
     expect(headers[2].className).not.toMatch(/text-(right|center)/)
-    // No `width` on any column: the table stays in the browser's auto layout.
-    expect(screen.getByRole("table")).not.toHaveClass("table-fixed")
+    expect(screen.getByRole("table")).toHaveClass("table-fixed")
 
     const alpha = within(row("Alpha"))
     expect(alpha.getByText("Completed")).toBeInTheDocument()

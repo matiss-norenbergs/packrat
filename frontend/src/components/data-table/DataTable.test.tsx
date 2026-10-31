@@ -1,4 +1,5 @@
 import { cleanup, render, screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it } from "vitest"
 import { DataTable } from "./DataTable"
 import { computeLayout } from "./columns"
@@ -58,40 +59,108 @@ describe("DataTable alignment presets", () => {
   })
 })
 
+const colWidths = (container: HTMLElement) => Array.from(container.querySelectorAll("col")).map((c) => (c as HTMLElement).style.width)
+const table = () => screen.getByRole("table")
+
 describe("DataTable widths", () => {
-  it("keeps auto layout and no colgroup when no column has a width", () => {
-    const { container } = render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a" }), col({ key: "b" })]} />)
-    expect(container.querySelector("colgroup")).toBeNull()
-    expect(screen.getByRole("table")).not.toHaveClass("table-fixed")
-    expect(screen.getByRole("table").style.minWidth).toBe("")
+  it.each([
+    ["text", "200px"],
+    [undefined, "200px"],
+    ["number", "110px"],
+    ["date", "180px"],
+    ["status", "130px"],
+    ["icon", "64px"],
+    ["switch", "96px"],
+  ] as const)("gives a %s column its default width", (type, expected) => {
+    const { container } = render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", type })]} />)
+    expect(colWidths(container)).toEqual([expected, ""])
   })
 
-  it("emits a fixed colgroup and a min-width equal to the sum of the widths", () => {
+  it("is always table-layout fixed with a colgroup, and the table sums to its min-width", () => {
+    const { container } = render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a" }), col({ key: "b", type: "number" })]} />)
+    expect(container.querySelector("colgroup")).not.toBeNull()
+    expect(table()).toHaveClass("table-fixed", "w-full")
+    expect(table().style.minWidth).toBe("310px")
+  })
+
+  it("uses an explicit width over the type default", () => {
+    const { container } = render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", type: "date", width: 150 })]} />)
+    expect(colWidths(container)).toEqual(["150px", ""])
+  })
+
+  it("never lays a column out below its minWidth (explicit or default 48)", () => {
     const { container } = render(
-      <DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", width: 100 }), col({ key: "b", width: 200, flex: true }), col({ key: "c", width: 50 })]} />,
+      <DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", width: 40, minWidth: 90 }), col({ key: "b", width: 10 }), col({ key: "c", width: 100, minWidth: 60 })]} />,
     )
-    const cols = Array.from(container.querySelectorAll("col")) as HTMLElement[]
-    expect(cols.map((c) => c.style.width)).toEqual(["100px", "", "50px"])
-    expect(screen.getByRole("table")).toHaveClass("table-fixed")
-    expect(screen.getByRole("table").style.minWidth).toBe("350px")
+    expect(colWidths(container)).toEqual(["90px", "48px", "100px", ""])
+    expect(table().style.minWidth).toBe("238px")
   })
 
-  it("lets the last column absorb the slack when none is flex", () => {
-    const { container } = render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", width: 100 }), col({ key: "b", width: 80 })]} />)
-    const cols = Array.from(container.querySelectorAll("col")) as HTMLElement[]
-    expect(cols.map((c) => c.style.width)).toEqual(["100px", ""])
-    expect(screen.getByRole("table").style.minWidth).toBe("180px")
+  it("adds the selection column's width to the min-width and the colgroup", () => {
+    const { container } = render(<DataTable rows={ROWS} getRowId={getRowId} selection="multi" columns={[col({ key: "a", width: 100 })]} />)
+    expect(colWidths(container)).toEqual(["32px", "100px", ""])
+    expect(table().style.minWidth).toBe("132px")
   })
 
-  it("counts minWidth / a default for width-less columns in a fixed layout", () => {
-    const layout = computeLayout([col({ key: "a", width: 100 }), col({ key: "b", minWidth: 60 }), col({ key: "c", flex: true })], 32)
-    expect(layout.colWidths).toEqual([100, 60, undefined])
-    expect(layout.minWidth).toBe(32 + 100 + 60 + 120)
+  it("ends a table without flex columns in an empty, aria-hidden filler column", () => {
+    const { container } = render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", width: 100 })]} />)
+    const last = container.querySelectorAll("col")[1] as HTMLElement
+    expect(last.getAttribute("style")).toBeNull()
+    for (const tr of Array.from(container.querySelectorAll("tr"))) {
+      const filler = tr.lastElementChild as HTMLElement
+      expect(filler).toHaveAttribute("aria-hidden", "true")
+      expect(filler.textContent).toBe("")
+      expect(filler).toHaveClass("p-0")
+      expect(tr.children).toHaveLength(2)
+    }
   })
 
-  it("applies minWidth to header cells", () => {
-    render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", minWidth: 90 })]} />)
-    expect(headerOf("a").style.minWidth).toBe("90px")
+  it("keeps the filler out of the accessible headers, cells and row selection", async () => {
+    const user = userEvent.setup()
+    render(<DataTable rows={ROWS} getRowId={getRowId} selection="multi" columns={[col({ key: "a" })]} />)
+    expect(screen.getAllByRole("columnheader")).toHaveLength(2)
+    expect(within(screen.getAllByRole("row")[1]).getAllByRole("cell")).toHaveLength(2)
+    const row = screen.getAllByRole("row")[1]
+    await user.click(row.lastElementChild!) // a click on the filler behaves like a click on the row
+    expect(row).toHaveAttribute("aria-selected", "true")
+    expect(screen.getAllByRole("row")[2]).toHaveAttribute("aria-selected", "false")
+  })
+
+  it("lets a flex column absorb the space: no colgroup width, no filler, its width is the minimum", () => {
+    const { container } = render(
+      <DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", width: 100 }), col({ key: "b", width: 300, flex: true }), col({ key: "c", width: 50 })]} />,
+    )
+    expect(colWidths(container)).toEqual(["100px", "", "50px"])
+    expect(table().style.minWidth).toBe("450px")
+    expect(container.querySelector("[aria-hidden=true]")).toBeNull()
+    expect(container.querySelector("tr")!.children).toHaveLength(3)
+  })
+
+  it("lets several flex columns share the spare width (all unsized, no filler)", () => {
+    const { container } = render(
+      <DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", flex: true }), col({ key: "b", width: 80 }), col({ key: "c", type: "number", flex: true })]} />,
+    )
+    expect(colWidths(container)).toEqual(["", "80px", ""])
+    expect(table().style.minWidth).toBe("390px")
+  })
+
+  it("computeLayout: no flex means a filler, any flex means none", () => {
+    expect(computeLayout([col({ key: "a" })], null).filler).toBe(true)
+    expect(computeLayout([col({ key: "a" }), col({ key: "b", flex: true })], null).filler).toBe(false)
+    expect(computeLayout([col({ key: "a", width: 100 }), col({ key: "b", minWidth: 60, width: 20 })], 32)).toEqual({
+      colWidths: [100, 60],
+      minWidth: 192,
+      filler: true,
+    })
+  })
+
+  it("renders no more cells than before when rerendered (rows stay memoized)", () => {
+    let renders = 0
+    const columns = [col({ key: "a", cell: (r) => (renders++, r.name) })]
+    const { rerender } = render(<DataTable rows={ROWS} getRowId={getRowId} columns={columns} />)
+    expect(renders).toBe(2)
+    rerender(<DataTable rows={ROWS} getRowId={getRowId} columns={columns} className="x" />)
+    expect(renders).toBe(2)
   })
 
   it("uses the table scroll container with a sticky header", () => {

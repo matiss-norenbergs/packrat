@@ -167,6 +167,8 @@ interface DataTableRowProps<T, Id extends RowId> {
   selected: boolean
   mode: SelectionMode
   columns: ColumnDef<T>[]
+  /** Ends the row with an empty filler cell (the table has no flex column). */
+  filler: boolean
   className: string
   label: string
   onMouseDown: (e: MouseEvent, id: Id) => void
@@ -185,6 +187,7 @@ function DataTableRowImpl<T, Id extends RowId>({
   selected,
   mode,
   columns,
+  filler,
   className,
   label,
   onMouseDown,
@@ -225,6 +228,7 @@ function DataTableRowImpl<T, Id extends RowId>({
           </TableCell>
         )
       })}
+      {filler && <TableCell aria-hidden className="p-0" />}
     </TableRow>
   )
 }
@@ -437,20 +441,19 @@ function DataTableView<T, Id extends RowId = number>({
     const table = (
       <Table
         containerClassName={containerClassName ?? CONTAINER_CLASS}
-        className={layout.fixed ? "table-fixed" : undefined}
-        style={layout.minWidth != null ? { minWidth: layout.minWidth } : undefined}
+        className="table-fixed"
+        style={{ minWidth: layout.minWidth }}
       >
-        {layout.fixed && (
-          <colgroup>
-            {selectable && <col style={{ width: selectionWidth }} />}
-            {visibleColumns.map((c, i) => (
-              <col key={c.key} style={layout.colWidths[i] != null ? { width: layout.colWidths[i] } : undefined} />
-            ))}
-          </colgroup>
-        )}
+        <colgroup>
+          {selectable && <col style={{ width: selectionWidth }} />}
+          {visibleColumns.map((c, i) => (
+            <col key={c.key} style={layout.colWidths[i] != null ? { width: layout.colWidths[i] } : undefined} />
+          ))}
+          {layout.filler && <col />}
+        </colgroup>
         <TableHeader>
           <TableRow>
-            {selectable && <TableHead className="w-8 text-center">{selectionHeader}</TableHead>}
+            {selectable && <TableHead className="text-center">{selectionHeader}</TableHead>}
             {visibleColumns.map((c) => {
               const align = resolveAlign(c)
               const sortable = layoutCtl != null && c.sortValue != null
@@ -459,7 +462,6 @@ function DataTableView<T, Id extends RowId = number>({
                 <TableHead
                   key={c.key}
                   className={cn(ALIGN_CLASS[align], c.headerClassName)}
-                  style={c.minWidth != null ? { minWidth: c.minWidth } : undefined}
                   aria-sort={sortable ? (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none") : undefined}
                 >
                   {sortable ? (
@@ -472,6 +474,7 @@ function DataTableView<T, Id extends RowId = number>({
                 </TableHead>
               )
             })}
+            {layout.filler && <TableHead aria-hidden className="p-0" />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -485,6 +488,7 @@ function DataTableView<T, Id extends RowId = number>({
                 selected={selection.isSelected(id)}
                 mode={mode}
                 columns={visibleColumns}
+                filler={layout.filler}
                 className={cn(selectable ? "cursor-default select-none" : onRowClick && "cursor-pointer", rowClassName?.(row))}
                 label={rowLabel(row, id)}
                 onMouseDown={onRowMouseDown}
