@@ -62,7 +62,7 @@ async function openColumns(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("DataTable columns menu", () => {
-  it("renders neither button when no column is hideable, with or without a tableId", () => {
+  it("renders no Columns menu when no column is hideable, and a Layout button only with a tableId (resizable columns)", () => {
     const plain = columns().map(({ hideable: _h, ...c }) => c)
     const client = new QueryClient()
     const { rerender } = render(
@@ -71,16 +71,28 @@ describe("DataTable columns menu", () => {
       </QueryClientProvider>,
     )
     expect(columnsButton()).toBeNull()
-    expect(layoutButton()).toBeNull()
+    expect(layoutButton()).toBeInTheDocument()
     rerender(
       <QueryClientProvider client={client}>
         <DataTable rows={ROWS} getRowId={(r) => r.id} columns={plain} />
       </QueryClientProvider>,
     )
     expect(columnsButton()).toBeNull()
+    expect(layoutButton()).toBeNull()
   })
 
-  it("shows only Columns without a tableId, and hiding removes header, cells and colgroup entry", async () => {
+  it("renders no Layout button when no column can be hidden, sorted or resized", () => {
+    const fixed = columns().map(({ hideable: _h, ...c }) => ({ ...c, resizable: false }))
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <DataTable rows={ROWS} getRowId={(r) => r.id} columns={fixed} tableId="t" />
+      </QueryClientProvider>,
+    )
+    expect(layoutButton()).toBeNull()
+    expect(screen.queryByRole("group")).toBeNull()
+  })
+
+  it("shows only Columns without a tableId,and hiding removes header, cells and colgroup entry", async () => {
     const user = userEvent.setup()
     renderTable()
     expect(columnsButton()).toBeInTheDocument()
@@ -457,5 +469,57 @@ describe("DataTable row memoization with hideable columns", () => {
     expect(renders.name).toBe(2)
     await user.click(screen.getByRole("checkbox", { name: "Select row 1" }))
     expect(renders.name).toBe(3)
+  })
+})
+
+describe("DataTable saved widths", () => {
+  const colWidths = () => Array.from(document.querySelectorAll("col")).map((c) => (c as HTMLElement).style.width)
+  const tableEl = () => document.querySelector("table") as HTMLElement
+
+  it("applies a saved width to the colgroup and the min-width, and it is not dirty", () => {
+    renderTable({ tableId: "t" }, { t: { v: 1, widths: { name: 300 } } })
+    expect(colWidths()).toEqual(["300px", "120px", "100px", ""])
+    expect(tableEl().style.minWidth).toBe("520px")
+    expect(screen.queryByTestId("layout-dirty-dot")).toBeNull()
+  })
+
+  it("raises a saved width below the column's minWidth when applying it", () => {
+    const cols: ColumnDef<Row>[] = [{ key: "name", header: "Name", cell: (r) => r.name, width: 200, minWidth: 90 }]
+    const client = new QueryClient()
+    client.setQueryData(tableLayoutsQueryKey, { t: { v: 1, widths: { name: 30 } } })
+    render(
+      <QueryClientProvider client={client}>
+        <DataTable rows={ROWS} getRowId={(r) => r.id} columns={cols} tableId="t" />
+      </QueryClientProvider>,
+    )
+    expect(colWidths()).toEqual(["90px", ""])
+  })
+
+  it("ignores stored widths of flex, icon, switch and resizable:false columns and of columns that do not exist", () => {
+    const cols: ColumnDef<Row>[] = [
+      { key: "name", header: "Name", cell: (r) => r.name, width: 100, flex: true },
+      { key: "birthday", header: "Birthday", cell: (r) => r.birthday, width: 100, resizable: false },
+      { key: "usage", header: "Usage", cell: (r) => r.usage, type: "icon" },
+    ]
+    const client = new QueryClient()
+    client.setQueryData(tableLayoutsQueryKey, { t: { v: 1, widths: { name: 500, birthday: 500, usage: 500, ghost: 500 } } })
+    render(
+      <QueryClientProvider client={client}>
+        <DataTable rows={ROWS} getRowId={(r) => r.id} columns={cols} tableId="t" />
+      </QueryClientProvider>,
+    )
+    expect(colWidths()).toEqual(["", "100px", "64px"])
+    expect(tableEl().style.minWidth).toBe("264px")
+    expect(screen.queryByTestId("layout-dirty-dot")).toBeNull() // the stale keys are normalized away
+  })
+
+  it("keeps the width of a hidden column and applies it when the column comes back", async () => {
+    const user = userEvent.setup()
+    renderTable({ tableId: "t" }, { t: { v: 1, widths: { birthday: 250 } } })
+    await user.click(columnsButton()!)
+    await user.click(await screen.findByRole("menuitemcheckbox", { name: "Birthday" }))
+    expect(colWidths()).toEqual(["200px", "100px", ""])
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Birthday" }))
+    expect(colWidths()).toEqual(["200px", "250px", "100px", ""])
   })
 })

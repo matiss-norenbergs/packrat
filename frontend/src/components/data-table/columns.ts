@@ -33,6 +33,8 @@ export const DEFAULT_WIDTH_BY_TYPE: Record<ColumnType, number> = {
 }
 /** Lower bound in px of any column that declares no `minWidth`. */
 export const DEFAULT_MIN_WIDTH = 48
+/** Upper bound in px of a resized column (the backend accepts 24..2000). */
+export const MAX_COLUMN_WIDTH = 2000
 
 /** Cells and headers never wrap by default: what does not fit is cut off with an ellipsis. */
 export const CLIP_CLASS = "overflow-hidden text-ellipsis whitespace-nowrap"
@@ -52,6 +54,33 @@ export function columnWidth<T>(column: ColumnDef<T>): number {
   return Math.max(column.width ?? DEFAULT_WIDTH_BY_TYPE[column.type ?? "text"], column.minWidth ?? DEFAULT_MIN_WIDTH)
 }
 
+/** The table's own lower bound for a column: its `minWidth`, else the default. */
+export function columnMinWidth<T>(column: ColumnDef<T>): number {
+  return column.minWidth ?? DEFAULT_MIN_WIDTH
+}
+
+/**
+ * Whether the user can drag this column's width (in a table with a `tableId`): by default every column except a flex
+ * one (it absorbs the spare space, so a drag would show nothing) and icon / switch columns; `resizable` overrides.
+ */
+export function isResizable<T>(column: ColumnDef<T>): boolean {
+  return column.resizable ?? !(column.flex || column.type === "icon" || column.type === "switch")
+}
+
+/** Clamps a dragged or saved width to [the column's minimum, MAX_COLUMN_WIDTH]. */
+export function clampColumnWidth<T>(column: ColumnDef<T>, px: number): number {
+  return Math.min(MAX_COLUMN_WIDTH, Math.max(columnMinWidth(column), Math.round(px)))
+}
+
+/**
+ * The width a column is laid out at: the user's override (resizable columns only, clamped), else `columnWidth`.
+ * `widths` holds overrides keyed by column key.
+ */
+export function effectiveColumnWidth<T>(column: ColumnDef<T>, widths?: Readonly<Record<string, number>>): number {
+  const override = widths?.[column.key]
+  return override != null && isResizable(column) ? clampColumnWidth(column, override) : columnWidth(column)
+}
+
 export interface TableLayout {
   /** Per-column width for the colgroup; undefined for a flex column (it absorbs the spare space). Excludes the selection column. */
   colWidths: (number | undefined)[]
@@ -63,10 +92,14 @@ export interface TableLayout {
 
 // Every table is `table-layout: fixed`: the real columns keep their exact width, and the spare space goes either to
 // the flex columns (explicit opt-in; their width is only their minimum) or, when there are none, to the filler column.
-export function computeLayout<T>(columns: ColumnDef<T>[], selectionWidth: number | null): TableLayout {
+export function computeLayout<T>(
+  columns: ColumnDef<T>[],
+  selectionWidth: number | null,
+  widths?: Readonly<Record<string, number>>,
+): TableLayout {
   return {
-    colWidths: columns.map((c) => (c.flex ? undefined : columnWidth(c))),
-    minWidth: columns.reduce((sum, c) => sum + columnWidth(c), selectionWidth ?? 0),
+    colWidths: columns.map((c) => (c.flex ? undefined : effectiveColumnWidth(c, widths))),
+    minWidth: columns.reduce((sum, c) => sum + effectiveColumnWidth(c, widths), selectionWidth ?? 0),
     filler: !columns.some((c) => c.flex),
   }
 }

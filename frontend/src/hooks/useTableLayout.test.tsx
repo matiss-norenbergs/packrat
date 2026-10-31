@@ -55,6 +55,45 @@ describe("normalizeTableLayout", () => {
     expect(out).toEqual({ v: 1, hidden: ["usage"], widths: { name: 80 } })
   })
 
+  describe("widths are overrides only", () => {
+    const resizableWidths = { name: { default: 200, min: 48 }, birthday: { default: 120, min: 90 } }
+    const opts = { knownKeys: KEYS, resizableWidths }
+
+    it("keeps a width that differs from the default", () => {
+      expect(normalizeTableLayout({ v: 1, widths: { name: 300 } }, opts)).toEqual({ v: 1, widths: { name: 300 } })
+    })
+
+    it("drops a width equal to the column's default", () => {
+      expect(normalizeTableLayout({ v: 1, widths: { name: 200, birthday: 150 } }, opts)).toEqual({ v: 1, widths: { birthday: 150 } })
+      expect(normalizeTableLayout({ v: 1, widths: { name: 200 } }, opts)).toEqual({ v: 1 })
+    })
+
+    it("drops a width for a column that does not exist or is not resizable", () => {
+      expect(normalizeTableLayout({ v: 1, widths: { ghost: 300, usage: 300, name: 250 } }, opts)).toEqual({ v: 1, widths: { name: 250 } })
+    })
+
+    it("raises a width below the minimum to it, and drops it when that is the default", () => {
+      expect(normalizeTableLayout({ v: 1, widths: { birthday: 30 } }, opts)).toEqual({ v: 1, widths: { birthday: 90 } })
+      const out = normalizeTableLayout({ v: 1, widths: { birthday: 30 } }, { ...opts, resizableWidths: { birthday: { default: 90, min: 90 } } })
+      expect(out).toEqual({ v: 1 })
+    })
+
+    it("caps a width at 2000 and rounds fractions", () => {
+      expect(normalizeTableLayout({ v: 1, widths: { name: 9000, birthday: 150.4 } }, opts)).toEqual({ v: 1, widths: { birthday: 150, name: 2000 } })
+    })
+
+    it("sorts the keys and omits an empty map", () => {
+      const out = normalizeTableLayout({ v: 1, widths: { name: 300, birthday: 150 } }, opts)
+      expect(Object.keys(out.widths!)).toEqual(["birthday", "name"])
+      expect("widths" in normalizeTableLayout({ v: 1, widths: {} }, opts)).toBe(false)
+    })
+
+    it("keeps the widths of hidden columns", () => {
+      const out = normalizeTableLayout({ v: 1, hidden: ["birthday"], widths: { birthday: 150 } }, { ...opts, hideableKeys: ["birthday"] })
+      expect(out).toEqual({ v: 1, hidden: ["birthday"], widths: { birthday: 150 } })
+    })
+  })
+
   it("keeps a sort of a sortable column, drops one equal to the default or on a column that is not sortable", () => {
     const opts = { knownKeys: KEYS, sortableKeys: ["name", "usage"], defaultSort: { key: "usage", dir: "desc" as const } }
     expect(normalizeTableLayout({ v: 1, sort: { key: "name", dir: "asc" } }, opts)).toEqual({ v: 1, sort: { key: "name", dir: "asc" } })

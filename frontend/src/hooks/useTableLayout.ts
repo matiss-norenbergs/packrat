@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { deleteTableLayout, fetchTableLayouts, saveTableLayout } from "@/lib/api"
 import { canonicalSort } from "@/components/data-table/sorting"
+import { MAX_COLUMN_WIDTH } from "@/components/data-table/columns"
 import type { SortState } from "@/components/data-table/sorting"
 import type { TableLayout, TableLayouts } from "@/types/api"
 
@@ -32,12 +33,18 @@ export interface TableLayoutOptions {
    * default order and an explicit sort identical to it never makes a layout look different.
    */
   defaultSort?: SortState
+  /**
+   * Columns whose width the user can set, with each one's default and minimum width in px. When given, `widths` keeps
+   * only these keys, raises a width to its minimum (and caps it at 2000), and drops one equal to the default, so
+   * `widths` holds overrides only. Omit to keep every width of a known column untouched.
+   */
+  resizableWidths?: Readonly<Record<string, { default: number; min: number }>>
   /** The caller owns the working layout (e.g. a page that also needs it elsewhere); `onChange` receives every edit. */
   controlled?: { working: TableLayout; onChange: (layout: TableLayout) => void }
 }
 
 /** Order-independent, empty-field-free form used to compare layouts and to send them. */
-export function normalizeTableLayout(layout: TableLayout, opts: Pick<TableLayoutOptions, "knownKeys" | "hideableKeys" | "sortableKeys" | "defaultSort"> = {}): TableLayout {
+export function normalizeTableLayout(layout: TableLayout, opts: Pick<TableLayoutOptions, "knownKeys" | "hideableKeys" | "sortableKeys" | "defaultSort" | "resizableWidths"> = {}): TableLayout {
   const known = opts.knownKeys ? new Set(opts.knownKeys) : null
   const hideable = opts.hideableKeys ? new Set(opts.hideableKeys) : known
   const out: TableLayout = { v: 1 }
@@ -46,8 +53,14 @@ export function normalizeTableLayout(layout: TableLayout, opts: Pick<TableLayout
   if (sort) out.sort = sort
   const hidden = [...new Set(layout.hidden ?? [])].filter((k) => !hideable || hideable.has(k)).sort()
   if (hidden.length) out.hidden = hidden
+  const specs = opts.resizableWidths
   const widths = Object.entries(layout.widths ?? {})
-    .filter(([k]) => !known || known.has(k))
+    .filter(([k]) => (!known || known.has(k)) && (!specs || k in specs))
+    .map(([k, w]): [string, number] => {
+      const spec = specs?.[k]
+      return [k, spec ? Math.min(MAX_COLUMN_WIDTH, Math.max(spec.min, Math.round(w))) : w]
+    })
+    .filter(([k, w]) => specs?.[k]?.default !== w)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
   if (widths.length) out.widths = Object.fromEntries(widths)
   return out
@@ -87,12 +100,13 @@ export interface TableLayoutState {
 export function useTableLayout(tableId: string, defaults: TableLayout, opts: TableLayoutOptions = {}): TableLayoutState {
   const queryClient = useQueryClient()
   const { data: layouts, isPending } = useTableLayouts()
-  const { knownKeys, hideableKeys, sortableKeys, defaultSort, controlled } = opts
+  const { knownKeys, hideableKeys, sortableKeys, defaultSort, resizableWidths, controlled } = opts
 
   // The key lists are usually rebuilt each render; key the memos on their content.
   const knownSig = knownKeys?.join("\0")
   const hideableSig = hideableKeys?.join("\0")
   const sortableSig = sortableKeys?.join("\0")
+  const widthsSig = resizableWidths ? JSON.stringify(resizableWidths) : undefined
   const defaultSortKey = defaultSort?.key
   const defaultSortDir = defaultSort?.dir
   const norm = useCallback(
@@ -102,8 +116,9 @@ export function useTableLayout(tableId: string, defaults: TableLayout, opts: Tab
         hideableKeys: hideableSig?.split("\0"),
         sortableKeys: sortableSig?.split("\0"),
         defaultSort: defaultSortKey != null && defaultSortDir ? { key: defaultSortKey, dir: defaultSortDir } : undefined,
+        resizableWidths: widthsSig ? JSON.parse(widthsSig) : undefined,
       }),
-    [knownSig, hideableSig, sortableSig, defaultSortKey, defaultSortDir],
+    [knownSig, hideableSig, sortableSig, defaultSortKey, defaultSortDir, widthsSig],
   )
 
   const savedRaw = layouts?.[tableId]
