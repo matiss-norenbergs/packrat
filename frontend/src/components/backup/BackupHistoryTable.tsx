@@ -60,7 +60,7 @@ function startDownload(id: number) {
 
 const columns: ColumnDef<BackupHistoryEntry>[] = [
   { key: "date", header: "Date", type: "date", cell: (entry) => new Date(entry.createdAt).toLocaleString() },
-  { key: "trigger", header: "Trigger", cell: (entry) => (entry.triggerType === "manual" ? "Manual" : "Scheduled") },
+  { key: "trigger", header: "Trigger", width: 110, cell: (entry) => (entry.triggerType === "manual" ? "Manual" : "Scheduled") },
   {
     key: "status",
     header: "Status",
@@ -78,7 +78,7 @@ const columns: ColumnDef<BackupHistoryEntry>[] = [
       </div>
     ),
   },
-  { key: "contents", header: "Contents", cell: itemsSummary },
+  { key: "contents", header: "Contents", width: 400, cell: itemsSummary },
   { key: "size", header: "Size", type: "number", cell: (entry) => (entry.fileSizeBytes != null ? formatBytes(entry.fileSizeBytes) : "—") },
 ]
 

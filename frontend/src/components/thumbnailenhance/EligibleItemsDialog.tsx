@@ -55,6 +55,7 @@ const columns: ColumnDef<ThumbnailEnhancementEligibleItem>[] = [
     key: "status",
     header: "Status",
     type: "status",
+    width: 140,
     cell: (item) =>
       item.isProcessing ? (
         <Badge variant="secondary" className="gap-1">

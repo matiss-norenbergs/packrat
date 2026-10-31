@@ -119,6 +119,7 @@ export function SubscriptionsPage() {
         header: "Known items",
         hideable: true,
         type: "number",
+        width: 140,
         cellClassName: "text-sm",
         sortValue: (sub) => sub.knownEntryCount,
         cell: (sub) => (
@@ -133,6 +134,7 @@ export function SubscriptionsPage() {
         header: "Last checked",
         hideable: true,
         type: "date",
+        width: 210,
         cellClassName: "text-sm text-muted-foreground",
         sortValue: (sub) => (sub.lastCheckedAt ? new Date(sub.lastCheckedAt) : null),
         cell: (sub) => (

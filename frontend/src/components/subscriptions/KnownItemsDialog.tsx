@@ -58,6 +58,7 @@ const columns: ColumnDef<SubscriptionEntry>[] = [
     key: "status",
     header: "Status",
     type: "status",
+    width: 150,
     cell: (entry) => {
       const isKnownEntry = entry.url !== ""
       return entry.linkedLibraryItemId != null ? (

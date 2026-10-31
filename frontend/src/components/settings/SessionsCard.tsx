@@ -57,12 +57,14 @@ export function SessionsCard() {
         key: "signedIn",
         header: "Signed in",
         type: "date",
+        width: 110,
         cell: (s) => <span title={new Date(s.createdAt).toLocaleString()}>{new Date(s.createdAt).toLocaleDateString()}</span>,
       },
       {
         key: "lastActive",
         header: "Last active",
         type: "date",
+        width: 120,
         cell: (s) => <span title={new Date(s.lastSeenAt).toLocaleString()}>{s.current ? "Now" : formatTimeAgo(s.lastSeenAt)}</span>,
       },
       {

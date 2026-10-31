@@ -73,7 +73,7 @@ describe("DataTable overflow tooltip", () => {
       />,
     )
     overflow(cell(1, 0))
-    Object.defineProperty(cell(1, 0), "innerText", { value: "Alpha\nsecond", configurable: true })
+    Object.defineProperty(cell(1, 0), "innerText", { value: "Alpha\n\nsecond", configurable: true })
     expect(await hoverShows(cell(1, 0))).toHaveTextContent("Alpha second")
     expect(tooltip()!.textContent).toBe("Alpha\nsecond")
   })

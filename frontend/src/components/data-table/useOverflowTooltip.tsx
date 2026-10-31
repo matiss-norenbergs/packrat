@@ -31,7 +31,8 @@ function tooltipTextFor<T>(cell: HTMLElement, column: ColumnDef<T> | undefined, 
   if (cell.querySelector(INTERACTIVE_SELECTOR)) return null
   if (!isCutOff(cell)) return null
   const text = column.tooltipText && row !== undefined ? column.tooltipText(row) : (cell.innerText ?? cell.textContent ?? "")
-  return text.trim() || null
+  // Block children (two `<p>`) come out of innerText with a blank line between them; keep one line break.
+  return text.replace(/\n{2,}/g, "\n").trim() || null
 }
 
 /**
