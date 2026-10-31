@@ -570,6 +570,18 @@ row type and the id type (number or string).
   (window-level mouseup). `single` = radios inside a `radiogroup` wrapping the content region, a click selects only that
   row, no drag/shift/ctrl. Right-clicking an unselected row replaces the selection with it; right-clicking a selected
   row keeps a multi-selection; the header/empty area opens nothing.
+- **Interactive cells**: a mouse-down / click / double-click on `button, a[href], input, select, textarea, label`,
+  the `switch`/`checkbox`/`radio`/`combobox`/`menuitem` roles or anything inside `[data-no-row-select]`
+  (`INTERACTIVE_SELECTOR`) is left to that element: it doesn't select the row, start a drag or fire
+  `onRowClick`/`onRowDoubleClick`. Put `data-no-row-select` on a custom interactive cell that matches none of those.
+  Events that reach the row through a React portal (a popover or dialog rendered from a cell) are ignored too. The
+  context-menu handler is unaffected.
+- **Rendering cost**: rows are `React.memo`'d (`DataTableRow`) and take only primitives and stable handlers (the
+  page's `onRowClick`, `contextMenu` etc. go through `useEvent`, so inline lambdas are fine), so a click or drag
+  re-renders only the rows whose `selected` flag changed; a drag that doesn't change the range skips the update
+  entirely. **Pages must `useMemo` their `columns`** (deps = whatever the cells close over) or define them at module
+  level: a new array identity re-renders every row and cell on every page render. The context-menu items are built
+  lazily, only while the menu is open, so the `contextMenu` builder may do real work.
 - **Widths**: with no `width` anywhere the table keeps the browser's auto layout (identical to the pre-component look).
   Any `width` switches to `table-layout: fixed` with a `<colgroup>`; the table's min-width is the sum of the columns'
   base widths (`width ?? minWidth ?? 120`), so a narrower container scrolls horizontally inside the single scroll
@@ -587,7 +599,7 @@ row type and the id type (number or string).
   function of the query (as typed) to tell "nothing yet" from "no match"; the toolbar slots also get `query` and
   `total`. **`match` must have a stable identity** (module-level function or `useCallback`), or the filter memo
   re-runs every render. Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
-  `search.onChange` owned by the page); the two modes are selected by whether `pageSize`/`match` is given.
+  `search.onChange` owned by the page; `search.value` is optional, it only seeds the input); the two modes are selected by whether `pageSize`/`match` is given.
 - **Layout**: the component renders a `flex min-h-0 flex-1 flex-col gap-6` block (toolbar and footer `shrink-0`, only the
   content region scrolls), meant to sit under the page title in the usual page column.
 - **Why no virtualization / sorting / resizing yet**: pages are paginated at 50 rows, so virtualization would add

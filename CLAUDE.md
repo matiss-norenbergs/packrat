@@ -76,7 +76,7 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
   the right (`ml-auto`, filter before search). Bulk/destructive actions get an `AlertDialog`
   confirmation showing the count; single-item actions don't.
 - **New list/table pages use `DataTable`** (`components/data-table`, see `docs/architecture.md`); don't
-  hand-roll a table. It enforces the next rules itself: checkbox/radio column on `useIdSelection` with
+  hand-roll a table (and `useMemo` its `columns`, or every row re-renders). It enforces the next rules itself: checkbox/radio column on `useIdSelection` with
   drag/shift/ctrl-click, context menu, `getPageNumbers` footer, alignment presets (column `type`), sticky
   header in one scroll container. Pages still own filtering/slicing and use 50 rows/page. Existing pages
   move over as they're touched; Collections (a tree) stays bespoke.
