@@ -714,6 +714,11 @@ row type and the id type (number or string).
   have none), with the same rules (cut off, `tooltip: false`, no icon / switch / `wrap`) and the header's own text. The label inside
   a sortable header's button counts as cut off, and that button (`data-sort-button`) is the one control that is part of the label
   rather than a control (any other control in a header follows the rule above). Hovering the resize handle shows none.
+- **Scroll reset**: when the page (`pagination.page` in controlled mode), the effective sort, the search query (the table's own in
+  client mode, the value `search.onChange` last reported in controlled mode) or `resetKey` changes, `DataTableView` sets the
+  scroll container's `scrollTop` to 0 (found through a ref on the region wrapper, `[data-slot=table-container]`) in a layout
+  effect that compares those values on every render (no extra render, never on mount). A refetch, a selection change, a hidden
+  column or a resize are not in the key, and `scrollLeft` is never touched.
 - **Footer**: always shown when pagination is configured (client mode with `pageSize` + `itemLabel`, or the `pagination`
   prop), including while loading and on error, so the page (and a dialog) never changes height between states. Then it shows
   a placeholder ("—" instead of the count, no "· N selected", Previous/Next and the current page button disabled) and

@@ -365,8 +365,11 @@ function DataTableView<T, Id extends RowId = number>({
     [clientMode, sortValue, sortDir, filtered],
   )
   const rows = clientMode && pageSize != null ? sorted.slice((page - 1) * pageSize, page * pageSize) : clientMode ? sorted : allRows
+  // Controlled mode: the query the page was last told about (only used to notice a change; the page owns the filtering).
+  const [reportedQuery, setReportedQuery] = useState(search?.value ?? "")
   const handleSearchChange = (value: string) => {
     search?.onChange?.(value)
+    if (!clientMode) setReportedQuery(value)
     if (!clientMode || value === rawQuery) return
     setRawQuery(value)
     setPage(1)
@@ -391,6 +394,20 @@ function DataTableView<T, Id extends RowId = number>({
       : undefined
     : controlledPagination
   const query = clientMode ? rawQuery : (search?.value ?? "")
+
+  // A new page, sort, search or resetKey starts at the top of the scroll container. Compared on every render (a layout
+  // effect, so before paint and without an extra render); not on mount, and never for a refetch, a selection change, a
+  // hidden column or a resize, none of which is in the key. Only scrollTop is touched, so scrollLeft stays.
+  const regionRef = useRef<HTMLDivElement>(null)
+  const scrollKey = useRef<unknown[] | null>(null)
+  useLayoutEffect(() => {
+    const next = [pagination?.page, sort ? `${sort.key}:${sort.dir}` : "", clientMode ? rawQuery : reportedQuery, resetKey]
+    const prev = scrollKey.current
+    scrollKey.current = next
+    if (!prev || next.every((v, i) => Object.is(v, prev[i]))) return
+    const container = regionRef.current?.querySelector<HTMLElement>('[data-slot="table-container"]')
+    if (container) container.scrollTop = 0
+  })
   const { onRowMouseDown, onRowMouseEnter } = useTableSelection({ rows, getRowId, mode, selection, isSelectable: isRowSelectable })
 
   // Stable wrappers around the page's (usually inline) handlers, so they never defeat the row memo.
@@ -582,7 +599,11 @@ function DataTableView<T, Id extends RowId = number>({
     )
   }
 
-  const region = <div className={cn("min-h-0 flex-1", regionClassName)}>{content}</div>
+  const region = (
+    <div ref={regionRef} className={cn("min-h-0 flex-1", regionClassName)}>
+      {content}
+    </div>
+  )
   const selectedId = mode === "single" ? selectableIds.find((id) => selection.selected.has(id)) : undefined
 
   const columnItems = layoutCtl

@@ -627,6 +627,8 @@ table, and does not appear on checkboxes, icons or switches. A cell that also ho
 name next to its ignore button) shows the tooltip while you point at its text, with the text of the controls left out, and not
 while you point at a control. Column headers behave the same: a header whose label is cut off shows it in full.
 
+Changing the page, the sort or the search takes a scrolled table back to its top (a sideways scroll position stays).
+
 Lists built on the shared table component can let you choose which columns to show and how to sort. Up to two icon-only buttons
 sit at the right end of the table's toolbar, after the search box (only on tables that offer them):
 
