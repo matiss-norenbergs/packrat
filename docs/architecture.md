@@ -564,7 +564,8 @@ transition is switched off only while dragging.
 ## List tables (`DataTable`)
 
 `components/data-table/` is the shared list-table component; `TagsPage` is the reference migration and `ArtistsPage` (the table beside its `CollapsiblePanel`, passing
-`className="overflow-hidden"`) is on it too. **The component owns**
+`className="overflow-hidden"`) is on it too, as is `SubscriptionsPage` — the reference for **interactive cells** (a `Switch` and a
+hover-popover button inside rows) and for the **stable-handler rule** below. **The component owns**
 the table chrome and the interaction logic that used to be copy-pasted per page: the column model, alignment, widths and
 scroll, the checkbox/radio column, click / ctrl / shift / drag selection (`useTableSelection`, on top of a *controlled*
 `useIdSelection` the page passes as `selectionState`, so its toolbar reads the same state), the context menu (including
@@ -593,7 +594,12 @@ row type and the id type (number or string).
   re-renders only the rows whose `selected` flag changed; a drag that doesn't change the range skips the update
   entirely. **Pages must `useMemo` their `columns`** (deps = whatever the cells close over) or define them at module
   level: a new array identity re-renders every row and cell on every page render. The context-menu items are built
-  lazily, only while the menu is open, so the `contextMenu` builder may do real work.
+  lazily, only while the menu is open, so the `contextMenu` builder may do real work. **Stable-handler rule**: a cell must
+  not read changing page state through a closure — the memoized `columns` would keep serving the old value. Route what a
+  cell calls through a handler with a stable identity and list exactly that handler in the `useMemo` deps
+  (`SubscriptionsPage`: `toggleEnabled` is a `useCallback` over the update mutation's `mutate`, which TanStack Query v5
+  keeps stable; if a callback can't be made stable, go through a ref / `useEvent`). `SubscriptionsPage.table.test.tsx`
+  has a test that the Enabled switch calls the *current* mutation after a re-render.
 - **Widths**: with no `width` anywhere the table keeps the browser's auto layout (identical to the pre-component look).
   Any `width` switches to `table-layout: fixed` with a `<colgroup>`; the table's min-width is the sum of the columns'
   base widths (`width ?? minWidth ?? 120`), so a narrower container scrolls horizontally inside the single scroll
