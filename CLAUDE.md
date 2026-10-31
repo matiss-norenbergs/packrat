@@ -70,6 +70,8 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
   the tab's file in `components/settings/tabs/` (each tab is wrapped in `SettingsTabLoader`, keeps its edits in `useSettingsDraft` and ends with the shared `SaveRow`).
 
 **Frontend UI**
+- Page footers clear the bottom-left floating dock with the shared `dock-occupied` rule
+  (`lib/dockClearance.ts`, `DataTable` does it itself), never a hard-coded `pl-12`.
 - Pages: `flex h-full min-h-0 flex-col gap-6`; header + toolbar are `shrink-0`; only the content
   region scrolls (`min-h-0 flex-1`, tables use `Table containerClassName="h-full overflow-auto …"`).
 - Toolbar: action buttons left (primary action first, buttons carry lucide icons), filter/search on
