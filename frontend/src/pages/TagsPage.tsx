@@ -85,6 +85,7 @@ export function TagsPage() {
         rows={data ?? []}
         getRowId={(t) => t.id}
         columns={columns}
+        tableId="tags"
         selection="multi"
         selectionState={selection}
         getRowLabel={(t) => `Select ${t.name}`}

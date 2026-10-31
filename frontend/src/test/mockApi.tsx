@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { vi } from "vitest"
+import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
 
 type Init = RequestInit & { headers: Record<string, string> }
 export type Responder = (url: string, init: Init) => { status: number; body?: unknown; headers?: Record<string, string> }
@@ -28,6 +29,8 @@ export const bodyOf = (call: unknown[]) => JSON.parse(((call[1] as RequestInit).
 
 export function renderWithProviders(ui: ReactElement, route = "/") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  // Tables with a tableId wait for the account's saved layouts; no saved layouts, so they render at once.
+  client.setQueryData(tableLayoutsQueryKey, {})
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
