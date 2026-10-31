@@ -43,6 +43,9 @@ function renderTable(props: Partial<DataTableProps<Row, number>> = {}, saved: Ta
 
 const columnsButton = () => screen.queryByRole("button", { name: "Columns" })
 const group = () => screen.getByRole("group")
+// Filters, search and the Columns / Layout group share one right-aligned cluster; ml-auto sits on it, not on its members.
+const cluster = () => group().parentElement!
+const END = ["ml-auto", "flex-wrap", "justify-end"]
 const layoutButton = () => screen.queryByRole("button", { name: "Table layout" })
 // Read from the DOM: while a Radix menu is open everything outside it is aria-hidden.
 const headers = () => Array.from(document.querySelectorAll("th:not([aria-hidden])")).map((h) => h.textContent)
@@ -194,43 +197,48 @@ describe("DataTable button group", () => {
 describe("DataTable toolbar order", () => {
   // The Columns / Layout group is flattened into its buttons' labels.
   const order = () =>
-    Array.from(screen.getByRole("group").parentElement!.children).flatMap((c) =>
+    Array.from(cluster().children).flatMap((c) =>
       c.getAttribute("role") === "group"
         ? Array.from(c.children).map((b) => b.getAttribute("aria-label"))
         : [c.textContent || c.getAttribute("aria-label") || c.querySelector("input")?.getAttribute("placeholder")],
     )
 
-  it("filters, search, Columns, Layout, with ml-auto on the first of the right-hand group", () => {
+  it("filters, search, Columns, Layout in one right-aligned wrapping cluster after the toolbar slot", () => {
     renderTable({ tableId: "t", toolbar: <button>New</button>, filters: <span>filter</span>, search: { placeholder: "Find…" } })
-    expect(order()).toEqual(["New", "filter", "Find…", "Columns", "Table layout"])
-    expect(screen.getByText("filter").parentElement).toHaveClass("ml-auto")
+    expect(order()).toEqual(["filter", "Find…", "Columns", "Table layout"])
+    expect(cluster()).toHaveClass(...END)
+    expect(screen.getByText("New").parentElement).toBe(cluster().parentElement)
+    expect(cluster().previousElementSibling).toBe(screen.getByText("New"))
+    expect(screen.getByText("filter").parentElement).not.toHaveClass("ml-auto")
     expect(group()).not.toHaveClass("ml-auto")
   })
 
   it("search first when there are no filters", () => {
     renderTable({ tableId: "t", toolbar: <button>New</button>, search: { placeholder: "Find…" } })
-    expect(order()).toEqual(["New", "Find…", "Columns", "Table layout"])
-    expect(screen.getByPlaceholderText("Find…").parentElement).toHaveClass("ml-auto")
+    expect(order()).toEqual(["Find…", "Columns", "Table layout"])
+    expect(cluster()).toHaveClass(...END)
+    expect(screen.getByPlaceholderText("Find…").parentElement).not.toHaveClass("ml-auto")
     expect(group()).not.toHaveClass("ml-auto")
   })
 
   it("the buttons sit at the right end when there is no search and no filters", () => {
     renderTable({ tableId: "t", toolbar: <button>New</button> })
-    expect(order()).toEqual(["New", "Columns", "Table layout"])
-    expect(group()).toHaveClass("ml-auto")
+    expect(order()).toEqual(["Columns", "Table layout"])
+    expect(cluster()).toHaveClass(...END)
+    expect(group()).not.toHaveClass("ml-auto")
     expect(columnsButton()).not.toHaveClass("ml-auto")
     expect(layoutButton()).not.toHaveClass("ml-auto")
   })
 
   it("Columns alone gets ml-auto without a tableId, and a table without a toolbar gets one for the buttons", () => {
     renderTable()
-    expect(group()).toHaveClass("ml-auto")
+    expect(cluster()).toHaveClass(...END)
     expect(layoutButton()).toBeNull()
   })
 
   it("a table without hideable columns keeps the old classes", () => {
     render(<DataTable rows={ROWS} getRowId={(r) => r.id} columns={[{ key: "n", header: "Name", cell: (r: Row) => r.name }]} search={{ placeholder: "Find…" }} />)
-    expect(screen.getByPlaceholderText("Find…").parentElement).toHaveClass("ml-auto")
+    expect(screen.getByPlaceholderText("Find…").parentElement!.parentElement).toHaveClass(...END)
     expect(screen.queryAllByRole("button", { name: /Columns|Table layout/ })).toHaveLength(0)
   })
 })

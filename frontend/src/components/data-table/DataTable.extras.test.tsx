@@ -144,7 +144,7 @@ describe("DataTable layoutActions", () => {
     render(<DataTable rows={ROWS} getRowId={(r) => r.id} columns={plain} layoutActions={actions} />)
     const group = screen.getByRole("group")
     expect(within(group).getByRole("button", { name: "Display settings" })).toBeInTheDocument()
-    expect(group.className).toContain("ml-auto")
+    expect(group.parentElement).toHaveClass("ml-auto", "flex-wrap", "justify-end")
   })
 
   it("is absent when omitted", () => {

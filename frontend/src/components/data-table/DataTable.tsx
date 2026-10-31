@@ -663,8 +663,9 @@ function DataTableView<T, Id extends RowId = number>({
   const hasLayoutButton = layoutCtl?.saved != null
   const hasLayoutActions = layoutActions != null
   const hasToolbar = toolbar != null || filters != null || search != null || hasColumnsMenu || hasLayoutButton || hasLayoutActions
-  // The first element on the right edge takes the spare space (ml-auto); filters, search, then the Columns / Layout group.
-  const rightStart = filters != null ? "filters" : search ? "search" : "group"
+  // Filters, search and the Columns / Layout group form one right-aligned cluster (ml-auto takes the spare space, justify-end
+  // keeps wrapped lines on the right edge, also when the whole cluster drops below the left toolbar slot).
+  const hasRightControls = filters != null || search != null || hasColumnsMenu || hasLayoutButton || hasLayoutActions
   const showPagination = pagination != null
   const pending = Boolean(loading || error)
 
@@ -673,30 +674,35 @@ function DataTableView<T, Id extends RowId = number>({
       {hasToolbar && (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {toolbar != null && renderSlot(toolbar)}
-          {filters != null && <div className="ml-auto flex flex-wrap items-center gap-2">{renderSlot(filters)}</div>}
-          {search && (
-            <TableSearch
-              value={clientMode ? rawQuery : (search.value ?? "")}
-              onChange={handleSearchChange}
-              placeholder={search.placeholder}
-              debounceMs={search.debounceMs}
-              className={rightStart === "search" ? "ml-auto" : undefined}
-            />
-          )}
-          {(hasColumnsMenu || hasLayoutButton || hasLayoutActions) && (
-            <ButtonGroup className={rightStart === "group" ? "ml-auto" : undefined}>
-              {hasColumnsMenu && <ColumnsMenu items={columnItems} onToggle={layoutCtl!.toggle} />}
-              {layoutCtl?.saved && (
-                <LayoutPopover
-                  dirty={layoutCtl.saved.dirty}
-                  hasSaved={layoutCtl.saved.hasSaved}
-                  onSave={layoutCtl.saved.save}
-                  onRestore={layoutCtl.saved.restore}
-                  onClear={layoutCtl.saved.clear}
+          {hasRightControls && (
+            <div data-slot="table-toolbar-end" className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              {filters != null && <div className="flex flex-wrap items-center justify-end gap-2">{renderSlot(filters)}</div>}
+              {search && (
+                <TableSearch
+                  value={clientMode ? rawQuery : (search.value ?? "")}
+                  onChange={handleSearchChange}
+                  placeholder={search.placeholder}
+                  debounceMs={search.debounceMs}
+                  // flex-1 alone would size the box by its content inside the content-sized cluster (narrower than the 280px cap): a 280px base that can still shrink.
+                  className="w-[280px] flex-initial"
                 />
               )}
-              {layoutActions}
-            </ButtonGroup>
+              {(hasColumnsMenu || hasLayoutButton || hasLayoutActions) && (
+                <ButtonGroup>
+                  {hasColumnsMenu && <ColumnsMenu items={columnItems} onToggle={layoutCtl!.toggle} />}
+                  {layoutCtl?.saved && (
+                    <LayoutPopover
+                      dirty={layoutCtl.saved.dirty}
+                      hasSaved={layoutCtl.saved.hasSaved}
+                      onSave={layoutCtl.saved.save}
+                      onRestore={layoutCtl.saved.restore}
+                      onClear={layoutCtl.saved.clear}
+                    />
+                  )}
+                  {layoutActions}
+                </ButtonGroup>
+              )}
+            </div>
           )}
         </div>
       )}
