@@ -221,6 +221,20 @@ without invalidating saved layouts of columns the user never resized. `save()` P
 layout, `clear()` DELETEs and applies the defaults, `restore()` is local; Save and Clear toast only when the server responds
 (an error toast leaves the working state alone) and a second one while a request is in flight is ignored.
 
+**Library sort.** The Library sort is not a Settings key any more (`library_sort`, `librarySortKey` and `librarySortDir` were removed;
+migration 000051 deletes the row and clients that still send the fields are ignored). `LibrarySortProvider` (`components/library/LibrarySortContext.tsx`,
+mounted in `AppLayout` next to `RevealAllProvider` so it sits above both `/library` and `/library/:id` and survives navigation between them)
+wraps `useTableLayout("library", ...)` with the seven `LibrarySortKey`s as known and sortable keys and `downloadedAt` descending as `defaultSort`.
+The **baseline** is the sort of the saved `library` layout, else the default; the **working** sort starts as the baseline (a late layout is adopted unless
+the user already changed the sort), applies instantly to every view, and is gone on a reload. `useLibrarySort()` (`hooks/useLibrarySort.ts`) exposes
+`sort`, `baseline`, `ready`, `differs`, `setSort` and `saveSortAsDefault`; without the provider (`BrowseLayout`, the Browse item page) it returns the saved
+layout's sort or the default, read-only. Library data queries wait for `ready` (the layouts answered or failed) so they never fire with the default
+and refire with the saved sort. `saveSortAsDefault` (`useSaveTableLayoutSort` in `useTableLayout.ts`, reusable by other lists) reads the **raw** stored layout
+(not the normalized one, which drops `hidden`/`widths` of columns the Library sort does not know), replaces only `sort` (omitted when equal to the default),
+and PUTs it, or DELETEs the layout when only `v` is left; one request at a time, a toast only when the server answers, and the layouts cache is updated, so the
+baseline becomes the saved sort. Backups: `ApplySettingsBundle` skips retired setting keys (`library_sort`) and does not count them, so an old backup or settings
+file cannot bring the row back.
+
 `DataTable` uses it when a table passes a `tableId` and has a `hideable`, a sortable or a resizable column; without a `tableId` hiding and
 sorting still work but nothing can be saved. Passing both `layout` and `onLayoutChange` makes the page own the working layout (the
 future Library list); the Layout popover then acts on that layout. `hidden`, `sort` and `widths` are all edited by the table (controlled mode carries all three).

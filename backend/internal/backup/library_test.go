@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -498,5 +499,27 @@ func TestBuildApplySettingsBundle_RoundTrip(t *testing.T) {
 	}
 	if got != "3" {
 		t.Fatalf("expected imported value to restore %q, got %q", "3", got)
+	}
+}
+
+func TestApplySettingsBundle_SkipsRetiredKeys(t *testing.T) {
+	ctx := context.Background()
+	repos := openTestRepos(t)
+
+	applied, err := ApplySettingsBundle(ctx, repos.settings, map[string]string{
+		"library_sort":             "title:asc",
+		"max_concurrent_downloads": "4",
+	})
+	if err != nil {
+		t.Fatalf("ApplySettingsBundle: %v", err)
+	}
+	if applied != 1 {
+		t.Fatalf("expected only the live key to count, got %d", applied)
+	}
+	if _, err := repos.settings.Get(ctx, "library_sort"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected library_sort not to be stored, got err=%v", err)
+	}
+	if got, _ := repos.settings.Get(ctx, "max_concurrent_downloads"); got != "4" {
+		t.Fatalf("expected the other key to apply, got %q", got)
 	}
 }

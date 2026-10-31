@@ -13,11 +13,21 @@ func BuildSettingsBundle(ctx context.Context, settingsRepo *repository.SettingsR
 	return settingsRepo.GetAll(ctx)
 }
 
+// retiredSettingKeys are settings that no longer exist. Old backups and settings
+// files still contain them, and restoring one must not bring the row back.
+var retiredSettingKeys = map[string]bool{
+	"library_sort": true, // now the account's saved `library` table layout
+}
+
 // ApplySettingsBundle overwrites every key present in bundle — same
 // per-key Set() loop UpdateSettings already uses, just applied to a whole
-// imported map instead of individual request fields.
+// imported map instead of individual request fields. Retired keys are skipped
+// and not counted in applied.
 func ApplySettingsBundle(ctx context.Context, settingsRepo *repository.SettingsRepo, bundle map[string]string) (applied int, err error) {
 	for key, value := range bundle {
+		if retiredSettingKeys[key] {
+			continue
+		}
 		if err := settingsRepo.Set(ctx, key, value); err != nil {
 			return applied, err
 		}

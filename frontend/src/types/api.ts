@@ -608,8 +608,6 @@ export interface Settings {
   historyRetentionDays: number
   downloadLogRetentionDays: number
   libraryView: string
-  librarySortKey: string
-  librarySortDir: string
   libraryMode: string
   libraryPaginationEnabled: boolean
   libraryPageSize: number
@@ -761,8 +759,6 @@ export interface UpdateSettingsRequest {
   historyRetentionDays?: number
   downloadLogRetentionDays?: number
   libraryView?: string
-  librarySortKey?: string
-  librarySortDir?: string
   libraryMode?: string
   libraryPaginationEnabled?: boolean
   libraryPageSize?: number

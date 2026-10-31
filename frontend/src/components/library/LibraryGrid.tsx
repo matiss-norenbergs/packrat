@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { useSettings } from "@/hooks/useSettings"
+import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LibraryCard } from "./LibraryCard"
 import { LibraryPagination } from "./LibraryPagination"
@@ -12,8 +13,8 @@ export function LibraryGrid() {
   const [page, setPage] = useState(1)
 
   const search = searchParams.get("q") ?? ""
-  const sortKey = settings?.librarySortKey || "downloadedAt"
-  const sortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
+  const { sort, ready: sortReady } = useLibrarySort()
+  const { key: sortKey, dir: sortDir } = sort
   const collectionId = searchParams.get("collection")
   const year = searchParams.get("year")
   const tagNames = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
@@ -40,9 +41,9 @@ export function LibraryGrid() {
     sortDir,
     page: paginationEnabled ? page : undefined,
     pageSize: paginationEnabled ? pageSize : undefined,
-  })
+  }, sortReady)
 
-  if (isLoading || settingsLoading) {
+  if (isLoading || settingsLoading || !sortReady) {
     return (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <Skeleton className="aspect-video w-full" />

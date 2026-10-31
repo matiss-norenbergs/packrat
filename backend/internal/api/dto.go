@@ -970,8 +970,6 @@ type SettingsResponse struct {
 	HistoryRetentionDays        int      `json:"historyRetentionDays"`
 	DownloadLogRetentionDays    int      `json:"downloadLogRetentionDays"`
 	LibraryView                 string   `json:"libraryView"`
-	LibrarySortKey              string   `json:"librarySortKey"`
-	LibrarySortDir              string   `json:"librarySortDir"`
 	LibraryMode                 string   `json:"libraryMode"`
 	LibraryPaginationEnabled    bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize             int      `json:"libraryPageSize"`
@@ -1038,8 +1036,6 @@ type UpdateSettingsRequest struct {
 	HistoryRetentionDays        *int      `json:"historyRetentionDays" binding:"omitempty,min=0"`
 	DownloadLogRetentionDays    *int      `json:"downloadLogRetentionDays" binding:"omitempty,min=0"`
 	LibraryView                 *string   `json:"libraryView" binding:"omitempty,oneof=grid folders list"`
-	LibrarySortKey              *string   `json:"librarySortKey" binding:"omitempty,oneof=downloadedAt title filename year duration sequenceNumber seasonNumber"`
-	LibrarySortDir              *string   `json:"librarySortDir" binding:"omitempty,oneof=asc desc"`
 	LibraryMode                 *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
 	LibraryPaginationEnabled    *bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize             *int      `json:"libraryPageSize" binding:"omitempty,min=1"`

@@ -10,7 +10,8 @@ import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress"
 import { useSettings } from "@/hooks/useSettings"
-import { sortLibraryItems, type LibrarySortDir, type LibrarySortKey } from "@/lib/libraryFilters"
+import { sortLibraryItems } from "@/lib/libraryFilters"
+import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { formatBytes, hashText, isAudioFilename } from "@/lib/utils"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
 import { LibraryItemStripTile } from "./LibraryItemStripTile"
@@ -88,8 +89,7 @@ export function LibraryItemDetail({
   // watching" concept, so audio items never report a position at all.
   usePlaybackProgress(videoRef, item.id, isVideo && !locked)
 
-  const sortKey = (settings?.librarySortKey as LibrarySortKey) || "downloadedAt"
-  const sortDir: LibrarySortDir = settings?.librarySortDir === "asc" ? "asc" : "desc"
+  const { key: sortKey, dir: sortDir } = useLibrarySort().sort
   // Only this item's own collection is fetched (not the whole library) — and
   // not at all for an uncategorized item, which has no siblings.
   const { data: collectionItems } = useLibraryQuery({ collectionId: item.collectionId ?? undefined }, item.collectionId != null)

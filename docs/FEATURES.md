@@ -218,8 +218,13 @@ not per-browser):
   browser-back support for navigating up.
 
 **Toolbar**: full-text search (title/uploader/artist/description, backed by SQLite FTS5), a sort
-key (date downloaded, title, filename, year, duration, sequence #) + ascending/descending toggle
-(also remembered server-side), a collection filter (Grid view only), and a year filter.
+key (date downloaded, title, filename, year, duration, sequence #, season & episode) + ascending/descending toggle, a collection filter
+(Grid view only), and a year filter. The sort is a **working choice**, not a remembered setting: it applies instantly, is shared by the
+grid, the folders, the list (its header clicks change the same sort) and the "More from this collection" strip on the item page, survives
+opening an item and coming back, and goes back to the **baseline** on a reload. The baseline is the sort in your saved `library` table
+layout, else date downloaded descending. **Save as default** in the Filters & Sort dialog (enabled when the chosen sort differs from the
+baseline) applies the dialog and stores just the sort; other saved parts of the layout are kept, and saving the built-in default clears it.
+The Browse item page uses the saved sort (or the default) and cannot change it.
 
 **Multi-select** (Grid or Folder view): check items, then use the **Bulk operations** menu to apply
 an action to the whole selection at once — Edit fields, Assign tags, Set artist, Set year, Generate
