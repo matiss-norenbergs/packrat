@@ -25,19 +25,14 @@ export function LibraryPage() {
     )
   }
 
+  // Grid and Folders: the same shell as the list. The toolbar row is fixed under the title (its border is a divider), the
+  // views own the rest: the cards scroll in their region, the breadcrumb and the pagination footer stay in view.
   return (
     <SelectionProvider>
       <RevealAllFloatingAction />
-      <div>
-        <h1 className="text-2xl font-semibold">Library</h1>
-        {/* mt-3 + pt-3 (rather than one mt-6/pt-0 split) is deliberate: margin
-            only holds space before the toolbar starts sticking, while padding
-            stays part of the box once it's pinned. So at rest the two stack
-            into the original 24px gap below the title, but once stuck (flush
-            against -top-4/-top-6, see below) only the 12px padding survives —
-            giving breathing room from the viewport edge with no JS/observer
-            needed to tell the two states apart. */}
-        <div className="sticky -top-4 z-20 -mx-4 mt-3 mb-6 border-b bg-background px-4 pb-3 pt-3 md:-top-6 md:-mx-6 md:px-6">
+      <div className="flex h-full min-h-0 flex-col gap-6">
+        <h1 className="shrink-0 text-2xl font-semibold">Library</h1>
+        <div className="shrink-0 border-b pb-3">
           <LibraryToolbar />
         </div>
         {view === "folders" ? <LibraryFolderView /> : <LibraryGrid />}

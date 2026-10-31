@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { usePageState } from "@/hooks/usePageState"
@@ -6,6 +7,7 @@ import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LibraryCard } from "./LibraryCard"
 import { LibraryPagination } from "./LibraryPagination"
+import { LibraryScrollView } from "./LibraryScrollView"
 
 export function LibraryGrid() {
   const { data: settings, isLoading: settingsLoading } = useSettings()
@@ -39,38 +41,41 @@ export function LibraryGrid() {
     pageSize: paginationEnabled ? pageSize : undefined,
   }, sortReady)
 
+  let content: ReactNode
   if (isLoading || settingsLoading || !sortReady) {
-    return (
+    content = (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <Skeleton className="aspect-video w-full" />
         <Skeleton className="aspect-video w-full" />
         <Skeleton className="aspect-video w-full" />
       </div>
     )
-  }
-
-  if (isError) {
-    return <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p>
-  }
-
-  if (!data || data.total === 0) {
-    return (
+  } else if (isError) {
+    content = <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p>
+  } else if (!data || data.total === 0) {
+    content = (
       <p className="text-sm text-muted-foreground">
         {hasFilters
           ? "No library items match these filters."
           : "Nothing here yet. Completed downloads will show up in your library."}
       </p>
     )
-  }
-
-  return (
-    <div className="space-y-4">
+  } else {
+    content = (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {data.items.map((item) => (
           <LibraryCard key={item.id} item={item} />
         ))}
       </div>
-      {paginationEnabled && <LibraryPagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} />}
-    </div>
+    )
+  }
+
+  const showFooter = paginationEnabled && !isLoading && !settingsLoading && sortReady && !isError && data != null && data.total > 0
+  return (
+    <LibraryScrollView
+      footer={showFooter && <LibraryPagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} />}
+    >
+      {content}
+    </LibraryScrollView>
   )
 }
