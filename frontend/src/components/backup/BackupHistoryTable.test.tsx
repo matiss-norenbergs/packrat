@@ -22,6 +22,13 @@ vi.mock("@/hooks/useBackup", () => ({
   useDeleteBackupHistoryEntry: () => ({ mutateAsync: deleteAsync }),
   useRestoreFullBackup: () => ({ mutate: restoreMutate }),
 }))
+// Tooltip content only exists while a tooltip is open (and never on a disabled button); render it inline so the
+// disabled-reason strings can be asserted.
+vi.mock("@/components/ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => <span data-testid="tip">{children}</span>,
+}))
 vi.mock("@/components/backup/BackupContentPreviewDialog", () => ({
   BackupContentPreviewDialog: ({ backupId }: { backupId: number | null }) =>
     backupId != null ? <div>preview-dialog-{backupId}</div> : null,
@@ -46,7 +53,7 @@ const OK1 = entry(1)
 const OK2 = entry(2)
 const FAILED = entry(3, { status: "failed", fileName: null, fileSizeBytes: null, errorMessage: "disk full" })
 
-const rowEls = () => Array.from(document.querySelectorAll<HTMLElement>("tr[data-backup-id]"))
+const rowEls = () => Array.from(document.querySelectorAll<HTMLElement>("tbody tr[data-row-id]"))
 const pick = (i: number) => fireEvent.mouseDown(rowEls()[i], { button: 0 })
 const toolbarBtn = (name: RegExp) => screen.getByRole("button", { name })
 
@@ -174,5 +181,209 @@ describe("BackupHistoryTable", () => {
     expect(screen.getByText("preview-dialog-2")).toBeTruthy()
     await user.click(toolbarBtn(/run backup now/i))
     expect(runMutate).toHaveBeenCalled()
+  })
+})
+
+const tips = () => screen.getAllByTestId("tip").map((t) => t.textContent)
+
+describe("BackupHistoryTable as a DataTable", () => {
+  it("renders the five columns with the alignment presets and the cell content", () => {
+    history = [
+      entry(1, { triggerType: "scheduled", libraryItemsCount: 5, collectionsCount: 2, tagsCount: 3, artistsCount: 4, fileSizeBytes: 2048 }),
+      entry(3, { status: "failed", fileName: null, fileSizeBytes: null, errorMessage: "disk full" }),
+    ]
+    renderWithProviders(<BackupHistoryTable />)
+    const headers = screen.getAllByRole("columnheader")
+    expect(headers.map((h) => h.textContent)).toEqual(["", "Date", "Trigger", "Status", "Contents", "Size"])
+    expect(headers[1]).toHaveClass("text-center")
+    expect(headers[3]).toHaveClass("text-center")
+    expect(headers[5]).toHaveClass("text-right")
+    expect(headers[2].className).not.toMatch(/text-(right|center)/)
+    expect(headers[4].className).not.toMatch(/text-(right|center)/)
+    expect(screen.getByRole("table")).not.toHaveClass("table-fixed")
+
+    const ok = rowEls()[0]
+    expect(within(ok).getByText(new Date(history[0].createdAt).toLocaleString())).toBeTruthy()
+    expect(within(ok).getByText("Scheduled")).toBeTruthy()
+    expect(within(ok).getByText("Success")).toBeTruthy()
+    expect(within(ok).getByText("5 items · 2 collections · 3 tags · 4 artists")).toBeTruthy()
+    expect(within(ok).getByText("2.0 KB")).toBeTruthy()
+    expect(ok.children[1]).toHaveClass("text-center")
+    expect(ok.children[5]).toHaveClass("text-right")
+
+    const failed = rowEls()[1]
+    expect(within(failed).getByText("Manual")).toBeTruthy()
+    expect(within(failed).getByText("Failed")).toBeTruthy()
+    const error = within(failed).getByText("disk full")
+    expect(error).toHaveClass("max-w-64", "truncate", "text-destructive")
+    expect(error).toHaveAttribute("title", "disk full")
+    expect(failed.children[4].textContent).toBe("—") // contents of a failed backup
+    expect(failed.children[5].textContent).toBe("—") // no size
+  })
+
+  it("keeps the embedded-in-a-card look: no border or fill-height container, 1rem gap, no footer or search", () => {
+    renderWithProviders(<BackupHistoryTable />)
+    const container = screen.getByRole("table").parentElement!
+    expect(container.className).toBe("relative w-full overflow-x-auto")
+    expect(container.className).not.toMatch(/border|h-full/)
+    const root = container.parentElement!.parentElement!
+    expect(root).toHaveClass("gap-4")
+    expect(root).not.toHaveClass("gap-6")
+    expect(screen.queryByRole("button", { name: "Previous" })).toBeNull()
+    expect(screen.queryByRole("textbox")).toBeNull()
+    // The toolbar row keeps its classes.
+    expect(toolbarBtn(/run backup now/i).parentElement).toHaveClass("flex", "flex-wrap", "items-center", "gap-2")
+  })
+
+  it("keeps the disabled-reason tooltips for none, several, a failed backup and a single one", () => {
+    renderWithProviders(<BackupHistoryTable />)
+    expect(tips()).toEqual(["Select a backup", "Select a backup", "Select a backup", "Select one or more backups"])
+    pick(0)
+    expect(tips()).toEqual(["Preview this backup's contents", "Download this backup", "Restore this backup", "Delete this backup"])
+    pick(2)
+    expect(tips()).toEqual([
+      "This backup failed, so there is no file",
+      "This backup failed, so there is no file",
+      "This backup failed, so there is no file",
+      "Delete this backup",
+    ])
+    fireEvent.mouseDown(rowEls()[0], { button: 0, ctrlKey: true })
+    expect(tips()).toEqual(["Select a single backup", "Select a single backup", "Select a single backup", "Delete 2 backups"])
+  })
+
+  it("select-all, shift-range and drag select rows; the header checkbox again clears", () => {
+    renderWithProviders(<BackupHistoryTable />)
+    const checked = () => rowEls().map((r) => r.getAttribute("data-state") === "selected")
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }))
+    expect(checked()).toEqual([true, true, true])
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }))
+    expect(checked()).toEqual([false, false, false])
+
+    fireEvent.mouseDown(rowEls()[0], { button: 0 })
+    fireEvent.mouseEnter(rowEls()[2])
+    fireEvent.mouseUp(window)
+    expect(checked()).toEqual([true, true, true])
+    pick(1)
+    fireEvent.mouseUp(window)
+    expect(checked()).toEqual([false, true, false])
+    fireEvent.mouseDown(rowEls()[2], { button: 0, shiftKey: true })
+    fireEvent.mouseUp(window)
+    expect(checked()).toEqual([false, true, true])
+  })
+
+  it("gives every row's checkbox its dated label", () => {
+    renderWithProviders(<BackupHistoryTable />)
+    expect(screen.getByRole("checkbox", { name: `Select backup from ${new Date(OK1.createdAt).toLocaleString()}` })).toBeTruthy()
+  })
+
+  it("lists Preview, Download, Restore, Delete in that order for one successful backup", async () => {
+    renderWithProviders(<BackupHistoryTable />)
+    fireEvent.contextMenu(rowEls()[0])
+    await screen.findByRole("menuitem", { name: /preview/i })
+    expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Preview", "Download", "Restore", "Delete"])
+  })
+
+  it("lists only Delete for a failed backup and Delete (n) for a failed + successful selection", async () => {
+    renderWithProviders(<BackupHistoryTable />)
+    fireEvent.contextMenu(rowEls()[2])
+    await screen.findByRole("menuitem", { name: "Delete" })
+    expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Delete"])
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" })
+    await waitFor(() => expect(screen.queryByRole("menuitem")).toBeNull())
+
+    fireEvent.mouseDown(rowEls()[0], { button: 0, ctrlKey: true })
+    fireEvent.contextMenu(rowEls()[0])
+    await screen.findByRole("menuitem", { name: "Delete (2)" })
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1)
+  })
+
+  it("right-clicking the header opens no menu", () => {
+    renderWithProviders(<BackupHistoryTable />)
+    fireEvent.contextMenu(screen.getByRole("columnheader", { name: "Date" }))
+    expect(screen.queryByRole("menuitem")).toBeNull()
+  })
+
+  it("context-menu Preview and Restore act on the right row", async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<BackupHistoryTable />)
+    fireEvent.contextMenu(rowEls()[1])
+    await user.click(await screen.findByRole("menuitem", { name: /preview/i }))
+    expect(screen.getByText("preview-dialog-2")).toBeTruthy()
+
+    fireEvent.contextMenu(rowEls()[0])
+    await user.click(await screen.findByRole("menuitem", { name: /restore/i }))
+    const dialog = await screen.findByRole("alertdialog")
+    expect(within(dialog).getByText("Restore this backup?")).toBeTruthy()
+    await user.click(within(dialog).getByRole("button", { name: "Restore" }))
+    expect(restoreMutate).toHaveBeenCalledWith({ id: 1, mode: "download" })
+  })
+
+  it("context-menu Delete on a multi-selection confirms with the count and deletes every id", async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<BackupHistoryTable />)
+    pick(0)
+    fireEvent.mouseDown(rowEls()[2], { button: 0, ctrlKey: true })
+    fireEvent.contextMenu(rowEls()[2])
+    await user.click(await screen.findByRole("menuitem", { name: "Delete (2)" }))
+    const dialog = await screen.findByRole("alertdialog")
+    expect(within(dialog).getByText("Delete 2 backups?")).toBeTruthy()
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }))
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Deleted 2 backups"))
+    expect(deleteAsync.mock.calls.map((c) => c[0])).toEqual([1, 3])
+  })
+
+  it("keeps the single-delete toasts for success and failure", async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<BackupHistoryTable />)
+    pick(0)
+    await user.click(toolbarBtn(/^delete$/i))
+    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }))
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Backup deleted"))
+
+    toastSuccess.mockReset()
+    deleteAsync.mockRejectedValue(new Error("boom"))
+    pick(1)
+    await user.click(toolbarBtn(/^delete$/i))
+    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }))
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Delete failed: boom"))
+    expect(toastSuccess).not.toHaveBeenCalled()
+  })
+
+  it("reports a total failure of several deletes in one toast", async () => {
+    const user = userEvent.setup()
+    deleteAsync.mockRejectedValue(new Error("boom"))
+    renderWithProviders(<BackupHistoryTable />)
+    pick(0)
+    fireEvent.mouseDown(rowEls()[1], { button: 0, shiftKey: true })
+    await user.click(toolbarBtn(/^delete$/i))
+    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }))
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Delete failed for 2 backups"))
+  })
+
+  it("ignores ids of rows that vanished from the data", () => {
+    renderWithProviders(<BackupHistoryTable />)
+    pick(1) // OK2
+    expect(tips().at(-1)).toBe("Delete this backup")
+    history = [OK1, FAILED] // OK2 vanished; the next render prunes its id
+    fireEvent.mouseDown(rowEls()[0], { button: 0, ctrlKey: true }) // any selection change re-renders the table
+    expect(rowEls()).toHaveLength(2)
+    expect(tips().at(-1)).toBe("Delete this backup") // only OK1, just toggled on
+    pick(1)
+    expect(rowEls().map((r) => r.getAttribute("data-state"))).toEqual([null, "selected"])
+  })
+
+  it("shows skeletons while loading and the empty message with no footer when there are no backups", () => {
+    loading = true
+    history = undefined
+    const { unmount } = renderWithProviders(<BackupHistoryTable />)
+    expect(screen.queryByRole("table")).toBeNull()
+    expect(screen.queryByText("No backups yet.")).toBeNull()
+    expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0)
+    unmount()
+    loading = false
+    history = []
+    renderWithProviders(<BackupHistoryTable />)
+    expect(screen.getByText("No backups yet.")).toBeTruthy()
+    expect(screen.queryByText(/^0 /)).toBeNull()
   })
 })
