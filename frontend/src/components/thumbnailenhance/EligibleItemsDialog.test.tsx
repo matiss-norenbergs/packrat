@@ -85,13 +85,34 @@ describe("EligibleItemsDialog", () => {
     expect(skeletons[0].parentElement!.parentElement).toHaveClass("max-h-[60vh]", "rounded-md", "border")
   })
 
+  it("shows the footer with the item count under the box, but not while loading", () => {
+    const { unmount } = renderDialog()
+    expect(screen.getByText("4 items")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+    expect(screen.queryByText("Nothing selected")).toBeNull()
+    unmount()
+    loading = true
+    items = undefined
+    renderDialog()
+    expect(screen.queryByText(/^d+ items?/)).toBeNull()
+  })
+
+  it("selects every item on select-all, however many there are", () => {
+    items = Array.from({ length: 120 }, (_, i) => item(i + 1))
+    renderDialog()
+    expect(rowEls()).toHaveLength(120)
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }))
+    expect(screen.getByText("120 items · 120 selected")).toBeInTheDocument()
+  })
+
   it("shows the empty message in the same box", () => {
     items = []
     renderDialog()
     const msg = screen.getByText("Nothing eligible right now.")
     expect(msg).toHaveClass("text-center")
     expect(msg.parentElement).toHaveClass("max-h-[60vh]", "rounded-md", "border")
-    expect(screen.getByText("Nothing selected")).toBeInTheDocument()
+    expect(screen.getByText("0 items")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
   })
 
   it("uses a single scroll container so the header can stick", () => {
@@ -106,16 +127,16 @@ describe("EligibleItemsDialog", () => {
     renderDialog()
     expect(enhanceBtn()).toBeDisabled()
     pick(0)
-    expect(screen.getByText("1 selected")).toBeInTheDocument()
+    expect(screen.getByText("4 items · 1 selected")).toBeInTheDocument()
     expect(enhanceBtn()).toBeEnabled()
     pick(2, { ctrlKey: true })
-    expect(screen.getByText("2 selected")).toBeInTheDocument()
+    expect(screen.getByText("4 items · 2 selected")).toBeInTheDocument()
     pick(1) // plain click replaces the selection
     fireEvent.mouseEnter(rowEls()[3])
     fireEvent.mouseUp(window)
-    expect(screen.getByText("3 selected")).toBeInTheDocument() // drag 1 -> 3
+    expect(screen.getByText("4 items · 3 selected")).toBeInTheDocument() // drag 1 -> 3
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }))
-    expect(screen.getByText("4 selected")).toBeInTheDocument()
+    expect(screen.getByText("4 items · 4 selected")).toBeInTheDocument()
     expect(screen.getByRole("checkbox", { name: "Select Item 2" })).toBeChecked()
   })
 
@@ -128,7 +149,8 @@ describe("EligibleItemsDialog", () => {
     const [ids, opts] = enhanceMutate.mock.calls[0]
     expect([...ids].sort()).toEqual([1, 3])
     opts.onSuccess()
-    expect(await screen.findByText("Nothing selected")).toBeInTheDocument()
+    expect(await screen.findByText("4 items")).toBeInTheDocument()
+    expect(enhanceBtn()).toBeDisabled()
   })
 
   it("disables Enhance Selected while the request is pending", () => {

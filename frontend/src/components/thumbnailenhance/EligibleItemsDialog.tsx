@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import { Loader2, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,9 @@ function timeAgo(iso: string): string {
   const hours = Math.floor(minutes / 60)
   return `${hours}h ago`
 }
+
+const ITEM_LABEL = { singular: "item", plural: "items" }
+const noop = () => {}
 
 const getItemId = (item: ThumbnailEnhancementEligibleItem) => item.libraryItemId
 const getItemLabel = (item: ThumbnailEnhancementEligibleItem) => `Select ${item.itemTitle}`
@@ -84,6 +88,14 @@ export function EligibleItemsDialog({ open, onOpenChange }: EligibleItemsDialogP
   const enhanceItems = useEnhanceThumbnailItems()
   const selection = useIdSelection<number>()
 
+  // Every eligible item is on one page ("select all" must cover the whole backlog); a single-page pagination config
+  // gives the standard footer ("N items · M selected") without client-mode paging.
+  const count = items?.length ?? 0
+  const pagination = useMemo(
+    () => ({ page: 1, pageSize: Math.max(1, count), total: count, onPageChange: noop, itemLabel: ITEM_LABEL }),
+    [count],
+  )
+
   const handleEnhanceSelected = () => {
     enhanceItems.mutate(Array.from(selection.selected), { onSuccess: selection.clear })
   }
@@ -107,6 +119,7 @@ export function EligibleItemsDialog({ open, onOpenChange }: EligibleItemsDialogP
           selection="multi"
           selectionState={selection}
           getRowLabel={getItemLabel}
+          pagination={pagination}
           loading={isLoading}
           loadingContent={loadingContent}
           empty={<p className="px-3 py-6 text-center text-sm text-muted-foreground">Nothing eligible right now.</p>}
@@ -117,11 +130,6 @@ export function EligibleItemsDialog({ open, onOpenChange }: EligibleItemsDialogP
               <Sparkles className="h-4 w-4" />
               Enhance Selected
             </Button>
-          }
-          filters={
-            <span className="text-sm text-muted-foreground">
-              {selection.size > 0 ? `${selection.size} selected` : "Nothing selected"}
-            </span>
           }
         />
       </DialogContent>
