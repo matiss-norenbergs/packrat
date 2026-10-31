@@ -22,6 +22,7 @@ import type { ColumnAlign, ColumnDef, ContextMenuItemDef, PaginationConfig, RowI
 import { cycleLayoutSort, effectiveSort, sortRows } from "./sorting"
 import type { SortDir, SortState } from "./sorting"
 import { useEvent } from "./useEvent"
+import { useOverflowTooltip } from "./useOverflowTooltip"
 import { useTableSelection } from "./useTableSelection"
 import type { SelectionMode } from "./useTableSelection"
 
@@ -223,7 +224,7 @@ function DataTableRowImpl<T, Id extends RowId>({
         // them; icon cells get a flex wrapper instead of every page needing mx-auto.
         const cell = c.cell(row)
         return (
-          <TableCell key={c.key} className={cn(ALIGN_CLASS[align], clipClass(c), c.cellClassName)}>
+          <TableCell key={c.key} data-col={c.key} className={cn(ALIGN_CLASS[align], clipClass(c), c.cellClassName)}>
             {c.type === "icon" ? <div className={cn("flex items-center", JUSTIFY_CLASS[align])}>{cell}</div> : cell}
           </TableCell>
         )
@@ -371,6 +372,7 @@ function DataTableView<T, Id extends RowId = number>({
   const layout = computeLayout(visibleColumns, selectable ? selectionWidth : null)
 
   const pageIds = rows.map(getRowId)
+  const overflowTip = useOverflowTooltip(visibleColumns, (id) => rows.find((r) => String(getRowId(r)) === id))
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selection.selected.has(id))
   const someSelected = pageIds.some((id) => selection.selected.has(id)) && !allSelected
 
@@ -477,7 +479,7 @@ function DataTableView<T, Id extends RowId = number>({
             {layout.filler && <TableHead aria-hidden className="p-0" />}
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody {...overflowTip.bodyProps}>
           {rows.map((row) => {
             const id = getRowId(row)
             return (
@@ -579,6 +581,7 @@ function DataTableView<T, Id extends RowId = number>({
       ) : (
         region
       )}
+      {overflowTip.node}
       {showPagination && <TablePagination {...pagination} selectedCount={mode === "multi" ? selectedRows.length : 0} loading={pending} />}
     </div>
   )

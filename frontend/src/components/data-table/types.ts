@@ -20,6 +20,10 @@ export interface ColumnDef<T> {
   minWidth?: number
   /** Opt-in: this column absorbs the spare width (its `width` is then its minimum); with one, the table has no filler column. */
   flex?: boolean
+  /** Opt-out: no tooltip with the full text when this column's cells are cut off. */
+  tooltip?: false
+  /** The tooltip's text for a cut-off cell of this row, instead of the cell's rendered text. */
+  tooltipText?: (row: T) => string
   /** The cells of this column may wrap onto several lines (the row grows) instead of being cut off with an ellipsis. */
   wrap?: boolean
   headerClassName?: string
