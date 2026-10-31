@@ -1,9 +1,10 @@
-import { Fragment, useEffect, useState } from "react"
+import { Fragment } from "react"
 import { ChevronRight, Home } from "lucide-react"
 import { useSearchParams } from "react-router-dom"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCollections } from "@/hooks/useCollections"
 import { useLibraryQuery } from "@/hooks/useLibrary"
+import { usePageState } from "@/hooks/usePageState"
 import { useSettings } from "@/hooks/useSettings"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { buildCollectionTree, findNodeById } from "@/lib/collectionTree"
@@ -31,7 +32,6 @@ export function LibraryFolderView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: collections, isLoading: collectionsLoading } = useCollections()
   const { data: settings, isLoading: settingsLoading } = useSettings()
-  const [page, setPage] = useState(1)
 
   const currentIdParam = searchParams.get("collection")
   const currentId = currentIdParam ? Number(currentIdParam) : null
@@ -43,12 +43,9 @@ export function LibraryFolderView() {
   const paginationEnabled = settings?.libraryPaginationEnabled ?? false
   const pageSize = settings?.libraryPageSize || 48
 
-  // Reset to page 1 whenever the open folder or a filter/search/sort changes
+  // Back to page 1 whenever the open folder or a filter/search/sort changes
   // underneath the current page.
-  const tagsKey = tagNames.join(",")
-  useEffect(() => {
-    setPage(1)
-  }, [currentId, search, tagsKey, hideGhosts, sortKey, sortDir])
+  const [page, setPage] = usePageState(JSON.stringify([currentId, search, tagNames.join(","), hideGhosts, sortKey, sortDir]))
 
   const {
     data,

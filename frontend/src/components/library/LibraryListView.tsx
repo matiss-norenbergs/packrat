@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react"
 import { Link, useLocation, useSearchParams } from "react-router-dom"
 import { ArrowDown, ArrowUp } from "lucide-react"
 import { useLibraryQuery } from "@/hooks/useLibrary"
+import { usePageState } from "@/hooks/usePageState"
 import { useSettings } from "@/hooks/useSettings"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -30,7 +30,6 @@ export function LibraryListView() {
   const { data: settings, isLoading: settingsLoading } = useSettings()
   const [searchParams] = useSearchParams()
   const location = useLocation()
-  const [page, setPage] = useState(1)
   const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
   const { selectionActive, isItemSelected, toggleItem: toggleSelected, selectItems, deselectItems } = useSelection()
   const { visibleColumns } = useLibraryColumns()
@@ -46,10 +45,7 @@ export function LibraryListView() {
   const pageSize = settings?.libraryPageSize || 48
   const hasFilters = Boolean(search || collectionId || year || tagNames.length > 0 || hideGhosts)
 
-  const tagsKey = tagNames.join(",")
-  useEffect(() => {
-    setPage(1)
-  }, [search, collectionId, year, tagsKey, hideGhosts, sortKey, sortDir])
+  const [page, setPage] = usePageState(JSON.stringify([search, collectionId, year, tagNames.join(","), hideGhosts, sortKey, sortDir]))
 
   const { data, isLoading, isError, error } = useLibraryQuery({
     q: search || undefined,

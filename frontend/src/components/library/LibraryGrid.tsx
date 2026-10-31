@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useLibraryQuery } from "@/hooks/useLibrary"
+import { usePageState } from "@/hooks/usePageState"
 import { useSettings } from "@/hooks/useSettings"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -10,7 +10,6 @@ import { LibraryPagination } from "./LibraryPagination"
 export function LibraryGrid() {
   const { data: settings, isLoading: settingsLoading } = useSettings()
   const [searchParams] = useSearchParams()
-  const [page, setPage] = useState(1)
 
   const search = searchParams.get("q") ?? ""
   const { sort, ready: sortReady } = useLibrarySort()
@@ -23,13 +22,10 @@ export function LibraryGrid() {
   const pageSize = settings?.libraryPageSize || 48
   const hasFilters = Boolean(search || collectionId || year || tagNames.length > 0 || hideGhosts)
 
-  // Reset to page 1 whenever a filter/search/sort changes underneath the
+  // Back to page 1 whenever a filter/search/sort changes underneath the
   // current page — otherwise "page 3" could point at nothing once the
   // result set shrinks.
-  const tagsKey = tagNames.join(",")
-  useEffect(() => {
-    setPage(1)
-  }, [search, collectionId, year, tagsKey, hideGhosts, sortKey, sortDir])
+  const [page, setPage] = usePageState(JSON.stringify([search, collectionId, year, tagNames.join(","), hideGhosts, sortKey, sortDir]))
 
   const { data, isLoading, isError, error } = useLibraryQuery({
     q: search || undefined,
