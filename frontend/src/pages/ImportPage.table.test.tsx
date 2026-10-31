@@ -213,7 +213,7 @@ describe("ImportPage table", () => {
     const col = Array.from(document.querySelectorAll("colgroup col")).at(-1) as HTMLElement
     expect(col.style.width).toBe("360px")
     const check = (name: string) => {
-      expect(rowButton(name)).toHaveClass("shrink-0", "whitespace-nowrap")
+      expect(rowButton(name)).toHaveClass("min-w-28", "shrink-0", "justify-center", "whitespace-nowrap") // one fixed width in every state
       expect(urlBox(name)).toHaveClass("w-44", "min-w-0")
     }
     check("clip-001.mp4") // Import

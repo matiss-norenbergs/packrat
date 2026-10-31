@@ -105,7 +105,7 @@ function ImportCell({ file }: { file: ScannedFile }) {
   return (
     <div className="flex items-center justify-end gap-2">
       <UrlInput path={file.path} label={file.filename} disabled={done} />
-      <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => onImport(file)} disabled={done || importing.has(file.path)}>
+      <Button size="sm" className="min-w-28 shrink-0 justify-center whitespace-nowrap" onClick={() => onImport(file)} disabled={done || importing.has(file.path)}>
         <Download className="h-4 w-4" />
         {done ? "Imported" : importing.has(file.path) ? "Importing…" : "Import"}
       </Button>
