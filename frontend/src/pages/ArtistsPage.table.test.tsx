@@ -178,14 +178,16 @@ describe("ArtistsPage table", () => {
     expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveAttribute("data-disabled")
   })
 
-  it("paginates at 50 rows per page and keeps the footer clear of the dock", async () => {
+  it("paginates at 50 rows per page and clears the dock only conditionally", async () => {
     serve(Array.from({ length: 120 }, (_, i) => artist(i + 1, `Artist ${String(i + 1).padStart(3, "0")}`)))
     renderPage()
     await screen.findByText("Artist 001")
     expect(screen.getAllByRole("row")).toHaveLength(51)
     const label = screen.getByText("120 artists")
-    expect(label).toHaveClass("pl-12")
-    expect(label.parentElement).toHaveClass("flex-wrap-reverse")
+    expect(label).toHaveClass("dock-occupied:pl-12")
+    expect(label).not.toHaveClass("pl-12")
+    expect(label.parentElement).toHaveClass("dock-occupied:flex-wrap-reverse")
+    expect(label.parentElement).not.toHaveClass("flex-wrap-reverse")
     fireEvent.click(screen.getByRole("button", { name: "3" }))
     expect(await screen.findByText("Artist 101")).toBeInTheDocument()
     expect(screen.getAllByRole("row")).toHaveLength(21)

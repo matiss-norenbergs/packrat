@@ -162,19 +162,28 @@ describe("DataTable client-side mode", () => {
   })
 })
 
-describe("DataTable footerClearsDock", () => {
-  const footerRow = () => screen.getByText(/^7 items/).parentElement!
-  const footerLabel = () => screen.getByText(/^7 items/)
-
-  it("indents the count and lets the footer wrap above the dock", () => {
-    render(<Harness footerClearsDock />)
-    expect(footerRow()).toHaveClass("flex", "shrink-0", "flex-wrap-reverse", "items-center", "justify-between", "gap-2")
-    expect(footerLabel()).toHaveClass("flex", "min-h-9", "items-center", "pl-12", "text-sm", "text-muted-foreground", "md:min-h-0")
-  })
-
-  it("leaves the footer markup unchanged without it", () => {
+describe("DataTable footer dock clearance", () => {
+  // jsdom can't evaluate :has(), so assert the class strings; the browser applies them via the
+  // dock-occupied variant (styles/globals.css) only while the floating dock holds a button.
+  it("carries the conditional dock-occupied classes, never the unconditional clearance", () => {
     render(<Harness />)
-    expect(footerRow().className).toBe("flex shrink-0 items-center justify-between")
-    expect(footerLabel().className).toBe("text-sm text-muted-foreground")
+    const label = screen.getByText(/^7 items/)
+    const row = label.parentElement!
+    expect(row.className.split(" ")).toEqual(
+      expect.arrayContaining(["flex", "shrink-0", "items-center", "justify-between", "dock-occupied:flex-wrap-reverse", "dock-occupied:gap-2"]),
+    )
+    expect(label.className.split(" ")).toEqual(
+      expect.arrayContaining([
+        "text-sm",
+        "text-muted-foreground",
+        "dock-occupied:flex",
+        "dock-occupied:min-h-9",
+        "dock-occupied:items-center",
+        "dock-occupied:pl-12",
+        "dock-occupied:md:min-h-0",
+      ]),
+    )
+    for (const unconditional of ["flex-wrap-reverse", "gap-2"]) expect(row).not.toHaveClass(unconditional)
+    for (const unconditional of ["flex", "min-h-9", "pl-12", "md:min-h-0"]) expect(label).not.toHaveClass(unconditional)
   })
 })

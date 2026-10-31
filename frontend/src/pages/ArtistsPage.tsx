@@ -134,7 +134,6 @@ export function ArtistsPage() {
           search={{ match: matchArtist, placeholder: "Search artists…" }}
           pageSize={PAGE_SIZE}
           itemLabel={{ singular: "artist", plural: "artists" }}
-          footerClearsDock
           contextMenu={contextMenu}
           toolbar={
             <>
