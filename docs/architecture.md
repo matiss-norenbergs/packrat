@@ -219,7 +219,8 @@ layout, `clear()` DELETEs and applies the defaults, `restore()` is local; Save a
 `DataTable` uses it when a table passes a `tableId` and has a `hideable` column; without a `tableId` the Columns menu still
 works but nothing can be saved. Passing both `layout` and `onLayoutChange` makes the page own the working layout (the future
 Library list); the Layout popover then acts on that layout. Only `hidden` is edited; `sort` and `widths` are carried through.
-Dialog tables do not opt in.
+Dialog tables do not opt in. While the layouts query has not answered, a table with a `tableId` shows its loading state (and the
+footer placeholder) instead of rendering the defaults and re-arranging a moment later; if the fetch fails the defaults apply.
 
 Failed attempts are stored (time, IP, step; pruned after 30 days) in `login_failures` and exposed to
 the owner after login as the dismissible "N failed login attempts since your last login" notice.

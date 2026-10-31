@@ -110,6 +110,8 @@ export interface DataTableProps<T, Id extends RowId = number> {
 interface LayoutCtl {
   hidden: ReadonlySet<string>
   toggle: (key: string) => void
+  /** The saved layouts have not arrived yet: the table shows its loading state instead of flashing the defaults. */
+  pending?: boolean
   /** Present when the table has a tableId. */
   saved?: { dirty: boolean; hasSaved: boolean; save: () => void; restore: () => void; clear: () => void }
 }
@@ -543,10 +545,11 @@ function DataTableWithSavedLayout<T, Id extends RowId>({ tableId, layout, onLayo
   // Rebuilt every render on purpose: only `visibleColumns` (memoized by content) reaches the memoized rows.
   const ctl: LayoutCtl = {
     hidden: new Set(working.hidden ?? []),
+    pending: !state.ready,
     toggle: (key) => setWorking((prev) => toggleHidden(prev, key)),
     saved: { dirty, hasSaved, save: () => void save(), restore, clear: () => void clear() },
   }
-  return <DataTableView {...props} layoutCtl={ctl} />
+  return <DataTableView {...props} loading={props.loading || ctl.pending} layoutCtl={ctl} />
 }
 
 // No tableId: hiding works (Columns menu) but is never saved; the working layout is the page's or ours.

@@ -271,6 +271,36 @@ describe("DataTable layout popover", () => {
   })
 })
 
+describe("DataTable while the saved layouts are still loading", () => {
+  it("shows its loading state, not the default columns, until the layouts arrive, then applies them", async () => {
+    let resolve!: (v: TableLayouts) => void
+    api.fetchTableLayouts.mockReturnValue(new Promise<TableLayouts>((r) => (resolve = r)))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <DataTable rows={ROWS} getRowId={(r) => r.id} columns={columns()} tableId="t" pageSize={50} itemLabel={{ singular: "row", plural: "rows" }} />
+      </QueryClientProvider>,
+    )
+    expect(headers()).toEqual([])
+    expect(screen.queryByText("Bday1")).toBeNull()
+    expect(screen.getByText("—")).toBeInTheDocument() // the footer is there, as a placeholder
+    resolve({ t: { v: 1, hidden: ["usage"] } })
+    await waitFor(() => expect(headers()).toEqual(["Name", "Birthday"]))
+    expect(screen.getByText("2 rows")).toBeInTheDocument()
+  })
+
+  it("falls back to the defaults when the layouts cannot be fetched", async () => {
+    api.fetchTableLayouts.mockRejectedValue(new Error("down"))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <DataTable rows={ROWS} getRowId={(r) => r.id} columns={columns()} tableId="t" />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(headers()).toEqual(["Name", "Birthday", "Used"]))
+  })
+})
+
 describe("DataTable controlled layout", () => {
   function Controlled({ initial }: { initial: TableLayout }) {
     const [layout, setLayout] = useState(initial)

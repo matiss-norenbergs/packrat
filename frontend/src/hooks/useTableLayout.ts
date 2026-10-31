@@ -45,6 +45,8 @@ function sameLayout(a: TableLayout, b: TableLayout) {
 }
 
 export interface TableLayoutState {
+  /** The account's layouts have been fetched (or the fetch failed, in which case the defaults apply). */
+  ready: boolean
   /** The account's saved layout for this table, null when none. */
   saved: TableLayout | null
   /** What Restore returns to: the saved layout, else the defaults. */
@@ -71,7 +73,7 @@ export interface TableLayoutState {
  */
 export function useTableLayout(tableId: string, defaults: TableLayout, opts: TableLayoutOptions = {}): TableLayoutState {
   const queryClient = useQueryClient()
-  const { data: layouts } = useTableLayouts()
+  const { data: layouts, isPending } = useTableLayouts()
   const { knownKeys, hideableKeys, controlled } = opts
 
   // The key lists are usually rebuilt each render; key the memos on their content.
@@ -166,6 +168,7 @@ export function useTableLayout(tableId: string, defaults: TableLayout, opts: Tab
   const restore = () => resetTo(baselineRef.current)
 
   return {
+    ready: !isPending,
     saved,
     baseline,
     working,
