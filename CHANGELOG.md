@@ -13,6 +13,11 @@ Maintenance notes:
 -->
 
 ## 2026-10-31
+- **Fixed table column widths, with full text on hover** — every `DataTable` now gives each column a width (by default from its
+  type, or explicit) instead of letting the browser share the space: columns keep their size, the table still spans the full width
+  through an invisible filler column (a narrower window scrolls sideways), and text that does not fit is cut off with an ellipsis
+  and shows in full in a tooltip on hover. `DataTable` gains `ColumnDef.wrap`, `tooltip` and `tooltipText`; the old auto layout and
+  "last column takes the slack" rules are gone. Resizing columns follows.
 - **Sortable table headers, saved with the layout** — Artists (Name, Birthday, Usage), Subscriptions (Title, Collection, Known
   items, Last checked), History (Title, Status, Date) and Logs (Title, Status, Date, Retries) sort when you click a header
   (ascending, descending, back to the default order; History and Logs default to newest first). Rows without a value sort last

@@ -612,6 +612,12 @@ password-protected file to store off-site.
 
 ## Table layouts
 
+Every list table has fixed column widths: columns keep the same width however wide the window is, the table always fills the width
+(an empty area after the last column keeps its row lines and highlight), and a window narrower than the columns scrolls the table
+sideways under a header that scrolls with it. Text that does not fit is cut off with an ellipsis; hover it (after a short delay)
+to see the full text in a tooltip. The tooltip closes when you press a mouse button, scroll, open the context menu or leave the
+table, and does not appear on checkboxes, icons, switches, or cells with buttons or links.
+
 Lists built on the shared table component can let you choose which columns to show and how to sort. Up to two icon-only buttons
 sit at the right end of the table's toolbar, after the search box (only on tables that offer them):
 

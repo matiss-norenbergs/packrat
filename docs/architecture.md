@@ -626,7 +626,7 @@ the visible page), resetting the page/selection when the search changes, and wha
 row type and the id type (number or string).
 
 - **Columns** (`ColumnDef<T>`): `key`, `header`, `cell(row)` (any React), `type` (text/number/date/status/icon/switch),
-  optional `align`, `width`, `minWidth`, `flex`, `headerClassName`, `cellClassName`. The `type` presets enforce the repo's
+  optional `align`, `width`, `minWidth`, `flex`, `wrap`, `tooltip`, `tooltipText`, `headerClassName`, `cellClassName`. The `type` presets enforce the repo's
   alignment rule for header and cells alike: date/status/switch/icon centre, number right, text left; `align` overrides.
   `icon` cells are wrapped in a flex box so bare (display:block) SVGs centre without `mx-auto`.
 - **Selection** (`"multi" | "single" | "none"`): the selection column is generated (default 32px, `selectionColumn` to
@@ -651,11 +651,29 @@ row type and the id type (number or string).
   (`SubscriptionsPage`: `toggleEnabled` is a `useCallback` over the update mutation's `mutate`, which TanStack Query v5
   keeps stable; if a callback can't be made stable, go through a ref / `useEvent`). `SubscriptionsPage.table.test.tsx`
   has a test that the Enabled switch calls the *current* mutation after a re-render.
-- **Widths**: with no `width` anywhere the table keeps the browser's auto layout (identical to the pre-component look).
-  Any `width` switches to `table-layout: fixed` with a `<colgroup>`; the table's min-width is the sum of the columns'
-  base widths (`width ?? minWidth ?? 120`), so a narrower container scrolls horizontally inside the single scroll
-  container (sticky header stays). Spare space goes to the `flex` columns, or — if none is flagged — to the **last column**,
-  so there is never an empty strip.
+- **Widths**: every column has a width, `width ?? DEFAULT_WIDTH_BY_TYPE[type ?? "text"]` (text 200, number 110, date 180, status
+  130, icon 64, switch 96 px; the selection column stays 32), never below its `minWidth` (default 48). **Every** table is
+  `table-layout: fixed` with a `<colgroup>` giving each real column its exact width, `width: 100%` and a `min-width` equal to the
+  sum of the columns (+ selection column), so a container narrower than the sum scrolls horizontally inside the single scroll
+  container (the sticky header scrolls with it). There is no auto layout and no "last column absorbs the slack" any more.
+  **Filler column**: when no column is `flex`, `DataTable` appends an empty, `aria-hidden` column (a `<col>` without width, a
+  `<th>` and a `<td>` per row with no padding) that takes all the spare width, so the real columns keep their exact widths while
+  row borders, the hover / selected highlight and the header background still span the table; it is 0 wide when the columns
+  already fill the container. It is not selectable, sortable, hideable or tooltipped, and a click on it is a click on the row.
+  **`flex: true`** is an explicit opt-in: such a column gets no colgroup width, its width is only its minimum in the sum, it
+  absorbs the spare width (several share it equally) and the table then has no filler. **Clipping**: header and body cells are
+  `overflow-hidden text-ellipsis whitespace-nowrap` (a sortable header truncates its label and keeps the arrow), so width comes
+  from the column, never from `max-w-*` / `w-*` hints inside cells (an inner `<p className="truncate">` is fine). `wrap: true`
+  lets one column's cells wrap onto several lines instead (the row grows; long words break) and gives it no tooltip.
+- **Overflow tooltip** (`useOverflowTooltip`): one tooltip per table, not per cell. A delegated `pointerover` listener on the
+  body finds the cell under the pointer (cells carry `data-col`), and only on entering it checks whether the text is cut off
+  (`scrollWidth > clientWidth` on the cell **or** any descendant, since many cells truncate in an inner block); then, after the
+  app's usual tooltip delay (200 ms), it shows the existing `Tooltip` with the cell's `innerText` (two-line cells stay two
+  lines) or `tooltipText(row)`. The anchor is a fixed, pointer-less box over the cell portaled to `document.body` (a dialog's
+  transform would otherwise displace it). Never for the selection column, `icon` / `switch` columns, the filler, `wrap`
+  columns, `tooltip: false` columns, or cells containing an `INTERACTIVE_SELECTOR` element. It closes on mouse down (and stays
+  off until the button is released, so drag selection is quiet), scroll, context menu, Escape and pointer leave, and never stops
+  or alters an event, so selection, drags, shift/ctrl clicks and the context menu are untouched. Keyboard-only use is not covered.
 - **Footer**: always shown when pagination is configured (client mode with `pageSize` + `itemLabel`, or the `pagination`
   prop), including while loading and on error, so the page (and a dialog) never changes height between states. Then it shows
   a placeholder ("—" instead of the count, no "· N selected", Previous/Next and the current page button disabled) and
@@ -671,7 +689,7 @@ row type and the id type (number or string).
   **Columns** menu at the right end of the toolbar (order: filters, search, Columns, Layout; the first of them takes the
   `ml-auto`), and with a `tableId` also the **Layout** popover (see "Saved table layouts" under Auth; it is also shown for
   sortable columns, see Sorting below). Hidden columns leave
-  the header, the cells and the colgroup, and the fixed-layout widths are computed from the visible columns; the visible
+  the header, the cells and the colgroup, and the widths (and the min-width sum) are computed from the visible columns; the visible
   list is memoized on the *content* of the hidden set (and is `columns` itself when nothing is hidden), so a toggle re-renders
   the rows once and nothing else does. Non-hideable columns are never hidden, even if a saved layout lists them. A page can
   own the working layout with `layout` + `onLayoutChange`. Tables without a hideable column render exactly as before.
