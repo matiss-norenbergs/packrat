@@ -1128,8 +1128,8 @@ list.
   "downloadDirectory": "/media", "maxConcurrentDownloads": 2, "maxConcurrentTranscodes": 2,
   "downloadTimeoutMinutes": 0, "defaultQuality": "best", "defaultDownloadType": "video",
   "importIgnoredFolders": [], "historyAnonymizeUrls": false, "historyRetentionDays": 0,
-  "downloadLogRetentionDays": 0, "libraryView": "grid", "librarySortKey": "downloadedAt",
-  "librarySortDir": "desc", "libraryMode": "manage", "libraryPaginationEnabled": false,
+  "downloadLogRetentionDays": 0, "libraryView": "grid",
+  "libraryMode": "manage", "libraryPaginationEnabled": false,
   "libraryPageSize": 48, "dashboardHiddenWidgets": [],
   "thumbnailFrameCount": 4, "thumbnailFrameRangeLow": 5, "thumbnailFrameRangeHigh": 100,
   "imageConvertFormat": "jpg",
@@ -1202,8 +1202,10 @@ Other fields, each configured on its own Settings tab (see `docs/FEATURES.md` â†
 
 Same field set as the `GET` response. Notes:
 
-- `librarySortKey`/`librarySortDir` are stored together as one row â€” patching just one merges with
-  the other's current value.
+- The Library sort is not a setting any more (`librarySortKey`/`librarySortDir` and the stored `library_sort` row were removed;
+  clients that still send them are ignored). It lives in the account's saved `library` table layout (`sort.key` is one of
+  `downloadedAt`, `title`, `filename`, `year`, `duration`, `sequenceNumber`, `seasonNumber`), see `/api/auth/table-layouts`.
+  Restoring an old backup or importing an old settings file skips the retired `library_sort` key.
 - `dashboardHiddenWidgets` is the list of Dashboard card IDs to hide (default `[]` = all shown).
   Valid IDs: `downloads`, `library`, `libraryGrowth`, `mediaTypes`, `resolutions`, `storage`,
   `topArtists`, `topTags`. Duplicates are collapsed; an unknown ID is a `400`.
