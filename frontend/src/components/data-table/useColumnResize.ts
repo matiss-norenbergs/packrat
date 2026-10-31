@@ -32,7 +32,11 @@ export function useColumnResize(onCommit: (key: string, px: number) => void) {
     if (!s || e.pointerId !== s.pointerId) return
     session.current = null
     s.restoreBody()
-    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    try {
+      e.currentTarget.releasePointerCapture?.(e.pointerId)
+    } catch {
+      // capture was already gone
+    }
     setDrag(null)
     if (apply && s.moved) commit(s.key, s.last)
   }
@@ -54,7 +58,11 @@ export function useColumnResize(onCommit: (key: string, px: number) => void) {
       // No text selection, no focus change, and the press never reaches the sort button or a row.
       e.preventDefault()
       e.stopPropagation()
-      e.currentTarget.setPointerCapture?.(e.pointerId)
+      try {
+        e.currentTarget.setPointerCapture?.(e.pointerId)
+      } catch {
+        // not an active pointer (a synthetic event): the drag still works inside the handle
+      }
       const prevSelect = document.body.style.userSelect
       const prevCursor = document.body.style.cursor
       document.body.style.userSelect = "none"
