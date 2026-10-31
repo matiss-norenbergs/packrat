@@ -84,7 +84,50 @@ describe("SessionsCard", () => {
     const cells = within(rows[2]).getAllByRole("cell")
     expect(cells[2]).toHaveClass("text-center") // signed in
     expect(cells[3]).toHaveClass("text-center") // last active
-    expect(within(cells[4]).getByRole("button")).toHaveClass("mx-auto")
+    expect(cells[4]).toHaveClass("text-center")
+    expect(within(cells[4]).getByRole("button").parentElement).toHaveClass("flex", "justify-center") // icon cells centre their content
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Device", "IP address", "Signed in", "Last active", ""])
+    expect(screen.getAllByRole("columnheader")[4]).toHaveClass("w-10")
+    expect(screen.getByRole("table").parentElement).toHaveClass("max-h-80", "overflow-auto")
+  })
+
+  it("puts the user agent and the full dates in title attributes", async () => {
+    fakeServer([THIS])
+    renderWithProviders(<SessionsCard />)
+    const [, row] = await screen.findAllByRole("row")
+    expect(within(row).getByText("Chrome on Windows")).toHaveAttribute("title", CHROME_WIN)
+    expect(within(row).getByText("Now")).toHaveAttribute("title", new Date(THIS.lastSeenAt).toLocaleString())
+    expect(within(row).getByText(new Date(THIS.createdAt).toLocaleDateString())).toHaveAttribute("title", new Date(THIS.createdAt).toLocaleString())
+  })
+
+  it("disables every sign-out button while one is pending and re-enables them with a working handler", async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const fetchMock = fakeServer([THIS, PHONE, DESKTOP])
+    const inner = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      if (init?.method === "DELETE" && url.endsWith("/auth/sessions/bbbb")) await gate
+      return inner(url, init as never)
+    })
+    renderWithProviders(<SessionsCard />)
+    const user = userEvent.setup()
+    const phone = await screen.findByRole("button", { name: "Sign out Firefox on Linux" })
+    const desktop = screen.getByRole("button", { name: "Sign out Packrat desktop app" })
+    expect(phone).toBeEnabled()
+    expect(desktop).toBeEnabled()
+
+    await user.click(phone)
+    await waitFor(() => expect(desktop).toBeDisabled())
+    expect(screen.getByRole("button", { name: "Sign out this device" })).toBeDisabled()
+
+    release()
+    await waitFor(() => expect(screen.queryByText("Firefox on Linux")).not.toBeInTheDocument())
+    // The memoized columns picked isPending back up, and the handler is the current one (targets the clicked row).
+    const desktopAgain = screen.getByRole("button", { name: "Sign out Packrat desktop app" })
+    await waitFor(() => expect(desktopAgain).toBeEnabled())
+    await user.click(desktopAgain)
+    await waitFor(() => expect(callsTo(fetchMock, "/auth/sessions/cccc")).toHaveLength(1))
+    expect((callsTo(fetchMock, "/auth/sessions/cccc")[0][1] as RequestInit).method).toBe("DELETE")
   })
 
   it("signs out one device without a confirmation", async () => {
