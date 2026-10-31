@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
@@ -185,5 +185,114 @@ describe("DataTable defaultHiddenWhenUnset", () => {
   it("without the flag a missing hidden means nothing is hidden", () => {
     renderWith({ v: 1, widths: { name: 300 } }, false)
     expect(headers()).toEqual(["Name", "A", "B"])
+  })
+})
+
+describe("DataTable count-only footer (hidePages)", () => {
+  const plain = COLUMNS.map(({ sortValue: _s, ...c }) => c)
+  const renderFooter = (onPageChange: () => void, page = 1, total = 3) =>
+    render(
+      <DataTable
+        rows={ROWS}
+        getRowId={(r) => r.id}
+        columns={plain}
+        selection="multi"
+        selectedCount={2}
+        pagination={{ page, pageSize: 1, total, onPageChange, itemLabel: { singular: "item", plural: "items" }, hidePages: true }}
+      />,
+    )
+
+  it("shows the count and the selected count and no page buttons", () => {
+    renderFooter(vi.fn())
+    expect(screen.getByText("3 items · 2 selected")).toBeInTheDocument()
+    for (const name of ["Previous", "Next", "1"]) expect(screen.queryByRole("button", { name })).toBeNull()
+  })
+
+  it("never calls onPageChange, not even to clamp a page past the end", () => {
+    const onPageChange = vi.fn()
+    renderFooter(onPageChange, 9)
+    expect(onPageChange).not.toHaveBeenCalled()
+  })
+
+  it("keeps the loading placeholder", () => {
+    render(
+      <DataTable
+        rows={ROWS}
+        getRowId={(r) => r.id}
+        columns={plain}
+        loading
+        pagination={{ page: 1, pageSize: 1, total: 0, onPageChange: () => {}, itemLabel: { singular: "item", plural: "items" }, hidePages: true }}
+      />,
+    )
+    expect(screen.getByText("—")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Next" })).toBeNull()
+  })
+})
+
+describe("DataTable context menu: submenus and empty menus", () => {
+  const plain = COLUMNS.map(({ sortValue: _s, ...c }) => c)
+  const rowOf = (name: string) => screen.getByText(name).closest("tr")!
+
+  it("renders a submenu whose items receive the rows, with separators and destructive items", async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    const onDelete = vi.fn()
+    render(
+      <DataTable
+        rows={ROWS}
+        getRowId={(r) => r.id}
+        columns={plain}
+        selection="multi"
+        contextMenu={() => [
+          { key: "top", label: "Top", onSelect: () => {} },
+          {
+            key: "sub",
+            label: "More",
+            items: [
+              { key: "a", label: "Nested A", onSelect },
+              { key: "sep", separator: true },
+              { key: "d", label: "Nested delete", destructive: true, onSelect: onDelete },
+            ],
+          },
+        ]}
+      />,
+    )
+    fireEvent.contextMenu(rowOf("A"))
+    expect(await screen.findByRole("menuitem", { name: "Top" })).toBeInTheDocument()
+    await user.click(screen.getByRole("menuitem", { name: "More" }))
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Nested A" }))
+    expect(onSelect).toHaveBeenCalledWith([ROWS[1]])
+    fireEvent.contextMenu(rowOf("C"))
+    await user.click(await screen.findByRole("menuitem", { name: "More" }))
+    const del = await screen.findByRole("menuitem", { name: "Nested delete" })
+    expect(del).toHaveAttribute("data-variant", "destructive")
+    fireEvent.click(del)
+    expect(onDelete).toHaveBeenCalledWith([ROWS[2]])
+  })
+
+  it("a disabled submenu cannot be opened", async () => {
+    const user = userEvent.setup()
+    render(
+      <DataTable
+        rows={ROWS}
+        getRowId={(r) => r.id}
+        columns={plain}
+        contextMenu={() => [{ key: "sub", label: "More", disabled: true, items: [{ key: "a", label: "Nested A", onSelect: () => {} }] }]}
+      />,
+    )
+    fireEvent.contextMenu(rowOf("A"))
+    const trigger = await screen.findByRole("menuitem", { name: "More" })
+    expect(trigger).toHaveAttribute("data-disabled")
+    await user.click(trigger)
+    expect(screen.queryByRole("menuitem", { name: "Nested A" })).toBeNull()
+  })
+
+  it("opens nothing, and not the browser's menu either, when the builder returns no items", () => {
+    const builder = vi.fn(() => [])
+    render(<DataTable rows={ROWS} getRowId={(r) => r.id} columns={plain} selection="multi" contextMenu={builder} />)
+    // fireEvent returns false when a handler called preventDefault.
+    expect(fireEvent.contextMenu(rowOf("A"))).toBe(false)
+    expect(builder).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole("menu")).toBeNull()
   })
 })

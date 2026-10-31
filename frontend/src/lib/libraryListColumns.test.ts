@@ -18,9 +18,9 @@ describe("library list column specs", () => {
     expect(LIBRARY_LIST_LAYOUT_OPTIONS.resizableWidths.artist).toEqual({ default: 200, min: 48 })
   })
 
-  it("never lets the thumbnail, title or actions column be hidden", () => {
+  it("never lets the thumbnail or title column be hidden, and has no actions column (row actions are the right-click menu)", () => {
     expect(LIBRARY_LIST_LAYOUT_OPTIONS.hideableKeys).not.toContain("thumb")
     expect(LIBRARY_LIST_LAYOUT_OPTIONS.hideableKeys).not.toContain("title")
-    expect(LIBRARY_LIST_LAYOUT_OPTIONS.hideableKeys).not.toContain("actions")
+    expect(LIBRARY_LIST_COLUMN_SPECS.map((c) => c.key)).not.toContain("actions")
   })
 })

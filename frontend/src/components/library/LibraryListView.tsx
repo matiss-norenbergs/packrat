@@ -15,7 +15,7 @@ import { librarySmallThumbnailUrl } from "@/lib/api"
 import { LIBRARY_LIST_COLUMN_SPECS, LIBRARY_LIST_EXTRA_SORT_KEYS } from "@/lib/libraryListColumns"
 import { formatBytes, formatDuration, hashText } from "@/lib/utils"
 import type { LibraryItem } from "@/types/api"
-import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
+import { toContextMenuItems, useLibraryItemActions } from "./libraryItemActions"
 import { useRevealAll } from "./RevealAllContext"
 import { useSelection } from "./SelectionContext"
 import { LibraryFiltersButton, LibrarySettingsPopover, LibraryToolbarActions } from "./LibraryToolbar"
@@ -132,7 +132,6 @@ const COLUMNS: ColumnDef<LibraryItem>[] = [
   column("collection", { cell: (item) => item.collectionName ?? "Uncategorized" }),
   column("size", { cell: (item) => (item.fileSizeBytes != null ? formatBytes(item.fileSizeBytes) : "—") }),
   column("tags", { cell: (item) => <TagsCell item={item} /> }),
-  column("actions", { header: "", cell: (item) => <LibraryItemActionsMenu item={item} /> }),
 ]
 
 const NO_ITEMS: LibraryItem[] = []
@@ -188,46 +187,59 @@ export function LibraryListView() {
   const items = data?.items ?? NO_ITEMS
   const total = data?.total ?? 0
   const selection = useLibraryListSelection(items)
+  // Row actions live in the right-click menu: the same actions as the "⋮" menus of the grid, one host for the table's dialogs.
+  const { actionsFor, host: actionsHost } = useLibraryItemActions()
+  // Per-row actions: only for exactly one target row. A right-click on a selected row while several items are selected opens
+  // nothing (bulk actions are the toolbar's Bulk operations); a right-click on an unselected row selects just that row first.
+  const contextMenu = (rows: LibraryItem[]) => {
+    if (rows.length !== 1) return []
+    if (selection.isSelected(rows[0].id) && selection.size > 1) return []
+    return toContextMenuItems<LibraryItem>(actionsFor(rows[0]))
+  }
 
-  // Pagination off: everything is one page, so the footer still shows "N items" and a single page button.
+  // Pagination off: everything is one page, so the footer is count-only ("N items" and the selected count, no page buttons).
   const pagination = paginationEnabled
     ? { page, pageSize, total, onPageChange: setPage, itemLabel: ITEM_LABEL }
-    : { page: 1, pageSize: Math.max(1, total), total, onPageChange: noop, itemLabel: ITEM_LABEL }
+    : { page: 1, pageSize: Math.max(1, total), total, onPageChange: noop, itemLabel: ITEM_LABEL, hidePages: true }
 
   return (
-    <DataTable
-      // 24px under the title (what the sticky toolbar wrapper used to leave); 16px between the toolbar, the table and the footer.
-      className="mt-6 gap-4"
-      toolbar={<LibraryToolbarActions t={toolbar} />}
-      filters={<LibraryFiltersButton t={toolbar} />}
-      search={{ value: toolbar.search, onChange: (value) => toolbar.update("q", value || null), placeholder: "Search library…" }}
-      layoutActions={<LibrarySettingsPopover t={toolbar} compact />}
-      containerClassName="relative max-h-[calc(100vh-210px)] w-full overflow-auto rounded-md border"
-      rows={items}
-      getRowId={getItemId}
-      columns={COLUMNS}
-      tableId={LIBRARY_TABLE_ID}
-      layout={layout}
-      onLayoutChange={setLayout}
-      defaultSort={DEFAULT_LIBRARY_SORT}
-      extraSortKeys={EXTRA_SORT_KEYS}
-      defaultHiddenWhenUnset
-      selection="multi"
-      selectionState={selection}
-      selectedCount={approxCount}
-      // A privacy label: the title stays hashed while the item is blurred and not revealed.
-      getRowLabel={(item) => `Select ${item.blurred && !isRevealed(item.id) ? hashText(item.title) : item.title}`}
-      pagination={pagination}
-      loading={isLoading || settingsLoading || !sortReady}
-      loadingContent={<ListSkeleton />}
-      error={isError ? <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p> : undefined}
-      empty={
-        data && data.total > 0 ? null : (
-          <p className="text-sm text-muted-foreground">
-            {hasFilters ? "No library items match these filters." : "Nothing here yet. Completed downloads will show up in your library."}
-          </p>
-        )
-      }
-    />
+    <>
+      <DataTable
+        // 16px between the toolbar, the table and the footer (the page leaves 24px under the title).
+        className="gap-4"
+        toolbar={<LibraryToolbarActions t={toolbar} />}
+        filters={<LibraryFiltersButton t={toolbar} />}
+        search={{ value: toolbar.search, onChange: (value) => toolbar.update("q", value || null), placeholder: "Search library…" }}
+        layoutActions={<LibrarySettingsPopover t={toolbar} compact />}
+        containerClassName="relative h-full w-full overflow-auto rounded-md border"
+        rows={items}
+        getRowId={getItemId}
+        columns={COLUMNS}
+        tableId={LIBRARY_TABLE_ID}
+        layout={layout}
+        onLayoutChange={setLayout}
+        defaultSort={DEFAULT_LIBRARY_SORT}
+        extraSortKeys={EXTRA_SORT_KEYS}
+        defaultHiddenWhenUnset
+        selection="multi"
+        selectionState={selection}
+        selectedCount={approxCount}
+        // A privacy label: the title stays hashed while the item is blurred and not revealed.
+        getRowLabel={(item) => `Select ${item.blurred && !isRevealed(item.id) ? hashText(item.title) : item.title}`}
+        contextMenu={contextMenu}
+        pagination={pagination}
+        loading={isLoading || settingsLoading || !sortReady}
+        loadingContent={<ListSkeleton />}
+        error={isError ? <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p> : undefined}
+        empty={
+          data && data.total > 0 ? null : (
+            <p className="text-sm text-muted-foreground">
+              {hasFilters ? "No library items match these filters." : "Nothing here yet. Completed downloads will show up in your library."}
+            </p>
+          )
+        }
+      />
+      {actionsHost}
+    </>
   )
 }

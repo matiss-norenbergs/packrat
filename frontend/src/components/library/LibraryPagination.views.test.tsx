@@ -117,10 +117,10 @@ describe.each(cases)("$name footer", ({ name, view, actions }) => {
     expect(String(libraryCalls()[0][0])).not.toContain("page=")
     await settle()
     if (name === "list view") {
-      // The table's own footer is always there: one page holding everything, so only the count is of use.
+      // The table's own footer is always there, count-only: no page buttons when everything is one page.
       expect(screen.getByText("60 items")).toBeInTheDocument()
-      expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
-      expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+      expect(screen.queryByRole("button", { name: "Next" })).toBeNull()
+      expect(screen.queryByRole("button", { name: "Previous" })).toBeNull()
       return
     }
     expect(screen.queryByText(/\d+ items/)).not.toBeInTheDocument()

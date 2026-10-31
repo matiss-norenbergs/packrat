@@ -178,7 +178,7 @@ describe("LibraryListView on DataTable: columns", () => {
     serve(ITEMS)
     renderList()
     await ready()
-    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Artist", "Collection", "Tags", ""])
+    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Artist", "Collection", "Tags"])
     expect(screen.queryByRole("columnheader", { name: "Year" })).toBeNull()
     expect(screen.queryByRole("columnheader", { name: "Size" })).toBeNull()
   })
@@ -219,7 +219,7 @@ describe("LibraryListView on DataTable: columns", () => {
     ])
     expect(within(menu).getByRole("menuitemcheckbox", { name: "Year" })).toHaveAttribute("aria-checked", "false")
     for (const name of ["Year", "Duration", "Downloaded", "Size"]) await user.click(within(screen.getByRole("menu")).getByRole("menuitemcheckbox", { name }))
-    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Year", "Duration", "Downloaded", "Artist", "Collection", "Size", "Tags", ""])
+    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Year", "Duration", "Downloaded", "Artist", "Collection", "Size", "Tags"])
     const cells = within(row("Title 1"))
     expect(cells.getByText("1999")).toBeInTheDocument()
     expect(cells.getByText("2.0 KB")).toBeInTheDocument()
@@ -260,7 +260,7 @@ describe("LibraryListView on DataTable: saved layout", () => {
     renderList()
     await ready()
     // The saved `hidden` replaces the defaults: Year, Artist and Tags are off, everything else is on.
-    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Duration", "Downloaded", "Collection", "Size", ""])
+    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Duration", "Downloaded", "Collection", "Size"])
     expect(colWidths()).toContain("260px")
     expect(screen.queryByTestId("layout-dirty-dot")).toBeNull()
     expect(libraryParams(fn)[0].get("sortKey")).toBe("title")
@@ -271,7 +271,7 @@ describe("LibraryListView on DataTable: saved layout", () => {
     serve(ITEMS, { layouts: { library: { v: 1, sort: { key: "title", dir: "asc" } } } })
     renderList()
     await ready()
-    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Artist", "Collection", "Tags", ""])
+    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Artist", "Collection", "Tags"])
     expect(screen.queryByTestId("layout-dirty-dot")).toBeNull()
   })
 
@@ -279,7 +279,7 @@ describe("LibraryListView on DataTable: saved layout", () => {
     serve(ITEMS, { layouts: { library: { v: 1, hidden: [] } } })
     renderList()
     await ready()
-    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Year", "Duration", "Downloaded", "Artist", "Collection", "Size", "Tags", ""])
+    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Year", "Duration", "Downloaded", "Artist", "Collection", "Size", "Tags"])
   })
 
   it("Restore returns to the saved layout and Clear to the defaults", async () => {
@@ -287,7 +287,7 @@ describe("LibraryListView on DataTable: saved layout", () => {
     const fn = serve(ITEMS, { layouts: { library: { v: 1, hidden: ["artist"] } } })
     renderList()
     await ready()
-    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Year", "Duration", "Downloaded", "Collection", "Size", "Tags", ""])
+    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Year", "Duration", "Downloaded", "Collection", "Size", "Tags"])
 
     await user.click(screen.getByRole("button", { name: "Columns" }))
     await user.click(await screen.findByRole("menuitemcheckbox", { name: "Tags" }))
@@ -304,7 +304,7 @@ describe("LibraryListView on DataTable: saved layout", () => {
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Clear saved layout" }))
     await waitFor(() => expect(JSON.parse(screen.getByTestId("layout").textContent!).hidden).toEqual(["downloadedAt", "duration", "size", "year"]))
     expect(fn.mock.calls.some(([url, init]) => url.endsWith("/auth/table-layouts/library") && init?.method === "DELETE")).toBe(true)
-    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Artist", "Collection", "Tags", ""])
+    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Artist", "Collection", "Tags"])
   })
 
   it("Save sends the hidden columns, widths and sort of the library layout", async () => {
@@ -431,13 +431,15 @@ describe("LibraryListView on DataTable: footer", () => {
     expect(screen.getByRole("button", { name: "2" })).toHaveAttribute("aria-current", "page")
   })
 
-  it("with pagination off shows the count and no usable pager, and requests no page", async () => {
+  it("with pagination off shows the count (and the selected count) with no page buttons, and requests no page", async () => {
+    const user = userEvent.setup()
     const fn = serve(ITEMS, { settings: { libraryPaginationEnabled: false } })
     renderList()
     await screen.findByText("Title 7")
     expect(footer()).toBe("7 items")
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+    await user.click(checkbox("Title 1"))
+    expect(footer()).toBe("7 items · 1 selected")
+    for (const name of ["Previous", "Next", "1"]) expect(screen.queryByRole("button", { name })).toBeNull()
     expect(libraryParams(fn)[0].has("page")).toBe(false)
     expect(libraryParams(fn)[0].has("pageSize")).toBe(false)
   })
@@ -613,7 +615,7 @@ describe("LibraryListView on DataTable: selection", () => {
 })
 
 describe("LibraryListView on DataTable: controls stay live with a selection", () => {
-  it("the title link, the thumbnail reveal, the tags popover and the actions menu work and never select", async () => {
+  it("the title link, the thumbnail reveal and the tags popover work and never select", async () => {
     const user = userEvent.setup()
     serve([
       item(1, { title: "Private", blurred: true, thumbnailSmallPath: "t/1.jpg", tags: ["a", "b", "c", "d", "e"] }),
@@ -634,13 +636,6 @@ describe("LibraryListView on DataTable: controls stay live with a selection", ()
     const tagsButton = within(row("Private")).getByRole("button", { name: /\+2/ })
     await user.click(tagsButton)
     expect(await screen.findByText("e")).toBeInTheDocument()
-    expect(approx()).toBe("1")
-    await user.keyboard("{Escape}")
-
-    // Actions menu opens.
-    const actions = row("Private").querySelector("td:last-child button") as HTMLElement
-    await user.click(actions)
-    expect(await screen.findByRole("menuitem", { name: /Edit/ })).toBeInTheDocument()
     expect(approx()).toBe("1")
     await user.keyboard("{Escape}")
 
@@ -798,5 +793,114 @@ describe("LibraryToolbar (grid and folders): classic toolbar", () => {
     await user.click(screen.getByRole("button", { name: "pick collection" }))
     expect(screen.getByText("10 selected")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument()
+  })
+})
+
+describe("LibraryListView: row actions in the context menu", () => {
+  const menuItem = (name: string | RegExp) => screen.findByRole("menuitem", { name })
+  const items = () => [item(1, { originalUrl: "https://example.com/1" }), item(2), item(3, { status: "ghost" } as Partial<LibraryItem>)]
+
+  it("has no actions column or header, and the Columns menu does not list Actions", async () => {
+    const user = userEvent.setup()
+    serve(items())
+    renderList()
+    await ready()
+    expect(screen.queryByRole("columnheader", { name: /actions/i })).toBeNull()
+    expect(row("Title 1").querySelectorAll("button:not([role=checkbox])")).toHaveLength(0)
+    await user.click(screen.getByRole("button", { name: "Columns" }))
+    expect(within(await screen.findByRole("menu")).queryByRole("menuitemcheckbox", { name: /actions/i })).toBeNull()
+  })
+
+  it("right-clicking an unselected row selects only it (replacing the selection and collections) and opens its actions", async () => {
+    const user = userEvent.setup()
+    serve(items())
+    renderList()
+    await ready()
+    await user.click(checkbox("Title 2"))
+    await user.click(screen.getByRole("button", { name: "pick collection" }))
+    fireEvent.contextMenu(screen.getByText("Title 1"))
+    expect(await menuItem("Edit")).toBeInTheDocument()
+    for (const name of ["Move", "Trim…", "Copy URL", "Metadata", "Redownload", "NFO", "Thumbnail", "Delete file…", "Delete"]) {
+      expect(screen.getByRole("menuitem", { name })).toBeInTheDocument()
+    }
+    expect(isSelected("Title 1")).toBe(true)
+    expect(isSelected("Title 2")).toBe(false)
+    expect(approx()).toBe("1")
+    expect(screen.getByTestId("collections").textContent).toBe("0")
+  })
+
+  it("right-clicking one of several selected rows opens nothing and keeps the selection", async () => {
+    const user = userEvent.setup()
+    serve(items())
+    renderList()
+    await ready()
+    await user.click(checkbox("Title 1"))
+    await user.click(checkbox("Title 2"))
+    expect(fireEvent.contextMenu(screen.getByText("Title 1"))).toBe(false)
+    expect(screen.queryByRole("menu")).toBeNull()
+    expect(approx()).toBe("2")
+  })
+
+  it("right-clicking an unselected row while several are selected selects only that row and opens its menu", async () => {
+    const user = userEvent.setup()
+    serve(items())
+    renderList()
+    await ready()
+    await user.click(checkbox("Title 1"))
+    await user.click(checkbox("Title 2"))
+    fireEvent.contextMenu(screen.getByText("Title 3"))
+    expect(await menuItem("Edit")).toBeInTheDocument()
+    expect(approx()).toBe("1")
+    expect(isSelected("Title 3")).toBe(true)
+  })
+
+  it("a ghost item gets the relabelled Redownload action and no Move, Trim or Delete file", async () => {
+    const user = userEvent.setup()
+    serve(items())
+    renderList()
+    await ready()
+    fireEvent.contextMenu(screen.getByText("Title 3"))
+    await menuItem("Edit")
+    expect(screen.queryByRole("menuitem", { name: "Move" })).toBeNull()
+    expect(screen.queryByRole("menuitem", { name: "Trim…" })).toBeNull()
+    expect(screen.queryByRole("menuitem", { name: "Delete file…" })).toBeNull()
+    await user.click(screen.getByRole("menuitem", { name: "Redownload" }))
+    expect(await menuItem("Download now")).toBeInTheDocument()
+  })
+
+  it("a submenu item runs on the right item", async () => {
+    const user = userEvent.setup()
+    const fn = serve(items())
+    renderList()
+    await ready()
+    fireEvent.contextMenu(screen.getByText("Title 1"))
+    await user.click(await menuItem("Redownload"))
+    fireEvent.click(await menuItem("From Current URL"))
+    expect(await screen.findByText("Redownload this file?")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Redownload" }))
+    await waitFor(() => expect(fn.mock.calls.some(([url, init]) => /\/library\/1\/redownload/.test(url) && init?.method === "POST")).toBe(true))
+  })
+
+  it("a destructive action asks for confirmation first, and Cancel sends nothing", async () => {
+    const user = userEvent.setup()
+    const fn = serve(items())
+    renderList()
+    await ready()
+    fireEvent.contextMenu(screen.getByText("Title 2"))
+    fireEvent.click(await menuItem("Delete"))
+    expect(await screen.findByRole("dialog")).toBeInTheDocument()
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    expect(fn.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false)
+    // The page is usable again (no lingering pointer-events lock).
+    expect(document.body.style.pointerEvents).not.toBe("none")
+  })
+
+  it("a stored layout that still mentions the old actions column is normalized without it", async () => {
+    serve(items(), { layouts: { library: { v: 1, hidden: ["actions", "year"], widths: { actions: 90 }, sort: { key: "actions", dir: "asc" } } } })
+    renderList()
+    await ready()
+    expect(screen.getByTestId("layout").textContent).toBe(JSON.stringify({ v: 1, hidden: ["year"] }))
+    expect(screen.queryByTestId("layout-dirty-dot")).toBeNull()
   })
 })

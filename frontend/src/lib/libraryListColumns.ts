@@ -35,7 +35,6 @@ export const LIBRARY_LIST_COLUMN_SPECS: readonly LibraryColumnSpec[] = [
   { key: "collection", label: "Collection", width: 200, hideable: true },
   { key: "size", label: "Size", type: "number", width: 110, hideable: true, defaultVisible: false },
   { key: "tags", label: "Tags", width: 280, hideable: true },
-  { key: "actions", label: "Actions", type: "icon", width: 56, resizable: false },
 ]
 
 /** Sort keys the toolbar's Filters & Sort dialog offers that have no column. */

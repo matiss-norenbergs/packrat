@@ -3,7 +3,16 @@ import type { MouseEvent, ReactNode } from "react"
 import { ArrowDown, ArrowUp } from "lucide-react"
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { RadioGroupItem } from "@/components/ui/radio-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -170,35 +179,40 @@ interface LayoutCtl {
   saved?: { dirty: boolean; hasSaved: boolean; save: () => void; restore: () => void; clear: () => void }
 }
 
-// Rendered inside ContextMenuContent, which Radix only mounts while the menu is open, so the page's
-// builder runs on demand instead of on every table render.
-function ContextMenuItems<T, Id extends RowId>({
-  rows,
-  getRowId,
-  ids,
-  build,
-}: {
-  rows: T[]
-  getRowId: (row: T) => Id
-  ids: Id[]
-  build: (rows: T[]) => ContextMenuItemDef<T>[]
-}) {
-  const menuRows = rows.filter((r) => ids.includes(getRowId(r)))
-  return build(menuRows).map((item) =>
+// Rendered inside ContextMenuContent (Radix only mounts it while the menu is open). `defs` were built by the page's
+// builder when the menu was requested; a submenu renders its items the same way and passes them the same rows.
+function ContextMenuItems<T>({ defs, rows }: { defs: ContextMenuItemDef<T>[]; rows: T[] }) {
+  return defs.map((item) =>
     "separator" in item ? (
       <ContextMenuSeparator key={item.key} />
+    ) : "items" in item ? (
+      <ContextMenuSub key={item.key}>
+        <ContextMenuSubTrigger disabled={item.disabled}>
+          {item.icon}
+          {item.label}
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuItems defs={item.items} rows={rows} />
+        </ContextMenuSubContent>
+      </ContextMenuSub>
     ) : (
       <ContextMenuItem
         key={item.key}
         variant={item.destructive ? "destructive" : "default"}
         disabled={item.disabled}
-        onClick={() => item.onSelect(menuRows)}
+        onClick={() => item.onSelect(rows)}
       >
         {item.icon}
         {item.label}
       </ContextMenuItem>
     ),
   )
+}
+
+// Builds the items in its own render, so the page's builder runs only while the menu is open (Radix mounts the content
+// then), not on every table render.
+function ContextMenuBody<T>({ build, rows }: { build: (rows: T[]) => ContextMenuItemDef<T>[]; rows: T[] }) {
+  return <ContextMenuItems defs={build(rows)} rows={rows} />
 }
 
 interface DataTableRowProps<T, Id extends RowId> {
@@ -486,7 +500,7 @@ function DataTableView<T, Id extends RowId = number>({
   // on this counter forces a genuine remount (and fresh position read) on every
   // right-click, regardless of whether the menu was already open.
   const [contextMenuAnchorKey, setContextMenuAnchorKey] = useState(0)
-  const [contextIds, setContextIds] = useState<Id[]>([])
+  const [contextRows, setContextRows] = useState<T[]>([])
 
   // Right-clicking a row outside the current selection replaces the selection with just
   // that row (mirroring left-click); right-clicking a selected row leaves a multi-selection
@@ -494,21 +508,31 @@ function DataTableView<T, Id extends RowId = number>({
   // clicked row only. The header / empty area isn't a row action, so it shouldn't open a
   // menu at all — preventDefault skips Radix's own reopen handler too (composeEventHandlers
   // checks event.defaultPrevented), the same escape hatch it uses for the native menu.
+  // The builder runs here once to see whether there is anything to show: an empty list opens no menu at all (and not the
+  // browser's own either, same as the header or an empty area). The menu's items are built again when it renders, after
+  // the selection this right-click may have changed has been applied, so a builder reading the selection sees the new one.
   const handleTableContextMenu = (e: MouseEvent) => {
     const rowEl = (e.target as HTMLElement).closest<HTMLElement>("tr[data-row-id]")
     const id = rowEl ? pageIds.find((pid) => String(pid) === rowEl.dataset.rowId) : undefined
-    if (id === undefined) {
+    if (id === undefined || !contextMenu) {
       e.preventDefault()
       return
     }
+    let ids: Id[]
     if (!selectable || (isRowSelectable && !isRowSelectable(rows[pageIds.indexOf(id)]))) {
-      setContextIds([id])
+      ids = [id]
     } else if (selection.isSelected(id)) {
-      setContextIds(selectableIds.filter((pid) => selection.isSelected(pid)))
+      ids = selectableIds.filter((pid) => selection.isSelected(pid))
     } else {
       selection.selectOnly(id)
-      setContextIds([id])
+      ids = [id]
     }
+    const menuRows = rows.filter((r) => ids.includes(getRowId(r)))
+    if (contextMenu(menuRows).length === 0) {
+      e.preventDefault()
+      return
+    }
+    setContextRows(menuRows)
     setContextMenuAnchorKey((k) => k + 1)
   }
 
@@ -617,7 +641,7 @@ function DataTableView<T, Id extends RowId = number>({
           {table}
         </ContextMenuTrigger>
         <ContextMenuContent key={contextMenuAnchorKey}>
-          <ContextMenuItems rows={rows} getRowId={getRowId} ids={contextIds} build={contextMenu} />
+          <ContextMenuBody build={contextMenu} rows={contextRows} />
         </ContextMenuContent>
       </ContextMenu>
     ) : (
