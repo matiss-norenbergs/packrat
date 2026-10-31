@@ -78,7 +78,7 @@ const columns: ColumnDef<BackupHistoryEntry>[] = [
       </div>
     ),
   },
-  { key: "contents", header: "Contents", width: 400, cell: itemsSummary },
+  { key: "contents", header: "Contents", width: 400, flex: true, cell: itemsSummary },
   { key: "size", header: "Size", type: "number", cell: (entry) => (entry.fileSizeBytes != null ? formatBytes(entry.fileSizeBytes) : "—") },
 ]
 

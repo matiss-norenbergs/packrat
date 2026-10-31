@@ -45,6 +45,7 @@ export function SessionsCard() {
         key: "device",
         header: "Device",
         wrap: true,
+        flex: true,
         cell: (s) => (
           <div className="flex flex-wrap items-center gap-2">
             <span title={s.userAgent || undefined}>{describeDevice(s.client, s.userAgent)}</span>

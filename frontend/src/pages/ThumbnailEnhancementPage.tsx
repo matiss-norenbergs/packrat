@@ -257,7 +257,7 @@ export function ThumbnailEnhancementPage() {
   // state setter (stable), so the columns are built once.
   const columns = useMemo<ColumnDef<ThumbnailEnhancementHistoryEntry>[]>(
     () => [
-      { key: "item", header: "Item", cell: (e) => <ItemTitleCell entry={e} /> },
+      { key: "item", header: "Item", flex: true, cell: (e) => <ItemTitleCell entry={e} /> },
       {
         key: "status",
         header: "Status",

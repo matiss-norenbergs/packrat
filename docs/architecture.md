@@ -661,7 +661,11 @@ row type and the id type (number or string).
   row borders, the hover / selected highlight and the header background still span the table; it is 0 wide when the columns
   already fill the container. It is not selectable, sortable, hideable or tooltipped, and a click on it is a click on the row.
   **`flex: true`** is an explicit opt-in: such a column gets no colgroup width, its width is only its minimum in the sum, it
-  absorbs the spare width (several share it equally) and the table then has no filler. **Clipping**: header and body cells are
+  absorbs the spare width and the table then has no filler. The flex columns have no colgroup width, so several of them split the
+  spare width **equally**, not in proportion to their `width`; a flex column's `width` counts toward the table's minimum width
+  (when the columns do not fit the container the table scrolls) but is only guaranteed as a floor when it is the table's single
+  flex column, so use **one flex column per table**. Tables with `flex` today: Sessions (Device), Backup history (Contents),
+  Logs (Title, `width: 280`), History (Title, `width: 280`) and AI Enhancement history (Item, `width: 200`). **Clipping**: header and body cells are
   `overflow-hidden text-ellipsis whitespace-nowrap` (a sortable header truncates its label and keeps the arrow), so width comes
   from the column, never from `max-w-*` / `w-*` hints inside cells (an inner `<p className="truncate">` is fine). `wrap: true`
   lets one column's cells wrap onto several lines instead (the row grows; long words break) and gives it no tooltip.

@@ -18,7 +18,13 @@ export interface ColumnDef<T> {
   width?: number
   /** Lower bound in px (default 48); the column is never laid out narrower. */
   minWidth?: number
-  /** Opt-in: this column absorbs the spare width (its `width` is then its minimum); with one, the table has no filler column. */
+  /**
+   * Opt-in: this column absorbs the spare width, and the table then has no filler column. A flex column gets no colgroup
+   * width, so with several of them the browser splits the spare width EQUALLY between them, not in proportion to their
+   * `width`. A flex column's `width` counts toward the table's minimum width (the horizontal scroll threshold), but it is
+   * only guaranteed as a floor when it is the table's single flex column: with several, an equal share can be narrower
+   * than one column's `width`. Use one flex column per table.
+   */
   flex?: boolean
   /** Opt-out: no tooltip with the full text when this column's cells are cut off. */
   tooltip?: false

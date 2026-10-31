@@ -115,7 +115,7 @@ const isSelected = (title: string) => row(title).getAttribute("data-state") === 
 const checkedBoxes = () => screen.queryAllByRole("checkbox", { checked: true })
 const searchBox = () => screen.getByPlaceholderText("Search by item title…")
 const toolbarButton = (name: string) => screen.getByRole("button", { name })
-const compareButton = (title: string) => row(title).querySelector<HTMLButtonElement>("td:nth-last-child(2) button")
+const compareButton = (title: string) => row(title).querySelector<HTMLButtonElement>("td:last-child button")
 
 const many = (n: number, over: (i: number) => Partial<ThumbnailEnhancementHistoryEntry> = () => ({})) =>
   Array.from({ length: n }, (_, k) => entry(n - k, `Item ${String(n - k).padStart(3, "0")}`, over(n - k)))

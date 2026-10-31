@@ -42,6 +42,8 @@ const columns: ColumnDef<LogEntry>[] = [
   {
     key: "title",
     header: "Title",
+    width: 280,
+    flex: true,
     sortValue: (entry) => entry.title ?? entry.url,
     cell: (entry) => <p className="truncate font-medium">{entry.title ?? entry.url}</p>,
   },

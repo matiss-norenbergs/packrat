@@ -57,6 +57,8 @@ const columns: ColumnDef<HistoryItem>[] = [
   {
     key: "title",
     header: "Title",
+    width: 280,
+    flex: true,
     sortValue: (item) => item.title ?? item.url,
     cell: (item) => (
       <>
