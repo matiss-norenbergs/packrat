@@ -4,7 +4,6 @@ import {
   ArrowDownAZ,
   ArrowUpAZ,
   Calendar,
-  Columns3,
   Download,
   FileImage,
   FilePlus2,
@@ -78,7 +77,6 @@ import { BulkSetGenerateNfoDialog } from "./BulkSetGenerateNfoDialog"
 import { BulkSetYearDialog } from "./BulkSetYearDialog"
 import { BulkSharpenThumbnailsDialog } from "./BulkSharpenThumbnailsDialog"
 import { EditSequenceDialog } from "./EditSequenceDialog"
-import { LIBRARY_COLUMNS, useLibraryColumns } from "./LibraryColumnsContext"
 import { useSelection } from "./SelectionContext"
 
 const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
@@ -111,7 +109,6 @@ export function LibraryToolbar() {
   const frameMatchingEnabled = useFeatureEnabled("featureFrameMatchingEnabled")
   const updateSettings = useUpdateSettings()
   const { selectionActive, approxCount, clear } = useSelection()
-  const { visibleColumns, toggleColumn } = useLibraryColumns()
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [bulkTagsOpen, setBulkTagsOpen] = useState(false)
   const [bulkArtistOpen, setBulkArtistOpen] = useState(false)
@@ -366,31 +363,6 @@ export function LibraryToolbar() {
         <span className="text-sm text-muted-foreground">
           {selectionActive ? `${approxCount} selected` : "Select files or collections to bulk edit"}
         </span>
-
-        {view === "list" && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Columns3 className="h-4 w-4" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-48">
-              {LIBRARY_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.key}
-                  checked={visibleColumns.has(col.key)}
-                  onSelect={(e) => {
-                    e.preventDefault()
-                    toggleColumn(col.key)
-                  }}
-                >
-                  {col.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
 
       <Button variant="outline" className="ml-auto" onClick={openFilters}>
         <SlidersHorizontal className="h-4 w-4" />

@@ -5,7 +5,6 @@ import { MemoryRouter, useNavigate, useSearchParams } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
-import { LibraryColumnsProvider } from "./LibraryColumnsContext"
 import { LibraryFolderView } from "./LibraryFolderView"
 import { LibraryGrid } from "./LibraryGrid"
 import { LibraryListView } from "./LibraryListView"
@@ -74,10 +73,8 @@ function renderView(view: React.ReactNode) {
       <MemoryRouter>
         <TooltipProvider>
           <LibrarySortProvider>
-            <LibraryColumnsProvider>
-              <Controls />
-              {view}
-            </LibraryColumnsProvider>
+            <Controls />
+            {view}
           </LibrarySortProvider>
         </TooltipProvider>
       </MemoryRouter>
@@ -98,7 +95,7 @@ const cases: Case[] = [
   { name: "list view", view: <LibraryListView key="l" />, actions: [...common, ["collection", "collectionId", "7"], ["year", "year", "1999"]] },
 ]
 
-describe.each(cases)("$name footer", ({ view, actions }) => {
+describe.each(cases)("$name footer", ({ name, view, actions }) => {
   it("shows the shared table footer when pagination is enabled", async () => {
     renderView(view)
     expect(await screen.findByText("60 items")).toBeInTheDocument()
@@ -119,6 +116,13 @@ describe.each(cases)("$name footer", ({ view, actions }) => {
     await waitFor(() => expect(libraryCalls()).toHaveLength(1))
     expect(String(libraryCalls()[0][0])).not.toContain("page=")
     await settle()
+    if (name === "list view") {
+      // The table's own footer is always there: one page holding everything, so only the count is of use.
+      expect(screen.getByText("60 items")).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+      expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+      return
+    }
     expect(screen.queryByText(/\d+ items/)).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument()
   })
