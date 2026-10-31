@@ -57,6 +57,7 @@ const columns: ColumnDef<HistoryItem>[] = [
   {
     key: "title",
     header: "Title",
+    sortValue: (item) => item.title ?? item.url,
     cell: (item) => (
       <>
         <p className="max-w-xs truncate font-medium">{item.title ?? item.url}</p>
@@ -74,6 +75,7 @@ const columns: ColumnDef<HistoryItem>[] = [
     key: "status",
     header: "Status",
     type: "status",
+    sortValue: (item) => formatDownloadStatus(item.status),
     cell: (item) => <Badge variant={STATUS_VARIANT[item.status] ?? "outline"}>{formatDownloadStatus(item.status)}</Badge>,
   },
   {
@@ -81,6 +83,7 @@ const columns: ColumnDef<HistoryItem>[] = [
     header: "Date",
     type: "date",
     cellClassName: "text-muted-foreground",
+    sortValue: (item) => new Date(item.createdAt),
     cell: (item) => new Date(item.createdAt).toLocaleString(),
   },
 ]
@@ -117,6 +120,8 @@ export function HistoryPage() {
         rows={data ?? []}
         getRowId={(h) => h.id}
         columns={columns}
+        tableId="history"
+        defaultSort={{ key: "date", dir: "desc" }}
         selection="multi"
         selectionState={selection}
         getRowLabel={(h) => `Select ${h.title ?? h.url}`}

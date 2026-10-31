@@ -99,6 +99,7 @@ export function SubscriptionsPage() {
         key: "title",
         header: "Title",
         cellClassName: "max-w-64",
+        sortValue: (sub) => sub.title,
         cell: (sub) => (
           <>
             <p className="truncate font-medium">{sub.title}</p>
@@ -111,6 +112,7 @@ export function SubscriptionsPage() {
         header: "Collection",
         hideable: true,
         cellClassName: "text-sm text-muted-foreground",
+        sortValue: (sub) => sub.collectionName ?? "Uncategorized",
         cell: (sub) => sub.collectionName ?? "Uncategorized",
       },
       {
@@ -119,6 +121,7 @@ export function SubscriptionsPage() {
         hideable: true,
         type: "number",
         cellClassName: "text-sm",
+        sortValue: (sub) => sub.knownEntryCount,
         cell: (sub) => (
           <span className="flex items-center justify-end gap-1.5">
             {sub.knownEntryCount}
@@ -132,6 +135,7 @@ export function SubscriptionsPage() {
         hideable: true,
         type: "date",
         cellClassName: "text-sm text-muted-foreground",
+        sortValue: (sub) => (sub.lastCheckedAt ? new Date(sub.lastCheckedAt) : null),
         cell: (sub) => (
           <div className="flex items-center justify-center gap-1.5">
             {sub.lastCheckedAt ? new Date(sub.lastCheckedAt).toLocaleString() : "Never"}
