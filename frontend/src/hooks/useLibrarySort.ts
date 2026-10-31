@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo } from "react"
 import { useTableLayouts } from "@/hooks/useTableLayout"
 import type { SortState } from "@/components/data-table/sorting"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
+import type { TableLayout } from "@/types/api"
 
 export const LIBRARY_SORT_KEYS: readonly LibrarySortKey[] = ["downloadedAt", "title", "filename", "year", "duration", "sequenceNumber", "seasonNumber"]
 export const LIBRARY_TABLE_ID = "library"
@@ -23,6 +24,12 @@ export interface LibrarySortValue {
   /** The working sort differs from the baseline. */
   differs: boolean
   setSort: (sort: LibrarySort) => void
+  /**
+   * The whole working layout of the `library` table (sort, hidden columns, widths): what the list view's DataTable
+   * shows and edits through its `layout` / `onLayoutChange`. `sort` above is derived from it.
+   */
+  layout: TableLayout
+  setLayout: (layout: TableLayout) => void
   /** Stores only the sort (default: the working one) in the saved `library` layout. Resolves true when stored. */
   saveSortAsDefault: (sort?: LibrarySort) => Promise<boolean>
 }
@@ -46,7 +53,7 @@ export function useLibrarySort(): LibrarySortValue {
   const savedDir = savedSort?.dir
   const fallback = useMemo<LibrarySortValue>(() => {
     const sort = toLibrarySort(savedKey && savedDir ? { key: savedKey, dir: savedDir } : undefined)
-    return { sort, baseline: sort, ready: !isPending, differs: false, setSort: () => {}, saveSortAsDefault: async () => false }
+    return { sort, baseline: sort, ready: !isPending, differs: false, setSort: () => {}, layout: { v: 1, sort }, setLayout: () => {}, saveSortAsDefault: async () => false }
   }, [savedKey, savedDir, isPending])
   return ctx ?? fallback
 }

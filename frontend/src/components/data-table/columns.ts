@@ -51,13 +51,19 @@ export function resolveAlign<T>(column: ColumnDef<T>): ColumnAlign {
   return column.align ?? ALIGN_BY_TYPE[column.type ?? "text"]
 }
 
+/**
+ * The part of a column that decides its width and whether it is resizable. A full `ColumnDef` satisfies it, and so does a
+ * plain spec without header / cell (a page whose layout is built outside the table, e.g. the Library's shared layout).
+ */
+export type ColumnWidthSpec = Pick<ColumnDef<never>, "width" | "minWidth" | "type" | "flex" | "resizable">
+
 /** The width a column is laid out at: its `width` (else the default for its type), never below its `minWidth`. */
-export function columnWidth<T>(column: ColumnDef<T>): number {
+export function columnWidth(column: ColumnWidthSpec): number {
   return Math.max(column.width ?? DEFAULT_WIDTH_BY_TYPE[column.type ?? "text"], column.minWidth ?? DEFAULT_MIN_WIDTH)
 }
 
 /** The table's own lower bound for a column: its `minWidth`, else the default. */
-export function columnMinWidth<T>(column: ColumnDef<T>): number {
+export function columnMinWidth(column: ColumnWidthSpec): number {
   return column.minWidth ?? DEFAULT_MIN_WIDTH
 }
 
@@ -65,7 +71,7 @@ export function columnMinWidth<T>(column: ColumnDef<T>): number {
  * Whether the user can drag this column's width (in a table with a `tableId`): by default every column except a flex
  * one (it absorbs the spare space, so a drag would show nothing) and icon / switch columns; `resizable` overrides.
  */
-export function isResizable<T>(column: ColumnDef<T>): boolean {
+export function isResizable(column: ColumnWidthSpec): boolean {
   return column.resizable ?? !(column.flex || column.type === "icon" || column.type === "switch")
 }
 
