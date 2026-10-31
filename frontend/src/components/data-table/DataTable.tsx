@@ -73,12 +73,20 @@ export interface DataTableProps<T, Id extends RowId = number> {
   loading?: boolean
   /** Number of skeleton bars shown while loading. */
   loadingRows?: number
+  /** Replaces the default skeleton bars while `loading` (e.g. skeletons with the padding of a bordered box). */
+  loadingContent?: ReactNode
   /** Replaces the table (e.g. a load failure message). */
   error?: ReactNode
   /** Shown instead of the table when there are no rows; a function receives the active query ("" when none). */
   empty?: ReactNode | ((query: string) => ReactNode)
   rowClassName?: (row: T) => string | undefined
   className?: string
+  /**
+   * Merged onto the content region wrapper (default `min-h-0 flex-1`) that holds the loading / error / empty state or
+   * the table, so a dialog can give all of them one fixed or capped height and a border (`h-[60vh] overflow-hidden
+   * rounded-md border`) and the box never resizes between states. Pair it with a `containerClassName` that fills it.
+   */
+  regionClassName?: string
   /** Replaces the scroll container's classes entirely (see Table in components/ui/table.tsx). */
   containerClassName?: string
 }
@@ -205,10 +213,12 @@ export function DataTable<T, Id extends RowId = number>({
   onRowDoubleClick,
   loading,
   loadingRows = 2,
+  loadingContent,
   error,
   empty,
   rowClassName,
   className,
+  regionClassName,
   containerClassName,
 }: DataTableProps<T, Id>) {
   const ownSelection = useIdSelection<Id>()
@@ -325,13 +335,14 @@ export function DataTable<T, Id extends RowId = number>({
 
   let content: ReactNode
   if (loading) {
-    content = (
-      <div className="space-y-2">
-        {Array.from({ length: loadingRows }, (_, i) => (
-          <Skeleton key={i} className="h-10 w-full" />
-        ))}
-      </div>
-    )
+    content =
+      loadingContent ?? (
+        <div className="space-y-2">
+          {Array.from({ length: loadingRows }, (_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      )
   } else if (error) {
     content = error
   } else if (rows.length === 0) {
@@ -409,7 +420,7 @@ export function DataTable<T, Id extends RowId = number>({
     )
   }
 
-  const region = <div className="min-h-0 flex-1">{content}</div>
+  const region = <div className={cn("min-h-0 flex-1", regionClassName)}>{content}</div>
   const selectedId = mode === "single" ? pageIds.find((id) => selection.selected.has(id)) : undefined
 
   const hasToolbar = toolbar != null || filters != null || search != null

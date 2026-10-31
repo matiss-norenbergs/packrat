@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { SearchX, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -12,18 +12,38 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTable } from "@/components/data-table"
+import type { ColumnDef } from "@/components/data-table"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { useDeleteStrayFiles, useScanStrayFiles } from "@/hooks/useMaintenance"
-import { getPageNumbers } from "@/lib/pagination"
 import { formatBytes } from "@/lib/utils"
 import type { StrayFileEntry, StrayFilesResult } from "@/types/api"
 
 const PAGE_SIZE = 50
+const ITEM_LABEL = { singular: "file", plural: "files" }
 
 const entryKey = (e: StrayFileEntry) => `${e.root}:${e.path}`
+const entryLabel = (e: StrayFileEntry) => `Select ${e.path}`
+
+const columns: ColumnDef<StrayFileEntry>[] = [
+  { key: "root", header: "Root", cellClassName: "text-muted-foreground", cell: (e) => e.root },
+  {
+    key: "path",
+    header: "Path",
+    cellClassName: "max-w-[280px] truncate font-medium",
+    cell: (e) => <span title={e.path}>{e.path}</span>,
+  },
+  { key: "reason", header: "Reason", cellClassName: "text-muted-foreground", cell: (e) => e.reason },
+  { key: "size", header: "Size", type: "number", cellClassName: "text-muted-foreground", cell: (e) => formatBytes(e.sizeBytes) },
+  {
+    key: "modified",
+    header: "Modified",
+    type: "date",
+    cellClassName: "text-muted-foreground",
+    cell: (e) => new Date(e.modifiedAt).toLocaleDateString(),
+  },
+]
 
 function summaryText(r: StrayFilesResult): string {
   return `${r.totals.count} stray file${r.totals.count === 1 ? "" : "s"} · ${formatBytes(r.totals.bytes)}`
@@ -38,40 +58,24 @@ export function StrayFilesRow() {
   const [result, setResult] = useState<StrayFilesResult | null>(null)
   const [open, setOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [page, setPage] = useState(1)
-  const { selected, isSelected, toggle, clear, selectAll, selectOnly } = useIdSelection<string>()
-
-  const [isDragging, setIsDragging] = useState(false)
-  const dragAnchorRef = useRef<string | null>(null)
+  // Bumped by every new scan so the table goes back to page 1 (DataTable's resetKey).
+  const [scanKey, setScanKey] = useState(0)
+  const selection = useIdSelection<string>()
+  const { selected, clear } = selection
 
   const entries = result?.entries ?? []
-  const total = entries.length
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const pageData = entries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const allSelected = pageData.length > 0 && pageData.every((e) => isSelected(entryKey(e)))
-  const someSelected = pageData.some((e) => isSelected(entryKey(e))) && !allSelected
   const selectedEntries = entries.filter((e) => selected.has(entryKey(e)))
   const selectedBytes = selectedEntries.reduce((sum, e) => sum + e.sizeBytes, 0)
 
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages)
-  }, [page, totalPages])
-
-  // Selection is scoped to the visible page, same as the other bulk tables.
+  // The table clears the selection when the page changes; opening or closing the dialog starts afresh too.
   useEffect(() => {
     clear()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, open])
-
-  useEffect(() => {
-    if (!isDragging) return
-    const onMouseUp = () => setIsDragging(false)
-    window.addEventListener("mouseup", onMouseUp)
-    return () => window.removeEventListener("mouseup", onMouseUp)
-  }, [isDragging])
+  }, [open])
 
   const applyResult = (r: StrayFilesResult) => {
     setResult(r)
+    setScanKey((k) => k + 1)
     clear()
     if (r.totals.count === 0) {
       setOpen(false)
@@ -87,7 +91,7 @@ export function StrayFilesRow() {
           toast.success("No stray files found")
           return
         }
-        setPage(1)
+        setScanKey((k) => k + 1)
         setOpen(true)
       },
     })
@@ -101,44 +105,6 @@ export function StrayFilesRow() {
         onSettled: () => scan.mutate(undefined, { onSuccess: applyResult }),
       },
     )
-  }
-
-  const isCheckboxTarget = (e: React.MouseEvent) => (e.target as HTMLElement).closest('[role="checkbox"]') != null
-
-  const rangeKeys = (anchor: string, target: string) => {
-    const a = pageData.findIndex((e) => entryKey(e) === anchor)
-    const t = pageData.findIndex((e) => entryKey(e) === target)
-    if (a === -1 || t === -1) return null
-    const [start, end] = a < t ? [a, t] : [t, a]
-    return pageData.slice(start, end + 1).map(entryKey)
-  }
-
-  // Click selects only this row, ctrl/cmd toggles, shift selects a range, and
-  // dragging extends — same conventions as the other selection tables.
-  const handleRowMouseDown = (e: React.MouseEvent, key: string) => {
-    if (e.button !== 0 || isCheckboxTarget(e)) return
-    e.preventDefault()
-    if (e.shiftKey && dragAnchorRef.current != null) {
-      const keys = rangeKeys(dragAnchorRef.current, key)
-      if (keys) {
-        selectAll(keys)
-        return
-      }
-    }
-    if (e.ctrlKey || e.metaKey) {
-      toggle(key)
-      dragAnchorRef.current = key
-      return
-    }
-    dragAnchorRef.current = key
-    setIsDragging(true)
-    selectOnly(key)
-  }
-
-  const handleRowMouseEnter = (key: string) => {
-    if (!isDragging || dragAnchorRef.current == null) return
-    const keys = rangeKeys(dragAnchorRef.current, key)
-    if (keys) selectAll(keys)
   }
 
   return (
@@ -161,85 +127,22 @@ export function StrayFilesRow() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-            <Table containerClassName="h-full overflow-auto">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8 text-center">
-                    <Checkbox
-                      checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                      onCheckedChange={(checked) => (checked ? selectAll(pageData.map(entryKey)) : clear())}
-                      aria-label="Select all"
-                    />
-                  </TableHead>
-                  <TableHead>Root</TableHead>
-                  <TableHead>Path</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead className="text-right">Size</TableHead>
-                  <TableHead className="text-center">Modified</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pageData.map((entry) => {
-                  const key = entryKey(entry)
-                  return (
-                    <TableRow
-                      key={key}
-                      data-state={isSelected(key) ? "selected" : undefined}
-                      className="cursor-default select-none"
-                      onMouseDown={(e) => handleRowMouseDown(e, key)}
-                      onMouseEnter={() => handleRowMouseEnter(key)}
-                    >
-                      <TableCell className="text-center">
-                        <Checkbox
-                          checked={isSelected(key)}
-                          onCheckedChange={() => toggle(key)}
-                          aria-label={`Select ${entry.path}`}
-                        />
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{entry.root}</TableCell>
-                      <TableCell className="max-w-[280px] truncate font-medium" title={entry.path}>
-                        {entry.path}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{entry.reason}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{formatBytes(entry.sizeBytes)}</TableCell>
-                      <TableCell className="text-center text-muted-foreground">
-                        {new Date(entry.modifiedAt).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-
-          {totalPages > 1 && (
-            <div className="flex shrink-0 items-center justify-end gap-1">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Previous
-              </Button>
-              {getPageNumbers(page, totalPages).map((p, i) =>
-                p === "ellipsis" ? (
-                  <span key={`ellipsis-${i}`} className="px-1.5 text-sm text-muted-foreground">
-                    …
-                  </span>
-                ) : (
-                  <Button
-                    key={p}
-                    variant={p === page ? "default" : "outline"}
-                    size="sm"
-                    className="w-8 px-0"
-                    onClick={() => setPage(p)}
-                  >
-                    {p}
-                  </Button>
-                ),
-              )}
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                Next
-              </Button>
-            </div>
-          )}
+          {/* The table fills the height the dialog leaves (nested flex columns, all min-h-0), so only its own
+              container scrolls and the header stays put. */}
+          <DataTable
+            className="gap-4"
+            rows={entries}
+            getRowId={entryKey}
+            columns={columns}
+            selection="multi"
+            selectionState={selection}
+            getRowLabel={entryLabel}
+            pageSize={PAGE_SIZE}
+            itemLabel={ITEM_LABEL}
+            resetKey={scanKey}
+            regionClassName="flex flex-col overflow-hidden rounded-md border"
+            containerClassName="min-h-0 flex-1 overflow-auto"
+          />
 
           <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={() => setOpen(false)}>

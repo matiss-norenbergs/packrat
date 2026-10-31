@@ -1,0 +1,62 @@
+import { cleanup, render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, it } from "vitest"
+import { DataTable } from "./DataTable"
+import type { DataTableProps } from "./DataTable"
+
+afterEach(cleanup)
+
+interface Row {
+  id: number
+  name: string
+}
+const ROWS: Row[] = Array.from({ length: 5 }, (_, i) => ({ id: i + 1, name: `Item ${i + 1}` }))
+const COLUMNS = [{ key: "n", header: "Name", cell: (r: Row) => r.name }]
+
+function setup(props: Partial<DataTableProps<Row, number>> = {}) {
+  return render(<DataTable rows={ROWS} getRowId={(r) => r.id} columns={COLUMNS} {...props} />)
+}
+const region = (container: HTMLElement) => container.querySelector("[data-slot=table-container]")?.parentElement ?? null
+
+describe("regionClassName", () => {
+  it("keeps the default region classes when omitted", () => {
+    const { container } = setup()
+    expect(region(container)).toHaveClass("min-h-0", "flex-1")
+    expect(region(container)?.className).toBe("min-h-0 flex-1")
+  })
+
+  it("merges onto the region around the table, the loading state and the empty state", () => {
+    const cls = "h-[60vh] overflow-hidden rounded-md border"
+    const { container, rerender } = setup({ regionClassName: cls })
+    expect(region(container)).toHaveClass("min-h-0", "flex-1", "h-[60vh]", "rounded-md", "border")
+
+    rerender(<DataTable rows={[]} getRowId={(r: Row) => r.id} columns={COLUMNS} regionClassName={cls} empty={<p>Nothing</p>} />)
+    expect(screen.getByText("Nothing").parentElement).toHaveClass("min-h-0", "flex-1", "h-[60vh]")
+
+    rerender(<DataTable rows={[]} getRowId={(r: Row) => r.id} columns={COLUMNS} regionClassName={cls} loading />)
+    expect(container.querySelector(".h-\\[60vh\\]")).not.toBeNull()
+  })
+
+  it("lets a later class win over a default one", () => {
+    const { container } = setup({ regionClassName: "min-h-[10rem]" })
+    expect(region(container)).toHaveClass("min-h-[10rem]")
+    expect(region(container)).not.toHaveClass("min-h-0")
+  })
+})
+
+describe("loadingContent", () => {
+  it("replaces the default skeleton bars while loading", () => {
+    const { container } = setup({ loading: true, loadingContent: <div data-testid="custom">loading…</div> })
+    expect(screen.getByTestId("custom")).toBeInTheDocument()
+    expect(container.querySelectorAll("[data-slot=skeleton]")).toHaveLength(0)
+    expect(screen.queryByRole("table")).toBeNull()
+  })
+
+  it("is ignored when not loading and the default bars are unchanged", () => {
+    const { container, rerender } = setup({ loadingContent: <div data-testid="custom" /> })
+    expect(screen.queryByTestId("custom")).toBeNull()
+    expect(screen.getByRole("table")).toBeInTheDocument()
+
+    rerender(<DataTable rows={ROWS} getRowId={(r: Row) => r.id} columns={COLUMNS} loading loadingRows={3} />)
+    expect(container.querySelectorAll("[data-slot=skeleton]")).toHaveLength(3)
+  })
+})

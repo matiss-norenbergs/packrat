@@ -522,6 +522,8 @@ renders nothing but portaled buttons (and is `empty:hidden`). `lib/dockClearance
 (so every `DataTable` page) and the hand-rolled footers of Downloads and Collections use them, so the
 count label shifts when the button appears or disappears and is not indented otherwise. Needs `:has()` (Chromium 105+,
 Safari 15.4+, Firefox 121+), which covers the web UI and the desktop webviews; older engines just get no indent.
+The variant does not apply inside dialogs or alert dialogs (`&:not([role="dialog"] *, [role="alertdialog"] *)`): they are
+portaled above the dock, so a table in a dialog never gets the dock indent.
 jsdom can't evaluate `:has`, so tests assert the class strings (and that the dock is `:empty` without a button).
 
 `AppLayout` also mounts a single `RevealAllProvider`, so reveal-all (in-memory only) survives
@@ -574,6 +576,18 @@ table's own search, via `resetKey`) and `FrameMatchingPage` (no search at all) a
 no `pagination` or `search`, `className="gap-4"` (tailwind-merge lets it beat the default `gap-6`) and a `containerClassName` equal
 to the plain `Table` default (`relative w-full overflow-x-auto`, no border, no `h-full`) so the card keeps its height; the
 toolbar is the `toolbar` slot and the context menu is built from the rows it was opened on (file actions only for one backup that has a file).
+The Settings cards follow the same recipe with no toolbar at all: `SessionsCard` and `ServersSection` pass `className="gap-0"`
+and the card's own `containerClassName="relative max-h-80 w-full overflow-auto"` (controlled mode, `selection="none"`), keep the surrounding
+buttons outside the table, and list the cell dependencies (`isPending`, the active profile id) in the `columns` memo; `ServersSection`'s
+`empty` node replaces the whole table, header included. **Dialogs**: `EligibleItemsDialog` (controlled, all rows on one page via a single-page `pagination` config so the footer shows "N items · M selected"),
+`KnownItemsDialog` (client mode, 20 per page, `resetKey` = the subscription id) and `StrayFilesRow` (client mode, 50 per page,
+`resetKey` bumped by every scan) put the table in the dialog with `className="gap-4"` (the dialog's own
+spacing instead of `gap-6`), the action buttons in the `toolbar` slot and the bordered box in `regionClassName`: a fixed
+`h-[60vh] flex-none overflow-hidden rounded-md border` (Known items, so the dialog never resizes between loading / empty /
+loaded) or a capped `flex max-h-[60vh] flex-col overflow-hidden rounded-md border` (Eligible) with `containerClassName="min-h-0 flex-1
+overflow-auto"`, and the skeletons come from `loadingContent`. A box whose parent has no definite height (the Stray files
+dialog, only a `max-h`) must be a flex column all the way down (`min-h-0 flex-1` at every level) because `h-full` would resolve to
+`auto` there and the table would be clipped instead of scrolling.
 **The component owns**
 the table chrome and the interaction logic that used to be copy-pasted per page: the column model, alignment, widths and
 scroll, the checkbox/radio column, click / ctrl / shift / drag selection (`useTableSelection`, on top of a *controlled*
@@ -614,8 +628,9 @@ row type and the id type (number or string).
   base widths (`width ?? minWidth ?? 120`), so a narrower container scrolls horizontally inside the single scroll
   container (sticky header stays). Spare space goes to the `flex` columns, or — if none is flagged — to the **last column**,
   so there is never an empty strip.
-- **Footer**: shown whenever `pagination` is set, except while loading or on error — including at 0 results ("0 tags",
-  one disabled page). In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
+- **Footer**: always shown when pagination is configured (client mode with `pageSize` + `itemLabel`, or the `pagination`
+  prop), hidden only while loading or on error — never for a single page or an empty table, which show "0 tags" and one
+  disabled page. In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
   clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
   `onPageChange(lastPage)`, so pages need no clamping code. **Dock clearance is automatic**: the footer
   carries the `dock-occupied:` variants of the clearance classes (`lib/dockClearance.ts`: row `flex-wrap-reverse gap-2`,
@@ -639,6 +654,10 @@ row type and the id type (number or string).
   filter change). `empty` should be a node there (the function form only receives the seed `search.value`, not the page's query); the two modes are selected by whether `pageSize`/`match` is given.
 - **Layout**: the component renders a `flex min-h-0 flex-1 flex-col gap-6` block (toolbar and footer `shrink-0`, only the
   content region scrolls), meant to sit under the page title in the usual page column.
+- **Region props** (for tables inside a dialog or card): `regionClassName` is merged onto the content region wrapper
+  (`min-h-0 flex-1`) that holds the loading / error / empty state or the table, so one fixed or capped height and
+  border covers all of them and the box doesn't resize between states; `loadingContent` replaces the default skeleton
+  bars while `loading`.
 - **Why no virtualization / sorting / resizing yet**: pages are paginated at 50 rows, so virtualization would add
   complexity for no gain; sorting, drag-resize and column show/hide are possible later because columns are data, but
   nothing needs them today.

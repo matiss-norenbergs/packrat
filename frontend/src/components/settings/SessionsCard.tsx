@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { LogOut, MonitorSmartphone } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -15,11 +15,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTable } from "@/components/data-table"
+import type { ColumnDef } from "@/components/data-table"
 import { useRevokeOtherSessions, useRevokeSession, useSessions } from "@/hooks/useSessions"
 import { formatTimeAgo } from "@/lib/timeAgo"
 import { describeDevice } from "@/lib/userAgent"
 import type { ActiveSession } from "@/types/api"
+
+const getSessionId = (s: ActiveSession) => s.id
 
 export function SessionsCard() {
   const { data: sessions, isLoading, isError } = useSessions()
@@ -29,8 +32,64 @@ export function SessionsCard() {
 
   const others = sessions?.filter((s) => !s.current).length ?? 0
 
-  const signOut = (s: ActiveSession) =>
-    revoke.mutate(s, { onSuccess: () => !s.current && toast.success(`Signed out ${describeDevice(s.client, s.userAgent)}`) })
+  // mutate keeps a stable identity (TanStack Query v5), so the memoized columns only rebuild when isPending flips.
+  const { mutate: revokeSession, isPending: revoking } = revoke
+  const signOut = useCallback(
+    (s: ActiveSession) =>
+      revokeSession(s, { onSuccess: () => !s.current && toast.success(`Signed out ${describeDevice(s.client, s.userAgent)}`) }),
+    [revokeSession],
+  )
+  const columns = useMemo<ColumnDef<ActiveSession>[]>(
+    () => [
+      {
+        key: "device",
+        header: "Device",
+        cell: (s) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <span title={s.userAgent || undefined}>{describeDevice(s.client, s.userAgent)}</span>
+            {s.current && <Badge variant="secondary">This device</Badge>}
+          </div>
+        ),
+      },
+      { key: "ip", header: "IP address", cellClassName: "font-mono text-xs", cell: (s) => s.ip || "—" },
+      {
+        key: "signedIn",
+        header: "Signed in",
+        type: "date",
+        cellClassName: "whitespace-nowrap",
+        cell: (s) => <span title={new Date(s.createdAt).toLocaleString()}>{new Date(s.createdAt).toLocaleDateString()}</span>,
+      },
+      {
+        key: "lastActive",
+        header: "Last active",
+        type: "date",
+        cellClassName: "whitespace-nowrap",
+        cell: (s) => <span title={new Date(s.lastSeenAt).toLocaleString()}>{s.current ? "Now" : formatTimeAgo(s.lastSeenAt)}</span>,
+      },
+      {
+        key: "actions",
+        header: "",
+        type: "icon",
+        headerClassName: "w-10",
+        cell: (s) => {
+          const device = describeDevice(s.client, s.userAgent)
+          return (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={s.current ? "Sign out this device" : `Sign out ${device}`}
+              title={s.current ? "Sign out this device" : "Sign out"}
+              disabled={revoking}
+              onClick={() => signOut(s)}
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          )
+        },
+      },
+    ],
+    [revoking, signOut],
+  )
 
   return (
     <Card>
@@ -46,52 +105,14 @@ export function SessionsCard() {
         {isError && <p className="text-sm text-destructive">Couldn't load the active sessions.</p>}
         {sessions && (
           <>
-            <Table containerClassName="relative max-h-80 w-full overflow-auto">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Device</TableHead>
-                  <TableHead>IP address</TableHead>
-                  <TableHead className="text-center">Signed in</TableHead>
-                  <TableHead className="text-center">Last active</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sessions.map((s) => {
-                  const device = describeDevice(s.client, s.userAgent)
-                  return (
-                    <TableRow key={s.id}>
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span title={s.userAgent || undefined}>{device}</span>
-                          {s.current && <Badge variant="secondary">This device</Badge>}
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{s.ip || "—"}</TableCell>
-                      <TableCell className="text-center whitespace-nowrap" title={new Date(s.createdAt).toLocaleString()}>
-                        {new Date(s.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-center whitespace-nowrap" title={new Date(s.lastSeenAt).toLocaleString()}>
-                        {s.current ? "Now" : formatTimeAgo(s.lastSeenAt)}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="mx-auto flex"
-                          aria-label={s.current ? "Sign out this device" : `Sign out ${device}`}
-                          title={s.current ? "Sign out this device" : "Sign out"}
-                          disabled={revoke.isPending}
-                          onClick={() => signOut(s)}
-                        >
-                          <LogOut className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+            <DataTable
+              rows={sessions}
+              getRowId={getSessionId}
+              columns={columns}
+              className="gap-0"
+              containerClassName="relative max-h-80 w-full overflow-auto"
+            />
+
             <div className="flex items-center gap-3">
               <Button variant="outline" disabled={others === 0 || revokeOthers.isPending} onClick={() => setConfirmOthers(true)}>
                 <LogOut className="h-4 w-4" />

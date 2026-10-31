@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Pencil, Plus, Server, Trash2 } from "lucide-react"
 import {
   AlertDialog,
@@ -23,7 +23,8 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTable } from "@/components/data-table"
+import type { ColumnDef } from "@/components/data-table"
 import { startAddingServer } from "@/lib/serverSwitch"
 import {
   changeProfileUrl,
@@ -40,6 +41,8 @@ import {
 } from "@/lib/server"
 import { formatTimeAgo } from "@/lib/timeAgo"
 
+const getProfileId = (p: ServerProfile) => p.id
+
 // Settings → Desktop → Servers: the saved server profiles. Name and address are edited in a dialog
 // together with the address (re-checked against /api/health before it is saved); removing a server
 // also deletes its stored login. Changing or removing the active server reloads the app.
@@ -49,6 +52,51 @@ export function ServersSection() {
   const [removing, setRemoving] = useState<ServerProfile | null>(null)
   const profiles = getProfiles()
   const activeId = getActiveProfile()?.id
+
+  // setEditing / setRemoving are state setters (stable), so only the active server changes the cells.
+  const columns = useMemo<ColumnDef<ServerProfile>[]>(
+    () => [
+      {
+        key: "name",
+        header: "Name",
+        cell: (profile) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{profile.name}</span>
+            {profile.id === activeId && <Badge variant="secondary">Current</Badge>}
+          </div>
+        ),
+      },
+      { key: "url", header: "Address", cellClassName: "break-all font-mono text-xs", cell: (profile) => profile.url },
+      {
+        key: "lastUsed",
+        header: "Last used",
+        type: "date",
+        cellClassName: "whitespace-nowrap",
+        cell: (profile) => (
+          <span title={new Date(profile.lastUsedAt).toLocaleString()}>
+            {profile.id === activeId ? "Now" : formatTimeAgo(new Date(profile.lastUsedAt).toISOString())}
+          </span>
+        ),
+      },
+      {
+        key: "actions",
+        header: "",
+        type: "icon",
+        headerClassName: "w-24",
+        cell: (profile) => (
+          <div className="flex gap-1">
+            <Button variant="ghost" size="icon" aria-label={`Edit ${profile.name}`} title="Edit" onClick={() => setEditing(profile)}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" aria-label={`Remove ${profile.name}`} title="Remove" onClick={() => setRemoving(profile)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [activeId],
+  )
 
   const confirmRemove = async () => {
     if (!removing) return
@@ -75,61 +123,14 @@ export function ServersSection() {
             Add server…
           </Button>
         </div>
-        <Table containerClassName="relative max-h-80 w-full overflow-auto">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Address</TableHead>
-              <TableHead className="text-center">Last used</TableHead>
-              <TableHead className="w-24" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {profiles.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground">
-                  No saved servers.
-                </TableCell>
-              </TableRow>
-            )}
-            {profiles.map((profile) => (
-              <TableRow key={profile.id}>
-                <TableCell>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{profile.name}</span>
-                    {profile.id === activeId && <Badge variant="secondary">Current</Badge>}
-                  </div>
-                </TableCell>
-                <TableCell className="break-all font-mono text-xs">{profile.url}</TableCell>
-                <TableCell className="text-center whitespace-nowrap" title={new Date(profile.lastUsedAt).toLocaleString()}>
-                  {profile.id === activeId ? "Now" : formatTimeAgo(new Date(profile.lastUsedAt).toISOString())}
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Edit ${profile.name}`}
-                      title="Edit"
-                      onClick={() => setEditing(profile)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Remove ${profile.name}`}
-                      title="Remove"
-                      onClick={() => setRemoving(profile)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <DataTable
+          rows={profiles}
+          getRowId={getProfileId}
+          columns={columns}
+          className="gap-0"
+          containerClassName="relative max-h-80 w-full overflow-auto"
+          empty={<p className="text-center text-sm text-muted-foreground">No saved servers.</p>}
+        />
         {isTauri() && (
           <p className="text-xs text-muted-foreground">
             Token storage: {getTokenStorage() === "keychain" ? "OS keychain" : "Local file (keychain unavailable)"}
