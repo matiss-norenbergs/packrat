@@ -37,6 +37,8 @@ const columns: ColumnDef<SubscriptionEntry>[] = [
   {
     key: "title",
     header: "Title",
+    width: 300,
+    flex: true,
     cellClassName: "font-medium",
     cell: (entry) => (entry.url !== "" ? entry.title : "Unknown"),
   },
