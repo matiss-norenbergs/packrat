@@ -23,6 +23,9 @@ const CONTROL_SELECTORS = [
 
 export const INTERACTIVE_SELECTOR = [LINK_SELECTOR, ...CONTROL_SELECTORS].join(", ")
 
+/** Marks the sort button of a sortable header: the one control that does not keep the header from showing a tooltip. */
+export const SORT_BUTTON_ATTR = "data-sort-button"
+
 /** Interactive content that keeps a cell from showing the overflow tooltip: everything except plain links. */
 export const TOOLTIP_BLOCKING_SELECTOR = CONTROL_SELECTORS.join(", ")
 

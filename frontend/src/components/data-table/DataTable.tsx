@@ -253,6 +253,7 @@ function SortButton({ align, dir, onClick, children }: { align: ColumnAlign; dir
   return (
     <button
       type="button"
+      data-sort-button
       className="inline-flex max-w-full cursor-pointer select-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       onClick={onClick}
     >
@@ -485,7 +486,7 @@ function DataTableView<T, Id extends RowId = number>({
           ))}
           {layout.filler && <col />}
         </colgroup>
-        <TableHeader>
+        <TableHeader {...overflowTip.headProps}>
           <TableRow>
             {selectable && <TableHead className="text-center">{selectionHeader}</TableHead>}
             {visibleColumns.map((c) => {
@@ -497,6 +498,8 @@ function DataTableView<T, Id extends RowId = number>({
                 <TableHead
                   key={c.key}
                   data-col={c.key}
+                  // The handle's own label would otherwise end up in the header's accessible name.
+                  aria-label={resizable && (typeof c.header === "string" || c.label != null) ? columnLabel(c) : undefined}
                   className={cn(ALIGN_CLASS[align], clipClass(c), resizable && "group/th relative", c.headerClassName)}
                   aria-sort={sortable ? (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none") : undefined}
                 >
