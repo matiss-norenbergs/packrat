@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react"
 import type { MouseEvent, PointerEvent } from "react"
-import { MAX_COLUMN_WIDTH } from "./columns"
+import { MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH } from "./columns"
 import { useEvent } from "./useEvent"
 
 interface Session {
@@ -96,5 +96,5 @@ export function useColumnResize(onCommit: (key: string, px: number) => void) {
 export type ColumnResizeHandleProps = ReturnType<ReturnType<typeof useColumnResize>["handleProps"]>
 
 function widthAt(s: Session, clientX: number) {
-  return Math.min(MAX_COLUMN_WIDTH, Math.max(s.min, Math.round(s.startWidth + clientX - s.startX)))
+  return Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, s.min, Math.round(s.startWidth + clientX - s.startX)))
 }

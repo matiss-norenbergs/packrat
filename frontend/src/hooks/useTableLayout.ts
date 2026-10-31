@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { deleteTableLayout, fetchTableLayouts, saveTableLayout } from "@/lib/api"
 import { canonicalSort } from "@/components/data-table/sorting"
-import { MAX_COLUMN_WIDTH } from "@/components/data-table/columns"
+import { MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH } from "@/components/data-table/columns"
 import type { SortState } from "@/components/data-table/sorting"
 import type { TableLayout, TableLayouts } from "@/types/api"
 
@@ -58,7 +58,7 @@ export function normalizeTableLayout(layout: TableLayout, opts: Pick<TableLayout
     .filter(([k]) => (!known || known.has(k)) && (!specs || k in specs))
     .map(([k, w]): [string, number] => {
       const spec = specs?.[k]
-      return [k, spec ? Math.min(MAX_COLUMN_WIDTH, Math.max(spec.min, Math.round(w))) : w]
+      return [k, spec ? Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, spec.min, Math.round(w))) : w]
     })
     .filter(([k, w]) => specs?.[k]?.default !== w)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

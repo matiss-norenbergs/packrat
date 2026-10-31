@@ -616,7 +616,8 @@ Every list table has fixed column widths: columns keep the same width however wi
 (an empty area after the last column keeps its row lines and highlight), and a window narrower than the columns scrolls the table
 sideways under a header that scrolls with it. Text that does not fit is cut off with an ellipsis; hover it (after a short delay)
 to see the full text in a tooltip. The tooltip closes when you press a mouse button, scroll, open the context menu or leave the
-table, and does not appear on checkboxes, icons, switches, or cells with buttons or links.
+table, and does not appear on checkboxes, icons, switches, or cells with buttons or links. Column headers behave the same: a
+header whose label is cut off shows it in full.
 
 Lists built on the shared table component can let you choose which columns to show and how to sort. Up to two icon-only buttons
 sit at the right end of the table's toolbar, after the search box (only on tables that offer them):
@@ -631,16 +632,24 @@ sit at the right end of the table's toolbar, after the search box (only on table
   before "File 10"); rows without a value (no birthday, a subscription that was never checked) always come last, whichever
   direction. Rows that tie keep their order. The sort covers all pages (it applies after search and filters, before paging); a
   new sort returns to page 1 and clears the selection. Headers are keyboard accessible (Tab to one, Enter or Space).
-- **Table layout** — a popover with **Save**, **Restore** and **Clear saved layout**; it covers the hidden columns and the sort
-  alike. A small dot on the button means the table currently differs from what you last saved (or from the defaults if you never
+- **Resizing columns** — on a table that saves a layout, point at a column header and drag the thin handle on its right edge.
+  The column follows the pointer (at least as wide as its minimum and at most 2000 px); growing a column first uses up the empty
+  area after the last column, then the table scrolls sideways. Letting go keeps the width as an unsaved change (the dot on
+  the layout button); pressing the handle never sorts. Checkbox columns, the column that takes the spare width, icon and switch
+  columns cannot be resized, and there is no keyboard or double-click shortcut: use Restore or Clear to get the default widths
+  back. Dragging a column back to its default width is no change at all. Hiding a column keeps its width. Available on
+  Artists, Subscriptions, History, Logs, Tags, AI Enhancement, Frame Matching and the Backup history.
+- **Table layout** — a popover with **Save**, **Restore** and **Clear saved layout**; it covers the hidden columns, the sort and
+  the column widths alike. A small dot on the button means the table currently differs from what you last saved (or from the defaults if you never
   saved). Save is enabled only then; it stores
   your layout on your account (it follows you to other browsers and the desktop app) and a "Layout saved" toast appears once
   the server has confirmed it. **Restore saved** (**Restore defaults** when nothing is saved) puts the table back to that
-  baseline with no toast. **Clear saved layout** (enabled only when one exists) deletes it and shows the default columns and order.
+  baseline with no toast. **Clear saved layout** (enabled only when one exists) deletes it and shows the default columns, order and widths.
 - Nothing is saved on its own: leaving the page and coming back shows your saved layout, or the defaults, again. The Layout
-  button appears only on tables that save a layout (Artists, Subscriptions, History, Logs); other tables with the Columns button
-  or sortable headers forget the choice when you leave the page. Tables with neither look as before. History has no hideable
-  column, so it only gets the Table layout button.
+  button appears only on tables that save a layout (Artists, Subscriptions, History, Logs, Tags, AI Enhancement, Frame Matching,
+  Backup history); other tables with the Columns button or sortable headers forget the choice when you leave the page, and tables
+  in dialogs and Settings have no resize handles. Tags, History and similar tables without a hideable column only get the Table
+  layout button.
 - While a list is loading, or failed to load, its footer still shows: a "—" instead of the count and a disabled pager, so
   the page (and dialogs such as Known items) keep their height.
 

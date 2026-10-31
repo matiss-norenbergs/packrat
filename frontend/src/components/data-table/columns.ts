@@ -33,8 +33,10 @@ export const DEFAULT_WIDTH_BY_TYPE: Record<ColumnType, number> = {
 }
 /** Lower bound in px of any column that declares no `minWidth`. */
 export const DEFAULT_MIN_WIDTH = 48
-/** Upper bound in px of a resized column (the backend accepts 24..2000). */
+/** Upper bound in px of a resized column. */
 export const MAX_COLUMN_WIDTH = 2000
+/** Lower bound in px of a resized column, whatever its `minWidth` (the backend accepts 24..2000). */
+export const MIN_COLUMN_WIDTH = 24
 
 /** Cells and headers never wrap by default: what does not fit is cut off with an ellipsis. */
 export const CLIP_CLASS = "overflow-hidden text-ellipsis whitespace-nowrap"
@@ -69,7 +71,7 @@ export function isResizable<T>(column: ColumnDef<T>): boolean {
 
 /** Clamps a dragged or saved width to [the column's minimum, MAX_COLUMN_WIDTH]. */
 export function clampColumnWidth<T>(column: ColumnDef<T>, px: number): number {
-  return Math.min(MAX_COLUMN_WIDTH, Math.max(columnMinWidth(column), Math.round(px)))
+  return Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, columnMinWidth(column), Math.round(px)))
 }
 
 /**

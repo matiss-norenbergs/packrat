@@ -195,8 +195,7 @@ at once and PATCH only the changed key; a failed save toasts and keeps the local
 migration of old browser values: an account with nothing stored gets the defaults.
 
 ### Saved table layouts
-What a user did to a list table (which columns are hidden and how it is sorted; the schema also carries column widths for the
-resize feature that follows) is stored per account in `user_table_layouts(user_id, table_id, layout, updated_at)`,
+What a user did to a list table (which columns are hidden, how it is sorted and how wide the columns are) is stored per account in `user_table_layouts(user_id, table_id, layout, updated_at)`,
 primary key `(user_id, table_id)`, `ON DELETE CASCADE`. It has its own table rather than rows in `user_preferences` because
 the value is a structured JSON document that the client fetches **once for every table** (`GET /api/auth/table-layouts`),
 whereas preferences are a fixed set of enum keys. Like preferences and 2FA data it is not in any backup, export or bundle
@@ -212,13 +211,19 @@ non-table list can use it): **saved** (the account's layout or null), **baseline
 layout lives in component state only and is never saved automatically; until the user edits, `working` simply *is* the
 baseline, so a saved layout that arrives after mount is adopted without overriding an edit made meanwhile, and leaving the
 page and coming back starts from the baseline again. `dirty` compares normalized forms (field and key order, empty versus
-missing `hidden`, keys of columns that no longer exist, and non-hideable keys in `hidden` are ignored). `save()` PUTs the working
+missing `hidden`, keys of columns that no longer exist, non-hideable keys in `hidden` and widths equal to the default are ignored).
+`widths` holds **overrides only**: normalization (`normalizeTableLayout`, fed the per-column default and minimum by DataTable through
+`resizableWidths`) drops a width equal to the column's default width (its `width` or the type default, raised to its `minWidth`), one
+for a column that does not exist or is not resizable (flex, icon, switch, `resizable: false`), raises a width below the
+column's minimum to it (never below the backend's 24) and caps it at 2000; keys are sorted and an empty map is omitted. Hidden
+columns keep their stored width. So dragging a column back to its default is not a change, and the default widths can change in code
+without invalidating saved layouts of columns the user never resized. `save()` PUTs the working
 layout, `clear()` DELETEs and applies the defaults, `restore()` is local; Save and Clear toast only when the server responds
 (an error toast leaves the working state alone) and a second one while a request is in flight is ignored.
 
-`DataTable` uses it when a table passes a `tableId` and has a `hideable` or a sortable column; without a `tableId` hiding and
+`DataTable` uses it when a table passes a `tableId` and has a `hideable`, a sortable or a resizable column; without a `tableId` hiding and
 sorting still work but nothing can be saved. Passing both `layout` and `onLayoutChange` makes the page own the working layout (the
-future Library list); the Layout popover then acts on that layout. `hidden` and `sort` are edited; `widths` is carried through.
+future Library list); the Layout popover then acts on that layout. `hidden`, `sort` and `widths` are all edited by the table (controlled mode carries all three).
 Dialog tables do not opt in. While the layouts query has not answered, a table with a `tableId` shows its loading state (and the
 footer placeholder) instead of rendering the defaults and re-arranging a moment later; if the fetch fails the defaults apply.
 
@@ -678,6 +683,10 @@ row type and the id type (number or string).
   columns, `tooltip: false` columns, or cells containing an `INTERACTIVE_SELECTOR` element. It closes on mouse down (and stays
   off until the button is released, so drag selection is quiet), scroll, context menu, Escape and pointer leave, and never stops
   or alters an event, so selection, drags, shift/ctrl clicks and the context menu are untouched. Keyboard-only use is not covered.
+  **Headers** use the same hook: the listener is also on the `thead` and finds `th[data-col]` (the selection column and the filler
+  have none), with the same rules (cut off, `tooltip: false`, no icon / switch / `wrap`) and the header's own text. The label inside
+  a sortable header's button counts as cut off, and that button (`data-sort-button`) is the one control that does not block the
+  tooltip; any other control in a header does. Hovering the resize handle shows none.
 - **Footer**: always shown when pagination is configured (client mode with `pageSize` + `itemLabel`, or the `pagination`
   prop), including while loading and on error, so the page (and a dialog) never changes height between states. Then it shows
   a placeholder ("—" instead of the count, no "· N selected", Previous/Next and the current page button disabled) and
@@ -742,11 +751,26 @@ row type and the id type (number or string).
   right-aligned columns so the label stays flush right, and centered columns keep a spacer of the arrow's width on the other
   side so the label stays centered. A sort change, however it came about (click, Restore, Clear, a saved layout arriving), goes
   back to page 1 and clears the selection in client mode, with the same mechanism as `resetKey` (state adjustment during render +
-  layout effect), keyed on the effective sort. **Layout button rule**: a table with a `tableId` and at least one hideable *or*
-  sortable column gets the Layout popover; the Columns menu needs a hideable one; the `ButtonGroup` holds whichever apply
+  layout effect), keyed on the effective sort. **Layout button rule**: a table with a `tableId` and at least one hideable, sortable *or* resizable
+  column gets the Layout popover; the Columns menu needs a hideable one; the `ButtonGroup` holds whichever apply
   (History: Layout only). Tables with neither render exactly as before. A sorted column that is also hidden keeps sorting.
-- **Why no virtualization / resizing yet**: pages are paginated at 50 rows, so virtualization would add complexity for no
-  gain; drag-resize is possible later because columns are data, but nothing needs it today.
+- **Resizing**: every column of a table **with a `tableId`** is resizable except the selection column, the filler, a `flex`
+  column (it absorbs the spare space, so dragging would show nothing), and `icon` / `switch` columns; `ColumnDef.resizable`
+  overrides the default either way (`true` on a flex column only moves its floor). Tables without a `tableId` (dialogs, Settings
+  tabs) get no handles. The handle is a `role="separator"` zone (`ResizeHandle`, `aria-label` "Resize <column> column", not focusable,
+  no keyboard or double-click reset: Restore / Clear are the way back) on the right edge of the `th`, a **sibling** of the sort
+  button so pressing it never sorts, drawn as a 1 px line only while the header is hovered. `useColumnResize` is modelled on
+  `CollapsiblePanel`: pointer events with pointer capture (the drag ends wherever the button is released), `preventDefault` on the
+  press (no text selection), `col-resize` and `user-select: none` on the body until it ends (also on pointercancel, lost capture and
+  unmount). **Live vs committed**: while dragging only `DataTableView` holds the width (a `{key, width}` state fed into
+  `computeLayout`, so the header, the colgroup and the min-width follow); the memoized rows receive nothing new and do not
+  re-render. On release the width goes into the working layout (`layout.widths[key]`, removed when equal to the default) like a hidden
+  column or the sort: dirty dot, Save, Restore, Clear. Growing a column uses up the filler first, then the table outgrows the
+  container and the single scroll container scrolls sideways (the sticky header with it). Effective width =
+  `max(widths[key] ?? width ?? type default, minWidth ?? 48)`, capped at 2000 (`effectiveColumnWidth`).
+- **tableIds** (stable, kebab-case): `artists`, `subscriptions`, `history`, `logs`, `tags`, `ai-enhancement`, `frame-matching`,
+  `backup-history`. Dialog tables (Eligible items, Known items, Stray files) and Settings tab tables (Sessions, Servers) have none.
+- **Why no virtualization**: pages are paginated at 50 rows, so virtualization would add complexity for no gain.
 - **Why Collections doesn't use it**: it renders a tree (expand/collapse, nesting, drag to re-parent), which a flat
   row model doesn't fit; its cells could use the same primitives but the table itself stays bespoke.
 

@@ -40,6 +40,10 @@ describe("effectiveColumnWidth", () => {
     expect(effectiveColumnWidth(col({ key: "a", width: 100, resizable: true, flex: true }), { a: 400 })).toBe(400)
   })
 
+  it("never goes below 24 px, even for a column with a tiny minWidth", () => {
+    expect(effectiveColumnWidth(col({ key: "a", minWidth: 10 }), { a: 5 })).toBe(24)
+  })
+
   it("rounds a fractional width", () => {
     expect(clampColumnWidth(col({ key: "a" }), 200.6)).toBe(201)
   })
