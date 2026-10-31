@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -352,26 +351,6 @@ func LibraryView(ctx context.Context, repo *repository.SettingsRepo) (string, er
 		return "grid", nil
 	}
 	return raw, err
-}
-
-// LibrarySort reads the library_sort setting — stored as "<sortKey>:<sortDir>"
-// (one key rather than two, since the two values are always read/written
-// together) — defaulting to downloadedAt/desc if unset or malformed. Shared
-// by GetSettings and UpdateSettings (which needs the current value to merge
-// in a change to just one half of the pair).
-func LibrarySort(ctx context.Context, repo *repository.SettingsRepo) (sortKey, sortDir string, err error) {
-	raw, err := repo.Get(ctx, models.SettingLibrarySort)
-	if errors.Is(err, repository.ErrNotFound) {
-		return "downloadedAt", "desc", nil
-	}
-	if err != nil {
-		return "", "", err
-	}
-	parts := strings.SplitN(raw, ":", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "downloadedAt", "desc", nil
-	}
-	return parts[0], parts[1], nil
 }
 
 // LibraryMode reads the library_mode setting, defaulting to "manage" if it's
@@ -976,11 +955,6 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		librarySortKey, librarySortDir, err := LibrarySort(c.Request.Context(), repo)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
 		libraryMode, err := LibraryMode(c.Request.Context(), repo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1218,8 +1192,6 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			HistoryRetentionDays:        historyRetentionDays,
 			DownloadLogRetentionDays:    downloadLogRetentionDays,
 			LibraryView:                 libraryView,
-			LibrarySortKey:              librarySortKey,
-			LibrarySortDir:              librarySortDir,
 			LibraryMode:                 libraryMode,
 			LibraryPaginationEnabled:    libraryPaginationEnabled,
 			LibraryPageSize:             libraryPageSize,
@@ -1463,26 +1435,6 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		}
 		if req.LibraryView != nil {
 			if err := repo.Set(c.Request.Context(), models.SettingLibraryView, *req.LibraryView); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-		}
-		if req.LibrarySortKey != nil || req.LibrarySortDir != nil {
-			// Stored together as one "<key>:<dir>" value — a request that only
-			// changes one half still needs the other half's current value to
-			// avoid clobbering it.
-			sortKey, sortDir, err := LibrarySort(c.Request.Context(), repo)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			if req.LibrarySortKey != nil {
-				sortKey = *req.LibrarySortKey
-			}
-			if req.LibrarySortDir != nil {
-				sortDir = *req.LibrarySortDir
-			}
-			if err := repo.Set(c.Request.Context(), models.SettingLibrarySort, sortKey+":"+sortDir); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
