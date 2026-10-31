@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import type { SortValue } from "./sorting"
 
 export type RowId = string | number
 
@@ -27,6 +28,12 @@ export interface ColumnDef<T> {
   defaultVisible?: boolean
   /** Name in the Columns menu; falls back to `header` when that is a string. A hideable column needs one of them. */
   label?: string
+  /**
+   * Makes the column sortable: the value a row sorts by (cells are React nodes, so it is given explicitly). Strings
+   * compare case-insensitively and numeric-aware, numbers numerically, Dates and booleans by their numeric value;
+   * null / undefined / NaN sort last in both directions. Rows are sorted by the table only in client-side mode.
+   */
+  sortValue?: (row: T) => SortValue
 }
 
 export interface SelectionColumnConfig {

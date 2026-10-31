@@ -2,6 +2,8 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { deleteTableLayout, fetchTableLayouts, saveTableLayout } from "@/lib/api"
+import { canonicalSort } from "@/components/data-table/sorting"
+import type { SortState } from "@/components/data-table/sorting"
 import type { TableLayout, TableLayouts } from "@/types/api"
 
 // Not under "auth": markLoggedOut and the 401 handler keep that key family and drop everything else,
@@ -23,16 +25,25 @@ export interface TableLayoutOptions {
   knownKeys?: readonly string[]
   /** Columns that may be hidden; narrows `hidden` further than `knownKeys` (a non-hideable column is never hidden). */
   hideableKeys?: readonly string[]
+  /** Columns that may be sorted by; narrows `sort` further than `knownKeys`. */
+  sortableKeys?: readonly string[]
+  /**
+   * The table's natural order. A `sort` equal to it is dropped when normalizing, so "no sort" always means the
+   * default order and an explicit sort identical to it never makes a layout look different.
+   */
+  defaultSort?: SortState
   /** The caller owns the working layout (e.g. a page that also needs it elsewhere); `onChange` receives every edit. */
   controlled?: { working: TableLayout; onChange: (layout: TableLayout) => void }
 }
 
 /** Order-independent, empty-field-free form used to compare layouts and to send them. */
-export function normalizeTableLayout(layout: TableLayout, opts: Pick<TableLayoutOptions, "knownKeys" | "hideableKeys"> = {}): TableLayout {
+export function normalizeTableLayout(layout: TableLayout, opts: Pick<TableLayoutOptions, "knownKeys" | "hideableKeys" | "sortableKeys" | "defaultSort"> = {}): TableLayout {
   const known = opts.knownKeys ? new Set(opts.knownKeys) : null
   const hideable = opts.hideableKeys ? new Set(opts.hideableKeys) : known
   const out: TableLayout = { v: 1 }
-  if (layout.sort && (!known || known.has(layout.sort.key))) out.sort = { key: layout.sort.key, dir: layout.sort.dir }
+  const sortable = opts.sortableKeys ? new Set(opts.sortableKeys) : known
+  const sort = layout.sort && (!sortable || sortable.has(layout.sort.key)) ? canonicalSort(layout.sort, opts.defaultSort) : undefined
+  if (sort) out.sort = sort
   const hidden = [...new Set(layout.hidden ?? [])].filter((k) => !hideable || hideable.has(k)).sort()
   if (hidden.length) out.hidden = hidden
   const widths = Object.entries(layout.widths ?? {})
@@ -76,14 +87,23 @@ export interface TableLayoutState {
 export function useTableLayout(tableId: string, defaults: TableLayout, opts: TableLayoutOptions = {}): TableLayoutState {
   const queryClient = useQueryClient()
   const { data: layouts, isPending } = useTableLayouts()
-  const { knownKeys, hideableKeys, controlled } = opts
+  const { knownKeys, hideableKeys, sortableKeys, defaultSort, controlled } = opts
 
   // The key lists are usually rebuilt each render; key the memos on their content.
   const knownSig = knownKeys?.join("\0")
   const hideableSig = hideableKeys?.join("\0")
+  const sortableSig = sortableKeys?.join("\0")
+  const defaultSortKey = defaultSort?.key
+  const defaultSortDir = defaultSort?.dir
   const norm = useCallback(
-    (l: TableLayout) => normalizeTableLayout(l, { knownKeys: knownSig?.split("\0"), hideableKeys: hideableSig?.split("\0") }),
-    [knownSig, hideableSig],
+    (l: TableLayout) =>
+      normalizeTableLayout(l, {
+        knownKeys: knownSig?.split("\0"),
+        hideableKeys: hideableSig?.split("\0"),
+        sortableKeys: sortableSig?.split("\0"),
+        defaultSort: defaultSortKey != null && defaultSortDir ? { key: defaultSortKey, dir: defaultSortDir } : undefined,
+      }),
+    [knownSig, hideableSig, sortableSig, defaultSortKey, defaultSortDir],
   )
 
   const savedRaw = layouts?.[tableId]
