@@ -27,6 +27,7 @@ interface Options<T, Id extends RowId> {
 // single: a click selects only that row; no drag, ctrl or shift.
 export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, selection }: Options<T, Id>) {
   const { selectAll, selectOnly, toggle } = selection
+  const current = selection.selected
   const [isDragging, setIsDragging] = useState(false)
   const anchorRef = useRef<Id | null>(null)
 
@@ -49,6 +50,13 @@ export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, s
     [rows, getRowId],
   )
 
+  // A drag fires mouseenter on every row crossed; setting an identical selection would still allocate a new
+  // Set and re-render the table, so only write when the range actually differs.
+  const selectRange = (ids: Id[]) => {
+    if (ids.length === current.size && ids.every((id) => current.has(id))) return
+    selectAll(ids)
+  }
+
   const onRowMouseDown = (e: MouseEvent, id: Id) => {
     if (mode === "none" || e.button !== 0) return
     // Checkbox / radio / buttons / inputs / portal content keep their own behavior (and native focus).
@@ -63,7 +71,7 @@ export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, s
     if (e.shiftKey && anchorRef.current != null) {
       const ids = rangeIds(anchorRef.current, id)
       if (ids) {
-        selectAll(ids)
+        selectRange(ids)
         return
       }
     }
@@ -82,7 +90,7 @@ export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, s
   const onRowMouseEnter = (id: Id) => {
     if (mode !== "multi" || !isDragging || anchorRef.current == null) return
     const ids = rangeIds(anchorRef.current, id)
-    if (ids) selectAll(ids)
+    if (ids) selectRange(ids)
   }
 
   return { onRowMouseDown, onRowMouseEnter }

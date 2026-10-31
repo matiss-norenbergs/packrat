@@ -119,3 +119,49 @@ describe("DataTable interactive targets", () => {
     expect(screen.getByRole("radio", { name: "Select B" })).toHaveAttribute("aria-checked", "false")
   })
 })
+
+describe("DataTable no-op selection updates", () => {
+  const selectAllSpy = vi.fn()
+  const seen: Set<number>[] = []
+
+  function Harness() {
+    const selection = useIdSelection<number>()
+    const spied = {
+      ...selection,
+      selectAll: (ids: number[]) => {
+        selectAllSpy(ids)
+        selection.selectAll(ids)
+      },
+    }
+    seen.push(selection.selected)
+    return <DataTable rows={ROWS} getRowId={getRowId} columns={[nameCol]} selection="multi" selectionState={spied} />
+  }
+
+  it("skips selectAll when a drag re-enters rows inside the existing range", () => {
+    selectAllSpy.mockClear()
+    render(<Harness />)
+    fireEvent.mouseDown(row("B"))
+    fireEvent.mouseEnter(row("B")) // same row: range is just B
+    expect(selectAllSpy).not.toHaveBeenCalled()
+    fireEvent.mouseEnter(row("C"))
+    fireEvent.mouseEnter(row("D"))
+    expect(selectAllSpy).toHaveBeenCalledTimes(2)
+    const afterDrag = seen[seen.length - 1]
+    fireEvent.mouseEnter(row("D")) // unchanged range B..D
+    expect(selectAllSpy).toHaveBeenCalledTimes(2)
+    expect(seen[seen.length - 1]).toBe(afterDrag) // same Set object, no extra render with a new one
+    fireEvent.mouseEnter(row("C")) // shrinks to B..C: a real change
+    expect(selectAllSpy).toHaveBeenCalledTimes(3)
+  })
+
+  it("skips selectAll for a shift-click that reproduces the current selection", () => {
+    selectAllSpy.mockClear()
+    render(<Harness />)
+    fireEvent.mouseDown(row("B"))
+    fireEvent.mouseUp(window)
+    fireEvent.mouseDown(row("D"), { shiftKey: true })
+    expect(selectAllSpy).toHaveBeenCalledTimes(1)
+    fireEvent.mouseDown(row("D"), { shiftKey: true })
+    expect(selectAllSpy).toHaveBeenCalledTimes(1)
+  })
+})
