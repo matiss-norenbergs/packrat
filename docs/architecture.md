@@ -234,6 +234,7 @@ and refire with the saved sort. `saveSortAsDefault` (`useSaveTableLayoutSort` in
 and PUTs it, or DELETEs the layout when only `v` is left; one request at a time, a toast only when the server answers, and the layouts cache is updated, so the
 baseline becomes the saved sort. Backups: `ApplySettingsBundle` skips retired setting keys (`library_sort`) and does not count them, so an old backup or settings
 file cannot bring the row back.
+
 `DataTable` uses it when a table passes a `tableId` and has a `hideable`, a sortable or a resizable column; without a `tableId` hiding and
 sorting still work but nothing can be saved. Passing both `layout` and `onLayoutChange` makes the page own the working layout (the
 future Library list); the Layout popover then acts on that layout. `hidden`, `sort` and `widths` are all edited by the table (controlled mode carries all three).
