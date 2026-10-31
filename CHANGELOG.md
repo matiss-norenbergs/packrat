@@ -12,6 +12,10 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-10-31
+- **Stray files dialog scrolls again** — the table inside the dialog was taller than its box, so rows beyond roughly the
+  first dozen were clipped and could not be reached; the list now scrolls inside the dialog with a sticky header.
+
 ## 2026-10-30
 - **Side panel sizing is configurable, opens at 500px, and reset forgets the width** — `CollapsiblePanel` takes
   `minWidth` / `maxRatio` / `defaultWidth` (280px / 50% / 500px). Double-click or Enter now clears the remembered width
