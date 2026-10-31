@@ -552,7 +552,8 @@ transition is switched off only while dragging.
 
 ## List tables (`DataTable`)
 
-`components/data-table/` is the shared list-table component; `TagsPage` is the first page on it. **The component owns**
+`components/data-table/` is the shared list-table component; `TagsPage` is the reference migration and `ArtistsPage` (the table beside its `CollapsiblePanel`, passing
+`className="overflow-hidden"` and `footerClearsDock`) is on it too. **The component owns**
 the table chrome and the interaction logic that used to be copy-pasted per page: the column model, alignment, widths and
 scroll, the checkbox/radio column, click / ctrl / shift / drag selection (`useTableSelection`, on top of a *controlled*
 `useIdSelection` the page passes as `selectionState`, so its toolbar reads the same state), the context menu (including
