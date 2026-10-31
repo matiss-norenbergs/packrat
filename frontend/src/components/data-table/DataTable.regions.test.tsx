@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { cleanup, render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, it } from "vitest"
 import { DataTable } from "./DataTable"
 import type { DataTableProps } from "./DataTable"
 
@@ -11,7 +11,6 @@ interface Row {
 }
 const ROWS: Row[] = Array.from({ length: 5 }, (_, i) => ({ id: i + 1, name: `Item ${i + 1}` }))
 const COLUMNS = [{ key: "n", header: "Name", cell: (r: Row) => r.name }]
-const LABEL = { singular: "item", plural: "items" }
 
 function setup(props: Partial<DataTableProps<Row, number>> = {}) {
   return render(<DataTable rows={ROWS} getRowId={(r) => r.id} columns={COLUMNS} {...props} />)
@@ -59,47 +58,5 @@ describe("loadingContent", () => {
 
     rerender(<DataTable rows={ROWS} getRowId={(r: Row) => r.id} columns={COLUMNS} loading loadingRows={3} />)
     expect(container.querySelectorAll("[data-slot=skeleton]")).toHaveLength(3)
-  })
-})
-
-describe("hideSinglePageFooter", () => {
-  const pager = (page: number, total: number, onPageChange = vi.fn()) => ({
-    page,
-    pageSize: 5,
-    total,
-    onPageChange,
-    itemLabel: LABEL,
-  })
-
-  it("still shows the footer by default, even for one page", () => {
-    setup({ pageSize: 10, itemLabel: LABEL })
-    expect(screen.getByText("5 items")).toBeInTheDocument()
-  })
-
-  it("client mode: hidden for one page, shown with the count and pager for several", () => {
-    const { rerender } = setup({ pageSize: 10, itemLabel: LABEL, hideSinglePageFooter: true })
-    expect(screen.queryByText("5 items")).toBeNull()
-    expect(screen.queryByRole("button", { name: "Next" })).toBeNull()
-
-    const many = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, name: `Item ${i + 1}` }))
-    rerender(<DataTable rows={many} getRowId={(r: Row) => r.id} columns={COLUMNS} pageSize={10} itemLabel={LABEL} hideSinglePageFooter />)
-    expect(screen.getByText("12 items")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "Next" }))
-    expect(screen.getByText("12 items")).toBeInTheDocument()
-  })
-
-  it("controlled mode: hidden for one page, shown for several", () => {
-    const { rerender } = setup({ pagination: pager(1, 5), hideSinglePageFooter: true })
-    expect(screen.queryByText("5 items")).toBeNull()
-
-    rerender(<DataTable rows={ROWS} getRowId={(r: Row) => r.id} columns={COLUMNS} pagination={pager(1, 6)} hideSinglePageFooter />)
-    expect(screen.getByText("6 items")).toBeInTheDocument()
-  })
-
-  it("keeps the footer for a page past the end so it can snap back, then hides it", () => {
-    const onPageChange = vi.fn()
-    setup({ pagination: pager(2, 5, onPageChange), hideSinglePageFooter: true })
-    expect(screen.getByText("5 items")).toBeInTheDocument()
-    expect(onPageChange).toHaveBeenCalledWith(1)
   })
 })

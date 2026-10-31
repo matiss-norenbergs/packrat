@@ -577,9 +577,9 @@ toolbar is the `toolbar` slot and the context menu is built from the rows it was
 The Settings cards follow the same recipe with no toolbar at all: `SessionsCard` and `ServersSection` pass `className="gap-0"`
 and the card's own `containerClassName="relative max-h-80 w-full overflow-auto"` (controlled mode, `selection="none"`), keep the surrounding
 buttons outside the table, and list the cell dependencies (`isPending`, the active profile id) in the `columns` memo; `ServersSection`'s
-`empty` node replaces the whole table, header included. **Dialogs**: `EligibleItemsDialog` (controlled, all rows, multi selection),
+`empty` node replaces the whole table, header included. **Dialogs**: `EligibleItemsDialog` (controlled, all rows on one page via a single-page `pagination` config so the footer shows "N items · M selected"),
 `KnownItemsDialog` (client mode, 20 per page, `resetKey` = the subscription id) and `StrayFilesRow` (client mode, 50 per page,
-`hideSinglePageFooter`, `resetKey` bumped by every scan) put the table in the dialog with `className="gap-4"` (the dialog's own
+`resetKey` bumped by every scan) put the table in the dialog with `className="gap-4"` (the dialog's own
 spacing instead of `gap-6`), the action buttons in the `toolbar` slot and the bordered box in `regionClassName`: a fixed
 `h-[60vh] flex-none overflow-hidden rounded-md border` (Known items, so the dialog never resizes between loading / empty /
 loaded) or a capped `flex max-h-[60vh] flex-col overflow-hidden rounded-md border` (Eligible) with `containerClassName="min-h-0 flex-1
@@ -626,8 +626,9 @@ row type and the id type (number or string).
   base widths (`width ?? minWidth ?? 120`), so a narrower container scrolls horizontally inside the single scroll
   container (sticky header stays). Spare space goes to the `flex` columns, or — if none is flagged — to the **last column**,
   so there is never an empty strip.
-- **Footer**: shown whenever `pagination` is set, except while loading or on error — including at 0 results ("0 tags",
-  one disabled page). In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
+- **Footer**: always shown when pagination is configured (client mode with `pageSize` + `itemLabel`, or the `pagination`
+  prop), hidden only while loading or on error — never for a single page or an empty table, which show "0 tags" and one
+  disabled page. In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
   clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
   `onPageChange(lastPage)`, so pages need no clamping code. **Dock clearance is automatic**: the footer
   carries the `dock-occupied:` variants of the clearance classes (`lib/dockClearance.ts`: row `flex-wrap-reverse gap-2`,
@@ -654,8 +655,7 @@ row type and the id type (number or string).
 - **Region props** (for tables inside a dialog or card): `regionClassName` is merged onto the content region wrapper
   (`min-h-0 flex-1`) that holds the loading / error / empty state or the table, so one fixed or capped height and
   border covers all of them and the box doesn't resize between states; `loadingContent` replaces the default skeleton
-  bars while `loading`; `hideSinglePageFooter` (client and controlled mode) omits the pagination footer while there is
-  only one page (default: always shown).
+  bars while `loading`.
 - **Why no virtualization / sorting / resizing yet**: pages are paginated at 50 rows, so virtualization would add
   complexity for no gain; sorting, drag-resize and column show/hide are possible later because columns are data, but
   nothing needs them today.

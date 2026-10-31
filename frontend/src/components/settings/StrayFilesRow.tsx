@@ -139,7 +139,6 @@ export function StrayFilesRow() {
             getRowLabel={entryLabel}
             pageSize={PAGE_SIZE}
             itemLabel={ITEM_LABEL}
-            hideSinglePageFooter
             resetKey={scanKey}
             regionClassName="flex flex-col overflow-hidden rounded-md border"
             containerClassName="min-h-0 flex-1 overflow-auto"

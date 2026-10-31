@@ -54,7 +54,7 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe("StrayFilesRow table", () => {
-  it("renders the columns and rows with their alignment, and no footer for one page", async () => {
+  it("renders the columns and rows with their alignment, and the footer with the count for one page", async () => {
     const dialog = await openDialog(result(3))
     const headers = within(dialog).getAllByRole("columnheader")
     expect(headers.map((h) => h.textContent)).toEqual(["", "Root", "Path", "Reason", "Size", "Modified"])
@@ -72,8 +72,10 @@ describe("StrayFilesRow table", () => {
     expect(cells[5]).toHaveTextContent(new Date("2026-09-03T10:00:00Z").toLocaleDateString())
     expect(screen.getByRole("checkbox", { name: "Select dir/file-1.mp4" })).toBeInTheDocument()
 
-    expect(within(dialog).queryByRole("button", { name: "Next" })).toBeNull()
-    expect(within(dialog).queryByText("3 files")).toBeNull()
+    expect(within(dialog).getByText("3 files")).toBeInTheDocument()
+    expect(within(dialog).getByRole("button", { name: "Next" })).toBeDisabled()
+    pick(0)
+    expect(within(dialog).getByText("3 files · 1 selected")).toBeInTheDocument()
   })
 
   it("fills the dialog with one scrolling container inside a bordered box", async () => {

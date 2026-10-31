@@ -89,11 +89,6 @@ export interface DataTableProps<T, Id extends RowId = number> {
   regionClassName?: string
   /** Replaces the scroll container's classes entirely (see Table in components/ui/table.tsx). */
   containerClassName?: string
-  /**
-   * Client-side and controlled mode: don't render the pagination footer while everything fits on one page (the
-   * default is to always show it, even at 0 results). It reappears as soon as there is a second page.
-   */
-  hideSinglePageFooter?: boolean
 }
 
 // Rendered inside ContextMenuContent, which Radix only mounts while the menu is open, so the page's
@@ -225,7 +220,6 @@ export function DataTable<T, Id extends RowId = number>({
   className,
   regionClassName,
   containerClassName,
-  hideSinglePageFooter,
 }: DataTableProps<T, Id>) {
   const ownSelection = useIdSelection<Id>()
   const selection = selectionState ?? ownSelection
@@ -430,9 +424,7 @@ export function DataTable<T, Id extends RowId = number>({
   const selectedId = mode === "single" ? pageIds.find((id) => selection.selected.has(id)) : undefined
 
   const hasToolbar = toolbar != null || filters != null || search != null
-  // A page past the end still renders the footer for one commit so TablePagination can snap it back.
-  const singlePage = pagination != null && pagination.page <= 1 && pagination.total <= pagination.pageSize
-  const showPagination = pagination != null && !loading && !error && !(hideSinglePageFooter && singlePage)
+  const showPagination = pagination != null && !loading && !error
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col gap-6", className)}>
