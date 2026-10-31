@@ -12,6 +12,7 @@ import type { Collection } from "@/types/api"
 import { CollectionFolderTile } from "./CollectionFolderTile"
 import { LibraryCard } from "./LibraryCard"
 import { LibraryPagination } from "./LibraryPagination"
+import { LibraryScrollView } from "./LibraryScrollView"
 
 // Walks parentId up to the root using a flat id->Collection map, rather than
 // the generated `.path` string — path segments are names, and two
@@ -63,17 +64,26 @@ export function LibraryFolderView() {
     pageSize: paginationEnabled ? pageSize : undefined,
   }, sortReady)
 
+  // Everything that starts a new view at the top (the page is already 1 in the pass that sees a changed filter).
+  const resetKey = JSON.stringify([page, currentId, search, tagNames.join(","), hideGhosts, sortKey, sortDir])
+
   if (collectionsLoading || itemsLoading || settingsLoading || !sortReady) {
     return (
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        <Skeleton className="aspect-video w-full" />
-        <Skeleton className="aspect-video w-full" />
-        <Skeleton className="aspect-video w-full" />
-      </div>
+      <LibraryScrollView resetKey={resetKey}>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <Skeleton className="aspect-video w-full" />
+          <Skeleton className="aspect-video w-full" />
+          <Skeleton className="aspect-video w-full" />
+        </div>
+      </LibraryScrollView>
     )
   }
   if (isError) {
-    return <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p>
+    return (
+      <LibraryScrollView resetKey={resetKey}>
+        <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p>
+      </LibraryScrollView>
+    )
   }
   if (!collections || !data) return null
 
@@ -89,48 +99,49 @@ export function LibraryFolderView() {
   const childNodes = currentNode ? currentNode.children : tree
   const breadcrumb = currentId != null ? breadcrumbFor(collections, currentId) : []
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
-        <button
-          type="button"
-          onClick={() => goTo(null)}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-        >
-          <Home className="h-3.5 w-3.5" />
-          Root
-        </button>
-        {breadcrumb.map((c) => (
-          <Fragment key={c.id}>
-            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-            <button
-              type="button"
-              onClick={() => goTo(c.id)}
-              className="rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-            >
-              {c.name}
-            </button>
-          </Fragment>
-        ))}
-      </div>
+  const isEmpty = childNodes.length === 0 && data.total === 0
 
-      {childNodes.length === 0 && data.total === 0 ? (
+  return (
+    <LibraryScrollView
+      resetKey={resetKey}
+      header={
+        <div className="flex shrink-0 flex-wrap items-center gap-1 text-sm text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => goTo(null)}
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
+          >
+            <Home className="h-3.5 w-3.5" />
+            Root
+          </button>
+          {breadcrumb.map((c) => (
+            <Fragment key={c.id}>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+              <button
+                type="button"
+                onClick={() => goTo(c.id)}
+                className="rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
+              >
+                {c.name}
+              </button>
+            </Fragment>
+          ))}
+        </div>
+      }
+      footer={!isEmpty && paginationEnabled && <LibraryPagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} />}
+    >
+      {isEmpty ? (
         <p className="text-sm text-muted-foreground">This collection is empty.</p>
       ) : (
-        <>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {childNodes.map((node) => (
-              <CollectionFolderTile key={node.id} node={node} onClick={() => goTo(node.id)} />
-            ))}
-            {data.items.map((item) => (
-              <LibraryCard key={item.id} item={item} />
-            ))}
-          </div>
-          {paginationEnabled && (
-            <LibraryPagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} />
-          )}
-        </>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {childNodes.map((node) => (
+            <CollectionFolderTile key={node.id} node={node} onClick={() => goTo(node.id)} />
+          ))}
+          {data.items.map((item) => (
+            <LibraryCard key={item.id} item={item} />
+          ))}
+        </div>
       )}
-    </div>
+    </LibraryScrollView>
   )
 }

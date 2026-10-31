@@ -113,11 +113,17 @@ type DialogId =
  * The actions of library items and the dialogs / mutations they own. `actionsFor(item)` returns that item's action list;
  * running one that opens a dialog first makes the item the dialog's target. `host` holds every dialog and goes anywhere in
  * the tree, independent of whatever menu triggers the actions: pass `fixedItem` to bind it to one item (the "⋮" dropdown of a
- * card mounts one per card), or omit it to mount it once for many items (the list view's right-click menu).
+ * card mounts one per card), or omit it to mount it once for many items (the list view's right-click menu). In the
+ * many-items mode pass `liveItems` (the current page's rows): only the picked item's id is kept and the dialogs resolve
+ * it from those rows on every render, so a refetch updates an open dialog; an item that left the page (moved, deleted,
+ * another page) keeps the last snapshot, so the dialog does not blank out.
  */
-export function useLibraryItemActions(fixedItem?: LibraryItem) {
-  const [picked, setPicked] = useState<LibraryItem | null>(null)
-  const item = fixedItem ?? picked
+export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: readonly LibraryItem[]) {
+  const [picked, setPicked] = useState<{ id: number; snapshot: LibraryItem } | null>(null)
+  const live = picked && liveItems?.find((i) => i.id === picked.id)
+  // Keep the snapshot at the latest live version (state adjusted during render, so the fallback is never older than needed).
+  if (picked && live && live !== picked.snapshot) setPicked({ id: picked.id, snapshot: live })
+  const item = fixedItem ?? live ?? picked?.snapshot ?? null
   const [dialog, setDialog] = useState<DialogId | null>(null)
   // undefined = use the Settings frame count / pick range; set by the custom
   // dialog for one run of the picker.
@@ -143,8 +149,9 @@ export function useLibraryItemActions(fixedItem?: LibraryItem) {
   const addToCompareList = useAddToCompareList()
   const removeFromCompareList = useRemoveFromCompareList()
 
+  const pick = (target: LibraryItem) => setPicked({ id: target.id, snapshot: target })
   const open = (target: LibraryItem, id: DialogId) => {
-    setPicked(target)
+    pick(target)
     setDialog(id)
   }
   // A dialog's onOpenChange: closing only counts while it is still the open one (a confirm that moves on to another
@@ -266,7 +273,7 @@ export function useLibraryItemActions(fixedItem?: LibraryItem) {
               icon: <Link2 />,
               disabled: !hasUrl,
               onSelect: () => {
-                setPicked(it)
+                pick(it)
                 setFrameMatchMode("url")
               },
             },
@@ -277,7 +284,7 @@ export function useLibraryItemActions(fixedItem?: LibraryItem) {
               icon: <RefreshCw />,
               disabled: !hasThumbnail,
               onSelect: () => {
-                setPicked(it)
+                pick(it)
                 setFrameMatchMode("current")
               },
             },

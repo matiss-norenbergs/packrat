@@ -9,17 +9,16 @@ interface LibraryPaginationProps {
 
 // The Library's footer is the shared table footer (count left, numbered pager right, dock-aware). The views render it
 // only when pagination is enabled, and then even for a single page. No `selectedCount`: the toolbar shows the selection.
-// The Library page scrolls as a whole, so the footer sits below the content with the old control's extra `pt-2`.
+// It sits below the scroll region (LibraryScrollView), outside the area that scrolls, so it is always in view; the 16px
+// above it come from the view's gap.
 export function LibraryPagination({ page, pageSize, total, onPageChange }: LibraryPaginationProps) {
   return (
-    <div className="pt-2">
-      <TablePagination
-        page={page}
-        pageSize={pageSize}
-        total={total}
-        onPageChange={onPageChange}
-        itemLabel={{ singular: "item", plural: "items" }}
-      />
-    </div>
+    <TablePagination
+      page={page}
+      pageSize={pageSize}
+      total={total}
+      onPageChange={onPageChange}
+      itemLabel={{ singular: "item", plural: "items" }}
+    />
   )
 }

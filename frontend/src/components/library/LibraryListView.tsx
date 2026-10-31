@@ -188,7 +188,7 @@ export function LibraryListView() {
   const total = data?.total ?? 0
   const selection = useLibraryListSelection(items)
   // Row actions live in the right-click menu: the same actions as the "⋮" menus of the grid, one host for the table's dialogs.
-  const { actionsFor, host: actionsHost } = useLibraryItemActions()
+  const { actionsFor, host: actionsHost } = useLibraryItemActions(undefined, items)
   // Per-row actions: only for exactly one target row. A right-click on a selected row while several items are selected opens
   // nothing (bulk actions are the toolbar's Bulk operations); a right-click on an unselected row selects just that row first.
   const contextMenu = (rows: LibraryItem[]) => {

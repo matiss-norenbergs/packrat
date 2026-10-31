@@ -26,20 +26,23 @@ function Table(props: Partial<DataTableProps<Row, number>>) {
 }
 
 describe("DataTable toolbar", () => {
-  it("renders toolbar nodes, then filters, then search, with search right-aligned", () => {
+  it("renders the toolbar node, then one right-aligned cluster with filters and search", () => {
     render(<Table toolbar={<button>New</button>} filters={<span>filter</span>} search={{ value: "", onChange: () => {}, placeholder: "Find…" }} />)
     const bar = screen.getByText("New").parentElement!
     const kids = Array.from(bar.children)
+    expect(kids).toHaveLength(2)
     expect(kids[0]).toHaveTextContent("New")
-    expect(kids[1]).toHaveTextContent("filter")
-    expect(kids[1]).toHaveClass("ml-auto")
-    expect(kids[2]).toContainElement(screen.getByPlaceholderText("Find…"))
+    // ml-auto pushes the cluster to the right edge; justify-end keeps its wrapped lines right-aligned too.
+    expect(kids[1]).toHaveClass("ml-auto", "flex-wrap", "justify-end")
+    const [filters, search] = Array.from(kids[1].children)
+    expect(filters).toHaveTextContent("filter")
+    expect(search).toContainElement(screen.getByPlaceholderText("Find…"))
     expect(bar).toHaveClass("shrink-0")
   })
 
-  it("gives the search ml-auto itself when there are no filters", () => {
+  it("puts a lone search in the right-aligned cluster", () => {
     render(<Table search={{ value: "", onChange: () => {} }} />)
-    expect(screen.getByPlaceholderText("Search…").parentElement).toHaveClass("ml-auto")
+    expect(screen.getByPlaceholderText("Search…").parentElement!.parentElement).toHaveClass("ml-auto", "justify-end")
   })
 
   it("renders no toolbar without slots", () => {

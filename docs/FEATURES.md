@@ -216,6 +216,10 @@ not per-browser):
   (Settings → toggle it on and pick a page size) for large libraries. With pagination on, the grid and the Folders view end in
   the same footer as the tables: "N items" on the left (even for a single page) and the numbered pager with Previous / Next on
   the right, indented to clear the floating reveal button when it is shown. With pagination off they have no footer.
+  **Scrolling**: the grid and the Folders view fill the window like the list: the title, the toolbar row (with its divider), the
+  Folders breadcrumb and the pagination footer stay in view and only the cards scroll (the page itself never scrolls). On a
+  narrow window the toolbar wraps and the cards area simply gets shorter. The cards return to the top on a new page, filter,
+  search, sort or folder (not on a refetch, a selection change or a resize).
 - **Folders** — browse by collection, one level at a time, with a breadcrumb trail and
   browser-back support for navigating up.
 - **List** — a table of the current page (see [List view](#list-view) below). It always ends in the table footer: with
@@ -238,8 +242,9 @@ The list is the shared table (see [Table layouts](#table-layouts) below) with th
   operations**, **Clear** and "N selected" (only with a selection) on the left; **Filters & Sort**, the search box and one
   joined group of three icon buttons on the right: **Columns**, **Layout** and the **display settings cog** (Mode / View /
   Pagination, same Apply behaviour as in the grid). The search is the Library's shared one (the URL `q`), so switching views keeps
-  the query. The row is not sticky (the table's header is, inside its scroll box); the grid and the Folders view keep the sticky
-  Library toolbar. On a narrow window the group wraps to its own row.
+  the query. On a narrow window the right-hand controls (Filters & Sort, the search and the button group) wrap onto their own
+  line(s) and stay right-aligned. The grid and the Folders view use a separate Library toolbar (the same controls) in a fixed
+  row under the title.
 - **Columns**: Thumb, Title, Season/Episode, Year, Duration, Downloaded, Artist, Collection, Size and Tags (there is no "⋮" column). Year,
   Duration, Downloaded and Size are hidden until you show them. The **Columns** menu and the **Layout** button (Save / Restore /
   Clear) are in the toolbar's button group (see above); the Library toolbar has no Columns menu any more. **Hidden columns, column widths and the sort are saved with the `library` layout** (hidden columns used to last only
@@ -677,7 +682,8 @@ while you point at a control. Column headers behave the same: a header whose lab
 Changing the page, the sort or the search takes a scrolled table back to its top (a sideways scroll position stays).
 
 Lists built on the shared table component can let you choose which columns to show and how to sort. Up to two icon-only buttons
-sit at the right end of the table's toolbar, after the search box (only on tables that offer them):
+sit at the right end of the table's toolbar, after the search box (only on tables that offer them; when the toolbar is too narrow
+they wrap together with the filters and the search, right-aligned):
 
 - **Columns** — a checkbox list of the columns that can be hidden. Ticking or unticking applies instantly, and the list stays open
   so you can change several.
