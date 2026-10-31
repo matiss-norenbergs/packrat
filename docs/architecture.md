@@ -567,7 +567,9 @@ because the dock is a *sibling* of the layout content, not an ancestor of any fo
 renders nothing but portaled buttons (and is `empty:hidden`). `lib/dockClearance.ts` exports the two class strings
 (`DOCK_FOOTER_ROW`, `DOCK_FOOTER_LABEL`; the `pl-12` is the button size plus gap, defined only there). `TablePagination`
 (so every `DataTable` page) and the hand-rolled footers of Downloads and Collections use them, so the
-count label shifts when the button appears or disappears and is not indented otherwise. Needs `:has()` (Chromium 105+,
+count label shifts when the button appears or disappears and is not indented otherwise. The Library's `LibraryPagination`
+(grid, folder and list views, only when its pagination setting is on) renders `TablePagination` too, inside a `pt-2` wrapper
+because the Library page scrolls as a whole. Needs `:has()` (Chromium 105+,
 Safari 15.4+, Firefox 121+), which covers the web UI and the desktop webviews; older engines just get no indent.
 The variant does not apply inside dialogs or alert dialogs (`&:not([role="dialog"] *, [role="alertdialog"] *)`): they are
 portaled above the dock, so a table in a dialog never gets the dock indent.

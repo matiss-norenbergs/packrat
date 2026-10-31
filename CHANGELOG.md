@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-10-31
+- **The Library footer matches the tables'** — with pagination on, the grid, Folders view and list now end in the shared table footer ("N items" on the left, numbered pager on the right, clear of the reveal button) instead of a centered "Prev / Page X of Y / Next", and it also shows for a single page.
 - **The Library sort is a working choice** — the sort picked in Filters & Sort (or by clicking a list header) now applies at once to the grid, folders, list and the item page's "More from this collection" strip, and survives opening an item, but it is no longer remembered across reloads: a reload starts from the sort saved in your `library` table layout (else date downloaded, newest first). The dialog has a new **Save as default** button to store it. The `librarySortKey`/`librarySortDir` settings are gone (migration 000051), and restoring an old backup no longer brings them back.
 - **File Import uses the shared table** — the Import page now has sortable Name, Size, Duration and Resolution headers (files
   without a duration or resolution come last; resolution sorts by pixel count), the Table layout button (saves the sort and the
