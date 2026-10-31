@@ -639,12 +639,30 @@ row type and the id type (number or string).
   (window-level mouseup). `single` = radios inside a `radiogroup` wrapping the content region, a click selects only that
   row, no drag/shift/ctrl. Right-clicking an unselected row replaces the selection with it; right-clicking a selected
   row keeps a multi-selection; the header/empty area opens nothing.
+  **`isRowSelectable?: (row) => boolean`** (default: all rows): a row that returns false keeps its place but cannot be
+  selected (Import: files already imported). Its checkbox / radio is disabled; the row gets no mouse-down / mouse-enter
+  handlers, so a click, ctrl/cmd click or a press that would start a drag does nothing, and `rangeIds` (shift ranges and drags)
+  filters it out, so a range across it selects the selectable rows around it. Select-all, the header checkbox's checked /
+  indeterminate state, the footer's "· N selected" and the toolbar slot's `selectedRows` consider only the selectable rows of
+  the page (a stale selected id of a row that became unselectable is not drawn as selected and not counted). A right-click on
+  it leaves the selection alone and the context menu acts on that row only. `onRowClick` / `onRowDoubleClick` still fire. The
+  flag reaches the memoized row as the primitive `canSelect`, so a page's inline predicate re-renders only rows whose result
+  changed. Dimming it is the page's job (`rowClassName`).
 - **Interactive cells**: a mouse-down / click / double-click on `button, a[href], input, select, textarea, label`,
   the `switch`/`checkbox`/`radio`/`combobox`/`menuitem` roles or anything inside `[data-no-row-select]`
   (`INTERACTIVE_SELECTOR`) is left to that element: it doesn't select the row, start a drag or fire
   `onRowClick`/`onRowDoubleClick`. Put `data-no-row-select` on a custom interactive cell that matches none of those.
   Events that reach the row through a React portal (a popover or dialog rendered from a cell) are ignored too. The
   context-menu handler is unaffected.
+- **Per-row editable state** (reference: `ImportPage`): a cell that holds an input must not make the page re-render per keystroke,
+  and `columns` must not close over changing state (it would re-render every row). The pattern: the page keeps a **ref map**
+  keyed by row id (`useState(() => new Map())`, never changed through a setter) and the input is a small cell component that
+  keeps its text in its own `useState`, initialised from the map and writing every change back to it. Typing re-renders that
+  input only, the text survives the row unmounting (paging, sorting, hiding) because the next mount reads the map again, and
+  the page's action (`importOne`) reads the value from the map. The flags that do change on events (Importing / Imported) and
+  the page's handler (wrapped in `useEvent`) reach the cells through a small **context** whose value is memoized on those
+  flags, so only the cells that consume it re-render, on import events and never while typing; `columns` is a module-level
+  constant. `ImportPage.table.test.tsx` pins it with render counters (the page, a row's cells, each input).
 - **Rendering cost**: rows are `React.memo`'d (`DataTableRow`) and take only primitives and stable handlers (the
   page's `onRowClick`, `contextMenu` etc. go through `useEvent`, so inline lambdas are fine), so a click or drag
   re-renders only the rows whose `selected` flag changed; a drag that doesn't change the range skips the update
@@ -680,13 +698,22 @@ row type and the id type (number or string).
   app's usual tooltip delay (200 ms), it shows the existing `Tooltip` with the cell's `innerText` (two-line cells stay two
   lines) or `tooltipText(row)`. The anchor is a fixed, pointer-less box over the cell portaled to `document.body` (a dialog's
   transform would otherwise displace it). Never for the selection column, `icon` / `switch` columns, the filler, `wrap`
-  columns, `tooltip: false` columns, or cells containing an `INTERACTIVE_SELECTOR` element. It closes on mouse down (and stays
+  columns or `tooltip: false` columns. **Controls in the cell**: a cell that also holds a control (`TOOLTIP_BLOCKING_SELECTOR`:
+  button, input, select, textarea, label, the switch / checkbox / radio / combobox / menuitem roles, `[data-no-row-select]`;
+  plain links are not controls) still shows the tooltip, but not while the pointer is over a control or inside one: the
+  hook remembers whether the pointer is on a control as well as which cell it is in, so moving from the text onto a button
+  closes it, moving back measures again, and moving between two controls does nothing. The text is the cell's own text
+  **without the text of its controls** (`textOutsideControls`: a tree walk over the text nodes, skipping control subtrees,
+  SVGs and `display: none`, one line per block ancestor and per `<br>`, whitespace collapsed; it replaces `innerText`, which
+  cannot leave anything out and does not exist in jsdom), so a button label never ends up in the tooltip, and a cell with only
+  controls shows none. A long value inside a control (an input) does not make the cell count as cut off. `tooltipText(row)` still
+  replaces the computed text. It closes on mouse down (and stays
   off until the button is released, so drag selection is quiet), scroll, context menu, Escape and pointer leave, and never stops
   or alters an event, so selection, drags, shift/ctrl clicks and the context menu are untouched. Keyboard-only use is not covered.
   **Headers** use the same hook: the listener is also on the `thead` and finds `th[data-col]` (the selection column and the filler
   have none), with the same rules (cut off, `tooltip: false`, no icon / switch / `wrap`) and the header's own text. The label inside
-  a sortable header's button counts as cut off, and that button (`data-sort-button`) is the one control that does not block the
-  tooltip; any other control in a header does. Hovering the resize handle shows none.
+  a sortable header's button counts as cut off, and that button (`data-sort-button`) is the one control that is part of the label
+  rather than a control (any other control in a header follows the rule above). Hovering the resize handle shows none.
 - **Footer**: always shown when pagination is configured (client mode with `pageSize` + `itemLabel`, or the `pagination`
   prop), including while loading and on error, so the page (and a dialog) never changes height between states. Then it shows
   a placeholder ("—" instead of the count, no "· N selected", Previous/Next and the current page button disabled) and
@@ -769,7 +796,7 @@ row type and the id type (number or string).
   container and the single scroll container scrolls sideways (the sticky header with it). Effective width =
   `max(widths[key] ?? width ?? type default, minWidth ?? 48)`, capped at 2000 (`effectiveColumnWidth`).
 - **tableIds** (stable, kebab-case): `artists`, `subscriptions`, `history`, `logs`, `tags`, `ai-enhancement`, `frame-matching`,
-  `backup-history`. Dialog tables (Eligible items, Known items, Stray files) and Settings tab tables (Sessions, Servers) have none.
+  `backup-history`, `import`. Dialog tables (Eligible items, Known items, Stray files) and Settings tab tables (Sessions, Servers) have none.
 - **Why no virtualization**: pages are paginated at 50 rows, so virtualization would add complexity for no gain.
 - **Why Collections doesn't use it**: it renders a tree (expand/collapse, nesting, drag to re-parent), which a flat
   row model doesn't fit; its cells could use the same primitives but the table itself stays bespoke.

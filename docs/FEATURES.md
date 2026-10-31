@@ -515,15 +515,22 @@ or downloaded by some other tool) — brings them into the Library without re-do
 
 - **Rescan** re-scans the media root for files not already in the Library, showing size, duration,
   resolution, and which collection folder (existing or new) each one would land in. Results are
-  paginated and searchable by filename, same as the Library/History/Logs tables.
+  paginated (50 per page) and searchable by filename or path (the search waits a moment after you stop typing and has a clear
+  button), same as the History/Logs tables; the footer shows how many files match and how many are selected. The **Name**,
+  **Size**, **Duration** and **Resolution** headers sort the list (click again for descending, a third time for the scan order;
+  files without a duration or resolution always come last, resolution sorts by pixel count) and **Table layout** can save the
+  sort and the column widths; see [Table layouts](#table-layouts). Size, Duration and Resolution can be resized; a file or
+  folder name that does not fit is cut off and shows in full in a tooltip when you hover the text (not the ignore button).
 - Select individual files (click/shift-click for a range, ctrl/cmd-click to toggle, or click-and-
   drag across rows) and hit **Import Selected**, or **Import All** to import every pending file —
   either asks for confirmation first and shows how many files will be added. Each import probes
   the file with `ffprobe` and creates a Library entry for it. You can optionally attach an original
   source URL per file (so Redownload/Refresh Metadata/Compare Metadata work on it later) — imports
-  without one just skip those actions; a per-file **Import** button imports just that one row
-  without a confirmation prompt. Imported rows are greyed out and can't be re-imported; the scan
-  list itself doesn't auto-refresh after every import, only on page load or manual Rescan.
+  without one just skip those actions; what you typed stays in its box while you page, sort or search and goes with whichever
+  import you start (single, selected or all); a per-file **Import** button imports just that one row
+  without a confirmation prompt. Imported rows are greyed out and can't be re-imported or selected (a drag, a shift range or
+  Select all skips them); the scan list itself doesn't auto-refresh after every import, only on page load or manual Rescan,
+  which keeps showing the current list while it scans.
 - **Ignored Folders** — mark specific folders (and their sub-folders) to be skipped in future
   scans entirely, e.g. a raw-footage or behind-the-scenes folder you never want surfaced here.
 
@@ -616,8 +623,9 @@ Every list table has fixed column widths: columns keep the same width however wi
 (an empty area after the last column keeps its row lines and highlight), and a window narrower than the columns scrolls the table
 sideways under a header that scrolls with it. Text that does not fit is cut off with an ellipsis; hover it (after a short delay)
 to see the full text in a tooltip. The tooltip closes when you press a mouse button, scroll, open the context menu or leave the
-table, and does not appear on checkboxes, icons, switches, or cells with buttons or links. Column headers behave the same: a
-header whose label is cut off shows it in full.
+table, and does not appear on checkboxes, icons or switches. A cell that also holds a button, input or switch (Import's file
+name next to its ignore button) shows the tooltip while you point at its text, with the text of the controls left out, and not
+while you point at a control. Column headers behave the same: a header whose label is cut off shows it in full.
 
 Lists built on the shared table component can let you choose which columns to show and how to sort. Up to two icon-only buttons
 sit at the right end of the table's toolbar, after the search box (only on tables that offer them):
@@ -638,7 +646,7 @@ sit at the right end of the table's toolbar, after the search box (only on table
   the layout button); pressing the handle never sorts. Checkbox columns, the column that takes the spare width, icon and switch
   columns cannot be resized, and there is no keyboard or double-click shortcut: use Restore or Clear to get the default widths
   back. Dragging a column back to its default width is no change at all. Hiding a column keeps its width. Available on
-  Artists, Subscriptions, History, Logs, Tags, AI Enhancement, Frame Matching and the Backup history.
+  Artists, Subscriptions, History (not its thumbnail), Logs, Tags, AI Enhancement, Frame Matching, the Backup history and Import.
 - **Table layout** — a popover with **Save**, **Restore** and **Clear saved layout**; it covers the hidden columns, the sort and
   the column widths alike. A small dot on the button means the table currently differs from what you last saved (or from the defaults if you never
   saved). Save is enabled only then; it stores
@@ -647,7 +655,7 @@ sit at the right end of the table's toolbar, after the search box (only on table
   baseline with no toast. **Clear saved layout** (enabled only when one exists) deletes it and shows the default columns, order and widths.
 - Nothing is saved on its own: leaving the page and coming back shows your saved layout, or the defaults, again. The Layout
   button appears only on tables that save a layout (Artists, Subscriptions, History, Logs, Tags, AI Enhancement, Frame Matching,
-  Backup history); other tables with the Columns button or sortable headers forget the choice when you leave the page, and tables
+  Backup history, Import); other tables with the Columns button or sortable headers forget the choice when you leave the page, and tables
   in dialogs and Settings have no resize handles. Tags, History and similar tables without a hideable column only get the Table
   layout button.
 - While a list is loading, or failed to load, its footer still shows: a "—" instead of the count and a disabled pager, so
