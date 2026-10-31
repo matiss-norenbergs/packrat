@@ -241,7 +241,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
                       type="button"
                       variant="ghost"
                       size="icon-xs"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
                       onClick={handleReconstructFilename}
                       aria-label="Reconstruct from collection's filename template"
                     >
@@ -396,7 +396,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
                         type="button"
                         variant="ghost"
                         size="icon-xs"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
                         onClick={handleDetectSeason}
                         aria-label="Detect Season from filename"
                       >
@@ -425,7 +425,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
                           type="button"
                           variant="ghost"
                           size="icon-xs"
-                          className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
                           onClick={handleDetectSequence}
                           aria-label="Detect Episode from filename"
                         >
