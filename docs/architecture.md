@@ -224,7 +224,9 @@ layout, `clear()` DELETEs and applies the defaults, `restore()` is local; Save a
 **Library sort.** The Library sort is not a Settings key any more (`library_sort`, `librarySortKey` and `librarySortDir` were removed;
 migration 000051 deletes the row and clients that still send the fields are ignored). `LibrarySortProvider` (`components/library/LibrarySortContext.tsx`,
 mounted in `AppLayout` next to `RevealAllProvider` so it sits above both `/library` and `/library/:id` and survives navigation between them)
-wraps `useTableLayout("library", ...)` with the seven `LibrarySortKey`s as known and sortable keys and `downloadedAt` descending as `defaultSort`.
+wraps `useTableLayout("library", ...)` configured from the list view's column specs (`lib/libraryListColumns.ts`, see "Library list view" below: known, hideable, sortable
+and resizable keys, the default hidden columns) with `downloadedAt` descending as `defaultSort`. It exposes the working **layout** (sort, hidden, widths) and `setLayout`
+as well as the sort.
 The **baseline** is the sort of the saved `library` layout, else the default; the **working** sort starts as the baseline (a late layout is adopted unless
 the user already changed the sort), applies instantly to every view, and is gone on a reload. `useLibrarySort()` (`hooks/useLibrarySort.ts`) exposes
 `sort`, `baseline`, `ready`, `differs`, `setSort` and `saveSortAsDefault`; without the provider (`BrowseLayout`, the Browse item page) it returns the saved
@@ -234,6 +236,31 @@ and refire with the saved sort. `saveSortAsDefault` (`useSaveTableLayoutSort` in
 and PUTs it, or DELETEs the layout when only `v` is left; one request at a time, a toast only when the server answers, and the layouts cache is updated, so the
 baseline becomes the saved sort. Backups: `ApplySettingsBundle` skips retired setting keys (`library_sort`) and does not count them, so an old backup or settings
 file cannot bring the row back.
+
+**Library list view.** `LibraryListView` is a `DataTable` in **controlled (server) mode** (`tableId="library"`, the id of the shared sort layout): `rows` is the
+current page's items, the page owns the query (URL filters, `usePageState`, the sort from `useLibrarySort`, pagination from Settings), and the table never sorts.
+- *Shared column specs.* `lib/libraryListColumns.ts` (no JSX, no component imports, so no cycle) is the single source of the column keys, labels, widths, hideable /
+  default-visible and sortable flags, the two extra sort keys and the default layout. The list builds its `ColumnDef`s from it (adding header cell, cell and `sortValue`), and
+  `LibrarySortProvider` builds its `useTableLayout` options from it. The provider needs them because it sits above the page and cannot see the columns, while the layout
+  normalization drops `hidden` and `widths` for keys it does not know: without the specs a saved layout's hidden columns and widths would be ignored on load and lost on
+  Restore. Its default layout hides the columns that are off by default, the same set `DataTable` computes, so Restore / Clear and the dirty dot agree. A sortable
+  column's key **is** the server sort key (`title`, `seasonNumber` for Season/Episode, `year`, `duration`, `downloadedAt`), so `layout.sort.key` is what the queries send;
+  `sortValue` only marks the column sortable. The toolbar's `filename` and `sequenceNumber` sorts are not columns and go through `extraSortKeys`.
+- *Layout ownership.* The table's `layout` / `onLayoutChange` are the provider's working layout, so a header click, the toolbar dialog, the grid and the folder
+  view all read and write the same sort. The old `LibraryColumnsContext` / `LibraryColumnsProvider` / `LIBRARY_COLUMNS` and the toolbar's Columns dropdown are gone:
+  hidden columns are part of the saved layout now, and the table's own Columns menu and Layout popover (the thin row above it) replace them. "Save as default" still saves
+  only the sort (`useSaveTableLayoutSort`, which keeps the stored `hidden` / `widths`).
+- *Selection adapter.* `useLibraryListSelection(items)` returns an `IdSelection<number>` over the Library's persisting `SelectionContext`, passed as `selectionState`:
+  `toggle` (ctrl / cmd click, the checkboxes) adds or removes one item and accumulates across pages; `selectOnly`, `selectAll` (a click, a drag, a shift range, the header
+  checkbox) and `clear` replace the whole selection and clear selected collections too. Ids always come from the current page, so they are turned back into items there.
+  The returned object changes only when the selection does (its mutators are `useEvent`s), so the memoized rows re-render only when their `selected` flag flips. The
+  controlled table does not clear the selection on a page, search or sort change, so it persists like the grid's. The grid and folder views keep using the context directly.
+- *Cells.* The cells that depend on page state (reveal, the current URL for the title link's `from` state) are small components reading their context, so `COLUMNS` is a
+  module constant. The old "selection active" coupling is gone: the title link, the thumbnail reveal, the tags popover and the actions menu stay live with a selection and
+  never select the row (links and buttons are skipped by the table's interactive-target guard; a blurred thumbnail's wrapper carries `data-no-row-select`).
+  `getRowLabel` hashes the title of a blurred, unrevealed item.
+- *Footer.* The table's own, through the `pagination` prop (with pagination off a single-page config, `pageSize: max(1, total)`, so "N items" still shows), and
+  `selectedCount={approxCount}`, so the footer shows the toolbar's number. `LibraryPagination` is now used by the grid and the folder view only.
 
 `DataTable` uses it when a table passes a `tableId` and has a `hideable`, a sortable or a resizable column; without a `tableId` hiding and
 sorting still work but nothing can be saved. Passing both `layout` and `onLayoutChange` makes the page own the working layout (the
@@ -568,8 +595,8 @@ renders nothing but portaled buttons (and is `empty:hidden`). `lib/dockClearance
 (`DOCK_FOOTER_ROW`, `DOCK_FOOTER_LABEL`; the `pl-12` is the button size plus gap, defined only there). `TablePagination`
 (so every `DataTable` page) and the hand-rolled footers of Downloads and Collections use them, so the
 count label shifts when the button appears or disappears and is not indented otherwise. The Library's `LibraryPagination`
-(grid, folder and list views, only when its pagination setting is on) renders `TablePagination` too, inside a `pt-2` wrapper
-because the Library page scrolls as a whole. Needs `:has()` (Chromium 105+,
+(grid and folder views, only when its pagination setting is on) renders `TablePagination` too, inside a `pt-2` wrapper
+because the Library page scrolls as a whole; the list view is a `DataTable` and has the footer itself. Needs `:has()` (Chromium 105+,
 Safari 15.4+, Firefox 121+), which covers the web UI and the desktop webviews; older engines just get no indent.
 The variant does not apply inside dialogs or alert dialogs (`&:not([role="dialog"] *, [role="alertdialog"] *)`): they are
 portaled above the dock, so a table in a dialog never gets the dock indent.
@@ -820,7 +847,7 @@ row type and the id type (number or string).
   container and the single scroll container scrolls sideways (the sticky header with it). Effective width =
   `max(widths[key] ?? width ?? type default, minWidth ?? 48)`, capped at 2000 (`effectiveColumnWidth`).
 - **tableIds** (stable, kebab-case): `artists`, `subscriptions`, `history`, `logs`, `tags`, `ai-enhancement`, `frame-matching`,
-  `backup-history`, `import`. Dialog tables (Eligible items, Known items, Stray files) and Settings tab tables (Sessions, Servers) have none.
+  `backup-history`, `import`, `library` (the list view; shares its layout with the Library sort). Dialog tables (Eligible items, Known items, Stray files) and Settings tab tables (Sessions, Servers) have none.
 - **Why no virtualization**: pages are paginated at 50 rows, so virtualization would add complexity for no gain.
 - **Why Collections doesn't use it**: it renders a tree (expand/collapse, nesting, drag to re-parent), which a flat
   row model doesn't fit; its cells could use the same primitives but the table itself stays bespoke.
