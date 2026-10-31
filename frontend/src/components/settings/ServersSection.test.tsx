@@ -54,6 +54,38 @@ describe("ServersSection", () => {
     expect(within(rows[1]).queryByText("Current")).toBeNull()
   })
 
+  it("has the Name / Address / Last used columns with an actions column", () => {
+    setup()
+    renderWithProviders(<ServersSection />)
+    const headers = screen.getAllByRole("columnheader")
+    expect(headers.map((h) => h.textContent)).toEqual(["Name", "Address", "Last used", ""])
+    expect(headers[2]).toHaveClass("text-center")
+    expect(headers[3]).toHaveClass("w-24")
+    const cells = within(screen.getAllByRole("row")[2]).getAllByRole("cell")
+    expect(cells[1]).toHaveClass("break-all", "font-mono", "text-xs")
+    expect(cells[2]).toHaveClass("text-center", "whitespace-nowrap")
+    expect(within(cells[2]).getByTitle(/./)).toBeInTheDocument() // full date on hover
+    expect(within(cells[3]).getByRole("button", { name: "Edit Work" })).toHaveAttribute("title", "Edit")
+    expect(within(cells[3]).getByRole("button", { name: "Remove Work" })).toHaveAttribute("title", "Remove")
+    expect(screen.getByRole("table").parentElement).toHaveClass("max-h-80", "overflow-auto")
+  })
+
+  it("shows a message instead of the table when there are no saved servers", () => {
+    renderWithProviders(<ServersSection />)
+    expect(screen.getByText("No saved servers.")).toBeInTheDocument()
+    expect(screen.queryByRole("table")).toBeNull()
+    expect(screen.getByRole("button", { name: "Add server…" })).toBeInTheDocument()
+  })
+
+  it("opens the edit dialog for the clicked row only", async () => {
+    setup()
+    renderWithProviders(<ServersSection />)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole("button", { name: "Edit Work" }))
+    expect(screen.getByLabelText("Name")).toHaveValue("Work")
+    expect(screen.getByLabelText("Address")).toHaveValue("https://packrat.work.example")
+  })
+
   it("renames a server without probing it", async () => {
     const { work } = setup()
     const fetchMock = health(true)
