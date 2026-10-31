@@ -20,6 +20,8 @@ export interface ColumnDef<T> {
   minWidth?: number
   /** Opt-in: this column absorbs the spare width (its `width` is then its minimum); with one, the table has no filler column. */
   flex?: boolean
+  /** The cells of this column may wrap onto several lines (the row grows) instead of being cut off with an ellipsis. */
+  wrap?: boolean
   headerClassName?: string
   cellClassName?: string
   /** Opt-in: the Columns menu lets the user hide this column. Default false (never hideable). */

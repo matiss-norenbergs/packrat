@@ -43,7 +43,7 @@ const columns: ColumnDef<LogEntry>[] = [
     key: "title",
     header: "Title",
     sortValue: (entry) => entry.title ?? entry.url,
-    cell: (entry) => <p className="max-w-xs truncate font-medium">{entry.title ?? entry.url}</p>,
+    cell: (entry) => <p className="truncate font-medium">{entry.title ?? entry.url}</p>,
   },
   {
     key: "status",

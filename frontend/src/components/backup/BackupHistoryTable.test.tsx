@@ -215,7 +215,7 @@ describe("BackupHistoryTable as a DataTable", () => {
     expect(within(failed).getByText("Manual")).toBeTruthy()
     expect(within(failed).getByText("Failed")).toBeTruthy()
     const error = within(failed).getByText("disk full")
-    expect(error).toHaveClass("max-w-64", "truncate", "text-destructive")
+    expect(error).toHaveClass("truncate", "text-destructive")
     expect(error).toHaveAttribute("title", "disk full")
     expect(failed.children[4].textContent).toBe("—") // contents of a failed backup
     expect(failed.children[5].textContent).toBe("—") // no size

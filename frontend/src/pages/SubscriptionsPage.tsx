@@ -98,7 +98,6 @@ export function SubscriptionsPage() {
       {
         key: "title",
         header: "Title",
-        cellClassName: "max-w-64",
         sortValue: (sub) => sub.title,
         cell: (sub) => (
           <>

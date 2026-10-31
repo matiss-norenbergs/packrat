@@ -230,7 +230,7 @@ describe("DataTable sortable headers", () => {
     ]
     render(wrap(<Client tableId="t" columns={cols} />))
     const kids = (n: string) =>
-      Array.from(sortButton(n).childNodes).map((c) => (c.nodeType === 3 ? "text" : (c as Element).tagName.toLowerCase() === "svg" ? "arrow" : "spacer"))
+      Array.from(sortButton(n).childNodes).map((c) => ((c as Element).classList.contains("truncate") ? "text" : (c as Element).tagName.toLowerCase() === "svg" ? "arrow" : "spacer"))
     click("Left")
     expect(kids("Left")).toEqual(["text", "arrow"])
     expect(kids("Center")).toEqual(["spacer", "text", "spacer"])

@@ -87,7 +87,7 @@ describe("LogsPage table", () => {
     expect(alpha.getByText("Failed")).toBeInTheDocument()
     expect(alpha.getByText("3").closest("td")).toHaveClass("text-right", "text-muted-foreground")
     expect(alpha.getByText(new Date(CREATED).toLocaleString())).toHaveClass("text-muted-foreground")
-    expect(alpha.getByText("Alpha")).toHaveClass("max-w-xs", "truncate", "font-medium")
+    expect(alpha.getByText("Alpha")).toHaveClass("truncate", "font-medium")
     // No retries shows an em dash; a missing title falls back to the url.
     expect(within(row("https://example.com/bare")).getByText("—")).toBeInTheDocument()
     expect(screen.getByText("2 logs")).toBeInTheDocument()

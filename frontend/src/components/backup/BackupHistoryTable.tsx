@@ -71,7 +71,7 @@ const columns: ColumnDef<BackupHistoryEntry>[] = [
           {entry.status === "success" ? "Success" : "Failed"}
         </Badge>
         {entry.status === "failed" && entry.errorMessage && (
-          <p className="max-w-64 truncate text-xs text-destructive" title={entry.errorMessage}>
+          <p className="truncate text-xs text-destructive" title={entry.errorMessage}>
             {entry.errorMessage}
           </p>
         )}

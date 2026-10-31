@@ -34,6 +34,15 @@ export const DEFAULT_WIDTH_BY_TYPE: Record<ColumnType, number> = {
 /** Lower bound in px of any column that declares no `minWidth`. */
 export const DEFAULT_MIN_WIDTH = 48
 
+/** Cells and headers never wrap by default: what does not fit is cut off with an ellipsis. */
+export const CLIP_CLASS = "overflow-hidden text-ellipsis whitespace-nowrap"
+/** A `wrap` column: long words break so nothing overflows the column. */
+export const WRAP_CLASS = "whitespace-normal break-words"
+
+export function clipClass<T>(column: ColumnDef<T>): string {
+  return column.wrap ? WRAP_CLASS : CLIP_CLASS
+}
+
 export function resolveAlign<T>(column: ColumnDef<T>): ColumnAlign {
   return column.align ?? ALIGN_BY_TYPE[column.type ?? "text"]
 }

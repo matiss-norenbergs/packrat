@@ -31,7 +31,7 @@ const columns: ColumnDef<StrayFileEntry>[] = [
   {
     key: "path",
     header: "Path",
-    cellClassName: "max-w-[280px] truncate font-medium",
+    cellClassName: "font-medium",
     cell: (e) => <span title={e.path}>{e.path}</span>,
   },
   { key: "reason", header: "Reason", cellClassName: "text-muted-foreground", cell: (e) => e.reason },

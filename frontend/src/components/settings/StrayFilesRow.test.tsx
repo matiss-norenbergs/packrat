@@ -64,7 +64,7 @@ describe("StrayFilesRow table", () => {
     const cells = within(rowEls()[1]).getAllByRole("cell")
     expect(cells[1]).toHaveTextContent("images")
     expect(cells[1]).toHaveClass("text-muted-foreground")
-    expect(cells[2]).toHaveClass("max-w-[280px]", "truncate", "font-medium")
+    expect(cells[2]).toHaveClass("overflow-hidden", "text-ellipsis", "whitespace-nowrap", "font-medium")
     expect(within(cells[2]).getByTitle("dir/file-1.mp4")).toBeInTheDocument()
     expect(cells[3]).toHaveTextContent("no db record")
     expect(cells[4]).toHaveTextContent("2.0 KB")

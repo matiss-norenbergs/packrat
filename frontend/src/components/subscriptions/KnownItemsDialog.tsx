@@ -37,7 +37,7 @@ const columns: ColumnDef<SubscriptionEntry>[] = [
   {
     key: "title",
     header: "Title",
-    cellClassName: "max-w-[360px] truncate font-medium",
+    cellClassName: "font-medium",
     cell: (entry) => (entry.url !== "" ? entry.title : "Unknown"),
   },
   {

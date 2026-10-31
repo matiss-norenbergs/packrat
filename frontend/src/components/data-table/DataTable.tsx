@@ -17,7 +17,7 @@ import { TableSearch } from "./TableSearch"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ColumnsMenu, LayoutPopover } from "./TableLayoutControls"
 import { isRowEventIgnored } from "./interactive"
-import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, computeLayout, resolveAlign } from "./columns"
+import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, clipClass, computeLayout, resolveAlign } from "./columns"
 import type { ColumnAlign, ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
 import { cycleLayoutSort, effectiveSort, sortRows } from "./sorting"
 import type { SortDir, SortState } from "./sorting"
@@ -223,7 +223,7 @@ function DataTableRowImpl<T, Id extends RowId>({
         // them; icon cells get a flex wrapper instead of every page needing mx-auto.
         const cell = c.cell(row)
         return (
-          <TableCell key={c.key} className={cn(ALIGN_CLASS[align], c.cellClassName)}>
+          <TableCell key={c.key} className={cn(ALIGN_CLASS[align], clipClass(c), c.cellClassName)}>
             {c.type === "icon" ? <div className={cn("flex items-center", JUSTIFY_CLASS[align])}>{cell}</div> : cell}
           </TableCell>
         )
@@ -245,11 +245,11 @@ function SortButton({ align, dir, onClick, children }: { align: ColumnAlign; dir
   return (
     <button
       type="button"
-      className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="inline-flex max-w-full cursor-pointer select-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       onClick={onClick}
     >
       {align === "right" ? (dir ? arrow : null) : align === "center" ? <span className="h-3 w-3 shrink-0" /> : null}
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
       {align === "right" ? null : align === "center" ? arrow : dir ? arrow : null}
     </button>
   )
@@ -461,7 +461,7 @@ function DataTableView<T, Id extends RowId = number>({
               return (
                 <TableHead
                   key={c.key}
-                  className={cn(ALIGN_CLASS[align], c.headerClassName)}
+                  className={cn(ALIGN_CLASS[align], clipClass(c), c.headerClassName)}
                   aria-sort={sortable ? (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none") : undefined}
                 >
                   {sortable ? (

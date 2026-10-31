@@ -170,6 +170,21 @@ describe("DataTable widths", () => {
   })
 })
 
+describe("DataTable clipping and wrap", () => {
+  it("clips cells and headers with an ellipsis by default", () => {
+    render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a" })]} />)
+    for (const el of [headerOf("a"), firstCellOf(0)]) expect(el).toHaveClass("overflow-hidden", "text-ellipsis", "whitespace-nowrap")
+  })
+
+  it("lets a wrap column's cells and header wrap, with long words breaking", () => {
+    render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", wrap: true })]} />)
+    for (const el of [headerOf("a"), firstCellOf(0)]) {
+      expect(el).toHaveClass("whitespace-normal", "break-words")
+      expect(el).not.toHaveClass("whitespace-nowrap", "text-ellipsis", "overflow-hidden")
+    }
+  })
+})
+
 describe("DataTable states", () => {
   it("renders rows with data-row-id, string ids included", () => {
     render(

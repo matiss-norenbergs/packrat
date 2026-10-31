@@ -59,6 +59,7 @@ export function ServersSection() {
       {
         key: "name",
         header: "Name",
+        wrap: true,
         cell: (profile) => (
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{profile.name}</span>
@@ -66,12 +67,11 @@ export function ServersSection() {
           </div>
         ),
       },
-      { key: "url", header: "Address", cellClassName: "break-all font-mono text-xs", cell: (profile) => profile.url },
+      { key: "url", header: "Address", wrap: true, cellClassName: "break-all font-mono text-xs", cell: (profile) => profile.url },
       {
         key: "lastUsed",
         header: "Last used",
         type: "date",
-        cellClassName: "whitespace-nowrap",
         cell: (profile) => (
           <span title={new Date(profile.lastUsedAt).toLocaleString()}>
             {profile.id === activeId ? "Now" : formatTimeAgo(new Date(profile.lastUsedAt).toISOString())}
@@ -82,7 +82,7 @@ export function ServersSection() {
         key: "actions",
         header: "",
         type: "icon",
-        headerClassName: "w-24",
+        width: 96,
         cell: (profile) => (
           <div className="flex gap-1">
             <Button variant="ghost" size="icon" aria-label={`Edit ${profile.name}`} title="Edit" onClick={() => setEditing(profile)}>
