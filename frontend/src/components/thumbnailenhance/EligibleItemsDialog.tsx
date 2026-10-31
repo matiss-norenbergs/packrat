@@ -1,14 +1,15 @@
-import { useState } from "react"
 import { Loader2, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Link } from "react-router-dom"
+import { DataTable } from "@/components/data-table"
+import type { ColumnDef } from "@/components/data-table"
 import { useEnhanceThumbnailItems, useThumbnailEnhancementEligible } from "@/hooks/useThumbnailEnhancement"
+import { useIdSelection } from "@/hooks/useIdSelection"
+import type { ThumbnailEnhancementEligibleItem } from "@/types/api"
 
 interface EligibleItemsDialogProps {
   open: boolean
@@ -24,31 +25,68 @@ function timeAgo(iso: string): string {
   return `${hours}h ago`
 }
 
+const getItemId = (item: ThumbnailEnhancementEligibleItem) => item.libraryItemId
+const getItemLabel = (item: ThumbnailEnhancementEligibleItem) => `Select ${item.itemTitle}`
+
+const columns: ColumnDef<ThumbnailEnhancementEligibleItem>[] = [
+  {
+    key: "item",
+    header: "Item",
+    cellClassName: "max-w-[280px] truncate",
+    cell: (item) => (
+      <Link to={`/library/${item.libraryItemId}`} className="font-medium underline-offset-2 hover:underline">
+        {item.itemTitle}
+      </Link>
+    ),
+  },
+  { key: "artist", header: "Artist", cellClassName: "text-muted-foreground", cell: (item) => item.artistName ?? "—" },
+  { key: "collection", header: "Collection", cellClassName: "text-muted-foreground", cell: (item) => item.collectionName ?? "—" },
+  {
+    key: "dimensions",
+    header: "Dimensions",
+    type: "number",
+    cellClassName: "text-muted-foreground",
+    cell: (item) => `${item.width}×${item.height}`,
+  },
+  {
+    key: "status",
+    header: "Status",
+    type: "status",
+    cell: (item) =>
+      item.isProcessing ? (
+        <Badge variant="secondary" className="gap-1">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Enhancing…
+        </Badge>
+      ) : item.recentlyFailedAt ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="destructive" className="cursor-default">
+              Recently failed
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>Failed {timeAgo(item.recentlyFailedAt)} — skipped from automatic runs, still retryable here.</TooltipContent>
+        </Tooltip>
+      ) : null,
+  },
+]
+
+const loadingContent = (
+  <div className="space-y-1 p-2">
+    {Array.from({ length: 4 }).map((_, i) => (
+      <Skeleton key={i} className="h-10 w-full rounded-md" />
+    ))}
+  </div>
+)
+
 export function EligibleItemsDialog({ open, onOpenChange }: EligibleItemsDialogProps) {
   const { data: items, isLoading } = useThumbnailEnhancementEligible(open)
   const enhanceItems = useEnhanceThumbnailItems()
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-
-  const toggleOne = (id: number, checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (checked) next.add(id)
-      else next.delete(id)
-      return next
-    })
-  }
-
-  const toggleAll = (checked: boolean) => {
-    setSelectedIds(checked ? new Set((items ?? []).map((i) => i.libraryItemId)) : new Set())
-  }
+  const selection = useIdSelection<number>()
 
   const handleEnhanceSelected = () => {
-    const ids = Array.from(selectedIds)
-    enhanceItems.mutate(ids, { onSuccess: () => setSelectedIds(new Set()) })
+    enhanceItems.mutate(Array.from(selection.selected), { onSuccess: selection.clear })
   }
-
-  const allSelected = !!items && items.length > 0 && selectedIds.size === items.length
-  const someSelected = selectedIds.size > 0 && !allSelected
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -61,92 +99,31 @@ export function EligibleItemsDialog({ open, onOpenChange }: EligibleItemsDialogP
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center justify-between gap-3">
-          <Button size="sm" disabled={selectedIds.size === 0 || enhanceItems.isPending} onClick={handleEnhanceSelected}>
-            <Sparkles className="h-4 w-4" />
-            Enhance Selected
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Nothing selected"}
-          </span>
-        </div>
-
-        <div className="max-h-[60vh] overflow-y-auto rounded-md border">
-          {isLoading ? (
-            <div className="space-y-1 p-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full rounded-md" />
-              ))}
-            </div>
-          ) : !items || items.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">Nothing eligible right now.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8 text-center">
-                    <Checkbox
-                      checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                      onCheckedChange={(checked) => toggleAll(checked === true)}
-                      aria-label="Select all"
-                    />
-                  </TableHead>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Artist</TableHead>
-                  <TableHead>Collection</TableHead>
-                  <TableHead className="text-right">Dimensions</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item.libraryItemId}>
-                    <TableCell className="text-center">
-                      <Checkbox
-                        checked={selectedIds.has(item.libraryItemId)}
-                        onCheckedChange={(checked) => toggleOne(item.libraryItemId, checked === true)}
-                        aria-label={`Select ${item.itemTitle}`}
-                      />
-                    </TableCell>
-                    <TableCell className="max-w-[280px] truncate">
-                      <Link
-                        to={`/library/${item.libraryItemId}`}
-                        className="font-medium underline-offset-2 hover:underline"
-                      >
-                        {item.itemTitle}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{item.artistName ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{item.collectionName ?? "—"}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {item.width}×{item.height}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {item.isProcessing ? (
-                        <Badge variant="secondary" className="gap-1">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Enhancing…
-                        </Badge>
-                      ) : item.recentlyFailedAt ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge variant="destructive" className="cursor-default">
-                              Recently failed
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Failed {timeAgo(item.recentlyFailedAt)} — skipped from automatic runs, still retryable
-                            here.
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : null}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+        <DataTable
+          className="gap-4"
+          rows={items ?? []}
+          getRowId={getItemId}
+          columns={columns}
+          selection="multi"
+          selectionState={selection}
+          getRowLabel={getItemLabel}
+          loading={isLoading}
+          loadingContent={loadingContent}
+          empty={<p className="px-3 py-6 text-center text-sm text-muted-foreground">Nothing eligible right now.</p>}
+          regionClassName="flex max-h-[60vh] flex-col overflow-hidden rounded-md border"
+          containerClassName="min-h-0 flex-1 overflow-auto"
+          toolbar={
+            <Button size="sm" disabled={selection.size === 0 || enhanceItems.isPending} onClick={handleEnhanceSelected}>
+              <Sparkles className="h-4 w-4" />
+              Enhance Selected
+            </Button>
+          }
+          filters={
+            <span className="text-sm text-muted-foreground">
+              {selection.size > 0 ? `${selection.size} selected` : "Nothing selected"}
+            </span>
+          }
+        />
       </DialogContent>
     </Dialog>
   )
