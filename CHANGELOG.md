@@ -13,6 +13,12 @@ Maintenance notes:
 -->
 
 ## 2026-10-31
+- **Resizable table columns, saved with the layout** — drag the right edge of a column header to change its width, on every
+  table that can save a layout (Artists, Subscriptions, History, Logs, and now Tags, AI Enhancement, Frame Matching and the
+  Backup history); selection, flexible, icon and switch columns keep their width. The width changes live and joins the table
+  layout when you let go: the dirty dot shows it, Save / Restore / Clear cover it, and Clear returns to the default widths. A
+  header whose label is cut off now shows the full text in a tooltip, like the cells. `ColumnDef` gains `resizable`; the
+  saved `widths` hold only overrides of the default widths. Those four pages get the Table layout button.
 - **Fixed table column widths, with full text on hover** — every `DataTable` now gives each column a width (by default from its
   type, or explicit) instead of letting the browser share the space: columns keep their size, the table still spans the full width
   through an invisible filler column (a narrower window scrolls sideways), and text that does not fit is cut off with an ellipsis

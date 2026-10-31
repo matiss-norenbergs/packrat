@@ -374,6 +374,7 @@ export function ThumbnailEnhancementPage() {
         rows={history ?? []}
         getRowId={(e) => e.id}
         columns={columns}
+        tableId="ai-enhancement"
         selection="multi"
         selectionState={selection}
         getRowLabel={(e) => `Select ${entryTitle(e, revealAll)}`}

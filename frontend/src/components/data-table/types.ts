@@ -26,7 +26,13 @@ export interface ColumnDef<T> {
    * than one column's `width`. Use one flex column per table.
    */
   flex?: boolean
-  /** Opt-out: no tooltip with the full text when this column's cells are cut off. */
+  /**
+   * Overrides whether the user can drag this column's width (tables with a `tableId` only). By default every column is
+   * resizable except a `flex` one and `icon` / `switch` columns. `true` forces a handle, `false` removes it. On a flex
+   * column the dragged width is only its floor (see `flex`).
+   */
+  resizable?: boolean
+  /** Opt-out: no tooltip with the full text when this column's cells (or its header) are cut off. */
   tooltip?: false
   /** The tooltip's text for a cut-off cell of this row, instead of the cell's rendered text. */
   tooltipText?: (row: T) => string

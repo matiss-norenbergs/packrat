@@ -184,7 +184,8 @@ describe("BackupHistoryTable", () => {
   })
 })
 
-const tips = () => screen.getAllByTestId("tip").map((t) => t.textContent)
+// The toolbar buttons' tooltips; the table's own Layout button (tableId) has one too.
+const tips = () => screen.getAllByTestId("tip").map((t) => t.textContent).filter((t) => t !== "Table layout")
 
 describe("BackupHistoryTable as a DataTable", () => {
   it("renders the five columns with the alignment presets and the cell content", () => {

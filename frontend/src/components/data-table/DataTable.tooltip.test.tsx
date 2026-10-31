@@ -1,10 +1,21 @@
+import type { ReactNode } from "react"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it } from "vitest"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
 import { DataTable } from "./DataTable"
 import type { ColumnDef } from "./types"
 
+vi.mock("@/lib/api", () => ({ fetchTableLayouts: vi.fn(), saveTableLayout: vi.fn(), deleteTableLayout: vi.fn() }))
 afterEach(cleanup)
+
+// A table with a tableId needs the layouts query; seed it empty so it renders at once.
+function withLayouts(ui: ReactNode) {
+  const client = new QueryClient()
+  client.setQueryData(tableLayoutsQueryKey, {})
+  return <QueryClientProvider client={client}>{ui}</QueryClientProvider>
+}
 
 interface Row {
   id: number
@@ -224,5 +235,66 @@ describe("DataTable overflow tooltip", () => {
       expect(await screen.findByRole("menuitem", { name: "Do it" })).toBeInTheDocument()
       expect(tooltip()).toBeNull()
     })
+  })
+})
+
+describe("DataTable header tooltip", () => {
+  const head = (c: number) => screen.getAllByRole("row")[0].querySelectorAll("th")[c] as HTMLElement
+  const headCols = [col({ key: "a", header: "A very long header" }), col({ key: "b", header: "Other" })]
+
+  it("shows the header's text when the header is cut off, and not when it fits", async () => {
+    render(<DataTable rows={ROWS} getRowId={getRowId} columns={headCols} />)
+    overflow(head(0))
+    expect(await hoverShows(head(0))).toHaveTextContent("A very long header")
+    fireEvent.pointerLeave(head(0).parentElement!.parentElement!)
+    overflow(head(1), 100, 100)
+    expect(await hoverShows(head(1))).toBeNull()
+  })
+
+  it("counts the label inside a sortable header's button as cut off, and the sort button does not block it", async () => {
+    render(withLayouts(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", header: "A very long header", sortValue: (r) => r.name })]} tableId="t" />))
+    overflow(head(0).querySelector("button span")!)
+    expect(await hoverShows(head(0))).toHaveTextContent("A very long header")
+  })
+
+  it("shows none for a header with another control in it", async () => {
+    render(
+      <DataTable
+        rows={ROWS}
+        getRowId={getRowId}
+        columns={[col({ key: "a", header: <span>Name <button type="button">?</button></span>, sortValue: (r) => r.name })]}
+      />,
+    )
+    overflow(head(0))
+    expect(await hoverShows(head(0))).toBeNull()
+  })
+
+  it("never for the selection column or the filler, and tooltip:false opts a column out", async () => {
+    render(<DataTable rows={ROWS} getRowId={getRowId} selection="multi" columns={[col({ key: "a", tooltip: false }), col({ key: "b" })]} />)
+    const ths = screen.getAllByRole("row")[0].querySelectorAll("th")
+    for (const th of ths) overflow(th)
+    expect(await hoverShows(ths[0])).toBeNull() // selection
+    fireEvent.pointerLeave(ths[0].parentElement!.parentElement!)
+    expect(await hoverShows(ths[1])).toBeNull() // opted out
+    fireEvent.pointerLeave(ths[0].parentElement!.parentElement!)
+    expect(await hoverShows(ths[ths.length - 1])).toBeNull() // filler
+    fireEvent.pointerLeave(ths[0].parentElement!.parentElement!)
+    expect(await hoverShows(ths[2])).toHaveTextContent("b")
+  })
+
+  it("does not show while the pointer is on the resize handle", async () => {
+    render(withLayouts(<DataTable rows={ROWS} getRowId={getRowId} columns={headCols} tableId="t" />))
+    overflow(head(0))
+    expect(await hoverShows(head(0).querySelector("[data-resize-handle]")!)).toBeNull()
+  })
+
+  it("closes on a press (so a sort click or a resize drag never shows one) and lets the click sort", async () => {
+    const user = userEvent.setup()
+    render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", header: "A very long header", sortValue: (r) => r.name })]} />)
+    overflow(head(0))
+    expect(await hoverShows(head(0))).not.toBeNull()
+    await user.click(screen.getByRole("button", { name: "A very long header" }))
+    expect(tooltip()).toBeNull()
+    expect(head(0)).toHaveAttribute("aria-sort", "ascending")
   })
 })

@@ -156,6 +156,7 @@ export function BackupHistoryTable() {
         rows={rows}
         getRowId={(entry) => entry.id}
         columns={columns}
+        tableId="backup-history"
         selection="multi"
         selectionState={selection}
         getRowLabel={(entry) => `Select backup from ${new Date(entry.createdAt).toLocaleString()}`}

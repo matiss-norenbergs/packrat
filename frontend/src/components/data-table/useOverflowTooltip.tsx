@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import type { PointerEvent, ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { TOOLTIP_BLOCKING_SELECTOR } from "./interactive"
+import { SORT_BUTTON_ATTR, TOOLTIP_BLOCKING_SELECTOR } from "./interactive"
 import type { ColumnDef } from "./types"
 import { useEvent } from "./useEvent"
 
@@ -24,22 +24,25 @@ function isCutOff(cell: HTMLElement): boolean {
   return false
 }
 
-// The text the tooltip would show for a hovered cell, or null when it must not show one (an excluded column or cell,
-// or the content fits). `innerText` keeps a two-line cell as two lines; jsdom has none, hence the textContent fallback.
+// The text the tooltip would show for a hovered cell or header, or null when it must not show one (an excluded column
+// or cell, or the content fits). `innerText` keeps a two-line cell as two lines; jsdom has none, hence the textContent
+// fallback. A header (`th`) shows its own text; the sort button inside a sortable header is not a blocking control.
 function tooltipTextFor<T>(cell: HTMLElement, column: ColumnDef<T> | undefined, row: T | undefined): string | null {
   if (!column || column.tooltip === false || column.wrap || column.type === "icon" || column.type === "switch") return null
-  if (cell.querySelector(TOOLTIP_BLOCKING_SELECTOR)) return null
+  const header = cell.tagName === "TH"
+  const blocked = Array.from(cell.querySelectorAll(TOOLTIP_BLOCKING_SELECTOR)).some((el) => !(header && el.hasAttribute(SORT_BUTTON_ATTR)))
+  if (blocked) return null
   if (!isCutOff(cell)) return null
-  const text = column.tooltipText && row !== undefined ? column.tooltipText(row) : (cell.innerText ?? cell.textContent ?? "")
+  const text = !header && column.tooltipText && row !== undefined ? column.tooltipText(row) : (cell.innerText ?? cell.textContent ?? "")
   // Block children (two `<p>`) come out of innerText with a blank line between them; keep one line break.
   return text.replace(/\n{2,}/g, "\n").trim() || null
 }
 
 /**
- * One tooltip for the whole table, driven by a delegated listener on the body: when the pointer enters a cell whose
- * text is cut off (measured on entry only, never continuously) it shows the full text after the usual delay. It closes
+ * One tooltip for the whole table, driven by a delegated listener on the head and one on the body: when the pointer
+ * enters a cell or header whose text is cut off (measured on entry only, never continuously) it shows the full text after the usual delay. It closes
  * on mouse down (and stays off until the button is released, so a drag selection never pops tooltips), scroll,
- * context menu, Escape and when the pointer leaves the body, and never stops or alters any event, so row selection,
+ * context menu, Escape and when the pointer leaves the head or the body, and never stops or alters any event, so row selection,
  * drags and the context menu are untouched. The anchor is a fixed, pointer-less box over the cell, portaled to
  * `document.body` (a transformed dialog would otherwise move it).
  */
@@ -57,7 +60,9 @@ export function useOverflowTooltip<T>(columns: ColumnDef<T>[], findRow: (id: str
   })
 
   const onPointerOver = useEvent((e: PointerEvent<HTMLElement>) => {
-    const cell = (e.target as Element).closest<HTMLElement>("td[data-col]")
+    const target = e.target as Element
+    // The resize handle sits on the header's edge; hovering it is not hovering the label.
+    const cell = target.closest("[data-resize-handle]") ? null : target.closest<HTMLElement>("td[data-col], th[data-col]")
     if (cell === cellRef.current) return
     close()
     if (!cell || !e.currentTarget.contains(cell)) return
@@ -116,5 +121,8 @@ export function useOverflowTooltip<T>(columns: ColumnDef<T>[], findRow: (id: str
       )
     : null
 
-  return { bodyProps: { onPointerOver, onPointerLeave: close }, node }
+  // The same listener serves the header and the body; `th[data-col]` exists only on the columns' own headers (not the
+  // selection column or the filler).
+  const props = { onPointerOver, onPointerLeave: close }
+  return { bodyProps: props, headProps: props, node }
 }

@@ -148,6 +148,7 @@ export function FrameMatchingPage() {
         rows={items ?? []}
         getRowId={(i) => i.id}
         columns={columns}
+        tableId="frame-matching"
         selection="multi"
         selectionState={selection}
         getRowLabel={(i) => `Select ${i.itemTitle}`}

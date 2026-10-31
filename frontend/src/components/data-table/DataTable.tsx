@@ -17,10 +17,12 @@ import { TableSearch } from "./TableSearch"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ColumnsMenu, LayoutPopover } from "./TableLayoutControls"
 import { isRowEventIgnored } from "./interactive"
-import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, clipClass, computeLayout, resolveAlign } from "./columns"
+import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, clipClass, columnMinWidth, columnWidth, computeLayout, effectiveColumnWidth, isResizable, resolveAlign } from "./columns"
 import type { ColumnAlign, ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
 import { cycleLayoutSort, effectiveSort, sortRows } from "./sorting"
 import type { SortDir, SortState } from "./sorting"
+import { useColumnResize } from "./useColumnResize"
+import type { ColumnResizeHandleProps } from "./useColumnResize"
 import { useEvent } from "./useEvent"
 import { useOverflowTooltip } from "./useOverflowTooltip"
 import { useTableSelection } from "./useTableSelection"
@@ -100,13 +102,14 @@ export interface DataTableProps<T, Id extends RowId = number> {
   /**
    * Stable id that lets the user save this table's layout (hidden columns) to their account: adds the Layout
    * popover (Save / Restore / Clear) at the end of the toolbar, with the Columns menu when there are hideable
-   * columns. Needs at least one `hideable` or `sortValue` column. Not for tables in dialogs.
+   * columns, and makes the columns resizable (see `ColumnDef.resizable`). Needs at least one `hideable`, `sortValue`
+   * or resizable column. Not for tables in dialogs.
    */
   tableId?: string
   /**
    * Controlled layout: when both are passed the page owns the working layout (what the user has now, never saved
    * automatically) and DataTable only reads it and reports edits. Without them DataTable keeps it internally.
-   * `hidden` and `sort` are edited here; `widths` is carried through untouched. In controlled-rows (server) mode the table never sorts rows: read `layout.sort` (or the default) and sort on the server.
+   * `hidden`, `sort` and `widths` (overrides of the default column widths) are edited here. In controlled-rows (server) mode the table never sorts rows: read `layout.sort` (or the default) and sort on the server.
    */
   layout?: TableLayout
   onLayoutChange?: (layout: TableLayout) => void
@@ -127,6 +130,10 @@ interface LayoutCtl {
   toggleSort: (key: string) => void
   /** The saved layouts have not arrived yet: the table shows its loading state instead of flashing the defaults. */
   pending?: boolean
+  /** Width overrides of the working layout, by column key. Only a table with a tableId resizes. */
+  widths?: Readonly<Record<string, number>>
+  /** Sets one column's width (px) in the working layout; a width equal to the column's default removes the override. */
+  setWidth?: (key: string, px: number) => void
   /** Present when the table has a tableId. */
   saved?: { dirty: boolean; hasSaved: boolean; save: () => void; restore: () => void; clear: () => void }
 }
@@ -246,6 +253,7 @@ function SortButton({ align, dir, onClick, children }: { align: ColumnAlign; dir
   return (
     <button
       type="button"
+      data-sort-button
       className="inline-flex max-w-full cursor-pointer select-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       onClick={onClick}
     >
@@ -253,6 +261,25 @@ function SortButton({ align, dir, onClick, children }: { align: ColumnAlign; dir
       <span className="min-w-0 truncate">{children}</span>
       {align === "right" ? null : align === "center" ? arrow : dir ? arrow : null}
     </button>
+  )
+}
+
+// The drag zone on a header cell's right edge (inside the cell, which clips its overflow). A sibling of the sort button,
+// so pressing it never sorts. Not focusable and no keyboard support: Restore and Clear in the Layout popover are the
+// way back to the default widths. The 1 px line only shows while the header is hovered.
+function ResizeHandle({ name, active, ...handlers }: ColumnResizeHandleProps & { name: string; active: boolean }) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${name} column`}
+      data-resize-handle
+      data-resizing={active ? "" : undefined}
+      className="group/handle absolute inset-y-0 right-0 flex w-2 cursor-col-resize touch-none select-none justify-end"
+      {...handlers}
+    >
+      <span className="pointer-events-none my-2 w-px bg-transparent group-hover/th:bg-border group-hover/handle:bg-muted-foreground/50 group-data-[resizing]/handle:bg-muted-foreground" />
+    </div>
   )
 }
 
@@ -369,7 +396,13 @@ function DataTableView<T, Id extends RowId = number>({
     const hidden = new Set(hiddenKey.split("\0"))
     return columns.filter((c) => !hidden.has(c.key))
   }, [columns, hiddenKey])
-  const layout = computeLayout(visibleColumns, selectable ? selectionWidth : null)
+  // The width being dragged replaces the working one for the header, the colgroup and the min-width only; the rows are
+  // memoized on props this does not touch. It reaches the layout on release.
+  const setWidth = useEvent((key: string, px: number) => layoutCtl?.setWidth?.(key, px))
+  const resize = useColumnResize(setWidth)
+  const widths = layoutCtl?.widths
+  const liveWidths = resize.drag ? { ...widths, [resize.drag.key]: resize.drag.width } : widths
+  const layout = computeLayout(visibleColumns, selectable ? selectionWidth : null, liveWidths)
 
   const pageIds = rows.map(getRowId)
   const overflowTip = useOverflowTooltip(visibleColumns, (id) => rows.find((r) => String(getRowId(r)) === id))
@@ -453,17 +486,21 @@ function DataTableView<T, Id extends RowId = number>({
           ))}
           {layout.filler && <col />}
         </colgroup>
-        <TableHeader>
+        <TableHeader {...overflowTip.headProps}>
           <TableRow>
             {selectable && <TableHead className="text-center">{selectionHeader}</TableHead>}
             {visibleColumns.map((c) => {
               const align = resolveAlign(c)
               const sortable = layoutCtl != null && c.sortValue != null
               const dir = sort?.key === c.key ? sort.dir : undefined
+              const resizable = layoutCtl?.setWidth != null && isResizable(c)
               return (
                 <TableHead
                   key={c.key}
-                  className={cn(ALIGN_CLASS[align], clipClass(c), c.headerClassName)}
+                  data-col={c.key}
+                  // The handle's own label would otherwise end up in the header's accessible name.
+                  aria-label={resizable && (typeof c.header === "string" || c.label != null) ? columnLabel(c) : undefined}
+                  className={cn(ALIGN_CLASS[align], clipClass(c), resizable && "group/th relative", c.headerClassName)}
                   aria-sort={sortable ? (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none") : undefined}
                 >
                   {sortable ? (
@@ -472,6 +509,13 @@ function DataTableView<T, Id extends RowId = number>({
                     </SortButton>
                   ) : (
                     c.header
+                  )}
+                  {resizable && (
+                    <ResizeHandle
+                      name={columnLabel(c)}
+                      active={resize.drag?.key === c.key}
+                      {...resize.handleProps(c.key, effectiveColumnWidth(c, widths), columnMinWidth(c))}
+                    />
                   )}
                 </TableHead>
               )
@@ -600,6 +644,14 @@ function defaultLayoutSort(layout: TableLayout, defaultSort: SortState | undefin
   return effectiveSort(layout.sort, defaultSort)
 }
 
+function withColumnWidth<T>(layout: TableLayout, column: ColumnDef<T>, px: number): TableLayout {
+  const widths = { ...layout.widths }
+  if (px === columnWidth(column)) delete widths[column.key]
+  else widths[column.key] = px
+  const { widths: _old, ...rest } = layout
+  return Object.keys(widths).length ? { ...rest, widths } : rest
+}
+
 function toggleHidden(layout: TableLayout, key: string): TableLayout {
   const hidden = new Set(layout.hidden ?? [])
   if (!hidden.delete(key)) hidden.add(key)
@@ -614,11 +666,17 @@ function DataTableWithSavedLayout<T, Id extends RowId>({ tableId, layout, onLayo
   const knownKeys = useMemo(() => columns.map((c) => c.key), [columns])
   const hideableKeys = useMemo(() => columns.filter((c) => c.hideable).map((c) => c.key), [columns])
   const sortableKeys = useMemo(() => columns.filter((c) => c.sortValue).map((c) => c.key), [columns])
+  // Default and minimum of every column the user can resize: what `widths` is normalized against.
+  const resizableWidths = useMemo(
+    () => Object.fromEntries(columns.filter(isResizable).map((c) => [c.key, { default: columnWidth(c), min: columnMinWidth(c) }])),
+    [columns],
+  )
   const state = useTableLayout(tableId, defaults, {
     knownKeys,
     hideableKeys,
     sortableKeys,
     defaultSort,
+    resizableWidths,
     controlled: layout && onLayoutChange ? { working: layout, onChange: onLayoutChange } : undefined,
   })
   const { working, setWorking, dirty, hasSaved, save, restore, clear } = state
@@ -629,6 +687,11 @@ function DataTableWithSavedLayout<T, Id extends RowId>({ tableId, layout, onLayo
     toggle: (key) => setWorking((prev) => toggleHidden(prev, key)),
     sort: defaultLayoutSort(working, defaultSort),
     toggleSort: (key) => setWorking((prev) => cycleLayoutSort(prev, key, defaultSort)),
+    widths: working.widths,
+    setWidth: (key, px) => {
+      const column = columns.find((c) => c.key === key)
+      if (column && isResizable(column)) setWorking((prev) => withColumnWidth(prev, column, px))
+    },
     saved: { dirty, hasSaved, save: () => void save(), restore, clear: () => void clear() },
   }
   return <DataTableView {...props} loading={props.loading || ctl.pending} layoutCtl={ctl} />
@@ -653,8 +716,9 @@ function DataTableWithLocalLayout<T, Id extends RowId>({ layout, onLayoutChange,
 
 export function DataTable<T, Id extends RowId = number>(props: DataTableProps<T, Id>) {
   const { columns, tableId } = props
-  // A hideable or a sortable column makes the table keep a layout (the Columns menu needs a hideable one).
-  const hasLayout = columns.some((c) => c.hideable || c.sortValue)
+  // A hideable or a sortable column makes the table keep a layout (the Columns menu needs a hideable one); so does a
+  // resizable one, but only with a tableId (without it nothing is saved, so the table does not resize at all).
+  const hasLayout = columns.some((c) => c.hideable || c.sortValue || (tableId && isResizable(c)))
   useEffect(() => {
     if (!import.meta.env.DEV) return
     for (const c of columns) {

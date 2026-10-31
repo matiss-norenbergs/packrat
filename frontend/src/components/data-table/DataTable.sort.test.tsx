@@ -308,8 +308,14 @@ describe("DataTable layout button with sortable columns", () => {
     expect(layoutButton()).toBeNull()
     expect(columnsButton()).toBeInTheDocument()
   })
-  it("renders neither, and no header buttons, for plain columns", () => {
+  it("shows Layout only (the column is resizable) for plain columns with a tableId", () => {
     render(wrap(<Client tableId="t" columns={neither} />))
+    expect(layoutButton()).toBeInTheDocument()
+    expect(columnsButton()).toBeNull()
+    expect(document.querySelectorAll("th button")).toHaveLength(0)
+  })
+  it("renders neither, and no header buttons, for columns that cannot be hidden, sorted or resized", () => {
+    render(wrap(<Client tableId="t" columns={neither.map((c) => ({ ...c, resizable: false }))} />))
     expect(layoutButton()).toBeNull()
     expect(columnsButton()).toBeNull()
     expect(document.querySelectorAll("th button")).toHaveLength(0)

@@ -155,7 +155,7 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
   fields (unknown fields are rejected): `v` (required, must be `1`), `sort` (optional
   `{ "key": <colKey>, "dir": "asc"|"desc" }`, both required; an absent `sort` means the table's default order, which
   the client defines per table, so a layout saved without `sort` keeps working), `hidden` (optional array of `<colKey>`,
-  unique, at most 64) and `widths` (optional object `<colKey>` → integer 24–2000, at most 64 entries).
+  unique, at most 64) and `widths` (optional object `<colKey>` → integer 24–2000, at most 64 entries; the web UI stores only overrides of the table's default column widths, a column at its default width has no entry).
   `<colKey>` matches `^[A-Za-z0-9_-]{1,64}$`; `tableId` matches `^[a-z0-9][a-z0-9-]{0,63}$`. The body is
   at most 4 KB. `400` with `{ "error" }` for any violation (a non-object body, a wrong type, a fractional
   number, an invalid `tableId`, an oversized body) and nothing is stored. Canonical form: fixed field
