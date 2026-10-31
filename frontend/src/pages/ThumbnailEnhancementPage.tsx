@@ -45,6 +45,7 @@ import {
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { useSettings } from "@/hooks/useSettings"
 import { enhancementStatusColor, type EnhancementStatusColor } from "@/lib/enhancementStatus"
+import { DOCK_FOOTER_LABEL, DOCK_FOOTER_ROW } from "@/lib/dockClearance"
 import { getPageNumbers } from "@/lib/pagination"
 import { cn, formatBytes, hashText } from "@/lib/utils"
 import type { ThumbnailEnhancementHistoryEntry, ThumbnailEnhancementStatus } from "@/types/api"
@@ -618,8 +619,8 @@ export function ThumbnailEnhancementPage() {
       </div>
 
       {!isLoading && history && history.length > 0 && (
-        <div className="flex shrink-0 flex-wrap-reverse items-center justify-between gap-2">
-          <span className="flex min-h-9 items-center pl-12 text-sm text-muted-foreground md:min-h-0">
+        <div className={cn("flex shrink-0 items-center justify-between", DOCK_FOOTER_ROW)}>
+          <span className={cn("text-sm text-muted-foreground", DOCK_FOOTER_LABEL)}>
             {total} {total === 1 ? "entry" : "entries"}
           </span>
           <div className="flex items-center gap-1">

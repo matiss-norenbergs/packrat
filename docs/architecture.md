@@ -513,6 +513,17 @@ button, unmounting removes it, and without a dock above it renders nothing. The 
 positioning, so features never position themselves. `RevealAllFloatingAction` is the first user; the AI Enhancement page also uses it and reads only the provider's
 `revealAll` flag (no per-item keys, no click-to-reveal).
 
+**Dock-aware footers.** A page footer must not sit under the dock button, but only while the dock actually has one
+(`RevealAllFloatingAction` renders nothing with privacy off or no private content). `styles/globals.css` defines the
+custom variant `dock-occupied`: `body:has([data-slot="floating-action-dock"]:not(:empty)) &`. `:has()` on `body` is needed
+because the dock is a *sibling* of the layout content, not an ancestor of any footer; `:empty` works because the dock
+renders nothing but portaled buttons (and is `empty:hidden`). `lib/dockClearance.ts` exports the two class strings
+(`DOCK_FOOTER_ROW`, `DOCK_FOOTER_LABEL`; the `pl-12` is the button size plus gap, defined only there). `TablePagination`
+(so every `DataTable` page) and the hand-rolled footers of Downloads, Collections and AI Enhancement use them, so the
+count label shifts when the button appears or disappears and is not indented otherwise. Needs `:has()` (Chromium 105+,
+Safari 15.4+, Firefox 121+), which covers the web UI and the desktop webviews; older engines just get no indent.
+jsdom can't evaluate `:has`, so tests assert the class strings (and that the dock is `:empty` without a button).
+
 `AppLayout` also mounts a single `RevealAllProvider`, so reveal-all (in-memory only) survives
 navigation between Library, Compare list, Downloads and Collections pages; those pages no longer create their
 own provider. The shared provider (`clearOnNavigate`) clears individually revealed items when the matched route changes (moving to a
@@ -552,7 +563,8 @@ transition is switched off only while dragging.
 
 ## List tables (`DataTable`)
 
-`components/data-table/` is the shared list-table component; `TagsPage` is the first page on it. **The component owns**
+`components/data-table/` is the shared list-table component; `TagsPage` is the reference migration and `ArtistsPage` (the table beside its `CollapsiblePanel`, passing
+`className="overflow-hidden"`) is on it too. **The component owns**
 the table chrome and the interaction logic that used to be copy-pasted per page: the column model, alignment, widths and
 scroll, the checkbox/radio column, click / ctrl / shift / drag selection (`useTableSelection`, on top of a *controlled*
 `useIdSelection` the page passes as `selectionState`, so its toolbar reads the same state), the context menu (including
@@ -590,7 +602,10 @@ row type and the id type (number or string).
 - **Footer**: shown whenever `pagination` is set, except while loading or on error — including at 0 results ("0 tags",
   one disabled page). In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
   clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
-  `onPageChange(lastPage)`, so pages need no clamping code.
+  `onPageChange(lastPage)`, so pages need no clamping code. **Dock clearance is automatic**: the footer
+  carries the `dock-occupied:` variants of the clearance classes (`lib/dockClearance.ts`: row `flex-wrap-reverse gap-2`,
+  label `flex min-h-9 items-center pl-12`, `md:min-h-0` from `md` up), so it indents the count and lets the pager wrap above
+  it only while the floating dock holds a button (see "Dock-aware footers" under Floating action dock); no page passes a prop.
 - **Client-side mode**: for pages whose data is fully loaded, pass **all** rows plus `pageSize`, `itemLabel` and/or
   `search.match(row, query)` and the table does what the page used to: it owns the query and page state, filters
   (the query is trimmed and lowercased once; an empty query means no filter), slices the current page, resets to

@@ -5,6 +5,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* dock-occupied: applies only while the floating action dock (FloatingActionDock) holds a button, so page
+   footers can leave room for it (see lib/dockClearance.ts). The dock is a SIBLING of the layout content, not an
+   ancestor of the footers, so the only common ancestor to hang :has() on is body. :empty works because the dock
+   renders nothing but portaled buttons (and is `empty:hidden`). Needs :has() (Chromium 105+, Safari 15.4+, Firefox 121+). */
+@custom-variant dock-occupied (body:has([data-slot="floating-action-dock"]:not(:empty)) &);
+
 @theme inline {
     --animate-caret-blink: caret-blink 1.25s ease-out infinite;
     --animate-progress-indeterminate: progress-indeterminate 1.4s ease-in-out infinite;

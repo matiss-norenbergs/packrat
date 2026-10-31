@@ -1,6 +1,8 @@
 import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { getPageNumbers } from "@/lib/pagination"
+import { DOCK_FOOTER_LABEL, DOCK_FOOTER_ROW } from "@/lib/dockClearance"
+import { cn } from "@/lib/utils"
 import type { PaginationConfig } from "./types"
 
 export function TablePagination({
@@ -20,8 +22,8 @@ export function TablePagination({
   }, [page, totalPages, onPageChange])
 
   return (
-    <div className="flex shrink-0 items-center justify-between">
-      <span className="text-sm text-muted-foreground">
+    <div className={cn("flex shrink-0 items-center justify-between", DOCK_FOOTER_ROW)}>
+      <span className={cn("text-sm text-muted-foreground", DOCK_FOOTER_LABEL)}>
         {total} {total === 1 ? itemLabel.singular : itemLabel.plural}
         {selectedCount > 0 && ` · ${selectedCount} selected`}
       </span>

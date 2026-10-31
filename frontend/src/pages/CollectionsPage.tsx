@@ -23,6 +23,7 @@ import { useIdSelection } from "@/hooks/useIdSelection"
 import { usePersistedOpen } from "@/hooks/usePersistedOpen"
 import { useBulkDeleteCollections } from "@/hooks/useCollections"
 import { buildCollectionTree, collectDescendantIds, filterCollectionTree } from "@/lib/collectionTree"
+import { DOCK_FOOTER_LABEL, DOCK_FOOTER_ROW } from "@/lib/dockClearance"
 import { getPageNumbers } from "@/lib/pagination"
 import { cn } from "@/lib/utils"
 
@@ -272,8 +273,8 @@ export function CollectionsPage() {
           </div>
 
           {!isLoading && data && data.length > 0 && total > 0 && (
-            <div className="flex shrink-0 flex-wrap-reverse items-center justify-between gap-2">
-              <span className="flex min-h-9 items-center pl-12 text-sm text-muted-foreground md:min-h-0">
+            <div className={cn("flex shrink-0 items-center justify-between", DOCK_FOOTER_ROW)}>
+              <span className={cn("text-sm text-muted-foreground", DOCK_FOOTER_LABEL)}>
                 {total} top-level {total === 1 ? "collection" : "collections"} ({totalAllLevels} total)
               </span>
               <div className="flex items-center gap-1">

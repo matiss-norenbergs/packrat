@@ -25,6 +25,21 @@ describe("FloatingActionDock", () => {
     expect(dockEl(container).className).toContain("empty:hidden")
   })
 
+  // The page footers' `dock-occupied` variant (styles/globals.css) is `:not(:empty)` on the dock, so it only
+  // works while the dock has no children (not even whitespace text) without a button and some with one.
+  it("matches :empty with no button and not with one", () => {
+    const empty = render(<FloatingActionDock>content</FloatingActionDock>)
+    expect(dockEl(empty.container).matches(":empty")).toBe(true)
+    cleanup()
+
+    const busy = render(
+      <FloatingActionDock>
+        <FloatingAction icon={Eye} label="Reveal" onClick={() => {}} />
+      </FloatingActionDock>,
+    )
+    expect(dockEl(busy.container).matches(":empty")).toBe(false)
+  })
+
   it("keeps the dock itself click-through but the buttons interactive", () => {
     const { container } = render(
       <FloatingActionDock>

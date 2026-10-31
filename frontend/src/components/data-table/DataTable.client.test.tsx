@@ -161,3 +161,29 @@ describe("DataTable client-side mode", () => {
     expect(names()).toEqual(["two", "three"])
   })
 })
+
+describe("DataTable footer dock clearance", () => {
+  // jsdom can't evaluate :has(), so assert the class strings; the browser applies them via the
+  // dock-occupied variant (styles/globals.css) only while the floating dock holds a button.
+  it("carries the conditional dock-occupied classes, never the unconditional clearance", () => {
+    render(<Harness />)
+    const label = screen.getByText(/^7 items/)
+    const row = label.parentElement!
+    expect(row.className.split(" ")).toEqual(
+      expect.arrayContaining(["flex", "shrink-0", "items-center", "justify-between", "dock-occupied:flex-wrap-reverse", "dock-occupied:gap-2"]),
+    )
+    expect(label.className.split(" ")).toEqual(
+      expect.arrayContaining([
+        "text-sm",
+        "text-muted-foreground",
+        "dock-occupied:flex",
+        "dock-occupied:min-h-9",
+        "dock-occupied:items-center",
+        "dock-occupied:pl-12",
+        "dock-occupied:md:min-h-0",
+      ]),
+    )
+    for (const unconditional of ["flex-wrap-reverse", "gap-2"]) expect(row).not.toHaveClass(unconditional)
+    for (const unconditional of ["flex", "min-h-9", "pl-12", "md:min-h-0"]) expect(label).not.toHaveClass(unconditional)
+  })
+})
