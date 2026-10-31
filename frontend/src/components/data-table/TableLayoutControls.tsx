@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Columns3, Table2 } from "lucide-react"
+import { Columns3, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -70,7 +70,7 @@ export function LayoutPopover({
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
             <Button variant="outline" size="icon-sm" aria-label="Table layout" className="relative">
-              <Table2 />
+              <Save />
               {dirty && <span data-testid="layout-dirty-dot" className="absolute right-0.5 top-0.5 size-2 rounded-full bg-primary" />}
             </Button>
           </PopoverTrigger>
