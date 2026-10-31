@@ -444,6 +444,8 @@ collection's Artist default — see Collections above).
   from every item that had it (items themselves are untouched, they just lose the artist link) and
   removes the artist's gallery images from disk.
 - Select multiple artists to bulk-delete.
+- **Columns and layout** — the icon buttons after the search box hide or show the **Birthday** and **Usage** columns (Name,
+  and Private when privacy is on, always stay) and save that choice to your account; see [Table layouts](#table-layouts).
 - **Panel images** — the display picture is at most 300px square, left-aligned, and shrinks with the panel when it is
   narrower than that (no overflow); the "Other images" thumbnails sit in an auto-fill grid of square tiles
   (about 72–110px), so the column count grows with the panel width (about 3 at 280px, 6 at 500px, 7 at 584px).
@@ -605,6 +607,24 @@ Old backups are pruned automatically past a configurable retention count (defaul
 there's nowhere to type a password unattended — use the plain Export cards above if you need a
 password-protected file to store off-site.
 
+## Table layouts
+
+Lists built on the shared table component can let you choose which columns to show. Two icon-only buttons sit at the right end
+of the table's toolbar, after the search box (and only on tables that offer them):
+
+- **Columns** — a checkbox list of the columns that can be hidden. Ticking or unticking applies instantly, and the list stays open
+  so you can change several.
+- **Table layout** — a popover with **Save**, **Restore** and **Clear saved layout**. A small dot on the button means the table
+  currently differs from what you last saved (or from the defaults if you never saved). Save is enabled only then; it stores
+  your layout on your account (it follows you to other browsers and the desktop app) and a "Layout saved" toast appears once
+  the server has confirmed it. **Restore saved** (**Restore defaults** when nothing is saved) puts the table back to that
+  baseline with no toast. **Clear saved layout** (enabled only when one exists) deletes it and shows the default columns.
+- Nothing is saved on its own: leaving the page and coming back shows your saved layout, or the defaults, again. The Layout
+  button appears only on tables that save a layout (Artists, Subscriptions); other tables with the Columns button forget the
+  choice when you leave the page.
+- While a list is loading, or failed to load, its footer still shows: a "—" instead of the count and a disabled pager, so
+  the page (and dialogs such as Known items) keep their height.
+
 ## Subscriptions
 
 > Optional — can be turned off in [Settings → Features](#settings); see the note there for what "off" means.
@@ -619,6 +639,8 @@ back manually.
   library placeholders to review; on means straight to the download queue), and Generate NFO.
   Subscribing baselines every upload that already exists at the URL as "known" — it never queues
   the whole back catalog, only uploads from that point forward.
+- **Columns and layout** — Collection, Known items, Last checked and Auto-download can be hidden and the choice saved
+  (Title and Enabled always show); see [Table layouts](#table-layouts).
 - The subscriptions table shows known-item count (with a "+N new" badge when there's anything
   unseen), last-checked time (with the error, if the last check failed), auto-download status, and
   an Enabled toggle — disabling only pauses the scheduled checks, "Check now" still works.
