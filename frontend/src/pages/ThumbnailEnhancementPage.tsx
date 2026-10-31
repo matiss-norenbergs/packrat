@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, Check, Download, Eye, ListChecks, Loader2, MoreHorizontal, Trash2, Undo2, Wand2 } from "lucide-react"
 import { Link } from "react-router-dom"
 import {
@@ -13,20 +13,17 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { DataTable } from "@/components/data-table"
+import type { ColumnDef } from "@/components/data-table"
 import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
 import { useRevealAll } from "@/components/library/RevealAllContext"
 import { useLibraryItem } from "@/hooks/useLibrary"
@@ -45,8 +42,6 @@ import {
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { useSettings } from "@/hooks/useSettings"
 import { enhancementStatusColor, type EnhancementStatusColor } from "@/lib/enhancementStatus"
-import { DOCK_FOOTER_LABEL, DOCK_FOOTER_ROW } from "@/lib/dockClearance"
-import { getPageNumbers } from "@/lib/pagination"
 import { cn, formatBytes, hashText } from "@/lib/utils"
 import type { ThumbnailEnhancementHistoryEntry, ThumbnailEnhancementStatus } from "@/types/api"
 
@@ -200,24 +195,11 @@ const MODE_ALL = "all"
 
 export function ThumbnailEnhancementPage() {
   const { data: settings } = useSettings()
-  const [searchInput, setSearchInput] = useState("")
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState(STATUS_ALL)
   const [trigger, setTrigger] = useState(TRIGGER_ALL)
   const [mode, setMode] = useState(MODE_ALL)
   const [page, setPage] = useState(1)
-
-  // Debounce free-text search the same way LibraryToolbar does — filtering
-  // on every keystroke re-fetches the whole page each time.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchInput !== search) {
-        setSearch(searchInput)
-        setPage(1)
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchInput, search])
 
   const { data: historyResult, isLoading } = useThumbnailEnhancementHistory({
     q: search || undefined,
@@ -229,7 +211,6 @@ export function ThumbnailEnhancementPage() {
   const history = historyResult?.entries
   const total = historyResult?.total ?? 0
   const pageSize = 25
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const activeItem = useThumbnailEnhancementActiveItem()
   const { revealAll } = useRevealAll()
 
@@ -240,24 +221,12 @@ export function ThumbnailEnhancementPage() {
   const redownloadFromOriginal = useRedownloadThumbnailsFromOriginal()
   const [eligibleOpen, setEligibleOpen] = useState(false)
   const [compareEntry, setCompareEntry] = useState<ThumbnailEnhancementHistoryEntry | null>(null)
-  const { selected, isSelected, toggle, clear, selectAll, selectOnly, size, active } = useIdSelection()
+  const selection = useIdSelection()
+  const { selected, clear, size, active } = selection
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [keepEnhancedOpen, setKeepEnhancedOpen] = useState(false)
   const [keepOriginalOpen, setKeepOriginalOpen] = useState(false)
   const [redownloadOpen, setRedownloadOpen] = useState(false)
-
-  // Drag-to-select: mousedown on a row starts the drag and anchors the
-  // range; mouseenter on subsequent rows while the button is held extends
-  // the selection to every row between the anchor and the row under the
-  // cursor. A window-level mouseup ends the drag even if the button is
-  // released outside the table.
-  const [isDragging, setIsDragging] = useState(false)
-  const dragAnchorIdRef = useRef<number | null>(null)
-
-  // Radix's ContextMenu only computes the floating menu's position when its
-  // content actually (re)mounts — keying ContextMenuContent on this counter
-  // forces a genuine remount (and fresh position read) on every right-click.
-  const [contextMenuAnchorKey, setContextMenuAnchorKey] = useState(0)
 
   // The selection is scoped to what's currently visible — a stale id from a
   // previous page/filter/search shouldn't silently ride along once the
@@ -266,73 +235,6 @@ export function ThumbnailEnhancementPage() {
     clear()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, search, status, trigger, mode])
-
-  useEffect(() => {
-    if (!isDragging) return
-    const onMouseUp = () => setIsDragging(false)
-    window.addEventListener("mouseup", onMouseUp)
-    return () => window.removeEventListener("mouseup", onMouseUp)
-  }, [isDragging])
-
-  const isInteractiveTarget = (e: React.MouseEvent) =>
-    (e.target as HTMLElement).closest('[role="checkbox"], button, a') != null
-
-  const rangeIds = (anchorId: number, targetId: number) => {
-    const rows = history ?? []
-    const anchorIdx = rows.findIndex((r) => r.id === anchorId)
-    const targetIdx = rows.findIndex((r) => r.id === targetId)
-    if (anchorIdx === -1 || targetIdx === -1) return null
-    const [start, end] = anchorIdx < targetIdx ? [anchorIdx, targetIdx] : [targetIdx, anchorIdx]
-    return rows.slice(start, end + 1).map((r) => r.id)
-  }
-
-  // Plain click (no drag) selects only this row, deselecting everything
-  // else. Ctrl/Cmd+click toggles just this row in or out of the current
-  // selection, and Shift+click selects the range from the last-clicked row
-  // to this one. The checkbox, the row's title link, and the Compare button
-  // are the exceptions — they keep their own click behavior.
-  const handleRowMouseDown = (e: React.MouseEvent, id: number) => {
-    if (e.button !== 0 || isInteractiveTarget(e)) return
-    e.preventDefault()
-
-    if (e.shiftKey && dragAnchorIdRef.current != null) {
-      const ids = rangeIds(dragAnchorIdRef.current, id)
-      if (ids) {
-        selectAll(ids)
-        return
-      }
-    }
-
-    if (e.ctrlKey || e.metaKey) {
-      toggle(id)
-      dragAnchorIdRef.current = id
-      return
-    }
-
-    dragAnchorIdRef.current = id
-    setIsDragging(true)
-    selectOnly(id)
-  }
-
-  const handleRowMouseEnter = (id: number) => {
-    if (!isDragging || dragAnchorIdRef.current == null) return
-    const ids = rangeIds(dragAnchorIdRef.current, id)
-    if (ids) selectAll(ids)
-  }
-
-  const handleTableContextMenu = (e: React.MouseEvent) => {
-    const rowEl = (e.target as HTMLElement).closest<HTMLElement>("tr[data-history-id]")
-    if (!rowEl) {
-      e.preventDefault()
-      return
-    }
-    const id = Number(rowEl.dataset.historyId)
-    if (!selected.has(id)) selectOnly(id)
-    setContextMenuAnchorKey((k) => k + 1)
-  }
-
-  const allSelected = !!history && history.length > 0 && size === history.length
-  const someSelected = size > 0 && !allSelected
 
   // Keep Enhanced/Keep Original only ever act on items that still have a
   // stored original backup (hasOriginalBackup) — same signal the Compare
@@ -349,6 +251,81 @@ export function ThumbnailEnhancementPage() {
   )
   const redownloadItemIds = Array.from(
     new Set(selectedEntries.filter((e) => e.libraryItemId != null).map((e) => e.libraryItemId as number)),
+  )
+
+  // Cells close over nothing that changes: ItemTitleCell reads reveal-all itself, and setCompareEntry is a
+  // state setter (stable), so the columns are built once.
+  const columns = useMemo<ColumnDef<ThumbnailEnhancementHistoryEntry>[]>(
+    () => [
+      { key: "item", header: "Item", cell: (e) => <ItemTitleCell entry={e} /> },
+      {
+        key: "status",
+        header: "Status",
+        type: "status",
+        cell: (e) => (
+          <div className="flex items-center justify-center gap-1.5">
+            {e.revertedAt ? (
+              <RevertedBadge revertedAt={e.revertedAt} />
+            ) : (
+              <>
+                <Badge variant={e.status === "success" ? "success" : "destructive"}>
+                  {e.status === "success" ? "Success" : "Failed"}
+                </Badge>
+                {e.status === "failed" && e.error && <ErrorBadge error={e.error} />}
+              </>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: "trigger",
+        header: "Trigger",
+        type: "status",
+        cell: (e) => (
+          <Badge variant="secondary">
+            {e.triggerType === "manual" ? "Manual" : e.triggerType === "scheduled" ? "Scheduled" : "Auto"}
+          </Badge>
+        ),
+      },
+      {
+        key: "mode",
+        header: "Type",
+        type: "status",
+        cell: (e) => <Badge variant="outline">{e.mode === "sharpen" ? "Sharpen" : "Upscale"}</Badge>,
+      },
+      {
+        key: "dimensions",
+        header: "Dimensions",
+        type: "number",
+        cell: (e) =>
+          `${dimensions(e.originalWidth, e.originalHeight)} → ${dimensions(e.enhancedWidth, e.enhancedHeight)}`,
+      },
+      {
+        key: "size",
+        header: "Size",
+        type: "number",
+        cell: (e) =>
+          `${e.originalSizeBytes != null ? formatBytes(e.originalSizeBytes) : "—"} → ${e.enhancedSizeBytes != null ? formatBytes(e.enhancedSizeBytes) : "—"}`,
+      },
+      { key: "date", header: "Date", type: "date", cell: (e) => new Date(e.createdAt).toLocaleString() },
+      {
+        key: "actions",
+        header: "Actions",
+        type: "icon",
+        cell: (e) =>
+          e.hasOriginalBackup && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setCompareEntry(e)}>
+                  <Eye className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Compare</TooltipContent>
+            </Tooltip>
+          ),
+      },
+    ],
+    [],
   )
 
   const enabled = settings?.thumbnailEnhancementEnabled ?? false
@@ -389,267 +366,147 @@ export function ThumbnailEnhancementPage() {
 
       <EligibleItemsDialog open={eligibleOpen} onOpenChange={setEligibleOpen} />
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <Button size="sm" onClick={() => runNow.mutate()} disabled={!enabled || runNow.isPending}>
-          {runNow.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Wand2 className="h-4 w-4" />
-          )}
-          {runNow.isPending ? "Enhancing…" : "Enhance Now"}
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setEligibleOpen(true)} disabled={!enabled}>
-          <ListChecks className="h-4 w-4" />
-          Preview Eligible Items
-        </Button>
-
-        <Button
-          variant="destructive"
-          size="sm"
-          disabled={!active}
-          onClick={() => setConfirmDeleteOpen(true)}
-        >
-          <Trash2 className="h-4 w-4" />
-          Delete
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" disabled={!active} aria-label="More actions">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-52">
-            <DropdownMenuItem disabled={keepEligibleItemIds.length === 0} onClick={() => setKeepEnhancedOpen(true)}>
-              <Check className="h-4 w-4" />
-              Keep enhanced{keepEligibleItemIds.length > 1 ? ` (${keepEligibleItemIds.length})` : ""}
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={keepEligibleItemIds.length === 0} onClick={() => setKeepOriginalOpen(true)}>
-              <Undo2 className="h-4 w-4" />
-              Keep original{keepEligibleItemIds.length > 1 ? ` (${keepEligibleItemIds.length})` : ""}
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={redownloadItemIds.length === 0} onClick={() => setRedownloadOpen(true)}>
-              <Download className="h-4 w-4" />
-              Redownload original{redownloadItemIds.length > 1 ? ` (${redownloadItemIds.length})` : ""}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {active && (
-          <Button variant="ghost" size="sm" onClick={clear}>
-            Clear
-          </Button>
-        )}
-
-        <div className="ml-auto flex flex-nowrap items-center gap-2">
-          <Select
-            value={status}
-            onValueChange={(v) => {
-              setStatus(v)
-              setPage(1)
-            }}
-          >
-            <SelectTrigger className="w-32 shrink-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={STATUS_ALL}>All statuses</SelectItem>
-              <SelectItem value="success">Success</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={trigger}
-            onValueChange={(v) => {
-              setTrigger(v)
-              setPage(1)
-            }}
-          >
-            <SelectTrigger className="w-28 shrink-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={TRIGGER_ALL}>All triggers</SelectItem>
-              <SelectItem value="manual">Manual</SelectItem>
-              <SelectItem value="scheduled">Scheduled</SelectItem>
-              <SelectItem value="auto">Auto</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={mode}
-            onValueChange={(v) => {
-              setMode(v)
-              setPage(1)
-            }}
-          >
-            <SelectTrigger className="w-32 shrink-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={MODE_ALL}>All types</SelectItem>
-              <SelectItem value="upscale">Upscale</SelectItem>
-              <SelectItem value="sharpen">Sharpen</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input
-            placeholder="Search by item title…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="min-w-[160px] max-w-[280px] flex-1 sm:min-w-[200px]"
-          />
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1">
-        {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : !history || history.length === 0 ? (
+      <DataTable
+        rows={history ?? []}
+        getRowId={(e) => e.id}
+        columns={columns}
+        selection="multi"
+        selectionState={selection}
+        getRowLabel={(e) => `Select ${entryTitle(e, revealAll)}`}
+        loading={isLoading}
+        empty={
           <p className="text-sm text-muted-foreground">
             {search || status !== STATUS_ALL || trigger !== TRIGGER_ALL || mode !== MODE_ALL
               ? "No history entries match these filters."
               : "Nothing enhanced yet."}
           </p>
-        ) : (
-          <ContextMenu>
-            <ContextMenuTrigger asChild onContextMenu={handleTableContextMenu}>
-              {/* Single scroll container (both axes) via containerClassName — layering
-                  a second overflow-y-auto wrapper around Table's own overflow-x-auto
-                  one would silently break the header's sticky positioning (see
-                  Table's doc comment in components/ui/table.tsx). */}
-              <Table containerClassName="h-full overflow-auto rounded-md border">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-8 text-center">
-                      <Checkbox
-                        checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                        onCheckedChange={(checked) => (checked ? selectAll(history.map((e) => e.id)) : clear())}
-                        aria-label="Select all"
-                      />
-                    </TableHead>
-                    <TableHead>Item</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-center">Trigger</TableHead>
-                    <TableHead className="text-center">Type</TableHead>
-                    <TableHead className="text-right">Dimensions</TableHead>
-                    <TableHead className="text-right">Size</TableHead>
-                    <TableHead className="text-center">Date</TableHead>
-                    <TableHead className="text-center">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {history.map((entry) => (
-                    <TableRow
-                      key={entry.id}
-                      data-history-id={entry.id}
-                      data-state={isSelected(entry.id) ? "selected" : undefined}
-                      className="cursor-default select-none"
-                      onMouseDown={(e) => handleRowMouseDown(e, entry.id)}
-                      onMouseEnter={() => handleRowMouseEnter(entry.id)}
-                    >
-                      <TableCell className="text-center">
-                        <Checkbox
-                          checked={isSelected(entry.id)}
-                          onCheckedChange={() => toggle(entry.id)}
-                          aria-label={`Select ${entryTitle(entry, revealAll)}`}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <ItemTitleCell entry={entry} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {entry.revertedAt ? (
-                            <RevertedBadge revertedAt={entry.revertedAt} />
-                          ) : (
-                            <>
-                              <Badge variant={entry.status === "success" ? "success" : "destructive"}>
-                                {entry.status === "success" ? "Success" : "Failed"}
-                              </Badge>
-                              {entry.status === "failed" && entry.error && <ErrorBadge error={entry.error} />}
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary">
-                          {entry.triggerType === "manual" ? "Manual" : entry.triggerType === "scheduled" ? "Scheduled" : "Auto"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline">{entry.mode === "sharpen" ? "Sharpen" : "Upscale"}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {dimensions(entry.originalWidth, entry.originalHeight)} → {dimensions(entry.enhancedWidth, entry.enhancedHeight)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {entry.originalSizeBytes != null ? formatBytes(entry.originalSizeBytes) : "—"} →{" "}
-                        {entry.enhancedSizeBytes != null ? formatBytes(entry.enhancedSizeBytes) : "—"}
-                      </TableCell>
-                      <TableCell className="text-center">{new Date(entry.createdAt).toLocaleString()}</TableCell>
-                      <TableCell>
-                        <div className="flex justify-center">
-                          {entry.hasOriginalBackup && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" onClick={() => setCompareEntry(entry)}>
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Compare</TooltipContent>
-                            </Tooltip>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ContextMenuTrigger>
-            <ContextMenuContent key={contextMenuAnchorKey}>
-              <ContextMenuItem variant="destructive" disabled={!active} onClick={() => setConfirmDeleteOpen(true)}>
-                <Trash2 className="h-4 w-4" />
-                Delete{size > 1 ? ` (${size})` : ""}
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
-        )}
-      </div>
-
-      {!isLoading && history && history.length > 0 && (
-        <div className={cn("flex shrink-0 items-center justify-between", DOCK_FOOTER_ROW)}>
-          <span className={cn("text-sm text-muted-foreground", DOCK_FOOTER_LABEL)}>
-            {total} {total === 1 ? "entry" : "entries"}
-          </span>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-              Previous
-            </Button>
-            {getPageNumbers(page, totalPages).map((p, i) =>
-              p === "ellipsis" ? (
-                <span key={`ellipsis-${i}`} className="px-1.5 text-sm text-muted-foreground">
-                  …
-                </span>
+        }
+        search={{
+          placeholder: "Search by item title…",
+          onChange: (q) => {
+            setSearch(q)
+            setPage(1)
+          },
+        }}
+        pagination={{ page, pageSize, total, onPageChange: setPage, itemLabel: { singular: "entry", plural: "entries" } }}
+        contextMenu={() => [
+          {
+            key: "delete",
+            label: `Delete${size > 1 ? ` (${size})` : ""}`,
+            icon: <Trash2 className="h-4 w-4" />,
+            destructive: true,
+            disabled: !active,
+            onSelect: () => setConfirmDeleteOpen(true),
+          },
+        ]}
+        toolbar={
+          <>
+            <Button size="sm" onClick={() => runNow.mutate()} disabled={!enabled || runNow.isPending}>
+              {runNow.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Button
-                  key={p}
-                  variant={p === page ? "default" : "outline"}
-                  size="sm"
-                  className="w-8 px-0"
-                  onClick={() => setPage(p)}
-                >
-                  {p}
-                </Button>
-              ),
-            )}
-            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-              Next
+                <Wand2 className="h-4 w-4" />
+              )}
+              {runNow.isPending ? "Enhancing…" : "Enhance Now"}
             </Button>
-          </div>
-        </div>
-      )}
+            <Button variant="outline" size="sm" onClick={() => setEligibleOpen(true)} disabled={!enabled}>
+              <ListChecks className="h-4 w-4" />
+              Preview Eligible Items
+            </Button>
+
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={!active}
+              onClick={() => setConfirmDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" disabled={!active} aria-label="More actions">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-52">
+                <DropdownMenuItem disabled={keepEligibleItemIds.length === 0} onClick={() => setKeepEnhancedOpen(true)}>
+                  <Check className="h-4 w-4" />
+                  Keep enhanced{keepEligibleItemIds.length > 1 ? ` (${keepEligibleItemIds.length})` : ""}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={keepEligibleItemIds.length === 0} onClick={() => setKeepOriginalOpen(true)}>
+                  <Undo2 className="h-4 w-4" />
+                  Keep original{keepEligibleItemIds.length > 1 ? ` (${keepEligibleItemIds.length})` : ""}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={redownloadItemIds.length === 0} onClick={() => setRedownloadOpen(true)}>
+                  <Download className="h-4 w-4" />
+                  Redownload original{redownloadItemIds.length > 1 ? ` (${redownloadItemIds.length})` : ""}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {active && (
+              <Button variant="ghost" size="sm" onClick={clear}>
+                Clear
+              </Button>
+            )}
+          </>
+        }
+        filters={
+          <>
+            <Select
+              value={status}
+              onValueChange={(v) => {
+                setStatus(v)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger className="w-32 shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={STATUS_ALL}>All statuses</SelectItem>
+                <SelectItem value="success">Success</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={trigger}
+              onValueChange={(v) => {
+                setTrigger(v)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger className="w-28 shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={TRIGGER_ALL}>All triggers</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
+                <SelectItem value="auto">Auto</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={mode}
+              onValueChange={(v) => {
+                setMode(v)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger className="w-32 shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={MODE_ALL}>All types</SelectItem>
+                <SelectItem value="upscale">Upscale</SelectItem>
+                <SelectItem value="sharpen">Sharpen</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
+      />
 
       {compareEntry && (
         <CompareThumbnailDialog
