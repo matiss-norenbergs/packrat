@@ -1,5 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
+import { ArrowDown, ArrowUp } from "lucide-react"
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -17,9 +18,9 @@ import { ButtonGroup } from "@/components/ui/button-group"
 import { ColumnsMenu, LayoutPopover } from "./TableLayoutControls"
 import { isRowEventIgnored } from "./interactive"
 import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, computeLayout, resolveAlign } from "./columns"
-import type { ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
+import type { ColumnAlign, ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
 import { cycleLayoutSort, effectiveSort, sortRows } from "./sorting"
-import type { SortState } from "./sorting"
+import type { SortDir, SortState } from "./sorting"
 import { useEvent } from "./useEvent"
 import { useTableSelection } from "./useTableSelection"
 import type { SelectionMode } from "./useTableSelection"
@@ -97,7 +98,8 @@ export interface DataTableProps<T, Id extends RowId = number> {
   containerClassName?: string
   /**
    * Stable id that lets the user save this table's layout (hidden columns) to their account: adds the Layout
-   * popover next to the Columns menu. Needs at least one `hideable` column. Not for tables in dialogs.
+   * popover (Save / Restore / Clear) at the end of the toolbar, with the Columns menu when there are hideable
+   * columns. Needs at least one `hideable` or `sortValue` column. Not for tables in dialogs.
    */
   tableId?: string
   /**
@@ -229,6 +231,25 @@ function DataTableRowImpl<T, Id extends RowId>({
 const DataTableRow = memo(DataTableRowImpl) as typeof DataTableRowImpl
 
 const CONTAINER_CLASS = "h-full overflow-auto rounded-md border"
+
+// The header of a sortable column, drawn like the Library list's (label, arrow next to it). A right-aligned column
+// puts the arrow before the label so the label stays flush right; a centered one keeps a spacer of the arrow's
+// width on the other side so the label stays centered whether or not the arrow shows.
+function SortButton({ align, dir, onClick, children }: { align: ColumnAlign; dir: SortDir | undefined; onClick: () => void; children: ReactNode }) {
+  const Arrow = dir === "asc" ? ArrowUp : ArrowDown
+  const arrow = dir ? <Arrow className="h-3 w-3 shrink-0" /> : <span className="h-3 w-3 shrink-0" />
+  return (
+    <button
+      type="button"
+      className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      onClick={onClick}
+    >
+      {align === "right" ? (dir ? arrow : null) : align === "center" ? <span className="h-3 w-3 shrink-0" /> : null}
+      {children}
+      {align === "right" ? null : align === "center" ? arrow : dir ? arrow : null}
+    </button>
+  )
+}
 
 // Runs `resetPage` while rendering (a state adjustment, no extra commit) and `clear` in a layout effect (before paint)
 // when `value` changes (`Object.is`); an unchanged value does nothing. Not on mount.
@@ -432,13 +453,22 @@ function DataTableView<T, Id extends RowId = number>({
             {selectable && <TableHead className="w-8 text-center">{selectionHeader}</TableHead>}
             {visibleColumns.map((c) => {
               const align = resolveAlign(c)
+              const sortable = layoutCtl != null && c.sortValue != null
+              const dir = sort?.key === c.key ? sort.dir : undefined
               return (
                 <TableHead
                   key={c.key}
                   className={cn(ALIGN_CLASS[align], c.headerClassName)}
                   style={c.minWidth != null ? { minWidth: c.minWidth } : undefined}
+                  aria-sort={sortable ? (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none") : undefined}
                 >
-                  {c.header}
+                  {sortable ? (
+                    <SortButton align={align} dir={dir} onClick={() => layoutCtl.toggleSort(c.key)}>
+                      {c.header}
+                    </SortButton>
+                  ) : (
+                    c.header
+                  )}
                 </TableHead>
               )
             })}
@@ -492,7 +522,8 @@ function DataTableView<T, Id extends RowId = number>({
     ? columns.filter((c) => c.hideable).map((c) => ({ key: c.key, label: columnLabel(c), visible: !layoutCtl.hidden.has(c.key) }))
     : []
   const hasColumnsMenu = layoutCtl != null && columnItems.length > 0
-  const hasToolbar = toolbar != null || filters != null || search != null || hasColumnsMenu
+  const hasLayoutButton = layoutCtl?.saved != null
+  const hasToolbar = toolbar != null || filters != null || search != null || hasColumnsMenu || hasLayoutButton
   // The first element on the right edge takes the spare space (ml-auto); filters, search, then the Columns / Layout group.
   const rightStart = filters != null ? "filters" : search ? "search" : "group"
   const showPagination = pagination != null
@@ -513,9 +544,9 @@ function DataTableView<T, Id extends RowId = number>({
               className={rightStart === "search" ? "ml-auto" : undefined}
             />
           )}
-          {hasColumnsMenu && (
+          {(hasColumnsMenu || hasLayoutButton) && (
             <ButtonGroup className={rightStart === "group" ? "ml-auto" : undefined}>
-              <ColumnsMenu items={columnItems} onToggle={layoutCtl.toggle} />
+              {hasColumnsMenu && <ColumnsMenu items={columnItems} onToggle={layoutCtl.toggle} />}
               {layoutCtl.saved && (
                 <LayoutPopover
                   dirty={layoutCtl.saved.dirty}
@@ -615,7 +646,8 @@ function DataTableWithLocalLayout<T, Id extends RowId>({ layout, onLayoutChange,
 
 export function DataTable<T, Id extends RowId = number>(props: DataTableProps<T, Id>) {
   const { columns, tableId } = props
-  const hideable = columns.some((c) => c.hideable)
+  // A hideable or a sortable column makes the table keep a layout (the Columns menu needs a hideable one).
+  const hasLayout = columns.some((c) => c.hideable || c.sortValue)
   useEffect(() => {
     if (!import.meta.env.DEV) return
     for (const c of columns) {
@@ -624,7 +656,7 @@ export function DataTable<T, Id extends RowId = number>(props: DataTableProps<T,
       }
     }
   }, [columns])
-  if (!hideable) return <DataTableView {...props} layoutCtl={null} />
+  if (!hasLayout) return <DataTableView {...props} layoutCtl={null} />
   if (tableId) return <DataTableWithSavedLayout {...props} tableId={tableId} />
   return <DataTableWithLocalLayout {...props} />
 }
