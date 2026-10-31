@@ -93,6 +93,15 @@ describe("Filters & Sort dialog", () => {
     return { user, dialog, dirButton }
   }
 
+  it("Save as default is disabled while the draft sort equals the baseline", async () => {
+    const { user, dialog, dirButton } = await openDialog()
+    const save = within(dialog).getByRole("button", { name: /save as default/i })
+    expect(save).toBeDisabled()
+    await user.click(dirButton())
+    expect(save).toBeEnabled()
+    await user.click(dirButton())
+    expect(save).toBeDisabled()
+  })
 
   it("Apply changes the sort without a settings PATCH or a layout save", async () => {
     const { user, dialog, dirButton } = await openDialog()
@@ -103,4 +112,16 @@ describe("Filters & Sort dialog", () => {
     expect(calls("/auth/table-layouts/", "PUT")).toHaveLength(0)
   })
 
+  it("Save as default applies the sort and saves only the sort", async () => {
+    layoutsResponse = Promise.resolve({ library: { v: 1, hidden: ["year"], widths: { title: 300 } } })
+    const { user, dialog, dirButton } = await openDialog()
+    await user.click(dirButton())
+    await user.click(within(dialog).getByRole("button", { name: /save as default/i }))
+    await waitFor(() => expect(calls("/auth/table-layouts/library", "PUT")).toHaveLength(1))
+    const body = JSON.parse(calls("/auth/table-layouts/library", "PUT")[0][1].body)
+    expect(body).toEqual({ v: 1, sort: { key: "downloadedAt", dir: "asc" }, hidden: ["year"], widths: { title: 300 } })
+    await waitFor(() => expect(libraryCalls().some(([u]) => String(u).includes("sortDir=asc"))).toBe(true))
+    expect(calls("/settings", "PATCH")).toHaveLength(0)
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+  })
 })

@@ -150,7 +150,7 @@ export function LibraryToolbar() {
   const mode = (settings?.libraryMode as "manage" | "details") || "manage"
   const search = searchParams.get("q") ?? ""
   const [searchInput, setSearchInput] = useState(search)
-  const { sort, setSort } = useLibrarySort()
+  const { sort, baseline: baselineSort, setSort, saveSortAsDefault } = useLibrarySort()
   const { key: sortKey, dir: sortDir } = sort
   const collectionId = searchParams.get("collection") ?? NONE
   const year = searchParams.get("year") ?? NONE
@@ -239,7 +239,9 @@ export function LibraryToolbar() {
     setDraftTags((prev) => (prev.includes(name) ? prev.filter((t) => t !== name) : [...prev, name]))
   }
 
-  const applyFilters = () => {
+  const draftSortDiffersFromBaseline = draftSortKey !== baselineSort.key || draftSortDir !== baselineSort.dir
+
+  const applyFilters = (saveSort = false) => {
     if (draftSortKey !== sortKey || draftSortDir !== sortDir) {
       setSort({ key: draftSortKey, dir: draftSortDir })
     }
@@ -255,6 +257,7 @@ export function LibraryToolbar() {
     }
     setSearchParams(next, { replace: true })
     setFiltersOpen(false)
+    if (saveSort) void saveSortAsDefault({ key: draftSortKey, dir: draftSortDir })
   }
 
   return (
@@ -644,7 +647,10 @@ export function LibraryToolbar() {
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={applyFilters}>Apply</Button>
+          <Button variant="outline" disabled={!draftSortDiffersFromBaseline} onClick={() => applyFilters(true)}>
+            Save as default
+          </Button>
+          <Button onClick={() => applyFilters()}>Apply</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
