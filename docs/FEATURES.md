@@ -213,7 +213,10 @@ Your completed downloads (and anything imported — see Import below).
 **View modes**, toggled in the toolbar and remembered across reloads/browsers (stored server-side,
 not per-browser):
 - **Grid** — a flat, filterable grid of every item, with server-side pagination available
-  (Settings → toggle it on and pick a page size) for large libraries.
+  (Settings → toggle it on and pick a page size) for large libraries. With pagination on, the grid, the Folders view and the
+  list end in the same footer as the tables: "N items" on the left (even for a single page) and the numbered pager with
+  Previous / Next on the right, indented to clear the floating reveal button when it is shown. With pagination off there is
+  no footer.
 - **Folders** — browse by collection, one level at a time, with a breadcrumb trail and
   browser-back support for navigating up.
 
