@@ -11,6 +11,7 @@ export function TablePagination({
   total,
   onPageChange,
   itemLabel,
+  hidePages = false,
   selectedCount = 0,
   loading = false,
 }: PaginationConfig & {
@@ -25,8 +26,8 @@ export function TablePagination({
   // page); snap back to the last valid page instead of showing an empty "page 2 of 1".
   // Not while loading or failed: total is 0 then, which would snap page 3 back to 1 before the data arrives.
   useEffect(() => {
-    if (!loading && page > totalPages) onPageChange(totalPages)
-  }, [loading, page, totalPages, onPageChange])
+    if (!hidePages && !loading && page > totalPages) onPageChange(totalPages)
+  }, [hidePages, loading, page, totalPages, onPageChange])
 
   return (
     <div className={cn("flex shrink-0 items-center justify-between", DOCK_FOOTER_ROW)}>
@@ -40,6 +41,7 @@ export function TablePagination({
           </>
         )}
       </span>
+      {!hidePages && (
       <div className="flex items-center gap-1">
         <Button variant="outline" size="sm" disabled={loading || page <= 1} onClick={() => onPageChange(page - 1)}>
           Previous
@@ -67,6 +69,7 @@ export function TablePagination({
           Next
         </Button>
       </div>
+      )}
     </div>
   )
 }

@@ -1,33 +1,5 @@
-import { useState } from "react"
-import {
-  ArrowLeftRight,
-  BookmarkPlus,
-  Camera,
-  Copy,
-  Download,
-  Eye,
-  FileImage,
-  FilePlus2,
-  FileText,
-  FileX,
-  Film,
-  FolderInput,
-  GitCompare,
-  Images,
-  Info,
-  Link2,
-  MoreVertical,
-  Pencil,
-  RefreshCw,
-  Scissors,
-  SlidersHorizontal,
-  Sparkles,
-  Trash2,
-} from "lucide-react"
-import { toast } from "sonner"
+import { MoreVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,120 +10,34 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import {
-  useDeleteLibraryItemFile,
-  useDeleteLibraryItemNFO,
-  useDeleteLibraryItemThumbnail,
-  useGenerateLibraryItemNFO,
-  useQuickGrabLibraryThumbnail,
-  useRedownloadLibraryItem,
-  useRedownloadLibraryThumbnail,
-  useRefreshLibraryItemMetadata,
-} from "@/hooks/useLibrary"
-import { useFeatureEnabled } from "@/hooks/useFeature"
-import { useAddToCompareList, useCompareList, useRemoveFromCompareList } from "@/hooks/useCompareList"
-import { useSettings } from "@/hooks/useSettings"
-import { useSharpenThumbnailItems } from "@/hooks/useThumbnailEnhancement"
-import { useSaveThumbnailToGallery } from "@/hooks/useThumbnailGallery"
-import { isAudioFilename } from "@/lib/utils"
-import { EditLibraryItemDialog } from "./EditLibraryItemDialog"
-import { MoveLibraryItemDialog } from "./MoveLibraryItemDialog"
-import { DeleteLibraryItemDialog } from "./DeleteLibraryItemDialog"
-import { NfoContentDialog } from "./NfoContentDialog"
-import { ThumbnailCustomRangeDialog, type ThumbnailPickOptions } from "./ThumbnailCustomRangeDialog"
-import { ThumbnailPickerDialog } from "./ThumbnailPickerDialog"
-import { ThumbnailGalleryDialog } from "./ThumbnailGalleryDialog"
-import { FrameMatchDialog } from "./FrameMatchDialog"
-import { CompareMetadataDialog } from "./CompareMetadataDialog"
-import { RedownloadFromUrlDialog } from "./RedownloadFromUrlDialog"
-import { TrimLibraryItemDialog } from "./TrimLibraryItemDialog"
-import type { FrameMatchMode, LibraryItem } from "@/types/api"
+import type { LibraryItem } from "@/types/api"
+import { useLibraryItemActions, type LibraryItemAction } from "./libraryItemActions"
 
+function ActionItems({ actions }: { actions: LibraryItemAction[] }) {
+  return actions.map((a) =>
+    "separator" in a ? (
+      <DropdownMenuSeparator key={a.key} />
+    ) : "items" in a ? (
+      <DropdownMenuSub key={a.key}>
+        <DropdownMenuSubTrigger>
+          {a.icon} {a.label}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          <ActionItems actions={a.items} />
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    ) : (
+      <DropdownMenuItem key={a.key} variant={a.destructive ? "destructive" : undefined} disabled={a.disabled} onClick={a.onSelect}>
+        {a.icon} {a.label}
+      </DropdownMenuItem>
+    ),
+  )
+}
+
+// The "⋮" menu of a card, a folder-view row and the item page. The actions and their dialogs are defined once in
+// libraryItemActions.tsx (the list view's right-click menu uses the same ones).
 export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
-  const [editOpen, setEditOpen] = useState(false)
-  const [compareOpen, setCompareOpen] = useState(false)
-  const [moveOpen, setMoveOpen] = useState(false)
-  const [trimOpen, setTrimOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [refreshWarningOpen, setRefreshWarningOpen] = useState(false)
-  const [redownloadWarningOpen, setRedownloadWarningOpen] = useState(false)
-  const [redownloadFromUrlOpen, setRedownloadFromUrlOpen] = useState(false)
-  const [redownloadThumbWarningOpen, setRedownloadThumbWarningOpen] = useState(false)
-  const [quickGrabWarningOpen, setQuickGrabWarningOpen] = useState(false)
-  const [thumbnailPickerOpen, setThumbnailPickerOpen] = useState(false)
-  // undefined = use the Settings frame count / pick range; set by the custom
-  // dialog for one run of the picker.
-  const [thumbnailPickOptions, setThumbnailPickOptions] = useState<ThumbnailPickOptions | undefined>()
-  const [thumbnailCustomRangeOpen, setThumbnailCustomRangeOpen] = useState(false)
-  const [thumbnailGalleryOpen, setThumbnailGalleryOpen] = useState(false)
-  const [nfoContentOpen, setNfoContentOpen] = useState(false)
-  const [deleteNfoWarningOpen, setDeleteNfoWarningOpen] = useState(false)
-  const [deleteFileWarningOpen, setDeleteFileWarningOpen] = useState(false)
-  const [deleteFileAlsoThumbnail, setDeleteFileAlsoThumbnail] = useState(false)
-  const [deleteThumbnailWarningOpen, setDeleteThumbnailWarningOpen] = useState(false)
-  const [frameMatchMode, setFrameMatchMode] = useState<FrameMatchMode | null>(null)
-  const [sharpenWarningOpen, setSharpenWarningOpen] = useState(false)
-
-  const { data: settings } = useSettings()
-  const refreshMetadata = useRefreshLibraryItemMetadata()
-  const redownload = useRedownloadLibraryItem()
-  const redownloadThumbnail = useRedownloadLibraryThumbnail()
-  const quickGrabThumbnail = useQuickGrabLibraryThumbnail()
-  const generateNfo = useGenerateLibraryItemNFO()
-  const deleteNfo = useDeleteLibraryItemNFO()
-  const deleteFile = useDeleteLibraryItemFile()
-  const deleteThumbnail = useDeleteLibraryItemThumbnail()
-  const sharpenThumbnail = useSharpenThumbnailItems()
-  const saveThumbnailToGallery = useSaveThumbnailToGallery()
-
-  const compareListEnabled = useFeatureEnabled("featureCompareListEnabled")
-  const frameMatchingEnabled = useFeatureEnabled("featureFrameMatchingEnabled")
-  const { data: compareList } = useCompareList({ enabled: compareListEnabled })
-  const inCompareList = compareList?.some((i) => i.id === item.id) ?? false
-  const addToCompareList = useAddToCompareList()
-  const removeFromCompareList = useRemoveFromCompareList()
-  const toggleCompareList = () => {
-    if (inCompareList) removeFromCompareList.mutate(item.id)
-    else addToCompareList.mutate({ itemIds: [item.id] })
-  }
-
-  const hasUrl = !!item.originalUrl
-  const hasThumbnail = !!(item.thumbnail || item.thumbnailSmallPath || item.thumbnailMediumPath)
-  // A ghost item has no downloaded file yet — file-dependent actions (Move,
-  // Trim, NFO generation, frame-grab thumbnails) are hidden rather than
-  // disabled, since there's nothing to explain via a tooltip; "Redownload"
-  // doubles as the "fill this in" action, so it's relabeled instead.
-  const isGhost = item.status === "ghost"
-  // Video/thumbnail-specific actions (Trim, NFO, frame-grab/frame-match
-  // thumbnails, Sharpen) don't apply to a plain downloaded image — same
-  // hidden-not-disabled treatment as the ghost gating above.
-  const isImage = item.mediaType === "image"
-  // Frame-extraction thumbnail actions (Quick Grab, Choose from Video,
-  // both frame-match modes) need an actual video stream to pull frames
-  // from — an audio file's thumbnail is just album art, so these are
-  // hidden the same way as the ghost/image gating above. Redownload from
-  // URL, Sharpen, Save/View Gallery, and Delete all still work fine on an
-  // audio item's thumbnail, so they stay.
-  const isAudio = isAudioFilename(item.filename)
-
-  const handleCopyUrl = () => {
-    if (!item.originalUrl) return
-    navigator.clipboard.writeText(item.originalUrl).then(
-      () => toast.success("URL copied"),
-      () => toast.error("Couldn't copy URL — clipboard access was denied"),
-    )
-  }
-
+  const { actionsFor, host } = useLibraryItemActions(item)
   return (
     <>
       <DropdownMenu>
@@ -161,334 +47,10 @@ export function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem onClick={() => setEditOpen(true)}>
-            <Pencil /> Edit
-          </DropdownMenuItem>
-          {!isGhost && (
-            <DropdownMenuItem onClick={() => setMoveOpen(true)}>
-              <FolderInput /> Move
-            </DropdownMenuItem>
-          )}
-          {!isGhost && !isImage && (
-            <DropdownMenuItem onClick={() => setTrimOpen(true)}>
-              <Scissors /> Trim…
-            </DropdownMenuItem>
-          )}
-          {compareListEnabled && (
-            <DropdownMenuItem
-              onClick={toggleCompareList}
-              disabled={addToCompareList.isPending || removeFromCompareList.isPending}
-            >
-              <GitCompare /> {inCompareList ? "Remove from compare list" : "Add to compare list"}
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleCopyUrl} disabled={!hasUrl}>
-            <Copy /> Copy URL
-          </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Info /> Metadata
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => setCompareOpen(true)} disabled={!hasUrl}>
-                <ArrowLeftRight /> Compare
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setRefreshWarningOpen(true)} disabled={!hasUrl}>
-                <RefreshCw /> Refresh
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Download /> Redownload
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => setRedownloadWarningOpen(true)} disabled={!hasUrl}>
-                <Download /> {isGhost ? "Download now" : "From Current URL"}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setRedownloadFromUrlOpen(true)}>
-                <Link2 /> From Different URL…
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <FileText /> NFO
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {!isGhost && !isImage && (
-                <DropdownMenuItem onClick={() => generateNfo.mutate(item.id)} disabled={!item.generateNfo}>
-                  <FilePlus2 /> Generate Now
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => setNfoContentOpen(true)} disabled={!item.nfoExists}>
-                <Eye /> View Contents
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onClick={() => setDeleteNfoWarningOpen(true)}>
-                <Trash2 /> Delete File
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <FileImage /> Thumbnail
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => setRedownloadThumbWarningOpen(true)} disabled={!hasUrl}>
-                <Download /> Redownload from URL
-              </DropdownMenuItem>
-              {!isGhost && !isImage && !isAudio && (
-                <DropdownMenuItem onClick={() => setQuickGrabWarningOpen(true)}>
-                  <Camera /> Quick Grab
-                </DropdownMenuItem>
-              )}
-              {!isGhost && !isImage && !isAudio && (
-                <DropdownMenuItem
-                  onClick={() => {
-                    setThumbnailPickOptions(undefined)
-                    setThumbnailPickerOpen(true)
-                  }}
-                >
-                  <Film /> Choose from Video…
-                </DropdownMenuItem>
-              )}
-              {!isGhost && !isImage && !isAudio && (
-                <DropdownMenuItem onClick={() => setThumbnailCustomRangeOpen(true)}>
-                  <SlidersHorizontal /> Choose from Video (custom)…
-                </DropdownMenuItem>
-              )}
-              {frameMatchingEnabled && !isGhost && !isImage && !isAudio && (
-                <DropdownMenuItem onClick={() => setFrameMatchMode("url")} disabled={!hasUrl}>
-                  <Link2 /> Match from URL Thumbnail…
-                </DropdownMenuItem>
-              )}
-              {frameMatchingEnabled && !isGhost && !isImage && !isAudio && (
-                <DropdownMenuItem onClick={() => setFrameMatchMode("current")} disabled={!hasThumbnail}>
-                  <RefreshCw /> Match from Current Thumbnail…
-                </DropdownMenuItem>
-              )}
-              {!isGhost && !isImage && settings?.thumbnailEnhancementEnabled && (
-                <DropdownMenuItem onClick={() => setSharpenWarningOpen(true)} disabled={!hasThumbnail}>
-                  <Sparkles /> Sharpen Thumbnail…
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={!hasThumbnail} onClick={() => saveThumbnailToGallery.mutate({ id: item.id })}>
-                <BookmarkPlus /> Save in Thumbnail Gallery
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setThumbnailGalleryOpen(true)}>
-                <Images /> View Gallery…
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={!hasThumbnail}
-                onClick={() => setDeleteThumbnailWarningOpen(true)}
-              >
-                <Trash2 /> Delete
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          {!isGhost && (
-            <DropdownMenuItem variant="destructive" onClick={() => setDeleteFileWarningOpen(true)}>
-              <FileX /> Delete file…
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <Trash2 /> Delete
-          </DropdownMenuItem>
+          <ActionItems actions={actionsFor(item)} />
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <EditLibraryItemDialog item={item} open={editOpen} onOpenChange={setEditOpen} />
-      <CompareMetadataDialog item={item} open={compareOpen} onOpenChange={setCompareOpen} />
-      <RedownloadFromUrlDialog item={item} open={redownloadFromUrlOpen} onOpenChange={setRedownloadFromUrlOpen} />
-      <MoveLibraryItemDialog item={item} open={moveOpen} onOpenChange={setMoveOpen} />
-      <TrimLibraryItemDialog item={item} open={trimOpen} onOpenChange={setTrimOpen} />
-      <DeleteLibraryItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
-      <ThumbnailCustomRangeDialog
-        open={thumbnailCustomRangeOpen}
-        onOpenChange={setThumbnailCustomRangeOpen}
-        durationSeconds={item.duration}
-        onConfirm={(options) => {
-          setThumbnailPickOptions(options)
-          setThumbnailCustomRangeOpen(false)
-          setThumbnailPickerOpen(true)
-        }}
-      />
-      <ThumbnailPickerDialog
-        item={item}
-        open={thumbnailPickerOpen}
-        onOpenChange={setThumbnailPickerOpen}
-        options={thumbnailPickOptions}
-      />
-      <ThumbnailGalleryDialog item={item} open={thumbnailGalleryOpen} onOpenChange={setThumbnailGalleryOpen} />
-      <NfoContentDialog item={item} open={nfoContentOpen} onOpenChange={setNfoContentOpen} />
-      {frameMatchingEnabled && frameMatchMode && (
-        <FrameMatchDialog
-          item={item}
-          mode={frameMatchMode}
-          open={frameMatchMode != null}
-          onOpenChange={(open) => !open && setFrameMatchMode(null)}
-        />
-      )}
-
-      <AlertDialog open={refreshWarningOpen} onOpenChange={setRefreshWarningOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Refresh metadata from source?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This re-fetches title, uploader, duration, resolution, and description from the
-              original URL — overwriting any manual edits you've made here. The media file and
-              thumbnail are not affected.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => refreshMetadata.mutate(item.id)}>Refresh</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={redownloadWarningOpen} onOpenChange={setRedownloadWarningOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{isGhost ? "Download this item's file?" : "Redownload this file?"}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {isGhost
-                ? "This fetches the file from the item's source URL for the first time. Resolution and duration get filled in — title, tags, season/sequence, year, and artist are left exactly as they are."
-                : "This re-fetches the file from its original URL and replaces it. Only resolution and duration are updated here — title, tags, season/sequence, year, artist, and thumbnail are left exactly as they are."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => redownload.mutate(item.id)}>
-              {isGhost ? "Download" : "Redownload"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={redownloadThumbWarningOpen} onOpenChange={setRedownloadThumbWarningOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Redownload thumbnail?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This re-fetches the thumbnail image from the original URL, replacing the current one.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => redownloadThumbnail.mutate(item.id)}>Redownload</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={quickGrabWarningOpen} onOpenChange={setQuickGrabWarningOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Grab a random frame as thumbnail?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This grabs a random frame from the video file itself, replacing the current
-              thumbnail. If you'd rather pick from a few options, use "Choose from Video" instead.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => quickGrabThumbnail.mutate(item.id)}>Grab</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={sharpenWarningOpen} onOpenChange={setSharpenWarningOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Sharpen this item's thumbnail?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Runs the current thumbnail through your configured Stable Diffusion WebUI instance for
-              a denoise/detail pass only — the output stays the same size, it's not upscaled. This
-              runs in the background; check the AI Enhancement page for progress.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => sharpenThumbnail.mutate([item.id])}>Sharpen</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={deleteThumbnailWarningOpen} onOpenChange={setDeleteThumbnailWarningOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this item's thumbnail?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the thumbnail image from disk. The media file and everything else about
-              this item are untouched — it shows a placeholder icon until a new thumbnail is set.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteThumbnail.mutate(item.id)}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={deleteNfoWarningOpen} onOpenChange={setDeleteNfoWarningOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete the .nfo file?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the .nfo file from disk. If "Generate NFO" is still enabled for this
-              item, it reappears the next time you save a relevant edit — to stop that too, turn
-              off "Generate NFO" in Edit instead.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteNfo.mutate(item.id)}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={deleteFileWarningOpen}
-        onOpenChange={(open) => {
-          setDeleteFileWarningOpen(open)
-          if (!open) setDeleteFileAlsoThumbnail(false)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this item's file?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the media file from disk to reclaim space. The library entry, tags,
-              collection membership, and all other metadata stay — the item shows a placeholder
-              until you download it again.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="flex items-center gap-1.5">
-            <Checkbox
-              id="delete-file-also-thumbnail"
-              checked={deleteFileAlsoThumbnail}
-              onCheckedChange={(v) => setDeleteFileAlsoThumbnail(v === true)}
-            />
-            <Label htmlFor="delete-file-also-thumbnail" className="font-normal">
-              Also delete thumbnail
-            </Label>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteFile.mutate({ id: item.id, deleteThumbnail: deleteFileAlsoThumbnail })}
-            >
-              Delete file
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {host}
     </>
   )
 }

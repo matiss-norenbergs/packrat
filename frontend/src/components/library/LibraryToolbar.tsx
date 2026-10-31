@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react"
-import { useSearchParams } from "react-router-dom"
 import {
   ArrowDownAZ,
   ArrowUpAZ,
   Calendar,
-  Columns3,
   Download,
   FileImage,
   FilePlus2,
@@ -55,15 +53,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useCollections } from "@/hooks/useCollections"
-import { useLibraryFacets } from "@/hooks/useLibrary"
-import { useSettings, useUpdateSettings } from "@/hooks/useSettings"
-import { useLibrarySort } from "@/hooks/useLibrarySort"
-import { useTags } from "@/hooks/useTags"
 import { sortCollectionsByPath } from "@/lib/collectionTree"
-import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
+import type { LibrarySortKey } from "@/lib/libraryFilters"
 import { AddGhostLibraryItemDialog } from "./AddGhostLibraryItemDialog"
-import { useFeatureEnabled } from "@/hooks/useFeature"
 import { AddToCompareListDialog } from "./AddToCompareListDialog"
 import { BulkAssignTagsDialog } from "./BulkAssignTagsDialog"
 import { BulkDeleteLibraryItemFilesDialog } from "./BulkDeleteLibraryItemFilesDialog"
@@ -71,15 +63,13 @@ import { BulkDeleteLibraryItemsDialog } from "./BulkDeleteLibraryItemsDialog"
 import { BulkEditLibraryItemsDialog } from "./BulkEditLibraryItemsDialog"
 import { BulkFetchLibraryThumbnailsDialog } from "./BulkFetchLibraryThumbnailsDialog"
 import { BulkFrameMatchDialog } from "./BulkFrameMatchDialog"
-import type { FrameMatchMode } from "@/types/api"
 import { BulkRedownloadLibraryItemsDialog } from "./BulkRedownloadLibraryItemsDialog"
 import { BulkSetArtistDialog } from "./BulkSetArtistDialog"
 import { BulkSetGenerateNfoDialog } from "./BulkSetGenerateNfoDialog"
 import { BulkSetYearDialog } from "./BulkSetYearDialog"
 import { BulkSharpenThumbnailsDialog } from "./BulkSharpenThumbnailsDialog"
 import { EditSequenceDialog } from "./EditSequenceDialog"
-import { LIBRARY_COLUMNS, useLibraryColumns } from "./LibraryColumnsContext"
-import { useSelection } from "./SelectionContext"
+import { NONE, PAGINATION_DISABLED, type LibraryToolbarState, useLibraryToolbar } from "./useLibraryToolbar"
 
 const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
   { value: "downloadedAt", label: "Date downloaded" },
@@ -92,177 +82,50 @@ const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
 ]
 
 const PAGE_SIZE_OPTIONS = [24, 48, 96, 200]
-const PAGINATION_DISABLED = "disabled"
 
-const NONE = "none"
-
-export function LibraryToolbar() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const { data: collections } = useCollections()
-  const { data: facets } = useLibraryFacets()
-  const { data: allTags } = useTags()
-  // view/sort are DB-backed settings (remembered across reloads and
-  // browsers) rather than URL params — q/collection/year stay URL-only
-  // since they're per-visit filters, not a "remembered preference," and
-  // moving "collection" out of the URL would break the folder view's
-  // breadcrumb/browser-back behavior.
-  const { data: settings } = useSettings()
-  const compareListEnabled = useFeatureEnabled("featureCompareListEnabled")
-  const frameMatchingEnabled = useFeatureEnabled("featureFrameMatchingEnabled")
-  const updateSettings = useUpdateSettings()
-  const { selectionActive, approxCount, clear } = useSelection()
-  const { visibleColumns, toggleColumn } = useLibraryColumns()
-  const [bulkEditOpen, setBulkEditOpen] = useState(false)
-  const [bulkTagsOpen, setBulkTagsOpen] = useState(false)
-  const [bulkArtistOpen, setBulkArtistOpen] = useState(false)
-  const [bulkYearOpen, setBulkYearOpen] = useState(false)
-  const [bulkNfoOpen, setBulkNfoOpen] = useState(false)
-  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
-  const [bulkDeleteFileOpen, setBulkDeleteFileOpen] = useState(false)
-  const [bulkRedownloadOpen, setBulkRedownloadOpen] = useState(false)
-  const [bulkFetchThumbnailsOpen, setBulkFetchThumbnailsOpen] = useState(false)
-  const [bulkFrameMatchMode, setBulkFrameMatchMode] = useState<FrameMatchMode | null>(null)
-  const [bulkSharpenOpen, setBulkSharpenOpen] = useState(false)
-  const [editSequenceOpen, setEditSequenceOpen] = useState(false)
-  const [addToCompareOpen, setAddToCompareOpen] = useState(false)
-  const [addGhostOpen, setAddGhostOpen] = useState(false)
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
-  // Draft copies of Mode/View/Pagination — same draft-then-Apply idiom as
-  // the Filters & Sort dialog below, just surfaced in a Popover instead of a
-  // Dialog, so opening the popover doesn't touch anything until Apply.
-  const [draftMode, setDraftMode] = useState<"manage" | "details">("manage")
-  const [draftView, setDraftView] = useState<"grid" | "folders" | "list">("grid")
-  const [draftPagination, setDraftPagination] = useState(PAGINATION_DISABLED)
-  // Draft copies of the filter/sort controls that live inside the dialog —
-  // edits only touch this local state, so opening the picker doesn't
-  // re-filter/re-sort the grid on every click. Applying commits everything
-  // in one settings PATCH + one URL update instead of one request per field.
-  const [draftSortKey, setDraftSortKey] = useState<LibrarySortKey>("downloadedAt")
-  const [draftSortDir, setDraftSortDir] = useState<LibrarySortDir>("desc")
-  const [draftCollectionId, setDraftCollectionId] = useState(NONE)
-  const [draftYear, setDraftYear] = useState(NONE)
-  const [draftTags, setDraftTags] = useState<string[]>([])
-  const [draftHideGhosts, setDraftHideGhosts] = useState(false)
-
-  const view =
-    settings?.libraryView === "folders" ? "folders" : settings?.libraryView === "list" ? "list" : "grid"
-  const mode = (settings?.libraryMode as "manage" | "details") || "manage"
-  const search = searchParams.get("q") ?? ""
-  const [searchInput, setSearchInput] = useState(search)
-  const { sort, baseline: baselineSort, setSort, saveSortAsDefault } = useLibrarySort()
-  const { key: sortKey, dir: sortDir } = sort
-  const collectionId = searchParams.get("collection") ?? NONE
-  const year = searchParams.get("year") ?? NONE
-  const selectedTags = (searchParams.get("tags") ?? "").split(",").filter(Boolean)
-  const hideGhosts = searchParams.get("hideGhosts") === "true"
-  const paginationEnabled = settings?.libraryPaginationEnabled ?? false
-  const pageSize = settings?.libraryPageSize || 48
-
-  const years = facets?.years ?? []
-  // Sort isn't counted here — it always has a value, so it wouldn't make a
-  // meaningful "N active" indicator the way an unset-by-default filter does.
-  const activeFilterCount =
-    (collectionId !== NONE ? 1 : 0) + (year !== NONE ? 1 : 0) + selectedTags.length + (hideGhosts ? 1 : 0)
-
-  const update = (key: string, value: string | null) => {
-    const next = new URLSearchParams(searchParams)
-    if (value == null || value === NONE || value === "") next.delete(key)
-    else next.set(key, value)
-    setSearchParams(next, { replace: true })
-  }
-
-  // Keep the input in sync when "q" changes from outside this component
-  // (e.g. browser back/forward) without fighting the debounce below.
-  useEffect(() => {
-    setSearchInput(search)
-  }, [search])
-
-  // Debounce pushing keystrokes into the URL param that actually drives
-  // filtering — updating on every keystroke re-filters the whole grid each
-  // time, which feels janky while typing.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchInput !== search) update("q", searchInput || null)
-    }, 300)
-    return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput])
-
-  const openSettingsPopover = (next: boolean) => {
-    if (next) {
-      setDraftMode(mode)
-      setDraftView(view)
-      setDraftPagination(paginationEnabled ? String(pageSize) : PAGINATION_DISABLED)
-    }
-    setSettingsPopoverOpen(next)
-  }
-
-  const applyLibrarySettings = () => {
-    const patch: { libraryMode?: string; libraryView?: string; libraryPaginationEnabled?: boolean; libraryPageSize?: number } = {}
-    if (draftMode !== mode) patch.libraryMode = draftMode
-    if (draftView !== view) patch.libraryView = draftView
-    const draftPaginationEnabled = draftPagination !== PAGINATION_DISABLED
-    if (draftPaginationEnabled !== paginationEnabled) patch.libraryPaginationEnabled = draftPaginationEnabled
-    if (draftPaginationEnabled && Number(draftPagination) !== pageSize) patch.libraryPageSize = Number(draftPagination)
-    if (Object.keys(patch).length > 0) updateSettings.mutate(patch)
-
-    // Preserve the two side effects the old per-control setters used to
-    // apply immediately on every click — now applied once at commit time.
-    if (draftView !== view) {
-      // Switching views makes a stale "collection" filter/location ambiguous
-      // between the two views' different meanings for that param — clear it.
-      const params = new URLSearchParams(searchParams)
-      params.delete("collection")
-      setSearchParams(params, { replace: true })
-    }
-    if (draftMode !== mode && draftMode !== "manage") {
-      // Leaving manage mode hides every checkbox, so a lingering selection
-      // would silently reappear if the user switches back — clear it now.
-      clear()
-    }
-
-    setSettingsPopoverOpen(false)
-  }
-
-  const openFilters = () => {
-    setDraftSortKey(sortKey)
-    setDraftSortDir(sortDir)
-    setDraftCollectionId(collectionId)
-    setDraftYear(year)
-    setDraftTags(selectedTags)
-    setDraftHideGhosts(hideGhosts)
-    setFiltersOpen(true)
-  }
-
-  const toggleDraftTag = (name: string) => {
-    setDraftTags((prev) => (prev.includes(name) ? prev.filter((t) => t !== name) : [...prev, name]))
-  }
-
-  const draftSortDiffersFromBaseline = draftSortKey !== baselineSort.key || draftSortDir !== baselineSort.dir
-
-  const applyFilters = (saveSort = false) => {
-    if (draftSortKey !== sortKey || draftSortDir !== sortDir) {
-      setSort({ key: draftSortKey, dir: draftSortDir })
-    }
-    const next = new URLSearchParams(searchParams)
-    for (const [key, value] of [
-      ["collection", draftCollectionId],
-      ["year", draftYear],
-      ["tags", draftTags.join(",")],
-      ["hideGhosts", draftHideGhosts ? "true" : ""],
-    ] as const) {
-      if (value === "" || value === NONE) next.delete(key)
-      else next.set(key, value)
-    }
-    setSearchParams(next, { replace: true })
-    setFiltersOpen(false)
-    if (saveSort) void saveSortAsDefault({ key: draftSortKey, dir: draftSortDir })
-  }
-
+/**
+ * Add item, Bulk operations (+ its dialogs), Clear and "N selected": the left side of the toolbar. Used by the classic
+ * sticky toolbar (grid, folders) and by the list view's DataTable `toolbar` slot; never both at once.
+ */
+export function LibraryToolbarActions({ t }: { t: LibraryToolbarState }) {
+  const {
+    addGhostOpen,
+    setAddGhostOpen,
+    selectionActive,
+    approxCount,
+    clear,
+    bulkEditOpen,
+    setBulkEditOpen,
+    bulkTagsOpen,
+    setBulkTagsOpen,
+    bulkArtistOpen,
+    setBulkArtistOpen,
+    bulkYearOpen,
+    setBulkYearOpen,
+    bulkNfoOpen,
+    setBulkNfoOpen,
+    bulkDeleteOpen,
+    setBulkDeleteOpen,
+    bulkDeleteFileOpen,
+    setBulkDeleteFileOpen,
+    bulkRedownloadOpen,
+    setBulkRedownloadOpen,
+    bulkFetchThumbnailsOpen,
+    setBulkFetchThumbnailsOpen,
+    bulkFrameMatchMode,
+    setBulkFrameMatchMode,
+    bulkSharpenOpen,
+    setBulkSharpenOpen,
+    editSequenceOpen,
+    setEditSequenceOpen,
+    addToCompareOpen,
+    setAddToCompareOpen,
+    compareListEnabled,
+    frameMatchingEnabled,
+    settings,
+  } = t
   return (
-    <div className="space-y-2">
-    <div className="flex flex-wrap items-center gap-2">
+    <>
         <Button size="sm" onClick={() => setAddGhostOpen(true)}>
           <Plus className="h-4 w-4" />
           Add item
@@ -363,36 +226,40 @@ export function LibraryToolbar() {
             Clear
           </Button>
         )}
-        <span className="text-sm text-muted-foreground">
-          {selectionActive ? `${approxCount} selected` : "Select files or collections to bulk edit"}
-        </span>
+      {selectionActive && <span className="text-sm text-muted-foreground">{approxCount} selected</span>}
+    </>
+  )
+}
 
-        {view === "list" && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Columns3 className="h-4 w-4" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-48">
-              {LIBRARY_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.key}
-                  checked={visibleColumns.has(col.key)}
-                  onSelect={(e) => {
-                    e.preventDefault()
-                    toggleColumn(col.key)
-                  }}
-                >
-                  {col.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-
-      <Button variant="outline" className="ml-auto" onClick={openFilters}>
+/** The "Filters & Sort" button and its draft / Apply / Save as default dialog. */
+export function LibraryFiltersButton({ t, className }: { t: LibraryToolbarState; className?: string }) {
+  const {
+    filtersOpen,
+    setFiltersOpen,
+    openFilters,
+    activeFilterCount,
+    view,
+    draftSortKey,
+    setDraftSortKey,
+    draftSortDir,
+    setDraftSortDir,
+    draftCollectionId,
+    setDraftCollectionId,
+    draftYear,
+    setDraftYear,
+    draftTags,
+    draftHideGhosts,
+    setDraftHideGhosts,
+    collections,
+    years,
+    allTags,
+    toggleDraftTag,
+    draftSortDiffersFromBaseline,
+    applyFilters,
+  } = t
+  return (
+    <>
+      <Button variant="outline" className={className} onClick={openFilters}>
         <SlidersHorizontal className="h-4 w-4" />
         Filters &amp; Sort
         {activeFilterCount > 0 && (
@@ -401,136 +268,6 @@ export function LibraryToolbar() {
           </span>
         )}
       </Button>
-
-      <div className="relative min-w-[160px] max-w-[280px] flex-1 sm:min-w-[200px]">
-        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search library…"
-          className="pl-8 pr-7"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
-        {searchInput && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setSearchInput("")
-                  update("q", null)
-                }}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Clear search</TooltipContent>
-          </Tooltip>
-        )}
-      </div>
-
-      <div className="h-6 w-px bg-border" />
-
-      <Popover open={settingsPopoverOpen} onOpenChange={openSettingsPopover}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Library display settings"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-72 space-y-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Mode</Label>
-            <div className="flex gap-1 rounded-md border p-0.5">
-              <Button
-                type="button"
-                variant={draftMode === "manage" ? "secondary" : "ghost"}
-                size="sm"
-                className="flex-1 gap-1.5"
-                onClick={() => setDraftMode("manage")}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Manage
-              </Button>
-              <Button
-                type="button"
-                variant={draftMode === "details" ? "secondary" : "ghost"}
-                size="sm"
-                className="flex-1 gap-1.5"
-                onClick={() => setDraftMode("details")}
-              >
-                <Info className="h-3.5 w-3.5" />
-                Details
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">View</Label>
-            <div className="flex gap-1 rounded-md border p-0.5">
-              <Button
-                type="button"
-                variant={draftView === "grid" ? "secondary" : "ghost"}
-                size="sm"
-                className="flex-1 gap-1.5"
-                onClick={() => setDraftView("grid")}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                Grid
-              </Button>
-              <Button
-                type="button"
-                variant={draftView === "folders" ? "secondary" : "ghost"}
-                size="sm"
-                className="flex-1 gap-1.5"
-                onClick={() => setDraftView("folders")}
-              >
-                <FolderTree className="h-3.5 w-3.5" />
-                Folders
-              </Button>
-              <Button
-                type="button"
-                variant={draftView === "list" ? "secondary" : "ghost"}
-                size="sm"
-                className="flex-1 gap-1.5"
-                onClick={() => setDraftView("list")}
-              >
-                <List className="h-3.5 w-3.5" />
-                List
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="library-settings-pagination" className="text-xs text-muted-foreground">
-              Pagination
-            </Label>
-            <Select value={draftPagination} onValueChange={setDraftPagination}>
-              <SelectTrigger id="library-settings-pagination" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={PAGINATION_DISABLED}>Disabled</SelectItem>
-                {PAGE_SIZE_OPTIONS.map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n}/page
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Button className="w-full" size="sm" onClick={applyLibrarySettings}>
-            Apply
-          </Button>
-        </PopoverContent>
-      </Popover>
-    </div>
 
     <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
       <DialogContent className="sm:max-w-md">
@@ -654,6 +391,183 @@ export function LibraryToolbar() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
+  )
+}
+
+/** The display settings cog (Mode / View / Pagination, draft then Apply). `compact` is the size of a table toolbar's group buttons. */
+export function LibrarySettingsPopover({ t, compact = false }: { t: LibraryToolbarState; compact?: boolean }) {
+  const {
+    settingsPopoverOpen,
+    openSettingsPopover,
+    draftMode,
+    setDraftMode,
+    draftView,
+    setDraftView,
+    draftPagination,
+    setDraftPagination,
+    applyLibrarySettings,
+  } = t
+  return (
+      <Popover open={settingsPopoverOpen} onOpenChange={openSettingsPopover}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size={compact ? "icon-sm" : "icon"}
+            aria-label="Library display settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Mode</Label>
+            <div className="flex gap-1 rounded-md border p-0.5">
+              <Button
+                type="button"
+                variant={draftMode === "manage" ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => setDraftMode("manage")}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Manage
+              </Button>
+              <Button
+                type="button"
+                variant={draftMode === "details" ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => setDraftMode("details")}
+              >
+                <Info className="h-3.5 w-3.5" />
+                Details
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">View</Label>
+            <div className="flex gap-1 rounded-md border p-0.5">
+              <Button
+                type="button"
+                variant={draftView === "grid" ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => setDraftView("grid")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Grid
+              </Button>
+              <Button
+                type="button"
+                variant={draftView === "folders" ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => setDraftView("folders")}
+              >
+                <FolderTree className="h-3.5 w-3.5" />
+                Folders
+              </Button>
+              <Button
+                type="button"
+                variant={draftView === "list" ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={() => setDraftView("list")}
+              >
+                <List className="h-3.5 w-3.5" />
+                List
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="library-settings-pagination" className="text-xs text-muted-foreground">
+              Pagination
+            </Label>
+            <Select value={draftPagination} onValueChange={setDraftPagination}>
+              <SelectTrigger id="library-settings-pagination" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={PAGINATION_DISABLED}>Disabled</SelectItem>
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}/page
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button className="w-full" size="sm" onClick={applyLibrarySettings}>
+            Apply
+          </Button>
+        </PopoverContent>
+      </Popover>
+  )
+}
+
+export function LibraryToolbar() {
+  const t = useLibraryToolbar()
+  const { search, update } = t
+  const [searchInput, setSearchInput] = useState(search)
+
+  // Keep the input in sync when "q" changes from outside this component
+  // (e.g. browser back/forward) without fighting the debounce below.
+  useEffect(() => {
+    setSearchInput(search)
+  }, [search])
+
+  // Debounce pushing keystrokes into the URL param that actually drives
+  // filtering — updating on every keystroke re-filters the whole grid each
+  // time, which feels janky while typing.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== search) update("q", searchInput || null)
+    }, 300)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput])
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <LibraryToolbarActions t={t} />
+      <LibraryFiltersButton t={t} className="ml-auto" />
+
+      <div className="relative min-w-[160px] max-w-[280px] flex-1 sm:min-w-[200px]">
+        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search library…"
+          className="pl-8 pr-7"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+        />
+        {searchInput && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setSearchInput("")
+                  update("q", null)
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Clear search</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+
+      <div className="h-6 w-px bg-border" />
+
+      <LibrarySettingsPopover t={t} />
     </div>
   )
 }

@@ -99,6 +99,73 @@ describe("working sort", () => {
   })
 })
 
+describe("shared layout", () => {
+  const FULL: TableLayouts = {
+    library: { v: 1, sort: { key: "seasonNumber", dir: "desc" }, hidden: ["artist", "tags"], widths: { artist: 260, size: 300, title: 500, bogus: 400 } },
+  }
+
+  it("starts from the default layout: the columns that are off by default are hidden", () => {
+    const { result } = setup({})
+    expect(result.current.layout).toEqual({ v: 1, hidden: ["downloadedAt", "duration", "size", "year"] })
+  })
+
+  it("applies a saved layout's hidden columns and widths instead of dropping them (flex and unknown columns are normalized away)", () => {
+    const { result } = setup(FULL)
+    expect(result.current.layout).toEqual({
+      v: 1,
+      sort: { key: "seasonNumber", dir: "desc" },
+      hidden: ["artist", "tags"],
+      widths: { artist: 260, size: 300 },
+    })
+    expect(result.current.sort).toEqual({ key: "seasonNumber", dir: "desc" })
+    expect(result.current.differs).toBe(false)
+  })
+
+  it("keeps a saved sort by a key that is not a column (filename, sequenceNumber)", () => {
+    const { result } = setup({ library: { v: 1, sort: { key: "filename", dir: "asc" } } })
+    expect(result.current.sort).toEqual({ key: "filename", dir: "asc" })
+    expect(result.current.layout.sort).toEqual({ key: "filename", dir: "asc" })
+  })
+
+  it("setLayout replaces the working layout and the sort follows it", () => {
+    const { result } = setup(FULL)
+    act(() => result.current.setLayout({ v: 1, hidden: ["year"], sort: { key: "year", dir: "asc" } }))
+    expect(result.current.layout).toEqual({ v: 1, hidden: ["year"], sort: { key: "year", dir: "asc" } })
+    expect(result.current.sort).toEqual({ key: "year", dir: "asc" })
+    expect(result.current.differs).toBe(true)
+  })
+
+  it("setSort keeps the hidden columns and widths of the working layout", () => {
+    const { result } = setup(FULL)
+    act(() => result.current.setSort({ key: "title", dir: "asc" }))
+    expect(result.current.layout).toEqual({ v: 1, sort: { key: "title", dir: "asc" }, hidden: ["artist", "tags"], widths: { artist: 260, size: 300 } })
+  })
+
+  it("a stored layout with only a sort keeps the default hidden columns", () => {
+    const { result } = setup({ library: { v: 1, sort: { key: "title", dir: "asc" } } })
+    expect(result.current.layout).toEqual({ v: 1, sort: { key: "title", dir: "asc" }, hidden: ["downloadedAt", "duration", "size", "year"] })
+    expect(result.current.differs).toBe(false)
+  })
+
+  it("an explicit empty hidden shows every column, and an explicit hidden list wins", () => {
+    expect(setup({ library: { v: 1, hidden: [] } }).result.current.layout).toEqual({ v: 1 })
+    expect(setup({ library: { v: 1, hidden: ["artist"] } }).result.current.layout).toEqual({ v: 1, hidden: ["artist"] })
+  })
+
+  it("saveSortAsDefault on a sort-only layout still stores only the sort", async () => {
+    const { result } = setup({ library: { v: 1, sort: { key: "title", dir: "asc" } } })
+    act(() => result.current.setSort({ key: "year", dir: "desc" }))
+    await act(async () => void (await result.current.saveSortAsDefault()))
+    expect(api.saveTableLayout).toHaveBeenCalledWith("library", { v: 1, sort: { key: "year", dir: "desc" } })
+  })
+
+  it("hiding a column is not a sort difference", () => {
+    const { result } = setup({})
+    act(() => result.current.setLayout({ v: 1, hidden: ["year"] }))
+    expect(result.current.differs).toBe(false)
+  })
+})
+
 describe("without the provider", () => {
   it("returns the saved sort, read-only", () => {
     const { result } = setup(SAVED, false)

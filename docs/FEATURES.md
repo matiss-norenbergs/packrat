@@ -213,12 +213,13 @@ Your completed downloads (and anything imported — see Import below).
 **View modes**, toggled in the toolbar and remembered across reloads/browsers (stored server-side,
 not per-browser):
 - **Grid** — a flat, filterable grid of every item, with server-side pagination available
-  (Settings → toggle it on and pick a page size) for large libraries. With pagination on, the grid, the Folders view and the
-  list end in the same footer as the tables: "N items" on the left (even for a single page) and the numbered pager with
-  Previous / Next on the right, indented to clear the floating reveal button when it is shown. With pagination off there is
-  no footer.
+  (Settings → toggle it on and pick a page size) for large libraries. With pagination on, the grid and the Folders view end in
+  the same footer as the tables: "N items" on the left (even for a single page) and the numbered pager with Previous / Next on
+  the right, indented to clear the floating reveal button when it is shown. With pagination off they have no footer.
 - **Folders** — browse by collection, one level at a time, with a breadcrumb trail and
   browser-back support for navigating up.
+- **List** — a table of the current page (see [List view](#list-view) below). It always ends in the table footer: with
+  pagination off it is count-only ("N items", no page buttons).
 
 **Toolbar**: full-text search (title/uploader/artist/description, backed by SQLite FTS5), a sort
 key (date downloaded, title, filename, year, duration, sequence #, season & episode) + ascending/descending toggle, a collection filter
@@ -229,7 +230,45 @@ layout, else date downloaded descending. **Save as default** in the Filters & So
 baseline) applies the dialog and stores just the sort; other saved parts of the layout are kept, and saving the built-in default clears it.
 The Browse item page uses the saved sort (or the default) and cannot change it.
 
-**Multi-select** (Grid or Folder view): check items, then use the **Bulk operations** menu to apply
+### List view
+
+The list is the shared table (see [Table layouts](#table-layouts) below) with the Library's own data and selection:
+
+- **One toolbar**: the list has no separate Library toolbar. DataTable's own toolbar row carries everything: **Add item**, **Bulk
+  operations**, **Clear** and "N selected" (only with a selection) on the left; **Filters & Sort**, the search box and one
+  joined group of three icon buttons on the right: **Columns**, **Layout** and the **display settings cog** (Mode / View /
+  Pagination, same Apply behaviour as in the grid). The search is the Library's shared one (the URL `q`), so switching views keeps
+  the query. The row is not sticky (the table's header is, inside its scroll box); the grid and the Folders view keep the sticky
+  Library toolbar. On a narrow window the group wraps to its own row.
+- **Columns**: Thumb, Title, Season/Episode, Year, Duration, Downloaded, Artist, Collection, Size and Tags (there is no "⋮" column). Year,
+  Duration, Downloaded and Size are hidden until you show them. The **Columns** menu and the **Layout** button (Save / Restore /
+  Clear) are in the toolbar's button group (see above); the Library toolbar has no Columns menu any more. **Hidden columns, column widths and the sort are saved with the `library` layout** (hidden columns used to last only
+  until a reload). A layout saved only for its sort (**Save as default**) still hides those four columns; a saved layout that lists
+  hidden columns (even none) wins. Drag a header's right edge to resize a column; Title takes the spare width.
+- **Sorting** happens on the server: click Title, Season/Episode, Year, Duration or Downloaded to sort ascending, again for
+  descending, a third time to go back to the default order (date downloaded, newest first). The header and the Filters & Sort dialog
+  show and change the same sort, which the grid and the Folders view use too. A sort the dialog offers that has no column
+  (Filename, Sequence #) is kept in the layout and can be saved, but no header shows an arrow for it.
+- **Selection** works like the other tables: a click selects only that row, **ctrl / cmd** click adds or removes a row,
+  **shift** click selects the range, dragging over rows selects them, the row checkboxes add or remove one, and the header checkbox
+  selects the page (unchecking it clears everything). The selection lives in the Library and survives paging, searching, sorting and
+  filters: the checkboxes and ctrl / cmd click **accumulate across pages**, while a plain click, a drag, a shift range and the
+  header checkbox **replace the whole selection, including any selected collections**. The toolbar and the footer ("N items · M
+  selected") show the same number, which also counts selected collections' items.
+- **Row actions are the right-click menu.** Right-click a row for the same actions as a card's "⋮" menu (Edit, Move, Trim,
+  compare list, Copy URL, Metadata, Redownload, NFO, Thumbnail, Delete file, Delete, with their submenus and confirmations).
+  Right-clicking a row that is not selected selects just that row (replacing any selection, collections included) and opens its
+  menu. With several rows selected, right-clicking one of them opens **no menu** (these actions are per row; use **Bulk operations**
+  for the selection). The grid and the Folders view keep their "⋮" buttons.
+- **Links stay live with a selection**: the title link, a blurred thumbnail's click-to-reveal and the tags popover (the
+  first three tags and "+N"; click for the full list) work whether or not something is selected, and clicking
+  them never selects the row. The title and a row's checkbox name stay hashed while a private item is blurred.
+- **Footer**: the table's own (see above), with the selected count of the Library toolbar. With pagination off it is count-only:
+  "N items" (and "· M selected"), no Previous / page / Next buttons.
+- **Height**: the list fills the window: the title and toolbar stay put, only the table scrolls, and the footer sits at the bottom
+  of the page. On a narrow window the toolbar wraps and the table simply gets shorter.
+
+**Multi-select** (Grid, Folder or List view): check items, then use the **Bulk operations** menu to apply
 an action to the whole selection at once — Edit fields, Assign tags, Set artist, Set year, Generate
 NFO, Edit sequence, add to the [compare list](#compare-list), Download file(s) (re-queues each
 selected item's own source URL — items with none are silently skipped), a Thumbnail submenu

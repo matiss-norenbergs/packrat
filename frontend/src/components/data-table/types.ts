@@ -72,6 +72,8 @@ export type ContextMenuItemDef<T> =
       onSelect: (rows: T[]) => void
     }
   | { key: string; separator: true }
+  /** A submenu. Its items receive the same rows as top-level ones; separators, destructive and disabled items work the same. */
+  | { key: string; label: ReactNode; icon?: ReactNode; disabled?: boolean; items: ContextMenuItemDef<T>[] }
 
 export interface SearchConfig<T = unknown> {
   /** Seeds the input (default ""); the table keeps its own input state and calls onChange debounced. */
@@ -97,4 +99,10 @@ export interface PaginationConfig {
   total: number
   onPageChange: (page: number) => void
   itemLabel: { singular: string; plural: string }
+  /**
+   * Count-only footer: no Previous / Next / page buttons, no clamping and no `onPageChange` calls (the page owns a list
+   * that is not paged, e.g. pagination switched off). The count, "· N selected", the dock clearance and the loading
+   * placeholder stay.
+   */
+  hidePages?: boolean
 }

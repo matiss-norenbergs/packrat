@@ -39,6 +39,12 @@ export interface TableLayoutOptions {
    * `widths` holds overrides only. Omit to keep every width of a known column untouched.
    */
   resizableWidths?: Readonly<Record<string, { default: number; min: number }>>
+  /**
+   * What `hidden` is for a STORED layout that has no `hidden` key at all (typically one saved for its sort only), instead of
+   * "nothing hidden". An explicit `hidden`, even an empty one, always wins. Only the stored layout is affected; a table that
+   * leaves this out treats a missing `hidden` as an empty one.
+   */
+  hiddenWhenUnset?: readonly string[]
   /** The caller owns the working layout (e.g. a page that also needs it elsewhere); `onChange` receives every edit. */
   controlled?: { working: TableLayout; onChange: (layout: TableLayout) => void }
 }
@@ -100,7 +106,7 @@ export interface TableLayoutState {
 export function useTableLayout(tableId: string, defaults: TableLayout, opts: TableLayoutOptions = {}): TableLayoutState {
   const queryClient = useQueryClient()
   const { data: layouts, isPending } = useTableLayouts()
-  const { knownKeys, hideableKeys, sortableKeys, defaultSort, resizableWidths, controlled } = opts
+  const { knownKeys, hideableKeys, sortableKeys, defaultSort, resizableWidths, hiddenWhenUnset, controlled } = opts
 
   // The key lists are usually rebuilt each render; key the memos on their content.
   const knownSig = knownKeys?.join("\0")
@@ -122,7 +128,11 @@ export function useTableLayout(tableId: string, defaults: TableLayout, opts: Tab
   )
 
   const savedRaw = layouts?.[tableId]
-  const saved = useMemo(() => (savedRaw ? norm(savedRaw) : null), [savedRaw, norm])
+  const unsetSig = hiddenWhenUnset?.join("\0")
+  const saved = useMemo(
+    () => (savedRaw ? norm(savedRaw.hidden === undefined && unsetSig != null ? { ...savedRaw, hidden: unsetSig ? unsetSig.split("\0") : [] } : savedRaw) : null),
+    [savedRaw, norm, unsetSig],
+  )
   const defaultsSig = JSON.stringify(norm(defaults))
   const normalizedDefaults = useMemo(() => JSON.parse(defaultsSig) as TableLayout, [defaultsSig])
   const baseline = saved ?? normalizedDefaults

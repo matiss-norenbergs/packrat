@@ -224,7 +224,9 @@ layout, `clear()` DELETEs and applies the defaults, `restore()` is local; Save a
 **Library sort.** The Library sort is not a Settings key any more (`library_sort`, `librarySortKey` and `librarySortDir` were removed;
 migration 000051 deletes the row and clients that still send the fields are ignored). `LibrarySortProvider` (`components/library/LibrarySortContext.tsx`,
 mounted in `AppLayout` next to `RevealAllProvider` so it sits above both `/library` and `/library/:id` and survives navigation between them)
-wraps `useTableLayout("library", ...)` with the seven `LibrarySortKey`s as known and sortable keys and `downloadedAt` descending as `defaultSort`.
+wraps `useTableLayout("library", ...)` configured from the list view's column specs (`lib/libraryListColumns.ts`, see "Library list view" below: known, hideable, sortable
+and resizable keys, the default hidden columns) with `downloadedAt` descending as `defaultSort`. It exposes the working **layout** (sort, hidden, widths) and `setLayout`
+as well as the sort.
 The **baseline** is the sort of the saved `library` layout, else the default; the **working** sort starts as the baseline (a late layout is adopted unless
 the user already changed the sort), applies instantly to every view, and is gone on a reload. `useLibrarySort()` (`hooks/useLibrarySort.ts`) exposes
 `sort`, `baseline`, `ready`, `differs`, `setSort` and `saveSortAsDefault`; without the provider (`BrowseLayout`, the Browse item page) it returns the saved
@@ -234,6 +236,41 @@ and refire with the saved sort. `saveSortAsDefault` (`useSaveTableLayoutSort` in
 and PUTs it, or DELETEs the layout when only `v` is left; one request at a time, a toast only when the server answers, and the layouts cache is updated, so the
 baseline becomes the saved sort. Backups: `ApplySettingsBundle` skips retired setting keys (`library_sort`) and does not count them, so an old backup or settings
 file cannot bring the row back.
+
+**Library list view.** `LibraryListView` is a `DataTable` in **controlled (server) mode** (`tableId="library"`, the id of the shared sort layout): `rows` is the
+current page's items, the page owns the query (URL filters, `usePageState`, the sort from `useLibrarySort`, pagination from Settings), and the table never sorts.
+- *Shared column specs.* `lib/libraryListColumns.ts` (no JSX, no component imports, so no cycle) is the single source of the column keys, labels, widths, hideable /
+  default-visible and sortable flags, the two extra sort keys and the default layout. The list builds its `ColumnDef`s from it (adding header cell, cell and `sortValue`), and
+  `LibrarySortProvider` builds its `useTableLayout` options from it. The provider needs them because it sits above the page and cannot see the columns, while the layout
+  normalization drops `hidden` and `widths` for keys it does not know: without the specs a saved layout's hidden columns and widths would be ignored on load and lost on
+  Restore. Its default layout hides the columns that are off by default, the same set `DataTable` computes, so Restore / Clear and the dirty dot agree. A sortable
+  column's key **is** the server sort key (`title`, `seasonNumber` for Season/Episode, `year`, `duration`, `downloadedAt`), so `layout.sort.key` is what the queries send;
+  `sortValue` only marks the column sortable. The toolbar's `filename` and `sequenceNumber` sorts are not columns and go through `extraSortKeys`.
+- *Layout ownership.* The table's `layout` / `onLayoutChange` are the provider's working layout, so a header click, the toolbar dialog, the grid and the folder
+  view all read and write the same sort. The old `LibraryColumnsContext` / `LibraryColumnsProvider` / `LIBRARY_COLUMNS` and the toolbar's Columns dropdown are gone:
+  hidden columns are part of the saved layout now, and the table's own Columns menu and Layout popover (in its toolbar row) replace them. "Save as default" still saves
+  only the sort (`useSaveTableLayoutSort`, which keeps the stored `hidden` / `widths`).
+- *Selection adapter.* `useLibraryListSelection(items)` returns an `IdSelection<number>` over the Library's persisting `SelectionContext`, passed as `selectionState`:
+  `toggle` (ctrl / cmd click, the checkboxes) adds or removes one item and accumulates across pages; `selectOnly`, `selectAll` (a click, a drag, a shift range, the header
+  checkbox) and `clear` replace the whole selection and clear selected collections too. Ids always come from the current page, so they are turned back into items there.
+  The returned object changes only when the selection does (its mutators are `useEvent`s), so the memoized rows re-render only when their `selected` flag flips. The
+  controlled table does not clear the selection on a page, search or sort change, so it persists like the grid's. The grid and folder views keep using the context directly.
+- *Row actions and height.* The "⋮" column is gone; row actions are the table's `contextMenu`, for exactly one target row (a right-click on an unselected row selects only it through the adapter first; on one of several selected items it returns `[]`, so no menu). `libraryItemActions.tsx` is the single definition of an item's actions as data (`LibraryItemAction`: labels, icons, order, separators, submenus, destructive / disabled flags, ghost / image / audio / feature gating) plus `useLibraryItemActions(fixedItem?)`, which returns `actionsFor(item)` and a `host` with every dialog and mutation hook. `LibraryItemActionsMenu` (grid cards, folders, the item page) renders the data with `DropdownMenu` and mounts one host per card, bound to its item; the list mounts one host for the table and `actionsFor` makes the clicked item the dialogs' target (`toContextMenuItems` converts the data; the dialog opens from `onSelect` like on the other pages with a context menu). `LibraryPage` gives the list branch a `flex h-full min-h-0 flex-col gap-6` root (title `shrink-0`), so DataTable's `min-h-0 flex-1` fills `<main>` and the scroll box is `h-full`; nothing guesses a `calc(100vh - N)` any more, and `<main>` never scrolls in the list. The grid and folder branch keeps its scrolling page with the sticky toolbar.
+- *Cells.* The cells that depend on page state (reveal, the current URL for the title link's `from` state) are small components reading their context, so `COLUMNS` is a
+  module constant. The old "selection active" coupling is gone: the title link, the thumbnail reveal, the tags popover and the actions menu stay live with a selection and
+  never select the row (links and buttons are skipped by the table's interactive-target guard; a blurred thumbnail's wrapper carries `data-no-row-select`).
+  `getRowLabel` hashes the title of a blurred, unrevealed item.
+- *One toolbar.* `useLibraryToolbar()` (`useLibraryToolbar.ts`) holds all state of the Library toolbar (bulk dialogs, the Filters & Sort draft, the display
+  settings draft, the URL filters and the `update` helper). `LibraryToolbarActions` (Add item, Bulk operations + dialogs, Clear, "N selected"),
+  `LibraryFiltersButton` (button + dialog) and `LibrarySettingsPopover` (the cog) render from it. The classic sticky `LibraryToolbar` (grid, folders)
+  composes them with its own search input; the list view calls the hook once and passes them to DataTable's `toolbar`, `filters` and `layoutActions`
+  slots and the shared `update("q", …)` to `search` (controlled; the page-state reset keeps it at one request per query). `LibraryPage` mounts either
+  the sticky wrapper + classic toolbar or the list view, never both. The "Select files or collections to bulk edit" hint is gone from all views.
+- *Saved layout without `hidden`.* A stored `library` layout with no `hidden` key (one written by "Save as default") gets the default hidden columns:
+  `useTableLayout`'s `hiddenWhenUnset` option, set by the provider, and DataTable's `defaultHiddenWhenUnset` prop for the table's own copy of the
+  hook (Restore, dirty). An explicit `hidden`, even `[]`, wins; other tables are unchanged and `saveSortAsDefault` still edits the raw layout's `sort` only.
+- *Footer.* The table's own, through the `pagination` prop (with pagination off a count-only config: `hidePages: true`, so "N items" and the selected count show without page buttons), and
+  `selectedCount={approxCount}`, so the footer shows the toolbar's number. `LibraryPagination` is now used by the grid and the folder view only.
 
 `DataTable` uses it when a table passes a `tableId` and has a `hideable`, a sortable or a resizable column; without a `tableId` hiding and
 sorting still work but nothing can be saved. Passing both `layout` and `onLayoutChange` makes the page own the working layout (the
@@ -568,8 +605,8 @@ renders nothing but portaled buttons (and is `empty:hidden`). `lib/dockClearance
 (`DOCK_FOOTER_ROW`, `DOCK_FOOTER_LABEL`; the `pl-12` is the button size plus gap, defined only there). `TablePagination`
 (so every `DataTable` page) and the hand-rolled footers of Downloads and Collections use them, so the
 count label shifts when the button appears or disappears and is not indented otherwise. The Library's `LibraryPagination`
-(grid, folder and list views, only when its pagination setting is on) renders `TablePagination` too, inside a `pt-2` wrapper
-because the Library page scrolls as a whole. Needs `:has()` (Chromium 105+,
+(grid and folder views, only when its pagination setting is on) renders `TablePagination` too, inside a `pt-2` wrapper
+because the Library page scrolls as a whole; the list view is a `DataTable` and has the footer itself. Needs `:has()` (Chromium 105+,
 Safari 15.4+, Firefox 121+), which covers the web UI and the desktop webviews; older engines just get no indent.
 The variant does not apply inside dialogs or alert dialogs (`&:not([role="dialog"] *, [role="alertdialog"] *)`): they are
 portaled above the dock, so a table in a dialog never gets the dock indent.
@@ -739,7 +776,7 @@ row type and the id type (number or string).
   prop), including while loading and on error, so the page (and a dialog) never changes height between states. Then it shows
   a placeholder ("—" instead of the count, no "· N selected", Previous/Next and the current page button disabled) and
   `TablePagination` skips its clamp (`loading` prop), otherwise a table on page 3 would snap to page 1 while its total is 0.
-  A single page or an empty table shows "0 tags" and one disabled page. In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
+  A single page or an empty table shows "0 tags" and one disabled page. In `multi` mode it appends "· N selected" (selected rows on the current page); **`selectedCount?: number`** replaces that number (0 shows nothing) for a page whose selection spans more than the rows shown and has its own count (the Library list view passes the toolbar's). `TablePagination`
   clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
   `onPageChange(lastPage)`, so pages need no clamping code. **Dock clearance is automatic**: the footer
   carries the `dock-occupied:` variants of the clearance classes (`lib/dockClearance.ts`: row `flex-wrap-reverse gap-2`,
@@ -765,7 +802,9 @@ row type and the id type (number or string).
   value changes (`Object.is`) the table goes back to page 1 and clears the selection, exactly as for its own search. The page
   reset is a state adjustment during render (no extra commit); the selection (the page's, via `selectionState`) is cleared in
   a layout effect, because updating another component while rendering is not allowed. An unchanged key does nothing.
-  Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
+  **`PaginationConfig.hidePages`** renders the footer count-only (no Previous / Next / page buttons, no clamping, no `onPageChange`; dock clearance and the loading placeholder stay). **Context menu**: `ContextMenuItemDef` has a submenu variant (`{ key, label, icon?, disabled?, items }`, rendered with the shadcn `ContextMenuSub*`; nested items receive the same rows, separators / destructive / disabled work as at the top level), and the page's `contextMenu` builder now runs when the menu is requested (the right-click), so returning an **empty list opens no menu at all** (the default is prevented, the browser's own menu does not show either, like the header). **`layoutActions?: ReactNode`** adds controls at the end of the toolbar's button group, after Columns and Layout (the Library list's display settings
+  cog); it counts as a toolbar element, so the group shows and right-aligns even when nothing else does. **`defaultHiddenWhenUnset`** (with a `tableId`) makes a stored layout
+  without `hidden` hide the `defaultVisible: false` columns. Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
   `search.onChange` owned by the page; `search.value` is optional, it only seeds the input). In controlled mode the
   table does **not** reset the page or the selection: the page does both in its handlers/effects (AI Enhancement: `search.onChange`
   sets the query and page 1, each filter `onValueChange` sets page 1, and an effect clears the selection on a page / search /
@@ -794,7 +833,10 @@ row type and the id type (number or string).
   asc → desc → off, a default column toggles between its two directions and any other column cycles asc → desc → default.
   An explicit sort equal to the default is stored as no sort. **Normalization** (`normalizeTableLayout`): a `sort` is dropped
   when equal to `defaultSort` or when its column is not sortable / does not exist, so a saved layout without `sort` means "default
-  order" and layouts saved before sorting existed keep working. **Header**: a sortable header is a `button type="button"` inside the
+  order" and layouts saved before sorting existed keep working. **`extraSortKeys?: string[]`** lists sort keys that are valid in the layout
+  without being columns (a server sort the page offers elsewhere, e.g. the Library's `filename` and `sequenceNumber`): with a `tableId` they are added to
+  the known and sortable keys fed to normalization, so a layout sorted by one is kept, is dirty against another sort and is saved; no header shows an arrow
+  and nothing is sorted by it (a controlled table never sorts anyway), and the next header click moves on to that column ascending. **Header**: a sortable header is a `button type="button"` inside the
   `th` (with `aria-sort`), drawn like the Library list: an `ArrowUp` / `ArrowDown` (`h-3 w-3`) after the label, before it in
   right-aligned columns so the label stays flush right, and centered columns keep a spacer of the arrow's width on the other
   side so the label stays centered. A sort change, however it came about (click, Restore, Clear, a saved layout arriving), goes
@@ -817,7 +859,7 @@ row type and the id type (number or string).
   container and the single scroll container scrolls sideways (the sticky header with it). Effective width =
   `max(widths[key] ?? width ?? type default, minWidth ?? 48)`, capped at 2000 (`effectiveColumnWidth`).
 - **tableIds** (stable, kebab-case): `artists`, `subscriptions`, `history`, `logs`, `tags`, `ai-enhancement`, `frame-matching`,
-  `backup-history`, `import`. Dialog tables (Eligible items, Known items, Stray files) and Settings tab tables (Sessions, Servers) have none.
+  `backup-history`, `import`, `library` (the list view; shares its layout with the Library sort). Dialog tables (Eligible items, Known items, Stray files) and Settings tab tables (Sessions, Servers) have none.
 - **Why no virtualization**: pages are paginated at 50 rows, so virtualization would add complexity for no gain.
 - **Why Collections doesn't use it**: it renders a tree (expand/collapse, nesting, drag to re-parent), which a flat
   row model doesn't fit; its cells could use the same primitives but the table itself stays bespoke.
