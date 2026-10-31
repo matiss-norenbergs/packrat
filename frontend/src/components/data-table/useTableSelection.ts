@@ -12,6 +12,8 @@ interface Options<T, Id extends RowId> {
   getRowId: (row: T) => Id
   mode: SelectionMode
   selection: IdSelection<Id>
+  /** A row that returns false is never selected: ranges and drags skip it and carry on over the rows around it. */
+  isSelectable?: (row: T) => boolean
 }
 
 // Row-pointer selection shared by every list page, on top of a controlled
@@ -26,7 +28,9 @@ interface Options<T, Id extends RowId> {
 // INTERACTIVE_SELECTOR) and events from portals are left alone — the checkbox
 // toggles without clearing via its own handler.
 // single: a click selects only that row; no drag, ctrl or shift.
-export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, selection }: Options<T, Id>) {
+// `isSelectable`: the row component hands out no mouse handlers for a row that is not selectable (so a press on it
+// does nothing); a range or drag that passes over it leaves it out.
+export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, selection, isSelectable }: Options<T, Id>) {
   const { selectAll, selectOnly, toggle } = selection
   const current = selection.selected
   const [isDragging, setIsDragging] = useState(false)
@@ -45,7 +49,8 @@ export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, s
     const targetIdx = ids.indexOf(targetId)
     if (anchorIdx === -1 || targetIdx === -1) return null
     const [start, end] = anchorIdx < targetIdx ? [anchorIdx, targetIdx] : [targetIdx, anchorIdx]
-    return ids.slice(start, end + 1)
+    const range = rows.slice(start, end + 1)
+    return (isSelectable ? range.filter(isSelectable) : range).map(getRowId)
   }
 
   // A drag fires mouseenter on every row crossed; setting an identical selection would still allocate a new
