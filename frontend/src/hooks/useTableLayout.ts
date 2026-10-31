@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { deleteTableLayout, fetchTableLayouts, saveTableLayout } from "@/lib/api"
@@ -91,12 +91,16 @@ export function useTableLayout(tableId: string, defaults: TableLayout, opts: Tab
   const [edited, setEdited] = useState<TableLayout | null>(null)
   const working = controlled ? controlled.working : (edited ?? baseline)
 
+  // Handlers read the latest values through refs, updated in a layout effect (never during render).
   const baselineRef = useRef(baseline)
-  baselineRef.current = baseline
   const workingRef = useRef(working)
-  workingRef.current = working
   const onChangeRef = useRef(controlled?.onChange)
-  onChangeRef.current = controlled?.onChange
+  const onChange = controlled?.onChange
+  useLayoutEffect(() => {
+    baselineRef.current = baseline
+    workingRef.current = working
+    onChangeRef.current = onChange
+  })
   const isControlled = controlled != null
 
   const setWorking = useCallback(
