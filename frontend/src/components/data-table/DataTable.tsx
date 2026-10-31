@@ -17,10 +17,12 @@ import { TableSearch } from "./TableSearch"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ColumnsMenu, LayoutPopover } from "./TableLayoutControls"
 import { isRowEventIgnored } from "./interactive"
-import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, clipClass, columnMinWidth, columnWidth, computeLayout, isResizable, resolveAlign } from "./columns"
+import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, clipClass, columnMinWidth, columnWidth, computeLayout, effectiveColumnWidth, isResizable, resolveAlign } from "./columns"
 import type { ColumnAlign, ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
 import { cycleLayoutSort, effectiveSort, sortRows } from "./sorting"
 import type { SortDir, SortState } from "./sorting"
+import { useColumnResize } from "./useColumnResize"
+import type { ColumnResizeHandleProps } from "./useColumnResize"
 import { useEvent } from "./useEvent"
 import { useOverflowTooltip } from "./useOverflowTooltip"
 import { useTableSelection } from "./useTableSelection"
@@ -261,6 +263,25 @@ function SortButton({ align, dir, onClick, children }: { align: ColumnAlign; dir
   )
 }
 
+// The drag zone on a header cell's right edge (inside the cell, which clips its overflow). A sibling of the sort button,
+// so pressing it never sorts. Not focusable and no keyboard support: Restore and Clear in the Layout popover are the
+// way back to the default widths. The 1 px line only shows while the header is hovered.
+function ResizeHandle({ name, active, ...handlers }: ColumnResizeHandleProps & { name: string; active: boolean }) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${name} column`}
+      data-resize-handle
+      data-resizing={active ? "" : undefined}
+      className="group/handle absolute inset-y-0 right-0 flex w-2 cursor-col-resize touch-none select-none justify-end"
+      {...handlers}
+    >
+      <span className="pointer-events-none my-2 w-px bg-transparent group-hover/th:bg-border group-hover/handle:bg-muted-foreground/50 group-data-[resizing]/handle:bg-muted-foreground" />
+    </div>
+  )
+}
+
 // Runs `resetPage` while rendering (a state adjustment, no extra commit) and `clear` in a layout effect (before paint)
 // when `value` changes (`Object.is`); an unchanged value does nothing. Not on mount.
 function useResetOnChange(value: unknown, resetPage: () => void, clear: () => void) {
@@ -374,7 +395,13 @@ function DataTableView<T, Id extends RowId = number>({
     const hidden = new Set(hiddenKey.split("\0"))
     return columns.filter((c) => !hidden.has(c.key))
   }, [columns, hiddenKey])
-  const layout = computeLayout(visibleColumns, selectable ? selectionWidth : null, layoutCtl?.widths)
+  // The width being dragged replaces the working one for the header, the colgroup and the min-width only; the rows are
+  // memoized on props this does not touch. It reaches the layout on release.
+  const setWidth = useEvent((key: string, px: number) => layoutCtl?.setWidth?.(key, px))
+  const resize = useColumnResize(setWidth)
+  const widths = layoutCtl?.widths
+  const liveWidths = resize.drag ? { ...widths, [resize.drag.key]: resize.drag.width } : widths
+  const layout = computeLayout(visibleColumns, selectable ? selectionWidth : null, liveWidths)
 
   const pageIds = rows.map(getRowId)
   const overflowTip = useOverflowTooltip(visibleColumns, (id) => rows.find((r) => String(getRowId(r)) === id))
@@ -465,10 +492,12 @@ function DataTableView<T, Id extends RowId = number>({
               const align = resolveAlign(c)
               const sortable = layoutCtl != null && c.sortValue != null
               const dir = sort?.key === c.key ? sort.dir : undefined
+              const resizable = layoutCtl?.setWidth != null && isResizable(c)
               return (
                 <TableHead
                   key={c.key}
-                  className={cn(ALIGN_CLASS[align], clipClass(c), c.headerClassName)}
+                  data-col={c.key}
+                  className={cn(ALIGN_CLASS[align], clipClass(c), resizable && "group/th relative", c.headerClassName)}
                   aria-sort={sortable ? (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none") : undefined}
                 >
                   {sortable ? (
@@ -477,6 +506,13 @@ function DataTableView<T, Id extends RowId = number>({
                     </SortButton>
                   ) : (
                     c.header
+                  )}
+                  {resizable && (
+                    <ResizeHandle
+                      name={columnLabel(c)}
+                      active={resize.drag?.key === c.key}
+                      {...resize.handleProps(c.key, effectiveColumnWidth(c, widths), columnMinWidth(c))}
+                    />
                   )}
                 </TableHead>
               )
