@@ -98,6 +98,8 @@ export function SubscriptionsPage() {
       {
         key: "title",
         header: "Title",
+        width: 300,
+        flex: true,
         sortValue: (sub) => sub.title,
         cell: (sub) => (
           <>
