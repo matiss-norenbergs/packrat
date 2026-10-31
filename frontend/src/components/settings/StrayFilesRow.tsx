@@ -32,7 +32,7 @@ const columns: ColumnDef<StrayFileEntry>[] = [
     key: "path",
     header: "Path",
     cellClassName: "font-medium",
-    cell: (e) => <span title={e.path}>{e.path}</span>,
+    cell: (e) => e.path,
   },
   { key: "reason", header: "Reason", width: 160, cellClassName: "text-muted-foreground", cell: (e) => e.reason },
   { key: "size", header: "Size", type: "number", cellClassName: "text-muted-foreground", cell: (e) => formatBytes(e.sizeBytes) },

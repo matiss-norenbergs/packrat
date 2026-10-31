@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import type { PointerEvent, ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { INTERACTIVE_SELECTOR } from "./interactive"
+import { TOOLTIP_BLOCKING_SELECTOR } from "./interactive"
 import type { ColumnDef } from "./types"
 import { useEvent } from "./useEvent"
 
@@ -28,7 +28,7 @@ function isCutOff(cell: HTMLElement): boolean {
 // or the content fits). `innerText` keeps a two-line cell as two lines; jsdom has none, hence the textContent fallback.
 function tooltipTextFor<T>(cell: HTMLElement, column: ColumnDef<T> | undefined, row: T | undefined): string | null {
   if (!column || column.tooltip === false || column.wrap || column.type === "icon" || column.type === "switch") return null
-  if (cell.querySelector(INTERACTIVE_SELECTOR)) return null
+  if (cell.querySelector(TOOLTIP_BLOCKING_SELECTOR)) return null
   if (!isCutOff(cell)) return null
   const text = column.tooltipText && row !== undefined ? column.tooltipText(row) : (cell.innerText ?? cell.textContent ?? "")
   // Block children (two `<p>`) come out of innerText with a blank line between them; keep one line break.

@@ -99,12 +99,41 @@ describe("DataTable overflow tooltip", () => {
     }
   })
 
-  it("is off for cells with an interactive element", async () => {
-    render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", cell: (r) => <a href="/x">{r.name}</a> }), col({ key: "b", cell: () => <button>go</button> })]} />)
+  it("is off for cells with a button or another control", async () => {
+    render(
+      <DataTable
+        rows={ROWS}
+        getRowId={getRowId}
+        columns={[col({ key: "a", cell: () => <button>go</button> }), col({ key: "b", cell: () => <input aria-label="x" /> }), col({ key: "c", cell: () => <span role="switch" aria-checked="false" /> })]}
+      />,
+    )
+    for (const c of [0, 1, 2]) {
+      overflow(cell(1, c))
+      expect(await hoverShows(cell(1, c))).toBeNull()
+    }
+  })
+
+  it("shows for a cut-off cell whose content is a plain link, and a click on the link still works and closes it", async () => {
+    const user = userEvent.setup()
+    let clicked = 0
+    render(
+      <DataTable
+        rows={ROWS}
+        getRowId={getRowId}
+        columns={[col({ key: "a", cell: (r) => <a href="#x" onClick={(e) => (e.preventDefault(), clicked++)}>{r.name}</a> })]}
+      />,
+    )
     overflow(cell(1, 0))
-    overflow(cell(1, 1))
+    expect(await hoverShows(cell(1, 0))).toHaveTextContent("Alpha")
+    await user.click(cell(1, 0).querySelector("a")!)
+    expect(clicked).toBe(1)
+    expect(tooltip()).toBeNull()
+  })
+
+  it("is off for a cell with a link AND a button", async () => {
+    render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", cell: (r) => (<><a href="#x">{r.name}</a><button>go</button></>) })]} />)
+    overflow(cell(1, 0))
     expect(await hoverShows(cell(1, 0))).toBeNull()
-    expect(await hoverShows(cell(1, 1))).toBeNull()
   })
 
   it("is off for the selection column and the filler", async () => {
