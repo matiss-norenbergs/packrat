@@ -92,6 +92,8 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
   Yellow/Monochrome. Chart colors: `--chart-1` = `--primary`; `--chart-2..5` are per-accent sets
   from the 8-hue reference palette, validated with the dataviz skill's `validate_palette.js`
   (both light and dark). Changing an accent's primary means re-deriving and re-validating its set.
+- A `Button` positioned with `absolute` must not be centered with translate classes (`Button` has an
+  `active:translate-y-px` press nudge that overrides them); use `inset-y-0 my-auto` instead.
 - `DialogContent` width overrides need the `sm:` prefix (`sm:max-w-2xl`) or they silently no-op.
 - Client-only preferences (e.g. desktop notifications) live in localStorage, not Settings. Theme and accent are
   per user account (`user_preferences`, `GET/PATCH /api/auth/preferences`, instant-apply via `useAppearance`);
