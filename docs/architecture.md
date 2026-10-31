@@ -568,7 +568,13 @@ transition is switched off only while dragging.
 hover-popover button inside rows) and for the **stable-handler rule** below. `ThumbnailEnhancementPage` (AI Enhancement history) is the
 reference for **controlled (server-side) mode**: the server filters and pages, so the page owns the search / filter / page
 state, feeds `rows` (the current page) and `pagination`, and clears its own selection when any of them changes, while
-`DataTable` debounces the search box and renders the footer. **The component owns**
+`DataTable` debounces the search box and renders the footer. `HistoryPage`, `LogsPage` (a page-owned status Select next to the
+table's own search, via `resetKey`) and `FrameMatchingPage` (no search at all) are client-mode pages as well. The Backup page's
+`BackupHistoryTable` is the reference for a table **embedded in a card** rather than filling a page column: controlled mode with
+no `pagination` or `search`, `className="gap-4"` (tailwind-merge lets it beat the default `gap-6`) and a `containerClassName` equal
+to the plain `Table` default (`relative w-full overflow-x-auto`, no border, no `h-full`) so the card keeps its height; the
+toolbar is the `toolbar` slot and the context menu is built from the rows it was opened on (file actions only for one backup that has a file).
+**The component owns**
 the table chrome and the interaction logic that used to be copy-pasted per page: the column model, alignment, widths and
 scroll, the checkbox/radio column, click / ctrl / shift / drag selection (`useTableSelection`, on top of a *controlled*
 `useIdSelection` the page passes as `selectionState`, so its toolbar reads the same state), the context menu (including
