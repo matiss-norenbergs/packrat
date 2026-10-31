@@ -629,8 +629,10 @@ row type and the id type (number or string).
   container (sticky header stays). Spare space goes to the `flex` columns, or — if none is flagged — to the **last column**,
   so there is never an empty strip.
 - **Footer**: always shown when pagination is configured (client mode with `pageSize` + `itemLabel`, or the `pagination`
-  prop), hidden only while loading or on error — never for a single page or an empty table, which show "0 tags" and one
-  disabled page. In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
+  prop), including while loading and on error, so the page (and a dialog) never changes height between states. Then it shows
+  a placeholder ("—" instead of the count, no "· N selected", Previous/Next and the current page button disabled) and
+  `TablePagination` skips its clamp (`loading` prop), otherwise a table on page 3 would snap to page 1 while its total is 0.
+  A single page or an empty table shows "0 tags" and one disabled page. In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
   clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
   `onPageChange(lastPage)`, so pages need no clamping code. **Dock clearance is automatic**: the footer
   carries the `dock-occupied:` variants of the clearance classes (`lib/dockClearance.ts`: row `flex-wrap-reverse gap-2`,

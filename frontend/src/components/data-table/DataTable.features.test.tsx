@@ -201,14 +201,46 @@ describe("TablePagination", () => {
     expect(screen.getByText("4 tags")).toBeInTheDocument()
   })
 
-  it("is hidden by DataTable while loading or on error", () => {
-    const pagination = { ...base, page: 1, total: 4, onPageChange: () => {} }
-    const { rerender } = render(<Table pagination={pagination} />)
-    expect(screen.getByText("4 tags")).toBeInTheDocument()
-    rerender(<Table pagination={{ ...pagination, total: 0 }} rows={[]} error={<p>Boom</p>} />)
-    expect(screen.queryByRole("button", { name: "Next" })).toBeNull()
-    rerender(<Table pagination={pagination} loading />)
-    expect(screen.queryByRole("button", { name: "Next" })).toBeNull()
+  it("stays rendered by DataTable while loading or on error, as a disabled placeholder", () => {
+    const pagination = { ...base, page: 2, total: 120, onPageChange: () => {} }
+    const { rerender } = render(<Table selection="multi" pagination={pagination} />)
+    expect(screen.getByText("120 tags")).toBeInTheDocument()
+    for (const props of [{ loading: true }, { error: <p>Boom</p> }]) {
+      rerender(<Table selection="multi" pagination={{ ...pagination, total: 0 }} rows={[]} {...props} />)
+      expect(screen.getByText("—")).toBeInTheDocument()
+      expect(screen.queryByText(/tags?$/)).toBeNull()
+      expect(screen.queryByText(/selected/)).toBeNull()
+      expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+      expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+      const current = screen.getByRole("button", { name: "2" })
+      expect(current).toBeDisabled()
+      expect(current).toHaveAttribute("aria-current", "page")
+      expect(screen.getAllByRole("button", { name: /^\d+$/ })).toHaveLength(1)
+    }
+  })
+
+  it("does not clamp the page while loading or erroring, only once loaded", () => {
+    const onPageChange = vi.fn()
+    const pagination = { ...base, page: 3, total: 0, onPageChange }
+    const { rerender } = render(<TablePagination {...pagination} loading />)
+    expect(onPageChange).not.toHaveBeenCalled()
+    rerender(<TablePagination {...pagination} total={0} loading />)
+    expect(onPageChange).not.toHaveBeenCalled()
+    rerender(<TablePagination {...pagination} total={0} />)
+    expect(onPageChange).toHaveBeenCalledWith(1)
+  })
+
+  it("keeps page 3 of a client table while its rows are still loading", async () => {
+    const many = Array.from({ length: 120 }, (_, i) => ({ id: i + 1, name: `R${i}` }))
+    const props = { pageSize: 50, itemLabel: { singular: "tag", plural: "tags" } }
+    const user = userEvent.setup()
+    const { rerender } = render(<Table rows={many} {...props} />)
+    await user.click(screen.getByRole("button", { name: "3" }))
+    rerender(<Table rows={[]} loading {...props} />)
+    expect(screen.getByRole("button", { name: "3" })).toHaveAttribute("aria-current", "page")
+    rerender(<Table rows={many} {...props} />)
+    expect(screen.getByRole("button", { name: "3" })).toHaveAttribute("aria-current", "page")
+    expect(screen.getByText("R100")).toBeInTheDocument()
   })
 })
 
