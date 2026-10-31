@@ -1,5 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { TablePagination } from "@/components/data-table/TablePagination"
 
 interface LibraryPaginationProps {
   page: number
@@ -8,23 +7,19 @@ interface LibraryPaginationProps {
   onPageChange: (page: number) => void
 }
 
+// The Library's footer is the shared table footer (count left, numbered pager right, dock-aware). The views render it
+// only when pagination is enabled, and then even for a single page. No `selectedCount`: the toolbar shows the selection.
+// The Library page scrolls as a whole, so the footer sits below the content with the old control's extra `pt-2`.
 export function LibraryPagination({ page, pageSize, total, onPageChange }: LibraryPaginationProps) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  if (totalPages <= 1) return null
-
   return (
-    <div className="flex items-center justify-center gap-3 pt-2">
-      <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
-        <ChevronLeft className="h-4 w-4" />
-        Prev
-      </Button>
-      <span className="text-sm text-muted-foreground">
-        Page {page} of {totalPages}
-      </span>
-      <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
-        Next
-        <ChevronRight className="h-4 w-4" />
-      </Button>
+    <div className="pt-2">
+      <TablePagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={onPageChange}
+        itemLabel={{ singular: "item", plural: "items" }}
+      />
     </div>
   )
 }
