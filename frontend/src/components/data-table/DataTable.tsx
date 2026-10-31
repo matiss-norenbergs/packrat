@@ -11,6 +11,7 @@ import type { IdSelection } from "@/hooks/useIdSelection"
 import { cn } from "@/lib/utils"
 import { TablePagination } from "./TablePagination"
 import { TableSearch } from "./TableSearch"
+import { isRowEventIgnored } from "./interactive"
 import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, computeLayout, resolveAlign } from "./columns"
 import type { ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
 import { useTableSelection } from "./useTableSelection"
@@ -246,8 +247,8 @@ export function DataTable<T, Id extends RowId = number>({
                 className={cn(selectable ? "cursor-default select-none" : onRowClick && "cursor-pointer", rowClassName?.(row))}
                 onMouseDown={selectable ? (e) => onRowMouseDown(e, id) : undefined}
                 onMouseEnter={selectable ? () => onRowMouseEnter(id) : undefined}
-                onClick={onRowClick ? (e) => onRowClick(row, e) : undefined}
-                onDoubleClick={onRowDoubleClick ? (e) => onRowDoubleClick(row, e) : undefined}
+                onClick={onRowClick ? (e) => !isRowEventIgnored(e) && onRowClick(row, e) : undefined}
+                onDoubleClick={onRowDoubleClick ? (e) => !isRowEventIgnored(e) && onRowDoubleClick(row, e) : undefined}
               >
                 {selectable && (
                   <TableCell className={cn("text-center", mode === "single" && "pr-0")}>
