@@ -639,6 +639,11 @@ row type and the id type (number or string).
   filter change). `empty` should be a node there (the function form only receives the seed `search.value`, not the page's query); the two modes are selected by whether `pageSize`/`match` is given.
 - **Layout**: the component renders a `flex min-h-0 flex-1 flex-col gap-6` block (toolbar and footer `shrink-0`, only the
   content region scrolls), meant to sit under the page title in the usual page column.
+- **Region props** (for tables inside a dialog or card): `regionClassName` is merged onto the content region wrapper
+  (`min-h-0 flex-1`) that holds the loading / error / empty state or the table, so one fixed or capped height and
+  border covers all of them and the box doesn't resize between states; `loadingContent` replaces the default skeleton
+  bars while `loading`; `hideSinglePageFooter` (client and controlled mode) omits the pagination footer while there is
+  only one page (default: always shown).
 - **Why no virtualization / sorting / resizing yet**: pages are paginated at 50 rows, so virtualization would add
   complexity for no gain; sorting, drag-resize and column show/hide are possible later because columns are data, but
   nothing needs them today.
