@@ -248,7 +248,7 @@ current page's items, the page owns the query (URL filters, `usePageState`, the 
   `sortValue` only marks the column sortable. The toolbar's `filename` and `sequenceNumber` sorts are not columns and go through `extraSortKeys`.
 - *Layout ownership.* The table's `layout` / `onLayoutChange` are the provider's working layout, so a header click, the toolbar dialog, the grid and the folder
   view all read and write the same sort. The old `LibraryColumnsContext` / `LibraryColumnsProvider` / `LIBRARY_COLUMNS` and the toolbar's Columns dropdown are gone:
-  hidden columns are part of the saved layout now, and the table's own Columns menu and Layout popover (the thin row above it) replace them. "Save as default" still saves
+  hidden columns are part of the saved layout now, and the table's own Columns menu and Layout popover (in its toolbar row) replace them. "Save as default" still saves
   only the sort (`useSaveTableLayoutSort`, which keeps the stored `hidden` / `widths`).
 - *Selection adapter.* `useLibraryListSelection(items)` returns an `IdSelection<number>` over the Library's persisting `SelectionContext`, passed as `selectionState`:
   `toggle` (ctrl / cmd click, the checkboxes) adds or removes one item and accumulates across pages; `selectOnly`, `selectAll` (a click, a drag, a shift range, the header
@@ -259,6 +259,15 @@ current page's items, the page owns the query (URL filters, `usePageState`, the 
   module constant. The old "selection active" coupling is gone: the title link, the thumbnail reveal, the tags popover and the actions menu stay live with a selection and
   never select the row (links and buttons are skipped by the table's interactive-target guard; a blurred thumbnail's wrapper carries `data-no-row-select`).
   `getRowLabel` hashes the title of a blurred, unrevealed item.
+- *One toolbar.* `useLibraryToolbar()` (`useLibraryToolbar.ts`) holds all state of the Library toolbar (bulk dialogs, the Filters & Sort draft, the display
+  settings draft, the URL filters and the `update` helper). `LibraryToolbarActions` (Add item, Bulk operations + dialogs, Clear, "N selected"),
+  `LibraryFiltersButton` (button + dialog) and `LibrarySettingsPopover` (the cog) render from it. The classic sticky `LibraryToolbar` (grid, folders)
+  composes them with its own search input; the list view calls the hook once and passes them to DataTable's `toolbar`, `filters` and `layoutActions`
+  slots and the shared `update("q", …)` to `search` (controlled; the page-state reset keeps it at one request per query). `LibraryPage` mounts either
+  the sticky wrapper + classic toolbar or the list view, never both. The "Select files or collections to bulk edit" hint is gone from all views.
+- *Saved layout without `hidden`.* A stored `library` layout with no `hidden` key (one written by "Save as default") gets the default hidden columns:
+  `useTableLayout`'s `hiddenWhenUnset` option, set by the provider, and DataTable's `defaultHiddenWhenUnset` prop for the table's own copy of the
+  hook (Restore, dirty). An explicit `hidden`, even `[]`, wins; other tables are unchanged and `saveSortAsDefault` still edits the raw layout's `sort` only.
 - *Footer.* The table's own, through the `pagination` prop (with pagination off a single-page config, `pageSize: max(1, total)`, so "N items" still shows), and
   `selectedCount={approxCount}`, so the footer shows the toolbar's number. `LibraryPagination` is now used by the grid and the folder view only.
 
@@ -792,7 +801,9 @@ row type and the id type (number or string).
   value changes (`Object.is`) the table goes back to page 1 and clears the selection, exactly as for its own search. The page
   reset is a state adjustment during render (no extra commit); the selection (the page's, via `selectionState`) is cleared in
   a layout effect, because updating another component while rendering is not allowed. An unchanged key does nothing.
-  Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
+  **`layoutActions?: ReactNode`** adds controls at the end of the toolbar's button group, after Columns and Layout (the Library list's display settings
+  cog); it counts as a toolbar element, so the group shows and right-aligns even when nothing else does. **`defaultHiddenWhenUnset`** (with a `tableId`) makes a stored layout
+  without `hidden` hide the `defaultVisible: false` columns. Server-paged pages keep the controlled mode (`rows` = the current page, `pagination` and
   `search.onChange` owned by the page; `search.value` is optional, it only seeds the input). In controlled mode the
   table does **not** reset the page or the selection: the page does both in its handlers/effects (AI Enhancement: `search.onChange`
   sets the query and page 1, each filter `onValueChange` sets page 1, and an effect clears the selection on a page / search /

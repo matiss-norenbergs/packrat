@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
 import type { TableLayout, TableLayouts } from "@/types/api"
+import { Button } from "@/components/ui/button"
 import { DataTable } from "./DataTable"
 import type { ColumnDef } from "./types"
 
@@ -121,5 +122,68 @@ describe("DataTable extraSortKeys", () => {
     await user.click(within(nameHeader()).getByRole("button"))
     // Name asc is the table's default order, which is stored as "no sort".
     expect(JSON.parse(screen.getByTestId("layout").textContent!)).toEqual({ v: 1 })
+  })
+})
+
+describe("DataTable layoutActions", () => {
+  const plain = COLUMNS.map(({ sortValue: _s, ...c }) => c)
+  const actions = <Button variant="outline" size="icon-sm" aria-label="Display settings" />
+
+  it("renders inside the button group after Columns and Layout", () => {
+    const hideable = [...plain, { key: "other", header: "Other", cell: () => "x", hideable: true }]
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <DataTable rows={ROWS} getRowId={(r) => r.id} columns={hideable} tableId="t" layoutActions={actions} />
+      </QueryClientProvider>,
+    )
+    const group = screen.getByRole("group")
+    expect(within(group).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Columns", "Table layout", "Display settings"])
+  })
+
+  it("alone it still shows the toolbar and right-aligns the group", () => {
+    render(<DataTable rows={ROWS} getRowId={(r) => r.id} columns={plain} layoutActions={actions} />)
+    const group = screen.getByRole("group")
+    expect(within(group).getByRole("button", { name: "Display settings" })).toBeInTheDocument()
+    expect(group.className).toContain("ml-auto")
+  })
+
+  it("is absent when omitted", () => {
+    render(<DataTable rows={ROWS} getRowId={(r) => r.id} columns={plain} />)
+    expect(screen.queryByRole("group")).toBeNull()
+    expect(screen.queryByRole("button", { name: "Display settings" })).toBeNull()
+  })
+})
+
+describe("DataTable defaultHiddenWhenUnset", () => {
+  const cols: ColumnDef<Row>[] = [
+    { key: "name", header: "Name", cell: (r) => r.name },
+    { key: "a", header: "A", cell: () => "a", hideable: true, defaultVisible: false },
+    { key: "b", header: "B", cell: () => "b", hideable: true },
+  ]
+  const headers = () => Array.from(document.querySelectorAll("th:not([aria-hidden])")).map((h) => h.textContent)
+  function renderWith(stored: TableLayout, flag: boolean) {
+    const client = new QueryClient()
+    client.setQueryData(tableLayoutsQueryKey, { t: stored })
+    render(
+      <QueryClientProvider client={client}>
+        <DataTable rows={ROWS} getRowId={(r) => r.id} columns={cols} tableId="t" defaultHiddenWhenUnset={flag} />
+      </QueryClientProvider>,
+    )
+  }
+
+  it("a stored layout without hidden keeps the default hidden columns, and is not dirty", () => {
+    renderWith({ v: 1, widths: { name: 300 } }, true)
+    expect(headers()).toEqual(["Name", "B"])
+    expect(screen.queryByTestId("layout-dirty-dot")).toBeNull()
+  })
+
+  it("an explicit hidden wins, even an empty one", () => {
+    renderWith({ v: 1, hidden: [] }, true)
+    expect(headers()).toEqual(["Name", "A", "B"])
+  })
+
+  it("without the flag a missing hidden means nothing is hidden", () => {
+    renderWith({ v: 1, widths: { name: 300 } }, false)
+    expect(headers()).toEqual(["Name", "A", "B"])
   })
 })

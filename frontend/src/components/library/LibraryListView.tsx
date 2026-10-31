@@ -18,6 +18,8 @@ import type { LibraryItem } from "@/types/api"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
 import { useRevealAll } from "./RevealAllContext"
 import { useSelection } from "./SelectionContext"
+import { LibraryFiltersButton, LibrarySettingsPopover, LibraryToolbarActions } from "./LibraryToolbar"
+import { useLibraryToolbar } from "./useLibraryToolbar"
 import { useLibraryListSelection } from "./useLibraryListSelection"
 
 // Caps how many tag badges a row shows before collapsing the rest into a
@@ -155,6 +157,8 @@ export function LibraryListView() {
   const [searchParams] = useSearchParams()
   const { isRevealed } = useRevealAll()
   const { approxCount } = useSelection()
+  // The Library toolbar's state, rendered through DataTable's slots (the classic sticky toolbar is not mounted in this view).
+  const toolbar = useLibraryToolbar()
 
   const search = searchParams.get("q") ?? ""
   const { sort, ready: sortReady, layout, setLayout } = useLibrarySort()
@@ -192,9 +196,13 @@ export function LibraryListView() {
 
   return (
     <DataTable
-      // The old wrapper spaced its children by 16px.
-      className="gap-4"
-      containerClassName="relative max-h-[calc(100vh-239px)] w-full overflow-auto rounded-md border"
+      // 24px under the title (what the sticky toolbar wrapper used to leave); 16px between the toolbar, the table and the footer.
+      className="mt-6 gap-4"
+      toolbar={<LibraryToolbarActions t={toolbar} />}
+      filters={<LibraryFiltersButton t={toolbar} />}
+      search={{ value: toolbar.search, onChange: (value) => toolbar.update("q", value || null), placeholder: "Search library…" }}
+      layoutActions={<LibrarySettingsPopover t={toolbar} compact />}
+      containerClassName="relative max-h-[calc(100vh-210px)] w-full overflow-auto rounded-md border"
       rows={items}
       getRowId={getItemId}
       columns={COLUMNS}
@@ -203,6 +211,7 @@ export function LibraryListView() {
       onLayoutChange={setLayout}
       defaultSort={DEFAULT_LIBRARY_SORT}
       extraSortKeys={EXTRA_SORT_KEYS}
+      defaultHiddenWhenUnset
       selection="multi"
       selectionState={selection}
       selectedCount={approxCount}

@@ -234,11 +234,17 @@ The Browse item page uses the saved sort (or the default) and cannot change it.
 
 The list is the shared table (see [Table layouts](#table-layouts) below) with the Library's own data and selection:
 
+- **One toolbar**: the list has no separate Library toolbar. DataTable's own toolbar row carries everything: **Add item**, **Bulk
+  operations**, **Clear** and "N selected" (only with a selection) on the left; **Filters & Sort**, the search box and one
+  joined group of three icon buttons on the right: **Columns**, **Layout** and the **display settings cog** (Mode / View /
+  Pagination, same Apply behaviour as in the grid). The search is the Library's shared one (the URL `q`), so switching views keeps
+  the query. The row is not sticky (the table's header is, inside its scroll box); the grid and the Folders view keep the sticky
+  Library toolbar. On a narrow window the group wraps to its own row.
 - **Columns**: Thumb, Title, Season/Episode, Year, Duration, Downloaded, Artist, Collection, Size, Tags and the "⋮" menu. Year,
   Duration, Downloaded and Size are hidden until you show them. The **Columns** menu and the **Layout** button (Save / Restore /
-  Clear) are the two icon buttons in the thin row above the table, at its right edge; the Library toolbar has no Columns menu any
-  more. **Hidden columns, column widths and the sort are saved with the `library` layout** (hidden columns used to last only
-  until a reload). Drag a header's right edge to resize a column; Title takes the spare width.
+  Clear) are in the toolbar's button group (see above); the Library toolbar has no Columns menu any more. **Hidden columns, column widths and the sort are saved with the `library` layout** (hidden columns used to last only
+  until a reload). A layout saved only for its sort (**Save as default**) still hides those four columns; a saved layout that lists
+  hidden columns (even none) wins. Drag a header's right edge to resize a column; Title takes the spare width.
 - **Sorting** happens on the server: click Title, Season/Episode, Year, Duration or Downloaded to sort ascending, again for
   descending, a third time to go back to the default order (date downloaded, newest first). The header and the Filters & Sort dialog
   show and change the same sort, which the grid and the Folders view use too. A sort the dialog offers that has no column

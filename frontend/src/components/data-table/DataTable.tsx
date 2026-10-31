@@ -138,6 +138,18 @@ export interface DataTableProps<T, Id extends RowId = number> {
    * dirty and is saved; no column shows an arrow and the table sorts nothing by it.
    */
   extraSortKeys?: string[]
+  /**
+   * Extra controls at the end of the toolbar's button group, after Columns and Layout (e.g. a page's display settings
+   * popover). Give them the group's look: `variant="outline" size="icon-sm"` buttons as direct children. Counts as a
+   * toolbar element, so the group (and the toolbar) is shown and right-aligned even when nothing else is.
+   */
+  layoutActions?: ReactNode
+  /**
+   * With a `tableId`: a STORED layout without a `hidden` key (typically one saved for its sort only) hides the columns
+   * that are hidden by default, instead of showing every column. An explicit `hidden`, even an empty one, wins.
+   * Default: a missing `hidden` means nothing is hidden.
+   */
+  defaultHiddenWhenUnset?: boolean
 }
 
 /** What the table needs from its layout state; built by the wrappers at the bottom of the file. */
@@ -353,6 +365,7 @@ function DataTableView<T, Id extends RowId = number>({
   containerClassName,
   isRowSelectable,
   selectedCount,
+  layoutActions,
 }: DataTableProps<T, Id> & { layoutCtl: LayoutCtl | null }) {
   const ownSelection = useIdSelection<Id>()
   const selection = selectionState ?? ownSelection
@@ -624,7 +637,8 @@ function DataTableView<T, Id extends RowId = number>({
     : []
   const hasColumnsMenu = layoutCtl != null && columnItems.length > 0
   const hasLayoutButton = layoutCtl?.saved != null
-  const hasToolbar = toolbar != null || filters != null || search != null || hasColumnsMenu || hasLayoutButton
+  const hasLayoutActions = layoutActions != null
+  const hasToolbar = toolbar != null || filters != null || search != null || hasColumnsMenu || hasLayoutButton || hasLayoutActions
   // The first element on the right edge takes the spare space (ml-auto); filters, search, then the Columns / Layout group.
   const rightStart = filters != null ? "filters" : search ? "search" : "group"
   const showPagination = pagination != null
@@ -645,10 +659,10 @@ function DataTableView<T, Id extends RowId = number>({
               className={rightStart === "search" ? "ml-auto" : undefined}
             />
           )}
-          {(hasColumnsMenu || hasLayoutButton) && (
+          {(hasColumnsMenu || hasLayoutButton || hasLayoutActions) && (
             <ButtonGroup className={rightStart === "group" ? "ml-auto" : undefined}>
-              {hasColumnsMenu && <ColumnsMenu items={columnItems} onToggle={layoutCtl.toggle} />}
-              {layoutCtl.saved && (
+              {hasColumnsMenu && <ColumnsMenu items={columnItems} onToggle={layoutCtl!.toggle} />}
+              {layoutCtl?.saved && (
                 <LayoutPopover
                   dirty={layoutCtl.saved.dirty}
                   hasSaved={layoutCtl.saved.hasSaved}
@@ -657,6 +671,7 @@ function DataTableView<T, Id extends RowId = number>({
                   onClear={layoutCtl.saved.clear}
                 />
               )}
+              {layoutActions}
             </ButtonGroup>
           )}
         </div>
@@ -712,7 +727,7 @@ function toggleHidden(layout: TableLayout, key: string): TableLayout {
 
 // Layout state with a tableId: the account's saved layout, a working copy, and Save / Restore / Clear.
 function DataTableWithSavedLayout<T, Id extends RowId>({ tableId, layout, onLayoutChange, ...props }: DataTableProps<T, Id> & { tableId: string }) {
-  const { columns, defaultSort, extraSortKeys } = props
+  const { columns, defaultSort, extraSortKeys, defaultHiddenWhenUnset } = props
   const defaults = useMemo(() => defaultLayout(columns), [columns])
   // Extra sort keys are known too, so a layout sorted by one is not stripped; they are not columns, so nothing else uses them.
   const extraSig = extraSortKeys?.join("\0")
@@ -731,6 +746,7 @@ function DataTableWithSavedLayout<T, Id extends RowId>({ tableId, layout, onLayo
     sortableKeys,
     defaultSort,
     resizableWidths,
+    hiddenWhenUnset: defaultHiddenWhenUnset ? (defaults.hidden ?? []) : undefined,
     controlled: layout && onLayoutChange ? { working: layout, onChange: onLayoutChange } : undefined,
   })
   const { working, setWorking, dirty, hasSaved, save, restore, clear } = state

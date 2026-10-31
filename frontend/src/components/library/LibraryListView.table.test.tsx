@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { MemoryRouter, useLocation } from "react-router-dom"
+import { MemoryRouter, useLocation, useSearchParams } from "react-router-dom"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
@@ -114,8 +114,10 @@ function Probe() {
   const { approxCount, toggleCollection, selectedCollectionIds } = useSelection()
   const { sort, layout, setSort } = useLibrarySort()
   const location = useLocation()
+  const [params] = useSearchParams()
   return (
     <div>
+      <output data-testid="q">{params.get("q") ?? ""}</output>
       <output data-testid="approx">{approxCount}</output>
       <output data-testid="collections">{selectedCollectionIds.size}</output>
       <output data-testid="sort">{`${sort.key}:${sort.dir}`}</output>
@@ -263,6 +265,21 @@ describe("LibraryListView on DataTable: saved layout", () => {
     expect(screen.queryByTestId("layout-dirty-dot")).toBeNull()
     expect(libraryParams(fn)[0].get("sortKey")).toBe("title")
     expect(libraryParams(fn)[0].get("sortDir")).toBe("desc")
+  })
+
+  it("a layout saved for its sort only keeps Year, Duration, Downloaded and Size hidden, and is not dirty", async () => {
+    serve(ITEMS, { layouts: { library: { v: 1, sort: { key: "title", dir: "asc" } } } })
+    renderList()
+    await ready()
+    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Artist", "Collection", "Tags", ""])
+    expect(screen.queryByTestId("layout-dirty-dot")).toBeNull()
+  })
+
+  it("an explicit empty hidden shows every column", async () => {
+    serve(ITEMS, { layouts: { library: { v: 1, hidden: [] } } })
+    renderList()
+    await ready()
+    expect(headers()).toEqual(["", "Thumb", "Title", "Season/Episode", "Year", "Duration", "Downloaded", "Artist", "Collection", "Size", "Tags", ""])
   })
 
   it("Restore returns to the saved layout and Clear to the defaults", async () => {
@@ -651,5 +668,135 @@ describe("LibraryListView on DataTable: queries", () => {
     const added = libraryParams(fn).slice(before)
     expect(added).toHaveLength(1)
     expect(added[0].get("page")).toBe("1")
+  })
+})
+
+describe("LibraryListView: one toolbar", () => {
+  const settingsPatches = (fn: Fetch) => fn.mock.calls.filter(([url, init]) => url.endsWith("/settings") && init?.method === "PATCH")
+
+  it("has a single toolbar row: Add item, Bulk operations, Filters & Sort, search, Columns, Layout and the settings cog in one group", async () => {
+    serve(ITEMS)
+    renderList()
+    await ready()
+    expect(screen.getAllByRole("button", { name: "Add item" })).toHaveLength(1)
+    expect(screen.getAllByRole("button", { name: "Columns" })).toHaveLength(1)
+    expect(screen.getAllByRole("button", { name: "Table layout" })).toHaveLength(1)
+    expect(screen.getByRole("button", { name: "Bulk operations" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /Filters & Sort/ })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("Search library…")).toBeInTheDocument()
+    const group = screen.getByRole("group")
+    expect(within(group).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Columns", "Table layout", "Library display settings"])
+    expect(document.querySelectorAll("[data-slot=table-container]")).toHaveLength(1)
+  })
+
+  it("shows no hint text, only the selected count with a Clear button once something is selected", async () => {
+    const user = userEvent.setup()
+    serve(ITEMS)
+    renderList()
+    await ready()
+    expect(screen.queryByText(/Select files or collections/)).toBeNull()
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull()
+    await user.click(checkbox("Title 1"))
+    await user.click(checkbox("Title 2"))
+    expect(screen.getByText("2 selected")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Bulk operations" })).toBeEnabled()
+    await user.click(screen.getByRole("button", { name: "Clear" }))
+    expect(screen.queryByText("2 selected")).toBeNull()
+    expect(approx()).toBe("0")
+  })
+
+  it("Bulk operations opens the bulk dialogs for the selection", async () => {
+    const user = userEvent.setup()
+    serve(ITEMS)
+    renderList()
+    await ready()
+    await user.click(checkbox("Title 1"))
+    await user.click(screen.getByRole("button", { name: "Bulk operations" }))
+    await user.click(await screen.findByRole("menuitem", { name: /Edit…/ }))
+    expect(await screen.findByText(/Edit 1 selected file/)).toBeInTheDocument()
+  })
+
+  it("the search updates the URL q after the debounce with exactly one request, on a later page too", async () => {
+    const user = userEvent.setup()
+    const fn = serve(ITEMS)
+    renderList()
+    await ready()
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    await screen.findByText("Title 4")
+    const before = libraryParams(fn).length
+    await user.type(screen.getByPlaceholderText("Search library…"), "abc")
+    await waitFor(() => expect(screen.getByTestId("q").textContent).toBe("abc"))
+    await settle()
+    const added = libraryParams(fn).slice(before)
+    expect(added).toHaveLength(1)
+    expect(added[0].get("q")).toBe("abc")
+    expect(added[0].get("page")).toBe("1")
+    await user.click(screen.getByRole("button", { name: "Clear search" }))
+    await waitFor(() => expect(screen.getByTestId("q").textContent).toBe(""))
+    await settle()
+    expect(libraryParams(fn).slice(before)).toHaveLength(2)
+  })
+
+  it("starts from the q in the URL", async () => {
+    const fn = serve(ITEMS)
+    renderList(["/library?q=zed"])
+    await ready()
+    expect(screen.getByPlaceholderText("Search library…")).toHaveValue("zed")
+    expect(libraryParams(fn)[0].get("q")).toBe("zed")
+  })
+
+  it("the cog Apply sends the same settings PATCH as the classic toolbar", async () => {
+    const user = userEvent.setup()
+    const fn = serve(ITEMS)
+    renderList()
+    await ready()
+    await user.click(screen.getByRole("button", { name: "Library display settings" }))
+    await user.click(await screen.findByRole("button", { name: "Grid" }))
+    await user.click(screen.getByRole("button", { name: "Details" }))
+    await user.click(screen.getByRole("button", { name: "Apply" }))
+    await waitFor(() => expect(settingsPatches(fn)).toHaveLength(1))
+    expect(JSON.parse(settingsPatches(fn)[0][1].body as string)).toEqual({ libraryMode: "details", libraryView: "grid" })
+  })
+
+  it("Filters & Sort opens the dialog and Apply sets the shared sort", async () => {
+    const user = userEvent.setup()
+    serve(ITEMS)
+    renderList()
+    await ready()
+    await user.click(screen.getByRole("button", { name: /Filters & Sort/ }))
+    expect(await screen.findByRole("dialog")).toBeInTheDocument()
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Apply" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+  })
+})
+
+describe("LibraryToolbar (grid and folders): classic toolbar", () => {
+  it("keeps its controls, has no hint text and shows the selected count", async () => {
+    const user = userEvent.setup()
+    serve(ITEMS, { settings: { libraryView: "grid" } })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <TooltipProvider>
+            <LibrarySortProvider>
+              <SelectionProvider>
+                <Probe />
+                <LibraryToolbar />
+              </SelectionProvider>
+            </LibrarySortProvider>
+          </TooltipProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await screen.findByRole("button", { name: "Add item" })
+    expect(screen.getByRole("button", { name: "Bulk operations" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /Filters & Sort/ })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("Search library…")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Library display settings" })).toBeInTheDocument()
+    expect(screen.queryByText(/Select files or collections/)).toBeNull()
+    await user.click(screen.getByRole("button", { name: "pick collection" }))
+    expect(screen.getByText("10 selected")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument()
   })
 })

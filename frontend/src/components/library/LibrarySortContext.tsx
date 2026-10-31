@@ -13,10 +13,11 @@ import { LIBRARY_LIST_DEFAULT_LAYOUT, LIBRARY_LIST_LAYOUT_OPTIONS } from "@/lib/
  *
  * It carries the table's FULL working layout (sort, hidden columns, widths), not only the sort: the list view's DataTable
  * edits it through `layout` / `onLayoutChange`, and the layout is normalized against the list's column specs
- * (lib/libraryListColumns.ts), which is what keeps a saved layout's `hidden` and `widths` instead of dropping them.
+ * (lib/libraryListColumns.ts), which is what keeps a saved layout's `hidden` and `widths` instead of dropping them. A stored layout
+ * with no `hidden` key (one saved for its sort only) hides the default columns; an explicit `hidden` wins.
  */
 export function LibrarySortProvider({ children }: { children: ReactNode }) {
-  const layout = useTableLayout(LIBRARY_TABLE_ID, LIBRARY_LIST_DEFAULT_LAYOUT, { ...LIBRARY_LIST_LAYOUT_OPTIONS, defaultSort: DEFAULT_LIBRARY_SORT })
+  const layout = useTableLayout(LIBRARY_TABLE_ID, LIBRARY_LIST_DEFAULT_LAYOUT, { ...LIBRARY_LIST_LAYOUT_OPTIONS, defaultSort: DEFAULT_LIBRARY_SORT, hiddenWhenUnset: LIBRARY_LIST_DEFAULT_LAYOUT.hidden })
   const save = useSaveTableLayoutSort(LIBRARY_TABLE_ID, DEFAULT_LIBRARY_SORT, "Default sort saved")
   const { setWorking, working, baseline: baselineLayout, ready } = layout
 
