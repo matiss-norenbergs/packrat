@@ -13,21 +13,13 @@ export interface ColumnsMenuItem {
 
 // Same control as the Library toolbar's "Columns" menu (checkbox items; choosing one keeps the menu open),
 // icon-only so it fits the end of a table toolbar.
-export function ColumnsMenu({
-  items,
-  onToggle,
-  className,
-}: {
-  items: ColumnsMenuItem[]
-  onToggle: (key: string) => void
-  className?: string
-}) {
+export function ColumnsMenu({ items, onToggle }: { items: ColumnsMenuItem[]; onToggle: (key: string) => void }) {
   return (
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon-sm" aria-label="Columns" className={className}>
+            <Button variant="outline" size="icon-sm" aria-label="Columns">
               <Columns3 />
             </Button>
           </DropdownMenuTrigger>

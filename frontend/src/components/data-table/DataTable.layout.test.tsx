@@ -42,6 +42,7 @@ function renderTable(props: Partial<DataTableProps<Row, number>> = {}, saved: Ta
 }
 
 const columnsButton = () => screen.queryByRole("button", { name: "Columns" })
+const group = () => screen.getByRole("group")
 const layoutButton = () => screen.queryByRole("button", { name: "Table layout" })
 // Read from the DOM: while a Radix menu is open everything outside it is aria-hidden.
 const headers = () => Array.from(document.querySelectorAll("th")).map((h) => h.textContent)
@@ -146,33 +147,72 @@ describe("DataTable columns menu", () => {
   })
 })
 
+describe("DataTable button group", () => {
+  it("holds Columns and Table layout in one group", () => {
+    renderTable({ tableId: "t" })
+    expect(screen.getAllByRole("group")).toHaveLength(1)
+    const buttons = within(group()).getAllByRole("button")
+    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["Columns", "Table layout"])
+    expect(group()).toHaveAttribute("data-slot", "button-group")
+  })
+
+  it("holds just Columns without a tableId", () => {
+    renderTable()
+    expect(within(group()).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Columns"])
+  })
+
+  it("has no group on a table without hideable columns", () => {
+    render(<DataTable rows={ROWS} getRowId={(r) => r.id} columns={[{ key: "n", header: "Name", cell: (r: Row) => r.name }]} />)
+    expect(screen.queryByRole("group")).toBeNull()
+  })
+
+  it("still opens the menu, the popover and the tooltips from inside the group", async () => {
+    const user = userEvent.setup()
+    renderTable({ tableId: "t" })
+    await user.hover(columnsButton()!)
+    expect((await screen.findAllByText("Columns")).length).toBeGreaterThan(0)
+    await user.click(columnsButton()!)
+    expect(await screen.findByRole("menu")).toBeInTheDocument()
+    await user.keyboard("{Escape}")
+    await user.click(layoutButton()!)
+    expect(await screen.findByRole("dialog")).toBeInTheDocument()
+  })
+})
+
 describe("DataTable toolbar order", () => {
-  const order = () => Array.from(screen.getByRole("button", { name: "Columns" }).parentElement!.children).map((c) => c.textContent || c.getAttribute("aria-label") || c.querySelector("input")?.getAttribute("placeholder"))
+  // The Columns / Layout group is flattened into its buttons' labels.
+  const order = () =>
+    Array.from(screen.getByRole("group").parentElement!.children).flatMap((c) =>
+      c.getAttribute("role") === "group"
+        ? Array.from(c.children).map((b) => b.getAttribute("aria-label"))
+        : [c.textContent || c.getAttribute("aria-label") || c.querySelector("input")?.getAttribute("placeholder")],
+    )
 
   it("filters, search, Columns, Layout, with ml-auto on the first of the right-hand group", () => {
     renderTable({ tableId: "t", toolbar: <button>New</button>, filters: <span>filter</span>, search: { placeholder: "Find…" } })
     expect(order()).toEqual(["New", "filter", "Find…", "Columns", "Table layout"])
     expect(screen.getByText("filter").parentElement).toHaveClass("ml-auto")
-    expect(columnsButton()).not.toHaveClass("ml-auto")
+    expect(group()).not.toHaveClass("ml-auto")
   })
 
   it("search first when there are no filters", () => {
     renderTable({ tableId: "t", toolbar: <button>New</button>, search: { placeholder: "Find…" } })
     expect(order()).toEqual(["New", "Find…", "Columns", "Table layout"])
     expect(screen.getByPlaceholderText("Find…").parentElement).toHaveClass("ml-auto")
-    expect(columnsButton()).not.toHaveClass("ml-auto")
+    expect(group()).not.toHaveClass("ml-auto")
   })
 
   it("the buttons sit at the right end when there is no search and no filters", () => {
     renderTable({ tableId: "t", toolbar: <button>New</button> })
     expect(order()).toEqual(["New", "Columns", "Table layout"])
-    expect(columnsButton()).toHaveClass("ml-auto")
+    expect(group()).toHaveClass("ml-auto")
+    expect(columnsButton()).not.toHaveClass("ml-auto")
     expect(layoutButton()).not.toHaveClass("ml-auto")
   })
 
   it("Columns alone gets ml-auto without a tableId, and a table without a toolbar gets one for the buttons", () => {
     renderTable()
-    expect(columnsButton()).toHaveClass("ml-auto")
+    expect(group()).toHaveClass("ml-auto")
     expect(layoutButton()).toBeNull()
   })
 

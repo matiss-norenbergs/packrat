@@ -13,6 +13,7 @@ import type { TableLayout } from "@/types/api"
 import { cn } from "@/lib/utils"
 import { TablePagination } from "./TablePagination"
 import { TableSearch } from "./TableSearch"
+import { ButtonGroup } from "@/components/ui/button-group"
 import { ColumnsMenu, LayoutPopover } from "./TableLayoutControls"
 import { isRowEventIgnored } from "./interactive"
 import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, computeLayout, resolveAlign } from "./columns"
@@ -462,8 +463,8 @@ function DataTableView<T, Id extends RowId = number>({
     : []
   const hasColumnsMenu = layoutCtl != null && columnItems.length > 0
   const hasToolbar = toolbar != null || filters != null || search != null || hasColumnsMenu
-  // The first element on the right edge takes the spare space (ml-auto); filters, search, Columns, Layout follow in order.
-  const rightStart = filters != null ? "filters" : search ? "search" : "columns"
+  // The first element on the right edge takes the spare space (ml-auto); filters, search, then the Columns / Layout group.
+  const rightStart = filters != null ? "filters" : search ? "search" : "group"
   const showPagination = pagination != null
   const pending = Boolean(loading || error)
 
@@ -482,15 +483,19 @@ function DataTableView<T, Id extends RowId = number>({
               className={rightStart === "search" ? "ml-auto" : undefined}
             />
           )}
-          {hasColumnsMenu && <ColumnsMenu items={columnItems} onToggle={layoutCtl.toggle} className={rightStart === "columns" ? "ml-auto" : undefined} />}
-          {hasColumnsMenu && layoutCtl.saved && (
-            <LayoutPopover
-              dirty={layoutCtl.saved.dirty}
-              hasSaved={layoutCtl.saved.hasSaved}
-              onSave={layoutCtl.saved.save}
-              onRestore={layoutCtl.saved.restore}
-              onClear={layoutCtl.saved.clear}
-            />
+          {hasColumnsMenu && (
+            <ButtonGroup className={rightStart === "group" ? "ml-auto" : undefined}>
+              <ColumnsMenu items={columnItems} onToggle={layoutCtl.toggle} />
+              {layoutCtl.saved && (
+                <LayoutPopover
+                  dirty={layoutCtl.saved.dirty}
+                  hasSaved={layoutCtl.saved.hasSaved}
+                  onSave={layoutCtl.saved.save}
+                  onRestore={layoutCtl.saved.restore}
+                  onClear={layoutCtl.saved.clear}
+                />
+              )}
+            </ButtonGroup>
           )}
         </div>
       )}
