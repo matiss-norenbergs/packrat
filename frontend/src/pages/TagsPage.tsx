@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Lock, Pencil, Plus, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -37,29 +37,32 @@ export function TagsPage() {
   const privacyEnabled = !!settings?.privacyEnabled
   const editTarget = size === 1 ? data?.find((t) => selected.has(t.id)) : undefined
 
-  const columns: ColumnDef<Tag>[] = [
-    { key: "name", header: "Name", cell: (t) => t.name, cellClassName: "font-medium" },
-    {
-      key: "usage",
-      header: "Usage",
-      type: "status",
-      cell: (t) => (
-        <Badge variant="outline">
-          {t.usageCount} item{t.usageCount === 1 ? "" : "s"}
-        </Badge>
-      ),
-    },
-    ...(privacyEnabled
-      ? [
-          {
-            key: "private",
-            header: "Private",
-            type: "icon",
-            cell: (t) => t.isPrivate && <Lock className="h-3.5 w-3.5 text-primary" aria-label="Private" />,
-          } satisfies ColumnDef<Tag>,
-        ]
-      : []),
-  ]
+  const columns = useMemo<ColumnDef<Tag>[]>(
+    () => [
+      { key: "name", header: "Name", cell: (t) => t.name, cellClassName: "font-medium" },
+      {
+        key: "usage",
+        header: "Usage",
+        type: "status",
+        cell: (t) => (
+          <Badge variant="outline">
+            {t.usageCount} item{t.usageCount === 1 ? "" : "s"}
+          </Badge>
+        ),
+      },
+      ...(privacyEnabled
+        ? [
+            {
+              key: "private",
+              header: "Private",
+              type: "icon",
+              cell: (t) => t.isPrivate && <Lock className="h-3.5 w-3.5 text-primary" aria-label="Private" />,
+            } satisfies ColumnDef<Tag>,
+          ]
+        : []),
+    ],
+    [privacyEnabled],
+  )
 
   const contextMenu = (rows: Tag[]): ContextMenuItemDef<Tag>[] => [
     { key: "new", label: "New Tag", icon: <Plus className="h-4 w-4" />, onSelect: () => setNewTagOpen(true) },

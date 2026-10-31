@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { MouseEvent } from "react"
 import type { IdSelection } from "@/hooks/useIdSelection"
 import { isRowEventIgnored } from "./interactive"
+import { useEvent } from "./useEvent"
 import type { RowId } from "./types"
 
 export type SelectionMode = "multi" | "single" | "none"
@@ -38,17 +39,14 @@ export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, s
     return () => window.removeEventListener("mouseup", onMouseUp)
   }, [isDragging])
 
-  const rangeIds = useCallback(
-    (anchorId: Id, targetId: Id) => {
-      const ids = rows.map(getRowId)
-      const anchorIdx = ids.indexOf(anchorId)
-      const targetIdx = ids.indexOf(targetId)
-      if (anchorIdx === -1 || targetIdx === -1) return null
-      const [start, end] = anchorIdx < targetIdx ? [anchorIdx, targetIdx] : [targetIdx, anchorIdx]
-      return ids.slice(start, end + 1)
-    },
-    [rows, getRowId],
-  )
+  const rangeIds = (anchorId: Id, targetId: Id) => {
+    const ids = rows.map(getRowId)
+    const anchorIdx = ids.indexOf(anchorId)
+    const targetIdx = ids.indexOf(targetId)
+    if (anchorIdx === -1 || targetIdx === -1) return null
+    const [start, end] = anchorIdx < targetIdx ? [anchorIdx, targetIdx] : [targetIdx, anchorIdx]
+    return ids.slice(start, end + 1)
+  }
 
   // A drag fires mouseenter on every row crossed; setting an identical selection would still allocate a new
   // Set and re-render the table, so only write when the range actually differs.
@@ -57,7 +55,8 @@ export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, s
     selectAll(ids)
   }
 
-  const onRowMouseDown = (e: MouseEvent, id: Id) => {
+  // Stable identities (they read the latest rows/selection) so memoized rows aren't re-rendered by new handlers.
+  const onRowMouseDown = useEvent((e: MouseEvent, id: Id) => {
     if (mode === "none" || e.button !== 0) return
     // Checkbox / radio / buttons / inputs / portal content keep their own behavior (and native focus).
     if (isRowEventIgnored(e)) return
@@ -85,13 +84,13 @@ export function useTableSelection<T, Id extends RowId>({ rows, getRowId, mode, s
     anchorRef.current = id
     setIsDragging(true)
     selectOnly(id)
-  }
+  })
 
-  const onRowMouseEnter = (id: Id) => {
+  const onRowMouseEnter = useEvent((id: Id) => {
     if (mode !== "multi" || !isDragging || anchorRef.current == null) return
     const ids = rangeIds(anchorRef.current, id)
     if (ids) selectRange(ids)
-  }
+  })
 
   return { onRowMouseDown, onRowMouseEnter }
 }
