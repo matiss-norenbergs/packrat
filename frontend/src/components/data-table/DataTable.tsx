@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -8,9 +8,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import type { IdSelection } from "@/hooks/useIdSelection"
+import { useTableLayout } from "@/hooks/useTableLayout"
+import type { TableLayout } from "@/types/api"
 import { cn } from "@/lib/utils"
 import { TablePagination } from "./TablePagination"
 import { TableSearch } from "./TableSearch"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { ColumnsMenu, LayoutPopover } from "./TableLayoutControls"
 import { isRowEventIgnored } from "./interactive"
 import { ALIGN_CLASS, JUSTIFY_CLASS, SELECTION_COLUMN_WIDTH, computeLayout, resolveAlign } from "./columns"
 import type { ColumnDef, ContextMenuItemDef, PaginationConfig, RowId, SearchConfig, SelectionColumnConfig } from "./types"
@@ -89,6 +93,28 @@ export interface DataTableProps<T, Id extends RowId = number> {
   regionClassName?: string
   /** Replaces the scroll container's classes entirely (see Table in components/ui/table.tsx). */
   containerClassName?: string
+  /**
+   * Stable id that lets the user save this table's layout (hidden columns) to their account: adds the Layout
+   * popover next to the Columns menu. Needs at least one `hideable` column. Not for tables in dialogs.
+   */
+  tableId?: string
+  /**
+   * Controlled layout: when both are passed the page owns the working layout (what the user has now, never saved
+   * automatically) and DataTable only reads it and reports edits. Without them DataTable keeps it internally.
+   * Only `hidden` is edited here; `sort` and `widths` are carried through untouched.
+   */
+  layout?: TableLayout
+  onLayoutChange?: (layout: TableLayout) => void
+}
+
+/** What the table needs from its layout state; built by the wrappers at the bottom of the file. */
+interface LayoutCtl {
+  hidden: ReadonlySet<string>
+  toggle: (key: string) => void
+  /** The saved layouts have not arrived yet: the table shows its loading state instead of flashing the defaults. */
+  pending?: boolean
+  /** Present when the table has a tableId. */
+  saved?: { dirty: boolean; hasSaved: boolean; save: () => void; restore: () => void; clear: () => void }
 }
 
 // Rendered inside ContextMenuContent, which Radix only mounts while the menu is open, so the page's
@@ -193,7 +219,8 @@ const DataTableRow = memo(DataTableRowImpl) as typeof DataTableRowImpl
 
 const CONTAINER_CLASS = "h-full overflow-auto rounded-md border"
 
-export function DataTable<T, Id extends RowId = number>({
+function DataTableView<T, Id extends RowId = number>({
+  layoutCtl,
   rows: allRows,
   getRowId,
   columns,
@@ -220,7 +247,7 @@ export function DataTable<T, Id extends RowId = number>({
   className,
   regionClassName,
   containerClassName,
-}: DataTableProps<T, Id>) {
+}: DataTableProps<T, Id> & { layoutCtl: LayoutCtl | null }) {
   const ownSelection = useIdSelection<Id>()
   const selection = selectionState ?? ownSelection
 
@@ -278,7 +305,15 @@ export function DataTable<T, Id extends RowId = number>({
 
   const selectable = mode !== "none"
   const selectionWidth = selectionColumn?.width ?? SELECTION_COLUMN_WIDTH
-  const layout = computeLayout(columns, selectable ? selectionWidth : null)
+  // Hidden columns leave the header, the cells and the colgroup alike. Only hideable columns can be hidden, and
+  // `columns` itself is passed on when nothing is hidden, so the rows' memo only breaks on an actual toggle.
+  const hiddenKey = layoutCtl ? columns.filter((c) => c.hideable && layoutCtl.hidden.has(c.key)).map((c) => c.key).join("\0") : ""
+  const visibleColumns = useMemo(() => {
+    if (!hiddenKey) return columns
+    const hidden = new Set(hiddenKey.split("\0"))
+    return columns.filter((c) => !hidden.has(c.key))
+  }, [columns, hiddenKey])
+  const layout = computeLayout(visibleColumns, selectable ? selectionWidth : null)
 
   const pageIds = rows.map(getRowId)
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selection.selected.has(id))
@@ -357,7 +392,7 @@ export function DataTable<T, Id extends RowId = number>({
         {layout.fixed && (
           <colgroup>
             {selectable && <col style={{ width: selectionWidth }} />}
-            {columns.map((c, i) => (
+            {visibleColumns.map((c, i) => (
               <col key={c.key} style={layout.colWidths[i] != null ? { width: layout.colWidths[i] } : undefined} />
             ))}
           </colgroup>
@@ -365,7 +400,7 @@ export function DataTable<T, Id extends RowId = number>({
         <TableHeader>
           <TableRow>
             {selectable && <TableHead className="w-8 text-center">{selectionHeader}</TableHead>}
-            {columns.map((c) => {
+            {visibleColumns.map((c) => {
               const align = resolveAlign(c)
               return (
                 <TableHead
@@ -389,7 +424,7 @@ export function DataTable<T, Id extends RowId = number>({
                 id={id}
                 selected={selection.isSelected(id)}
                 mode={mode}
-                columns={columns}
+                columns={visibleColumns}
                 className={cn(selectable ? "cursor-default select-none" : onRowClick && "cursor-pointer", rowClassName?.(row))}
                 label={rowLabel(row, id)}
                 onMouseDown={onRowMouseDown}
@@ -423,8 +458,15 @@ export function DataTable<T, Id extends RowId = number>({
   const region = <div className={cn("min-h-0 flex-1", regionClassName)}>{content}</div>
   const selectedId = mode === "single" ? pageIds.find((id) => selection.selected.has(id)) : undefined
 
-  const hasToolbar = toolbar != null || filters != null || search != null
-  const showPagination = pagination != null && !loading && !error
+  const columnItems = layoutCtl
+    ? columns.filter((c) => c.hideable).map((c) => ({ key: c.key, label: columnLabel(c), visible: !layoutCtl.hidden.has(c.key) }))
+    : []
+  const hasColumnsMenu = layoutCtl != null && columnItems.length > 0
+  const hasToolbar = toolbar != null || filters != null || search != null || hasColumnsMenu
+  // The first element on the right edge takes the spare space (ml-auto); filters, search, then the Columns / Layout group.
+  const rightStart = filters != null ? "filters" : search ? "search" : "group"
+  const showPagination = pagination != null
+  const pending = Boolean(loading || error)
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col gap-6", className)}>
@@ -438,8 +480,22 @@ export function DataTable<T, Id extends RowId = number>({
               onChange={handleSearchChange}
               placeholder={search.placeholder}
               debounceMs={search.debounceMs}
-              className={filters == null ? "ml-auto" : undefined}
+              className={rightStart === "search" ? "ml-auto" : undefined}
             />
+          )}
+          {hasColumnsMenu && (
+            <ButtonGroup className={rightStart === "group" ? "ml-auto" : undefined}>
+              <ColumnsMenu items={columnItems} onToggle={layoutCtl.toggle} />
+              {layoutCtl.saved && (
+                <LayoutPopover
+                  dirty={layoutCtl.saved.dirty}
+                  hasSaved={layoutCtl.saved.hasSaved}
+                  onSave={layoutCtl.saved.save}
+                  onRestore={layoutCtl.saved.restore}
+                  onClear={layoutCtl.saved.clear}
+                />
+              )}
+            </ButtonGroup>
           )}
         </div>
       )}
@@ -458,7 +514,72 @@ export function DataTable<T, Id extends RowId = number>({
       ) : (
         region
       )}
-      {showPagination && <TablePagination {...pagination} selectedCount={mode === "multi" ? selectedRows.length : 0} />}
+      {showPagination && <TablePagination {...pagination} selectedCount={mode === "multi" ? selectedRows.length : 0} loading={pending} />}
     </div>
   )
+}
+
+function columnLabel<T>(c: ColumnDef<T>): string {
+  return c.label ?? (typeof c.header === "string" ? c.header : c.key)
+}
+
+function defaultLayout<T>(columns: ColumnDef<T>[]): TableLayout {
+  const hidden = columns.filter((c) => c.hideable && c.defaultVisible === false).map((c) => c.key)
+  return hidden.length ? { v: 1, hidden } : { v: 1 }
+}
+
+function toggleHidden(layout: TableLayout, key: string): TableLayout {
+  const hidden = new Set(layout.hidden ?? [])
+  if (!hidden.delete(key)) hidden.add(key)
+  const { hidden: _old, ...rest } = layout
+  return hidden.size ? { ...rest, hidden: [...hidden] } : rest
+}
+
+// Layout state with a tableId: the account's saved layout, a working copy, and Save / Restore / Clear.
+function DataTableWithSavedLayout<T, Id extends RowId>({ tableId, layout, onLayoutChange, ...props }: DataTableProps<T, Id> & { tableId: string }) {
+  const { columns } = props
+  const defaults = useMemo(() => defaultLayout(columns), [columns])
+  const knownKeys = useMemo(() => columns.map((c) => c.key), [columns])
+  const hideableKeys = useMemo(() => columns.filter((c) => c.hideable).map((c) => c.key), [columns])
+  const state = useTableLayout(tableId, defaults, {
+    knownKeys,
+    hideableKeys,
+    controlled: layout && onLayoutChange ? { working: layout, onChange: onLayoutChange } : undefined,
+  })
+  const { working, setWorking, dirty, hasSaved, save, restore, clear } = state
+  // Rebuilt every render on purpose: only `visibleColumns` (memoized by content) reaches the memoized rows.
+  const ctl: LayoutCtl = {
+    hidden: new Set(working.hidden ?? []),
+    pending: !state.ready,
+    toggle: (key) => setWorking((prev) => toggleHidden(prev, key)),
+    saved: { dirty, hasSaved, save: () => void save(), restore, clear: () => void clear() },
+  }
+  return <DataTableView {...props} loading={props.loading || ctl.pending} layoutCtl={ctl} />
+}
+
+// No tableId: hiding works (Columns menu) but is never saved; the working layout is the page's or ours.
+function DataTableWithLocalLayout<T, Id extends RowId>({ layout, onLayoutChange, ...props }: DataTableProps<T, Id>) {
+  const { columns } = props
+  const [own, setOwn] = useState<TableLayout | null>(null)
+  const controlled = layout != null && onLayoutChange != null
+  const working = controlled ? layout : (own ?? defaultLayout(columns))
+  const setWorking = controlled ? onLayoutChange : setOwn
+  const ctl: LayoutCtl = { hidden: new Set(working.hidden ?? []), toggle: (key) => setWorking(toggleHidden(working, key)) }
+  return <DataTableView {...props} layoutCtl={ctl} />
+}
+
+export function DataTable<T, Id extends RowId = number>(props: DataTableProps<T, Id>) {
+  const { columns, tableId } = props
+  const hideable = columns.some((c) => c.hideable)
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    for (const c of columns) {
+      if (c.hideable && c.label == null && typeof c.header !== "string") {
+        console.warn(`DataTable: hideable column "${c.key}" needs a label (its header is not a string)`)
+      }
+    }
+  }, [columns])
+  if (!hideable) return <DataTableView {...props} layoutCtl={null} />
+  if (tableId) return <DataTableWithSavedLayout {...props} tableId={tableId} />
+  return <DataTableWithLocalLayout {...props} />
 }

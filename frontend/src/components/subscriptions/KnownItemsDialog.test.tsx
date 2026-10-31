@@ -108,7 +108,8 @@ describe("KnownItemsDialog table", () => {
     expect(skeletons).toHaveLength(4)
     expect(skeletons[0].parentElement).toHaveClass("h-full", "space-y-1", "overflow-y-auto", "p-2")
     expect(box(skeletons[0].parentElement!)).toHaveClass("h-[60vh]", "overflow-hidden", "rounded-md", "border")
-    expect(screen.queryByText(/ items?$/)).toBeNull() // no footer while loading
+    expect(screen.getByText("—")).toBeInTheDocument() // footer placeholder while loading
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
 
     loading = false
     entries = []

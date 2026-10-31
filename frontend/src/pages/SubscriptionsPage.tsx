@@ -109,12 +109,14 @@ export function SubscriptionsPage() {
       {
         key: "collection",
         header: "Collection",
+        hideable: true,
         cellClassName: "text-sm text-muted-foreground",
         cell: (sub) => sub.collectionName ?? "Uncategorized",
       },
       {
         key: "knownItems",
         header: "Known items",
+        hideable: true,
         type: "number",
         cellClassName: "text-sm",
         cell: (sub) => (
@@ -127,6 +129,7 @@ export function SubscriptionsPage() {
       {
         key: "lastChecked",
         header: "Last checked",
+        hideable: true,
         type: "date",
         cellClassName: "text-sm text-muted-foreground",
         cell: (sub) => (
@@ -139,6 +142,7 @@ export function SubscriptionsPage() {
       {
         key: "autoDownload",
         header: "Auto-download",
+        hideable: true,
         type: "status",
         cell: (sub) =>
           sub.autoDownload ? <Badge variant="secondary">On</Badge> : <span className="text-sm text-muted-foreground">Off</span>,
@@ -197,6 +201,7 @@ export function SubscriptionsPage() {
         rows={data ?? []}
         getRowId={(s) => s.id}
         columns={columns}
+        tableId="subscriptions"
         selection="multi"
         selectionState={selection}
         getRowLabel={(s) => `Select ${s.title}`}

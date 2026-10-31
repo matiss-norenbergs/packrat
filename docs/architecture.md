@@ -194,6 +194,34 @@ response can't overwrite a choice just made — which also refreshes the cache. 
 at once and PATCH only the changed key; a failed save toasts and keeps the local value. There is no
 migration of old browser values: an account with nothing stored gets the defaults.
 
+### Saved table layouts
+What a user did to a list table (today: which columns are hidden; the schema also carries a sort and column widths for the
+sorting and resize features that follow) is stored per account in `user_table_layouts(user_id, table_id, layout, updated_at)`,
+primary key `(user_id, table_id)`, `ON DELETE CASCADE`. It has its own table rather than rows in `user_preferences` because
+the value is a structured JSON document that the client fetches **once for every table** (`GET /api/auth/table-layouts`),
+whereas preferences are a fixed set of enum keys. Like preferences and 2FA data it is not in any backup, export or bundle
+(pinned by `backup/no_table_layouts_test.go`). The API is the only validator: `models.ParseTableLayout` accepts exactly
+`v` (1), `sort`, `hidden` and `widths` with the bounds in `docs/api.md`, rejects unknown fields and stores canonical JSON,
+so the later PRs need no backend change. At most 100 tables per account (a 409 for a new one beyond that).
+
+On the client `useTableLayouts` (key `["tableLayouts"]`, `staleTime: Infinity`, mounted in `AppLayout`) holds all layouts;
+saving or clearing writes the cache with `setQueryData`. The key is outside `["auth", ...]`, so `markLoggedOut` and the 401
+handler drop it with every other protected query, and the desktop's server switch reloads the app, so a signed-out user's
+layouts never survive. `useTableLayout(tableId, defaults, opts)` is the reusable state (it knows nothing about DataTable, so a
+non-table list can use it): **saved** (the account's layout or null), **baseline** (`saved ?? defaults`) and **working**. The working
+layout lives in component state only and is never saved automatically; until the user edits, `working` simply *is* the
+baseline, so a saved layout that arrives after mount is adopted without overriding an edit made meanwhile, and leaving the
+page and coming back starts from the baseline again. `dirty` compares normalized forms (field and key order, empty versus
+missing `hidden`, keys of columns that no longer exist, and non-hideable keys in `hidden` are ignored). `save()` PUTs the working
+layout, `clear()` DELETEs and applies the defaults, `restore()` is local; Save and Clear toast only when the server responds
+(an error toast leaves the working state alone) and a second one while a request is in flight is ignored.
+
+`DataTable` uses it when a table passes a `tableId` and has a `hideable` column; without a `tableId` the Columns menu still
+works but nothing can be saved. Passing both `layout` and `onLayoutChange` makes the page own the working layout (the future
+Library list); the Layout popover then acts on that layout. Only `hidden` is edited; `sort` and `widths` are carried through.
+Dialog tables do not opt in. While the layouts query has not answered, a table with a `tableId` shows its loading state (and the
+footer placeholder) instead of rendering the defaults and re-arranging a moment later; if the fetch fails the defaults apply.
+
 Failed attempts are stored (time, IP, step; pruned after 30 days) in `login_failures` and exposed to
 the owner after login as the dismissible "N failed login attempts since your last login" notice.
 
@@ -629,13 +657,23 @@ row type and the id type (number or string).
   container (sticky header stays). Spare space goes to the `flex` columns, or — if none is flagged — to the **last column**,
   so there is never an empty strip.
 - **Footer**: always shown when pagination is configured (client mode with `pageSize` + `itemLabel`, or the `pagination`
-  prop), hidden only while loading or on error — never for a single page or an empty table, which show "0 tags" and one
-  disabled page. In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
+  prop), including while loading and on error, so the page (and a dialog) never changes height between states. Then it shows
+  a placeholder ("—" instead of the count, no "· N selected", Previous/Next and the current page button disabled) and
+  `TablePagination` skips its clamp (`loading` prop), otherwise a table on page 3 would snap to page 1 while its total is 0.
+  A single page or an empty table shows "0 tags" and one disabled page. In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
   clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
   `onPageChange(lastPage)`, so pages need no clamping code. **Dock clearance is automatic**: the footer
   carries the `dock-occupied:` variants of the clearance classes (`lib/dockClearance.ts`: row `flex-wrap-reverse gap-2`,
   label `flex min-h-9 items-center pl-12`, `md:min-h-0` from `md` up), so it indents the count and lets the pager wrap above
   it only while the floating dock holds a button (see "Dock-aware footers" under Floating action dock); no page passes a prop.
+- **Columns and layout** (opt-in per column): `hideable` (default false), `defaultVisible` (default true) and `label` (name in
+  the menu; falls back to a string `header`, a dev warning otherwise). A table with a hideable column gets an icon-only
+  **Columns** menu at the right end of the toolbar (order: filters, search, Columns, Layout; the first of them takes the
+  `ml-auto`), and with a `tableId` also the **Layout** popover (see "Saved table layouts" under Auth). Hidden columns leave
+  the header, the cells and the colgroup, and the fixed-layout widths are computed from the visible columns; the visible
+  list is memoized on the *content* of the hidden set (and is `columns` itself when nothing is hidden), so a toggle re-renders
+  the rows once and nothing else does. Non-hideable columns are never hidden, even if a saved layout lists them. A page can
+  own the working layout with `layout` + `onLayoutChange`. Tables without a hideable column render exactly as before.
 - **Client-side mode**: for pages whose data is fully loaded, pass **all** rows plus `pageSize`, `itemLabel` and/or
   `search.match(row, query)` and the table does what the page used to: it owns the query and page state, filters
   (the query is trimmed and lowercased once; an empty query means no filter), slices the current page, resets to

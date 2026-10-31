@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/sidebar/Sidebar"
 import { Toaster } from "@/components/ui/sonner"
 import { useAuthStatus } from "@/hooks/useAuth"
 import { useSyncAppearance } from "@/hooks/useAppearance"
+import { useTableLayouts } from "@/hooks/useTableLayout"
 import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
 
 export function AppLayout() {
@@ -26,6 +27,7 @@ export function AppLayout() {
 function AuthedAppLayout() {
   useDownloadsSocket()
   useSyncAppearance()
+  useTableLayouts() // fetched once for every table; each table's useTableLayout reads the same cache entry
   const mainRef = useRef<HTMLElement>(null)
   const location = useLocation()
 

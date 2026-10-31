@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -119,6 +120,12 @@ type SessionsResponse struct {
 type UserPreferencesResponse struct {
 	Theme  string `json:"theme"`
 	Accent string `json:"accent"`
+}
+
+// TableLayoutsResponse holds the signed-in user's saved table layouts by table id; each value is the
+// canonical layout document (see models.TableLayout). An empty object when none are saved.
+type TableLayoutsResponse struct {
+	Layouts map[string]json.RawMessage `json:"layouts"`
 }
 
 type RevokeOthersResponse struct {

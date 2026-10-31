@@ -13,6 +13,14 @@ Maintenance notes:
 -->
 
 ## 2026-10-31
+- **Show/hide table columns, with saved layouts** — Artists (Birthday, Usage) and Subscriptions (Collection, Known items,
+  Last checked, Auto-download) get a Columns menu and a Table layout popover (Save / Restore / Clear) after the search box.
+  The layout is stored per account on the server (`GET/PUT/DELETE /api/auth/table-layouts`, not part of backups) and the
+  schema already covers sorting and column widths for the next changes. `DataTable` gains `hideable` / `defaultVisible` /
+  `label` column props and `tableId` / `layout` / `onLayoutChange`.
+- **Table footers stay put while loading** — the footer of every paged table is now rendered (with a "—" and a disabled pager)
+  while the rows load or fail, so dialogs no longer change height when the data arrives, and a table on page 3 is no longer
+  snapped back to page 1 while it reloads.
 - **Stray files dialog scrolls again** — the table inside the dialog was taller than its box, so rows beyond roughly the
   first dozen were clipped and could not be reached; the list now scrolls inside the dialog with a sticky header.
 

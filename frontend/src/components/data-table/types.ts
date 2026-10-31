@@ -21,6 +21,12 @@ export interface ColumnDef<T> {
   flex?: boolean
   headerClassName?: string
   cellClassName?: string
+  /** Opt-in: the Columns menu lets the user hide this column. Default false (never hideable). */
+  hideable?: boolean
+  /** Hideable columns only: shown unless a layout hides it. Default true. */
+  defaultVisible?: boolean
+  /** Name in the Columns menu; falls back to `header` when that is a string. A hideable column needs one of them. */
+  label?: string
 }
 
 export interface SelectionColumnConfig {
