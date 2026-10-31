@@ -64,9 +64,12 @@ export function LibraryFolderView() {
     pageSize: paginationEnabled ? pageSize : undefined,
   }, sortReady)
 
+  // Everything that starts a new view at the top (the page is already 1 in the pass that sees a changed filter).
+  const resetKey = JSON.stringify([page, currentId, search, tagNames.join(","), hideGhosts, sortKey, sortDir])
+
   if (collectionsLoading || itemsLoading || settingsLoading || !sortReady) {
     return (
-      <LibraryScrollView>
+      <LibraryScrollView resetKey={resetKey}>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           <Skeleton className="aspect-video w-full" />
           <Skeleton className="aspect-video w-full" />
@@ -77,7 +80,7 @@ export function LibraryFolderView() {
   }
   if (isError) {
     return (
-      <LibraryScrollView>
+      <LibraryScrollView resetKey={resetKey}>
         <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p>
       </LibraryScrollView>
     )
@@ -100,6 +103,7 @@ export function LibraryFolderView() {
 
   return (
     <LibraryScrollView
+      resetKey={resetKey}
       header={
         <div className="flex shrink-0 flex-wrap items-center gap-1 text-sm text-muted-foreground">
           <button

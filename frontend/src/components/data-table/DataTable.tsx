@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import type { IdSelection } from "@/hooks/useIdSelection"
+import { useScrollTopOnChange } from "@/hooks/useScrollTopOnChange"
 import { useTableLayout } from "@/hooks/useTableLayout"
 import type { TableLayout } from "@/types/api"
 import { cn } from "@/lib/utils"
@@ -439,15 +440,10 @@ function DataTableView<T, Id extends RowId = number>({
   // effect, so before paint and without an extra render); not on mount, and never for a refetch, a selection change, a
   // hidden column or a resize, none of which is in the key. Only scrollTop is touched, so scrollLeft stays.
   const regionRef = useRef<HTMLDivElement>(null)
-  const scrollKey = useRef<unknown[] | null>(null)
-  useLayoutEffect(() => {
-    const next = [pagination?.page, sort ? `${sort.key}:${sort.dir}` : "", clientMode ? rawQuery : reportedQuery, resetKey]
-    const prev = scrollKey.current
-    scrollKey.current = next
-    if (!prev || next.every((v, i) => Object.is(v, prev[i]))) return
-    const container = regionRef.current?.querySelector<HTMLElement>('[data-slot="table-container"]')
-    if (container) container.scrollTop = 0
-  })
+  useScrollTopOnChange(
+    () => regionRef.current?.querySelector<HTMLElement>('[data-slot="table-container"]'),
+    [pagination?.page, sort ? `${sort.key}:${sort.dir}` : "", clientMode ? rawQuery : reportedQuery, resetKey],
+  )
   const { onRowMouseDown, onRowMouseEnter } = useTableSelection({ rows, getRowId, mode, selection, isSelectable: isRowSelectable })
 
   // Stable wrappers around the page's (usually inline) handlers, so they never defeat the row memo.

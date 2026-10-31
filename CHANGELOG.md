@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-01
+- **Library cards return to the top** — in the grid and the Folders view the cards area now scrolls back to the top on a new page, filter, search, sort or folder, as the list does (the footer is always in view now, so you could otherwise land mid-scroll). A refetch or a selection does not move it.
 - **Library grid and Folders: only the cards scroll** — like the list, the grid and the Folders view now fill the window: the title, the toolbar row, the Folders breadcrumb and the pagination footer stay in view while the cards scroll (the toolbar is no longer a sticky overlay and the footer no longer scrolls away). New `LibraryScrollView` shell.
 - **Table toolbars wrap right-aligned** — on a narrow window the filters, search and the Columns / Layout group of every table wrap onto their own line and stay on the right instead of dropping to the left.
 - **Library list dialogs follow fresh data** — a dialog opened from a list row's right-click menu (thumbnail gallery or picker, NFO contents, Edit after a failed save) now shows the item as it is after a refetch instead of the snapshot from the click; if the item leaves the page the dialog keeps its last data.

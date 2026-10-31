@@ -218,7 +218,8 @@ not per-browser):
   the right, indented to clear the floating reveal button when it is shown. With pagination off they have no footer.
   **Scrolling**: the grid and the Folders view fill the window like the list: the title, the toolbar row (with its divider), the
   Folders breadcrumb and the pagination footer stay in view and only the cards scroll (the page itself never scrolls). On a
-  narrow window the toolbar wraps and the cards area simply gets shorter.
+  narrow window the toolbar wraps and the cards area simply gets shorter. The cards return to the top on a new page, filter,
+  search, sort or folder (not on a refetch, a selection change or a resize).
 - **Folders** — browse by collection, one level at a time, with a breadcrumb trail and
   browser-back support for navigating up.
 - **List** — a table of the current page (see [List view](#list-view) below). It always ends in the table footer: with

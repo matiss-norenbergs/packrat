@@ -41,6 +41,9 @@ export function LibraryGrid() {
     pageSize: paginationEnabled ? pageSize : undefined,
   }, sortReady)
 
+  // Everything that starts a new view at the top (the page is already 1 in the pass that sees a changed filter).
+  const resetKey = JSON.stringify([page, search, collectionId, year, tagNames.join(","), hideGhosts, sortKey, sortDir])
+
   let content: ReactNode
   if (isLoading || settingsLoading || !sortReady) {
     content = (
@@ -73,6 +76,7 @@ export function LibraryGrid() {
   const showFooter = paginationEnabled && !isLoading && !settingsLoading && sortReady && !isError && data != null && data.total > 0
   return (
     <LibraryScrollView
+      resetKey={resetKey}
       footer={showFooter && <LibraryPagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} />}
     >
       {content}

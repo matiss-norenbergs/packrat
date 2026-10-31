@@ -1,13 +1,17 @@
-import { cleanup, screen, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { useSearchParams } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { LibraryPage } from "@/pages/LibraryPage"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import { LibraryFolderView } from "./LibraryFolderView"
 import { LibraryGrid } from "./LibraryGrid"
+import { LibraryScrollView } from "./LibraryScrollView"
 import { LibrarySortProvider } from "./LibrarySortContext"
 import { RevealAllProvider } from "./RevealAllContext"
-import { SelectionProvider } from "./SelectionContext"
+import { SelectionProvider, useSelection } from "./SelectionContext"
+import { useLibrarySort } from "@/hooks/useLibrarySort"
 
 // jsdom has no layout: heights, overflow and actual scrolling are not asserted here; they are measured in the browser
 // (see the PR). What these tests pin is the structure: who is inside the scroll region and who is a fixed sibling.
@@ -42,7 +46,7 @@ afterEach(() => {
 const region = () => screen.getByTestId("library-scroll")
 const footerCount = () => screen.queryByText(/^\d+ items?$/)
 
-function renderView(view: React.ReactNode) {
+function renderView(view: React.ReactNode, route = "/") {
   return renderWithProviders(
     <TooltipProvider>
       <LibrarySortProvider>
@@ -51,6 +55,7 @@ function renderView(view: React.ReactNode) {
         </RevealAllProvider>
       </LibrarySortProvider>
     </TooltipProvider>,
+    route,
   )
 }
 
@@ -152,5 +157,115 @@ describe("LibraryPage shell", () => {
     expect(screen.queryByTestId("library-scroll")).toBeNull()
     expect(container.firstElementChild).toHaveClass("flex", "h-full", "min-h-0", "flex-col", "gap-6")
     expect(screen.getByPlaceholderText("Search library…")).toBeInTheDocument()
+  })
+})
+
+describe("LibraryScrollView: resetKey", () => {
+  const view = (key: string | undefined, children: React.ReactNode = "cards") => (
+    <LibraryScrollView resetKey={key}>{children}</LibraryScrollView>
+  )
+
+  it("returns the region to the top when the key changes", () => {
+    const { rerender } = render(view("a"))
+    region().scrollTop = 200
+    rerender(view("b"))
+    expect(region().scrollTop).toBe(0)
+  })
+
+  it("keeps the scroll on a re-render with the same key, also with new children (a refetch)", () => {
+    const { rerender } = render(view("a", "old cards"))
+    region().scrollTop = 200
+    rerender(view("a", "old cards"))
+    expect(region().scrollTop).toBe(200)
+    rerender(view("a", "refetched cards"))
+    expect(region().scrollTop).toBe(200)
+  })
+
+  it("does nothing on mount", () => {
+    const original = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop")
+    const writes = vi.fn()
+    Object.defineProperty(Element.prototype, "scrollTop", { configurable: true, get: () => 0, set: writes })
+    try {
+      render(view("a"))
+    } finally {
+      if (original) Object.defineProperty(Element.prototype, "scrollTop", original)
+      else delete (Element.prototype as { scrollTop?: number }).scrollTop
+    }
+    expect(writes).not.toHaveBeenCalled()
+  })
+})
+
+// Stands in for the toolbar / sort dialog / a card's selection box.
+function Controls() {
+  const [, setParams] = useSearchParams()
+  const { setSort } = useLibrarySort()
+  const { toggleCollection } = useSelection()
+  return (
+    <>
+      <button type="button" onClick={() => setParams((p) => ({ ...Object.fromEntries(p), q: "abc" }))}>search</button>
+      <button type="button" onClick={() => setSort({ key: "title", dir: "asc" })}>sort</button>
+      <button type="button" onClick={() => toggleCollection(77, 3)}>select</button>
+    </>
+  )
+}
+
+describe.each([
+  ["grid", <LibraryGrid key="g" />, "/"],
+  ["folder view", <LibraryFolderView key="f" />, "/?collection=7"],
+])("%s: the region goes back to the top", (_name, view, route) => {
+  async function scrolled() {
+    serve()
+    renderView(
+      <>
+        <Controls />
+        {view}
+      </>,
+      route,
+    )
+    await screen.findByText("60 items")
+    region().scrollTop = 200
+  }
+
+  it("on the next page", async () => {
+    await scrolled()
+    await userEvent.setup().click(screen.getByRole("button", { name: "Next" }))
+    await screen.findByRole("button", { name: "2", current: "page" })
+    expect(region().scrollTop).toBe(0)
+  })
+
+  it("on a new search and a new sort", async () => {
+    const user = userEvent.setup()
+    await scrolled()
+    await user.click(screen.getByRole("button", { name: "search" }))
+    await screen.findByText("60 items")
+    expect(region().scrollTop).toBe(0)
+    region().scrollTop = 200
+    await user.click(screen.getByRole("button", { name: "sort" }))
+    await screen.findByText("60 items")
+    expect(region().scrollTop).toBe(0)
+  })
+
+  it("not on a selection change or a refetch of the same page", async () => {
+    const user = userEvent.setup()
+    await scrolled()
+    await user.click(screen.getByRole("button", { name: "select" }))
+    expect(region().scrollTop).toBe(200)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    fireEvent.focus(window)
+    expect(region().scrollTop).toBe(200)
+  })
+})
+
+describe("folder view: leaving the folder", () => {
+  it("clicking Root goes back to the top", async () => {
+    serve()
+    renderView(<LibraryFolderView />, "/?collection=7")
+    await screen.findByText("60 items")
+    region().scrollTop = 200
+    await userEvent.setup().click(screen.getByRole("button", { name: "Root" }))
+    await screen.findByText("60 items")
+    expect(region().scrollTop).toBe(0)
   })
 })
