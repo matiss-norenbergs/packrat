@@ -71,6 +71,37 @@ export interface DataTableProps<T, Id extends RowId = number> {
   containerClassName?: string
 }
 
+// Rendered inside ContextMenuContent, which Radix only mounts while the menu is open, so the page's
+// builder runs on demand instead of on every table render.
+function ContextMenuItems<T, Id extends RowId>({
+  rows,
+  getRowId,
+  ids,
+  build,
+}: {
+  rows: T[]
+  getRowId: (row: T) => Id
+  ids: Id[]
+  build: (rows: T[]) => ContextMenuItemDef<T>[]
+}) {
+  const menuRows = rows.filter((r) => ids.includes(getRowId(r)))
+  return build(menuRows).map((item) =>
+    "separator" in item ? (
+      <ContextMenuSeparator key={item.key} />
+    ) : (
+      <ContextMenuItem
+        key={item.key}
+        variant={item.destructive ? "destructive" : "default"}
+        disabled={item.disabled}
+        onClick={() => item.onSelect(menuRows)}
+      >
+        {item.icon}
+        {item.label}
+      </ContextMenuItem>
+    ),
+  )
+}
+
 const CONTAINER_CLASS = "h-full overflow-auto rounded-md border"
 
 export function DataTable<T, Id extends RowId = number>({
@@ -285,21 +316,7 @@ export function DataTable<T, Id extends RowId = number>({
           {table}
         </ContextMenuTrigger>
         <ContextMenuContent key={contextMenuAnchorKey}>
-          {contextMenu(rows.filter((r) => contextIds.includes(getRowId(r)))).map((item) =>
-            "separator" in item ? (
-              <ContextMenuSeparator key={item.key} />
-            ) : (
-              <ContextMenuItem
-                key={item.key}
-                variant={item.destructive ? "destructive" : "default"}
-                disabled={item.disabled}
-                onClick={() => item.onSelect(rows.filter((r) => contextIds.includes(getRowId(r))))}
-              >
-                {item.icon}
-                {item.label}
-              </ContextMenuItem>
-            ),
-          )}
+          <ContextMenuItems rows={rows} getRowId={getRowId} ids={contextIds} build={contextMenu} />
         </ContextMenuContent>
       </ContextMenu>
     ) : (

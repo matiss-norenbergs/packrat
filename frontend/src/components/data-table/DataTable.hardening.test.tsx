@@ -4,7 +4,7 @@ import { createPortal } from "react-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { DataTable } from "./DataTable"
-import type { ColumnDef } from "./types"
+import type { ColumnDef, ContextMenuItemDef } from "./types"
 
 afterEach(cleanup)
 
@@ -163,5 +163,66 @@ describe("DataTable no-op selection updates", () => {
     expect(selectAllSpy).toHaveBeenCalledTimes(1)
     fireEvent.mouseDown(row("D"), { shiftKey: true })
     expect(selectAllSpy).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("DataTable lazy context menu", () => {
+  const columns = [nameCol]
+  function setup(selection: "multi" | "none" = "multi") {
+    const build = vi.fn((rows: Row[]): ContextMenuItemDef<Row>[] => [{ key: "act", label: `Act ${rows.length}`, onSelect: onSelect }])
+    const onSelect = vi.fn()
+    render(<DataTable rows={ROWS} getRowId={getRowId} columns={columns} selection={selection} contextMenu={build} />)
+    return { build, onSelect }
+  }
+
+  it("does not call the builder until the menu opens, nor on re-renders while closed", () => {
+    const { build } = setup()
+    fireEvent.mouseDown(row("A"))
+    fireEvent.mouseUp(window)
+    fireEvent.mouseDown(row("B"), { ctrlKey: true })
+    expect(build).not.toHaveBeenCalled()
+  })
+
+  it("builds from the right-clicked unselected row", () => {
+    const { build, onSelect } = setup()
+    fireEvent.mouseDown(row("A"))
+    fireEvent.mouseUp(window)
+    fireEvent.contextMenu(row("C"))
+    expect(build).toHaveBeenCalled()
+    expect(build.mock.lastCall![0]).toEqual([ROWS[2]])
+    fireEvent.click(screen.getByRole("menuitem", { name: "Act 1" }))
+    expect(onSelect).toHaveBeenCalledWith([ROWS[2]])
+  })
+
+  it("builds from the selected row", () => {
+    const { build } = setup()
+    fireEvent.mouseDown(row("B"))
+    fireEvent.mouseUp(window)
+    fireEvent.contextMenu(row("B"))
+    expect(build.mock.lastCall![0]).toEqual([ROWS[1]])
+  })
+
+  it("builds from the whole multi-selection and onSelect receives it", () => {
+    const { build, onSelect } = setup()
+    fireEvent.mouseDown(row("A"))
+    fireEvent.mouseUp(window)
+    fireEvent.mouseDown(row("D"), { ctrlKey: true })
+    fireEvent.contextMenu(row("D"))
+    expect(build.mock.lastCall![0]).toEqual([ROWS[0], ROWS[3]])
+    fireEvent.click(screen.getByRole("menuitem", { name: "Act 2" }))
+    expect(onSelect).toHaveBeenCalledWith([ROWS[0], ROWS[3]])
+  })
+
+  it("acts on the clicked row without selection", () => {
+    const { build } = setup("none")
+    fireEvent.contextMenu(row("E"))
+    expect(build.mock.lastCall![0]).toEqual([ROWS[4]])
+  })
+
+  it("header right-click opens nothing and never calls the builder", () => {
+    const { build } = setup()
+    fireEvent.contextMenu(screen.getByRole("columnheader", { name: "Name" }))
+    expect(screen.queryByRole("menu")).toBeNull()
+    expect(build).not.toHaveBeenCalled()
   })
 })
