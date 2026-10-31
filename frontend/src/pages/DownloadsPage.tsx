@@ -20,7 +20,9 @@ import { NewDownloadDialog } from "@/components/downloads/NewDownloadDialog"
 import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { useBulkDeleteDownloads, useDownloads } from "@/hooks/useDownloads"
+import { DOCK_FOOTER_LABEL, DOCK_FOOTER_ROW } from "@/lib/dockClearance"
 import { getPageNumbers } from "@/lib/pagination"
+import { cn } from "@/lib/utils"
 
 const PAGE_SIZE = 25
 
@@ -268,8 +270,8 @@ export function DownloadsPage() {
       </div>
 
       {!isLoading && total > 0 && (
-        <div className="flex shrink-0 flex-wrap-reverse items-center justify-between gap-2">
-          <span className="flex min-h-9 items-center pl-12 text-sm text-muted-foreground md:min-h-0">
+        <div className={cn("flex shrink-0 items-center justify-between", DOCK_FOOTER_ROW)}>
+          <span className={cn("text-sm text-muted-foreground", DOCK_FOOTER_LABEL)}>
             {total} {total === 1 ? "download" : "downloads"}
           </span>
           <div className="flex items-center gap-1">
