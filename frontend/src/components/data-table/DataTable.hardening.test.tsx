@@ -324,3 +324,23 @@ describe("DataTable memoized rows", () => {
     expect(seen).toEqual([2])
   })
 })
+
+describe("DataTable search.value", () => {
+  it("is optional", () => {
+    render(<DataTable rows={ROWS} getRowId={getRowId} columns={[nameCol]} search={{ match: (r, q) => r.name.toLowerCase() === q }} />)
+    expect(screen.getByRole("textbox")).toHaveValue("")
+    expect(screen.getAllByRole("row")).toHaveLength(6)
+  })
+
+  it("does not leak config-only fields into the input", () => {
+    render(<DataTable rows={ROWS} getRowId={getRowId} columns={[nameCol]} search={{ match: () => true, placeholder: "Find…", debounceMs: 5 }} />)
+    expect(screen.getByRole("textbox")).toHaveAttribute("placeholder", "Find…")
+    expect(screen.getByRole("textbox")).not.toHaveAttribute("match")
+  })
+
+  it("still seeds the input when given", () => {
+    render(<DataTable rows={ROWS} getRowId={getRowId} columns={[nameCol]} search={{ value: "b", match: (r, q) => r.name.toLowerCase() === q }} />)
+    expect(screen.getByRole("textbox")).toHaveValue("b")
+    expect(screen.getAllByRole("row")).toHaveLength(2)
+  })
+})

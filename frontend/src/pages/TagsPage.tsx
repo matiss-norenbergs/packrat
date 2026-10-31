@@ -99,7 +99,7 @@ export function TagsPage() {
             <p className="text-sm text-muted-foreground">No tags match "{query}".</p>
           )
         }
-        search={{ value: "", match: matchTag, placeholder: "Search tags…" }}
+        search={{ match: matchTag, placeholder: "Search tags…" }}
         pageSize={PAGE_SIZE}
         itemLabel={{ singular: "tag", plural: "tags" }}
         contextMenu={contextMenu}

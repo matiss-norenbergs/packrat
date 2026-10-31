@@ -400,9 +400,10 @@ export function DataTable<T, Id extends RowId = number>({
           {filters != null && <div className="ml-auto flex flex-wrap items-center gap-2">{renderSlot(filters)}</div>}
           {search && (
             <TableSearch
-              {...search}
-              value={clientMode ? rawQuery : search.value}
+              value={clientMode ? rawQuery : (search.value ?? "")}
               onChange={handleSearchChange}
+              placeholder={search.placeholder}
+              debounceMs={search.debounceMs}
               className={filters == null ? "ml-auto" : undefined}
             />
           )}
