@@ -135,22 +135,25 @@ function Probe() {
 
 function renderList(initialEntries = ["/library"]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={initialEntries}>
-        <TooltipProvider>
-          <LibrarySortProvider>
-            <RevealAllProvider>
-              <SelectionProvider>
-                <Probe />
-                <LibraryListView />
-              </SelectionProvider>
-            </RevealAllProvider>
-          </LibrarySortProvider>
-        </TooltipProvider>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
+  return {
+    client,
+    ...render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={initialEntries}>
+          <TooltipProvider>
+            <LibrarySortProvider>
+              <RevealAllProvider>
+                <SelectionProvider>
+                  <Probe />
+                  <LibraryListView />
+                </SelectionProvider>
+              </RevealAllProvider>
+            </LibrarySortProvider>
+          </TooltipProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    ),
+  }
 }
 
 const ITEMS = [1, 2, 3, 4, 5, 6, 7].map((i) => item(i))
@@ -894,6 +897,25 @@ describe("LibraryListView: row actions in the context menu", () => {
     expect(fn.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false)
     // The page is usable again (no lingering pointer-events lock).
     expect(document.body.style.pointerEvents).not.toBe("none")
+  })
+
+  it("an open dialog follows the refetched row (same id, new title), and keeps the last snapshot once the item leaves the page", async () => {
+    const list = items()
+    serve(list)
+    const { client } = renderList()
+    await ready()
+    fireEvent.contextMenu(screen.getByText("Title 2"))
+    fireEvent.click(await menuItem("Delete"))
+    expect(await screen.findByText('Delete "Title 2"?')).toBeInTheDocument()
+
+    list[1] = item(2, { title: "Renamed 2" })
+    await act(() => client.invalidateQueries())
+    expect(await screen.findByText('Delete "Renamed 2"?')).toBeInTheDocument()
+
+    list.splice(1, 1)
+    await act(() => client.invalidateQueries())
+    await waitFor(() => expect(screen.queryByText("Title 2")).toBeNull())
+    expect(screen.getByText('Delete "Renamed 2"?')).toBeInTheDocument()
   })
 
   it("a stored layout that still mentions the old actions column is normalized without it", async () => {
