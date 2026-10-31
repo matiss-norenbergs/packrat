@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { getPageNumbers } from "@/lib/pagination"
+import { cn } from "@/lib/utils"
 import type { PaginationConfig } from "./types"
 
 export function TablePagination({
@@ -10,7 +11,13 @@ export function TablePagination({
   onPageChange,
   itemLabel,
   selectedCount = 0,
-}: PaginationConfig & { /** Selected rows on the current page; shown after the count when > 0. */ selectedCount?: number }) {
+  clearsDock = false,
+}: PaginationConfig & {
+  /** Selected rows on the current page; shown after the count when > 0. */
+  selectedCount?: number
+  /** Leave room for the floating reveal dock at the bottom-left (see DataTableProps.footerClearsDock). */
+  clearsDock?: boolean
+}) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   // The data can shrink under the current page (e.g. deleting the only row on the last
@@ -20,8 +27,8 @@ export function TablePagination({
   }, [page, totalPages, onPageChange])
 
   return (
-    <div className="flex shrink-0 items-center justify-between">
-      <span className="text-sm text-muted-foreground">
+    <div className={cn("flex shrink-0 items-center justify-between", clearsDock && "flex-wrap-reverse gap-2")}>
+      <span className={cn("text-sm text-muted-foreground", clearsDock && "flex min-h-9 items-center pl-12 md:min-h-0")}>
         {total} {total === 1 ? itemLabel.singular : itemLabel.plural}
         {selectedCount > 0 && ` · ${selectedCount} selected`}
       </span>

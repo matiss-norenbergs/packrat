@@ -60,6 +60,11 @@ export interface DataTableProps<T, Id extends RowId = number> {
   pageSize?: number
   /** Client-side mode: footer label; the footer is shown only when `pageSize` and `itemLabel` are both set. */
   itemLabel?: { singular: string; plural: string }
+  /**
+   * Leaves room in the footer for the floating reveal dock at the bottom-left (indents the count and lets the
+   * footer wrap, pager on top, when narrow). Set it on pages that render `RevealAllFloatingAction`.
+   */
+  footerClearsDock?: boolean
   /** Right-click menu, built from the rows it applies to. Right-clicking the header or an empty area opens nothing. */
   contextMenu?: (rows: T[]) => ContextMenuItemDef<T>[]
   onRowClick?: (row: T, e: MouseEvent<HTMLTableRowElement>) => void
@@ -193,6 +198,7 @@ export function DataTable<T, Id extends RowId = number>({
   pagination: controlledPagination,
   pageSize,
   itemLabel,
+  footerClearsDock,
   contextMenu,
   onRowClick,
   onRowDoubleClick,
@@ -424,7 +430,9 @@ export function DataTable<T, Id extends RowId = number>({
       ) : (
         region
       )}
-      {showPagination && <TablePagination {...pagination} selectedCount={mode === "multi" ? selectedRows.length : 0} />}
+      {showPagination && (
+        <TablePagination {...pagination} selectedCount={mode === "multi" ? selectedRows.length : 0} clearsDock={footerClearsDock} />
+      )}
     </div>
   )
 }

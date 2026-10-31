@@ -590,7 +590,9 @@ row type and the id type (number or string).
 - **Footer**: shown whenever `pagination` is set, except while loading or on error — including at 0 results ("0 tags",
   one disabled page). In `multi` mode it appends "· N selected" (selected rows on the current page). `TablePagination`
   clamps itself: if `page` exceeds the page count (e.g. the last row of the last page was deleted) it calls
-  `onPageChange(lastPage)`, so pages need no clamping code.
+  `onPageChange(lastPage)`, so pages need no clamping code. `footerClearsDock` (default off) is for pages that render
+  `RevealAllFloatingAction`: it indents the count (`pl-12`) so it clears the floating reveal dock at the bottom-left and
+  lets the footer wrap (`flex-wrap-reverse`, pager above the count) on narrow widths; without it the markup is unchanged.
 - **Client-side mode**: for pages whose data is fully loaded, pass **all** rows plus `pageSize`, `itemLabel` and/or
   `search.match(row, query)` and the table does what the page used to: it owns the query and page state, filters
   (the query is trimmed and lowercased once; an empty query means no filter), slices the current page, resets to

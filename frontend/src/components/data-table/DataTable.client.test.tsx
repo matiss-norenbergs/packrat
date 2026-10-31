@@ -161,3 +161,20 @@ describe("DataTable client-side mode", () => {
     expect(names()).toEqual(["two", "three"])
   })
 })
+
+describe("DataTable footerClearsDock", () => {
+  const footerRow = () => screen.getByText(/^7 items/).parentElement!
+  const footerLabel = () => screen.getByText(/^7 items/)
+
+  it("indents the count and lets the footer wrap above the dock", () => {
+    render(<Harness footerClearsDock />)
+    expect(footerRow()).toHaveClass("flex", "shrink-0", "flex-wrap-reverse", "items-center", "justify-between", "gap-2")
+    expect(footerLabel()).toHaveClass("flex", "min-h-9", "items-center", "pl-12", "text-sm", "text-muted-foreground", "md:min-h-0")
+  })
+
+  it("leaves the footer markup unchanged without it", () => {
+    render(<Harness />)
+    expect(footerRow().className).toBe("flex shrink-0 items-center justify-between")
+    expect(footerLabel().className).toBe("text-sm text-muted-foreground")
+  })
+})
