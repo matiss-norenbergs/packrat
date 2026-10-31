@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { deleteTableLayout, fetchTableLayouts, saveTableLayout } from "@/lib/api"
-import { canonicalSort } from "@/components/data-table/sorting"
+import { canonicalSort, sameSort } from "@/components/data-table/sorting"
 import { MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH } from "@/components/data-table/columns"
 import type { SortState } from "@/components/data-table/sorting"
 import type { TableLayout, TableLayouts } from "@/types/api"
@@ -216,4 +216,55 @@ export function useTableLayout(tableId: string, defaults: TableLayout, opts: Tab
     restore,
     clear,
   }
+}
+
+/**
+ * The layout that results from saving only `sort` on top of the stored one: every other field (`hidden`, `widths`)
+ * stays untouched, a sort equal to `defaultSort` is omitted. null = nothing but `v` would be left (delete the layout).
+ */
+export function layoutWithSort(stored: TableLayout | undefined, sort: SortState, defaultSort: SortState): TableLayout | null {
+  const next: TableLayout = { ...stored, v: 1 }
+  delete next.sort
+  if (!sameSort(sort, defaultSort)) next.sort = { key: sort.key, dir: sort.dir }
+  return Object.keys(next).length > 1 ? next : null
+}
+
+/**
+ * Saves just the sort of table `tableId` (see layoutWithSort), for pages whose sort is not edited through
+ * useTableLayout's own working layout. Resolves true when it was stored. Toasts `successMessage` only when the server
+ * answers (an error toast otherwise); a second call while one is in flight is ignored (resolves false). The layouts
+ * cache is updated on success.
+ */
+export function useSaveTableLayoutSort(tableId: string, defaultSort: SortState, successMessage: string) {
+  const queryClient = useQueryClient()
+  const busy = useRef(false)
+  return useCallback(
+    async (sort: SortState): Promise<boolean> => {
+      if (busy.current) return false
+      busy.current = true
+      try {
+        const stored = queryClient.getQueryData<TableLayouts>(tableLayoutsQueryKey)?.[tableId]
+        const next = layoutWithSort(stored, sort, defaultSort)
+        let result: TableLayout | null = null
+        if (next) result = await saveTableLayout(tableId, next)
+        else if (stored) await deleteTableLayout(tableId)
+        queryClient.setQueryData<TableLayouts>(tableLayoutsQueryKey, (old) => {
+          const layouts = { ...old }
+          if (result) layouts[tableId] = result
+          else delete layouts[tableId]
+          return layouts
+        })
+        toast.success(successMessage)
+        return true
+      } catch (err) {
+        toast.error(`Couldn't save: ${err instanceof Error ? err.message : String(err)}`)
+        return false
+      } finally {
+        busy.current = false
+      }
+    },
+    // defaultSort is a module constant at the call sites; key on content anyway
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, tableId, defaultSort.key, defaultSort.dir, successMessage],
+  )
 }
