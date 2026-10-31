@@ -88,7 +88,7 @@ function UrlInput({ path, label, disabled }: { path: string; label: string; disa
     <Input
       placeholder="Original URL (optional)"
       aria-label={`Original URL for ${label}`}
-      className="h-8 w-44"
+      className="h-8 w-44 min-w-0"
       value={value}
       onChange={(e) => {
         setValue(e.target.value)
@@ -105,7 +105,7 @@ function ImportCell({ file }: { file: ScannedFile }) {
   return (
     <div className="flex items-center justify-end gap-2">
       <UrlInput path={file.path} label={file.filename} disabled={done} />
-      <Button size="sm" onClick={() => onImport(file)} disabled={done || importing.has(file.path)}>
+      <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => onImport(file)} disabled={done || importing.has(file.path)}>
         <Download className="h-4 w-4" />
         {done ? "Imported" : importing.has(file.path) ? "Importing…" : "Import"}
       </Button>
@@ -144,7 +144,7 @@ const columns: ColumnDef<ScannedFile>[] = [
     key: "import",
     header: "Import",
     align: "right",
-    width: 320,
+    width: 360,
     resizable: false,
     tooltip: false,
     cell: (f) => <ImportCell file={f} />,

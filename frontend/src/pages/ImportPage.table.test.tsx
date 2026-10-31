@@ -205,6 +205,26 @@ describe("ImportPage table", () => {
     expect(within(headers[5]).queryByRole("button")).toBeNull()
   })
 
+  it("the Import column keeps the button at its natural width in every state; the input gives way", async () => {
+    const server = serve(many(3))
+    server.holdPosts()
+    renderPage()
+    await screen.findByText("clip-001.mp4")
+    const col = Array.from(document.querySelectorAll("colgroup col")).at(-1) as HTMLElement
+    expect(col.style.width).toBe("360px")
+    const check = (name: string) => {
+      expect(rowButton(name)).toHaveClass("shrink-0", "whitespace-nowrap")
+      expect(urlBox(name)).toHaveClass("w-44", "min-w-0")
+    }
+    check("clip-001.mp4") // Import
+    fireEvent.click(rowButton("clip-002.mp4"))
+    check("clip-002.mp4") // Importing…
+    expect(rowButton("clip-002.mp4")).toHaveTextContent("Importing…")
+    server.releasePosts()
+    await waitFor(() => expect(rowButton("clip-002.mp4")).toHaveTextContent("Imported"))
+    check("clip-002.mp4") // Imported
+  })
+
   it("shows the em dash for a missing duration and resolution", async () => {
     serve([file(1, { durationSeconds: null, resolution: null })])
     renderPage()
@@ -421,7 +441,7 @@ describe("ImportPage table", () => {
       expect(screen.getByRole("columnheader", { name: "Size" })).toHaveAttribute("aria-sort", "descending")
       const widths = Array.from(document.querySelectorAll("colgroup col")).map((c) => (c as HTMLElement).style.width)
       // selection, Name (flex: no width), Size (the saved 160), Duration, Resolution, Import; no filler (Name is flex)
-      expect(widths).toEqual(["32px", "", "160px", "110px", "110px", "320px"])
+      expect(widths).toEqual(["32px", "", "160px", "110px", "110px", "360px"])
     })
   })
 
