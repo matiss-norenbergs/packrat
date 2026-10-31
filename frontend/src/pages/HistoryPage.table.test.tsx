@@ -85,6 +85,19 @@ describe("HistoryPage table", () => {
     expect(screen.getByText("3 entries")).toBeInTheDocument()
   })
 
+  it("has no resize handle on the thumbnail column; the other columns keep theirs", async () => {
+    serve([entry(1, "Alpha")])
+    renderPage()
+    await screen.findByText("Alpha")
+    const [, thumbnail, title, status, date] = screen.getAllByRole("columnheader")
+    expect(thumbnail.querySelector("[data-resize-handle]")).toBeNull()
+    // Title is the flex column, so it has none either; Status and Date do.
+    expect(title.querySelector("[data-resize-handle]")).toBeNull()
+    expect(status.querySelector("[data-resize-handle]")).not.toBeNull()
+    expect(date.querySelector("[data-resize-handle]")).not.toBeNull()
+    expect(screen.getAllByRole("separator")).toHaveLength(2)
+  })
+
   it("searches the title (or url) with a debounce, case-insensitively", async () => {
     serve([entry(1, "Alpha"), entry(2, "Beta"), entry(3, null, { url: "https://videos.test/zeta" })])
     renderPage()

@@ -118,6 +118,14 @@ export interface DataTableProps<T, Id extends RowId = number> {
    * Set it only where it reproduces the order of `rows` exactly; leave it unset for "whatever order `rows` has".
    */
   defaultSort?: SortState
+  /**
+   * Default: every row is selectable. A row that returns false keeps its place but is never selected: its checkbox /
+   * radio is disabled; a click, ctrl / cmd click, drag or shift range skips it; select-all, the header checkbox, the
+   * footer count and the toolbar's `selectedRows` consider only the selectable rows; right-clicking it leaves the
+   * selection alone (the context menu acts on that row only). `onRowClick` / `onRowDoubleClick` still fire. Styling it
+   * (dimming) is the page's job, through `rowClassName`.
+   */
+  isRowSelectable?: (row: T) => boolean
 }
 
 /** What the table needs from its layout state; built by the wrappers at the bottom of the file. */
@@ -173,6 +181,8 @@ interface DataTableRowProps<T, Id extends RowId> {
   row: T
   id: Id
   selected: boolean
+  /** False for a row `isRowSelectable` rules out: no checkbox / radio, no press handlers. */
+  canSelect: boolean
   mode: SelectionMode
   columns: ColumnDef<T>[]
   /** Ends the row with an empty filler cell (the table has no flex column). */
@@ -193,6 +203,7 @@ function DataTableRowImpl<T, Id extends RowId>({
   row,
   id,
   selected,
+  canSelect,
   mode,
   columns,
   filler,
@@ -211,17 +222,17 @@ function DataTableRowImpl<T, Id extends RowId>({
       data-state={selected ? "selected" : undefined}
       aria-selected={selectable ? selected : undefined}
       className={className}
-      onMouseDown={selectable ? (e) => onMouseDown(e, id) : undefined}
-      onMouseEnter={selectable ? () => onMouseEnter(id) : undefined}
+      onMouseDown={selectable && canSelect ? (e) => onMouseDown(e, id) : undefined}
+      onMouseEnter={selectable && canSelect ? () => onMouseEnter(id) : undefined}
       onClick={(e) => !isRowEventIgnored(e) && onClick(row, e)}
       onDoubleClick={(e) => !isRowEventIgnored(e) && onDoubleClick(row, e)}
     >
       {selectable && (
         <TableCell className={cn("text-center", mode === "single" && "pr-0")}>
           {mode === "multi" ? (
-            <Checkbox checked={selected} onCheckedChange={() => onToggle(id)} aria-label={label} />
+            <Checkbox checked={selected} disabled={!canSelect} onCheckedChange={() => onToggle(id)} aria-label={label} />
           ) : (
-            <RadioGroupItem value={String(id)} aria-label={label} />
+            <RadioGroupItem value={String(id)} disabled={!canSelect} aria-label={label} />
           )}
         </TableCell>
       )}
@@ -328,6 +339,7 @@ function DataTableView<T, Id extends RowId = number>({
   className,
   regionClassName,
   containerClassName,
+  isRowSelectable,
 }: DataTableProps<T, Id> & { layoutCtl: LayoutCtl | null }) {
   const ownSelection = useIdSelection<Id>()
   const selection = selectionState ?? ownSelection
@@ -353,8 +365,11 @@ function DataTableView<T, Id extends RowId = number>({
     [clientMode, sortValue, sortDir, filtered],
   )
   const rows = clientMode && pageSize != null ? sorted.slice((page - 1) * pageSize, page * pageSize) : clientMode ? sorted : allRows
+  // Controlled mode: the query the page was last told about (only used to notice a change; the page owns the filtering).
+  const [reportedQuery, setReportedQuery] = useState(search?.value ?? "")
   const handleSearchChange = (value: string) => {
     search?.onChange?.(value)
+    if (!clientMode) setReportedQuery(value)
     if (!clientMode || value === rawQuery) return
     setRawQuery(value)
     setPage(1)
@@ -379,7 +394,21 @@ function DataTableView<T, Id extends RowId = number>({
       : undefined
     : controlledPagination
   const query = clientMode ? rawQuery : (search?.value ?? "")
-  const { onRowMouseDown, onRowMouseEnter } = useTableSelection({ rows, getRowId, mode, selection })
+
+  // A new page, sort, search or resetKey starts at the top of the scroll container. Compared on every render (a layout
+  // effect, so before paint and without an extra render); not on mount, and never for a refetch, a selection change, a
+  // hidden column or a resize, none of which is in the key. Only scrollTop is touched, so scrollLeft stays.
+  const regionRef = useRef<HTMLDivElement>(null)
+  const scrollKey = useRef<unknown[] | null>(null)
+  useLayoutEffect(() => {
+    const next = [pagination?.page, sort ? `${sort.key}:${sort.dir}` : "", clientMode ? rawQuery : reportedQuery, resetKey]
+    const prev = scrollKey.current
+    scrollKey.current = next
+    if (!prev || next.every((v, i) => Object.is(v, prev[i]))) return
+    const container = regionRef.current?.querySelector<HTMLElement>('[data-slot="table-container"]')
+    if (container) container.scrollTop = 0
+  })
+  const { onRowMouseDown, onRowMouseEnter } = useTableSelection({ rows, getRowId, mode, selection, isSelectable: isRowSelectable })
 
   // Stable wrappers around the page's (usually inline) handlers, so they never defeat the row memo.
   const toggleRow = useEvent((id: Id) => selection.toggle(id))
@@ -405,9 +434,12 @@ function DataTableView<T, Id extends RowId = number>({
   const layout = computeLayout(visibleColumns, selectable ? selectionWidth : null, liveWidths)
 
   const pageIds = rows.map(getRowId)
+  // Only the selectable rows of the page count for select-all, the header checkbox, the footer and the toolbar.
+  const selectableRows = isRowSelectable ? rows.filter(isRowSelectable) : rows
+  const selectableIds = isRowSelectable ? selectableRows.map(getRowId) : pageIds
   const overflowTip = useOverflowTooltip(visibleColumns, (id) => rows.find((r) => String(getRowId(r)) === id))
-  const allSelected = pageIds.length > 0 && pageIds.every((id) => selection.selected.has(id))
-  const someSelected = pageIds.some((id) => selection.selected.has(id)) && !allSelected
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selection.selected.has(id))
+  const someSelected = selectableIds.some((id) => selection.selected.has(id)) && !allSelected
 
   const rowLabel = (row: T, id: Id) => (getRowLabel ? getRowLabel(row) : `Select row ${String(id)}`)
 
@@ -416,7 +448,7 @@ function DataTableView<T, Id extends RowId = number>({
     (mode === "multi" ? (
       <Checkbox
         checked={allSelected ? true : someSelected ? "indeterminate" : false}
-        onCheckedChange={(checked) => (checked ? selection.selectAll(pageIds) : selection.clear())}
+        onCheckedChange={(checked) => (checked ? selection.selectAll(selectableIds) : selection.clear())}
         aria-label="Select all"
       />
     ) : null)
@@ -443,10 +475,10 @@ function DataTableView<T, Id extends RowId = number>({
       e.preventDefault()
       return
     }
-    if (!selectable) {
+    if (!selectable || (isRowSelectable && !isRowSelectable(rows[pageIds.indexOf(id)]))) {
       setContextIds([id])
     } else if (selection.isSelected(id)) {
-      setContextIds(pageIds.filter((pid) => selection.isSelected(pid)))
+      setContextIds(selectableIds.filter((pid) => selection.isSelected(pid)))
     } else {
       selection.selectOnly(id)
       setContextIds([id])
@@ -454,7 +486,7 @@ function DataTableView<T, Id extends RowId = number>({
     setContextMenuAnchorKey((k) => k + 1)
   }
 
-  const selectedRows = rows.filter((r) => selection.isSelected(getRowId(r)))
+  const selectedRows = selectableRows.filter((r) => selection.isSelected(getRowId(r)))
   const slotCtx = { selection, selectedRows, query, total: pagination?.total ?? rows.length }
   const renderSlot = (slot: Slot<T, Id>) => (typeof slot === "function" ? slot(slotCtx) : slot)
 
@@ -526,12 +558,14 @@ function DataTableView<T, Id extends RowId = number>({
         <TableBody {...overflowTip.bodyProps}>
           {rows.map((row) => {
             const id = getRowId(row)
+            const canSelect = isRowSelectable ? isRowSelectable(row) : true
             return (
               <DataTableRow
                 key={String(id)}
                 row={row}
                 id={id}
-                selected={selection.isSelected(id)}
+                selected={canSelect && selection.isSelected(id)}
+                canSelect={canSelect}
                 mode={mode}
                 columns={visibleColumns}
                 filler={layout.filler}
@@ -565,8 +599,12 @@ function DataTableView<T, Id extends RowId = number>({
     )
   }
 
-  const region = <div className={cn("min-h-0 flex-1", regionClassName)}>{content}</div>
-  const selectedId = mode === "single" ? pageIds.find((id) => selection.selected.has(id)) : undefined
+  const region = (
+    <div ref={regionRef} className={cn("min-h-0 flex-1", regionClassName)}>
+      {content}
+    </div>
+  )
+  const selectedId = mode === "single" ? selectableIds.find((id) => selection.selected.has(id)) : undefined
 
   const columnItems = layoutCtl
     ? columns.filter((c) => c.hideable).map((c) => ({ key: c.key, label: columnLabel(c), visible: !layoutCtl.hidden.has(c.key) }))

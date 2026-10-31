@@ -13,6 +13,13 @@ Maintenance notes:
 -->
 
 ## 2026-10-31
+- **File Import uses the shared table** — the Import page now has sortable Name, Size, Duration and Resolution headers (files
+  without a duration or resolution come last; resolution sorts by pixel count), the Table layout button (saves the sort and the
+  widths), a search with a short delay and a clear button, fixed column widths with the full text in a tooltip, and a "0 files"
+  footer for no matches. Already imported files stay visible but cannot be selected, and drags, shift ranges and Select all skip
+  them. What you type in an Original URL box now survives paging, sorting and searching. `DataTable` gains `isRowSelectable`, and a
+  cut-off cell that holds a button or input now shows its tooltip (without the control's text) while you point at its text; the
+  History thumbnail column is no longer resizable.
 - **Resizable table columns, saved with the layout** — drag the right edge of a column header to change its width, on every
   table that can save a layout (Artists, Subscriptions, History, Logs, and now Tags, AI Enhancement, Frame Matching and the
   Backup history); selection, flexible, icon and switch columns keep their width. The width changes live and joins the table

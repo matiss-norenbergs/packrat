@@ -42,6 +42,7 @@ const columns: ColumnDef<HistoryItem>[] = [
     key: "thumbnail",
     header: "",
     width: 80,
+    resizable: false,
     cell: (item) => (
       <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-muted">
         {item.thumbnail ? (

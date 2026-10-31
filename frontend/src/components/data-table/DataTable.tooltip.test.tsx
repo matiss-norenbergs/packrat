@@ -75,7 +75,7 @@ describe("DataTable overflow tooltip", () => {
     expect(await hoverShows(cell(1, 0))).toHaveTextContent("Alpha")
   })
 
-  it("reads a two-line cell as two lines (innerText)", async () => {
+  it("reads a two-line cell as two lines", async () => {
     render(
       <DataTable
         rows={ROWS}
@@ -110,41 +110,83 @@ describe("DataTable overflow tooltip", () => {
     }
   })
 
-  it("is off for cells with a button or another control", async () => {
-    render(
-      <DataTable
-        rows={ROWS}
-        getRowId={getRowId}
-        columns={[col({ key: "a", cell: () => <button>go</button> }), col({ key: "b", cell: () => <input aria-label="x" /> }), col({ key: "c", cell: () => <span role="switch" aria-checked="false" /> })]}
-      />,
-    )
-    for (const c of [0, 1, 2]) {
-      overflow(cell(1, c))
-      expect(await hoverShows(cell(1, c))).toBeNull()
-    }
-  })
+  describe("cells with controls", () => {
+    const withButton = [col({ key: "a", cell: (r) => (<><span>{r.name}</span><button>go</button></>) })]
 
-  it("shows for a cut-off cell whose content is a plain link, and a click on the link still works and closes it", async () => {
-    const user = userEvent.setup()
-    let clicked = 0
-    render(
-      <DataTable
-        rows={ROWS}
-        getRowId={getRowId}
-        columns={[col({ key: "a", cell: (r) => <a href="#x" onClick={(e) => (e.preventDefault(), clicked++)}>{r.name}</a> })]}
-      />,
-    )
-    overflow(cell(1, 0))
-    expect(await hoverShows(cell(1, 0))).toHaveTextContent("Alpha")
-    await user.click(cell(1, 0).querySelector("a")!)
-    expect(clicked).toBe(1)
-    expect(tooltip()).toBeNull()
-  })
+    it("shows for the text of a cell that also holds a button, and not over the button", async () => {
+      render(<DataTable rows={ROWS} getRowId={getRowId} columns={withButton} />)
+      overflow(cell(1, 0))
+      expect(await hoverShows(cell(1, 0).querySelector("span")!)).toHaveTextContent("Alpha")
+      fireEvent.pointerLeave(row(1).parentElement!)
+      expect(await hoverShows(screen.getAllByRole("button", { name: "go" })[0])).toBeNull()
+    })
 
-  it("is off for a cell with a link AND a button", async () => {
-    render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", cell: (r) => (<><a href="#x">{r.name}</a><button>go</button></>) })]} />)
-    overflow(cell(1, 0))
-    expect(await hoverShows(cell(1, 0))).toBeNull()
+    it("does not show over an input, a switch, or an element inside a button", async () => {
+      const columns = [
+        col({ key: "a", cell: (r) => (<><span>{r.name}</span><input aria-label="x" /></>) }),
+        col({ key: "b", cell: (r) => (<><span>{r.name}</span><span role="switch" aria-checked="false" /></>) }),
+        col({ key: "c", cell: (r) => (<><span>{r.name}</span><button><i>icon</i></button></>) }),
+      ]
+      render(<DataTable rows={ROWS} getRowId={getRowId} columns={columns} />)
+      const targets = [cell(1, 0).querySelector("input")!, cell(1, 1).querySelector("[role=switch]")!, cell(1, 2).querySelector("i")!]
+      for (const [c, target] of targets.entries()) {
+        overflow(cell(1, c))
+        expect(await hoverShows(target)).toBeNull()
+        fireEvent.pointerLeave(row(1).parentElement!)
+        expect(await hoverShows(cell(1, c).querySelector("span")!), `text of column ${c}`).toHaveTextContent("Alpha")
+        fireEvent.pointerLeave(row(1).parentElement!)
+      }
+    })
+
+    it("leaves the text of the controls out of the tooltip", async () => {
+      render(
+        <DataTable
+          rows={ROWS}
+          getRowId={getRowId}
+          columns={[col({ key: "a", cell: (r) => (<><p>{r.name}</p><div><p>folder</p><button>Ignore it</button></div><input defaultValue="typed" /></>) })]}
+        />,
+      )
+      overflow(cell(1, 0))
+      expect(await hoverShows(cell(1, 0))).not.toBeNull()
+      expect(tooltip()!.textContent).toBe("Alpha\nfolder")
+    })
+
+    it("shows nothing when only controls are left", async () => {
+      render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", cell: () => <button>go</button> })]} />)
+      overflow(cell(1, 0))
+      expect(await hoverShows(cell(1, 0))).toBeNull()
+    })
+
+    it("a long value inside an input does not make the cell count as cut off", async () => {
+      render(<DataTable rows={ROWS} getRowId={getRowId} columns={[col({ key: "a", cell: (r) => (<><span>{r.name}</span><input aria-label="x" /></>) })]} />)
+      overflow(cell(1, 0).querySelector("input")!)
+      expect(await hoverShows(cell(1, 0).querySelector("span")!)).toBeNull()
+    })
+
+    it("closes when the pointer moves from the text onto the control, and measures again on the way back", async () => {
+      render(<DataTable rows={ROWS} getRowId={getRowId} columns={withButton} />)
+      overflow(cell(1, 0))
+      const text = cell(1, 0).querySelector("span")!
+      expect(await hoverShows(text)).not.toBeNull()
+      enter(cell(1, 0).querySelector("button")!)
+      expect(tooltip()).toBeNull()
+      await sleep(SHOW)
+      expect(tooltip()).toBeNull()
+      expect(await hoverShows(text)).toHaveTextContent("Alpha")
+    })
+
+    it("skips hidden elements and SVGs when reading the text", async () => {
+      render(
+        <DataTable
+          rows={ROWS}
+          getRowId={getRowId}
+          columns={[col({ key: "a", cell: (r) => (<><svg><title>icon title</title></svg><span style={{ display: "none" }}>hidden</span>{r.name}<br />tail</>) })]}
+        />,
+      )
+      overflow(cell(1, 0))
+      expect(await hoverShows(cell(1, 0))).not.toBeNull()
+      expect(tooltip()!.textContent).toBe("Alpha\ntail")
+    })
   })
 
   it("is off for the selection column and the filler", async () => {
@@ -257,7 +299,7 @@ describe("DataTable header tooltip", () => {
     expect(await hoverShows(head(0))).toHaveTextContent("A very long header")
   })
 
-  it("shows none for a header with another control in it", async () => {
+  it("shows the label of a header with another control in it, without the control, and not over the control", async () => {
     render(
       <DataTable
         rows={ROWS}
@@ -266,7 +308,10 @@ describe("DataTable header tooltip", () => {
       />,
     )
     overflow(head(0))
-    expect(await hoverShows(head(0))).toBeNull()
+    expect(await hoverShows(head(0).querySelector("span")!)).toHaveTextContent("Name")
+    expect(tooltip()!.textContent).toBe("Name")
+    enter(head(0).querySelector("button[type=button]:not([data-sort-button])")!)
+    expect(tooltip()).toBeNull()
   })
 
   it("never for the selection column or the filler, and tooltip:false opts a column out", async () => {
