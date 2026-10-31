@@ -12,6 +12,11 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-01
+- **Library grid and Folders: only the cards scroll** — like the list, the grid and the Folders view now fill the window: the title, the toolbar row, the Folders breadcrumb and the pagination footer stay in view while the cards scroll (the toolbar is no longer a sticky overlay and the footer no longer scrolls away). New `LibraryScrollView` shell.
+- **Table toolbars wrap right-aligned** — on a narrow window the filters, search and the Columns / Layout group of every table wrap onto their own line and stay on the right instead of dropping to the left.
+- **Library list dialogs follow fresh data** — a dialog opened from a list row's right-click menu (thumbnail gallery or picker, NFO contents, Edit after a failed save) now shows the item as it is after a refetch instead of the snapshot from the click; if the item leaves the page the dialog keeps its last data.
+
 ## 2026-10-31
 - **Library list: row actions in the right-click menu, count-only footer, fills the window** — the "⋮" column is gone: right-click a row for the same actions (submenus included; an unselected row is selected first, and with several rows selected no menu opens — use Bulk operations). With pagination off the footer shows only "N items" (no page buttons). The list now fills the window (only the table scrolls, the footer sits at the bottom, also when the toolbar wraps). `DataTable` gains submenus in `contextMenu`, a count-only footer (`hidePages`) and no empty menu; the item actions are defined once for the dropdown and the context menu.
 - **One toolbar in the Library list** — the list's toolbar now holds everything in a single row: Add item, Bulk operations, Clear and the selected count on the left; Filters & Sort, the search and a joined Columns / Layout / display-settings group on the right (the old sticky Library toolbar stays in the grid and Folders views). The "Select files or collections to bulk edit" hint is gone everywhere, and a layout saved only for its sort keeps Year, Duration, Downloaded and Size hidden. `DataTable` gains `layoutActions` and `defaultHiddenWhenUnset`.
