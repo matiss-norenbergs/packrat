@@ -195,14 +195,14 @@ at once and PATCH only the changed key; a failed save toasts and keeps the local
 migration of old browser values: an account with nothing stored gets the defaults.
 
 ### Saved table layouts
-What a user did to a list table (today: which columns are hidden; the schema also carries a sort and column widths for the
-sorting and resize features that follow) is stored per account in `user_table_layouts(user_id, table_id, layout, updated_at)`,
+What a user did to a list table (which columns are hidden and how it is sorted; the schema also carries column widths for the
+resize feature that follows) is stored per account in `user_table_layouts(user_id, table_id, layout, updated_at)`,
 primary key `(user_id, table_id)`, `ON DELETE CASCADE`. It has its own table rather than rows in `user_preferences` because
 the value is a structured JSON document that the client fetches **once for every table** (`GET /api/auth/table-layouts`),
 whereas preferences are a fixed set of enum keys. Like preferences and 2FA data it is not in any backup, export or bundle
 (pinned by `backup/no_table_layouts_test.go`). The API is the only validator: `models.ParseTableLayout` accepts exactly
 `v` (1), `sort`, `hidden` and `widths` with the bounds in `docs/api.md`, rejects unknown fields and stores canonical JSON,
-so the later PRs need no backend change. At most 100 tables per account (a 409 for a new one beyond that).
+so later client features need no backend change. At most 100 tables per account (a 409 for a new one beyond that).
 
 On the client `useTableLayouts` (key `["tableLayouts"]`, `staleTime: Infinity`, mounted in `AppLayout`) holds all layouts;
 saving or clearing writes the cache with `setQueryData`. The key is outside `["auth", ...]`, so `markLoggedOut` and the 401
@@ -216,9 +216,9 @@ missing `hidden`, keys of columns that no longer exist, and non-hideable keys in
 layout, `clear()` DELETEs and applies the defaults, `restore()` is local; Save and Clear toast only when the server responds
 (an error toast leaves the working state alone) and a second one while a request is in flight is ignored.
 
-`DataTable` uses it when a table passes a `tableId` and has a `hideable` column; without a `tableId` the Columns menu still
-works but nothing can be saved. Passing both `layout` and `onLayoutChange` makes the page own the working layout (the future
-Library list); the Layout popover then acts on that layout. Only `hidden` is edited; `sort` and `widths` are carried through.
+`DataTable` uses it when a table passes a `tableId` and has a `hideable` or a sortable column; without a `tableId` hiding and
+sorting still work but nothing can be saved. Passing both `layout` and `onLayoutChange` makes the page own the working layout (the
+future Library list); the Layout popover then acts on that layout. `hidden` and `sort` are edited; `widths` is carried through.
 Dialog tables do not opt in. While the layouts query has not answered, a table with a `tableId` shows its loading state (and the
 footer placeholder) instead of rendering the defaults and re-arranging a moment later; if the fetch fails the defaults apply.
 
@@ -669,7 +669,8 @@ row type and the id type (number or string).
 - **Columns and layout** (opt-in per column): `hideable` (default false), `defaultVisible` (default true) and `label` (name in
   the menu; falls back to a string `header`, a dev warning otherwise). A table with a hideable column gets an icon-only
   **Columns** menu at the right end of the toolbar (order: filters, search, Columns, Layout; the first of them takes the
-  `ml-auto`), and with a `tableId` also the **Layout** popover (see "Saved table layouts" under Auth). Hidden columns leave
+  `ml-auto`), and with a `tableId` also the **Layout** popover (see "Saved table layouts" under Auth; it is also shown for
+  sortable columns, see Sorting below). Hidden columns leave
   the header, the cells and the colgroup, and the fixed-layout widths are computed from the visible columns; the visible
   list is memoized on the *content* of the hidden set (and is `columns` itself when nothing is hidden), so a toggle re-renders
   the rows once and nothing else does. Non-hideable columns are never hidden, even if a saved layout lists them. A page can
@@ -696,9 +697,34 @@ row type and the id type (number or string).
   (`min-h-0 flex-1`) that holds the loading / error / empty state or the table, so one fixed or capped height and
   border covers all of them and the box doesn't resize between states; `loadingContent` replaces the default skeleton
   bars while `loading`.
-- **Why no virtualization / sorting / resizing yet**: pages are paginated at 50 rows, so virtualization would add
-  complexity for no gain; sorting, drag-resize and column show/hide are possible later because columns are data, but
-  nothing needs them today.
+- **Sorting** (opt-in per column): a column is sortable when it declares `sortValue(row)` (string | number | boolean | Date |
+  null | undefined; cells are React nodes, so the value is given explicitly). The comparator (`sorting.ts`) orders strings with a
+  case-insensitive, numeric-aware `Intl.Collator`, numbers numerically, Dates and booleans by their numeric value; null, undefined,
+  NaN and an invalid Date come **last in both directions**; ties keep the original row order. **Where it runs**: only in
+  client-side mode (`pageSize` / `search.match`), on the filtered rows *before* paging, so shift-range and drag selection follow
+  the displayed order. In controlled (server) mode the table never sorts rows: the page owns `layout` / `onLayoutChange`, reads
+  `layout.sort` (or its own default) and sorts on the server; the header still shows the arrow and reports clicks through
+  `onLayoutChange`. **State**: the sort lives in the layout (`layout.sort`, absent = none), so it is a working draft exactly like
+  hidden columns: applied instantly, never saved automatically, reset to the baseline on leaving the page, and covered by Save /
+  Restore / Clear and the dirty dot. **Default sort**: `defaultSort` is the table's natural order, to be set only where it
+  reproduces the order of `rows` exactly (History and Logs: date desc = the API's `created_at DESC`; Artists is *not* set because
+  the API orders by name with SQLite's binary collation, which differs from the collator for mixed case; Subscriptions is not set
+  because no column shows `created_at`). The effective sort is `working.sort ?? defaultSort ?? none`, and the header shows its
+  arrow. **Cycle** (`nextSort`): none or another column → asc; asc → desc; desc → cleared (back to the default / natural order);
+  if clearing would change nothing (the column is a desc default) it moves on to asc instead, so a table without a default cycles
+  asc → desc → off, a default column toggles between its two directions and any other column cycles asc → desc → default.
+  An explicit sort equal to the default is stored as no sort. **Normalization** (`normalizeTableLayout`): a `sort` is dropped
+  when equal to `defaultSort` or when its column is not sortable / does not exist, so a saved layout without `sort` means "default
+  order" and layouts saved before sorting existed keep working. **Header**: a sortable header is a `button type="button"` inside the
+  `th` (with `aria-sort`), drawn like the Library list: an `ArrowUp` / `ArrowDown` (`h-3 w-3`) after the label, before it in
+  right-aligned columns so the label stays flush right, and centered columns keep a spacer of the arrow's width on the other
+  side so the label stays centered. A sort change, however it came about (click, Restore, Clear, a saved layout arriving), goes
+  back to page 1 and clears the selection in client mode, with the same mechanism as `resetKey` (state adjustment during render +
+  layout effect), keyed on the effective sort. **Layout button rule**: a table with a `tableId` and at least one hideable *or*
+  sortable column gets the Layout popover; the Columns menu needs a hideable one; the `ButtonGroup` holds whichever apply
+  (History: Layout only). Tables with neither render exactly as before. A sorted column that is also hidden keeps sorting.
+- **Why no virtualization / resizing yet**: pages are paginated at 50 rows, so virtualization would add complexity for no
+  gain; drag-resize is possible later because columns are data, but nothing needs it today.
 - **Why Collections doesn't use it**: it renders a tree (expand/collapse, nesting, drag to re-parent), which a flat
   row model doesn't fit; its cells could use the same primitives but the table itself stays bespoke.
 

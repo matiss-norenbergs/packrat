@@ -13,6 +13,12 @@ Maintenance notes:
 -->
 
 ## 2026-10-31
+- **Sortable table headers, saved with the layout** — Artists (Name, Birthday, Usage), Subscriptions (Title, Collection, Known
+  items, Last checked), History (Title, Status, Date) and Logs (Title, Status, Date, Retries) sort when you click a header
+  (ascending, descending, back to the default order; History and Logs default to newest first). Rows without a value sort last
+  in both directions, text sorts case-insensitively with numbers in order, and the sort covers all pages. The sort is part of the
+  table layout: it applies instantly, Save / Restore / Clear cover it, and the dirty dot shows it. History and Logs get the Table
+  layout button. `DataTable` gains `ColumnDef.sortValue` and `defaultSort`.
 - **Show/hide table columns, with saved layouts** — Artists (Birthday, Usage) and Subscriptions (Collection, Known items,
   Last checked, Auto-download) get a Columns menu and a Table layout popover (Save / Restore / Clear) after the search box.
   The layout is stored per account on the server (`GET/PUT/DELETE /api/auth/table-layouts`, not part of backups) and the
