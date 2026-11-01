@@ -28,7 +28,7 @@ servers**. Picking another server reloads the app on it. **Add server…** opens
 (address, an optional name — the host if left empty — and a **Cancel** back to the current server;
 connecting to an address that is already saved just switches to it). The login screen's and the
 "Can't reach the server" screen's **Change server** open the same list. Settings → Desktop → **Servers**
-is the table of profiles: name, address, last used; **Edit** renames a server or changes its address
+is the table of profiles: name, address, last used (name and address share the spare width); **Edit** renames a server or changes its address
 (the new address is checked against `/api/health` first, and changing it signs you out of that server
 on this device — a login is never sent to a different address) and **Remove** forgets a server and
 deletes its saved login (asks first; removing the current server goes to the connect screen). An app
@@ -133,7 +133,9 @@ The landing page. Two cards summarize current state at a glance, followed by cha
 - **Downloads** — active, queued, and completed-today counts, with a link to the Downloads page.
 - **Library** — video count, audio count, image count, and total storage used across the whole
   library.
-- **Charts** — Library Growth, Media Types, Items by Resolution, Storage, Top Artists, Top Tags.
+- **Charts** — Library Growth, Media Types, Items by Resolution, Storage, Top Artists, Top Tags. With privacy on, Top Artists
+  and Top Tags leave out private artists / tags entirely (the next ones fill the top 8); when every candidate is private the chart
+  shows "No data yet".
 
 Read-only — it's a summary view, not a control panel. The cog button in the header opens a popover
 with a switch per card (the two summary cards and all six charts); **Save** hides the switched-off
@@ -215,7 +217,9 @@ not per-browser):
 - **Grid** — a flat, filterable grid of every item, with server-side pagination available
   (Settings → toggle it on and pick a page size) for large libraries. With pagination on, the grid and the Folders view end in
   the same footer as the tables: "N items" on the left (even for a single page) and the numbered pager with Previous / Next on
-  the right, indented to clear the floating reveal button when it is shown. With pagination off they have no footer.
+  the right, indented to clear the floating reveal button when it is shown. With pagination off they have no footer. While a
+  page loads the footer stays, with a "—" instead of the count and a disabled pager (only the current page button), so the cards
+  area keeps its height; it is not shown on an error, before the settings are known, or when the result is empty.
   **Scrolling**: the grid and the Folders view fill the window like the list: the title, the toolbar row (with its divider), the
   Folders breadcrumb and the pagination footer stay in view and only the cards scroll (the page itself never scrolls). On a
   narrow window the toolbar wraps and the cards area simply gets shorter. The cards return to the top on a new page, filter,
