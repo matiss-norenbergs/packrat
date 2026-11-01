@@ -69,7 +69,12 @@ export function LibraryFolderView() {
 
   if (collectionsLoading || itemsLoading || settingsLoading || !sortReady) {
     return (
-      <LibraryScrollView resetKey={resetKey}>
+      <LibraryScrollView
+        resetKey={resetKey}
+        footer={
+          !settingsLoading && paginationEnabled && <LibraryPagination page={page} pageSize={pageSize} total={0} onPageChange={setPage} loading />
+        }
+      >
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           <Skeleton className="aspect-video w-full" />
           <Skeleton className="aspect-video w-full" />

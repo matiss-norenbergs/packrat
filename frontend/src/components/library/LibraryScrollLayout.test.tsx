@@ -34,6 +34,28 @@ function serve({ settings = {}, total = 60, libraryStatus = 200, items = [] }: S
   })
 }
 
+// Like serve(), but the library answer waits for release(), so the loading state can be observed.
+function serveGated({ settings = {}, total = 60 }: Serve = {}) {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  const json = (body: unknown) => ({ ok: true, status: 200, statusText: "200", headers: { get: () => null }, json: async () => body })
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.includes("/library?")) {
+        await gate
+        return json({ items: [], total })
+      }
+      if (url.endsWith("/settings")) return json({ libraryPaginationEnabled: true, libraryPageSize: 24, ...settings })
+      if (url.endsWith("/auth/table-layouts")) return json({ layouts: {} })
+      if (url.endsWith("/collections") || url.endsWith("/tags") || url.endsWith("/artists") || url.includes("/compare")) return json([])
+      if (url.endsWith("/library/facets")) return json({ years: [] })
+      return json({})
+    }),
+  )
+  return release
+}
+
 beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }))
   Element.prototype.scrollIntoView ??= () => {}
@@ -84,6 +106,38 @@ describe.each([
     await new Promise((r) => setTimeout(r, 100))
     expect(footerCount()).toBeNull()
     expect(region().nextElementSibling).toBeNull()
+  })
+
+  it("keeps the footer through the load with a placeholder, then shows the real counts in the same footer", async () => {
+    const release = serveGated()
+    renderView(view)
+    expect(await screen.findByText("\u2014")).toBeInTheDocument()
+    const loadingFooter = region().nextElementSibling as HTMLElement
+    expect(loadingFooter).not.toBeNull()
+    expect(footerCount()).toBeNull()
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "1" })).toBeDisabled()
+    expect(screen.queryByRole("button", { name: "2" })).toBeNull()
+    release()
+    await screen.findByText("60 items")
+    const loadedFooter = region().nextElementSibling as HTMLElement
+    expect(loadedFooter).not.toBeNull()
+    expect(loadedFooter.tagName).toBe(loadingFooter.tagName)
+    expect(loadedFooter.className).toBe(loadingFooter.className)
+    expect(screen.getByRole("button", { name: "2" })).toBeEnabled()
+    expect(screen.queryByText("\u2014")).toBeNull()
+  })
+
+  it("shows no footer while loading when pagination is off", async () => {
+    const release = serveGated({ settings: { libraryPaginationEnabled: false } })
+    renderView(view)
+    await screen.findByTestId("library-scroll")
+    await new Promise((r) => setTimeout(r, 100))
+    expect(region().querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0)
+    expect(screen.queryByText("\u2014")).toBeNull()
+    expect(region().nextElementSibling).toBeNull()
+    release()
   })
 
   it("shows the error inside the region and no footer", async () => {
