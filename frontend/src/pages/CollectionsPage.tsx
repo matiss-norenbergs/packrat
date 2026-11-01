@@ -263,6 +263,7 @@ export function CollectionsPage() {
             ) : (
               <CollectionTree
                 nodes={pageTree}
+                collections={data}
                 isSelected={isSelected}
                 onToggle={toggle}
                 onRowMouseDown={handleRowMouseDown}

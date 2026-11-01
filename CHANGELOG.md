@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-01
+- **Lock icon on inherited-private collections** — with privacy on, a collection that only inherits privacy from a private ancestor now shows the lock too (muted, tooltip "Inherited from <ancestor>"), in the Collections tree and on the Library Folders view's folder tiles; an own Private flag keeps the primary-colored lock. New shared `PrivateLock`.
 - **Top Artists honours private artists** — with privacy on, the dashboard's Top Artists chart leaves private artists out entirely (before the top-8 cut, so the next artists fill the bars), like Top Tags; if every candidate is private it shows "No data yet".
 - **Settings → Servers: Name and Address take the spare width** — both columns grow with the card instead of the table ending in an empty column, so long addresses wrap less.
 - **Top Artists / Top Tags fail closed** — while the settings are still loading (or failed to load) privacy counts as on, so private artists and tags are never listed for a moment before privacy is known; they appear only once privacy is explicitly off.

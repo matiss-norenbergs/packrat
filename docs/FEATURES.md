@@ -226,7 +226,9 @@ not per-browser):
   narrow window the toolbar wraps and the cards area simply gets shorter. The cards return to the top on a new page, filter,
   search, sort or folder (not on a refetch, a selection change or a resize).
 - **Folders** — browse by collection, one level at a time, with a breadcrumb trail and
-  browser-back support for navigating up.
+  browser-back support for navigating up. With privacy on, a private folder tile shows a lock next to its name
+  (primary color, tooltip "Private"); a folder that only inherits privacy from an ancestor shows a muted lock
+  with the tooltip "Inherited from <ancestor>".
 - **List** — a table of the current page (see [List view](#list-view) below). It always ends in the table footer: with
   pagination off it is count-only ("N items", no page buttons).
 
@@ -433,8 +435,10 @@ selectable from the New Download dialog so you don't have to re-pick them every 
 - Collections nest (sub-collections), shown as a tree; a collection's position in the tree is
   fixed at creation and can't be moved later.
 - **Private** — marking a collection private blurs thumbnails for everything in it (and its
-  sub-collections) throughout the app, shown with a lock icon in the tree (own flag only, not
-  inherited). In the info panel the cover blurs for private **and** inherited-private collections (a
+  sub-collections) throughout the app, shown with a lock icon in the tree and on the Library Folders
+  view's folder tiles. A collection that only inherits privacy from a private ancestor shows the same
+  lock in a muted color, with the tooltip "Inherited from <nearest private ancestor>" (own flag: primary
+  color, tooltip "Private"); no locks show with privacy off. In the info panel the cover blurs for private **and** inherited-private collections (a
   child of a private parent), and the **Private** row reads "Yes" for an own flag, an "Inherited" badge
   (tooltip "Inherited from <nearest private ancestor>") when it only comes from an ancestor, or "No".
   Click the cover to reveal or hide just that collection's cover, or use the
