@@ -34,6 +34,29 @@ function serve({ settings = {}, total = 60, libraryStatus = 200, items = [] }: S
   })
 }
 
+// Like serve(), but the library answer waits for release(), so the loading state can be observed.
+function serveGated({ settings = {}, total = 60, collections = [] }: Serve & { collections?: object[] } = {}) {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  const json = (body: unknown) => ({ ok: true, status: 200, statusText: "200", headers: { get: () => null }, json: async () => body })
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.includes("/library?")) {
+        await gate
+        return json({ items: [], total })
+      }
+      if (url.endsWith("/settings")) return json({ libraryPaginationEnabled: true, libraryPageSize: 24, ...settings })
+      if (url.endsWith("/auth/table-layouts")) return json({ layouts: {} })
+      if (url.endsWith("/collections")) return json(collections)
+      if (url.endsWith("/tags") || url.endsWith("/artists") || url.includes("/compare")) return json([])
+      if (url.endsWith("/library/facets")) return json({ years: [] })
+      return json({})
+    }),
+  )
+  return release
+}
+
 beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }))
   Element.prototype.scrollIntoView ??= () => {}
@@ -86,6 +109,38 @@ describe.each([
     expect(region().nextElementSibling).toBeNull()
   })
 
+  it("keeps the footer through the load with a placeholder, then shows the real counts in the same footer", async () => {
+    const release = serveGated()
+    renderView(view)
+    expect(await screen.findByText("\u2014")).toBeInTheDocument()
+    const loadingFooter = region().nextElementSibling as HTMLElement
+    expect(loadingFooter).not.toBeNull()
+    expect(footerCount()).toBeNull()
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "1" })).toBeDisabled()
+    expect(screen.queryByRole("button", { name: "2" })).toBeNull()
+    release()
+    await screen.findByText("60 items")
+    const loadedFooter = region().nextElementSibling as HTMLElement
+    expect(loadedFooter).not.toBeNull()
+    expect(loadedFooter.tagName).toBe(loadingFooter.tagName)
+    expect(loadedFooter.className).toBe(loadingFooter.className)
+    expect(screen.getByRole("button", { name: "2" })).toBeEnabled()
+    expect(screen.queryByText("\u2014")).toBeNull()
+  })
+
+  it("shows no footer while loading when pagination is off", async () => {
+    const release = serveGated({ settings: { libraryPaginationEnabled: false } })
+    renderView(view)
+    await screen.findByTestId("library-scroll")
+    await new Promise((r) => setTimeout(r, 100))
+    expect(region().querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0)
+    expect(screen.queryByText("\u2014")).toBeNull()
+    expect(region().nextElementSibling).toBeNull()
+    release()
+  })
+
   it("shows the error inside the region and no footer", async () => {
     serve({ libraryStatus: 500 })
     renderView(view)
@@ -119,6 +174,59 @@ describe("folder view: the breadcrumb", () => {
     expect(crumb.nextElementSibling).toBe(region())
   })
 })
+
+describe("folder view: the breadcrumb row while loading", () => {
+  const shows = { id: 5, name: "Shows", parentId: null, path: "Shows", createdAt: "2026-01-01T00:00:00Z" }
+
+  it("shows Root at the root, outside the region, and the full row once loaded", async () => {
+    const release = serveGated({ collections: [shows] })
+    renderView(<LibraryFolderView />)
+    const root = await screen.findByRole("button", { name: "Root" })
+    const crumb = root.parentElement!
+    expect(region()).not.toContainElement(crumb)
+    expect(crumb.nextElementSibling).toBe(region())
+    expect(crumb.querySelector('[data-slot="skeleton"]')).toBeNull()
+    release()
+    await screen.findByText("60 items")
+    expect(screen.getByRole("button", { name: "Root" }).parentElement).toBe(crumb)
+    expect(crumb.nextElementSibling).toBe(region())
+  })
+
+  it("inside a folder shows Root and a skeleton for the names, then the real names", async () => {
+    const release = serveGated({ collections: [shows] })
+    renderView(<LibraryFolderView />, "/?collection=5")
+    const root = await screen.findByRole("button", { name: "Root" })
+    const crumb = root.parentElement!
+    expect(region()).not.toContainElement(crumb)
+    expect(crumb.nextElementSibling).toBe(region())
+    expect(crumb.querySelector('[data-slot="skeleton"]')).not.toBeNull()
+    expect(screen.queryByRole("button", { name: "Shows" })).toBeNull()
+    release()
+    expect(await screen.findByRole("button", { name: "Shows" })).toBeInTheDocument()
+    expect(crumb.querySelector('[data-slot="skeleton"]')).toBeNull()
+    expect(screen.getByRole("button", { name: "Root" }).parentElement).toBe(crumb)
+  })
+
+  it("the Root button navigates while loading", async () => {
+    const release = serveGated({ collections: [shows] })
+    renderView(
+      <>
+        <LibraryFolderView />
+        <SearchProbe />
+      </>,
+      "/?collection=5",
+    )
+    expect(screen.getByTestId("search")).toHaveTextContent("collection=5")
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Root" }))
+    expect(screen.getByTestId("search")).not.toHaveTextContent("collection")
+    release()
+  })
+})
+
+function SearchProbe() {
+  const [params] = useSearchParams()
+  return <span data-testid="search">{params.toString()}</span>
+}
 
 describe("LibraryPage shell", () => {
   const page = () =>

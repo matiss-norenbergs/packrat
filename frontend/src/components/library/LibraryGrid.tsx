@@ -73,11 +73,17 @@ export function LibraryGrid() {
     )
   }
 
-  const showFooter = paginationEnabled && !isLoading && !settingsLoading && sortReady && !isError && data != null && data.total > 0
+  // Pagination on and the settings known: the footer stays through the load (placeholder), so the region does not jump.
+  const pending = isLoading || !sortReady
+  const showFooter = paginationEnabled && !settingsLoading && !isError && (pending || (data != null && data.total > 0))
   return (
     <LibraryScrollView
       resetKey={resetKey}
-      footer={showFooter && <LibraryPagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} />}
+      footer={
+        showFooter && (
+          <LibraryPagination page={page} pageSize={pageSize} total={pending ? 0 : (data?.total ?? 0)} onPageChange={setPage} loading={pending} />
+        )
+      }
     >
       {content}
     </LibraryScrollView>

@@ -2,6 +2,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useArtists } from "@/hooks/useArtists"
+import { useSettings } from "@/hooks/useSettings"
 import { ChartTooltipContent } from "./ChartTooltip"
 
 const MAX_BARS = 8
@@ -10,12 +11,19 @@ const MAX_BARS = 8
 // "Top Collections": unlike collections, artist names are flat (no tree),
 // so there's no risk of two different same-named collections (e.g. two
 // unrelated "Season 1" folders under different shows) getting silently
-// merged into one misleading bar.
+// merged into one misleading bar. Private artists are excluded entirely when
+// privacy is enabled (before the top-8 cut, so they leave no gap), like TopTagsChart.
+// Fails closed: until the settings have loaded (or if they failed) privacy counts as
+// on, so no private name flashes.
 export function TopArtistsChart() {
   const { data: artists, isLoading } = useArtists()
+  const { data: settings } = useSettings()
+
+  const hidePrivate = settings?.privacyEnabled !== false
 
   const rows = (artists ?? [])
     .filter((a) => a.usageCount > 0)
+    .filter((a) => !hidePrivate || !a.isPrivate)
     .sort((a, b) => b.usageCount - a.usageCount)
     .slice(0, MAX_BARS)
     .map((a) => ({ name: a.name, count: a.usageCount }))

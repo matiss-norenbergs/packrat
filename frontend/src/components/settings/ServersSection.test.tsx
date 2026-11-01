@@ -61,6 +61,11 @@ describe("ServersSection", () => {
     expect(headers.map((h) => h.textContent)).toEqual(["Name", "Address", "Last used", ""])
     expect(headers[2]).toHaveClass("text-center")
     expect(document.querySelectorAll("col")[3]).toHaveStyle({ width: "96px" })
+    // Name and Address are flex columns: no fixed width, and no empty filler column after the icons.
+    const cols = document.querySelectorAll("col")
+    expect(cols).toHaveLength(4)
+    expect((cols[0] as HTMLElement).style.width).toBe("")
+    expect((cols[1] as HTMLElement).style.width).toBe("")
     const cells = within(screen.getAllByRole("row")[2]).getAllByRole("cell")
     expect(cells[1]).toHaveClass("break-all", "font-mono", "text-xs")
     expect(cells[2]).toHaveClass("text-center", "whitespace-nowrap")
