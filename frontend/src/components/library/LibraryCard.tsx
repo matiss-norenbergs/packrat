@@ -11,6 +11,7 @@ import { ResolutionValue } from "@/components/ResolutionValue"
 import { ThumbnailDimensionsValue } from "@/components/ThumbnailDimensionsValue"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { useSettings } from "@/hooks/useSettings"
+import { useArtistNameMask } from "@/hooks/useArtistNameMask"
 import { useTagNameMask } from "@/hooks/useTagNameMask"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
@@ -27,6 +28,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
   const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
   const { data: settings } = useSettings()
   const maskTag = useTagNameMask()
+  const maskArtist = useArtistNameMask()
   const navigate = useNavigate()
   const location = useLocation()
   const revealed = isRevealed(item.id)
@@ -121,7 +123,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
           </p>
         )}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span className="truncate">{item.artistName ?? item.uploader ?? "Uncategorized"}</span>
+          <span className="truncate">{item.artistName ? maskArtist(item.artistId, item.artistName, revealed || !item.blurred) : (item.uploader ?? "Uncategorized")}</span>
           {item.duration != null && <span>{formatDuration(item.duration)}</span>}
         </div>
         {item.tags.length > 0 && (
@@ -172,7 +174,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             </div>
             <div className="flex justify-between gap-2">
               <span>Artist</span>
-              <span className="truncate text-foreground">{item.artistName ?? "-"}</span>
+              <span className="truncate text-foreground">{item.artistName ? maskArtist(item.artistId, item.artistName, revealed || !item.blurred) : "-"}</span>
             </div>
             <div className="flex justify-between gap-2">
               <span>Year</span>

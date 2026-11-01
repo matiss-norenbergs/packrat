@@ -7,6 +7,7 @@ import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllC
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ArtistImagesPanel, ArtistsPage } from "@/pages/ArtistsPage"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
+import { hashText } from "@/lib/utils"
 import type { Artist } from "@/types/api"
 
 beforeEach(() => {
@@ -183,11 +184,11 @@ const fab = () => screen.queryByRole("button", { name: /private items/ })
 describe("ArtistsPage privacy", () => {
   it("shows the Private column with a lock only for private artists, only with privacy on", async () => {
     const { unmount } = renderPage(true)
-    await screen.findByText("Priv")
+    await screen.findByText(hashText("Priv"))
     expect(screen.getByRole("columnheader", { name: "Private" })).toBeInTheDocument()
     const rows = screen.getAllByRole("row")
     const rowOf = (name: string) => rows.find((r) => within(r).queryByText(name)) as HTMLElement
-    expect(within(rowOf("Priv")).getByLabelText("Private")).toBeInTheDocument()
+    expect(within(rowOf(hashText("Priv"))).getByLabelText("Private")).toBeInTheDocument()
     expect(within(rowOf("Pub")).queryByLabelText("Private")).toBeNull()
     unmount()
 
@@ -201,7 +202,7 @@ describe("ArtistsPage privacy", () => {
   it("floating button appears for a private artist alone and reveals the panel images", async () => {
     const user = userEvent.setup()
     renderPage(true)
-    await user.click(await screen.findByText("Priv"))
+    await user.click(await screen.findByText(hashText("Priv")))
     await waitFor(() => expect(imgs().length).toBeGreaterThan(1))
     expect(allBlurred()).toBe(true)
     await user.click(await screen.findByRole("button", { name: "Reveal all private items" }))

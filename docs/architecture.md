@@ -367,23 +367,27 @@ title/uploader/artist/description. `GET /api/library?q=...` queries it directly 
 `LIKE` scan. Pagination, sorting, and collection/year/tag filters all compose with the search query
 in the same `LibraryRepo.Query` method.
 
-## Privacy: private collections and private tags
+## Privacy: private collections, tags and artists
 
 Artists have the same explicit flag (`artists.is_private`, migration 000049; `PATCH` with the field omitted means
-unchanged), but it is deliberately narrow: only the Artists page's right-hand image panel blurs on it (frontend-gated
-on `privacyEnabled && artist.isPrivate`; the API returns the raw flag). No item response, Browse or dialog uses it, and
-library backups don't carry it yet (restore creates public artists; see `TODO.md`).
+unchanged). It is no longer panel-only: an item is also blurred when its *own* artist is private (an item's artist is
+always its own stored `artist_id` — a collection's artist only fills the field as a default when a download starts, so
+there is no tree-walking), and the Artists page's right-hand image panel still blurs on it (frontend-gated on
+`privacyEnabled && artist.isPrivate`; the API returns the raw flag). Private artist *names* are hashed on the Artists
+page and in the Library (`useArtistNameMask`, below). Browse and dialogs don't use the flag, and library backups don't
+carry it yet (restore creates public artists; see `TODO.md`).
 
-An item is `blurred` if the privacy master switch (`privacy_enabled`) is on **and** either of two
-independent things is true: its collection (or an ancestor collection) is marked private, or any tag
-assigned to it is marked private. Collection privacy is inheritance-aware (`effectivePrivacyMap`
-over the full collections list, resolving the `parentId` chain); tag privacy has no hierarchy — a
-tag is just private or not. Blur status is computed at read time from current collection/tag state,
+An item is `blurred` if the privacy master switch (`privacy_enabled`) is on **and** any of three
+independent things is true: its collection (or an ancestor collection) is marked private, its own artist
+is marked private, or any tag assigned to it is marked private. Collection privacy is inheritance-aware (`effectivePrivacyMap`
+over the full collections list, resolving the `parentId` chain); tag and artist privacy have no hierarchy — a
+tag or artist is just private or not. Blur status is computed at read time from current collection/tag state,
 never cached on the item row.
 
-That decision lives in exactly one place: `ItemPrivacy.Blurred(collectionID, tagNames)`
+That decision lives in exactly one place: `ItemPrivacy.Blurred(collectionID, artistID, tagNames)`
 (`internal/api/item_privacy.go`), loaded once per request with `LoadItemPrivacy` (master switch,
-effective collection privacy, private tag names). It returns false whenever privacy is off, so no
+effective collection privacy, private tag names, private artist ids via `ArtistsRepo.PrivateArtistIDs`;
+the last three queries are skipped when the switch is off). It returns false whenever privacy is off, so no
 endpoint can leak a blur flag with the switch off. Every endpoint that returns library items builds
 its response through `ItemResponder` (`Responses` for lists, `Response` for one item), which
 batch-loads tags and gallery counts and applies the resolver: `GET /api/library` and
@@ -392,9 +396,9 @@ batch-loads tags and gallery counts and applies the resolver: `GET /api/library`
 frame-match accept), file import and ghost creation. Single-item responses re-read the item's tags
 from the DB, so they reflect what was actually stored.
 
-The downloads list is the one deliberate exception to the *tags* half of the rule: queue rows blur
-by collection only (`Blurred(d.CollectionID, nil)`), because a download has no tags until it
-completes into a library item. It still gets the master switch and ancestor handling from the same
+The downloads list is the one deliberate exception to the *tags* and *artist* parts of the rule: queue rows blur
+by collection only (`Blurred(d.CollectionID, nil, nil)`), because a download has no tags until it
+completes into a library item, and the queue deliberately ignores the artist. It still gets the master switch and ancestor handling from the same
 resolver. The collections list's `effectiveIsPrivate` uses `effectivePrivacyMap` directly (it is
 not an item response). The compare list shares all of this, so a private item shows blurred in the
 compare grid too, gated by the same reveal-all mechanism.
@@ -595,7 +599,7 @@ Pages/features render `<FloatingAction icon label onClick active? order? />`, wh
 button into the node (state-backed callback ref, so it works on the first render); mounting adds the
 button, unmounting removes it, and without a dock above it renders nothing. The dock owns all
 positioning, so features never position themselves. `RevealAllFloatingAction` is the first user; the AI Enhancement page also uses it and reads only the provider's
-`revealAll` flag (no per-item keys, no click-to-reveal), as does the Tags page, where `useTagNameMask` (display-only; fails closed while settings/tags load) hashes private tag names — the Library surfaces pass their per-item reveal state to the same hook.
+`revealAll` flag (no per-item keys, no click-to-reveal), as does the Tags page, where `useTagNameMask` (display-only; fails closed while settings/tags load) hashes private tag names, and likewise `useArtistNameMask` (matched by `artistId`) hashes private artist names on the Artists page — the Library surfaces pass their per-item reveal state to the same hooks.
 
 **Dock-aware footers.** A page footer must not sit under the dock button, but only while the dock actually has one
 (`RevealAllFloatingAction` renders nothing with privacy off or no private content). `styles/globals.css` defines the

@@ -76,7 +76,7 @@ func TestListDownloadsBlursByCollectionOnly(t *testing.T) {
 	}
 	mgr := queue.NewDownloadManager("", "", "", nil, conn, f.library, f.collections, nil, nil, f.tags, f.settings, nil, nil, nil, queue.NewProgressStore(), nil)
 	mount := func(r *gin.Engine) {
-		r.GET("/api/downloads", ListDownloads(mgr, conn, f.collections, f.tags, f.settings))
+		r.GET("/api/downloads", ListDownloads(mgr, conn, f.collections, f.tags, f.artists, f.settings))
 	}
 
 	for _, on := range []bool{false, true} {
@@ -91,6 +91,34 @@ func TestListDownloadsBlursByCollectionOnly(t *testing.T) {
 			if d.Blurred != (on && inChild) {
 				t.Errorf("privacy=%v download %d (inChild=%v) blurred = %v", on, d.ID, inChild, d.Blurred)
 			}
+		}
+	}
+}
+
+// A library item whose own artist is private comes back blurred from the
+// list and get endpoints (only while privacy is on).
+func TestLibraryEndpointsBlurPrivateArtist(t *testing.T) {
+	f := newPrivacyFixture(t)
+	priv, err := f.artists.CreateWithPrivacy(f.ctx, "Hidden", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPriv := f.itemByArtist("by-private", priv.ID)
+	plain := f.item("plain", nil)
+	responder := f.responder()
+	mount := func(r *gin.Engine) {
+		r.GET("/api/library", ListLibrary(f.library, responder))
+		r.GET("/api/library/:id", GetLibraryItem(f.library, responder))
+	}
+	for _, on := range []bool{false, true} {
+		f.setPrivacy(on)
+		var list LibraryListResponse
+		serve(t, mount, http.MethodGet, "/api/library", &list)
+		assertBlurred(t, blurredByID(list.Items), map[int64]bool{byPriv: on, plain: false})
+		var item LibraryItemResponse
+		serve(t, mount, http.MethodGet, fmt.Sprintf("/api/library/%d", byPriv), &item)
+		if item.Blurred != on {
+			t.Fatalf("privacy=%v get blurred = %v", on, item.Blurred)
 		}
 	}
 }

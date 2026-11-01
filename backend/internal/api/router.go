@@ -137,7 +137,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		public.POST("/auth/logout", AuthLogout(deps.UsersRepo))
 	}
 
-	itemResponder := NewItemResponder(deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ThumbnailGalleryRepo, deps.MediaRoot)
+	itemResponder := NewItemResponder(deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.ThumbnailGalleryRepo, deps.MediaRoot)
 
 	api := r.Group("/api")
 	api.Use(RequireAuth(deps.UsersRepo), RequireCSRF())
@@ -190,7 +190,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		}
 
 		api.POST("/downloads", CreateDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
-		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.SettingsRepo))
+		api.GET("/downloads", ListDownloads(deps.Manager, deps.DownloadsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.SettingsRepo))
 		api.POST("/downloads/preview", PreviewDownloadMetadata(deps.YtDlp, deps.LibraryRepo))
 		api.GET("/downloads/preview-image", PreviewImage(deps.SettingsRepo))
 		api.POST("/downloads/playlist", CreatePlaylistDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo, deps.LibraryRepo, deps.HistoryRepo, deps.YtDlp))
@@ -329,7 +329,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 			FFmpegPath:    deps.YtDlp.FFmpegPath,
 			Broadcaster:   deps.Broadcaster,
 		}
-		api.GET("/thumbnail-enhancement/history", ListThumbnailEnhancementHistory(enhanceDeps, deps.CollectionsRepo, deps.TagsRepo))
+		api.GET("/thumbnail-enhancement/history", ListThumbnailEnhancementHistory(enhanceDeps, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo))
 		api.DELETE("/thumbnail-enhancement/history/:id", DeleteThumbnailEnhancementHistoryEntry(enhanceDeps))
 		api.POST("/thumbnail-enhancement/history/bulk-delete", BulkDeleteThumbnailEnhancementHistoryEntries(enhanceDeps))
 		api.POST("/thumbnail-enhancement/history/clear", ClearThumbnailEnhancementHistory(enhanceDeps))

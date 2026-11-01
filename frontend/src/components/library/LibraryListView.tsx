@@ -10,6 +10,7 @@ import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { usePageState } from "@/hooks/usePageState"
 import { useSettings } from "@/hooks/useSettings"
+import { useArtistNameMask } from "@/hooks/useArtistNameMask"
 import { useTagNameMask } from "@/hooks/useTagNameMask"
 import { DEFAULT_LIBRARY_SORT, LIBRARY_TABLE_ID, useLibrarySort } from "@/hooks/useLibrarySort"
 import { librarySmallThumbnailUrl } from "@/lib/api"
@@ -73,6 +74,13 @@ function TitleCell({ item }: { item: LibraryItem }) {
   )
 }
 
+function ArtistCell({ item }: { item: LibraryItem }) {
+  const { isRevealed } = useRevealAll()
+  const maskArtist = useArtistNameMask()
+  if (!item.artistName) return <>{item.uploader ?? "—"}</>
+  return <>{maskArtist(item.artistId, item.artistName, isRevealed(item.id) || !item.blurred)}</>
+}
+
 function TagsCell({ item }: { item: LibraryItem }) {
   const { isRevealed } = useRevealAll()
   const maskTag = useTagNameMask()
@@ -132,7 +140,7 @@ const COLUMNS: ColumnDef<LibraryItem>[] = [
   column("year", { cell: (item) => item.year ?? "—", sortValue: (item) => item.year }),
   column("duration", { cell: (item) => formatDuration(item.duration), sortValue: (item) => item.duration }),
   column("downloadedAt", { cell: (item) => new Date(item.downloadedAt).toLocaleDateString(), sortValue: (item) => new Date(item.downloadedAt) }),
-  column("artist", { cell: (item) => item.artistName ?? item.uploader ?? "—" }),
+  column("artist", { cell: (item) => <ArtistCell item={item} /> }),
   column("collection", { cell: (item) => item.collectionName ?? "Uncategorized" }),
   column("size", { cell: (item) => (item.fileSizeBytes != null ? formatBytes(item.fileSizeBytes) : "—") }),
   column("tags", { cell: (item) => <TagsCell item={item} /> }),

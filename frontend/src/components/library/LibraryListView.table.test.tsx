@@ -71,6 +71,7 @@ function item(id: number, over: Partial<LibraryItem> = {}): LibraryItem {
 
 interface ServeOptions {
   tags?: unknown[]
+  artists?: unknown[]
   settings?: Record<string, unknown>
   layouts?: TableLayouts
   /** Replaces the library answer (an error status, a delay…). */
@@ -102,6 +103,7 @@ function serve(all: LibraryItem[], opts: ServeOptions = {}) {
     if (url.endsWith("/settings")) return { status: 200, body: { libraryView: "list", libraryMode: "manage", libraryPaginationEnabled: true, libraryPageSize: PAGE_SIZE, ...opts.settings } }
     if (url.endsWith("/library/facets")) return { status: 200, body: { years: [] } }
     if (url.endsWith("/tags") && opts.tags) return { status: 200, body: opts.tags }
+    if (url.endsWith("/artists") && opts.artists) return { status: 200, body: opts.artists }
     if (url.endsWith("/collections") || url.endsWith("/tags") || url.endsWith("/artists") || url.includes("/compare")) return { status: 200, body: [] }
     return { status: 200, body: {} }
   })
@@ -547,6 +549,29 @@ describe("LibraryListView on DataTable: privacy", () => {
     await user.click(row(hashText("Secret Show")).querySelector("img")!)
     expect(await screen.findByText("Hush")).toBeInTheDocument()
     expect(screen.queryByText(hashedTag)).toBeNull()
+  })
+
+  it("hashes a private artist's name (not the uploader) until the item is revealed", async () => {
+    const user = userEvent.setup()
+    serve(
+      [
+        item(1, { title: "Secret Show", blurred: true, thumbnailSmallPath: "thumbs/1.jpg", artistId: 7, artistName: "Hidden Person" }),
+        item(2, { title: "Uploaded", uploader: "SomeChannel" }),
+      ],
+      {
+        settings: { privacyEnabled: true },
+        artists: [{ id: 7, name: "Hidden Person", isPrivate: true, selectedImagePath: null, birthday: null, createdAt: "", usageCount: 1 }],
+      },
+    )
+    renderList()
+    const hashed = hashText("Hidden Person")
+    await screen.findByText(hashed)
+    expect(screen.queryByText("Hidden Person")).toBeNull()
+    expect(screen.getByText("SomeChannel")).toBeInTheDocument()
+
+    await user.click(row(hashText("Secret Show")).querySelector("img")!)
+    expect(await screen.findByText("Hidden Person")).toBeInTheDocument()
+    expect(screen.queryByText(hashed)).toBeNull()
   })
 
   it("shows a non-blurred item's tags readable immediately, even before the tags list arrives", async () => {

@@ -263,3 +263,24 @@ func (r *ArtistsRepo) Delete(ctx context.Context, id int64) error {
 	}
 	return checkRowsAffected(res)
 }
+
+// PrivateArtistIDs returns the set of artist ids currently marked private —
+// fetched once per request and cross-referenced against each item's own
+// ArtistID, the same fetch-once-then-lookup shape as TagsRepo.PrivateTagNames.
+func (r *ArtistsRepo) PrivateArtistIDs(ctx context.Context) (map[int64]bool, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id FROM artists WHERE is_private = 1`)
+	if err != nil {
+		return nil, fmt.Errorf("listing private artists: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int64]bool)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scanning private artist: %w", err)
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}

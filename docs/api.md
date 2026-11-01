@@ -472,7 +472,7 @@ Response is always a wrapper, even with no pagination:
 ```
 
 `blurred` is true if privacy is enabled (Settings → Privacy master switch) **and** the item's
-collection (or an ancestor) is private, **or** any of its tags is marked private; it is always `false`
+collection (or an ancestor) is private, **or** its own artist (`artistId`) is private, **or** any of its tags is marked private; it is always `false`
 when privacy is off. The rule is the same in every endpoint that returns a library item (list, get-one,
 compare list, refresh-metadata, trim accept, thumbnail set/redownload/quick-grab/gallery apply/frame-match
 accept, file import, ghost creation). `tags` is never `null` — `[]` if none. `mediaType` is `"video"`, `"audio"`, or
@@ -1809,7 +1809,7 @@ reflect the item's *current* live state, not this specific row — only the most
 item is eligible for Compare/Revert. `originalThumbnailPath` is served via `/local-images/*`,
 `enhancedThumbnailPath` via `/media-files/*` — different roots.
 `blurred` follows the same rule as library items (the shared `ItemPrivacy` resolver, applied to the
-item's *current* collection and tags): `false` when privacy is off, and `false` when the item no
+item's *current* collection, artist and tags): `false` when privacy is off, and `false` when the item no
 longer exists (`libraryItemId` is `null`). The `q` filter still matches real titles.
 
 `DELETE .../history/:id` — `404`/`204`. `POST .../history/bulk-delete` — `{"ids":[...]}` →

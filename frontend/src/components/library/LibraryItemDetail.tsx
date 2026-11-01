@@ -10,6 +10,7 @@ import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress"
 import { useSettings } from "@/hooks/useSettings"
+import { useArtistNameMask } from "@/hooks/useArtistNameMask"
 import { useTagNameMask } from "@/hooks/useTagNameMask"
 import { sortLibraryItems } from "@/lib/libraryFilters"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
@@ -61,6 +62,7 @@ export function LibraryItemDetail({
 }) {
   const { data: settings } = useSettings()
   const maskTag = useTagNameMask()
+  const maskArtist = useArtistNameMask()
   const { isRevealed, toggleItem, revealItems } = useRevealAll()
   const revealed = isRevealed(item.id)
   const effectiveBlurred = item.blurred && !ignorePrivacy
@@ -185,7 +187,7 @@ export function LibraryItemDetail({
             </div>
             <div className="text-center">
               <p className="text-base font-medium text-white">{item.title}</p>
-              <p className="text-sm text-white/70">{item.artistName ?? item.uploader ?? "Unknown artist"}</p>
+              <p className="text-sm text-white/70">{item.artistName ? maskArtist(item.artistId, item.artistName, !locked) : (item.uploader ?? "Unknown artist")}</p>
             </div>
             <audio key={item.path} ref={audioRef} controls className="w-full max-w-md">
               <source src={mediaFileUrl(item.path)} />
@@ -206,7 +208,7 @@ export function LibraryItemDetail({
                 {item.sequenceNumber != null && `${item.sequenceNumber}. `}
                 {locked ? hashText(item.title) : item.title}
               </h1>
-              <p className="text-sm text-muted-foreground">{item.artistName ?? item.uploader ?? "Uncategorized"}</p>
+              <p className="text-sm text-muted-foreground">{item.artistName ? maskArtist(item.artistId, item.artistName, !locked) : (item.uploader ?? "Uncategorized")}</p>
             </div>
             <LibraryItemActionsMenu item={item} />
           </div>

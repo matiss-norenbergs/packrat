@@ -27,6 +27,7 @@ type privacyFixture struct {
 	settings    *repository.SettingsRepo
 	collections *repository.CollectionsRepo
 	tags        *repository.TagsRepo
+	artists     *repository.ArtistsRepo
 	gallery     *repository.ThumbnailGalleryRepo
 	library     *repository.LibraryRepo
 	compare     *repository.CompareListRepo
@@ -54,6 +55,7 @@ func newPrivacyFixture(t *testing.T) *privacyFixture {
 		settings:    repository.NewSettingsRepo(conn),
 		collections: repository.NewCollectionsRepo(conn),
 		tags:        repository.NewTagsRepo(conn),
+		artists:     repository.NewArtistsRepo(conn),
 		gallery:     repository.NewThumbnailGalleryRepo(conn),
 		library:     repository.NewLibraryRepo(conn),
 		compare:     repository.NewCompareListRepo(conn),
@@ -62,7 +64,7 @@ func newPrivacyFixture(t *testing.T) *privacyFixture {
 }
 
 func (f *privacyFixture) responder() *ItemResponder {
-	return NewItemResponder(f.settings, f.collections, f.tags, f.gallery, f.mediaRoot)
+	return NewItemResponder(f.settings, f.collections, f.tags, f.artists, f.gallery, f.mediaRoot)
 }
 
 func (f *privacyFixture) setPrivacy(on bool) {
@@ -105,6 +107,18 @@ func (f *privacyFixture) item(title string, collectionID *int64, tagNames ...str
 		if err := f.tags.SetForLibraryItem(f.ctx, id, ids); err != nil {
 			f.t.Fatal(err)
 		}
+	}
+	return id
+}
+
+// itemByArtist inserts a completed library item whose own artist is artistID.
+func (f *privacyFixture) itemByArtist(title string, artistID int64) int64 {
+	f.t.Helper()
+	id, err := f.library.Create(f.ctx, &models.LibraryItem{
+		Title: title, Filename: title + ".mp4", Path: title + ".mp4", ArtistID: &artistID, Status: "completed",
+	})
+	if err != nil {
+		f.t.Fatal(err)
 	}
 	return id
 }
