@@ -60,6 +60,7 @@ export function ServersSection() {
         key: "name",
         header: "Name",
         wrap: true,
+        flex: true,
         cell: (profile) => (
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{profile.name}</span>
@@ -67,7 +68,7 @@ export function ServersSection() {
           </div>
         ),
       },
-      { key: "url", header: "Address", wrap: true, cellClassName: "break-all font-mono text-xs", cell: (profile) => profile.url },
+      { key: "url", header: "Address", wrap: true, flex: true, cellClassName: "break-all font-mono text-xs", cell: (profile) => profile.url },
       {
         key: "lastUsed",
         header: "Last used",
