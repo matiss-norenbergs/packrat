@@ -15,6 +15,7 @@ Maintenance notes:
 ## 2026-11-01
 - **Top Artists honours private artists** — with privacy on, the dashboard's Top Artists chart leaves private artists out entirely (before the top-8 cut, so the next artists fill the bars), like Top Tags; if every candidate is private it shows "No data yet".
 - **Settings → Servers: Name and Address take the spare width** — both columns grow with the card instead of the table ending in an empty column, so long addresses wrap less.
+- **Top Artists / Top Tags fail closed** — while the settings are still loading (or failed to load) privacy counts as on, so private artists and tags are never listed for a moment before privacy is known; they appear only once privacy is explicitly off.
 - **Folders view: no jump when loading finishes** — the breadcrumb row is shown while loading (Root, plus a skeleton for the folder names inside a folder), so the cards area starts at the same place before and after the data arrives.
 - **Library grid and Folders: no footer flicker while loading** — with pagination on, the footer stays during a load (a "—" count and a disabled pager) instead of disappearing and reappearing, so the cards area keeps its height.
 - **Library cards return to the top** — in the grid and the Folders view the cards area now scrolls back to the top on a new page, filter, search, sort or folder, as the list does (the footer is always in view now, so you could otherwise land mid-scroll). A refetch or a selection does not move it.

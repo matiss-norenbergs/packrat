@@ -133,8 +133,8 @@ The landing page. Two cards summarize current state at a glance, followed by cha
 - **Downloads** — active, queued, and completed-today counts, with a link to the Downloads page.
 - **Library** — video count, audio count, image count, and total storage used across the whole
   library.
-- **Charts** — Library Growth, Media Types, Items by Resolution, Storage, Top Artists, Top Tags. With privacy on, Top Artists
-  and Top Tags leave out private artists / tags entirely (the next ones fill the top 8); when every candidate is private the chart
+- **Charts** — Library Growth, Media Types, Items by Resolution, Storage, Top Artists, Top Tags. With privacy on (or not yet known:
+  the settings are still loading or failed), Top Artists and Top Tags leave out private artists / tags entirely (the next ones fill the top 8); when every candidate is private the chart
   shows "No data yet".
 
 Read-only — it's a summary view, not a control panel. The cog button in the header opens a popover

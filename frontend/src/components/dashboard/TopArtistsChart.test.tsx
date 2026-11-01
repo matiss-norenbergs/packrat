@@ -69,6 +69,20 @@ describe("TopArtistsChart", () => {
     expect(shown()).toEqual([])
   })
 
+  it("treats unknown settings as privacy on: a pending or failed settings query hides private artists", () => {
+    useArtists.mockReturnValue({ data: [artist(1, 10, true), artist(2, 5)], isLoading: false })
+    useSettings.mockReturnValue({ data: undefined })
+    render(<TopArtistsChart />)
+    expect(shown()).toEqual(["Artist 2:5"])
+  })
+
+  it("shows No data yet while settings are unknown and every artist is private", () => {
+    useArtists.mockReturnValue({ data: [artist(1, 10, true)], isLoading: false })
+    useSettings.mockReturnValue({ data: undefined })
+    render(<TopArtistsChart />)
+    expect(screen.getByText("No data yet")).toBeInTheDocument()
+  })
+
   it("keeps artists without usage out", () => {
     useArtists.mockReturnValue({ data: [artist(1, 0), artist(2, 3)], isLoading: false })
     render(<TopArtistsChart />)

@@ -8,14 +8,17 @@ import { ChartTooltipContent } from "./ChartTooltip"
 const MAX_BARS = 8
 
 // Same shape as TopCollectionsChart — single series, one hue, private tags
-// excluded entirely when privacy is enabled.
+// excluded entirely when privacy is enabled. Fails closed: until the settings have
+// loaded (or if they failed) privacy counts as on, so no private name flashes.
 export function TopTagsChart() {
   const { data: tags, isLoading } = useTags()
   const { data: settings } = useSettings()
 
+  const hidePrivate = settings?.privacyEnabled !== false
+
   const rows = (tags ?? [])
     .filter((t) => t.usageCount > 0)
-    .filter((t) => !settings?.privacyEnabled || !t.isPrivate)
+    .filter((t) => !hidePrivate || !t.isPrivate)
     .sort((a, b) => b.usageCount - a.usageCount)
     .slice(0, MAX_BARS)
     .map((t) => ({ name: t.name, count: t.usageCount }))

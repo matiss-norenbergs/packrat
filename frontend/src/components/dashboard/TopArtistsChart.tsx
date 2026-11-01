@@ -13,13 +13,17 @@ const MAX_BARS = 8
 // unrelated "Season 1" folders under different shows) getting silently
 // merged into one misleading bar. Private artists are excluded entirely when
 // privacy is enabled (before the top-8 cut, so they leave no gap), like TopTagsChart.
+// Fails closed: until the settings have loaded (or if they failed) privacy counts as
+// on, so no private name flashes.
 export function TopArtistsChart() {
   const { data: artists, isLoading } = useArtists()
   const { data: settings } = useSettings()
 
+  const hidePrivate = settings?.privacyEnabled !== false
+
   const rows = (artists ?? [])
     .filter((a) => a.usageCount > 0)
-    .filter((a) => !settings?.privacyEnabled || !a.isPrivate)
+    .filter((a) => !hidePrivate || !a.isPrivate)
     .sort((a, b) => b.usageCount - a.usageCount)
     .slice(0, MAX_BARS)
     .map((a) => ({ name: a.name, count: a.usageCount }))
