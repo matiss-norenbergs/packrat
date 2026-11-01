@@ -57,3 +57,25 @@ func TestArtistsRepo_IsPrivate(t *testing.T) {
 		t.Fatalf("Update(&false) did not clear the flag")
 	}
 }
+
+func TestArtistsRepo_PrivateArtistIDs(t *testing.T) {
+	ctx := context.Background()
+	repo := NewArtistsRepo(openTestDB(t).db)
+
+	none, err := repo.PrivateArtistIDs(ctx)
+	if err != nil || len(none) != 0 {
+		t.Fatalf("empty db: %v err=%v", none, err)
+	}
+	pub, _ := repo.Create(ctx, "Public", nil)
+	priv, err := repo.CreateWithPrivacy(ctx, "Private", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.PrivateArtistIDs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || !got[priv.ID] || got[pub.ID] {
+		t.Fatalf("PrivateArtistIDs = %v", got)
+	}
+}

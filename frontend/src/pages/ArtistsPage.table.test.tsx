@@ -5,6 +5,7 @@ import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ArtistsPage } from "@/pages/ArtistsPage"
 import { callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
+import { hashText } from "@/lib/utils"
 import type { Artist } from "@/types/api"
 
 beforeEach(() => {
@@ -85,9 +86,9 @@ describe("ArtistsPage table", () => {
   it("shows the Private column only when privacy is on", async () => {
     serve([artist(1, "Secret", { isPrivate: true }), artist(2, "Open")], true)
     renderPage()
-    await screen.findByText("Secret")
+    await screen.findByText(hashText("Secret"))
     expect(screen.getByRole("columnheader", { name: "Private" })).toBeInTheDocument()
-    expect(within(row("Secret")).getByLabelText("Private")).toBeInTheDocument()
+    expect(within(row(hashText("Secret"))).getByLabelText("Private")).toBeInTheDocument()
     expect(within(row("Open")).queryByLabelText("Private")).toBeNull()
     cleanup()
 

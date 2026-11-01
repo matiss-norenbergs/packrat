@@ -23,6 +23,7 @@ import { DataTable } from "@/components/data-table"
 import type { ColumnDef, ContextMenuItemDef } from "@/components/data-table"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { usePersistedOpen } from "@/hooks/usePersistedOpen"
+import { useArtistNameMask } from "@/hooks/useArtistNameMask"
 import { useArtistImages, useArtists, useBulkDeleteArtists } from "@/hooks/useArtists"
 import { useSettings } from "@/hooks/useSettings"
 import { imageUrl } from "@/lib/api"
@@ -45,11 +46,15 @@ export function ArtistsPage() {
   const bulkDeleteArtists = useBulkDeleteArtists()
   const { data: settings } = useSettings()
   const privacyEnabled = !!settings?.privacyEnabled
+  // Private artists' names are hashed until reveal-all (no per-name click);
+  // search and sort keep using the real name.
+  const { revealAll } = useRevealAll()
+  const maskArtist = useArtistNameMask()
   const editTarget = size === 1 ? data?.find((a) => selected.has(a.id)) : undefined
 
   const columns = useMemo<ColumnDef<Artist>[]>(
     () => [
-      { key: "name", header: "Name", cell: (a) => a.name, cellClassName: "font-medium", sortValue: (a) => a.name },
+      { key: "name", header: "Name", cell: (a) => maskArtist(a.id, a.name, revealAll), cellClassName: "font-medium", sortValue: (a) => a.name },
       {
         key: "birthday",
         header: "Birthday",
@@ -92,7 +97,7 @@ export function ArtistsPage() {
           ]
         : []),
     ],
-    [privacyEnabled],
+    [privacyEnabled, maskArtist, revealAll],
   )
 
   const contextMenu = (rows: Artist[]): ContextMenuItemDef<Artist>[] => [
@@ -127,7 +132,7 @@ export function ArtistsPage() {
           tableId="artists"
           selection="multi"
           selectionState={selection}
-          getRowLabel={(a) => `Select ${a.name}`}
+          getRowLabel={(a) => `Select ${maskArtist(a.id, a.name, revealAll)}`}
           loading={isLoading}
           error={isError ? <p className="text-sm text-destructive">Failed to load artists: {(error as Error).message}</p> : undefined}
           empty={(query) =>
@@ -217,7 +222,8 @@ export function ArtistImagesPanel({
 }) {
   const { data: images, isLoading } = useArtistImages(artist?.id ?? 0, artist != null && panelOpen)
   const { data: settings } = useSettings()
-  const { isRevealed, toggleItem, hideItem } = useRevealAll()
+  const { revealAll, isRevealed, toggleItem, hideItem } = useRevealAll()
+  const maskArtist = useArtistNameMask()
 
   // One reveal key per artist, shared by every image in the panel. A reveal
   // by click lasts only while this artist stays selected and the panel stays
@@ -265,7 +271,7 @@ export function ArtistImagesPanel({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="mb-2 truncate text-sm font-medium">{artist.name}</h2>
+        <h2 className="mb-2 truncate text-sm font-medium">{maskArtist(artist.id, artist.name, revealAll)}</h2>
         <div className="aspect-square w-full max-w-[300px] overflow-hidden rounded-md border bg-muted">
           {artist.selectedImagePath ? (
             <BlurredThumbnail

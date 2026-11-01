@@ -16,6 +16,11 @@ func TestListThumbnailEnhancementHistoryBlurred(t *testing.T) {
 	s := f.scenario()
 	privateCol := f.collection("vault", nil, true)
 	inPrivate := f.item("in-private", privateCol)
+	privArtist, err := f.artists.CreateWithPrivacy(f.ctx, "Hidden", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byArtist := f.itemByArtist("by-artist", privArtist.ID)
 
 	history := repository.NewThumbnailEnhancementHistoryRepo(f.conn)
 	deps := thumbnailenhance.Deps{
@@ -38,11 +43,12 @@ func TestListThumbnailEnhancementHistoryBlurred(t *testing.T) {
 	add("in-private", &inPrivate)
 	add("in-parent", &s.inPrivateParent)
 	add("tagged", &s.privateTagged)
+	add("by-artist", &byArtist)
 	add("plain", &s.plain)
 	add("deleted", nil)
 
 	mount := func(r *gin.Engine) {
-		r.GET("/api/thumbnail-enhancement/history", ListThumbnailEnhancementHistory(deps, f.collections, f.tags))
+		r.GET("/api/thumbnail-enhancement/history", ListThumbnailEnhancementHistory(deps, f.collections, f.tags, f.artists))
 	}
 	list := func() map[string]bool {
 		t.Helper()
@@ -66,7 +72,7 @@ func TestListThumbnailEnhancementHistoryBlurred(t *testing.T) {
 	}
 
 	f.setPrivacy(true)
-	want := map[string]bool{"in-private": true, "in-parent": true, "tagged": true, "plain": false, "deleted": false}
+	want := map[string]bool{"in-private": true, "in-parent": true, "tagged": true, "by-artist": true, "plain": false, "deleted": false}
 	got := list()
 	for title, w := range want {
 		if got[title] != w {

@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-01
+- **Private artists behave like private tags** — with privacy on, every library item whose own artist is private is now blurred (Library, Compare list, AI Enhancement history, item page; the shared `ItemPrivacy` rule gains the artist, loaded via `ArtistsRepo.PrivateArtistIDs`), and a private artist's *name* is hashed on the Artists page (revealed by reveal-all only) and in the Library grid, list and item page until the item is revealed. Shared `useArtistNameMask`. **Existing items by an artist already marked Private become blurred**; the Downloads queue still ignores the artist.
 - **Private tag names are hashed** — with privacy on, a private tag's name shows as `Hidden-xxxxxxxx` on the Tags page (revealed by the new reveal-all button there; search still matches the real name) and in the Library grid, list and item page until the item is revealed. Frontend only; shared `useTagNameMask`.
 - **Lock icon on inherited-private collections** — with privacy on, a collection that only inherits privacy from a private ancestor now shows the lock too (muted, tooltip "Inherited from <ancestor>"), in the Collections tree and on the Library Folders view's folder tiles; an own Private flag keeps the primary-colored lock. New shared `PrivateLock`.
 - **Top Artists honours private artists** — with privacy on, the dashboard's Top Artists chart leaves private artists out entirely (before the top-8 cut, so the next artists fill the bars), like Top Tags; if every candidate is private it shows "No data yet".

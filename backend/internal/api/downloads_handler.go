@@ -211,7 +211,7 @@ func writeEnqueueError(c *gin.Context, err error) {
 	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 }
 
-func ListDownloads(mgr *queue.DownloadManager, repo *repository.DownloadsRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
+func ListDownloads(mgr *queue.DownloadManager, repo *repository.DownloadsRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
@@ -219,7 +219,7 @@ func ListDownloads(mgr *queue.DownloadManager, repo *repository.DownloadsRepo, c
 			return
 		}
 
-		privacy, err := LoadItemPrivacy(c.Request.Context(), settingsRepo, collectionsRepo, tagsRepo)
+		privacy, err := LoadItemPrivacy(c.Request.Context(), settingsRepo, collectionsRepo, tagsRepo, artistsRepo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -228,9 +228,10 @@ func ListDownloads(mgr *queue.DownloadManager, repo *repository.DownloadsRepo, c
 		live := mgr.ProgressSnapshot()
 		out := make([]DownloadResponse, 0, len(rows))
 		for _, d := range rows {
-			// Queue rows blur by collection only (no tags passed): a download has
-			// no tags yet — they're applied to the library item once it completes.
-			out = append(out, toDownloadResponse(d, live[d.ID], privacy.Blurred(d.CollectionID, nil)))
+			// Queue rows blur by collection only (no tags, no artist passed): a
+			// download has no tags yet — they're applied to the library item once
+			// it completes — and the queue deliberately ignores the artist too.
+			out = append(out, toDownloadResponse(d, live[d.ID], privacy.Blurred(d.CollectionID, nil, nil)))
 		}
 		c.JSON(http.StatusOK, out)
 	}

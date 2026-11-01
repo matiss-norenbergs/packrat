@@ -256,6 +256,27 @@ func (r *ArtistsRepo) Update(ctx context.Context, id int64, newName string, birt
 // Delete removes an artist; ON DELETE SET NULL on library.artist_id and
 // downloads.override_artist_id clears the reference on affected rows
 // automatically rather than deleting anything.
+// PrivateArtistIDs returns the set of artist ids currently marked private —
+// fetched once per request and cross-referenced against each item's own
+// ArtistID, the same fetch-once-then-lookup shape as TagsRepo.PrivateTagNames.
+func (r *ArtistsRepo) PrivateArtistIDs(ctx context.Context) (map[int64]bool, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id FROM artists WHERE is_private = 1`)
+	if err != nil {
+		return nil, fmt.Errorf("listing private artists: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int64]bool)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scanning private artist: %w", err)
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
 func (r *ArtistsRepo) Delete(ctx context.Context, id int64) error {
 	res, err := r.db.ExecContext(ctx, `DELETE FROM artists WHERE id = ?`, id)
 	if err != nil {
