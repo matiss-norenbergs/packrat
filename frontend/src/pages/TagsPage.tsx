@@ -16,6 +16,9 @@ import { DataTable } from "@/components/data-table"
 import type { ColumnDef, ContextMenuItemDef } from "@/components/data-table"
 import { TagDialog } from "@/components/tags/TagDialog"
 import { useIdSelection } from "@/hooks/useIdSelection"
+import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
+import { useRevealAll } from "@/components/library/RevealAllContext"
+import { useTagNameMask } from "@/hooks/useTagNameMask"
 import { useSettings } from "@/hooks/useSettings"
 import { useBulkDeleteTags, useTags } from "@/hooks/useTags"
 import type { Tag } from "@/types/api"
@@ -33,13 +36,15 @@ export function TagsPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const bulkDeleteTags = useBulkDeleteTags()
+  const { revealAll } = useRevealAll()
+  const maskTag = useTagNameMask()
 
   const privacyEnabled = !!settings?.privacyEnabled
   const editTarget = size === 1 ? data?.find((t) => selected.has(t.id)) : undefined
 
   const columns = useMemo<ColumnDef<Tag>[]>(
     () => [
-      { key: "name", header: "Name", cell: (t) => t.name, cellClassName: "font-medium" },
+      { key: "name", header: "Name", cell: (t) => maskTag(t.name, revealAll), cellClassName: "font-medium" },
       {
         key: "usage",
         header: "Usage",
@@ -61,7 +66,7 @@ export function TagsPage() {
           ]
         : []),
     ],
-    [privacyEnabled],
+    [privacyEnabled, maskTag, revealAll],
   )
 
   const contextMenu = (rows: Tag[]): ContextMenuItemDef<Tag>[] => [
@@ -80,6 +85,7 @@ export function TagsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
       <h1 className="shrink-0 text-2xl font-semibold">Tags</h1>
+      <RevealAllFloatingAction />
 
       <DataTable
         rows={data ?? []}
@@ -88,7 +94,7 @@ export function TagsPage() {
         tableId="tags"
         selection="multi"
         selectionState={selection}
-        getRowLabel={(t) => `Select ${t.name}`}
+        getRowLabel={(t) => `Select ${maskTag(t.name, revealAll)}`}
         loading={isLoading}
         error={isError ? <p className="text-sm text-destructive">Failed to load tags: {(error as Error).message}</p> : undefined}
         empty={(query) =>

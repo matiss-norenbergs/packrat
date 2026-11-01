@@ -10,6 +10,7 @@ import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { usePageState } from "@/hooks/usePageState"
 import { useSettings } from "@/hooks/useSettings"
+import { useTagNameMask } from "@/hooks/useTagNameMask"
 import { DEFAULT_LIBRARY_SORT, LIBRARY_TABLE_ID, useLibrarySort } from "@/hooks/useLibrarySort"
 import { librarySmallThumbnailUrl } from "@/lib/api"
 import { LIBRARY_LIST_COLUMN_SPECS, LIBRARY_LIST_EXTRA_SORT_KEYS } from "@/lib/libraryListColumns"
@@ -73,6 +74,9 @@ function TitleCell({ item }: { item: LibraryItem }) {
 }
 
 function TagsCell({ item }: { item: LibraryItem }) {
+  const { isRevealed } = useRevealAll()
+  const maskTag = useTagNameMask()
+  const revealed = isRevealed(item.id) || !item.blurred
   if (item.tags.length === 0) return null
   const visibleTags = item.tags.slice(0, MAX_VISIBLE_TAGS)
   const hiddenTags = item.tags.slice(MAX_VISIBLE_TAGS)
@@ -88,7 +92,7 @@ function TagsCell({ item }: { item: LibraryItem }) {
         >
           {visibleTags.map((tag) => (
             <Badge key={tag} variant="secondary" className="min-w-0 shrink truncate">
-              {tag}
+              {maskTag(tag, revealed)}
             </Badge>
           ))}
           {hiddenTags.length > 0 && (
@@ -102,7 +106,7 @@ function TagsCell({ item }: { item: LibraryItem }) {
         <div className="flex flex-wrap gap-1">
           {item.tags.map((tag) => (
             <Badge key={tag} variant="secondary">
-              {tag}
+              {maskTag(tag, revealed)}
             </Badge>
           ))}
         </div>

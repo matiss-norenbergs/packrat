@@ -494,6 +494,14 @@ new download via the Advanced section, or bulk-assigned to a selection on the Li
   the same way a private collection does. This is a second, independent way to mark content
   private that isn't tied to where the file lives on disk — useful when the items you want hidden
   are scattered across several collections rather than confined to one folder.
+- **Privacy screen for names** — with **Enable privacy** on, a private tag's *name* is shown as a hash
+  (`Hidden-xxxxxxxx`, the same mask as private titles) so passers-by can't read it. On the Tags page it
+  is revealed only by the floating reveal-all button (no per-row click); search and sort still use the
+  real name, and the Add/Edit dialog shows it. In the Library the private tags of an item (grid card
+  and its "+N" tooltip, list Tags column and its popover, item page) are hashed until that item is
+  revealed — click or reveal-all, the same state that unblurs its thumbnail; the item's other tags stay
+  readable. Dialogs, tag suggestions, the filter popover and other pages are unchanged. Fails closed
+  while settings or tags are still loading.
 - Select multiple tags to bulk-delete.
 
 ## Artists
@@ -550,8 +558,8 @@ Private items are blurred here too; the [reveal-all floating button](#reveal-all
 ## Reveal-all floating button
 
 A round eye button floats at the bottom-left of the content area (clear of the sidebar on desktop) on
-the **Library**, **Compare list**, **Downloads**, **Collections**, **Artists** and **AI Enhancement** pages (on Collections it reveals the
-selected collection's cover in the info panel, the only blurred imagery there; on Artists, the selected artist's panel images). It appears only when **Enable privacy** is
+the **Library**, **Compare list**, **Downloads**, **Collections**, **Artists**, **Tags** and **AI Enhancement** pages (on Collections it reveals the
+selected collection's cover in the info panel, the only blurred imagery there; on Artists, the selected artist's panel images; on Tags, the hashed names of private tags). It appears only when **Enable privacy** is
 on *and* something is actually private (a private collection with items, a private tag in use, or a private artist) —
 otherwise it is hidden, not disabled. Click it to reveal every blurred item on the page (the icon
 becomes a crossed-out eye, the button is filled, and the tooltip reads "Hide all private items"); click

@@ -1,5 +1,9 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { FloatingActionDock } from "@/components/FloatingActionDock"
+import { RevealAllProvider } from "@/components/library/RevealAllContext"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { hashText } from "@/lib/utils"
 import { TagsPage } from "@/pages/TagsPage"
 import { callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { Tag } from "@/types/api"
@@ -27,6 +31,18 @@ function serve(tags: Tag[], privacy = false) {
   })
 }
 
+function renderPage() {
+  return renderWithProviders(
+    <TooltipProvider>
+      <RevealAllProvider>
+        <FloatingActionDock>
+          <TagsPage />
+        </FloatingActionDock>
+      </RevealAllProvider>
+    </TooltipProvider>,
+  )
+}
+
 const row = (name: string) => screen.getByText(name).closest("tr")!
 
 describe("TagsPage", () => {
@@ -43,7 +59,7 @@ describe("TagsPage", () => {
   it("shows the Private column with a lock only when privacy is on", async () => {
     serve([tag(1, "Secret", { isPrivate: true }), tag(2, "Open")], true)
     renderWithProviders(<TagsPage />)
-    await screen.findByText("Secret")
+    await screen.findByText("Open")
     expect(screen.getByRole("columnheader", { name: "Private" })).toBeInTheDocument()
     expect(screen.getAllByLabelText("Private")).toHaveLength(1)
   })
@@ -98,5 +114,30 @@ describe("TagsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "3" }))
     expect(await screen.findByText("Tag 101")).toBeInTheDocument()
     expect(screen.getAllByRole("row")).toHaveLength(21)
+  })
+
+  it("hashes a private tag's name with privacy on; reveal-all shows it; search still matches the real name", async () => {
+    serve([tag(1, "Secret", { isPrivate: true, usageCount: 1 }), tag(2, "Open", { usageCount: 1 })], true)
+    renderPage()
+    const hashed = hashText("Secret")
+    expect(await screen.findByText(hashed)).toBeInTheDocument()
+    expect(screen.getByText("Open")).toBeInTheDocument()
+    expect(screen.queryByText("Secret")).toBeNull()
+    expect(document.body.innerHTML).not.toContain("Secret")
+
+    fireEvent.change(screen.getByPlaceholderText("Search tags…"), { target: { value: "secret" } })
+    await waitFor(() => expect(screen.queryByText("Open")).toBeNull())
+    expect(screen.getByText(hashed)).toBeInTheDocument()
+    fireEvent.change(screen.getByPlaceholderText("Search tags…"), { target: { value: "" } })
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reveal all private items" }))
+    expect(await screen.findByText("Secret")).toBeInTheDocument()
+    expect(screen.queryByText(hashed)).toBeNull()
+  })
+
+  it("does not hash anything with privacy off", async () => {
+    serve([tag(1, "Secret", { isPrivate: true, usageCount: 1 })], false)
+    renderPage()
+    expect(await screen.findByText("Secret")).toBeInTheDocument()
   })
 })

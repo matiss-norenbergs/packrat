@@ -595,7 +595,7 @@ Pages/features render `<FloatingAction icon label onClick active? order? />`, wh
 button into the node (state-backed callback ref, so it works on the first render); mounting adds the
 button, unmounting removes it, and without a dock above it renders nothing. The dock owns all
 positioning, so features never position themselves. `RevealAllFloatingAction` is the first user; the AI Enhancement page also uses it and reads only the provider's
-`revealAll` flag (no per-item keys, no click-to-reveal).
+`revealAll` flag (no per-item keys, no click-to-reveal), as does the Tags page, where `useTagNameMask` (display-only; fails closed while settings/tags load) hashes private tag names — the Library surfaces pass their per-item reveal state to the same hook.
 
 **Dock-aware footers.** A page footer must not sit under the dock button, but only while the dock actually has one
 (`RevealAllFloatingAction` renders nothing with privacy off or no private content). `styles/globals.css` defines the
