@@ -549,6 +549,25 @@ describe("LibraryListView on DataTable: privacy", () => {
     expect(screen.queryByText(hashedTag)).toBeNull()
   })
 
+  it("shows a non-blurred item's tags readable immediately, even before the tags list arrives", async () => {
+    const base = mockFetch((url) => {
+      if (url.endsWith("/tags")) return { status: 200, body: [{ id: 1, name: "Plain", isPrivate: true, createdAt: "", usageCount: 1 }] }
+      if (url.endsWith("/settings")) return { status: 200, body: { libraryView: "list", libraryMode: "manage", libraryPaginationEnabled: true, libraryPageSize: PAGE_SIZE, privacyEnabled: true } }
+      if (url.includes("/library?")) return { status: 200, body: { items: [item(1, { title: "Open Show", tags: ["Plain"] })], total: 1 } }
+      if (url.endsWith("/auth/table-layouts")) return { status: 200, body: { layouts: {} } }
+      return { status: 200, body: url.endsWith("/library/facets") ? { years: [] } : [] }
+    })
+    // The tags list arrives late; the table must not hash the tags while it is pending.
+    vi.stubGlobal("fetch", async (url: string, init: unknown) => {
+      if (url.endsWith("/tags")) await new Promise((r) => setTimeout(r, 400))
+      return base(url, init as never)
+    })
+    renderList()
+    expect(await screen.findByText("Plain")).toBeInTheDocument()
+    await settle()
+    expect(screen.getByText("Plain")).toBeInTheDocument()
+  })
+
   it("the title link navigates and never selects the row", async () => {
     const user = userEvent.setup()
     serve([PRIVATE, item(2)])

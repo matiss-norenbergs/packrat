@@ -128,7 +128,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
           <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
             {visibleTags.map((tag) => (
               <Badge key={tag} variant="secondary" className="min-w-0 shrink truncate">
-                {maskTag(tag, revealed)}
+                {maskTag(tag, revealed || !item.blurred)}
               </Badge>
             ))}
             {hiddenTags.length > 0 && (
@@ -138,7 +138,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
                     +{hiddenTags.length}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent>{hiddenTags.map((t) => maskTag(t, revealed)).join(", ")}</TooltipContent>
+                <TooltipContent>{hiddenTags.map((t) => maskTag(t, revealed || !item.blurred)).join(", ")}</TooltipContent>
               </Tooltip>
             )}
           </div>

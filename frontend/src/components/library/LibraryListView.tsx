@@ -76,7 +76,7 @@ function TitleCell({ item }: { item: LibraryItem }) {
 function TagsCell({ item }: { item: LibraryItem }) {
   const { isRevealed } = useRevealAll()
   const maskTag = useTagNameMask()
-  const revealed = isRevealed(item.id)
+  const revealed = isRevealed(item.id) || !item.blurred
   if (item.tags.length === 0) return null
   const visibleTags = item.tags.slice(0, MAX_VISIBLE_TAGS)
   const hiddenTags = item.tags.slice(MAX_VISIBLE_TAGS)
