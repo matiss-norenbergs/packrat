@@ -11,6 +11,7 @@ import { ResolutionValue } from "@/components/ResolutionValue"
 import { ThumbnailDimensionsValue } from "@/components/ThumbnailDimensionsValue"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { useSettings } from "@/hooks/useSettings"
+import { useTagNameMask } from "@/hooks/useTagNameMask"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
 import { useRevealAll } from "./RevealAllContext"
@@ -25,6 +26,7 @@ const MAX_VISIBLE_TAGS = 2
 export function LibraryCard({ item }: { item: LibraryItem }) {
   const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
   const { data: settings } = useSettings()
+  const maskTag = useTagNameMask()
   const navigate = useNavigate()
   const location = useLocation()
   const revealed = isRevealed(item.id)
@@ -126,7 +128,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
           <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
             {visibleTags.map((tag) => (
               <Badge key={tag} variant="secondary" className="min-w-0 shrink truncate">
-                {tag}
+                {maskTag(tag, revealed)}
               </Badge>
             ))}
             {hiddenTags.length > 0 && (
@@ -136,7 +138,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
                     +{hiddenTags.length}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent>{hiddenTags.join(", ")}</TooltipContent>
+                <TooltipContent>{hiddenTags.map((t) => maskTag(t, revealed)).join(", ")}</TooltipContent>
               </Tooltip>
             )}
           </div>

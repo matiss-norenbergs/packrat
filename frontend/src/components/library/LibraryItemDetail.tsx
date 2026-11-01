@@ -10,6 +10,7 @@ import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress"
 import { useSettings } from "@/hooks/useSettings"
+import { useTagNameMask } from "@/hooks/useTagNameMask"
 import { sortLibraryItems } from "@/lib/libraryFilters"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { formatBytes, hashText, isAudioFilename } from "@/lib/utils"
@@ -59,6 +60,7 @@ export function LibraryItemDetail({
   ignorePrivacy?: boolean
 }) {
   const { data: settings } = useSettings()
+  const maskTag = useTagNameMask()
   const { isRevealed, toggleItem, revealItems } = useRevealAll()
   const revealed = isRevealed(item.id)
   const effectiveBlurred = item.blurred && !ignorePrivacy
@@ -213,7 +215,7 @@ export function LibraryItemDetail({
             <Badge variant="outline">{item.collectionName ?? "Uncategorized"}</Badge>
             {item.tags.map((tag) => (
               <Badge key={tag} variant="secondary">
-                {tag}
+                {maskTag(tag, !locked)}
               </Badge>
             ))}
           </div>
