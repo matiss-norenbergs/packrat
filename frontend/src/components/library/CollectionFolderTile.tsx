@@ -1,15 +1,23 @@
 import { useState } from "react"
-import { AlertTriangle, Folder, Lock } from "lucide-react"
+import { AlertTriangle, Folder } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useSettings } from "@/hooks/useSettings"
+import { PrivateLock } from "@/components/collections/PrivateLock"
 import type { CollectionTreeNode } from "@/lib/collectionTree"
+import type { Collection } from "@/types/api"
 import { cn } from "@/lib/utils"
 import { useSelection } from "./SelectionContext"
 
-export function CollectionFolderTile({ node, onClick }: { node: CollectionTreeNode; onClick: () => void }) {
-  const { data: settings } = useSettings()
+export function CollectionFolderTile({
+  node,
+  collections,
+  onClick,
+}: {
+  node: CollectionTreeNode
+  collections: Collection[] | undefined
+  onClick: () => void
+}) {
   const { selectionActive, isCollectionSelected, toggleCollection } = useSelection()
   const selected = isCollectionSelected(node.id)
   // Controlled instead of Radix's default click/focus trigger — Popover has
@@ -53,7 +61,7 @@ export function CollectionFolderTile({ node, onClick }: { node: CollectionTreeNo
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="truncate text-sm font-medium">{node.name}</p>
-            {settings?.privacyEnabled && node.isPrivate && <Lock className="h-3 w-3 shrink-0 text-primary" />}
+            <PrivateLock collection={node} collections={collections} className="h-3 w-3" />
           </div>
           <p className="text-xs text-muted-foreground">
             {node.children.length} {node.children.length === 1 ? "subcollection" : "subcollections"}

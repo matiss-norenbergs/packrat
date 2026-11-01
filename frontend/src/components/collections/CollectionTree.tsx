@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronDown, ChevronRight, FolderPlus, Info, Lock, Pencil, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, FolderPlus, Info, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -19,7 +19,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { CollectionDialog } from "./CollectionDialog"
 import { useDeleteCollection } from "@/hooks/useCollections"
 import { useArtists } from "@/hooks/useArtists"
-import { useSettings } from "@/hooks/useSettings"
+import { PrivateLock } from "@/components/collections/PrivateLock"
+import type { Collection } from "@/types/api"
 import type { CollectionTreeNode } from "@/lib/collectionTree"
 
 interface SelectionProps {
@@ -46,12 +47,13 @@ function capitalize(s: string): string {
 
 export function CollectionTree({
   nodes,
+  collections,
   isSelected,
   onToggle,
   onRowMouseDown,
   isExpanded,
   onToggleExpanded,
-}: { nodes: CollectionTreeNode[] } & SelectionProps & ExpansionProps) {
+}: { nodes: CollectionTreeNode[]; collections: Collection[] | undefined } & SelectionProps & ExpansionProps) {
   const { data: artists } = useArtists()
   const artistNameById = new Map((artists ?? []).map((a) => [a.id, a.name]))
 
@@ -67,6 +69,7 @@ export function CollectionTree({
           isExpanded={isExpanded}
           onToggleExpanded={onToggleExpanded}
           artistNameById={artistNameById}
+          collections={collections}
         />
       ))}
     </div>
@@ -81,10 +84,10 @@ function CollectionNode({
   isExpanded,
   onToggleExpanded,
   artistNameById,
-}: { node: CollectionTreeNode; artistNameById: Map<number, string> } & SelectionProps & ExpansionProps) {
+  collections,
+}: { node: CollectionTreeNode; artistNameById: Map<number, string>; collections: Collection[] | undefined } & SelectionProps & ExpansionProps) {
   const expanded = isExpanded(node.id)
   const deleteCollection = useDeleteCollection()
-  const { data: settings } = useSettings()
   const hasChildren = node.children.length > 0
   const selected = isSelected(node.id)
   // Controlled instead of Radix's default click/focus trigger — Popover has
@@ -165,16 +168,7 @@ function CollectionNode({
                 </dl>
               </PopoverContent>
             </Popover>
-            {settings?.privacyEnabled && node.isPrivate && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Lock className="h-3.5 w-3.5 text-primary" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Private</TooltipContent>
-              </Tooltip>
-            )}
+            <PrivateLock collection={node} collections={collections} className="h-3.5 w-3.5" />
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <Badge variant="outline">
@@ -253,6 +247,7 @@ function CollectionNode({
               isExpanded={isExpanded}
               onToggleExpanded={onToggleExpanded}
               artistNameById={artistNameById}
+              collections={collections}
             />
           ))}
         </div>

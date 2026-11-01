@@ -166,7 +166,7 @@ export function LibraryFolderView() {
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {childNodes.map((node) => (
-            <CollectionFolderTile key={node.id} node={node} onClick={() => goTo(node.id)} />
+            <CollectionFolderTile key={node.id} node={node} collections={collections} onClick={() => goTo(node.id)} />
           ))}
           {data.items.map((item) => (
             <LibraryCard key={item.id} item={item} />
