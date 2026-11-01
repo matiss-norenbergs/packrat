@@ -219,7 +219,8 @@ not per-browser):
   the same footer as the tables: "N items" on the left (even for a single page) and the numbered pager with Previous / Next on
   the right, indented to clear the floating reveal button when it is shown. With pagination off they have no footer. While a
   page loads the footer stays, with a "—" instead of the count and a disabled pager (only the current page button), so the cards
-  area keeps its height; it is not shown on an error, before the settings are known, or when the result is empty.
+  area keeps its height (and in the Folders view the breadcrumb row is shown while loading too: Root, plus a skeleton
+  for the folder names inside a folder, so the cards do not jump when the data arrives); the footer is not shown on an error, before the settings are known, or when the result is empty.
   **Scrolling**: the grid and the Folders view fill the window like the list: the title, the toolbar row (with its divider), the
   Folders breadcrumb and the pagination footer stay in view and only the cards scroll (the page itself never scrolls). On a
   narrow window the toolbar wraps and the cards area simply gets shorter. The cards return to the top on a new page, filter,

@@ -35,7 +35,7 @@ function serve({ settings = {}, total = 60, libraryStatus = 200, items = [] }: S
 }
 
 // Like serve(), but the library answer waits for release(), so the loading state can be observed.
-function serveGated({ settings = {}, total = 60 }: Serve = {}) {
+function serveGated({ settings = {}, total = 60, collections = [] }: Serve & { collections?: object[] } = {}) {
   let release!: () => void
   const gate = new Promise<void>((resolve) => (release = resolve))
   const json = (body: unknown) => ({ ok: true, status: 200, statusText: "200", headers: { get: () => null }, json: async () => body })
@@ -48,7 +48,8 @@ function serveGated({ settings = {}, total = 60 }: Serve = {}) {
       }
       if (url.endsWith("/settings")) return json({ libraryPaginationEnabled: true, libraryPageSize: 24, ...settings })
       if (url.endsWith("/auth/table-layouts")) return json({ layouts: {} })
-      if (url.endsWith("/collections") || url.endsWith("/tags") || url.endsWith("/artists") || url.includes("/compare")) return json([])
+      if (url.endsWith("/collections")) return json(collections)
+      if (url.endsWith("/tags") || url.endsWith("/artists") || url.includes("/compare")) return json([])
       if (url.endsWith("/library/facets")) return json({ years: [] })
       return json({})
     }),
@@ -173,6 +174,59 @@ describe("folder view: the breadcrumb", () => {
     expect(crumb.nextElementSibling).toBe(region())
   })
 })
+
+describe("folder view: the breadcrumb row while loading", () => {
+  const shows = { id: 5, name: "Shows", parentId: null, path: "Shows", createdAt: "2026-01-01T00:00:00Z" }
+
+  it("shows Root at the root, outside the region, and the full row once loaded", async () => {
+    const release = serveGated({ collections: [shows] })
+    renderView(<LibraryFolderView />)
+    const root = await screen.findByRole("button", { name: "Root" })
+    const crumb = root.parentElement!
+    expect(region()).not.toContainElement(crumb)
+    expect(crumb.nextElementSibling).toBe(region())
+    expect(crumb.querySelector('[data-slot="skeleton"]')).toBeNull()
+    release()
+    await screen.findByText("60 items")
+    expect(screen.getByRole("button", { name: "Root" }).parentElement).toBe(crumb)
+    expect(crumb.nextElementSibling).toBe(region())
+  })
+
+  it("inside a folder shows Root and a skeleton for the names, then the real names", async () => {
+    const release = serveGated({ collections: [shows] })
+    renderView(<LibraryFolderView />, "/?collection=5")
+    const root = await screen.findByRole("button", { name: "Root" })
+    const crumb = root.parentElement!
+    expect(region()).not.toContainElement(crumb)
+    expect(crumb.nextElementSibling).toBe(region())
+    expect(crumb.querySelector('[data-slot="skeleton"]')).not.toBeNull()
+    expect(screen.queryByRole("button", { name: "Shows" })).toBeNull()
+    release()
+    expect(await screen.findByRole("button", { name: "Shows" })).toBeInTheDocument()
+    expect(crumb.querySelector('[data-slot="skeleton"]')).toBeNull()
+    expect(screen.getByRole("button", { name: "Root" }).parentElement).toBe(crumb)
+  })
+
+  it("the Root button navigates while loading", async () => {
+    const release = serveGated({ collections: [shows] })
+    renderView(
+      <>
+        <LibraryFolderView />
+        <SearchProbe />
+      </>,
+      "/?collection=5",
+    )
+    expect(screen.getByTestId("search")).toHaveTextContent("collection=5")
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Root" }))
+    expect(screen.getByTestId("search")).not.toHaveTextContent("collection")
+    release()
+  })
+})
+
+function SearchProbe() {
+  const [params] = useSearchParams()
+  return <span data-testid="search">{params.toString()}</span>
+}
 
 describe("LibraryPage shell", () => {
   const page = () =>

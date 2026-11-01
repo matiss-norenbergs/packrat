@@ -29,6 +29,42 @@ function breadcrumbFor(collections: Collection[], id: number): Collection[] {
   return trail
 }
 
+// The breadcrumb row. One component for the loaded and the loading state, so the two rows (and the region under them)
+// cannot drift apart: inside a folder the names are not known until the collections load, so a skeleton stands in for them.
+function FolderBreadcrumb({ trail, loading, onNavigate }: { trail: Collection[]; loading: boolean; onNavigate: (id: number | null) => void }) {
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-1 text-sm text-muted-foreground">
+      <button
+        type="button"
+        onClick={() => onNavigate(null)}
+        className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
+      >
+        <Home className="h-3.5 w-3.5" />
+        Root
+      </button>
+      {loading ? (
+        <>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+          <Skeleton className="h-4 w-24" />
+        </>
+      ) : (
+        trail.map((c) => (
+          <Fragment key={c.id}>
+            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+            <button
+              type="button"
+              onClick={() => onNavigate(c.id)}
+              className="rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
+            >
+              {c.name}
+            </button>
+          </Fragment>
+        ))
+      )}
+    </div>
+  )
+}
+
 export function LibraryFolderView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: collections, isLoading: collectionsLoading } = useCollections()
@@ -67,10 +103,21 @@ export function LibraryFolderView() {
   // Everything that starts a new view at the top (the page is already 1 in the pass that sees a changed filter).
   const resetKey = JSON.stringify([page, currentId, search, tagNames.join(","), hideGhosts, sortKey, sortDir])
 
+  const goTo = (id: number | null) => {
+    const next = new URLSearchParams(searchParams)
+    if (id == null) next.delete("collection")
+    else next.set("collection", String(id))
+    setSearchParams(next) // pushes a history entry so Back navigates up a level
+  }
+
+  // Inside a folder the loading row shows a skeleton for the names; at the root there is nothing more than Root.
+  const loadingHeader = <FolderBreadcrumb trail={[]} loading={currentId != null} onNavigate={goTo} />
+
   if (collectionsLoading || itemsLoading || settingsLoading || !sortReady) {
     return (
       <LibraryScrollView
         resetKey={resetKey}
+        header={loadingHeader}
         footer={
           !settingsLoading && paginationEnabled && <LibraryPagination page={page} pageSize={pageSize} total={0} onPageChange={setPage} loading />
         }
@@ -85,19 +132,21 @@ export function LibraryFolderView() {
   }
   if (isError) {
     return (
-      <LibraryScrollView resetKey={resetKey}>
+      <LibraryScrollView
+        resetKey={resetKey}
+        header={
+          <FolderBreadcrumb
+            trail={collections && currentId != null ? breadcrumbFor(collections, currentId) : []}
+            loading={!collections && currentId != null}
+            onNavigate={goTo}
+          />
+        }
+      >
         <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p>
       </LibraryScrollView>
     )
   }
   if (!collections || !data) return null
-
-  const goTo = (id: number | null) => {
-    const next = new URLSearchParams(searchParams)
-    if (id == null) next.delete("collection")
-    else next.set("collection", String(id))
-    setSearchParams(next) // pushes a history entry so Back navigates up a level
-  }
 
   const tree = buildCollectionTree(collections)
   const currentNode = currentId != null ? findNodeById(tree, currentId) : null
@@ -109,30 +158,7 @@ export function LibraryFolderView() {
   return (
     <LibraryScrollView
       resetKey={resetKey}
-      header={
-        <div className="flex shrink-0 flex-wrap items-center gap-1 text-sm text-muted-foreground">
-          <button
-            type="button"
-            onClick={() => goTo(null)}
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-          >
-            <Home className="h-3.5 w-3.5" />
-            Root
-          </button>
-          {breadcrumb.map((c) => (
-            <Fragment key={c.id}>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-              <button
-                type="button"
-                onClick={() => goTo(c.id)}
-                className="rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-              >
-                {c.name}
-              </button>
-            </Fragment>
-          ))}
-        </div>
-      }
+      header={<FolderBreadcrumb trail={breadcrumb} loading={false} onNavigate={goTo} />}
       footer={!isEmpty && paginationEnabled && <LibraryPagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} />}
     >
       {isEmpty ? (
