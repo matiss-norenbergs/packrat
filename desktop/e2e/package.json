@@ -8,6 +8,6 @@
     "test": "node run.mjs"
   },
   "dependencies": {
-    "selenium-webdriver": "^4.51.0"
+    "selenium-webdriver": "^4.52.0"
   }
 }
