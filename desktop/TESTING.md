@@ -131,6 +131,7 @@ Downloads are done with the backup file: **Backup → Backup History → Downloa
 | --- | --- | --- | --- |
 | W-60 | Sidebar server switcher → **Add server…**, connect the second server, log in. | Both servers are listed with a check on the current one. | Pass 2026-10-24 v0.18.1 |
 | W-61 | Switch between them with the switcher. | The app reloads on each and stays signed in; data is that server's. | Pass 2026-10-24 v0.18.1 |
+| W-62a | Look at the sidebar footer. | The switcher shows the server's name and version; the next line reads "Desktop vX.Y.Z" matching Settings → Desktop → "App X.Y.Z", with no update dot and no link. | Not run — needs the Windows desktop shell |
 | W-62 | Settings → Desktop → Servers → Edit → change the name. | The new name shows in the list and the switcher without a reload. | Pass 2026-10-24 v0.18.1 |
 | W-63 | Edit the address to a working one, save. | The address is checked first; on success the app signs out of that server (token dropped). | Pass 2026-10-24 v0.18.1 |
 | W-64 | Edit the address to an unreachable one. | The save is refused with an error; nothing changes. | Pass 2026-10-24 v0.18.1 |
