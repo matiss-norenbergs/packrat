@@ -22,10 +22,12 @@ import { SidebarServerSwitcher } from "@/components/ServerSwitcher"
 import { PackratLogo } from "@/components/PackratLogo"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useDesktopAppVersion } from "@/hooks/useDesktopAppVersion"
 import { useLogout } from "@/hooks/useAuth"
 import { useAppVersion, useProxyStatus, useSettings, useYtDlpVersion } from "@/hooks/useSettings"
 import { useThumbnailEnhancementStatus } from "@/hooks/useThumbnailEnhancement"
 import { enhancementStatusColor } from "@/lib/enhancementStatus"
+import { isDesktop } from "@/lib/server"
 import { cn } from "@/lib/utils"
 import type { ProxyStatus } from "@/types/api"
 import { HostActionsMenu } from "./HostActionsMenu"
@@ -101,7 +103,7 @@ export function SidebarContent() {
       <div className="shrink-0">
         <HostActionsMenu />
         <SidebarServerSwitcher onManage={() => navigate("/settings?tab=desktop")} />
-        <AppVersionLine />
+        {isDesktop() ? <DesktopVersionLine /> : <AppVersionLine />}
         <VersionLine />
         <div className="px-2 py-2">
           <Button
@@ -178,6 +180,20 @@ function ProxyStatusDot() {
       </TooltipTrigger>
       <TooltipContent>{PROXY_STATUS_DOT_LABEL[color]}</TooltipContent>
     </Tooltip>
+  )
+}
+
+// Desktop app: the switcher above already shows the server's version, so this
+// row is the app's own. Plain row (no update dot/link) to line up with yt-dlp.
+function DesktopVersionLine() {
+  const version = useDesktopAppVersion()
+  if (!version) return null
+
+  return (
+    <div className="flex items-center justify-between px-4 py-1 text-xs text-muted-foreground">
+      <span>Desktop</span>
+      <span>v{version}</span>
+    </div>
   )
 }
 

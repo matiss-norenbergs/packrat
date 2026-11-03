@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { AppWindow, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -13,6 +12,7 @@ import { UpdateProgress } from "@/components/settings/UpdateProgress"
 import { useAppUpdate } from "@/hooks/useAppUpdate"
 import { useMatchServerVersion } from "@/hooks/useMatchServerVersion"
 import { compareSemver, isReleaseVersion } from "@/lib/semver"
+import { useDesktopAppVersion } from "@/hooks/useDesktopAppVersion"
 import { useCloseToTray } from "@/hooks/useCloseToTray"
 import { useStartup, type StartupMode } from "@/hooks/useStartup"
 import { SettingRow } from "@/components/settings/SettingRow"
@@ -97,19 +97,8 @@ function ShellSettings() {
 function UpdatesSection() {
   const { state, check, install } = useAppUpdate()
   const match = useMatchServerVersion()
-  const [currentVersion, setCurrentVersion] = useState<string | null>(null)
+  const currentVersion = useDesktopAppVersion()
   const serverVersion = useAppVersion().data?.version
-
-  useEffect(() => {
-    let cancelled = false
-    import("@tauri-apps/api/app")
-      .then(({ getVersion }) => getVersion())
-      .then((version) => !cancelled && setCurrentVersion(version))
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const busy =
     state.status === "checking" ||

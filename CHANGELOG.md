@@ -12,6 +12,9 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-03
+- **Desktop sidebar shows the app's own version** — in the desktop app the footer's second line now reads "Desktop vX.Y.Z" (the installed app, same as Settings → Desktop) instead of repeating the server version, which the server switcher above already shows; it has no update dot or link. The web UI is unchanged. Frontend only; shared `useDesktopAppVersion`.
+
 ## 2026-11-01
 - **Private artists behave like private tags** — with privacy on, every library item whose own artist is private is now blurred (Library, Compare list, AI Enhancement history, item page; the shared `ItemPrivacy` rule gains the artist, loaded via `ArtistsRepo.PrivateArtistIDs`), and a private artist's *name* is hashed on the Artists page (revealed by reveal-all only) and in the Library grid, list and item page until the item is revealed. Shared `useArtistNameMask`. **Existing items by an artist already marked Private become blurred**; the Downloads queue still ignores the artist.
 - **Private tag names are hashed** — with privacy on, a private tag's name shows as `Hidden-xxxxxxxx` on the Tags page (revealed by the new reveal-all button there; search still matches the real name) and in the Library grid, list and item page until the item is revealed. Frontend only; shared `useTagNameMask`.

@@ -130,6 +130,9 @@ isn't wired up yet.
   across the three webviews), `opener` (http(s) links open in the system browser —
   `frontend/src/lib/desktop.ts`), `window-state` (remembers size/position), `single-instance` (a
   second launch focuses the running window instead of opening another).
+- **Sidebar versions** — the footer's server switcher shows the server's version; the line below it,
+  "Desktop", shows the app's own version (Tauri `getVersion()`, same as Settings → Desktop → "App x.y.z"),
+  with no update dot or link.
 - **Tray and close-to-tray** — `src/tray.rs` builds the tray icon (left click or "Show Packrat"
   restores the window, "Quit" exits). With saved servers the menu starts with a **Servers** submenu
   (the active one checked, the tooltip reads "Packrat — <name>"); picking one shows the window and
