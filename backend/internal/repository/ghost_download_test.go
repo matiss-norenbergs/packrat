@@ -36,7 +36,7 @@ func TestLibraryRepo_CompleteGhostFromDownload(t *testing.T) {
 	err = lib.CompleteGhostFromDownload(ctx, ghost, &models.LibraryItem{
 		DownloadID: &dlID, Title: "new", Filename: "b.mp4", Path: "a/b.mp4", Folder: "a",
 		MediaType: &mt, Resolution: &res, Thumbnail: &thumb, FileSizeBytes: &size, Duration: &dur,
-	})
+	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,12 +54,47 @@ func TestLibraryRepo_CompleteGhostFromDownload(t *testing.T) {
 	}
 
 	// Already filled: no longer a ghost, so a second fill is refused.
-	if err := lib.CompleteGhostFromDownload(ctx, ghost, &models.LibraryItem{Title: "x"}); !errors.Is(err, ErrNotFound) {
+	if err := lib.CompleteGhostFromDownload(ctx, ghost, &models.LibraryItem{Title: "x"}, false); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second fill err = %v, want ErrNotFound", err)
 	}
 	// Deleted row: ErrNotFound too (the caller falls back to Create).
-	if err := lib.CompleteGhostFromDownload(ctx, 9999, &models.LibraryItem{Title: "x"}); !errors.Is(err, ErrNotFound) {
+	if err := lib.CompleteGhostFromDownload(ctx, 9999, &models.LibraryItem{Title: "x"}, false); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing row err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestLibraryRepo_CompleteGhostKeepMetadata(t *testing.T) {
+	ctx := context.Background()
+	dl := openTestDB(t)
+	lib := NewLibraryRepo(dl.db)
+	up, desc := "my uploader", "my description"
+	ghost, err := lib.Create(ctx, &models.LibraryItem{Title: "my edited title", Uploader: &up, Description: &desc, Status: "ghost"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nu, nd, res := "dl uploader", "dl description", "1280x720"
+	err = lib.CompleteGhostFromDownload(ctx, ghost, &models.LibraryItem{
+		Title: "download title", Uploader: &nu, Description: &nd, Filename: "f.mp4", Path: "f.mp4", Resolution: &res,
+	}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := lib.Get(ctx, ghost)
+	if got.Title != "my edited title" || got.Uploader == nil || *got.Uploader != up || got.Description == nil || *got.Description != desc {
+		t.Fatalf("keepMetadata must preserve title/uploader/description: %+v", got)
+	}
+	if got.Status != "completed" || got.Filename != "f.mp4" || got.Path != "f.mp4" || got.Resolution == nil {
+		t.Fatalf("file fields must still be filled: %+v", got)
+	}
+
+	// keepMetadata=false takes the download's values.
+	g2, _ := lib.Create(ctx, &models.LibraryItem{Title: "old", Uploader: &up, Description: &desc, Status: "ghost"})
+	if err := lib.CompleteGhostFromDownload(ctx, g2, &models.LibraryItem{Title: "download title", Uploader: &nu, Description: &nd, Filename: "g.mp4", Path: "g.mp4"}, false); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = lib.Get(ctx, g2)
+	if got.Title != "download title" || *got.Uploader != nu || *got.Description != nd {
+		t.Fatalf("keepMetadata=false should take the download's values: %+v", got)
 	}
 }
 

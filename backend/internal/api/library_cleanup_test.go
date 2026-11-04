@@ -310,7 +310,7 @@ func TestDeleteLibraryItemFileArtifacts(t *testing.T) {
 	t.Run("bulk with deleteThumbnail", func(t *testing.T) {
 		e := newCleanupEnv(t)
 		a, b := e.seedItem(t, "bda"), e.seedItem(t, "bdb")
-		h := BulkDeleteLibraryItemFiles(e.conn, e.library, e.originals, e.mediaRoot, e.imagesRoot)
+		h := BulkDeleteLibraryItemFiles(e.conn, e.library, e.downloads, e.originals, e.mediaRoot, e.imagesRoot)
 		body := fmt.Sprintf(`{"itemIds":[%d,%d],"deleteThumbnail":true}`, a.id, b.id)
 		w := e.do(t, h, http.MethodPost, "/library/bulk-delete-file", "/library/bulk-delete-file", body)
 		if w.Code != http.StatusOK {

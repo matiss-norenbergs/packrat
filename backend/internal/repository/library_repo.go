@@ -734,23 +734,34 @@ func (r *LibraryRepo) ApplyRedownload(ctx context.Context, id int64, p ApplyRedo
 // probed resolution/duration/size and the metadata the download resolved,
 // with status 'completed'. Artist/year/season/sequence only overwrite when
 // the download supplies a value, so a retried download that carries no
-// overrides never blanks what the ghost already holds. Only matches a row
+// overrides never blanks what the ghost already holds. keepMetadata leaves
+// the row's own title, uploader and description untouched (a ghost the
+// download merely reused, whose text the user may have edited since); false
+// takes them from item. Only matches a row
 // that is still a ghost; ErrNotFound means it was deleted (or already
 // filled) meanwhile and the caller falls back to Create.
-func (r *LibraryRepo) CompleteGhostFromDownload(ctx context.Context, id int64, item *models.LibraryItem) error {
+func (r *LibraryRepo) CompleteGhostFromDownload(ctx context.Context, id int64, item *models.LibraryItem, keepMetadata bool) error {
+	metadataSet := `title = ?, uploader = ?, description = ?`
+	metadataArgs := []any{item.Title, item.Uploader, item.Description}
+	if keepMetadata {
+		metadataSet = `title = title, uploader = uploader, description = description`
+		metadataArgs = nil
+	}
+	args := []any{item.DownloadID}
+	args = append(args, metadataArgs...)
+	args = append(args,
+		item.Filename, item.Path, item.CollectionID, item.Folder, item.OriginalURL,
+		item.VideoID, item.Duration, item.Resolution, item.MediaType, item.Thumbnail,
+		item.GenerateNFO, item.FileSizeBytes,
+		item.ArtistID, item.ReleaseYear, item.SequenceNumber, item.SeasonNumber, id)
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE library
-		SET download_id = ?, title = ?, filename = ?, path = ?, collection_id = ?, folder = ?, original_url = ?,
-		    video_id = ?, uploader = ?, duration = ?, resolution = ?, media_type = ?, thumbnail = ?,
-		    description = ?, generate_nfo = ?, file_size_bytes = ?, status = 'completed',
+		SET download_id = ?, `+metadataSet+`, filename = ?, path = ?, collection_id = ?, folder = ?, original_url = ?,
+		    video_id = ?, duration = ?, resolution = ?, media_type = ?, thumbnail = ?,
+		    generate_nfo = ?, file_size_bytes = ?, status = 'completed',
 		    artist_id = COALESCE(?, artist_id), release_year = COALESCE(?, release_year),
 		    sequence_number = COALESCE(?, sequence_number), season_number = COALESCE(?, season_number)
-		WHERE id = ? AND status = 'ghost'`,
-		item.DownloadID, item.Title, item.Filename, item.Path, item.CollectionID, item.Folder, item.OriginalURL,
-		item.VideoID, item.Uploader, item.Duration, item.Resolution, item.MediaType, item.Thumbnail,
-		item.Description, item.GenerateNFO, item.FileSizeBytes,
-		item.ArtistID, item.ReleaseYear, item.SequenceNumber, item.SeasonNumber, id,
-	)
+		WHERE id = ? AND status = 'ghost'`, args...)
 	if err != nil {
 		return fmt.Errorf("completing ghost library item: %w", err)
 	}

@@ -110,7 +110,7 @@ func GetFrameMatchStatus(jobs *framematch.JobStore) gin.HandlerFunc {
 // item already sitting in the queue (any state) is skipped too and counted
 // separately, so re-selecting an already-queued item doesn't waste a
 // redundant scan on it.
-func BulkStartFrameMatch(libraryRepo *repository.LibraryRepo, queueRepo *repository.FrameMatchQueueRepo) gin.HandlerFunc {
+func BulkStartFrameMatch(libraryRepo *repository.LibraryRepo, queueRepo *repository.FrameMatchQueueRepo, downloadsRepo *repository.DownloadsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		var req BulkFrameMatchRequest
@@ -125,8 +125,19 @@ func BulkStartFrameMatch(libraryRepo *repository.LibraryRepo, queueRepo *reposit
 			return
 		}
 
+		active, err := downloadsRepo.ActiveDownloadIDsByLibraryItem(ctx, req.ItemIds)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
 		var resp BulkFrameMatchResponse
 		for _, id := range req.ItemIds {
+			if _, busy := active[id]; busy {
+				resp.Skipped++
+				resp.SkippedDownloading++
+				continue
+			}
 			if alreadyQueued[id] {
 				resp.AlreadyQueued++
 				continue

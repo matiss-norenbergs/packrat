@@ -572,6 +572,25 @@ type BulkFetchLibraryThumbnailsRequest struct {
 type BulkRedownloadResponse struct {
 	Queued  int `json:"queued"`
 	Skipped int `json:"skipped"`
+	// SkippedDownloading is the part of Skipped that was left out because the
+	// item has a queued/running download (a subset, not an addition).
+	SkippedDownloading int `json:"skippedDownloading"`
+}
+
+// BulkAssignTagsResponse reports how many items got the new tag set; items
+// with an active download are left out (Skipped == SkippedDownloading).
+type BulkAssignTagsResponse struct {
+	Updated            int `json:"updated"`
+	Skipped            int `json:"skipped"`
+	SkippedDownloading int `json:"skippedDownloading"`
+}
+
+// BulkDeleteLibraryItemFilesResponse reports how many items had their file
+// removed; items with an active download are left out.
+type BulkDeleteLibraryItemFilesResponse struct {
+	Deleted            int `json:"deleted"`
+	Skipped            int `json:"skipped"`
+	SkippedDownloading int `json:"skippedDownloading"`
 }
 
 // BulkFetchThumbnailsResponse reports how many items actually got a new
@@ -581,6 +600,8 @@ type BulkRedownloadResponse struct {
 type BulkFetchThumbnailsResponse struct {
 	Fetched int `json:"fetched"`
 	Skipped int `json:"skipped"`
+	// SkippedDownloading: the part of Skipped with an active download.
+	SkippedDownloading int `json:"skippedDownloading"`
 }
 
 // MissingLibraryFileResponse is one item ScanMissingLibraryFiles found and
@@ -701,6 +722,8 @@ type BulkFrameMatchResponse struct {
 	Queued        int `json:"queued"`
 	Skipped       int `json:"skipped"`
 	AlreadyQueued int `json:"alreadyQueued"`
+	// SkippedDownloading: the part of Skipped with an active download.
+	SkippedDownloading int `json:"skippedDownloading"`
 }
 
 // FrameMatchQueueItemResponse is one row of GET /frame-match/queue — the

@@ -544,11 +544,23 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 // frontend bulk-edit dialog's explicit "replaces all tags" warning. Ids that
 // no longer exist are silently skipped by SetForLibraryItems rather than
 // failing the whole batch.
-func BulkAssignTags(repo *repository.LibraryRepo, tagsRepo *repository.TagsRepo, mediaRoot string) gin.HandlerFunc {
+func BulkAssignTags(repo *repository.LibraryRepo, tagsRepo *repository.TagsRepo, downloadsRepo *repository.DownloadsRepo, mediaRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BulkAssignTagsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Items with an active download are left alone (their download would
+		// not overwrite tags, but the item is locked while it runs).
+		itemIDs, skipped, err := splitActiveItems(c.Request.Context(), downloadsRepo, req.ItemIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if len(itemIDs) == 0 {
+			c.JSON(http.StatusOK, BulkAssignTagsResponse{Skipped: skipped, SkippedDownloading: skipped})
 			return
 		}
 
@@ -557,14 +569,14 @@ func BulkAssignTags(repo *repository.LibraryRepo, tagsRepo *repository.TagsRepo,
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if err := tagsRepo.SetForLibraryItems(c.Request.Context(), req.ItemIDs, tagIDs); err != nil {
+		if err := tagsRepo.SetForLibraryItems(c.Request.Context(), itemIDs, tagIDs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
 		// Keep each opted-in item's .nfo sidecar in sync, same as
 		// UpdateLibraryItem's nfoRelevant block — best effort, log-only.
-		for _, id := range req.ItemIDs {
+		for _, id := range itemIDs {
 			item, err := repo.Get(c.Request.Context(), id)
 			if err != nil || !item.GenerateNFO || item.Path == "" {
 				continue
@@ -574,7 +586,7 @@ func BulkAssignTags(repo *repository.LibraryRepo, tagsRepo *repository.TagsRepo,
 			}
 		}
 
-		c.Status(http.StatusNoContent)
+		c.JSON(http.StatusOK, BulkAssignTagsResponse{Updated: len(itemIDs), Skipped: skipped, SkippedDownloading: skipped})
 	}
 }
 
@@ -840,6 +852,44 @@ func rejectIfDownloadActive(c *gin.Context, downloadsRepo *repository.DownloadsR
 	return false
 }
 
+// blockWhenDownloadActive is route middleware for every single-item route that
+// changes a library item or its files: while the item has a queued/running
+// download the request is answered 409 (rejectIfDownloadActive), so an edit can
+// never be overwritten by the download finishing underneath it. A malformed id
+// falls through so the handler keeps its own 400.
+func blockWhenDownloadActive(downloadsRepo *repository.DownloadsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.Next()
+			return
+		}
+		if rejectIfDownloadActive(c, downloadsRepo, id) {
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// splitActiveItems returns ids without those that have an active download,
+// plus how many were left out (duplicates in ids count each time).
+func splitActiveItems(ctx context.Context, downloadsRepo *repository.DownloadsRepo, ids []int64) (rest []int64, skipped int, err error) {
+	active, err := downloadsRepo.ActiveDownloadIDsByLibraryItem(ctx, ids)
+	if err != nil {
+		return nil, 0, err
+	}
+	rest = make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if _, busy := active[id]; busy {
+			skipped++
+			continue
+		}
+		rest = append(rest, id)
+	}
+	return rest, skipped, nil
+}
+
 // cancelActiveDownloads cancels every queued/running download filling in one
 // of itemIDs (best-effort; a download that just finished on its own is fine).
 // Called before deleting library items. The worker's own ghost cleanup racing
@@ -942,6 +992,9 @@ func BulkRedownloadLibraryItems(libraryRepo *repository.LibraryRepo, downloadsRe
 
 			if _, active, err := activeDownloadFor(ctx, downloadsRepo, id); err != nil || active {
 				resp.Skipped++ // a download is already filling this item in
+				if err == nil {
+					resp.SkippedDownloading++
+				}
 				continue
 			}
 

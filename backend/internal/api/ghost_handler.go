@@ -109,7 +109,7 @@ func fetchGhostThumbnail(ctx context.Context, libraryRepo *repository.LibraryRep
 // (works the same whether the item has a file or not, since it only ever
 // writes ImagesRoot-relative tiers). Items with no source URL are silently
 // skipped, matching this app's other bulk operations.
-func BulkFetchLibraryThumbnails(libraryRepo *repository.LibraryRepo, imagesRoot string, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+func BulkFetchLibraryThumbnails(libraryRepo *repository.LibraryRepo, downloadsRepo *repository.DownloadsRepo, imagesRoot string, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		var req BulkFetchLibraryThumbnailsRequest
@@ -118,8 +118,19 @@ func BulkFetchLibraryThumbnails(libraryRepo *repository.LibraryRepo, imagesRoot 
 			return
 		}
 
+		active, err := downloadsRepo.ActiveDownloadIDsByLibraryItem(ctx, req.ItemIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
 		var resp BulkFetchThumbnailsResponse
 		for _, id := range req.ItemIDs {
+			if _, busy := active[id]; busy {
+				resp.Skipped++
+				resp.SkippedDownloading++
+				continue
+			}
 			item, err := libraryRepo.Get(ctx, id)
 			if err != nil {
 				if errors.Is(err, repository.ErrNotFound) {
@@ -225,11 +236,17 @@ func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRe
 // that's already gone or already has no file (already a ghost) is skipped
 // rather than failing the batch — a bulk selection spanning both real and
 // ghost items is an expected, not exceptional, case here.
-func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, mediaRoot, imagesRoot string) gin.HandlerFunc {
+func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, downloadsRepo *repository.DownloadsRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, mediaRoot, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BulkDeleteLibraryItemFilesRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		itemIDs, skippedDownloading, err := splitActiveItems(c.Request.Context(), downloadsRepo, req.ItemIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -241,9 +258,9 @@ func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, origin
 		defer tx.Rollback()
 		txRepo := repo.WithTx(tx)
 
-		var resp BulkDeleteResponse
+		resp := BulkDeleteLibraryItemFilesResponse{Skipped: skippedDownloading, SkippedDownloading: skippedDownloading}
 		var cleared []*models.LibraryItem
-		for _, id := range req.ItemIDs {
+		for _, id := range itemIDs {
 			item, err := txRepo.Get(c.Request.Context(), id)
 			if err != nil {
 				if errors.Is(err, repository.ErrNotFound) {

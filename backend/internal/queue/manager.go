@@ -599,7 +599,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 			if err := m.ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, seq, season); err != nil {
 				log.Printf("queue: embedding metadata into %s failed: %v", path, err)
 			}
-		}(result.FinalPath, effectiveTitle, overrideArtistName, d.OverrideYear, d.OverrideSequenceNumber, d.OverrideSeasonNumber)
+		}(result.FinalPath, libItem.Title, overrideArtistName, d.OverrideYear, d.OverrideSequenceNumber, d.OverrideSeasonNumber)
 	}
 
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: id, LibraryID: libID, Title: libItem.Title}})
@@ -1212,9 +1212,16 @@ func (m *DownloadManager) fillOrCreateLibraryItem(ctx context.Context, downloadI
 	if g, ok := m.runGhost(downloadID); ok {
 		before, err := m.libraryRepo.Get(ctx, g.libraryID)
 		if err == nil {
-			err = m.libraryRepo.CompleteGhostFromDownload(ctx, g.libraryID, libItem)
+			// A ghost this run merely reused keeps its own (possibly edited)
+			// title/uploader/description; one it created takes the download's.
+			err = m.libraryRepo.CompleteGhostFromDownload(ctx, g.libraryID, libItem, !g.createdByRun)
 		}
 		if err == nil {
+			if !g.createdByRun {
+				// libItem now mirrors the row, so the NFO, metadata embedding
+				// and notification below use what the item really holds.
+				libItem.Title, libItem.Uploader, libItem.Description = before.Title, before.Uploader, before.Description
+			}
 			return g.libraryID, before, nil
 		}
 		log.Printf("queue: filling ghost item %d for download %d failed (%v) — creating a new item instead", g.libraryID, downloadID, err)

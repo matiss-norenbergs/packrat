@@ -230,6 +230,10 @@ func TestGhostCreatedThenFilledInPlace(t *testing.T) {
 	if it.ReleaseYear == nil || *it.ReleaseYear != 2020 {
 		t.Fatalf("year override lost: %+v", it.ReleaseYear)
 	}
+	// A ghost this run created takes the download's own values.
+	if it.Title != "Fake Title" || it.Uploader == nil || *it.Uploader != "Up" || it.Description == nil || *it.Description != "desc" {
+		t.Fatalf("run-created ghost should take the download's metadata: %+v", it)
+	}
 	if tags, _ := e.tags.TagsForLibraryItem(context.Background(), it.ID); len(tags) != 1 {
 		t.Fatalf("tags after completion = %v", tags)
 	}
@@ -297,6 +301,12 @@ func TestFailureKeepsGhostAndRetryReusesIt(t *testing.T) {
 		t.Fatalf("failed download lost its ghost link: %v", got)
 	}
 
+	// The user edits the kept ghost's text before retrying.
+	edited, up, desc := "My edited title", "My uploader", "My description"
+	if err := e.library.UpdateMetadata(context.Background(), ghostID, &edited, &up, nil, nil, &desc, nil, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+
 	// Retry: a fresh download row carrying the ghost id (what RetryHistoryItem builds).
 	e.flag("fail", false)
 	retryID := e.newDownload(models.Download{GhostLibraryItemID: &ghostID})
@@ -311,6 +321,10 @@ func TestFailureKeepsGhostAndRetryReusesIt(t *testing.T) {
 	}
 	if items[0].ID != ghostID || items[0].Status != "completed" || items[0].Path == "" {
 		t.Fatalf("retry did not fill the original ghost: %+v", items[0])
+	}
+	// The reused ghost keeps its own (edited) text; the fake yt-dlp says "Fake Title"/"Up"/"desc".
+	if items[0].Title != edited || items[0].Uploader == nil || *items[0].Uploader != up || items[0].Description == nil || *items[0].Description != desc {
+		t.Fatalf("retry overwrote the ghost's edited metadata: %+v", items[0])
 	}
 	if active, _ := e.downloads.ActiveDownloadIDsByLibraryItem(context.Background(), []int64{ghostID}); len(active) != 0 {
 		t.Fatalf("finished item still reports an active download: %v", active)
