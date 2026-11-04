@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-04
+- **A download shows up in the Library as a ghost while it runs** — once a download has its metadata and destination checked, its library item appears right away as a ghost (title, thumbnail, collection, artist, tags… already on it) and the same row is filled in when the file lands (no second row, same id). Cancelling removes a ghost the download created (and its thumbnail files); a failure, timeout or restart keeps it, and **Retry** in History reuses it instead of creating a duplicate (retry now also carries the original title/artist/year/season/sequence/tags/name template/NFO overrides). "Download now" and the other redownload actions are blocked (`409`, disabled in the UI) while an item has an active download, and deleting an item cancels its download. New `activeDownloadId` on library items (for a later progress bar), `library_changed` WebSocket event, `downloads.ghost_library_item_id` (migration 52) and a shared `ghostthumb` package. Image downloads and redownloads are unchanged.
 - **Ghost thumbnails are grayscale** — a ghost item's thumbnail now shows in grayscale in the Library grid, Folders view and list, and turns to full color on hover (ghosts without a thumbnail and non-ghost items are unchanged; a blurred private ghost keeps its usual blur behavior). Frontend only; new `muted` prop on `BlurredThumbnail`.
 
 ## 2026-11-03

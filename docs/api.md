@@ -467,7 +467,8 @@ Response is always a wrapper, even with no pagination:
   "downloadedAt": "2026-07-19T10:02:00Z", "status": "completed", "blurred": false,
   "fileSizeBytes": 84213099, "tags": ["music", "live"],
   "playbackPositionSeconds": 812, "lastWatchedAt": "2026-07-20T21:15:00Z",
-  "galleryCount": 3
+  "galleryCount": 3,
+  "activeDownloadId": null
 }
 ```
 
@@ -489,7 +490,7 @@ These two fields are deliberately omitted from library backup exports — they'r
 derived value, regenerated the next time the thumbnail changes.
 
 `playbackPositionSeconds`/`lastWatchedAt` back the Browse page's "Continue Watching" row — see
-`POST /api/library/:id/progress` below. `galleryCount` is the number of saved images in this item's
+`POST /api/library/:id/progress` below. `activeDownloadId` is the id of the item's queued/running download (a ghost being downloaded — its `downloads.ghost_library_item_id` — or a redownload target), `null` when none; it is batch-loaded, one query per response. `galleryCount` is the number of saved images in this item's
 thumbnail gallery — see Thumbnail gallery below.
 
 ### `GET /api/library/:id` — no params
@@ -512,7 +513,8 @@ Computed across the whole library, independent of the current search/page.
 disk — a missing file is logged, not an error. Regardless of `deleteFiles`, once the row is deleted
 the item's `ImagesRoot` artifacts are removed too: `library/<id>/` (thumbnail tiers + AI-enhancement
 original), `thumbnail-gallery/<id>/` and `frame-match/<queueId>/` for each of its frame-match queue
-rows. Files are only touched after the DB delete succeeds. `404` unknown, `204` on success.
+rows. Files are only touched after the DB delete succeeds. A queued/running download that is filling the
+item in (`activeDownloadId`) is cancelled first. `404` unknown, `204` on success.
 
 ### `PATCH /api/library/:id` — partial merge (fields omitted are left untouched)
 
@@ -550,7 +552,8 @@ keeps each opted-in item's `.nfo` sidecar in sync. `204`.
 ```
 
 One `deleteFiles` flag for the whole batch (same on-disk cleanup as the single-item version; files
-are removed only after the transaction commits). An already-gone id is silently skipped. Response:
+are removed only after the transaction commits). An already-gone id is silently skipped, and the
+selected items' active downloads are cancelled first. Response:
 `200 {"deleted": 3}`.
 
 ### `POST /api/library/:id/move`
@@ -598,7 +601,7 @@ item.
 
 Re-queues a download from `originalUrl`, reusing the exact original type/quality/filename/
 audioFormat if the originating download row still exists, else falling back to app defaults.
-`400` no source URL. Response `201 {"id": <newDownloadId>}`.
+`400` no source URL. `409` the item already has a queued/running download. Response `201 {"id": <newDownloadId>}`.
 
 ### Redownload from a different URL
 
@@ -671,7 +674,7 @@ deleted (`DELETE /:id/file`) or found missing on disk (`scan-missing`).
   ```
 - **`POST /api/library/bulk-redownload`** — `{ "itemIds": [1, 2, 3] }`. Redownloads each item from
   its own `originalUrl` (same resolution/duration-only overwrite as single-item Redownload). Items
-  with no URL, or whose enqueue fails, are silently skipped. `200 {"queued": 2, "skipped": 1}`.
+  with no URL, with an active download, or whose enqueue fails, are silently skipped. `200 {"queued": 2, "skipped": 1}`.
 - **`POST /api/library/bulk-fetch-thumbnails`** — `{ "itemIds": [1, 2, 3] }`. Re-fetches each item's
   thumbnail from its `originalUrl` — works identically for ghost or real items, since it only
   writes the `ImagesRoot`-relative WebP derivatives, never the `MediaRoot`-relative sidecar. Items
@@ -1497,7 +1500,11 @@ placeholder (`"hidden-<12 hex chars>"` — the same URL always anonymizes to the
 
 `POST /api/history/:id/retry` — no body. Re-queues from the entry's URL, reusing the original
 type/quality/collection/folder/filename/audioFormat when the source download row still exists.
-Response `201 {"id": <newDownloadId>}`.
+Also carries over the original request's Title/Artist/Year/Season/Sequence overrides, filename
+prefix/template, tags and Generate NFO. If the original run left a ghost library item behind
+(`downloads.ghost_library_item_id`) and it still exists and is still a ghost, the new download
+fills that same item in instead of creating a second one; `409` if that ghost already has an
+active download. Response `201 {"id": <newDownloadId>}`.
 
 `DELETE /api/history/:id` — `404` unknown, `204` success, permanent.
 
@@ -1981,6 +1988,13 @@ trigger (single ad-hoc job or bulk queue):
 { "type": "frame_match_progress", "payload": { "queueId": 7, "libraryItemId": 118, "itemTitle": "Some Video", "state": "done", "error": null } }
 ```
 `state` is `"running"`, `"done"`, or `"error"` (then `error` is set).
+
+**`library_changed`** — a ghost library item was created or removed by a running download (no item
+data, clients just refetch the library); `reason` is `"ghost_created"` or `"ghost_removed"`.
+Completion, failure and cancel are already signalled by `completed` / `failed`:
+```json
+{ "type": "library_changed", "payload": { "libraryId": 118, "reason": "ghost_created" } }
+```
 
 **`subscription_new_items`** — once per subscription, only from the *scheduled* background sweep
 finding new items (manual "Check now" gets its count synchronously via the HTTP response instead,

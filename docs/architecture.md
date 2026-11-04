@@ -420,6 +420,42 @@ toolbar's bulk "Download thumbnail(s)" action — it always writes only the `Ima
 WebP tiers, never the `MediaRoot`-relative `thumbnail` field, since a ghost has no `MediaRoot`
 location to anchor a sidecar file to.
 
+### A ghost while a download runs
+
+`queue.runOne` creates a ghost for a video/audio download (`ensureGhost`) right after the yt-dlp
+metadata fetch and the collection-root / destination / `EnsureDir` checks pass, immediately before
+the status becomes `downloading` — so a bad URL or folder never leaves one. Image downloads (no
+metadata fetch) and redownloads (`TargetLibraryItemID`) get none. The ghost carries the title,
+collection, folder, URL, video id, uploader, duration, description, media type, the download's
+artist/year/season/sequence/Generate-NFO overrides and its override tags, and a best-effort
+thumbnail from `meta.Thumbnail` (ImagesRoot WebP tiers only, via the shared `ghostthumb.Generate`,
+which `api.fetchGhostThumbnail` also calls — `queue` cannot import `api`). `library_changed` is
+broadcast so the Library refetches.
+
+- **Fill-in vs `completeRedownload`.** On success `fillOrCreateLibraryItem` calls
+  `LibraryRepo.CompleteGhostFromDownload`, which updates the *same* row (file fields, thumbnail,
+  probed resolution/duration/size, status `completed`; artist/year/season/sequence only when the
+  download supplies them) and the rest of the completion flow (thumbnail tiers — the ghost's
+  placeholder tiers are deleted — override tags, NFO, Jellyfin, metadata embedding, `completed`)
+  runs on that id. The file keeps the normal filename/template/prefix handling; this is *not*
+  `completeRedownload`, which names a scratch file after an existing item and ignores them. If the
+  ghost is gone (or no longer a ghost) the row is created instead, so a file is never lost.
+- **`downloads.ghost_library_item_id`** (migration 52, FK `library(id)` `ON DELETE SET NULL`) is set
+  by the worker when a run creates or reuses a ghost, and by `RetryHistoryItem` on the new download
+  when the earlier run's ghost still exists and is still a ghost; `ensureGhost` then reuses that row
+  (never created-by-run) instead of creating another. Tag assignment is idempotent and a filled-in
+  ghost keeps the tags it already has. Deleting the item nulls the column.
+- **Cancel / failure / interrupt.** The worker remembers which ghost the run *created*
+  (`runGhosts`). A user cancel (`finishError` "cancelled", not a shutdown) deletes only that ghost
+  and its `library/<id>` ImagesRoot directory (an already-deleted row is not an error — a library
+  delete cancels the download first and the two may race). A ghost that pre-existed the run is never
+  removed. Plain failure, timeout and startup interruption (`MarkInterruptedIfActive`) leave the
+  ghost as an ordinary ghost; the Downloads/History row carries the error.
+- **`activeDownloadId`.** `ItemResponder.Responses` batch-loads
+  `DownloadsRepo.ActiveDownloadIDsByLibraryItem` (queued/fetching/downloading/processing downloads by
+  `ghost_library_item_id` or `target_library_item_id`; one query per response). Redownload endpoints
+  return `409` while it is set and Library delete / bulk delete call `Manager.Cancel` for it first.
+
 ## Thumbnail/image derivatives
 
 `imageproc.GenerateTiers`/`GenerateTiersFromPath` (ffmpeg shell-out, never a cgo image library) is

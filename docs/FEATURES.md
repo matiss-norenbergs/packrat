@@ -149,7 +149,8 @@ versions show up by default. Hiding everything shows a hint pointing at the cog.
 
 The live download queue.
 
-- **New Download** — paste any URL `yt-dlp` supports.
+- **New Download** — paste any URL `yt-dlp` supports. While it runs, its library item shows in the
+  Library as a [ghost](#ghost-items) and is filled in when the file lands.
   - Pick a collection (optional). Selecting one inherits its default type/quality, and — if set —
     its Season # and Artist defaults (see Collections below); only fills those in, never clears a
     value you've already typed.
@@ -391,6 +392,19 @@ item, for the same file-doesn't-have-what's-needed reason — see the Thumbnail 
   converts anything gone (deleted, moved, or renamed outside the app) into a ghost automatically.
   Manual only, never runs on a schedule.
 - Subscriptions (below) also create ghosts for new uploads when auto-download is off.
+- **A download shows up as a ghost while it runs.** When a video/audio download has fetched its
+  metadata and its destination folder checks out (so an invalid URL, a page with nothing
+  downloadable or a bad folder never leaves one), its library item appears at once as a ghost with
+  the title, thumbnail, collection, artist/year/season/sequence and tags already on it. When the
+  download finishes the *same* item is filled in with the file (it keeps its id, so it doesn't jump
+  or duplicate). Image downloads create no ghost. **Cancelling** a download removes the ghost it
+  created; a ghost that existed before (Add item, a subscription, or one kept after a failure) is
+  never removed by a cancel. **A failure, timeout or app restart keeps the ghost** (the Downloads /
+  History row shows the error) — **Retry** in History reuses that ghost rather than creating a
+  second item, and **Download now** is the manual alternative. While an item has a queued or
+  running download, **Download now / From Current URL / From Different URL…** are disabled
+  ("A download is already in progress for this item"), and **deleting** the item cancels its
+  download (the delete dialog says so).
 
 ### Thumbnail gallery
 
