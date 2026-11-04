@@ -12,6 +12,9 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-04
+- **Ghost thumbnails are grayscale** — a ghost item's thumbnail now shows in grayscale in the Library grid, Folders view and list, and turns to full color on hover (ghosts without a thumbnail and non-ghost items are unchanged; a blurred private ghost keeps its usual blur behavior). Frontend only; new `muted` prop on `BlurredThumbnail`.
+
 ## 2026-11-03
 - **Desktop sidebar shows the app's own version** — in the desktop app the footer's second line now reads "Desktop vX.Y.Z" (the installed app, same as Settings → Desktop) instead of repeating the server version, which the server switcher above already shows; it has no update dot or link. The web UI is unchanged. Frontend only; shared `useDesktopAppVersion`.
 

@@ -55,6 +55,7 @@ function ThumbCell({ item }: { item: LibraryItem }) {
           blurred={item.blurred}
           revealed={isRevealed(item.id)}
           onToggleReveal={() => toggleItem(item.id)}
+          muted={item.status === "ghost"}
         />
       ) : (
         <MediaTypePlaceholder mediaType={item.mediaType} iconClassName="h-4 w-4" />

@@ -55,6 +55,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             revealed={revealed}
             onToggleReveal={selectionActive ? () => {} : toggleRevealItem}
             interactive={!selectionActive}
+            muted={item.status === "ghost"}
           />
         ) : (
           <MediaTypePlaceholder mediaType={item.mediaType} />
