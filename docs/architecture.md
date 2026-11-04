@@ -420,6 +420,63 @@ toolbar's bulk "Download thumbnail(s)" action — it always writes only the `Ima
 WebP tiers, never the `MediaRoot`-relative `thumbnail` field, since a ghost has no `MediaRoot`
 location to anchor a sidecar file to.
 
+### A ghost while a download runs
+
+`queue.runOne` creates a ghost for a video/audio download (`ensureGhost`) right after the yt-dlp
+metadata fetch and the collection-root / destination / `EnsureDir` checks pass, immediately before
+the status becomes `downloading` — so a bad URL or folder never leaves one. Image downloads (no
+metadata fetch) and redownloads (`TargetLibraryItemID`) get none. The ghost carries the title,
+collection, folder, URL, video id, uploader, duration, description, media type, the download's
+artist/year/season/sequence/Generate-NFO overrides and its override tags, and a best-effort
+thumbnail from `meta.Thumbnail` (ImagesRoot WebP tiers only, via the shared `ghostthumb.Generate`,
+which `api.fetchGhostThumbnail` also calls — `queue` cannot import `api`). `library_changed` is
+broadcast so the Library refetches.
+
+- **Fill-in vs `completeRedownload`.** On success `fillOrCreateLibraryItem` calls
+  `LibraryRepo.CompleteGhostFromDownload`, which updates the *same* row (file fields, thumbnail,
+  probed resolution/duration/size, status `completed`; artist/year/season/sequence only when the
+  download supplies them) and the rest of the completion flow (thumbnail tiers — the ghost's
+  placeholder tiers are deleted — override tags, NFO, Jellyfin, metadata embedding, `completed`)
+  runs on that id. The file keeps the normal filename/template/prefix handling; this is *not*
+  `completeRedownload`, which names a scratch file after an existing item and ignores them. If the
+  ghost is gone (or no longer a ghost) the row is created instead, so a file is never lost.
+- **`downloads.ghost_library_item_id`** (migration 52, FK `library(id)` `ON DELETE SET NULL`) is set
+  by the worker when a run creates or reuses a ghost, and by `RetryHistoryItem` on the new download
+  when the earlier run's ghost still exists and is still a ghost; `ensureGhost` then reuses that row
+  (never created-by-run) instead of creating another. Tag assignment is idempotent and a filled-in
+  ghost keeps the tags it already has. Deleting the item nulls the column.
+- **Cancel / failure / interrupt.** The worker remembers which ghost the run *created*
+  (`runGhosts`). A user cancel (`finishError` "cancelled", not a shutdown) deletes only that ghost
+  and its `library/<id>` ImagesRoot directory (an already-deleted row is not an error — a library
+  delete cancels the download first and the two may race). A ghost that pre-existed the run is never
+  removed. Plain failure, timeout and startup interruption (`MarkInterruptedIfActive`) leave the
+  ghost as an ordinary ghost; the Downloads/History row carries the error.
+- **`activeDownloadId`.** `ItemResponder.Responses` batch-loads
+  `DownloadsRepo.ActiveDownloadIDsByLibraryItem` (queued/fetching/downloading/processing downloads by
+  `ghost_library_item_id` or `target_library_item_id`; one query per response). Library delete / bulk
+  delete call `Manager.Cancel` for it first.
+- **The lock rule.** An item with an active download is locked, because finishing the download
+  rewrites the row (and a redownload swaps its file). The server enforces it in one place:
+  `blockWhenDownloadActive` route middleware (`library_handler.go`, wired as `notDownloading` in
+  `router.go`) answers `409` via `rejectIfDownloadActive` on every single-item route that changes an
+  item or its files (PATCH, move, refresh-metadata, trim accept, every thumbnail write, gallery
+  save/apply/favorite/delete, frame match, NFO write/delete, delete-file, and the AI-enhancement
+  revert / delete-original routes; the two redownload handlers keep their inline check). Reads,
+  `POST .../progress` and `DELETE /library/:id` (which cancels the download) stay open.
+  `TestRouterGuardsMutatingItemRoutes` scans `router.go` so a new mutating route can't be forgotten
+  from the list. The bulk endpoints (`bulk-tags`, `bulk-delete-file`, `bulk-fetch-thumbnails`,
+  `bulk-redownload`, frame-match bulk) don't fail: `splitActiveItems` / one batched lookup leaves the
+  busy items out and the response reports `skippedDownloading`. The frontend hides (not disables) all
+  but Copy URL / Metadata → Compare / Delete in `libraryItemActions.tsx` (`pruneSeparators` keeps no
+  separator dangling) and its multi-item dialogs that PATCH per item filter such items out first. Not
+  covered: the AI-enhancement bulk/sweep endpoints (they select items themselves) and the frame-match
+  queue accept (a queued item already has a file).
+- **A reused ghost keeps its own text.** `CompleteGhostFromDownload(..., keepMetadata)` is driven by
+  `ghostRun.createdByRun`: a ghost the run *created* takes the download's title/uploader/description
+  (it was built from the same metadata); one the run merely *reused* (History retry, or any ghost that
+  existed before) keeps its own, which the user may have edited since, while everything file-related is
+  filled in. The `libItem` used for the NFO / embedding / notification is synced to the row's text.
+
 ## Thumbnail/image derivatives
 
 `imageproc.GenerateTiers`/`GenerateTiersFromPath` (ffmpeg shell-out, never a cgo image library) is

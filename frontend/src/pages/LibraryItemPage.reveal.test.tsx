@@ -48,6 +48,7 @@ function item(id: number) {
     generateNfo: false,
     nfoExists: false,
     galleryCount: 0,
+    activeDownloadId: null,
     fileSizeBytes: null,
     playbackPositionSeconds: null,
     lastWatchedAt: null,

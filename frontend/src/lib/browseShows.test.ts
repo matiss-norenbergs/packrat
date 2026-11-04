@@ -68,6 +68,7 @@ function makeItem(overrides: Partial<LibraryItem> & { id: number }): LibraryItem
     playbackPositionSeconds: null,
     lastWatchedAt: null,
     galleryCount: 0,
+    activeDownloadId: null,
     thumbnailWidth: null,
     thumbnailHeight: null,
     ...overrides,

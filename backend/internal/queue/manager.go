@@ -17,6 +17,7 @@ import (
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
+	"packrat/backend/internal/ghostthumb"
 	"packrat/backend/internal/imagefetch"
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/importer"
@@ -83,6 +84,9 @@ type DownloadManager struct {
 
 	mu      sync.Mutex
 	cancels map[int64]context.CancelFunc
+	// runGhosts maps a running download's id to the ghost library row the run
+	// is filling in (see ensureGhost); guarded by mu, cleared when the run ends.
+	runGhosts map[int64]ghostRun
 
 	lastBroadcastMu sync.Mutex
 	lastBroadcastAt map[int64]time.Time
@@ -126,6 +130,7 @@ func NewDownloadManager(
 		broadcaster:                       broadcaster,
 		jobs:                              make(chan int64, 100),
 		cancels:                           make(map[int64]context.CancelFunc),
+		runGhosts:                         make(map[int64]ghostRun),
 		lastBroadcastAt:                   make(map[int64]time.Time),
 	}
 	m.jellyfinDebounce = jellyfin.NewDebouncer(jellyfinRefreshDebounce, m.doJellyfinRefresh)
@@ -282,6 +287,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		atomic.AddInt32(&m.activeCount, -1)
 		m.mu.Lock()
 		delete(m.cancels, id)
+		delete(m.runGhosts, id)
 		m.mu.Unlock()
 		cancel()
 		m.progress.Delete(id)
@@ -384,6 +390,14 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 			m.finishError(parentCtx, runCtx, id, d.URL, "creating destination directory: "+err.Error(), "", "")
 			return
 		}
+	}
+
+	// Metadata fetched and the destination checked out: this is the point a
+	// download is known to be real, so its library item appears now (as a
+	// ghost) instead of only when the file lands. Images skip metadata and
+	// redownloads already have their item, so neither gets one.
+	if !isRedownload && d.DownloadType != "image" {
+		m.ensureGhost(runCtx, id, d, effectiveTitle, meta)
 	}
 
 	if err := m.downloadsRepo.UpdateStatus(runCtx, id, models.StatusDownloading, nil); err != nil {
@@ -491,7 +505,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 
 	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, finalDuration, sizeBytes)
 	libItem.GenerateNFO = d.GenerateNFO
-	libID, err := m.libraryRepo.Create(parentCtx, libItem)
+	libID, ghost, err := m.fillOrCreateLibraryItem(parentCtx, id, libItem)
 	if err != nil {
 		log.Printf("queue: creating library item failed for %d: %v", id, err)
 		return
@@ -525,6 +539,9 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 			}
 			if err := m.libraryRepo.UpdateThumbnailTiers(parentCtx, libID, &tiers[0], &tiers[1], width, height); err != nil {
 				log.Printf("queue: saving thumbnail derivatives for library item %d failed: %v", libID, err)
+			} else if ghost != nil {
+				// The ghost's placeholder tiers are superseded by the real ones.
+				ghostthumb.RemoveTiers(m.imagesRoot, ghost.ThumbnailSmallPath, ghost.ThumbnailMediumPath)
 			}
 		}
 
@@ -541,7 +558,9 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	// backup/library import flow — see ImportLibrary) now that the item has
 	// an id to attach them to. Creates missing tag names rather than
 	// silently dropping them, matching bulk-assign-tags' behavior.
-	if len(d.OverrideTags) > 0 {
+	// The ghost already carries them (applied at creation, possibly edited since),
+	// so a filled-in ghost is left alone; assignment is idempotent either way.
+	if len(d.OverrideTags) > 0 && ghost == nil {
 		if tagIDs, err := m.tagsRepo.GetOrCreateByNames(parentCtx, d.OverrideTags); err != nil {
 			log.Printf("queue: creating override tags for %d failed: %v", id, err)
 		} else if err := m.tagsRepo.SetForLibraryItem(parentCtx, libID, tagIDs); err != nil {
@@ -580,7 +599,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 			if err := m.ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, seq, season); err != nil {
 				log.Printf("queue: embedding metadata into %s failed: %v", path, err)
 			}
-		}(result.FinalPath, effectiveTitle, overrideArtistName, d.OverrideYear, d.OverrideSequenceNumber, d.OverrideSeasonNumber)
+		}(result.FinalPath, libItem.Title, overrideArtistName, d.OverrideYear, d.OverrideSequenceNumber, d.OverrideSeasonNumber)
 	}
 
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: id, LibraryID: libID, Title: libItem.Title}})
@@ -1084,6 +1103,164 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: downloadID, LibraryID: targetID, Title: updated.Title}})
 }
 
+// ghostRun is the ghost library row a running download is filling in.
+// createdByRun distinguishes a ghost this run made (removed again on a user
+// cancel) from one that already existed (Add item, subscription, or kept
+// after an earlier failed run; never removed by a cancel).
+type ghostRun struct {
+	libraryID    int64
+	createdByRun bool
+}
+
+// ghostThumbnailTimeout bounds the best-effort thumbnail fetch so a slow
+// image host can't hold up the start of the real download.
+const ghostThumbnailTimeout = 20 * time.Second
+
+// ensureGhost makes sure a library row exists for download id before the
+// file download starts: it reuses d.GhostLibraryItemID when that row still
+// exists and is still a ghost (a retried download), otherwise creates a new
+// ghost from the fetched metadata and the download's overrides. Every failure
+// is logged and swallowed — without a ghost the download simply behaves as
+// it did before (a library item is created when the file lands). This is
+// deliberately separate from completeRedownload/TargetLibraryItemID: the
+// ghost goes through the normal filename/template handling.
+func (m *DownloadManager) ensureGhost(ctx context.Context, id int64, d *models.Download, title string, meta *downloader.Metadata) {
+	if ctx.Err() != nil {
+		return
+	}
+	if d.GhostLibraryItemID != nil {
+		if existing, err := m.libraryRepo.Get(ctx, *d.GhostLibraryItemID); err == nil && existing.Status == "ghost" {
+			m.setRunGhost(id, ghostRun{libraryID: existing.ID})
+			if err := m.downloadsRepo.SetGhostLibraryItem(ctx, id, existing.ID); err != nil {
+				log.Printf("queue: recording ghost item for download %d failed: %v", id, err)
+			}
+			return
+		}
+	}
+
+	uploader, videoID, description := meta.Uploader, meta.ID, meta.Description
+	duration := int(meta.Duration)
+	mediaType := d.DownloadType
+	item := &models.LibraryItem{
+		DownloadID:     &id,
+		Title:          title,
+		CollectionID:   d.CollectionID,
+		Folder:         d.Folder,
+		OriginalURL:    &d.URL,
+		VideoID:        &videoID,
+		Uploader:       &uploader,
+		Duration:       &duration,
+		MediaType:      &mediaType,
+		Description:    &description,
+		ArtistID:       d.OverrideArtistID,
+		ReleaseYear:    d.OverrideYear,
+		SequenceNumber: d.OverrideSequenceNumber,
+		SeasonNumber:   d.OverrideSeasonNumber,
+		GenerateNFO:    d.GenerateNFO,
+		Status:         "ghost",
+	}
+	libID, err := m.libraryRepo.Create(ctx, item)
+	if err != nil {
+		log.Printf("queue: creating ghost item for download %d failed: %v", id, err)
+		return
+	}
+	m.setRunGhost(id, ghostRun{libraryID: libID, createdByRun: true})
+	if err := m.downloadsRepo.SetGhostLibraryItem(ctx, id, libID); err != nil {
+		log.Printf("queue: recording ghost item for download %d failed: %v", id, err)
+	}
+
+	if len(d.OverrideTags) > 0 {
+		if tagIDs, err := m.tagsRepo.GetOrCreateByNames(ctx, d.OverrideTags); err != nil {
+			log.Printf("queue: creating override tags for ghost %d failed: %v", libID, err)
+		} else if err := m.tagsRepo.SetForLibraryItem(ctx, libID, tagIDs); err != nil {
+			log.Printf("queue: assigning override tags to ghost %d failed: %v", libID, err)
+		}
+	}
+
+	if meta.Thumbnail != "" {
+		proxy, _ := m.settingsRepo.Get(ctx, models.SettingYtdlpProxy)
+		tctx, cancel := context.WithTimeout(ctx, ghostThumbnailTimeout)
+		ghostthumb.Generate(tctx, m.libraryRepo, m.imagesRoot, m.ytdlp.FFmpegPath, libID, func(c context.Context, dir string) (string, error) {
+			p, _, err := imagefetch.Fetch(c, meta.Thumbnail, dir, "thumb", true, proxy)
+			return p, err
+		})
+		cancel()
+	}
+
+	m.broadcaster.Broadcast(ws.Event{Type: ws.EventLibraryChanged, Payload: ws.LibraryChangedPayload{LibraryID: libID, Reason: "ghost_created"}})
+}
+
+func (m *DownloadManager) setRunGhost(id int64, g ghostRun) {
+	m.mu.Lock()
+	m.runGhosts[id] = g
+	m.mu.Unlock()
+}
+
+func (m *DownloadManager) runGhost(id int64) (ghostRun, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	g, ok := m.runGhosts[id]
+	return g, ok
+}
+
+// fillOrCreateLibraryItem turns the finished download's libItem into the
+// library row: the run's ghost is filled in place (same id) when there is
+// one, otherwise — no ghost, or it vanished meanwhile — a new row is created
+// so the file is never lost. The returned ghost snapshot (pre-fill) is nil
+// when a new row was created.
+func (m *DownloadManager) fillOrCreateLibraryItem(ctx context.Context, downloadID int64, libItem *models.LibraryItem) (int64, *models.LibraryItem, error) {
+	if g, ok := m.runGhost(downloadID); ok {
+		before, err := m.libraryRepo.Get(ctx, g.libraryID)
+		if err == nil {
+			// A ghost this run merely reused keeps its own (possibly edited)
+			// title/uploader/description; one it created takes the download's.
+			err = m.libraryRepo.CompleteGhostFromDownload(ctx, g.libraryID, libItem, !g.createdByRun)
+		}
+		if err == nil {
+			if !g.createdByRun {
+				// libItem now mirrors the row, so the NFO, metadata embedding
+				// and notification below use what the item really holds.
+				libItem.Title, libItem.Uploader, libItem.Description = before.Title, before.Uploader, before.Description
+			}
+			return g.libraryID, before, nil
+		}
+		log.Printf("queue: filling ghost item %d for download %d failed (%v) — creating a new item instead", g.libraryID, downloadID, err)
+	}
+	libID, err := m.libraryRepo.Create(ctx, libItem)
+	return libID, nil, err
+}
+
+// removeRunGhost deletes the ghost a run created itself (plus its derivative
+// files) after a user cancel. A ghost that existed before the run is kept,
+// and so is anything no longer a ghost. Deleting an already-deleted row (a
+// library delete cancelled this download) is not an error. Skipped while the
+// server is shutting down (parentCtx done): that leaves the download to be
+// marked interrupted on the next start, ghost intact.
+func (m *DownloadManager) removeRunGhost(parentCtx context.Context, id int64) {
+	g, ok := m.runGhost(id)
+	if !ok || !g.createdByRun || parentCtx.Err() != nil {
+		return
+	}
+	item, err := m.libraryRepo.Get(parentCtx, g.libraryID)
+	if err != nil {
+		if !errors.Is(err, repository.ErrNotFound) {
+			log.Printf("queue: loading ghost item %d for cleanup failed: %v", g.libraryID, err)
+		}
+		return
+	}
+	if item.Status != "ghost" {
+		return
+	}
+	if err := m.libraryRepo.Delete(parentCtx, g.libraryID); err != nil {
+		if !errors.Is(err, repository.ErrNotFound) {
+			log.Printf("queue: removing ghost item %d failed: %v", g.libraryID, err)
+		}
+		return
+	}
+	ghostthumb.RemoveItemDir(m.imagesRoot, g.libraryID)
+	m.broadcaster.Broadcast(ws.Event{Type: ws.EventLibraryChanged, Payload: ws.LibraryChangedPayload{LibraryID: g.libraryID, Reason: "ghost_removed"}})
+}
+
 // triggerJellyfinRefresh schedules a debounced Jellyfin rescan for a just-
 // completed download, per the jellyfin_refresh_mode setting — "entire"
 // debounces a full-library refresh, "specific" debounces a refresh scoped
@@ -1219,6 +1396,7 @@ func (m *DownloadManager) finishError(parentCtx, runCtx context.Context, id int6
 		m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "failed", Error: timeoutMsg}})
 		return
 	case "cancelled":
+		m.removeRunGhost(parentCtx, id)
 		if err := m.downloadsRepo.MarkCancelled(parentCtx, id); err != nil {
 			log.Printf("queue: mark cancelled failed for %d: %v", id, err)
 		}

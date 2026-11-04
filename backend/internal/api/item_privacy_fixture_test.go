@@ -29,6 +29,7 @@ type privacyFixture struct {
 	tags        *repository.TagsRepo
 	artists     *repository.ArtistsRepo
 	gallery     *repository.ThumbnailGalleryRepo
+	downloads   *repository.DownloadsRepo
 	library     *repository.LibraryRepo
 	compare     *repository.CompareListRepo
 	mediaRoot   string
@@ -57,6 +58,7 @@ func newPrivacyFixture(t *testing.T) *privacyFixture {
 		tags:        repository.NewTagsRepo(conn),
 		artists:     repository.NewArtistsRepo(conn),
 		gallery:     repository.NewThumbnailGalleryRepo(conn),
+		downloads:   repository.NewDownloadsRepo(conn),
 		library:     repository.NewLibraryRepo(conn),
 		compare:     repository.NewCompareListRepo(conn),
 		mediaRoot:   t.TempDir(),
@@ -64,7 +66,7 @@ func newPrivacyFixture(t *testing.T) *privacyFixture {
 }
 
 func (f *privacyFixture) responder() *ItemResponder {
-	return NewItemResponder(f.settings, f.collections, f.tags, f.artists, f.gallery, f.mediaRoot)
+	return NewItemResponder(f.settings, f.collections, f.tags, f.artists, f.gallery, f.downloads, f.mediaRoot)
 }
 
 func (f *privacyFixture) setPrivacy(on bool) {

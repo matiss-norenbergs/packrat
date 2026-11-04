@@ -93,6 +93,12 @@ type Download struct {
 	// POST /downloads JSON body (see CreateDownloadRequest's json:"-" tag);
 	// only set internally by RedownloadLibraryItem/RedownloadLibraryItemFromURL.
 	TargetLibraryItemID *int64
+	// GhostLibraryItemID is the library row this download is filling in: a
+	// ghost the worker created (or reused) when the run started, completed in
+	// place on success. Set on enqueue by Retry (to reuse the earlier run's
+	// ghost) and by the worker once it has created/reused one. NULL for
+	// image downloads and redownloads (TargetLibraryItemID covers those).
+	GhostLibraryItemID *int64
 	// OverwriteFields lists which of the target item's fields get
 	// overwritten with freshly-fetched data on completion — a subset of
 	// {"title","uploader","description","thumbnail","resolution","duration"}.

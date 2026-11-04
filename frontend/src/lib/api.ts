@@ -14,6 +14,8 @@ import type {
   FullImportPreview,
   LibraryImportMode,
   BulkAssignTagsRequest,
+  BulkAssignTagsResponse,
+  BulkDeleteLibraryItemFilesResponse,
   BulkDeleteLibraryItemFilesRequest,
   BulkDeleteLibraryItemsRequest,
   BulkDeleteRequest,
@@ -571,8 +573,8 @@ export function updateLibraryItem(id: number, payload: UpdateLibraryItemRequest)
   })
 }
 
-export function bulkAssignTags(payload: BulkAssignTagsRequest): Promise<void> {
-  return request<void>("/library/bulk-tags", {
+export function bulkAssignTags(payload: BulkAssignTagsRequest): Promise<BulkAssignTagsResponse> {
+  return request<BulkAssignTagsResponse>("/library/bulk-tags", {
     method: "POST",
     body: JSON.stringify(payload),
   })
@@ -585,8 +587,8 @@ export function bulkDeleteLibraryItems(payload: BulkDeleteLibraryItemsRequest): 
   })
 }
 
-export function bulkDeleteLibraryItemFiles(payload: BulkDeleteLibraryItemFilesRequest): Promise<BulkDeleteResponse> {
-  return request<BulkDeleteResponse>("/library/bulk-delete-file", {
+export function bulkDeleteLibraryItemFiles(payload: BulkDeleteLibraryItemFilesRequest): Promise<BulkDeleteLibraryItemFilesResponse> {
+  return request<BulkDeleteLibraryItemFilesResponse>("/library/bulk-delete-file", {
     method: "POST",
     body: JSON.stringify(payload),
   })

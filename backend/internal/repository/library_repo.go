@@ -728,6 +728,53 @@ func (r *LibraryRepo) ApplyRedownload(ctx context.Context, id int64, p ApplyRedo
 	return checkRowsAffected(res)
 }
 
+// CompleteGhostFromDownload fills an existing ghost row in place with the
+// result of a finished download (the queue worker's completion path when it
+// created/reused a ghost at the start of the run): file fields, thumbnail,
+// probed resolution/duration/size and the metadata the download resolved,
+// with status 'completed'. Artist/year/season/sequence only overwrite when
+// the download supplies a value, so a retried download that carries no
+// overrides never blanks what the ghost already holds. keepMetadata leaves
+// the row's own title, uploader and description untouched (a ghost the
+// download merely reused, whose text the user may have edited since); false
+// takes them from item. Only matches a row
+// that is still a ghost; ErrNotFound means it was deleted (or already
+// filled) meanwhile and the caller falls back to Create.
+func (r *LibraryRepo) CompleteGhostFromDownload(ctx context.Context, id int64, item *models.LibraryItem, keepMetadata bool) error {
+	metadataSet := `title = ?, uploader = ?, description = ?`
+	metadataArgs := []any{item.Title, item.Uploader, item.Description}
+	if keepMetadata {
+		metadataSet = `title = title, uploader = uploader, description = description`
+		metadataArgs = nil
+	}
+	args := []any{item.DownloadID}
+	args = append(args, metadataArgs...)
+	args = append(args,
+		item.Filename, item.Path, item.CollectionID, item.Folder, item.OriginalURL,
+		item.VideoID, item.Duration, item.Resolution, item.MediaType, item.Thumbnail,
+		item.GenerateNFO, item.FileSizeBytes,
+		item.ArtistID, item.ReleaseYear, item.SequenceNumber, item.SeasonNumber, id)
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE library
+		SET download_id = ?, `+metadataSet+`, filename = ?, path = ?, collection_id = ?, folder = ?, original_url = ?,
+		    video_id = ?, duration = ?, resolution = ?, media_type = ?, thumbnail = ?,
+		    generate_nfo = ?, file_size_bytes = ?, status = 'completed',
+		    artist_id = COALESCE(?, artist_id), release_year = COALESCE(?, release_year),
+		    sequence_number = COALESCE(?, sequence_number), season_number = COALESCE(?, season_number)
+		WHERE id = ? AND status = 'ghost'`, args...)
+	if err != nil {
+		return fmt.Errorf("completing ghost library item: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ClearFile detaches an item's media file — used both by the "delete file
 // only" action on a real item and, structurally, produces the same state a
 // ghost item is created in directly (see ApplyRedownload, the inverse

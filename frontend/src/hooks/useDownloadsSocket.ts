@@ -105,12 +105,18 @@ export function useDownloadsSocket() {
         }
         case "failed": {
           queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+          // A failed/cancelled download changes its ghost's activeDownloadId (and a cancel removes the ghost).
+          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
           const p = event.payload
           if (p.status === "cancelled") {
             notifyEvent("info", "Download cancelled", undefined, true)
           } else {
             notifyEvent("error", "Download failed", p.error, true)
           }
+          break
+        }
+        case "library_changed": {
+          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
           break
         }
         case "queue_update": {

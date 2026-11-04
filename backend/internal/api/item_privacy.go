@@ -86,11 +86,12 @@ type ItemResponder struct {
 	tagsRepo        *repository.TagsRepo
 	artistsRepo     *repository.ArtistsRepo
 	galleryRepo     *repository.ThumbnailGalleryRepo
+	downloadsRepo   *repository.DownloadsRepo
 	mediaRoot       string
 }
 
-func NewItemResponder(settingsRepo *repository.SettingsRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, galleryRepo *repository.ThumbnailGalleryRepo, mediaRoot string) *ItemResponder {
-	return &ItemResponder{settingsRepo, collectionsRepo, tagsRepo, artistsRepo, galleryRepo, mediaRoot}
+func NewItemResponder(settingsRepo *repository.SettingsRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, galleryRepo *repository.ThumbnailGalleryRepo, downloadsRepo *repository.DownloadsRepo, mediaRoot string) *ItemResponder {
+	return &ItemResponder{settingsRepo, collectionsRepo, tagsRepo, artistsRepo, galleryRepo, downloadsRepo, mediaRoot}
 }
 
 // Responses batch-loads tags, gallery counts and the privacy resolver once
@@ -108,6 +109,10 @@ func (r *ItemResponder) Responses(ctx context.Context, items []models.LibraryIte
 	if err != nil {
 		return nil, err
 	}
+	activeByID, err := r.downloadsRepo.ActiveDownloadIDsByLibraryItem(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	privacy, err := LoadItemPrivacy(ctx, r.settingsRepo, r.collectionsRepo, r.tagsRepo, r.artistsRepo)
 	if err != nil {
 		return nil, err
@@ -115,7 +120,11 @@ func (r *ItemResponder) Responses(ctx context.Context, items []models.LibraryIte
 	out := make([]LibraryItemResponse, 0, len(items))
 	for _, item := range items {
 		tags := tagsByID[item.ID]
-		out = append(out, toLibraryItemResponse(item, privacy.Blurred(item.CollectionID, item.ArtistID, tags), tags, galleryCountByID[item.ID], r.mediaRoot))
+		var activeDownloadID *int64
+		if dlID, ok := activeByID[item.ID]; ok {
+			activeDownloadID = &dlID
+		}
+		out = append(out, toLibraryItemResponse(item, privacy.Blurred(item.CollectionID, item.ArtistID, tags), tags, galleryCountByID[item.ID], activeDownloadID, r.mediaRoot))
 	}
 	return out, nil
 }

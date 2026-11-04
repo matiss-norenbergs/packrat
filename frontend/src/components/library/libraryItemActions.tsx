@@ -77,6 +77,19 @@ export type LibraryItemAction =
   | { key: string; separator: true }
   | { key: string; label: string; icon: ReactNode; items: LibraryItemAction[] }
 
+// Drops separators that would dangle (first, last, or two in a row), in every submenu too, so hiding entries never
+// leaves a stray line at the top or bottom of a menu.
+const pruneSeparators = (list: LibraryItemAction[]): LibraryItemAction[] => {
+  const out: LibraryItemAction[] = []
+  for (const a of list) {
+    const entry = "items" in a ? { ...a, items: pruneSeparators(a.items) } : a
+    if ("separator" in entry && (out.length === 0 || "separator" in out[out.length - 1])) continue
+    out.push(entry)
+  }
+  while (out.length > 0 && "separator" in out[out.length - 1]) out.pop()
+  return out
+}
+
 // Conditional entries are written as `condition && {…}`; this drops the ones whose condition is false.
 const compact = (entries: (LibraryItemAction | false)[]): LibraryItemAction[] => entries.filter((a): a is LibraryItemAction => a !== false)
 
@@ -182,6 +195,10 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
     // audio item's thumbnail, so they stay.
     const isAudio = isAudioFilename(it.filename)
     const frames = !isGhost && !isImage && !isAudio
+    // A download is filling this item in (queued or running): the item is locked, since finishing would overwrite any
+    // edit (the server answers 409 to them). Its menu shrinks to Copy URL, the read-only metadata compare and Delete
+    // (which cancels the download); everything else is hidden, not disabled.
+    const downloadActive = it.activeDownloadId != null
 
     const copyUrl = () => {
       if (!it.originalUrl) return
@@ -193,6 +210,22 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
     const toggleCompareList = () => {
       if (inCompareList) removeFromCompareList.mutate(it.id)
       else addToCompareList.mutate({ itemIds: [it.id] })
+    }
+
+    if (downloadActive) {
+      return pruneSeparators(
+        compact([
+          { key: "copy-url", label: "Copy URL", icon: <Copy />, disabled: !hasUrl, onSelect: copyUrl },
+          {
+            key: "metadata",
+            label: "Metadata",
+            icon: <Info />,
+            items: [{ key: "metadata-compare", label: "Compare", icon: <ArrowLeftRight />, disabled: !hasUrl, onSelect: () => open(it, "compare") }],
+          },
+          { key: "sep-1", separator: true },
+          { key: "delete", label: "Delete", icon: <Trash2 />, destructive: true, onSelect: () => open(it, "delete") },
+        ]),
+      )
     }
 
     const list = compact([
@@ -321,7 +354,7 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
       !isGhost && { key: "delete-file", label: "Delete file…", icon: <FileX />, destructive: true, onSelect: () => open(it, "deleteFileWarning") },
       { key: "delete", label: "Delete", icon: <Trash2 />, destructive: true, onSelect: () => open(it, "delete") },
     ])
-    return list
+    return pruneSeparators(list)
   }
 
   const host = item && (

@@ -292,6 +292,8 @@ export interface LibraryItem {
   playbackPositionSeconds: number | null
   lastWatchedAt: string | null
   galleryCount: number
+  /** Id of the item's queued/running download (a ghost being downloaded, or a redownload); null when none. */
+  activeDownloadId: number | null
 }
 
 export interface UpdateLibraryProgressRequest {
@@ -386,6 +388,20 @@ export interface BulkRedownloadLibraryItemsRequest {
 export interface BulkRedownloadResponse {
   queued: number
   skipped: number
+  /** The part of `skipped` left out because the item has a queued/running download. */
+  skippedDownloading: number
+}
+
+export interface BulkAssignTagsResponse {
+  updated: number
+  skipped: number
+  skippedDownloading: number
+}
+
+export interface BulkDeleteLibraryItemFilesResponse {
+  deleted: number
+  skipped: number
+  skippedDownloading: number
 }
 
 export interface BulkFetchLibraryThumbnailsRequest {
@@ -395,6 +411,7 @@ export interface BulkFetchLibraryThumbnailsRequest {
 export interface BulkFetchThumbnailsResponse {
   fetched: number
   skipped: number
+  skippedDownloading: number
 }
 
 // Response shape for the AI Enhancement page's bulk "Keep Enhanced"/"Keep
@@ -524,6 +541,7 @@ export interface FrameMatchStatus {
 export interface BulkFrameMatchResponse {
   queued: number
   skipped: number
+  skippedDownloading: number
   alreadyQueued: number
 }
 

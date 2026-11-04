@@ -31,11 +31,11 @@ func (r *DownloadsRepo) Create(ctx context.Context, d *models.Download) (int64, 
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO downloads (url, collection_id, folder, filename, download_type, quality, audio_format, status,
 		                        override_title, override_artist_id, override_year, override_season_number, override_sequence_number, filename_prefix, filename_template, override_tags, generate_nfo,
-		                        target_library_item_id, overwrite_fields)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		                        target_library_item_id, overwrite_fields, ghost_library_item_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		d.URL, d.CollectionID, d.Folder, d.Filename, d.DownloadType, d.Quality, d.AudioFormat, d.Status,
 		d.OverrideTitle, d.OverrideArtistID, d.OverrideYear, d.OverrideSeasonNumber, d.OverrideSequenceNumber, d.FilenamePrefix, d.FilenameTemplate, overrideTags, d.GenerateNFO,
-		d.TargetLibraryItemID, overwriteFields,
+		d.TargetLibraryItemID, overwriteFields, d.GhostLibraryItemID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("inserting download: %w", err)
@@ -197,6 +197,67 @@ func (r *DownloadsRepo) MarkCancelled(ctx context.Context, id int64) error {
 	return checkRowsAffected(res)
 }
 
+// SetGhostLibraryItem records the library row a download is filling in (see
+// models.Download.GhostLibraryItemID).
+func (r *DownloadsRepo) SetGhostLibraryItem(ctx context.Context, id, libraryItemID int64) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE downloads SET ghost_library_item_id = ?, updated_at = datetime('now') WHERE id = ?`, libraryItemID, id)
+	if err != nil {
+		return fmt.Errorf("setting download ghost item: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
+// ActiveDownloadIDsByLibraryItem returns, for each of the given library item
+// ids that has a queued/running download (via ghost_library_item_id or
+// target_library_item_id), the id of that download. One query for the whole
+// batch; items without an active download are absent from the map. If an
+// item somehow has several, the newest wins.
+func (r *DownloadsRepo) ActiveDownloadIDsByLibraryItem(ctx context.Context, itemIDs []int64) (map[int64]int64, error) {
+	out := make(map[int64]int64)
+	if len(itemIDs) == 0 {
+		return out, nil
+	}
+	statuses := models.ActiveStatuses()
+	args := make([]any, 0, len(statuses)+2*len(itemIDs))
+	statusPH := make([]string, len(statuses))
+	for i, s := range statuses {
+		statusPH[i] = "?"
+		args = append(args, s)
+	}
+	idPH := strings.TrimSuffix(strings.Repeat("?,", len(itemIDs)), ",")
+	for i := 0; i < 2; i++ {
+		for _, id := range itemIDs {
+			args = append(args, id)
+		}
+	}
+	query := fmt.Sprintf(`
+		SELECT id, ghost_library_item_id, target_library_item_id FROM downloads
+		WHERE status IN (%s) AND (ghost_library_item_id IN (%s) OR target_library_item_id IN (%s))
+		ORDER BY id ASC`, strings.Join(statusPH, ","), idPH, idPH)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("looking up active downloads for library items: %w", err)
+	}
+	defer rows.Close()
+	wanted := make(map[int64]bool, len(itemIDs))
+	for _, id := range itemIDs {
+		wanted[id] = true
+	}
+	for rows.Next() {
+		var id int64
+		var ghost, target sql.NullInt64
+		if err := rows.Scan(&id, &ghost, &target); err != nil {
+			return nil, fmt.Errorf("scanning active download: %w", err)
+		}
+		for _, lib := range []sql.NullInt64{ghost, target} {
+			if lib.Valid && wanted[lib.Int64] {
+				out[lib.Int64] = id // ascending id order: the newest overwrites
+			}
+		}
+	}
+	return out, rows.Err()
+}
+
 // Delete removes a download's history row. Safe to call even for a download
 // that has a completed library item — library.download_id is
 // ON DELETE SET NULL, so the library item just loses its back-link, it is
@@ -316,7 +377,7 @@ const downloadSelectColumns = `
 	       d.status, d.title, d.uploader, d.duration, d.resolution, d.thumbnail, d.error_message, d.ytdlp_command,
 	       d.exit_code, d.stdout_tail, d.stderr_tail, d.retry_count, d.created_at, d.updated_at, d.completed_at,
 	       d.override_title, d.override_artist_id, d.override_year, d.override_season_number, d.override_sequence_number, d.filename_prefix, d.filename_template, d.override_tags, d.generate_nfo,
-	       d.target_library_item_id, d.overwrite_fields
+	       d.target_library_item_id, d.overwrite_fields, d.ghost_library_item_id
 	FROM downloads d
 	LEFT JOIN collections c ON c.id = d.collection_id`
 
@@ -335,7 +396,7 @@ func scanDownload(row rowScanner) (*models.Download, error) {
 		&d.Status, &d.Title, &d.Uploader, &d.Duration, &d.Resolution, &d.Thumbnail, &d.ErrorMessage, &d.YtDlpCommand,
 		&d.ExitCode, &d.StdoutTail, &d.StderrTail, &d.RetryCount, &createdAt, &updatedAt, &completedAt,
 		&d.OverrideTitle, &d.OverrideArtistID, &d.OverrideYear, &d.OverrideSeasonNumber, &d.OverrideSequenceNumber, &d.FilenamePrefix, &d.FilenameTemplate, &overrideTags, &d.GenerateNFO,
-		&d.TargetLibraryItemID, &overwriteFields,
+		&d.TargetLibraryItemID, &overwriteFields, &d.GhostLibraryItemID,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

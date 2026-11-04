@@ -11,6 +11,7 @@ const (
 	EventFrameMatchProgress   EventType = "frame_match_progress"
 	EventSubscriptionNewItems EventType = "subscription_new_items"
 	EventBackupCompleted      EventType = "backup_completed"
+	EventLibraryChanged       EventType = "library_changed"
 )
 
 type Event struct {
@@ -84,6 +85,14 @@ type SubscriptionNewItemsPayload struct {
 type BackupCompletedPayload struct {
 	Status       string  `json:"status"` // "success" | "failed"
 	ErrorMessage *string `json:"errorMessage,omitempty"`
+}
+
+// LibraryChangedPayload tells clients the library list changed outside a
+// "completed" event (a ghost appeared or was removed while a download ran) —
+// they just refetch, no item data travels with it.
+type LibraryChangedPayload struct {
+	LibraryID int64  `json:"libraryId"`
+	Reason    string `json:"reason"` // "ghost_created" | "ghost_removed"
 }
 
 // Broadcaster is satisfied by Hub. It is defined here (rather than in the

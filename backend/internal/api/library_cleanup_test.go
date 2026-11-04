@@ -15,7 +15,9 @@ import (
 
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/models"
+	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/ws"
 )
 
 type cleanupEnv struct {
@@ -23,6 +25,8 @@ type cleanupEnv struct {
 	library    *repository.LibraryRepo
 	originals  *repository.ThumbnailEnhancementOriginalsRepo
 	queue      *repository.FrameMatchQueueRepo
+	downloads  *repository.DownloadsRepo
+	mgr        *queue.DownloadManager
 	mediaRoot  string
 	imagesRoot string
 }
@@ -41,14 +45,17 @@ func newCleanupEnv(t *testing.T) *cleanupEnv {
 	if err := db.Migrate(conn, migrationsDir); err != nil {
 		t.Fatalf("migrating test db: %v", err)
 	}
-	return &cleanupEnv{
+	e := &cleanupEnv{
 		conn:       conn,
 		library:    repository.NewLibraryRepo(conn),
 		originals:  repository.NewThumbnailEnhancementOriginalsRepo(conn),
 		queue:      repository.NewFrameMatchQueueRepo(conn),
+		downloads:  repository.NewDownloadsRepo(conn),
 		mediaRoot:  t.TempDir(),
 		imagesRoot: t.TempDir(),
 	}
+	e.mgr = queue.NewDownloadManager(e.mediaRoot, e.imagesRoot, "", nil, e.downloads, e.library, nil, nil, nil, nil, nil, nil, nil, nil, queue.NewProgressStore(), ws.NoopBroadcaster{})
+	return e
 }
 
 func writeFile(t *testing.T, path string) {
@@ -206,7 +213,7 @@ func TestDeleteLibraryItemRemovesArtifacts(t *testing.T) {
 		t.Run(fmt.Sprintf("deleteFiles=%v", deleteFiles), func(t *testing.T) {
 			e := newCleanupEnv(t)
 			s := e.seedItem(t, "single")
-			h := DeleteLibraryItem(e.library, e.mediaRoot, e.imagesRoot)
+			h := DeleteLibraryItem(e.library, e.downloads, e.mgr, e.mediaRoot, e.imagesRoot)
 			w := e.do(t, h, http.MethodDelete, fmt.Sprintf("/library/%d?deleteFiles=%v", s.id, deleteFiles), "/library/:id", "")
 			if w.Code != http.StatusNoContent {
 				t.Fatalf("status = %d: %s", w.Code, w.Body)
@@ -228,7 +235,7 @@ func TestBulkDeleteLibraryItems(t *testing.T) {
 	t.Run("removes artifacts after commit", func(t *testing.T) {
 		e := newCleanupEnv(t)
 		a, b := e.seedItem(t, "ba"), e.seedItem(t, "bb")
-		h := BulkDeleteLibraryItems(e.conn, e.library, e.mediaRoot, e.imagesRoot)
+		h := BulkDeleteLibraryItems(e.conn, e.library, e.downloads, e.mgr, e.mediaRoot, e.imagesRoot)
 		body := fmt.Sprintf(`{"itemIds":[%d,%d,12345],"deleteFiles":true}`, a.id, b.id)
 		w := e.do(t, h, http.MethodPost, "/library/bulk-delete", "/library/bulk-delete", body)
 		if w.Code != http.StatusOK {
@@ -248,7 +255,7 @@ func TestBulkDeleteLibraryItems(t *testing.T) {
 			`CREATE TRIGGER block_delete BEFORE DELETE ON library WHEN OLD.id = %d BEGIN SELECT RAISE(ABORT, 'boom'); END`, b.id)); err != nil {
 			t.Fatal(err)
 		}
-		h := BulkDeleteLibraryItems(e.conn, e.library, e.mediaRoot, e.imagesRoot)
+		h := BulkDeleteLibraryItems(e.conn, e.library, e.downloads, e.mgr, e.mediaRoot, e.imagesRoot)
 		body := fmt.Sprintf(`{"itemIds":[%d,%d],"deleteFiles":true}`, a.id, b.id)
 		w := e.do(t, h, http.MethodPost, "/library/bulk-delete", "/library/bulk-delete", body)
 		if w.Code != http.StatusInternalServerError {
@@ -303,7 +310,7 @@ func TestDeleteLibraryItemFileArtifacts(t *testing.T) {
 	t.Run("bulk with deleteThumbnail", func(t *testing.T) {
 		e := newCleanupEnv(t)
 		a, b := e.seedItem(t, "bda"), e.seedItem(t, "bdb")
-		h := BulkDeleteLibraryItemFiles(e.conn, e.library, e.originals, e.mediaRoot, e.imagesRoot)
+		h := BulkDeleteLibraryItemFiles(e.conn, e.library, e.downloads, e.originals, e.mediaRoot, e.imagesRoot)
 		body := fmt.Sprintf(`{"itemIds":[%d,%d],"deleteThumbnail":true}`, a.id, b.id)
 		w := e.do(t, h, http.MethodPost, "/library/bulk-delete-file", "/library/bulk-delete-file", body)
 		if w.Code != http.StatusOK {
