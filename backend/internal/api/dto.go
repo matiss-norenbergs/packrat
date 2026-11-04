@@ -178,6 +178,10 @@ type CreateDownloadRequest struct {
 	// internally before calling enqueueDownload.
 	TargetLibraryItemID *int64   `json:"-"`
 	OverwriteFields     []string `json:"-"`
+	// GhostLibraryItemID makes the new download fill in an existing ghost
+	// (a retry of a failed run) instead of creating a fresh one; json:"-"
+	// for the same reason as TargetLibraryItemID.
+	GhostLibraryItemID *int64 `json:"-"`
 }
 
 // RedownloadFromURLRequest is the body of POST
@@ -396,6 +400,9 @@ type LibraryItemResponse struct {
 	PlaybackPositionSeconds *int     `json:"playbackPositionSeconds"`
 	LastWatchedAt           *string  `json:"lastWatchedAt"`
 	GalleryCount            int      `json:"galleryCount"`
+	// ActiveDownloadID is the queued/running download currently filling this
+	// item in (a ghost being downloaded, or a redownload); null when none.
+	ActiveDownloadID *int64 `json:"activeDownloadId"`
 }
 
 // UpdateLibraryProgressRequest is POST /library/:id/progress's body — a
@@ -426,7 +433,7 @@ type LibraryFacetsResponse struct {
 // disk — GenerateNFO only reflects whether the toggle is on, not whether a
 // file is actually present (it can be turned off after generating, or
 // deleted independently via the "Delete File" action while still on).
-func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string, galleryCount int, mediaRoot string) LibraryItemResponse {
+func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string, galleryCount int, activeDownloadID *int64, mediaRoot string) LibraryItemResponse {
 	if tags == nil {
 		tags = []string{}
 	}
@@ -473,6 +480,7 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 		PlaybackPositionSeconds: item.PlaybackPositionSeconds,
 		LastWatchedAt:           lastWatchedAt,
 		GalleryCount:            galleryCount,
+		ActiveDownloadID:        activeDownloadID,
 	}
 }
 

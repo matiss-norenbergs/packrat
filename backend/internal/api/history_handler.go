@@ -51,7 +51,7 @@ func ListHistory(repo *repository.HistoryRepo, settingsRepo *repository.Settings
 // RedownloadLibraryItem), falling back to the app's default download type
 // otherwise. Only meaningful for entries that didn't end in "completed" —
 // retrying a completed one is what Library's "Redownload" is already for.
-func RetryHistoryItem(historyRepo *repository.HistoryRepo, downloadsRepo *repository.DownloadsRepo, mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
+func RetryHistoryItem(historyRepo *repository.HistoryRepo, downloadsRepo *repository.DownloadsRepo, libraryRepo *repository.LibraryRepo, mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -83,6 +83,32 @@ func RetryHistoryItem(historyRepo *repository.HistoryRepo, downloadsRepo *reposi
 				req.Quality = orig.Quality
 				if orig.AudioFormat != nil {
 					req.AudioFormat = *orig.AudioFormat
+				}
+				// The original request's metadata overrides, name template and
+				// NFO choice carry over too, so the retry produces the same
+				// item the first run would have.
+				req.Title = orig.OverrideTitle
+				req.ArtistID = orig.OverrideArtistID
+				req.Year = orig.OverrideYear
+				req.SeasonNumber = orig.OverrideSeasonNumber
+				req.SequenceNumber = orig.OverrideSequenceNumber
+				req.FilenamePrefix = orig.FilenamePrefix
+				req.FilenameTemplate = orig.FilenameTemplate
+				req.Tags = orig.OverrideTags
+				req.GenerateNFO = orig.GenerateNFO
+
+				// Reuse the ghost the failed run left behind instead of
+				// creating a second one — only while it still exists, is still
+				// a ghost and no other download is filling it in.
+				if orig.GhostLibraryItemID != nil {
+					ctx := c.Request.Context()
+					if item, err := libraryRepo.Get(ctx, *orig.GhostLibraryItemID); err == nil && item.Status == "ghost" {
+						if _, active, err := activeDownloadFor(ctx, downloadsRepo, item.ID); err == nil && active {
+							c.JSON(http.StatusConflict, gin.H{"error": "a download is already in progress for this item"})
+							return
+						}
+						req.GhostLibraryItemID = &item.ID
+					}
 				}
 			}
 		}

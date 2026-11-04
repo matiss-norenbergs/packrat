@@ -178,7 +178,7 @@ func GetLibraryFacets(repo *repository.LibraryRepo) gin.HandlerFunc {
 // ?deleteFiles=true is passed — the media file, thumbnail and .nfo sidecar
 // too (see purgeLibraryItemArtifacts). A missing file is logged, not treated
 // as a request failure, since the end state (file gone) is the same either way.
-func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot, imagesRoot string) gin.HandlerFunc {
+func DeleteLibraryItem(repo *repository.LibraryRepo, downloadsRepo *repository.DownloadsRepo, mgr *queue.DownloadManager, mediaRoot, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -196,6 +196,10 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, mediaRoot, imagesRoot strin
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		// A download still filling this item in is cancelled first, so its
+		// worker stops instead of finishing into a row that is going away.
+		cancelActiveDownloads(c.Request.Context(), downloadsRepo, mgr, []int64{id})
 
 		// The queue rows cascade away with the library row, so grab their ids first.
 		artifacts, err := collectLibraryItemArtifacts(c.Request.Context(), repo, item)
@@ -256,13 +260,15 @@ func UpdateLibraryItemProgress(repo *repository.LibraryRepo) gin.HandlerFunc {
 // of deleted/not-deleted rows. Files are only touched after tx.Commit
 // succeeds (items and their frame-match queue ids are collected inside the
 // tx), so a failed batch leaves disk untouched.
-func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, mediaRoot, imagesRoot string) gin.HandlerFunc {
+func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, downloadsRepo *repository.DownloadsRepo, mgr *queue.DownloadManager, mediaRoot, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BulkDeleteLibraryItemsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+
+		cancelActiveDownloads(c.Request.Context(), downloadsRepo, mgr, req.ItemIDs)
 
 		tx, err := db.BeginTx(c.Request.Context(), nil)
 		if err != nil {
@@ -807,6 +813,55 @@ func CompareLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 	}
 }
 
+// activeDownloadFor reports the queued/running download currently filling in
+// library item id (see DownloadsRepo.ActiveDownloadIDsByLibraryItem).
+func activeDownloadFor(ctx context.Context, downloadsRepo *repository.DownloadsRepo, id int64) (int64, bool, error) {
+	m, err := downloadsRepo.ActiveDownloadIDsByLibraryItem(ctx, []int64{id})
+	if err != nil {
+		return 0, false, err
+	}
+	dl, ok := m[id]
+	return dl, ok, nil
+}
+
+// rejectIfDownloadActive answers 409 (or 500 on a lookup failure) and returns
+// true when item id already has an active download, so a second one can't be
+// started on top of it.
+func rejectIfDownloadActive(c *gin.Context, downloadsRepo *repository.DownloadsRepo, id int64) bool {
+	_, active, err := activeDownloadFor(c.Request.Context(), downloadsRepo, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return true
+	}
+	if active {
+		c.JSON(http.StatusConflict, gin.H{"error": "a download is already in progress for this item"})
+		return true
+	}
+	return false
+}
+
+// cancelActiveDownloads cancels every queued/running download filling in one
+// of itemIDs (best-effort; a download that just finished on its own is fine).
+// Called before deleting library items. The worker's own ghost cleanup racing
+// with the delete is harmless: removing an already-removed row is not an error.
+func cancelActiveDownloads(ctx context.Context, downloadsRepo *repository.DownloadsRepo, mgr *queue.DownloadManager, itemIDs []int64) {
+	active, err := downloadsRepo.ActiveDownloadIDsByLibraryItem(ctx, itemIDs)
+	if err != nil {
+		log.Printf("library delete: looking up active downloads failed: %v", err)
+		return
+	}
+	seen := make(map[int64]bool, len(active))
+	for _, dl := range active {
+		if seen[dl] {
+			continue
+		}
+		seen[dl] = true
+		if err := mgr.Cancel(ctx, dl); err != nil {
+			log.Printf("library delete: cancelling download %d failed: %v", dl, err)
+		}
+	}
+}
+
 // RedownloadLibraryItem re-fetches the file from the item's original URL
 // and swaps it into place over the existing item once the download
 // succeeds — reusing the exact original type/quality/format when the
@@ -835,6 +890,10 @@ func RedownloadLibraryItem(libraryRepo *repository.LibraryRepo, downloadsRepo *r
 
 		if item.OriginalURL == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no source URL set for this item"})
+			return
+		}
+
+		if rejectIfDownloadActive(c, downloadsRepo, id) {
 			return
 		}
 
@@ -878,6 +937,11 @@ func BulkRedownloadLibraryItems(libraryRepo *repository.LibraryRepo, downloadsRe
 			}
 			if item.OriginalURL == nil {
 				resp.Skipped++
+				continue
+			}
+
+			if _, active, err := activeDownloadFor(ctx, downloadsRepo, id); err != nil || active {
+				resp.Skipped++ // a download is already filling this item in
 				continue
 			}
 
@@ -935,6 +999,10 @@ func RedownloadLibraryItemFromURL(libraryRepo *repository.LibraryRepo, downloads
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if rejectIfDownloadActive(c, downloadsRepo, id) {
 			return
 		}
 

@@ -137,7 +137,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		public.POST("/auth/logout", AuthLogout(deps.UsersRepo))
 	}
 
-	itemResponder := NewItemResponder(deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.ThumbnailGalleryRepo, deps.MediaRoot)
+	itemResponder := NewItemResponder(deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.ThumbnailGalleryRepo, deps.DownloadsRepo, deps.MediaRoot)
 
 	api := r.Group("/api")
 	api.Use(RequireAuth(deps.UsersRepo), RequireCSRF())
@@ -207,11 +207,11 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/scan-missing", ScanMissingLibraryFiles(deps.MediaRoot, deps.LibraryRepo))
 		api.GET("/maintenance/stray-files", ScanStrayFiles(deps.DB, deps.Manager, deps.MediaRoot, deps.ImagesRoot))
 		api.POST("/maintenance/stray-files/delete", DeleteStrayFiles(deps.DB, deps.Manager, deps.MediaRoot, deps.ImagesRoot))
-		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.ImagesRoot))
+		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.MediaRoot, deps.ImagesRoot))
 		api.PATCH("/library/:id", UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.YtDlp, deps.TagsRepo, deps.ArtistsRepo))
 		api.POST("/library/:id/progress", UpdateLibraryItemProgress(deps.LibraryRepo))
 		api.POST("/library/bulk-tags", BulkAssignTags(deps.LibraryRepo, deps.TagsRepo, deps.MediaRoot))
-		api.POST("/library/bulk-delete", BulkDeleteLibraryItems(deps.DB, deps.LibraryRepo, deps.MediaRoot, deps.ImagesRoot))
+		api.POST("/library/bulk-delete", BulkDeleteLibraryItems(deps.DB, deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.MediaRoot, deps.ImagesRoot))
 		api.POST("/library/bulk-delete-file", BulkDeleteLibraryItemFiles(deps.DB, deps.LibraryRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.MediaRoot, deps.ImagesRoot))
 		api.POST("/library/bulk-redownload", BulkRedownloadLibraryItems(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.POST("/library/bulk-fetch-thumbnails", BulkFetchLibraryThumbnails(deps.LibraryRepo, deps.ImagesRoot, deps.YtDlp))
@@ -348,7 +348,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/import", fileImportOnly, CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath, itemResponder))
 
 		api.GET("/history", ListHistory(deps.HistoryRepo, deps.SettingsRepo))
-		api.POST("/history/:id/retry", RetryHistoryItem(deps.HistoryRepo, deps.DownloadsRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
+		api.POST("/history/:id/retry", RetryHistoryItem(deps.HistoryRepo, deps.DownloadsRepo, deps.LibraryRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
 		api.DELETE("/history/:id", DeleteHistoryItem(deps.HistoryRepo))
 		api.POST("/history/clear", ClearHistory(deps.HistoryRepo))
 

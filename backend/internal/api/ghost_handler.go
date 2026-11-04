@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/downloader"
-	"packrat/backend/internal/imageproc"
+	"packrat/backend/internal/ghostthumb"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
@@ -85,7 +85,8 @@ func CreateGhostLibraryItem(libraryRepo *repository.LibraryRepo, imagesRoot stri
 	}
 }
 
-// fetchGhostThumbnail best-effort fetches and tiers a thumbnail for a
+// fetchGhostThumbnail (the implementation is the shared ghostthumb.Generate,
+// also used by the queue worker) best-effort fetches and tiers a thumbnail for a
 // library item from url, independent of whether the item has a file
 // (originally built for ghost creation, now also reused by the bulk
 // "Download thumbnail(s)" operation for real items too) — the source image
@@ -98,45 +99,9 @@ func CreateGhostLibraryItem(libraryRepo *repository.LibraryRepo, imagesRoot stri
 // report accurate fetched/skipped counts; single-item callers that only
 // want best-effort behavior can ignore the return value.
 func fetchGhostThumbnail(ctx context.Context, libraryRepo *repository.LibraryRepo, imagesRoot string, ytdlp *downloader.YtDlpService, id int64, url string) bool {
-	tmpDir, err := os.MkdirTemp("", "ghost-thumb-*")
-	if err != nil {
-		log.Printf("ghost item %d: creating scratch dir for thumbnail fetch failed: %v", id, err)
-		return false
-	}
-	defer os.RemoveAll(tmpDir)
-
-	thumbAbs, err := ytdlp.FetchThumbnail(ctx, url, tmpDir, "thumb")
-	if err != nil {
-		log.Printf("ghost item %d: thumbnail fetch failed: %v", id, err)
-		return false
-	}
-
-	tiers, err := imageproc.GenerateTiersFromPath(ctx, ytdlp.FFmpegPath, imagesRoot, "library", id, thumbAbs, libraryThumbnailTiers)
-	if err != nil {
-		log.Printf("ghost item %d: generating thumbnail derivatives failed: %v", id, err)
-		return false
-	}
-	// Snapshot the tiers being replaced so they can be removed once the DB
-	// points at the new ones (best-effort; a failed lookup just skips cleanup).
-	var oldSmall, oldMedium *string
-	if existing, err := libraryRepo.Get(ctx, id); err != nil {
-		log.Printf("ghost item %d: loading previous thumbnail tiers failed: %v", id, err)
-	} else {
-		oldSmall, oldMedium = existing.ThumbnailSmallPath, existing.ThumbnailMediumPath
-	}
-
-	var width, height *int
-	if w, h, err := imageproc.ProbeDimensions(thumbAbs); err != nil {
-		log.Printf("ghost item %d: probing thumbnail dimensions failed: %v", id, err)
-	} else {
-		width, height = &w, &h
-	}
-	if err := libraryRepo.UpdateThumbnailTiers(ctx, id, &tiers[0], &tiers[1], width, height); err != nil {
-		log.Printf("ghost item %d: saving thumbnail derivatives failed: %v", id, err)
-		return false
-	}
-	removeThumbnailTiers(imagesRoot, oldSmall, oldMedium)
-	return true
+	return ghostthumb.Generate(ctx, libraryRepo, imagesRoot, ytdlp.FFmpegPath, id, func(ctx context.Context, dir string) (string, error) {
+		return ytdlp.FetchThumbnail(ctx, url, dir, "thumb")
+	})
 }
 
 // BulkFetchLibraryThumbnails is the Library toolbar's bulk "Download
