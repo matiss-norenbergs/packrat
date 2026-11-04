@@ -381,6 +381,10 @@ item, for the same file-doesn't-have-what's-needed reason — see the Thumbnail 
   a live preview and optionally fetch the thumbnail up front, or just type a title with no URL for
   a pure placeholder. Collection, artist, year, season/sequence #, tags, and Generate NFO can all
   be set immediately, same as a real item.
+- A ghost that has a thumbnail (e.g. fetched from its source URL) shows it in grayscale in the
+  Library grid, Folders view and list, and it turns to full color on hover. Ghosts without a
+  thumbnail keep the placeholder icon. A blurred private ghost behaves as any private item until
+  revealed.
 - Any real item can become a ghost via **Delete file…** (see above) — frees disk space, keeps the
   catalog entry.
 - Settings → Library → **Scan for Missing Files** checks every item's file against disk and

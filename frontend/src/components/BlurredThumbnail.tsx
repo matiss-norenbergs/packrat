@@ -22,6 +22,9 @@ interface BlurredThumbnailProps {
   // thumbnail (e.g. Library's multi-select, where a click toggles selection
   // instead of revealing) pass false so a hover can't leak the image either.
   interactive?: boolean
+  // Grayscale until hovered (e.g. a ghost item's thumbnail). Blurred-and-
+  // unrevealed rules win over it; see the className below.
+  muted?: boolean
 }
 
 // Click-to-reveal: a blurred thumbnail can be temporarily un-blurred by
@@ -37,6 +40,7 @@ export function BlurredThumbnail({
   revealed,
   onToggleReveal,
   interactive = true,
+  muted = false,
 }: BlurredThumbnailProps) {
   const { data: settings } = useSettings()
   const blurClass = BLUR_CLASS[settings?.privacyBlurStrength ?? "default"] ?? BLUR_CLASS.default
@@ -53,7 +57,12 @@ export function BlurredThumbnail({
       className={cn(
         className,
         "select-none [-webkit-user-drag:none]",
-        showBlur && [blurClass, "grayscale transition-[filter] duration-150", interactive && "hover:grayscale-0"],
+        // Precedence: blurred-and-unrevealed rules win (hover un-greys only when
+        // interactive, so a hover can't leak a blurred image); otherwise `muted`
+        // applies grayscale that clears on hover.
+        showBlur
+          ? [blurClass, "grayscale transition-[filter] duration-150", interactive && "hover:grayscale-0"]
+          : muted && "grayscale transition-[filter] duration-150 hover:grayscale-0",
         clickable && "cursor-pointer",
       )}
       onClick={clickable ? onToggleReveal : undefined}
