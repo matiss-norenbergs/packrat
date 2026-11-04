@@ -54,13 +54,47 @@ describe("library item actions", () => {
     expect(list).toContainEqual(["Redownload", ["Download now", "From Different URL…"]])
   })
 
-  it("disables the redownload actions while a download is in progress for the item", () => {
-    const ghostBusy = tree(actions(make({ status: "ghost", activeDownloadId: 7 })))
-    expect(ghostBusy).toContainEqual(["Redownload", ["Download now (disabled)", "From Different URL… (disabled)"]])
-    const realBusy = tree(actions(make({ activeDownloadId: 7 })))
-    expect(realBusy).toContainEqual(["Redownload", ["From Current URL (disabled)", "From Different URL… (disabled)"]])
-    // No active download: enabled again.
-    expect(tree(actions(make({ status: "ghost", activeDownloadId: null })))).toContainEqual(["Redownload", ["Download now", "From Different URL…"]])
+  describe("while a download is in progress for the item", () => {
+    const only = ["Copy URL", ["Metadata", ["Compare"]], "---", "Delete (destructive)"]
+
+    it("offers only Copy URL, the read-only compare and Delete — everything else is hidden, not disabled", () => {
+      for (const status of ["ghost", "completed"]) {
+        const list = tree(actions(make({ status, activeDownloadId: 7 })))
+        expect(list).toEqual(only)
+        const flat = JSON.stringify(list)
+        for (const hidden of ["Edit", "Move", "Trim", "Redownload", "Download now", "From Current URL", "NFO", "Thumbnail", "Match", "Refresh", "Delete file", "compare list"]) {
+          expect(flat).not.toContain(hidden)
+        }
+        expect(flat).not.toContain("(disabled)")
+      }
+    })
+
+    it("has no dangling separator at either end, in the menu or a submenu", () => {
+      const walk = (list: unknown[]) => {
+        expect(list[0]).not.toBe("---")
+        expect(list.at(-1)).not.toBe("---")
+        list.forEach((e, i) => {
+          if (e === "---") expect(list[i - 1]).not.toBe("---")
+          if (Array.isArray(e)) walk(e[1] as unknown[])
+        })
+      }
+      walk(tree(actions(make({ activeDownloadId: 7 }))))
+      walk(tree(actions(make({ status: "ghost" }))))
+      walk(tree(actions(make({ mediaType: "image", status: "ghost" }))))
+    })
+
+    it("converts to the same short context menu for the list view", () => {
+      const items = toContextMenuItems(actions(make({ activeDownloadId: 7 })))
+      expect(items.map((i) => i.key)).toEqual(["copy-url", "metadata", "sep-1", "delete"])
+      expect(items.map((i) => ("items" in i ? i.items.map((x) => x.key) : null))).toEqual([null, ["metadata-compare"], null, null])
+    })
+
+    it("restores the full menu once the download is gone", () => {
+      const list = tree(actions(make({ status: "ghost", activeDownloadId: null })))
+      expect(list.length).toBeGreaterThan(only.length)
+      expect(list).toContainEqual(["Redownload", ["Download now", "From Different URL…"]])
+      expect(list[0]).toBe("Edit")
+    })
   })
 
   it("disables the URL-dependent actions when there is no source URL", () => {

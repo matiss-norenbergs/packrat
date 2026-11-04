@@ -3,6 +3,7 @@ import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { skippedDownloadingNote } from "@/lib/bulkSkipped"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
@@ -176,8 +177,11 @@ export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogPro
     }
 
     setIsSaving(true)
+    // Items with a running download are locked (the server would answer 409): leave them out and say so.
+    const editable = toSave.filter(({ item }) => item.activeDownloadId == null)
+    const skippedDownloading = toSave.length - editable.length
     const results = await Promise.allSettled(
-      toSave.map(({ item, newNumber }) => updateLibraryItem(item.id, { sequenceNumber: newNumber })),
+      editable.map(({ item, newNumber }) => updateLibraryItem(item.id, { sequenceNumber: newNumber })),
     )
     setIsSaving(false)
 
@@ -191,6 +195,7 @@ export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogPro
     queryClient.invalidateQueries({ queryKey: collectionsQueryKey })
     if (succeeded > 0) toast.success(`Renumbered ${succeeded} file${succeeded === 1 ? "" : "s"}`)
     if (failed > 0) toast.error(`${failed} file${failed === 1 ? "" : "s"} failed to update`)
+    if (skippedDownloading > 0) toast.warning(skippedDownloadingNote(skippedDownloading))
 
     clear()
     onOpenChange(false)

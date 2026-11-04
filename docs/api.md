@@ -543,7 +543,9 @@ not merge, when present — creates missing tag names). Side effects:
 ```
 
 **Overwrites** (not merges) the tag set on every listed item, creating missing tag names, and
-keeps each opted-in item's `.nfo` sidecar in sync. `204`.
+keeps each opted-in item's `.nfo` sidecar in sync. Items with an active download are left out.
+`200 {"updated": 2, "skipped": 1, "skippedDownloading": 1}` (here `skipped` only counts the
+active-download items). *Previously `204 No Content`.*
 
 ### `POST /api/library/bulk-delete`
 
@@ -596,6 +598,19 @@ item.
 ```json
 { "resolution": "1920x1080", "durationSeconds": 214, "frameRate": 29.97 }
 ```
+
+### Items with an active download are locked
+
+While an item has a queued/running download (`activeDownloadId` is set) every single-item route that
+changes the item or its files answers **`409 {"error": "a download is already in progress for this
+item"}`**: `PATCH /library/:id`, `DELETE .../file`, `POST .../move`, `.../refresh-metadata`,
+`.../trim/accept`, `POST/DELETE .../thumbnail`, `.../thumbnail/redownload`, `.../thumbnail/quick-grab`,
+`POST .../thumbnail/gallery`, `.../thumbnail/gallery/:galleryId/apply`, `PATCH/DELETE
+.../thumbnail/gallery/:galleryId`, `.../thumbnail/match`, `POST/DELETE .../nfo`, `POST .../redownload`,
+`.../redownload/from-url`, plus `POST /thumbnail-enhancement/items/:id/revert` and `DELETE
+/thumbnail-enhancement/items/:id/original`. Reads, `POST .../progress` and `DELETE /library/:id` (which
+cancels the download) are unaffected. The multi-item endpoints skip such items instead of failing (see
+`skippedDownloading` on each); `bulk-delete` is unchanged and cancels their downloads.
 
 ### `POST /api/library/:id/redownload` — no body
 
@@ -674,14 +689,19 @@ deleted (`DELETE /:id/file`) or found missing on disk (`scan-missing`).
   ```
 - **`POST /api/library/bulk-redownload`** — `{ "itemIds": [1, 2, 3] }`. Redownloads each item from
   its own `originalUrl` (same resolution/duration-only overwrite as single-item Redownload). Items
-  with no URL, with an active download, or whose enqueue fails, are silently skipped. `200 {"queued": 2, "skipped": 1}`.
+  with no URL, with an active download, or whose enqueue fails, are silently skipped.
+  `200 {"queued": 2, "skipped": 1, "skippedDownloading": 0}` (`skippedDownloading` is the part of
+  `skipped` left out because of an active download).
 - **`POST /api/library/bulk-fetch-thumbnails`** — `{ "itemIds": [1, 2, 3] }`. Re-fetches each item's
   thumbnail from its `originalUrl` — works identically for ghost or real items, since it only
   writes the `ImagesRoot`-relative WebP derivatives, never the `MediaRoot`-relative sidecar. Items
-  with no source URL, or a failed fetch, are skipped. `200 {"fetched": 2, "skipped": 1}`.
+  with no source URL, a failed fetch, or an active download, are skipped.
+  `200 {"fetched": 2, "skipped": 1, "skippedDownloading": 0}`.
 - **`POST /api/library/bulk-delete-file`** — `{ "itemIds": [1, 2, 3], "deleteThumbnail": true }`. One
   `deleteThumbnail` flag for the whole batch (same semantics as the single-item version above). An
-  id already gone, or already a ghost, is silently skipped. `200 {"deleted": 2}`.
+  id already gone, or already a ghost, is silently skipped; an item with an active download is left
+  untouched and counted. `200 {"deleted": 2, "skipped": 1, "skippedDownloading": 1}` (here `skipped`
+  only counts the active-download items).
 
 ### Trim
 
@@ -813,8 +833,9 @@ candidates), **not** duplicate-video detection. Two independent flows: a single-
 - **`POST /api/library/thumbnail/match/bulk`** — `{ "itemIds": [101, 102, 103], "mode": "url" }`.
   Enqueues each eligible item onto the durable queue, worked one at a time by a background worker.
   An item is skipped (not an error) if it's a ghost, or ineligible for the mode (no `originalUrl`
-  for `"url"`, no current thumbnail for `"current"`); already-queued is counted separately.
-  Response `202 {"queued": 2, "skipped": 1, "alreadyQueued": 0}`.
+  for `"url"`, no current thumbnail for `"current"`) or has an active download; already-queued is
+  counted separately. Response `202 {"queued": 2, "skipped": 1, "skippedDownloading": 0, "alreadyQueued": 0}`
+  (`skippedDownloading` is the part of `skipped` left out because of an active download).
 - **`GET /api/frame-match/queue`** — no params. Every row currently queued/running/done/error,
   oldest first:
   ```json

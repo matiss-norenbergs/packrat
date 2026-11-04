@@ -53,6 +53,7 @@ import type {
   TrimPreviewRequest,
   UpdateLibraryItemRequest,
 } from "@/types/api"
+import { withSkippedNote } from "@/lib/bulkSkipped"
 import { downloadsQueryKey } from "./useDownloads"
 import { tagsQueryKey } from "./useTags"
 
@@ -267,8 +268,10 @@ export function useBulkAssignTags() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: BulkAssignTagsRequest) => bulkAssignTags(payload),
-    onSuccess: (_data, payload) => {
-      toast.success(`Tags updated on ${payload.itemIds.length} ${payload.itemIds.length === 1 ? "file" : "files"}`)
+    onSuccess: (result) => {
+      const message = `Tags updated on ${result.updated} ${result.updated === 1 ? "file" : "files"}`
+      if (result.updated === 0 && result.skippedDownloading > 0) toast.warning(withSkippedNote("No tags updated", result.skippedDownloading))
+      else toast.success(withSkippedNote(message, result.skippedDownloading))
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })
     },
@@ -294,7 +297,7 @@ export function useBulkDeleteLibraryItemFiles() {
   return useMutation({
     mutationFn: (payload: BulkDeleteLibraryItemFilesRequest) => bulkDeleteLibraryItemFiles(payload),
     onSuccess: (result) => {
-      toast.success(`Deleted ${result.deleted} ${result.deleted === 1 ? "file" : "files"}`)
+      toast.success(withSkippedNote(`Deleted ${result.deleted} ${result.deleted === 1 ? "file" : "files"}`, result.skippedDownloading))
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to delete: ${err.message}`),
@@ -306,7 +309,7 @@ export function useBulkRedownloadLibraryItems() {
   return useMutation({
     mutationFn: (payload: BulkRedownloadLibraryItemsRequest) => bulkRedownloadLibraryItems(payload),
     onSuccess: (result) => {
-      toast.success(`Queued ${result.queued} ${result.queued === 1 ? "download" : "downloads"}`)
+      toast.success(withSkippedNote(`Queued ${result.queued} ${result.queued === 1 ? "download" : "downloads"}`, result.skippedDownloading))
       queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to queue downloads: ${err.message}`),
@@ -318,7 +321,7 @@ export function useBulkFetchLibraryThumbnails() {
   return useMutation({
     mutationFn: (payload: BulkFetchLibraryThumbnailsRequest) => bulkFetchLibraryThumbnails(payload),
     onSuccess: (result) => {
-      toast.success(`Fetched ${result.fetched} ${result.fetched === 1 ? "thumbnail" : "thumbnails"}`)
+      toast.success(withSkippedNote(`Fetched ${result.fetched} ${result.fetched === 1 ? "thumbnail" : "thumbnails"}`, result.skippedDownloading))
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to fetch thumbnails: ${err.message}`),

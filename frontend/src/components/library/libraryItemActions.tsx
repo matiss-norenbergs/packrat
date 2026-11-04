@@ -73,9 +73,22 @@ import type { FrameMatchMode, LibraryItem } from "@/types/api"
  * renders it with DropdownMenu items and the list view's right-click menu converts it with `toContextMenuItems`.
  */
 export type LibraryItemAction =
-  | { key: string; label: string; icon: ReactNode; destructive?: boolean; disabled?: boolean; disabledReason?: string; onSelect: () => void }
+  | { key: string; label: string; icon: ReactNode; destructive?: boolean; disabled?: boolean; onSelect: () => void }
   | { key: string; separator: true }
   | { key: string; label: string; icon: ReactNode; items: LibraryItemAction[] }
+
+// Drops separators that would dangle (first, last, or two in a row), in every submenu too, so hiding entries never
+// leaves a stray line at the top or bottom of a menu.
+const pruneSeparators = (list: LibraryItemAction[]): LibraryItemAction[] => {
+  const out: LibraryItemAction[] = []
+  for (const a of list) {
+    const entry = "items" in a ? { ...a, items: pruneSeparators(a.items) } : a
+    if ("separator" in entry && (out.length === 0 || "separator" in out[out.length - 1])) continue
+    out.push(entry)
+  }
+  while (out.length > 0 && "separator" in out[out.length - 1]) out.pop()
+  return out
+}
 
 // Conditional entries are written as `condition && {…}`; this drops the ones whose condition is false.
 const compact = (entries: (LibraryItemAction | false)[]): LibraryItemAction[] => entries.filter((a): a is LibraryItemAction => a !== false)
@@ -85,8 +98,7 @@ export function toContextMenuItems<T>(actions: LibraryItemAction[]): ContextMenu
   return actions.map((a): ContextMenuItemDef<T> => {
     if ("separator" in a) return { key: a.key, separator: true }
     if ("items" in a) return { key: a.key, label: a.label, icon: a.icon, items: toContextMenuItems<T>(a.items) }
-    const label = a.disabled && a.disabledReason ? <span title={a.disabledReason}>{a.label}</span> : a.label
-    return { key: a.key, label, icon: a.icon, destructive: a.destructive, disabled: a.disabled, onSelect: a.onSelect }
+    return { key: a.key, label: a.label, icon: a.icon, destructive: a.destructive, disabled: a.disabled, onSelect: a.onSelect }
   })
 }
 
@@ -183,10 +195,10 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
     // audio item's thumbnail, so they stay.
     const isAudio = isAudioFilename(it.filename)
     const frames = !isGhost && !isImage && !isAudio
-    // A download is already filling this item in (queued or running): starting another on top is refused by the
-    // server (409), so the redownload actions are disabled with a reason.
+    // A download is filling this item in (queued or running): the item is locked, since finishing would overwrite any
+    // edit (the server answers 409 to them). Its menu shrinks to Copy URL, the read-only metadata compare and Delete
+    // (which cancels the download); everything else is hidden, not disabled.
     const downloadActive = it.activeDownloadId != null
-    const activeReason = downloadActive ? "A download is already in progress for this item" : undefined
 
     const copyUrl = () => {
       if (!it.originalUrl) return
@@ -198,6 +210,22 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
     const toggleCompareList = () => {
       if (inCompareList) removeFromCompareList.mutate(it.id)
       else addToCompareList.mutate({ itemIds: [it.id] })
+    }
+
+    if (downloadActive) {
+      return pruneSeparators(
+        compact([
+          { key: "copy-url", label: "Copy URL", icon: <Copy />, disabled: !hasUrl, onSelect: copyUrl },
+          {
+            key: "metadata",
+            label: "Metadata",
+            icon: <Info />,
+            items: [{ key: "metadata-compare", label: "Compare", icon: <ArrowLeftRight />, disabled: !hasUrl, onSelect: () => open(it, "compare") }],
+          },
+          { key: "sep-1", separator: true },
+          { key: "delete", label: "Delete", icon: <Trash2 />, destructive: true, onSelect: () => open(it, "delete") },
+        ]),
+      )
     }
 
     const list = compact([
@@ -231,18 +259,10 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
             key: "redownload-current",
             label: isGhost ? "Download now" : "From Current URL",
             icon: <Download />,
-            disabled: !hasUrl || downloadActive,
-            disabledReason: activeReason,
+            disabled: !hasUrl,
             onSelect: () => open(it, "redownloadWarning"),
           },
-          {
-            key: "redownload-other",
-            label: "From Different URL…",
-            icon: <Link2 />,
-            disabled: downloadActive,
-            disabledReason: activeReason,
-            onSelect: () => open(it, "redownloadFromUrl"),
-          },
+          { key: "redownload-other", label: "From Different URL…", icon: <Link2 />, onSelect: () => open(it, "redownloadFromUrl") },
         ],
       },
       { key: "sep-2", separator: true },
@@ -334,7 +354,7 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
       !isGhost && { key: "delete-file", label: "Delete file…", icon: <FileX />, destructive: true, onSelect: () => open(it, "deleteFileWarning") },
       { key: "delete", label: "Delete", icon: <Trash2 />, destructive: true, onSelect: () => open(it, "delete") },
     ])
-    return list
+    return pruneSeparators(list)
   }
 
   const host = item && (

@@ -402,9 +402,16 @@ item, for the same file-doesn't-have-what's-needed reason — see the Thumbnail 
   never removed by a cancel. **A failure, timeout or app restart keeps the ghost** (the Downloads /
   History row shows the error) — **Retry** in History reuses that ghost rather than creating a
   second item, and **Download now** is the manual alternative. While an item has a queued or
-  running download, **Download now / From Current URL / From Different URL…** are disabled
-  ("A download is already in progress for this item"), and **deleting** the item cancels its
-  download (the delete dialog says so).
+  running download it is **locked**: its menu (⋮ and right-click) shows only **Copy URL**,
+  **Metadata → Compare** and **Delete** (which cancels the download, and the dialog says so) — every
+  other entry (Edit, Move, Trim, NFO, Thumbnail, Download now / Redownload, …) is hidden, and the
+  full menu returns once the download has finished, failed or been cancelled. The server refuses
+  edits too (`409`), and the bulk actions (assign tags, set year / artist / Generate NFO, bulk edit,
+  renumber, delete files, download file(s) / thumbnail(s), frame matching) skip such items and say
+  so in their result toast ("3 skipped, download in progress"). Selecting them stays possible, and
+  bulk **Delete** still works (it cancels their downloads). A ghost a download only *reuses* (a
+  History retry, or one that existed before the run) keeps its own title, uploader and
+  description: edits made while it sat there are not overwritten when the download finishes.
 
 ### Thumbnail gallery
 

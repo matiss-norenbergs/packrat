@@ -453,8 +453,29 @@ broadcast so the Library refetches.
   ghost as an ordinary ghost; the Downloads/History row carries the error.
 - **`activeDownloadId`.** `ItemResponder.Responses` batch-loads
   `DownloadsRepo.ActiveDownloadIDsByLibraryItem` (queued/fetching/downloading/processing downloads by
-  `ghost_library_item_id` or `target_library_item_id`; one query per response). Redownload endpoints
-  return `409` while it is set and Library delete / bulk delete call `Manager.Cancel` for it first.
+  `ghost_library_item_id` or `target_library_item_id`; one query per response). Library delete / bulk
+  delete call `Manager.Cancel` for it first.
+- **The lock rule.** An item with an active download is locked, because finishing the download
+  rewrites the row (and a redownload swaps its file). The server enforces it in one place:
+  `blockWhenDownloadActive` route middleware (`library_handler.go`, wired as `notDownloading` in
+  `router.go`) answers `409` via `rejectIfDownloadActive` on every single-item route that changes an
+  item or its files (PATCH, move, refresh-metadata, trim accept, every thumbnail write, gallery
+  save/apply/favorite/delete, frame match, NFO write/delete, delete-file, and the AI-enhancement
+  revert / delete-original routes; the two redownload handlers keep their inline check). Reads,
+  `POST .../progress` and `DELETE /library/:id` (which cancels the download) stay open.
+  `TestRouterGuardsMutatingItemRoutes` scans `router.go` so a new mutating route can't be forgotten
+  from the list. The bulk endpoints (`bulk-tags`, `bulk-delete-file`, `bulk-fetch-thumbnails`,
+  `bulk-redownload`, frame-match bulk) don't fail: `splitActiveItems` / one batched lookup leaves the
+  busy items out and the response reports `skippedDownloading`. The frontend hides (not disables) all
+  but Copy URL / Metadata → Compare / Delete in `libraryItemActions.tsx` (`pruneSeparators` keeps no
+  separator dangling) and its multi-item dialogs that PATCH per item filter such items out first. Not
+  covered: the AI-enhancement bulk/sweep endpoints (they select items themselves) and the frame-match
+  queue accept (a queued item already has a file).
+- **A reused ghost keeps its own text.** `CompleteGhostFromDownload(..., keepMetadata)` is driven by
+  `ghostRun.createdByRun`: a ghost the run *created* takes the download's title/uploader/description
+  (it was built from the same metadata); one the run merely *reused* (History retry, or any ghost that
+  existed before) keeps its own, which the user may have edited since, while everything file-related is
+  filled in. The `libItem` used for the NFO / embedding / notification is synced to the row's text.
 
 ## Thumbnail/image derivatives
 

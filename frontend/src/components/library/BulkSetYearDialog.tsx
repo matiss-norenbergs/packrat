@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { skippedDownloadingNote } from "@/lib/bulkSkipped"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -71,8 +72,11 @@ export function BulkSetYearDialog({ open, onOpenChange }: BulkSetYearDialogProps
     if (Number.isNaN(parsedYear)) return
 
     setIsSaving(true)
+    // Items with a running download are locked (the server would answer 409): leave them out and say so.
+    const editable = affectedItems.filter((item) => item.activeDownloadId == null)
+    const skippedDownloading = affectedItems.length - editable.length
     const results = await Promise.allSettled(
-      affectedItems.map((item) => updateLibraryItem(item.id, { year: parsedYear })),
+      editable.map((item) => updateLibraryItem(item.id, { year: parsedYear })),
     )
     setIsSaving(false)
 
@@ -82,6 +86,7 @@ export function BulkSetYearDialog({ open, onOpenChange }: BulkSetYearDialogProps
     queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     if (succeeded > 0) toast.success(`Updated ${succeeded} file${succeeded === 1 ? "" : "s"}`)
     if (failed > 0) toast.error(`${failed} file${failed === 1 ? "" : "s"} failed to update`)
+    if (skippedDownloading > 0) toast.warning(skippedDownloadingNote(skippedDownloading))
 
     clear()
     onOpenChange(false)

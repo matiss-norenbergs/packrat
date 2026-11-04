@@ -6,6 +6,7 @@ import {
   discardFrameMatchQueueItem,
   fetchFrameMatchQueue,
 } from "@/lib/api"
+import { skippedDownloadingNote } from "@/lib/bulkSkipped"
 import { libraryQueryKey } from "./useLibrary"
 import type { FrameMatchMode } from "@/types/api"
 
@@ -34,7 +35,9 @@ export function useBulkStartFrameMatch() {
     onSuccess: (result) => {
       const notes = []
       if (result.alreadyQueued > 0) notes.push(`${result.alreadyQueued} already queued`)
-      if (result.skipped > 0) notes.push(`${result.skipped} ineligible`)
+      const ineligible = result.skipped - result.skippedDownloading
+      if (ineligible > 0) notes.push(`${ineligible} ineligible`)
+      if (result.skippedDownloading > 0) notes.push(skippedDownloadingNote(result.skippedDownloading))
       toast.success(
         notes.length > 0
           ? `Queued ${result.queued} item(s) for matching, skipped ${notes.join(", ")}`
