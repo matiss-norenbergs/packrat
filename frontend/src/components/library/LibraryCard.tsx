@@ -14,6 +14,7 @@ import { useSettings } from "@/hooks/useSettings"
 import { useArtistNameMask } from "@/hooks/useArtistNameMask"
 import { useTagNameMask } from "@/hooks/useTagNameMask"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
+import { DownloadProgressBar } from "./DownloadProgressBar"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
 import { useRevealAll } from "./RevealAllContext"
 import { useSelection } from "./SelectionContext"
@@ -66,6 +67,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             <Ghost className="h-3 w-3" />
           </div>
         )}
+        {item.activeDownloadId != null && <DownloadProgressBar downloadId={item.activeDownloadId} size="card" />}
         <Checkbox
           checked={selected}
           onCheckedChange={() => toggleSelected(item)}

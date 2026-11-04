@@ -17,6 +17,7 @@ import { librarySmallThumbnailUrl } from "@/lib/api"
 import { LIBRARY_LIST_COLUMN_SPECS, LIBRARY_LIST_EXTRA_SORT_KEYS } from "@/lib/libraryListColumns"
 import { formatBytes, formatDuration, hashText } from "@/lib/utils"
 import type { LibraryItem } from "@/types/api"
+import { DownloadProgressBar } from "./DownloadProgressBar"
 import { toContextMenuItems, useLibraryItemActions } from "./libraryItemActions"
 import { useRevealAll } from "./RevealAllContext"
 import { useSelection } from "./SelectionContext"
@@ -41,7 +42,7 @@ function formatSeasonEpisode(item: LibraryItem): string {
 
 // The cells that depend on page state (reveal, the current URL) are components that read their context themselves, so
 // COLUMNS is a module-level constant and a reveal re-renders only these cells.
-function ThumbCell({ item }: { item: LibraryItem }) {
+export function ThumbCell({ item }: { item: LibraryItem }) {
   const { isRevealed, toggleItem } = useRevealAll()
   const thumbUrl = librarySmallThumbnailUrl(item)
   return (
@@ -60,6 +61,7 @@ function ThumbCell({ item }: { item: LibraryItem }) {
       ) : (
         <MediaTypePlaceholder mediaType={item.mediaType} iconClassName="h-4 w-4" />
       )}
+      {item.activeDownloadId != null && <DownloadProgressBar downloadId={item.activeDownloadId} size="list" />}
     </div>
   )
 }

@@ -451,6 +451,16 @@ broadcast so the Library refetches.
   delete cancels the download first and the two may race). A ghost that pre-existed the run is never
   removed. Plain failure, timeout and startup interruption (`MarkInterruptedIfActive`) leave the
   ghost as an ordinary ghost; the Downloads/History row carries the error.
+- **Progress bar on the ghost's thumbnail (frontend only).** `DownloadProgressBar` (`components/library`,
+  `size` card/list) is rendered by `LibraryCard` and the list's `ThumbCell` *only* when
+  `item.activeDownloadId != null`, so plain cards never touch the downloads data. It calls
+  `useDownloadProgress(id)` (`hooks/useDownloads.ts`): the same `downloadsQueryKey` + `fetchDownloads` +
+  10 s refetch as `useDownloads()`, with a `select` returning just `{status, percent}` (structurally shared,
+  so a card re-renders only on its own download's change, not other downloads' ticks). The downloads query
+  stays the single owner of progress: `useDownloadsSocket` patches `progress` events into it, and a mounted
+  card now creates that query even if the Downloads page was never opened. Only `downloading` / `processing`
+  render (processing = full bar); the bar vanishes when `activeDownloadId` goes null via the existing
+  `library_changed` / `completed` / `failed` refetch.
 - **`activeDownloadId`.** `ItemResponder.Responses` batch-loads
   `DownloadsRepo.ActiveDownloadIDsByLibraryItem` (queued/fetching/downloading/processing downloads by
   `ghost_library_item_id` or `target_library_item_id`; one query per response). Library delete / bulk
