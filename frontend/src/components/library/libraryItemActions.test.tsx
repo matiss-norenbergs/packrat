@@ -54,6 +54,15 @@ describe("library item actions", () => {
     expect(list).toContainEqual(["Redownload", ["Download now", "From Different URL…"]])
   })
 
+  it("disables the redownload actions while a download is in progress for the item", () => {
+    const ghostBusy = tree(actions(make({ status: "ghost", activeDownloadId: 7 })))
+    expect(ghostBusy).toContainEqual(["Redownload", ["Download now (disabled)", "From Different URL… (disabled)"]])
+    const realBusy = tree(actions(make({ activeDownloadId: 7 })))
+    expect(realBusy).toContainEqual(["Redownload", ["From Current URL (disabled)", "From Different URL… (disabled)"]])
+    // No active download: enabled again.
+    expect(tree(actions(make({ status: "ghost", activeDownloadId: null })))).toContainEqual(["Redownload", ["Download now", "From Different URL…"]])
+  })
+
   it("disables the URL-dependent actions when there is no source URL", () => {
     const list = tree(actions(make({ originalUrl: "" })))
     expect(list).toContain("Copy URL (disabled)")

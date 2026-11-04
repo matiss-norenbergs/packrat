@@ -73,7 +73,7 @@ import type { FrameMatchMode, LibraryItem } from "@/types/api"
  * renders it with DropdownMenu items and the list view's right-click menu converts it with `toContextMenuItems`.
  */
 export type LibraryItemAction =
-  | { key: string; label: string; icon: ReactNode; destructive?: boolean; disabled?: boolean; onSelect: () => void }
+  | { key: string; label: string; icon: ReactNode; destructive?: boolean; disabled?: boolean; disabledReason?: string; onSelect: () => void }
   | { key: string; separator: true }
   | { key: string; label: string; icon: ReactNode; items: LibraryItemAction[] }
 
@@ -85,7 +85,8 @@ export function toContextMenuItems<T>(actions: LibraryItemAction[]): ContextMenu
   return actions.map((a): ContextMenuItemDef<T> => {
     if ("separator" in a) return { key: a.key, separator: true }
     if ("items" in a) return { key: a.key, label: a.label, icon: a.icon, items: toContextMenuItems<T>(a.items) }
-    return { key: a.key, label: a.label, icon: a.icon, destructive: a.destructive, disabled: a.disabled, onSelect: a.onSelect }
+    const label = a.disabled && a.disabledReason ? <span title={a.disabledReason}>{a.label}</span> : a.label
+    return { key: a.key, label, icon: a.icon, destructive: a.destructive, disabled: a.disabled, onSelect: a.onSelect }
   })
 }
 
@@ -182,6 +183,10 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
     // audio item's thumbnail, so they stay.
     const isAudio = isAudioFilename(it.filename)
     const frames = !isGhost && !isImage && !isAudio
+    // A download is already filling this item in (queued or running): starting another on top is refused by the
+    // server (409), so the redownload actions are disabled with a reason.
+    const downloadActive = it.activeDownloadId != null
+    const activeReason = downloadActive ? "A download is already in progress for this item" : undefined
 
     const copyUrl = () => {
       if (!it.originalUrl) return
@@ -226,10 +231,18 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
             key: "redownload-current",
             label: isGhost ? "Download now" : "From Current URL",
             icon: <Download />,
-            disabled: !hasUrl,
+            disabled: !hasUrl || downloadActive,
+            disabledReason: activeReason,
             onSelect: () => open(it, "redownloadWarning"),
           },
-          { key: "redownload-other", label: "From Different URL…", icon: <Link2 />, onSelect: () => open(it, "redownloadFromUrl") },
+          {
+            key: "redownload-other",
+            label: "From Different URL…",
+            icon: <Link2 />,
+            disabled: downloadActive,
+            disabledReason: activeReason,
+            onSelect: () => open(it, "redownloadFromUrl"),
+          },
         ],
       },
       { key: "sep-2", separator: true },

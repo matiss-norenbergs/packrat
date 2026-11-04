@@ -31,6 +31,7 @@ export function DeleteLibraryItemDialog({ item, open, onOpenChange }: DeleteLibr
           <DialogDescription>
             "Remove from library" only deletes the database entry — the file stays on disk.
             "Delete files too" also removes the media file and thumbnail.
+            {item.activeDownloadId != null && " The download in progress for this item will be cancelled."}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="sm:justify-between">

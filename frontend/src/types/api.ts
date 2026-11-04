@@ -292,6 +292,8 @@ export interface LibraryItem {
   playbackPositionSeconds: number | null
   lastWatchedAt: string | null
   galleryCount: number
+  /** Id of the item's queued/running download (a ghost being downloaded, or a redownload); null when none. */
+  activeDownloadId: number | null
 }
 
 export interface UpdateLibraryProgressRequest {

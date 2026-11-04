@@ -63,6 +63,13 @@ export interface BackupCompletedPayload {
   errorMessage?: string
 }
 
+// LibraryChangedPayload: a ghost appeared or was removed while a download ran. No item data travels with it;
+// the client just refetches the library.
+export interface LibraryChangedPayload {
+  libraryId: number
+  reason: "ghost_created" | "ghost_removed"
+}
+
 export type WSEvent =
   | { type: "progress"; payload: ProgressPayload }
   | { type: "completed"; payload: CompletedPayload }
@@ -72,3 +79,4 @@ export type WSEvent =
   | { type: "frame_match_progress"; payload: FrameMatchProgressPayload }
   | { type: "subscription_new_items"; payload: SubscriptionNewItemsPayload }
   | { type: "backup_completed"; payload: BackupCompletedPayload }
+  | { type: "library_changed"; payload: LibraryChangedPayload }

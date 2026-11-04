@@ -27,9 +27,11 @@ function ActionItems({ actions }: { actions: LibraryItemAction[] }) {
         </DropdownMenuSubContent>
       </DropdownMenuSub>
     ) : (
-      <DropdownMenuItem key={a.key} variant={a.destructive ? "destructive" : undefined} disabled={a.disabled} onClick={a.onSelect}>
-        {a.icon} {a.label}
-      </DropdownMenuItem>
+      <span key={a.key} title={a.disabled ? a.disabledReason : undefined} className="block">
+        <DropdownMenuItem variant={a.destructive ? "destructive" : undefined} disabled={a.disabled} onClick={a.onSelect}>
+          {a.icon} {a.label}
+        </DropdownMenuItem>
+      </span>
     ),
   )
 }
