@@ -12,15 +12,43 @@ import {
 } from "@/lib/api"
 import { historyQueryKey } from "@/hooks/useHistory"
 import { logsQueryKey } from "@/hooks/useLogs"
-import type { CreateBatchDownloadRequest, CreateDownloadRequest, CreatePlaylistDownloadRequest } from "@/types/api"
+import type { CreateBatchDownloadRequest, CreateDownloadRequest, CreatePlaylistDownloadRequest, Download, DownloadStatus } from "@/types/api"
 
 export const downloadsQueryKey = ["downloads"] as const
+
+const DOWNLOADS_REFETCH_MS = 10_000 // safety-net poll; WS pushes deltas in between
 
 export function useDownloads() {
   return useQuery({
     queryKey: downloadsQueryKey,
     queryFn: fetchDownloads,
-    refetchInterval: 10_000, // safety-net poll; WS pushes deltas in between
+    refetchInterval: DOWNLOADS_REFETCH_MS,
+  })
+}
+
+export interface DownloadProgress {
+  status: DownloadStatus
+  percent: number
+}
+
+/** Narrows the downloads list to one download's progress. Exported for tests. */
+export function selectDownloadProgress(downloads: Download[], downloadId: number): DownloadProgress | null {
+  const d = downloads.find((x) => x.id === downloadId)
+  return d ? { status: d.status, percent: d.percent } : null
+}
+
+/**
+ * Live status/percent of one download, for a Library card. Shares the downloads query (so the socket hook's
+ * `progress` patches land in it) but `select` narrows it to `{status, percent}`: the result is structurally
+ * shared, so a card re-renders only when its own download changes, not on other downloads' ticks. Mount it
+ * only for items that have an active download.
+ */
+export function useDownloadProgress(downloadId: number) {
+  return useQuery({
+    queryKey: downloadsQueryKey,
+    queryFn: fetchDownloads,
+    refetchInterval: DOWNLOADS_REFETCH_MS,
+    select: (downloads) => selectDownloadProgress(downloads, downloadId),
   })
 }
 

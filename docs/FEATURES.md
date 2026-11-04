@@ -401,7 +401,12 @@ item, for the same file-doesn't-have-what's-needed reason — see the Thumbnail 
   created; a ghost that existed before (Add item, a subscription, or one kept after a failure) is
   never removed by a cancel. **A failure, timeout or app restart keeps the ghost** (the Downloads /
   History row shows the error) — **Retry** in History reuses that ghost rather than creating a
-  second item, and **Download now** is the manual alternative. While an item has a queued or
+  second item, and **Download now** is the manual alternative. While the download is *downloading*
+  (or in its post-download *processing* step, shown as a full bar) the ghost's thumbnail carries a thin
+  progress bar along its bottom edge — Library grid, Folders view (4px) and list (2px) — laid over the
+  "Ghost item" strip without changing the card or row size, with no text, and shown for private
+  (blurred) items too. Nothing shows while the download is only queued or fetching metadata, and the
+  bar disappears when it finishes, fails or is cancelled. While an item has a queued or
   running download it is **locked**: its menu (⋮ and right-click) shows only **Copy URL**,
   **Metadata → Compare** and **Delete** (which cancels the download, and the dialog says so) — every
   other entry (Edit, Move, Trim, NFO, Thumbnail, Download now / Redownload, …) is hidden, and the
