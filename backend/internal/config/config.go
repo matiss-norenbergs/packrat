@@ -125,7 +125,16 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("resolving BACKUPS_ROOT: %w", err)
 	}
-	if err := os.MkdirAll(backupsRoot, 0o755); err != nil {
+	// Backups can contain secrets: a directory created here is owner-only.
+	// An existing directory is left as it is.
+	if _, statErr := os.Stat(backupsRoot); os.IsNotExist(statErr) {
+		if err := os.MkdirAll(filepath.Dir(backupsRoot), 0o755); err != nil {
+			return Config{}, fmt.Errorf("creating BACKUPS_ROOT %q: %w", backupsRoot, err)
+		}
+		if err := os.Mkdir(backupsRoot, 0o700); err != nil && !os.IsExist(err) {
+			return Config{}, fmt.Errorf("creating BACKUPS_ROOT %q: %w", backupsRoot, err)
+		}
+	} else if err := os.MkdirAll(backupsRoot, 0o700); err != nil {
 		return Config{}, fmt.Errorf("creating BACKUPS_ROOT %q: %w", backupsRoot, err)
 	}
 	cfg.BackupsRoot = backupsRoot

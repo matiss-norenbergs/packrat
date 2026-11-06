@@ -109,6 +109,16 @@ func AuthStatus(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 	}
 }
 
+// dummyPasswordHash is a throwaway hash at the real cost, used to equalize
+// login work for unknown usernames.
+var dummyPasswordHash = func() []byte {
+	h, err := bcrypt.GenerateFromPassword([]byte("packrat-dummy-password"), bcrypt.DefaultCost)
+	if err != nil {
+		panic(err)
+	}
+	return h
+}()
+
 // AuthSetup creates the single admin account. Only allowed while no user
 // exists yet — once an account exists, this always 409s (there is no
 // route to add a second user, by design).
@@ -135,7 +145,11 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		user, err := usersRepo.Create(c.Request.Context(), req.Username, string(hash))
+		user, err := usersRepo.CreateFirst(c.Request.Context(), req.Username, string(hash))
+		if errors.Is(err, repository.ErrSetupAlreadyDone) {
+			c.JSON(http.StatusConflict, gin.H{"error": "setup already completed"})
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -167,6 +181,8 @@ func AuthLogin(deps *AuthDeps) gin.HandlerFunc {
 
 		user, err := usersRepo.GetByUsername(c.Request.Context(), req.Username)
 		if errors.Is(err, repository.ErrNotFound) {
+			// Same work as a wrong password so both take similar time.
+			_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(req.Password))
 			deps.fail(c, ratelimit.KindPassword, "password")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 			return
@@ -241,6 +257,11 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 			return
 		}
 		if err := usersRepo.UpdatePasswordHash(c.Request.Context(), userID, string(hash)); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		// Sign out every other session (web and desktop tokens); this one stays.
+		if _, err := usersRepo.DeleteOtherSessions(c.Request.Context(), userID, currentSession(c).Token); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

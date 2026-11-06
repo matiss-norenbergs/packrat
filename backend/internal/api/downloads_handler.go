@@ -205,6 +205,10 @@ func writeEnqueueError(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": urlErr.Error()})
 		return
 	}
+	if errors.Is(err, queue.ErrInvalidURL) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": queue.ErrInvalidURL.Error()})
+		return
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "collection not found"})
 		return

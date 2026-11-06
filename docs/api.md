@@ -100,7 +100,7 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
 | POST | `/api/auth/security-notice/ack` | session + CSRF |
 
 - **`POST /api/auth/setup`** — `{ "username": "...", "password": "min 8 chars" }`. Only succeeds
-  while zero users exist (`409` otherwise). Creates the user, sets both cookies, `204`.
+  while zero users exist (`409` otherwise, also when several calls arrive at once). Creates the user, sets both cookies, `204`.
 - **`POST /api/auth/login`** — `{ "username": "...", "password": "..." }`. Wrong username *or*
   password both return `401 {"error":"invalid username or password"}` — never reveals which was
   wrong. `204` on success, sets both cookies (desktop: `200 {"token"}`, see above). **If the account
@@ -125,7 +125,8 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
 - **`PATCH /api/auth/password`** — `{ "currentPassword": "...", "newPassword": "min 8 chars" }`.
   Requires the *current* password even though the route is already session-protected, so a
   hijacked/left-open session can't lock out the real owner. `401` if current password is wrong,
-  else `204`.
+  else `204`. All other sessions of the user (including desktop tokens) are signed out; the current
+  one stays.
 - **`GET /api/auth/sessions`** — the signed-in devices, most recently active first:
   `{ "sessions": [{ "id", "client", "ip", "userAgent", "createdAt", "lastSeenAt", "current" }] }`
   (times RFC 3339 UTC). `id` is a random, non-secret handle — the session token itself is never
@@ -871,6 +872,8 @@ candidates), **not** duplicate-video detection. Two independent flows: a single-
   if the `generateNfo` toggle is off, else writes/overwrites the sidecar. `204`.
 - **`GET /api/library/:id/nfo`** — `200 {"content": "<movie>...</movie>"}`. `404` if none generated
   yet.
+- All three NFO endpoints answer `400 {"error":"item has no media file"}` for an item without a
+  file (a ghost).
 - **`DELETE /api/library/:id/nfo`** — removes the sidecar file only, does **not** touch the
   `generateNfo` toggle (so it reappears on the next relevant edit if still on). Idempotent, `204`.
 
@@ -1497,7 +1500,7 @@ Filters out anything under a configured ignored folder.
 { "path": "Music/Some Song.mp3", "originalUrl": "https://youtube.com/watch?v=abc" }
 ```
 
-`path` required, `originalUrl` optional. Creates any missing collections matching the on-disk
+`path` required, `originalUrl` optional (must be an `http(s)` URL when given, else `400`). Creates any missing collections matching the on-disk
 folder chain, probes duration/resolution, resolves a thumbnail (a same-basename sidecar image on
 disk first, else — only if `originalUrl` given — a best-effort yt-dlp thumbnail-only fetch), and
 creates the library row directly as `status="completed"`. **Never triggers a real download.**
@@ -1939,7 +1942,7 @@ Sends the configured request (15 s timeout) and relays the answer:
 |---|---|
 | GET | `/media-files/*path` |
 
-Static file server rooted at `MEDIA_ROOT`. Requires a valid session cookie but no CSRF header
+Static file server rooted at `MEDIA_ROOT`. Directories are not listed (`404`); only files are served. Requires a valid session cookie but no CSRF header
 (GET-only). Responses carry `Cache-Control: no-cache` (not `no-store`) — still revalidates cheaply
 via `If-Modified-Since`, but never assumes a stale byte range is fresh, since sidecar thumbnails
 get overwritten in place at the same path.

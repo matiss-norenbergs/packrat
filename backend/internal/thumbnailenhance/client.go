@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -39,6 +40,12 @@ func NewClient(baseURL, username, password string) *Client {
 		httpClient: &http.Client{Timeout: 5 * time.Minute},
 	}
 }
+
+// maxUpscaleResponseBytes caps how much of an upscaler response is read.
+var maxUpscaleResponseBytes int64 = 64 << 20
+
+// ErrResponseTooLarge is returned when the upscaler response exceeds the cap.
+var ErrResponseTooLarge = errors.New("upscale response is too large")
 
 type extraSingleImageRequest struct {
 	Image                string  `json:"image"`
@@ -93,8 +100,15 @@ func (c *Client) Upscale(ctx context.Context, imageBytes []byte, upscaler string
 		return nil, fmt.Errorf("upscale request failed: %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxUpscaleResponseBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("reading upscale response: %w", err)
+	}
+	if int64(len(raw)) > maxUpscaleResponseBytes {
+		return nil, ErrResponseTooLarge
+	}
 	var result extraSingleImageResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(raw, &result); err != nil {
 		return nil, fmt.Errorf("decoding upscale response: %w", err)
 	}
 	if result.Image == "" {

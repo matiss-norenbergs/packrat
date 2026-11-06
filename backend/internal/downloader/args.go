@@ -78,7 +78,8 @@ func (s *YtDlpService) BuildArgs(ctx context.Context, job DownloadJob) []string 
 	}
 
 	args = append(args, s.globalArgs(ctx)...)
-	args = append(args, job.URL)
+	// "--" ends option parsing so the URL is never read as a flag.
+	args = append(args, "--", job.URL)
 	return args
 }
 

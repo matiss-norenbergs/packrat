@@ -102,7 +102,7 @@ func RunBackup(ctx context.Context, deps RunDeps, triggerType string) (models.Ba
 	if err != nil {
 		return recordFailure(ctx, deps, triggerType, fmt.Errorf("resolving backup path: %w", err))
 	}
-	if err := os.WriteFile(fullPath, envJSON, 0o644); err != nil {
+	if err := os.WriteFile(fullPath, envJSON, 0o600); err != nil {
 		return recordFailure(ctx, deps, triggerType, fmt.Errorf("writing backup file: %w", err))
 	}
 

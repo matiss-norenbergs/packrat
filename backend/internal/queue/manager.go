@@ -211,6 +211,9 @@ func (m *DownloadManager) WorkerCount() int {
 
 // Enqueue creates a queued download row and schedules it for a worker.
 func (m *DownloadManager) Enqueue(ctx context.Context, d models.Download) (int64, error) {
+	if !IsHTTPURL(d.URL) {
+		return 0, ErrInvalidURL
+	}
 	d.Status = models.StatusQueued
 	id, err := m.downloadsRepo.Create(ctx, &d)
 	if err != nil {
@@ -220,6 +223,19 @@ func (m *DownloadManager) Enqueue(ctx context.Context, d models.Download) (int64
 	m.jobs <- id
 	m.broadcastQueueUpdate()
 	return id, nil
+}
+
+// ErrInvalidURL is returned by Enqueue for a URL that is not an absolute
+// http(s) URL. Enqueue is the single place URL schemes are enforced.
+var ErrInvalidURL = errors.New("url must be an http or https URL")
+
+// IsHTTPURL reports whether raw is an absolute http(s) URL with a host.
+func IsHTTPURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	return (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 // Cancel stops an in-flight download, or marks a not-yet-started one as

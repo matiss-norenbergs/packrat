@@ -146,7 +146,7 @@ func (s *YtDlpService) FetchMetadata(ctx context.Context, url string) (*Metadata
 	defer cancel()
 
 	args := append([]string{"--dump-single-json", "--flat-playlist", "--skip-download", "--no-warnings"}, s.globalArgs(ctx)...)
-	args = append(args, url)
+	args = append(args, "--", url)
 	cmd := newTreeKillCmd(ctx, s.BinPath, args...)
 	out, err := cmd.Output()
 	if err != nil {
@@ -180,7 +180,7 @@ func (s *YtDlpService) FetchThumbnail(ctx context.Context, url, destDir, baseFil
 		"-o", outputTemplate,
 	}
 	args = append(args, s.globalArgs(ctx)...)
-	args = append(args, url)
+	args = append(args, "--", url)
 
 	cmd := newTreeKillCmd(ctx, s.BinPath, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -219,7 +219,7 @@ func (s *YtDlpService) FetchThumbnailRaw(ctx context.Context, url, destDir, base
 		"-o", outputTemplate,
 	}
 	args = append(args, s.globalArgs(ctx)...)
-	args = append(args, url)
+	args = append(args, "--", url)
 
 	cmd := newTreeKillCmd(ctx, s.BinPath, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {

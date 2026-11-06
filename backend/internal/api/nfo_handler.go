@@ -61,12 +61,12 @@ func GenerateLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRep
 			writeLibraryItemGetError(c, err)
 			return
 		}
-		if !item.GenerateNFO {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Generate NFO is not enabled for this item"})
-			return
-		}
 		if item.Path == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
+			return
+		}
+		if !item.GenerateNFO {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Generate NFO is not enabled for this item"})
 			return
 		}
 
@@ -93,6 +93,11 @@ func GetLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRepo) gi
 		item, err := libraryRepo.Get(c.Request.Context(), id)
 		if err != nil {
 			writeLibraryItemGetError(c, err)
+			return
+		}
+
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
 			return
 		}
 
@@ -127,6 +132,11 @@ func DeleteLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRepo)
 		item, err := libraryRepo.Get(c.Request.Context(), id)
 		if err != nil {
 			writeLibraryItemGetError(c, err)
+			return
+		}
+
+		if item.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
 			return
 		}
 

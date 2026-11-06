@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,6 +24,32 @@ func (r *UsersRepo) Create(ctx context.Context, username, passwordHash string) (
 	res, err := r.db.ExecContext(ctx, `INSERT INTO users (username, password_hash) VALUES (?, ?)`, username, passwordHash)
 	if err != nil {
 		return nil, fmt.Errorf("inserting user: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetByID(ctx, id)
+}
+
+// ErrSetupAlreadyDone is returned by CreateFirst when a user already exists.
+var ErrSetupAlreadyDone = errors.New("setup already completed")
+
+// CreateFirst inserts the user only if the users table is empty, in a single
+// statement, so concurrent first-run calls cannot both succeed.
+func (r *UsersRepo) CreateFirst(ctx context.Context, username, passwordHash string) (*models.User, error) {
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO users (username, password_hash) SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM users)`,
+		username, passwordHash)
+	if err != nil {
+		return nil, fmt.Errorf("inserting user: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, ErrSetupAlreadyDone
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
@@ -216,10 +243,8 @@ func (r *UsersRepo) DeleteOtherSessions(ctx context.Context, userID int64, keepT
 }
 
 // UpdatePasswordHash overwrites the stored bcrypt hash for a user — used by
-// the change-password flow. Existing sessions are left untouched; a changed
-// password doesn't invalidate the session the request itself is using, and
-// this is a single-user app so there's no other-device threat model to
-// address here.
+// the change-password flow. It does not touch sessions; the handler signs
+// out the other ones with DeleteOtherSessions.
 func (r *UsersRepo) UpdatePasswordHash(ctx context.Context, userID int64, passwordHash string) error {
 	res, err := r.db.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, passwordHash, userID)
 	if err != nil {

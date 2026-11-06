@@ -428,6 +428,16 @@ type LibraryFacetsResponse struct {
 	Years []int `json:"years"`
 }
 
+// nfoSidecarExists reports whether the .nfo sidecar of the media file at
+// relPath exists. An item without a file (relPath "") has none.
+func nfoSidecarExists(mediaRoot, relPath string) bool {
+	if relPath == "" {
+		return false
+	}
+	_, err := os.Stat(nfo.SidecarPath(filepath.Join(mediaRoot, filepath.FromSlash(relPath))))
+	return err == nil
+}
+
 // toLibraryItemResponse builds the API response for a library item. mediaRoot
 // is needed to check whether the item's .nfo sidecar currently exists on
 // disk — GenerateNFO only reflects whether the toggle is on, not whether a
@@ -437,9 +447,7 @@ func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string,
 	if tags == nil {
 		tags = []string{}
 	}
-	mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-	_, err := os.Stat(nfo.SidecarPath(mediaAbs))
-	nfoExists := err == nil
+	nfoExists := nfoSidecarExists(mediaRoot, item.Path)
 	var lastWatchedAt *string
 	if item.LastWatchedAt != nil {
 		s := item.LastWatchedAt.Format(timeFormat)
