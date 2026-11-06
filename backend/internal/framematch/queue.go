@@ -34,6 +34,8 @@ type QueueDeps struct {
 	// toggle. Nil means "always on".
 	SettingsRepo *repository.SettingsRepo
 	Broadcaster  ws.Broadcaster
+	// MatchTimeout bounds each item's match; zero means matchTimeout.
+	MatchTimeout time.Duration
 }
 
 // RunQueue processes frame_match_queue rows one at a time for as long as
@@ -127,9 +129,15 @@ func processQueueItem(ctx context.Context, deps QueueDeps, row models.FrameMatch
 
 	videoAbs := filepath.Join(deps.MediaRoot, filepath.FromSlash(item.Path))
 
-	matchMu.Lock()
-	result, err := Match(ctx, deps.YtDlp, deps.FFProbePath, videoAbs, referenceJPEG)
-	matchMu.Unlock()
+	timeout := deps.MatchTimeout
+	if timeout <= 0 {
+		timeout = matchTimeout
+	}
+	// Each item gets its own time budget (started once the match lock is held),
+	// so a wedged ffmpeg fails this item instead of blocking the whole queue.
+	result, err := runExclusive(ctx, timeout, func(mctx context.Context) (Result, error) {
+		return Match(mctx, deps.YtDlp, deps.FFProbePath, videoAbs, referenceJPEG)
+	})
 	if err != nil {
 		fail(err)
 		return

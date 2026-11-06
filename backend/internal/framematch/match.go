@@ -11,10 +11,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"image/jpeg"
+	"io"
 	"os/exec"
 	"sort"
+	"time"
 
 	"github.com/corona10/goimagehash"
 
@@ -36,6 +39,15 @@ const (
 	// A full per-frame decode (this is not keyframe-only), but 1fps kept
 	// the one-time sweep to roughly a minute on the tuning video.
 	coarseFPS = 1.0
+	// coarseScaleWidth is the width (px) ffmpeg downscales each coarse-sweep
+	// frame to before piping it out. The perceptual hash resizes to 64x64
+	// anyway, so 256 keeps 4x headroom while shrinking a frame from hundreds
+	// of KB (native 1080p JPEG) to a few KB. Height follows the aspect ratio,
+	// rounded to an even number (-2).
+	coarseScaleWidth = 256
+	// maxStderrBytes bounds how much of ffmpeg stderr is kept for error
+	// messages (the tail: the actual failure is printed last).
+	maxStderrBytes = 8 << 10
 )
 
 // Result is the best-matching frame found for a reference image.
@@ -190,28 +202,70 @@ type hashedFrame struct {
 	hash      *goimagehash.ImageHash
 }
 
+// coarseVideoFilter is the ffmpeg -vf chain for the coarse sweep.
+func coarseVideoFilter() string {
+	return fmt.Sprintf("fps=%f,scale=%d:-2:flags=bicubic", coarseFPS, coarseScaleWidth)
+}
+
 // coarseSweep decodes the whole video at coarseFPS via a single ffmpeg
-// invocation, buffering the whole MJPEG stream and splitting it with
-// splitMJPEGStream rather than decoding frames one at a time off the pipe —
-// see that function's doc comment for why the more obvious streaming
-// approach isn't reliable here.
+// invocation (downscaled to coarseScaleWidth) and hashes each frame as soon
+// as it has been read off the pipe, so peak memory is one frame plus the
+// hash list — not the whole video. Frames are split with frameSplitter (SOI/
+// EOI markers) rather than repeated jpeg.Decode calls on the raw stream; see
+// its doc comment for why.
 func coarseSweep(ctx context.Context, ffmpegPath, videoAbsPath string) ([]hashedFrame, error) {
 	args := []string{
 		"-y", "-i", videoAbsPath,
-		"-vf", fmt.Sprintf("fps=%f", coarseFPS),
+		"-vf", coarseVideoFilter(),
 		"-q:v", "4", "-f", "image2pipe", "-vcodec", "mjpeg", "-",
 	}
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	stderr := &tailBuffer{max: maxStderrBytes}
+	cmd.Stderr = stderr
+	// If ffmpeg leaves a grandchild holding a pipe open after being killed,
+	// don't let Wait block forever.
+	cmd.WaitDelay = 5 * time.Second
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		return nil, fmt.Errorf("ffmpeg stdout pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("%w: %s", err, stderr.String())
 	}
 
-	images := splitMJPEGStream(out)
-	frames := make([]hashedFrame, 0, len(images))
-	for i, raw := range images {
+	frames, scanErr := hashFrameStream(stdout)
+	if scanErr != nil {
+		// Stop ffmpeg so Wait returns promptly; the scan error is reported.
+		_ = cmd.Process.Kill()
+	}
+	waitErr := cmd.Wait()
+
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	if scanErr != nil {
+		return nil, scanErr
+	}
+	if waitErr != nil {
+		return nil, fmt.Errorf("%w: %s", waitErr, stderr.String())
+	}
+	return frames, nil
+}
+
+// hashFrameStream reads an MJPEG stream from r, hashing each frame as it
+// completes. A frame that fails to decode is skipped but still consumes its
+// index, so timestamps stay frame-index / coarseFPS.
+func hashFrameStream(r io.Reader) ([]hashedFrame, error) {
+	sp := newFrameSplitter(r)
+	var frames []hashedFrame
+	for i := 0; ; i++ {
+		raw, err := sp.Next()
+		if err == io.EOF {
+			return frames, nil
+		}
+		if err != nil {
+			return frames, err
+		}
 		img, err := jpeg.Decode(bytes.NewReader(raw))
 		if err != nil {
 			continue
@@ -222,39 +276,103 @@ func coarseSweep(ctx context.Context, ffmpegPath, videoAbsPath string) ([]hashed
 		}
 		frames = append(frames, hashedFrame{timestamp: float64(i) / coarseFPS, hash: h})
 	}
-	return frames, nil
 }
 
-// splitMJPEGStream splits a concatenated stream of JPEG images (as produced
-// by ffmpeg's "-f image2pipe -vcodec mjpeg -") into individual JPEG byte
-// slices, by scanning for SOI (0xFFD8) / EOI (0xFFD9) marker pairs — the
-// same technique internal/downloader/trim_frames.go's ExtractFrameRange
-// uses (and cmd/framematch-bench independently re-derived while confirming
-// that repeatedly calling jpeg.Decode on the raw stream isn't reliable).
-// JPEG's entropy-coded scan data always byte-stuffs any literal 0xFF byte
-// with a following 0x00, so a raw 0xFFD9 outside that stuffing unambiguously
-// marks the end of an image.
-func splitMJPEGStream(data []byte) [][]byte {
-	var images [][]byte
-	i := 0
-	for i < len(data)-1 {
-		if data[i] != 0xFF || data[i+1] != 0xD8 {
-			i++
-			continue
+// maxFrameBytes caps a single frame in frameSplitter so a corrupt stream
+// with an SOI but no EOI can't grow the buffer without limit.
+const maxFrameBytes = 32 << 20
+
+// frameSplitter incrementally splits a concatenated stream of JPEG images (as
+// produced by ffmpeg's "-f image2pipe -vcodec mjpeg -") by scanning for SOI
+// (0xFFD8) / EOI (0xFFD9) marker pairs — the same technique as
+// internal/downloader/trim_frames.go's ExtractFrameRange (and
+// cmd/framematch-bench independently re-derived while confirming that
+// repeatedly calling jpeg.Decode on the raw stream isn't reliable). JPEG's
+// entropy-coded scan data always byte-stuffs any literal 0xFF byte with a
+// following 0x00, so a raw 0xFFD9 outside that stuffing unambiguously marks
+// the end of an image.
+type frameSplitter struct {
+	r   *byteReader
+	buf []byte
+}
+
+func newFrameSplitter(r io.Reader) *frameSplitter {
+	return &frameSplitter{r: newByteReader(r), buf: make([]byte, 0, 64<<10)}
+}
+
+// Next returns the next complete frame. The slice is only valid until the
+// following call. io.EOF means the stream ended; a trailing partial frame
+// (ffmpeg killed mid-write) is dropped.
+func (s *frameSplitter) Next() ([]byte, error) {
+	var prev byte
+	for { // find SOI
+		b, err := s.r.ReadByte()
+		if err != nil {
+			return nil, err
 		}
-		start := i
-		j := i + 2
-		for j < len(data)-1 {
-			if data[j] == 0xFF && data[j+1] == 0xD9 {
-				images = append(images, data[start:j+2])
-				i = j + 2
-				break
-			}
-			j++
-		}
-		if j >= len(data)-1 {
+		if prev == 0xFF && b == 0xD8 {
 			break
 		}
+		prev = b
 	}
-	return images
+	s.buf = append(s.buf[:0], 0xFF, 0xD8)
+	prev = 0xD8
+	for {
+		b, err := s.r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		s.buf = append(s.buf, b)
+		if prev == 0xFF && b == 0xD9 {
+			return s.buf, nil
+		}
+		if len(s.buf) > maxFrameBytes {
+			return nil, errors.New("mjpeg frame exceeds size limit")
+		}
+		prev = b
+	}
 }
+
+// byteReader is a small buffered reader. It tolerates readers that return 0
+// bytes with a nil error, and only surfaces an error once buffered bytes
+// have been consumed. buffered() reports how many bytes were read from the
+// source but not yet handed out (used by the memory-bound test).
+type byteReader struct {
+	r   io.Reader
+	buf [32 << 10]byte
+	pos int
+	n   int
+}
+
+func newByteReader(r io.Reader) *byteReader { return &byteReader{r: r} }
+
+func (b *byteReader) buffered() int { return b.n - b.pos }
+
+func (b *byteReader) ReadByte() (byte, error) {
+	for b.pos >= b.n {
+		n, err := b.r.Read(b.buf[:])
+		b.pos, b.n = 0, n
+		if n == 0 && err != nil {
+			return 0, err
+		}
+	}
+	c := b.buf[b.pos]
+	b.pos++
+	return c, nil
+}
+
+// tailBuffer is an io.Writer that keeps only the last max bytes written.
+type tailBuffer struct {
+	max int
+	buf []byte
+}
+
+func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.buf = append(t.buf, p...)
+	if len(t.buf) > t.max {
+		t.buf = append(t.buf[:0], t.buf[len(t.buf)-t.max:]...)
+	}
+	return len(p), nil
+}
+
+func (t *tailBuffer) String() string { return string(bytes.TrimSpace(t.buf)) }
