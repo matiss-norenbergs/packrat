@@ -135,7 +135,11 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		user, err := usersRepo.Create(c.Request.Context(), req.Username, string(hash))
+		user, err := usersRepo.CreateFirst(c.Request.Context(), req.Username, string(hash))
+		if errors.Is(err, repository.ErrSetupAlreadyDone) {
+			c.JSON(http.StatusConflict, gin.H{"error": "setup already completed"})
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
