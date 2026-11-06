@@ -113,6 +113,7 @@ func TestAccuracyHarness(t *testing.T) {
 				t.Logf("T=%-7v fps=%v k=%-2d sep=%-4v rank=%-5d region=%-3d", T, c.fps, c.topK, c.minSep, rank, region)
 				continue
 			}
+			debugf = t.Logf
 			start := time.Now()
 			res, err := refine(ctx, ytdlp, ffprobe, video, refJPEG, ref, newSignature(img), coarse, c)
 			el := time.Since(start).Round(100 * time.Millisecond)

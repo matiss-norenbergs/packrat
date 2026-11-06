@@ -62,6 +62,9 @@ type config struct {
 	minSep float64 // seconds between shortlisted candidates (0 = plain top-K)
 }
 
+// debugf, when set (by the accuracy harness), traces each fine window.
+var debugf func(format string, args ...any)
+
 var defaultConfig = config{fps: coarseFPS, topK: topK, minSep: candidateSeparation}
 
 // Result is the best-matching frame found for a reference image.
@@ -167,19 +170,22 @@ func refine(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath, vi
 	// best (distance, timestamp) is kept. With no usable fine result the best
 	// coarse frame stands.
 	best := hit{ts: ranked[0].timestamp, dist: ranked[0].distance}
-	fineFound := false
+	coarseBest := true // best is still the coarse sweep's frame
 	half := fineWindowSeconds / 2
 	for _, c := range candidates {
 		lo := math.Max(0, c.timestamp-half)
 		h, err := fineWindow(ctx, ytdlp.FFmpegPath, ffprobePath, videoAbsPath, lo, c.timestamp+half, refHash, refSig)
+		if debugf != nil {
+			debugf("window [%.2f,%.2f] coarse-dist=%d -> hit=%+v err=%v", lo, c.timestamp+half, c.distance, h, err)
+		}
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return Result{}, ctxErr
 			}
 			continue
 		}
-		if !fineFound || h.betterThan(best) {
-			best, fineFound = h, true
+		if h.betterThan(best) || (coarseBest && h.dist == best.dist) {
+			best, coarseBest = h, false
 		}
 	}
 
@@ -205,14 +211,24 @@ func fineWindow(ctx context.Context, ffmpegPath, ffprobePath, videoAbsPath strin
 	if len(stamps) == 0 {
 		return hit{}, errors.New("no frame timestamps in window")
 	}
-	args := []string{
-		"-y", "-ss", formatSeconds(lo), "-i", videoAbsPath, "-t", formatSeconds(hi - lo),
-		"-vsync", "0", "-frames:v", strconv.Itoa(maxFineFrames),
-		"-vf", fmt.Sprintf("scale=%d:-2:flags=bicubic", coarseScaleWidth),
-		"-q:v", "4", "-f", "image2pipe", "-vcodec", "mjpeg", "-",
+	// Downscaling makes the mjpeg encoder reject frames whose millisecond pts
+	// collide (30 fps in a 1/1000 timebase), so the encoder timebase must follow
+	// the filter graph; setpts is the fallback for ffmpeg builds without
+	// -enc_time_base.
+	var tr *bestTracker
+	var err error
+	for _, variant := range [][]string{
+		{"-enc_time_base", "-1", "-vf", fineScale},
+		{"-vf", fineScale + ",setpts=N/FRAME_RATE/TB"},
+	} {
+		args := []string{"-y", "-ss", formatSeconds(lo), "-i", videoAbsPath, "-t", formatSeconds(hi - lo), "-vsync", "0", "-frames:v", strconv.Itoa(maxFineFrames)}
+		args = append(append(args, variant...), "-q:v", "4", "-f", "image2pipe", "-vcodec", "mjpeg", "-")
+		tr = newBestTracker(ref, refSig, stamps)
+		if err = streamMJPEG(ctx, ffmpegPath, args, tr.observe); err == nil || ctx.Err() != nil {
+			break
+		}
 	}
-	tr := newBestTracker(ref, refSig, stamps)
-	if err := streamMJPEG(ctx, ffmpegPath, args, tr.observe); err != nil {
+	if err != nil {
 		return hit{}, err
 	}
 	if !tr.found {
@@ -220,6 +236,8 @@ func fineWindow(ctx context.Context, ffmpegPath, ffprobePath, videoAbsPath strin
 	}
 	return tr.best, nil
 }
+
+var fineScale = fmt.Sprintf("scale=%d:-2:flags=bicubic", coarseScaleWidth)
 
 // hit is a frame's closeness to the reference: the perceptual-hash distance,
 // with a coarse luma-signature difference (sad) breaking exact ties — flat or
