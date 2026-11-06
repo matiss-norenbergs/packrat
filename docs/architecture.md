@@ -160,6 +160,13 @@ quiet day. A completed login resets that IP's counters. It is in memory, mutex-g
 `Retry-After` + `{error, retryAfterSeconds}` and are logged by IP only. There is deliberately **no
 permanent lockout**: with one account, a hard lock would let anyone lock the owner out on purpose.
 
+An attempt is **reserved when it is checked**, not recorded after it fails: `Limiter.Reserve` counts
+the attempt under the limiter's lock (pending attempts count toward both budgets), so parallel
+requests cannot all pass before the first failure lands. The handler turns the reservation into a
+failure (`fail`), and a deferred `release` gives it back otherwise (success, bad body), so nothing
+leaks. A login challenge works the same way: `Challenges.Lookup` counts a code attempt atomically,
+so at most five codes are ever checked per challenge, however many arrive at once.
+
 ### Two-factor auth (TOTP)
 
 Opt-in per account (`internal/twofactor`). TOTP is RFC 6238 via `github.com/pquerna/otp`

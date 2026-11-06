@@ -68,6 +68,7 @@ func AuthLogin2FA(deps *AuthDeps) gin.HandlerFunc {
 		if deps.rateLimited(c, ratelimit.KindCode) {
 			return
 		}
+		defer deps.release(c)
 		var req Login2FARequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -212,6 +213,7 @@ func TwoFactorEnable(deps *AuthDeps) gin.HandlerFunc {
 		if deps.rateLimited(c, ratelimit.KindCode) {
 			return
 		}
+		defer deps.release(c)
 		var req TwoFactorEnableRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -260,6 +262,7 @@ func TwoFactorDisable(deps *AuthDeps) gin.HandlerFunc {
 		if deps.rateLimited(c, ratelimit.KindPassword, ratelimit.KindCode) {
 			return
 		}
+		defer deps.release(c)
 		var req TwoFactorDisableRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -304,6 +307,7 @@ func TwoFactorRegenerateCodes(deps *AuthDeps) gin.HandlerFunc {
 		if deps.rateLimited(c, ratelimit.KindPassword, ratelimit.KindCode) {
 			return
 		}
+		defer deps.release(c)
 		var req TwoFactorRegenerateRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

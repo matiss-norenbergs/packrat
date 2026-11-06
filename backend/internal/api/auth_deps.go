@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -48,22 +49,28 @@ func (d *AuthDeps) now() time.Time {
 	return time.Now()
 }
 
-// rateLimited aborts with 429 (+ Retry-After and a JSON body) when the caller is blocked for any
-// of the given steps, and reports whether it did. Blocks are logged by address only.
+// reservationKey is where rateLimited parks the attempt it reserved for the rest of the request.
+const reservationKey = "authReservation"
+
+// rateLimited reserves one attempt for each given step and returns false when the caller may
+// proceed. The reservation counts against the limits immediately (see ratelimit.Reserve), so
+// parallel requests cannot all pass before any failure is recorded; fail turns it into a recorded
+// failure and release (defer it right after a false return) gives it back otherwise. When the
+// caller is blocked it aborts with 429 (+ Retry-After and a JSON body) and returns true. Blocks are
+// logged by address only.
 func (d *AuthDeps) rateLimited(c *gin.Context, kinds ...ratelimit.Kind) bool {
 	ip := c.ClientIP()
-	var wait time.Duration
-	var blockedKind ratelimit.Kind
-	for _, k := range kinds {
-		if w := d.Limiter.Check(ip, k); w > wait {
-			wait, blockedKind = w, k
-		}
-	}
+	res, wait := d.Limiter.Reserve(ip, kinds...)
 	if wait <= 0 {
+		c.Set(reservationKey, res)
 		return false
 	}
 	secs := int(math.Ceil(wait.Seconds()))
-	log.Printf("auth rate limit: blocked %s step=%s retryAfter=%ds", ip, blockedKind, secs)
+	steps := make([]string, len(kinds))
+	for i, k := range kinds {
+		steps[i] = string(k)
+	}
+	log.Printf("auth rate limit: blocked %s step=%s retryAfter=%ds", ip, strings.Join(steps, "+"), secs)
 	c.Header("Retry-After", strconv.Itoa(secs))
 	c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 		"error":             "too many attempts, try again later",
@@ -72,11 +79,26 @@ func (d *AuthDeps) rateLimited(c *gin.Context, kinds ...ratelimit.Kind) bool {
 	return true
 }
 
+func reservationOf(c *gin.Context) *ratelimit.Reservation {
+	v, _ := c.Get(reservationKey)
+	res, _ := v.(*ratelimit.Reservation)
+	return res
+}
+
+// release gives back the attempt rateLimited reserved, if no failure has been recorded for it.
+func (d *AuthDeps) release(c *gin.Context) {
+	reservationOf(c).Release()
+}
+
 // fail counts a failed attempt against the caller's address and the global budget for kind, and
 // logs it (time, address, label — never what was typed) for the security notice.
 func (d *AuthDeps) fail(c *gin.Context, kind ratelimit.Kind, label string) {
 	ip := c.ClientIP()
-	d.Limiter.Fail(ip, kind)
+	if res := reservationOf(c); res != nil {
+		res.Fail(kind)
+	} else {
+		d.Limiter.Fail(ip, kind)
+	}
 	if err := d.Users.RecordLoginFailure(c.Request.Context(), ip, label, d.now(), failureRetention); err != nil {
 		log.Printf("recording login failure: %v", err)
 	}
