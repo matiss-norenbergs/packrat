@@ -188,6 +188,12 @@ func DeleteLibraryItemFile(libraryRepo *repository.LibraryRepo, originalsRepo *r
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		if isImageItem(item) && !clearThumbnail {
+			// The thumbnail pointer was the deleted file; the tiers stay.
+			if err := libraryRepo.ClearThumbnailPointer(ctx, id); err != nil {
+				log.Printf("delete file: clearing thumbnail pointer for item %d failed: %v", id, err)
+			}
+		}
 		purgeLibraryItemFileArtifacts(ctx, mediaRoot, imagesRoot, originalsRepo, item, clearThumbnail)
 		c.Status(http.StatusNoContent)
 	}
@@ -276,6 +282,12 @@ func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, downlo
 			if err := txRepo.ClearFile(c.Request.Context(), id, req.DeleteThumbnail); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
+			}
+			if isImageItem(item) && !req.DeleteThumbnail {
+				if err := txRepo.ClearThumbnailPointer(c.Request.Context(), id); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
 			}
 			cleared = append(cleared, item)
 			resp.Deleted++

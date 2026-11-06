@@ -156,6 +156,9 @@ func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		if item.Path != "" && rejectImageItem(c, item) {
+			return
+		}
 		if item.OriginalURL == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no source URL set for this item"})
 			return
@@ -187,6 +190,10 @@ func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 		}
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
+		if pathIsMedia(mediaRoot, item, thumbnailAbsPathFor(mediaAbs)) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
+			return
+		}
 		dir := filepath.Dir(mediaAbs)
 		base := strings.TrimSuffix(filepath.Base(mediaAbs), filepath.Ext(mediaAbs))
 
@@ -221,6 +228,9 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 			return
 		}
 
+		if rejectImageItem(c, item) {
+			return
+		}
 		if item.Path == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
 			return
@@ -247,6 +257,10 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 		}
 
 		thumbAbs := thumbnailAbsPathFor(mediaAbs)
+		if pathIsMedia(mediaRoot, item, thumbAbs) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
+			return
+		}
 		if err := os.WriteFile(thumbAbs, frame, 0o644); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -515,8 +529,17 @@ func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *
 			return
 		}
 
+		if isImageItem(item) {
+			setImageItemThumbnailTiers(c, libraryRepo, responder, originalsRepo, item, imagesRoot, ffmpegPath, data)
+			return
+		}
+
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		thumbAbs := thumbnailAbsPathFor(mediaAbs)
+		if pathIsMedia(mediaRoot, item, thumbAbs) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
+			return
+		}
 		if err := os.WriteFile(thumbAbs, data, 0o644); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -550,6 +573,9 @@ func DeleteLibraryItemThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		if rejectImageItem(c, item) {
+			return
+		}
 		if item.Thumbnail == nil && item.ThumbnailSmallPath == nil && item.ThumbnailMediumPath == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no thumbnail"})
 			return
@@ -557,6 +583,10 @@ func DeleteLibraryItemThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 
 		if item.Thumbnail != nil {
 			abs := filepath.Join(mediaRoot, filepath.FromSlash(*item.Thumbnail))
+			if pathIsMedia(mediaRoot, item, abs) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
+				return
+			}
 			if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
 				log.Printf("library thumbnail: failed to delete %s: %v", abs, err)
 			}

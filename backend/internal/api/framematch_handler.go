@@ -54,6 +54,9 @@ func StartFrameMatch(mediaRoot string, libraryRepo *repository.LibraryRepo, ytdl
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		if rejectImageItem(c, item) {
+			return
+		}
 		if item.Path == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
 			return
@@ -147,7 +150,7 @@ func BulkStartFrameMatch(libraryRepo *repository.LibraryRepo, queueRepo *reposit
 				resp.Skipped++
 				continue
 			}
-			if item.Path == "" {
+			if item.Path == "" || isImageItem(item) {
 				resp.Skipped++
 				continue
 			}
@@ -251,14 +254,21 @@ func AcceptFrameMatchQueueItem(mediaRoot, imagesRoot, ffmpegPath string, queueRe
 			return
 		}
 
-		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-		thumbAbs := thumbnailAbsPathFor(mediaAbs)
-		if err := os.WriteFile(thumbAbs, data, 0o644); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
+		if isImageItem(item) {
+			setImageItemThumbnailTiers(c, libraryRepo, responder, originalsRepo, item, imagesRoot, ffmpegPath, data)
+		} else {
+			mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
+			thumbAbs := thumbnailAbsPathFor(mediaAbs)
+			if pathIsMedia(mediaRoot, item, thumbAbs) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
+				return
+			}
+			if err := os.WriteFile(thumbAbs, data, 0o644); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, row.LibraryItemID, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
 		}
-
-		writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, row.LibraryItemID, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
 		if c.Writer.Status() != http.StatusOK {
 			// writeThumbnailAndRespond already sent its own error response —
 			// leave the queue row in place so the user can retry Accept.

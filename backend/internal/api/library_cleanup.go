@@ -79,7 +79,8 @@ func removeMediaAndSidecars(mediaRoot string, item *models.LibraryItem, withThum
 		removeFileBestEffort(mediaAbs, "media file")
 		removeFileBestEffort(nfo.SidecarPath(mediaAbs), "nfo sidecar")
 	}
-	if withThumbnail && item.Thumbnail != nil {
+	// An image item's thumbnail is the media file, already removed above.
+	if withThumbnail && item.Thumbnail != nil && !pathIsMedia(mediaRoot, item, filepath.Join(mediaRoot, filepath.FromSlash(*item.Thumbnail))) {
 		removeFileBestEffort(filepath.Join(mediaRoot, filepath.FromSlash(*item.Thumbnail)), "thumbnail")
 	}
 }
