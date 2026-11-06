@@ -798,6 +798,17 @@ func (r *LibraryRepo) ClearFile(ctx context.Context, id int64, clearThumbnail bo
 	return checkRowsAffected(res)
 }
 
+// ClearThumbnailPointer nulls only the plain thumbnail column (the
+// MediaRoot-relative path), leaving the resized tiers and their dimensions.
+// Used when an image item's file is deleted: its thumbnail was the file itself.
+func (r *LibraryRepo) ClearThumbnailPointer(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE library SET thumbnail = NULL WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("clearing library thumbnail pointer: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // FrameMatchQueueIDs returns the ids of every frame_match_queue row for a
 // library item — those rows (and their images/frame-match/<id>/ snapshot
 // dirs) are removed by ON DELETE CASCADE / by the delete handlers, so callers

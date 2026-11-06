@@ -282,7 +282,9 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
         label: "Thumbnail",
         icon: <FileImage />,
         items: compact([
-          { key: "thumb-redownload", label: "Redownload from URL", icon: <Download />, disabled: !hasUrl, onSelect: () => open(it, "redownloadThumbWarning") },
+          // An image item's thumbnail is the image file itself, so the server
+          // refuses to redownload it (a ghost has no file and still can).
+          (!isImage || isGhost) && { key: "thumb-redownload", label: "Redownload from URL", icon: <Download />, disabled: !hasUrl, onSelect: () => open(it, "redownloadThumbWarning") },
           frames && { key: "thumb-quick-grab", label: "Quick Grab", icon: <Camera />, onSelect: () => open(it, "quickGrabWarning") },
           frames && {
             key: "thumb-choose",
@@ -340,7 +342,8 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
           },
           { key: "thumb-view-gallery", label: "View Gallery…", icon: <Images />, onSelect: () => open(it, "thumbnailGallery") },
           { key: "thumb-sep-2", separator: true },
-          {
+          // Deleting would remove the image file itself; the server answers 400.
+          !isImage && {
             key: "thumb-delete",
             label: "Delete",
             icon: <Trash2 />,

@@ -346,6 +346,12 @@ detection, thumbnail-tier generation (the image doubles as its own thumbnail), r
 queue's progress model — is unmodified, since both paths converge back onto the same
 `downloader.RunResult` shape.
 
+Because the image doubles as its own thumbnail (`library.thumbnail` = the media file), handlers must never
+treat that path as a disposable sidecar: for `mediaType=image` items the thumbnail delete / redownload /
+quick-grab / frame-match endpoints answer `400`, setting a thumbnail (`POST .../thumbnail`, gallery apply,
+frame-match accept) only regenerates the `ImagesRoot` small/medium tiers (`setImageItemThumbnailTiers`),
+and `pathIsMedia` guards every sidecar write/delete. Deleting such an item's file clears `thumbnail` too.
+
 **Proxy routing.** yt-dlp reads the `ytdlp_proxy` setting via its own `--proxy` flag, but a plain
 `http.Client` fetch doesn't get that for free — `imagefetch.Fetch`/`imagefetch.Open` both take a
 `proxyURL` parameter and build an `http.Transport{Proxy: http.ProxyURL(...)}` from it, reusing the

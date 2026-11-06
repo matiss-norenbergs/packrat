@@ -254,8 +254,17 @@ func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, 
 			return
 		}
 
+		if isImageItem(item) {
+			setImageItemThumbnailTiers(c, libraryRepo, responder, originalsRepo, item, imagesRoot, ffmpegPath, data)
+			return
+		}
+
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		thumbAbs := thumbnailAbsPathFor(mediaAbs)
+		if pathIsMedia(mediaRoot, item, thumbAbs) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
+			return
+		}
 		if err := os.WriteFile(thumbAbs, data, 0o644); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

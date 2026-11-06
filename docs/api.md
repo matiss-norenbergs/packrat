@@ -676,7 +676,8 @@ deleted (`DELETE /:id/file`) or found missing on disk (`scan-missing`).
   on disk) and flips the item to `status="ghost"`; all other metadata (tags, collection, artist,
   etc.) is untouched. The `.nfo` sidecar is always removed with the media file. `deleteThumbnail`
   (default false) also removes the thumbnail, its `ImagesRoot` WebP tiers (clearing the stored
-  thumbnail dimensions too) and the AI-enhancement original. Files are removed only after the DB
+  thumbnail dimensions too) and the AI-enhancement original. For an image item the `thumbnail` field
+  (the image file itself) is cleared even when `deleteThumbnail` is false (the tiers stay). Files are removed only after the DB
   update succeeds. Distinct from
   the already-documented `DELETE /api/library/:id?deleteFiles=true`: that one deletes the DB row
   entirely and is permanent — this keeps the row so it can be redownloaded later. `400` item is
@@ -738,11 +739,12 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
 - **`POST /api/library/:id/thumbnail/redownload`** — no body. Re-fetches the thumbnail from
   `originalUrl`, overwriting the current one. Ghost items (no file) are accepted: only the resized
   `thumbnailSmallPath`/`thumbnailMediumPath` tiers are stored (plain `thumbnail` stays null). Responds
-  with the updated item. `400` no source URL, `502` fetch failure.
+  with the updated item. `400` no source URL — or the item is an image (`mediaType=image`: its
+  thumbnail is the image file itself), `502` fetch failure.
 - **`POST /api/library/:id/thumbnail/quick-grab`** — no body. Extracts one video frame at a random
   timestamp within the configured pick range (see `thumbnailFrameRangeLow`/`High` below; default
   5%-100% of duration, skipping the likely-blank intro) and sets it immediately. `502` if extraction
-  fails.
+  fails. `400` for an image item (its thumbnail is the image file itself).
 - **`GET /api/library/:id/thumbnail/timestamps`** — read-only; extracts nothing. Picks the
   timestamps for a "choose from video" batch: `count` frames spread across the pick range, one
   random point per equal bucket. Optional query params `count` (1–50), `low` and `high` (percent of
@@ -764,10 +766,14 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   ```
 - **`POST /api/library/:id/thumbnail`** — `{ "imageBase64": "/9j/4AAQ..." }`. Writes the given
   bytes as the thumbnail — finalize step for "choose from video." `400` invalid base64. All three
-  thumbnail endpoints respond `200` with the full updated library item.
+  thumbnail endpoints respond `200` with the full updated library item. For an **image item**
+  (`mediaType=image`) the bytes only regenerate the small/medium tiers (`thumbnailSmallPath`/
+  `thumbnailMediumPath`, stale tiers and AI-enhancement backup removed); the media file and `thumbnail`
+  are never written.
 - **`DELETE /api/library/:id/thumbnail`** — removes the thumbnail (all tiers) and the item's
   AI-enhancement original (the enhanced image *is* the thumbnail, so the backup has nothing left to
-  compare against or revert onto). `404` unknown item,
+  compare against or revert onto). `400` for an image item (`"an image item's thumbnail is the image
+  file itself"` — the thumbnail would be the image), `404` unknown item,
   `204` on success.
 
 ### Thumbnail gallery
@@ -799,7 +805,8 @@ re-extracting/re-fetching. Cascade-deleted with the library item.
   which is `MediaRoot`-relative.
 - **`POST /api/library/:id/thumbnail/gallery/:galleryId/apply`** — no body. Makes a saved gallery
   image the item's active thumbnail (same finish as `POST .../thumbnail`: regenerates derivatives,
-  clears any stale AI-enhancement backup). `400` item has no media file, or `galleryId` belongs to a
+  clears any stale AI-enhancement backup; for an image item only the tiers change, as for
+  `POST .../thumbnail`). `400` item has no media file, or `galleryId` belongs to a
   different item; `404` unknown gallery id/item. `200` with the full updated library item.
 - **`PATCH /api/library/:id/thumbnail/gallery/:galleryId`** — body `{ "isFavorite": true }`.
   `400` belongs to a different item, `404` unknown id, `200` with the updated gallery image.
@@ -817,7 +824,7 @@ candidates), **not** duplicate-video detection. Two independent flows: a single-
 (poll-based, in-memory — lost on restart), and a durable bulk queue reviewed on the dedicated
 "Frame Matching" page.
 
-- **`POST /api/library/:id/thumbnail/match`** — `{ "mode": "url" }` (`"url"` re-fetches the source
+- **`POST /api/library/:id/thumbnail/match`** — (`400` for an image item) `{ "mode": "url" }` (`"url"` re-fetches the source
   URL's thumbnail fresh to compare against; `"current"` compares against whatever thumbnail file
   the item has right now, including an enhanced one). `400` no media file, `404` unknown item,
   `409` item already has a pending/awaiting-review row in the bulk queue, `502` reference-image
@@ -834,7 +841,7 @@ candidates), **not** duplicate-video detection. Two independent flows: a single-
   score in the 70s–80s. `404` unknown job id (never existed, or the process restarted).
 - **`POST /api/library/thumbnail/match/bulk`** — `{ "itemIds": [101, 102, 103], "mode": "url" }`.
   Enqueues each eligible item onto the durable queue, worked one at a time by a background worker.
-  An item is skipped (not an error) if it's a ghost, or ineligible for the mode (no `originalUrl`
+  An item is skipped (not an error) if it's a ghost, an image, or ineligible for the mode (no `originalUrl`
   for `"url"`, no current thumbnail for `"current"`) or has an active download; already-queued is
   counted separately. Response `202 {"queued": 2, "skipped": 1, "skippedDownloading": 0, "alreadyQueued": 0}`
   (`skippedDownloading` is the part of `skipped` left out because of an active download).
@@ -854,7 +861,7 @@ candidates), **not** duplicate-video detection. Two independent flows: a single-
 - **`POST /api/frame-match/queue/:id/accept`** — no body. Writes the row's found frame as the
   item's active thumbnail (same commit path as `SetLibraryThumbnail`/gallery-apply), then deletes
   the queue row and its snapshot images — a working queue, not a history. `409` row isn't
-  `state="done"`, `400` item has no media file, `200` with the full updated library item.
+  `state="done"`, `400` item has no media file (an image item takes the tiers-only route), `200` with the full updated library item.
 - **`DELETE /api/frame-match/queue/:id`** — no body. Removes the row and its snapshot files without
   touching the item's thumbnail; also cancels a still-running row. `404` unknown id, `204`.
 
