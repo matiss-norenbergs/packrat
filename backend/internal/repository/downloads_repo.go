@@ -88,26 +88,26 @@ func (r *DownloadsRepo) GetByIDs(ctx context.Context, ids []int64) (map[int64]*m
 		return out, nil
 	}
 
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
-	}
-
-	rows, err := r.db.QueryContext(ctx, downloadSelectColumns+` WHERE d.id IN (`+placeholders+`)`, args...)
-	if err != nil {
-		return nil, fmt.Errorf("batch-fetching downloads: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		d, err := scanDownload(rows)
+	err := inChunks(ids, inChunkSize, func(chunk []int64) error {
+		rows, err := r.db.QueryContext(ctx, downloadSelectColumns+` WHERE d.id IN (`+placeholderList(len(chunk))+`)`, anySlice(chunk)...)
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("batch-fetching downloads: %w", err)
 		}
-		out[d.ID] = d
+		defer rows.Close()
+
+		for rows.Next() {
+			d, err := scanDownload(rows)
+			if err != nil {
+				return err
+			}
+			out[d.ID] = d
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (r *DownloadsRepo) List(ctx context.Context) ([]models.Download, error) {
@@ -218,44 +218,51 @@ func (r *DownloadsRepo) ActiveDownloadIDsByLibraryItem(ctx context.Context, item
 		return out, nil
 	}
 	statuses := models.ActiveStatuses()
-	args := make([]any, 0, len(statuses)+2*len(itemIDs))
-	statusPH := make([]string, len(statuses))
-	for i, s := range statuses {
-		statusPH[i] = "?"
-		args = append(args, s)
-	}
-	idPH := strings.TrimSuffix(strings.Repeat("?,", len(itemIDs)), ",")
-	for i := 0; i < 2; i++ {
-		for _, id := range itemIDs {
-			args = append(args, id)
+	statusPH := placeholderList(len(statuses))
+	err := inChunks(itemIDs, inChunkSize, func(chunk []int64) error {
+		args := make([]any, 0, len(statuses)+2*len(chunk))
+		for _, s := range statuses {
+			args = append(args, s)
 		}
-	}
-	query := fmt.Sprintf(`
-		SELECT id, ghost_library_item_id, target_library_item_id FROM downloads
-		WHERE status IN (%s) AND (ghost_library_item_id IN (%s) OR target_library_item_id IN (%s))
-		ORDER BY id ASC`, strings.Join(statusPH, ","), idPH, idPH)
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("looking up active downloads for library items: %w", err)
-	}
-	defer rows.Close()
-	wanted := make(map[int64]bool, len(itemIDs))
-	for _, id := range itemIDs {
-		wanted[id] = true
-	}
-	for rows.Next() {
-		var id int64
-		var ghost, target sql.NullInt64
-		if err := rows.Scan(&id, &ghost, &target); err != nil {
-			return nil, fmt.Errorf("scanning active download: %w", err)
-		}
-		for _, lib := range []sql.NullInt64{ghost, target} {
-			if lib.Valid && wanted[lib.Int64] {
-				out[lib.Int64] = id // ascending id order: the newest overwrites
+		for i := 0; i < 2; i++ {
+			for _, id := range chunk {
+				args = append(args, id)
 			}
 		}
+		idPH := placeholderList(len(chunk))
+		query := fmt.Sprintf(`
+			SELECT id, ghost_library_item_id, target_library_item_id FROM downloads
+			WHERE status IN (%s) AND (ghost_library_item_id IN (%s) OR target_library_item_id IN (%s))
+			ORDER BY id ASC`, statusPH, idPH, idPH)
+		rows, err := r.db.QueryContext(ctx, query, args...)
+		if err != nil {
+			return fmt.Errorf("looking up active downloads for library items: %w", err)
+		}
+		defer rows.Close()
+		// Per chunk: an item is only ever queried in its own chunk, so its
+		// "newest wins" ascending-id overwrite order stays intact.
+		wanted := make(map[int64]bool, len(chunk))
+		for _, id := range chunk {
+			wanted[id] = true
+		}
+		for rows.Next() {
+			var id int64
+			var ghost, target sql.NullInt64
+			if err := rows.Scan(&id, &ghost, &target); err != nil {
+				return fmt.Errorf("scanning active download: %w", err)
+			}
+			for _, lib := range []sql.NullInt64{ghost, target} {
+				if lib.Valid && wanted[lib.Int64] {
+					out[lib.Int64] = id // ascending id order: the newest overwrites
+				}
+			}
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Delete removes a download's history row. Safe to call even for a download
@@ -335,17 +342,20 @@ func (r *DownloadsRepo) MarkInterruptedIfActive(ctx context.Context) ([]models.D
 		return nil, nil
 	}
 
-	idPlaceholders := make([]string, len(affected))
-	updateArgs := make([]any, 0, len(affected)+1)
-	updateArgs = append(updateArgs, models.StatusInterrupted)
+	affectedIDs := make([]int64, len(affected))
 	for i, d := range affected {
-		idPlaceholders[i] = "?"
-		updateArgs = append(updateArgs, d.ID)
+		affectedIDs[i] = d.ID
 	}
-	query := fmt.Sprintf(`UPDATE downloads SET status = ?, updated_at = datetime('now') WHERE id IN (%s)`,
-		strings.Join(idPlaceholders, ","))
-	if _, err := r.db.ExecContext(ctx, query, updateArgs...); err != nil {
-		return nil, fmt.Errorf("marking interrupted downloads: %w", err)
+	err = inChunks(affectedIDs, inChunkSize, func(chunk []int64) error {
+		query := `UPDATE downloads SET status = ?, updated_at = datetime('now') WHERE id IN (` + placeholderList(len(chunk)) + `)`
+		args := append([]any{models.StatusInterrupted}, anySlice(chunk)...)
+		if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
+			return fmt.Errorf("marking interrupted downloads: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return affected, nil
 }

@@ -53,7 +53,7 @@ type batchEntry struct {
 // (CreatePlaylistDownload) and the Bulk Download endpoint
 // (CreateBatchDownload) — both are "take a list of would-be downloads +a
 // skip-duplicates flag, dedupe, enqueue, aggregate results."
-func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, libraryRepo *repository.LibraryRepo, historyRepo *repository.HistoryRepo, entries []batchEntry, skipDuplicates bool) EnqueueResultResponse {
+func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, libraryRepo *repository.LibraryRepo, historyRepo *repository.HistoryRepo, entries []batchEntry, skipDuplicates bool) (EnqueueResultResponse, error) {
 	result := EnqueueResultResponse{
 		Queued:  []QueuedItemResponse{},
 		Skipped: []SkippedItemResponse{},
@@ -68,7 +68,12 @@ func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRe
 		for i, entry := range entries {
 			queries[i] = repository.DuplicateQuery{URL: entry.req.URL, VideoID: entry.videoID}
 		}
-		dupsByIndex, _ = libraryRepo.FindDuplicates(ctx, queries) // best-effort — a lookup failure just skips dedup, same as FindDuplicate's err handling did per-entry before
+		var err error
+		dupsByIndex, err = libraryRepo.FindDuplicates(ctx, queries)
+		if err != nil {
+			// Don't silently skip dedup: that would re-queue items already in the library.
+			return result, fmt.Errorf("checking for duplicates: %w", err)
+		}
 	}
 
 	for i, entry := range entries {
@@ -93,7 +98,7 @@ func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRe
 		result.Queued = append(result.Queued, QueuedItemResponse{ID: id, URL: entry.req.URL})
 	}
 
-	return result
+	return result, nil
 }
 
 // CreateBatchDownloadRequest queues many independent downloads in one call —
@@ -117,7 +122,11 @@ func CreateBatchDownload(mgr *queue.DownloadManager, collectionsRepo *repository
 			entries[i] = batchEntry{req: item}
 		}
 
-		result := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, entries, req.SkipDuplicates)
+		result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, entries, req.SkipDuplicates)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusCreated, result)
 	}
 }
@@ -187,7 +196,11 @@ func CreatePlaylistDownload(mgr *queue.DownloadManager, collectionsRepo *reposit
 				URL: req.URL, CollectionID: req.CollectionID, DownloadType: req.DownloadType,
 				Quality: req.Quality, AudioFormat: req.AudioFormat,
 			}}}
-			result := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, entries, req.SkipDuplicates)
+			result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, entries, req.SkipDuplicates)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
 			c.JSON(http.StatusCreated, result)
 			return
 		}
@@ -216,7 +229,11 @@ func CreatePlaylistDownload(mgr *queue.DownloadManager, collectionsRepo *reposit
 			}
 		}
 
-		result := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, entries, req.SkipDuplicates)
+		result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, entries, req.SkipDuplicates)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusCreated, result)
 	}
 }

@@ -125,16 +125,22 @@ func (r *LibraryRepo) FindDuplicates(ctx context.Context, queries []DuplicateQue
 	var conditions []string
 	var args []any
 	if len(urlSet) > 0 {
-		conditions = append(conditions, `l.original_url IN (`+strings.TrimSuffix(strings.Repeat("?,", len(urlSet)), ",")+`)`)
+		// One JSON parameter instead of a placeholder per value, so a huge
+		// playlist can't exceed SQLite's variable limit.
+		conditions = append(conditions, `l.original_url IN (SELECT value FROM json_each(?))`)
+		urls := make([]string, 0, len(urlSet))
 		for u := range urlSet {
-			args = append(args, u)
+			urls = append(urls, u)
 		}
+		args = append(args, jsonArrayArg(urls))
 	}
 	if len(videoIDSet) > 0 {
-		conditions = append(conditions, `l.video_id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(videoIDSet)), ",")+`)`)
+		conditions = append(conditions, `l.video_id IN (SELECT value FROM json_each(?))`)
+		vids := make([]string, 0, len(videoIDSet))
 		for v := range videoIDSet {
-			args = append(args, v)
+			vids = append(vids, v)
 		}
+		args = append(args, jsonArrayArg(vids))
 	}
 
 	rows, err := r.db.QueryContext(ctx, librarySelectColumns+` WHERE `+strings.Join(conditions, " OR "), args...)
@@ -254,11 +260,8 @@ func (r *LibraryRepo) Query(ctx context.Context, q LibraryQuery) ([]models.Libra
 		args = append(args, ftsQuery)
 	}
 	if len(q.CollectionIDs) > 0 {
-		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(q.CollectionIDs)), ",")
-		conditions = append(conditions, `l.collection_id IN (`+placeholders+`)`)
-		for _, id := range q.CollectionIDs {
-			args = append(args, id)
-		}
+		conditions = append(conditions, `l.collection_id IN (SELECT value FROM json_each(?))`)
+		args = append(args, jsonArrayArg(q.CollectionIDs))
 	} else if q.CollectionIDIsNull {
 		conditions = append(conditions, `l.collection_id IS NULL`)
 	} else if q.CollectionID != nil {
