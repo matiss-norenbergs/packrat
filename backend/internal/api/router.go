@@ -337,7 +337,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/thumbnail-enhancement/history/bulk-delete", BulkDeleteThumbnailEnhancementHistoryEntries(enhanceDeps))
 		api.POST("/thumbnail-enhancement/history/clear", ClearThumbnailEnhancementHistory(enhanceDeps))
 		api.POST("/thumbnail-enhancement/run", RunThumbnailEnhancementNow(enhanceDeps))
-		api.GET("/thumbnail-enhancement/upscalers", ListThumbnailUpscalers())
+		api.POST("/thumbnail-enhancement/upscalers", ListThumbnailUpscalers())
 		api.GET("/thumbnail-enhancement/status", GetThumbnailEnhancementStatus(enhanceDeps))
 		api.GET("/thumbnail-enhancement/eligible", ListThumbnailEnhancementEligible(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/bulk-run", EnhanceThumbnailItemsNow(enhanceDeps))

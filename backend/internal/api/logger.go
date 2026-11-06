@@ -11,9 +11,14 @@ import (
 // image/WebSocket URLs (see sessionCandidates).
 var tokenQueryParam = regexp.MustCompile(`([?&]token=)[^&\s]*`)
 
-// redactToken masks a ?token= query value so a session credential never lands in the access log.
+// secretQueryParam matches other credential-looking query values (password, pass, secret).
+var secretQueryParam = regexp.MustCompile(`(?i)([?&](?:password|pass|secret)=)[^&\s]*`)
+
+// redactToken masks credential query values (?token=, ?password=, ?pass=, ?secret=) so they never
+// land in the access log.
 func redactToken(path string) string {
-	return tokenQueryParam.ReplaceAllString(path, "${1}REDACTED")
+	path = tokenQueryParam.ReplaceAllString(path, "${1}REDACTED")
+	return secretQueryParam.ReplaceAllString(path, "${1}REDACTED")
 }
 
 // redactingLogFormatter is gin's default access-log line with the request path run through

@@ -36,7 +36,7 @@ since Gin matches registered routes before falling back to serving `index.html`.
   order bearer → cookie → query; the first valid one wins. A request authenticated by bearer or query
   token **skips the CSRF check** (nothing ambient for a forged request to ride on); a cookie-
   authenticated request is checked exactly as before, whatever other headers it carries. The access
-  and panic-recovery logs redact `?token=` values and the `Authorization`, `Cookie` and `X-CSRF-Token`
+  and panic-recovery logs redact `?token=` (and `?password=`, `?pass=`, `?secret=`) values and the `Authorization`, `Cookie` and `X-CSRF-Token`
   headers.
 - **Getting a token**: send `X-Client: desktop` on `POST /api/auth/login` or `/api/auth/setup`. The
   response is then `200 {"token":"..."}` and **no cookies are set**; without the header the response
@@ -1813,7 +1813,7 @@ See [FEATURES.md](FEATURES.md#ai-enhancement) for what this does and how the thr
 | POST | `/api/thumbnail-enhancement/history/bulk-delete` | Delete many history entries |
 | POST | `/api/thumbnail-enhancement/history/clear` | Delete every history entry |
 | POST | `/api/thumbnail-enhancement/run` | Run a sweep now ("Enhance Now") |
-| GET | `/api/thumbnail-enhancement/upscalers` | List upscaler models from a (possibly unsaved) instance URL |
+| POST | `/api/thumbnail-enhancement/upscalers` | List upscaler models from a (possibly unsaved) instance URL |
 | GET | `/api/thumbnail-enhancement/status` | Configured/reachable status |
 | GET | `/api/thumbnail-enhancement/eligible` | Every currently-eligible item (uncapped) |
 | POST | `/api/thumbnail-enhancement/items/bulk-run` | Enhance a specific set of items now |
@@ -1863,10 +1863,11 @@ Fire-and-forget: counts eligible items synchronously, runs the sweep detached fr
 responds immediately. `202 {"queued": 7}`. Progress streams over the `enhance_progress` WebSocket
 event (see WebSocket, below) rather than blocking this response.
 
-### `GET /api/thumbnail-enhancement/upscalers?url=...&username=...&password=...`
+### `POST /api/thumbnail-enhancement/upscalers` — `{url, username?, password?}`
 
-Tests against whatever's currently typed into the Settings form, not necessarily saved yet. `400`
-missing `url`, `502` on failure. `200 {"upscalers": ["R-ESRGAN 4x+", "..."]}`.
+Tests against whatever's currently typed into the Settings form, not necessarily saved yet. The
+credentials travel in the JSON body (CSRF-protected), never in the URL; the old `GET` form is gone.
+`400` missing `url` or bad body, `502` on failure. `200 {"upscalers": ["R-ESRGAN 4x+", "..."]}`.
 
 ### `GET /api/thumbnail-enhancement/status` — no params
 

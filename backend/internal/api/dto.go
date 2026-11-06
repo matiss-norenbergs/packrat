@@ -1820,6 +1820,14 @@ func toThumbnailEnhancementEligibleItemResponse(e thumbnailenhance.EligibleItem)
 	}
 }
 
+// ThumbnailUpscalersRequest is the body of the "Load models" lookup: the
+// instance URL and optional credentials as currently typed in the form.
+type ThumbnailUpscalersRequest struct {
+	URL      string `json:"url"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 // ThumbnailUpscalersResponse backs the Settings tab's "Load models" button —
 // queried against whatever URL/credentials are currently typed in the form,
 // not necessarily what's saved yet.

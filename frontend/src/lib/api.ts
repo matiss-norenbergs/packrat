@@ -1199,12 +1199,10 @@ export function runThumbnailEnhancementNow(): Promise<RunThumbnailEnhancementRes
 // passed in — not necessarily saved yet — so the Settings tab's "Load
 // models" button works before the form has been saved.
 export function listThumbnailUpscalers(url: string, username: string, password: string): Promise<string[]> {
-  const search = new URLSearchParams({ url })
-  if (username) search.set("username", username)
-  if (password) search.set("password", password)
-  return request<{ upscalers: string[] }>(`/thumbnail-enhancement/upscalers?${search.toString()}`).then(
-    (r) => r.upscalers,
-  )
+  return request<{ upscalers: string[] }>("/thumbnail-enhancement/upscalers", {
+    method: "POST",
+    body: JSON.stringify({ url, username, password }),
+  }).then((r) => r.upscalers)
 }
 
 export function getThumbnailEnhancementStatus(): Promise<ThumbnailEnhancementStatus> {
