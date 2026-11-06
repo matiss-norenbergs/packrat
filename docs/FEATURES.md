@@ -188,6 +188,11 @@ The live download queue.
     A download never overwrites another file: if the name is already taken in the folder (a ghost
     filled in by **Download now**, a redownload that changes container, an image converted to another
     format), the new file gets a ` (2)` suffix (` (3)`, …) before the extension.
+    The same goes for a *different* video that would get the same file name as an existing library
+    item (e.g. two uploads with the same title, or a reused literal **Filename**): it is downloaded
+    again under its own name, `Name [video id]` for the default title-based name, `Name (2)`,
+    `Name (3)`, … for a name you chose, and the existing item keeps its file. A file in the folder
+    that no library item owns is still picked up as before.
 - **Bulk Download** — queue several URLs at once from a set of rows (each with its own
   collection/type/quality/format/tags/advanced fields, and its own optional per-row preview), or
   paste a list of URLs (one per line) into a textarea and add them all as rows in one go. Up to 50
