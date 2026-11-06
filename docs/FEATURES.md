@@ -162,7 +162,8 @@ The live download queue.
   - A live preview card (thumbnail/title/uploader/duration for video/audio; the image itself for
     Image) fetches before you submit, unless "I trust this source" is enabled in Settings →
     Downloads. If the URL matches something already in the library, a duplicate warning is shown
-    but doesn't block submission. Every preview image request — the Image type's own preview and
+    but doesn't block submission; if the matching item is private (private collection, artist or tag,
+    with privacy on) its title is shown hashed. Every preview image request — the Image type's own preview and
     the yt-dlp-reported video/audio thumbnail alike — is proxied through the backend rather than
     fetched directly by the browser, so it honors a configured proxy (see Settings → yt-dlp below)
     the same way the real download does.

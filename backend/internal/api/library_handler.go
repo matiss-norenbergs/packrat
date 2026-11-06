@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -1107,7 +1106,7 @@ func enqueueRedownload(ctx context.Context, mgr *queue.DownloadManager, download
 // self-match against the item being redownloaded, which isn't a real
 // duplicate). Never writes anything; mirrors CompareLibraryItemMetadata's
 // read-only shape but against an arbitrary URL instead of the item's own.
-func PreviewRedownloadURL(libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+func PreviewRedownloadURL(libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, responder *ItemResponder) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -1128,12 +1127,12 @@ func PreviewRedownloadURL(libraryRepo *repository.LibraryRepo, ytdlp *downloader
 
 		resp := RedownloadPreviewResponse{LibraryItemMetadataPreviewResponse: toLibraryItemMetadataPreviewResponse(meta)}
 		if dup, err := libraryRepo.FindDuplicate(c.Request.Context(), url, meta.ID); err == nil && dup != nil && dup.ID != id {
-			resp.Duplicate = &DuplicateInfo{
-				LibraryItemID: dup.ID,
-				Title:         dup.Title,
-				Thumbnail:     dup.Thumbnail,
-				DownloadedAt:  dup.DownloadedAt.Format(time.RFC3339),
+			info, err := responder.duplicateInfo(c.Request.Context(), dup)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
 			}
+			resp.Duplicate = info
 		}
 		c.JSON(http.StatusOK, resp)
 	}

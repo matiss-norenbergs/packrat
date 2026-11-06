@@ -432,7 +432,9 @@ its response through `ItemResponder` (`Responses` for lists, `Response` for one 
 batch-loads tags and gallery counts and applies the resolver: `GET /api/library` and
 `/library/:id`, the compare list, refresh-metadata, trim accept, the thumbnail writes
 (`writeThumbnailAndRespond`, shared by thumbnail set/quick-grab/redownload, gallery apply and
-frame-match accept), file import and ghost creation. Single-item responses re-read the item's tags
+frame-match accept), file import and ghost creation. Duplicate-URL warnings (`DuplicateInfo`,
+batch `skipped` entries) are not library items but follow the same rule through
+`ItemResponder.BlurredItems`, exposed as a `blurred` flag. Single-item responses re-read the item's tags
 from the DB, so they reflect what was actually stored.
 
 The downloads list is the one deliberate exception to the *tags* and *artist* parts of the rule: queue rows blur

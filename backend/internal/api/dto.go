@@ -237,12 +237,15 @@ type DuplicateInfo struct {
 	Title         string  `json:"title"`
 	Thumbnail     *string `json:"thumbnail"`
 	DownloadedAt  string  `json:"downloadedAt"`
+	// Blurred is the library item privacy rule applied to the matched item (collection, artist,
+	// tags); clients show its title hashed and hide its thumbnail.
+	Blurred bool `json:"blurred"`
 }
 
 // toPreviewDownloadResponse builds the preview response from yt-dlp's
 // metadata and (for a non-playlist URL) an already-performed duplicate
-// lookup — dup is nil when none was found or none was attempted.
-func toPreviewDownloadResponse(m *downloader.Metadata, dup *models.LibraryItem) PreviewDownloadResponse {
+// lookup (already shaped and privacy-flagged) — dup is nil when none was found or attempted.
+func toPreviewDownloadResponse(m *downloader.Metadata, dup *DuplicateInfo) PreviewDownloadResponse {
 	if m.IsPlaylist() {
 		return PreviewDownloadResponse{
 			IsPlaylist:    true,
@@ -262,14 +265,7 @@ func toPreviewDownloadResponse(m *downloader.Metadata, dup *models.LibraryItem) 
 		res := fmt.Sprintf("%dx%d", m.Width, m.Height)
 		resp.Resolution = &res
 	}
-	if dup != nil {
-		resp.Duplicate = &DuplicateInfo{
-			LibraryItemID: dup.ID,
-			Title:         dup.Title,
-			Thumbnail:     dup.Thumbnail,
-			DownloadedAt:  dup.DownloadedAt.Format(time.RFC3339),
-		}
-	}
+	resp.Duplicate = dup
 	return resp
 }
 

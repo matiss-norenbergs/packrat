@@ -289,7 +289,10 @@ running:
 
 Body: `{ "url": "https://..." }`. Fetches yt-dlp metadata for the New Download dialog's pre-submit
 card — a fetch failure returns `422` and the frontend treats it as non-fatal. For a single-video
-URL, also checks for a duplicate already in the library (by URL/video ID).
+URL, also checks for a duplicate already in the library (by URL/video ID). A `duplicate` is
+`{libraryItemId, title, thumbnail, downloadedAt, blurred}`; `blurred` is the library item privacy rule
+(private collection, artist or tag, privacy on) applied to the matched item, and is `false` with the
+privacy switch off. Clients show a blurred match's title hashed and hide its thumbnail.
 
 ```json
 {
@@ -360,12 +363,14 @@ rather than re-downloaded. Response `201`:
 ```json
 {
   "queued": [ { "id": 101, "url": "https://youtube.com/watch?v=aaa" } ],
-  "skipped": [ { "url": "https://youtube.com/watch?v=bbb", "title": "Old Song", "libraryItemId": 55 } ],
+  "skipped": [ { "url": "https://youtube.com/watch?v=bbb", "title": "Old Song", "libraryItemId": 55, "blurred": false } ],
   "failed": []
 }
 ```
 
 A per-item enqueue failure lands in `failed` (`{url, error}`) rather than aborting the whole batch.
+Each `skipped` entry carries `blurred` — the library item privacy rule applied to the matched item,
+as in the duplicate warning of `POST /api/downloads/preview`.
 
 ### `POST /api/downloads/:id/cancel` — no body
 
@@ -631,10 +636,11 @@ audioFormat if the originating download row still exists, else falling back to a
   {
     "title": "Some Video (Alt Upload)", "uploader": "Another Channel", "duration": 220,
     "description": "...", "thumbnail": "https://...jpg", "resolution": "1920x1080",
-    "duplicate": { "libraryItemId": 90, "title": "Other Item", "thumbnail": "...", "downloadedAt": "2026-07-19T10:00:00Z" }
+    "duplicate": { "libraryItemId": 90, "title": "Other Item", "thumbnail": "...", "downloadedAt": "2026-07-19T10:00:00Z", "blurred": false }
   }
   ```
-  `duplicate` is set only when the URL matches a *different* library item, else `null`.
+  `duplicate` is set only when the URL matches a *different* library item, else `null`; it has the
+  same `blurred` flag as in `POST /api/downloads/preview`.
 - **`POST /api/library/:id/redownload/from-url`** —
   ```json
   { "url": "https://youtube.com/watch?v=xyz789", "overwriteFields": ["resolution", "duration"] }
