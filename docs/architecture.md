@@ -440,6 +440,19 @@ broadcast so the Library refetches.
   runs on that id. The file keeps the normal filename/template/prefix handling; this is *not*
   `completeRedownload`, which names a scratch file after an existing item and ignores them. If the
   ghost is gone (or no longer a ghost) the row is created instead, so a file is never lost.
+- **Completion is file-safe and row-first.** Nothing a download completes ever overwrites a file that
+  belongs to something else: `completeRedownload` (ghost fill-in via "Download now", Redownload) and
+  the image format conversion take `fsutil.UniquePath` (`Name (2).ext`, first free) when the target
+  name is occupied by anything other than the item's own current file — replacing that one in place
+  stays the point of a same-extension redownload. The library row is written *before* the download is
+  marked `completed` (normal path: `fillOrCreateLibraryItem`, then `MarkCompleted` + history; a
+  failure removes the run's file and sidecar and fails the download with "creating library item: …",
+  the ghost stays; redownload: `ApplyRedownload` first, then the stale old file is removed — a failed
+  update after an extension change drops the new file and leaves the old file and row intact). A run
+  that ends without an existing `FinalPath` fails ("yt-dlp finished without reporting an output
+  file") whatever the exit code, so no item with an empty path is created. After a non-zero exit with
+  the file present, only known thumbnail leftovers at exactly `base + .webp/.avif/.png/…` are removed
+  — never a glob over the folder.
 - **`downloads.ghost_library_item_id`** (migration 52, FK `library(id)` `ON DELETE SET NULL`) is set
   by the worker when a run creates or reuses a ghost, and by `RetryHistoryItem` on the new download
   when the earlier run's ghost still exists and is still a ghost; `ensureGhost` then reuses that row

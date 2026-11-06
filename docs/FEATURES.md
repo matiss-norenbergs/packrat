@@ -185,6 +185,9 @@ The live download queue.
     that end up empty are dropped. Characters that can't be used are flagged under the field. A
     collection can supply a default template (see Collections), which a template or filename typed
     here overrides; a plain **Filename** beats both. The Bulk Download rows have the same field.
+    A download never overwrites another file: if the name is already taken in the folder (a ghost
+    filled in by **Download now**, a redownload that changes container, an image converted to another
+    format), the new file gets a ` (2)` suffix (` (3)`, …) before the extension.
 - **Bulk Download** — queue several URLs at once from a set of rows (each with its own
   collection/type/quality/format/tags/advanced fields, and its own optional per-row preview), or
   paste a list of URLs (one per line) into a textarea and add them all as rows in one go. Up to 50
