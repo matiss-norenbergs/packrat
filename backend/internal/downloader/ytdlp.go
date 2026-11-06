@@ -187,6 +187,7 @@ func (s *YtDlpService) FetchThumbnail(ctx context.Context, url, destDir, baseFil
 		return "", fmt.Errorf("yt-dlp thumbnail fetch failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
+	// Exact paths only (see findThumbnailFile): never a glob on the name.
 	thumbPath := filepath.Join(destDir, baseFilename+".jpg")
 	if _, err := os.Stat(thumbPath); err != nil {
 		return "", fmt.Errorf("thumbnail not written: %w", err)
@@ -204,8 +205,8 @@ func (s *YtDlpService) FetchThumbnail(ctx context.Context, url, destDir, baseFil
 // to miss (see the exit-code leniency in queue/manager.go's runOne), where
 // callers here can hand the raw bytes to DecodeImageToJPEG themselves and
 // see the real ffmpeg error if decoding fails. The extension isn't known
-// ahead of time, so the written file is found by globbing baseFilename.*
-// after the download completes.
+// ahead of time, so the written file is found afterwards by probing the known
+// image extensions (findThumbnailFile).
 func (s *YtDlpService) FetchThumbnailRaw(ctx context.Context, url, destDir, baseFilename string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, metadataFetchTimeout)
 	defer cancel()
@@ -225,11 +226,28 @@ func (s *YtDlpService) FetchThumbnailRaw(ctx context.Context, url, destDir, base
 		return "", fmt.Errorf("yt-dlp thumbnail fetch failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
-	matches, err := filepath.Glob(filepath.Join(destDir, baseFilename+".*"))
-	if err != nil || len(matches) == 0 {
-		return "", fmt.Errorf("thumbnail not written")
+	if found := findThumbnailFile(destDir, baseFilename); found != "" {
+		return found, nil
 	}
-	return matches[0], nil
+	return "", fmt.Errorf("thumbnail not written")
+}
+
+// thumbnailExts are the only extensions findThumbnailFile accepts, in
+// preference order (.jpg first — it's what --convert-thumbnails produces).
+var thumbnailExts = []string{".jpg", ".jpeg", ".png", ".webp", ".avif"}
+
+// findThumbnailFile returns the thumbnail yt-dlp wrote as baseFilename.<ext>
+// in destDir, or "" if there is none. It checks exact paths only (no glob), so
+// "[", "]", "*", "?" and "\\" in the name are literal and a media file or any
+// other sibling sharing the base name can never be returned.
+func findThumbnailFile(destDir, baseFilename string) string {
+	for _, ext := range thumbnailExts {
+		p := filepath.Join(destDir, baseFilename+ext)
+		if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
+			return p
+		}
+	}
+	return ""
 }
 
 const metadataEmbedTimeout = 5 * time.Minute
