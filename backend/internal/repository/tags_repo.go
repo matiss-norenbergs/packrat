@@ -247,40 +247,38 @@ func (r *TagsRepo) SetForLibraryItems(ctx context.Context, libraryIDs []int64, t
 	}
 	defer tx.Rollback()
 
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(libraryIDs)), ",")
-	args := make([]any, len(libraryIDs))
-	for i, id := range libraryIDs {
-		args[i] = id
-	}
-
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM library WHERE id IN (`+placeholders+`)`, args...)
-	if err != nil {
-		return fmt.Errorf("resolving existing library ids: %w", err)
-	}
+	// Chunked inside the one transaction so atomicity is unchanged.
 	var existingIDs []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return fmt.Errorf("scanning library id: %w", err)
+	err = inChunks(libraryIDs, inChunkSize, func(chunk []int64) error {
+		rows, err := tx.QueryContext(ctx, `SELECT id FROM library WHERE id IN (`+placeholderList(len(chunk))+`)`, anySlice(chunk)...)
+		if err != nil {
+			return fmt.Errorf("resolving existing library ids: %w", err)
 		}
-		existingIDs = append(existingIDs, id)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				return fmt.Errorf("scanning library id: %w", err)
+			}
+			existingIDs = append(existingIDs, id)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		return err
 	}
-	rows.Close()
 	if len(existingIDs) == 0 {
 		return nil
 	}
 
-	existingPlaceholders := strings.TrimSuffix(strings.Repeat("?,", len(existingIDs)), ",")
-	existingArgs := make([]any, len(existingIDs))
-	for i, id := range existingIDs {
-		existingArgs[i] = id
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM library_tags WHERE library_id IN (`+existingPlaceholders+`)`, existingArgs...); err != nil {
-		return fmt.Errorf("clearing existing tags: %w", err)
+	err = inChunks(existingIDs, inChunkSize, func(chunk []int64) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM library_tags WHERE library_id IN (`+placeholderList(len(chunk))+`)`, anySlice(chunk)...); err != nil {
+			return fmt.Errorf("clearing existing tags: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	for _, libraryID := range existingIDs {
@@ -302,32 +300,34 @@ func (r *TagsRepo) TagsByLibraryIDs(ctx context.Context, ids []int64) (map[int64
 		return out, nil
 	}
 
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
-	}
-
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT lt.library_id, t.name
-		FROM library_tags lt
-		JOIN tags t ON t.id = lt.tag_id
-		WHERE lt.library_id IN (`+placeholders+`)
-		ORDER BY t.name`, args...)
-	if err != nil {
-		return nil, fmt.Errorf("batch-fetching tags: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var libraryID int64
-		var name string
-		if err := rows.Scan(&libraryID, &name); err != nil {
-			return nil, fmt.Errorf("scanning tag: %w", err)
+	// Each library id lands in exactly one chunk, so its tags stay in the
+	// per-query ORDER BY t.name order.
+	err := inChunks(ids, inChunkSize, func(chunk []int64) error {
+		rows, err := r.db.QueryContext(ctx, `
+			SELECT lt.library_id, t.name
+			FROM library_tags lt
+			JOIN tags t ON t.id = lt.tag_id
+			WHERE lt.library_id IN (`+placeholderList(len(chunk))+`)
+			ORDER BY t.name`, anySlice(chunk)...)
+		if err != nil {
+			return fmt.Errorf("batch-fetching tags: %w", err)
 		}
-		out[libraryID] = append(out[libraryID], name)
+		defer rows.Close()
+
+		for rows.Next() {
+			var libraryID int64
+			var name string
+			if err := rows.Scan(&libraryID, &name); err != nil {
+				return fmt.Errorf("scanning tag: %w", err)
+			}
+			out[libraryID] = append(out[libraryID], name)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // PrivateTagNames returns the set of tag names currently marked private —

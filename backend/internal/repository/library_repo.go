@@ -125,16 +125,22 @@ func (r *LibraryRepo) FindDuplicates(ctx context.Context, queries []DuplicateQue
 	var conditions []string
 	var args []any
 	if len(urlSet) > 0 {
-		conditions = append(conditions, `l.original_url IN (`+strings.TrimSuffix(strings.Repeat("?,", len(urlSet)), ",")+`)`)
+		// One JSON parameter instead of a placeholder per value, so a huge
+		// playlist can't exceed SQLite's variable limit.
+		conditions = append(conditions, `l.original_url IN (SELECT value FROM json_each(?))`)
+		urls := make([]string, 0, len(urlSet))
 		for u := range urlSet {
-			args = append(args, u)
+			urls = append(urls, u)
 		}
+		args = append(args, jsonArrayArg(urls))
 	}
 	if len(videoIDSet) > 0 {
-		conditions = append(conditions, `l.video_id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(videoIDSet)), ",")+`)`)
+		conditions = append(conditions, `l.video_id IN (SELECT value FROM json_each(?))`)
+		vids := make([]string, 0, len(videoIDSet))
 		for v := range videoIDSet {
-			args = append(args, v)
+			vids = append(vids, v)
 		}
+		args = append(args, jsonArrayArg(vids))
 	}
 
 	rows, err := r.db.QueryContext(ctx, librarySelectColumns+` WHERE `+strings.Join(conditions, " OR "), args...)
@@ -224,6 +230,44 @@ var librarySortColumns = map[string]string{
 	"lastWatchedAt":  "l.last_watched_at",
 }
 
+// librarySortNotNull lists the sort columns declared NOT NULL in the schema.
+// Those skip the `IS NULL` ordering term: it never changes their result, and
+// it stops SQLite from reading the column's index in order (the default
+// downloaded_at sort used to plan as a full scan + temp b-tree).
+var librarySortNotNull = map[string]bool{
+	"l.downloaded_at": true,
+	"l.title":         true,
+	"l.filename":      true,
+}
+
+// libraryOrderBy builds the ORDER BY clause for a Query sort key/direction.
+func libraryOrderBy(sortKey, dir string) string {
+	sortDir := "DESC"
+	if dir == "asc" {
+		sortDir = "ASC"
+	}
+	if sortKey == "seasonNumber" {
+		// The list view's combined Season/Episode column sorts on both
+		// fields together (season first, sequence as the tiebreaker within
+		// a season) — the only sort key backed by two columns instead of one.
+		return fmt.Sprintf(
+			" ORDER BY l.season_number IS NULL, l.season_number %s, l.sequence_number IS NULL, l.sequence_number %s",
+			sortDir, sortDir,
+		)
+	}
+	sortCol, ok := librarySortColumns[sortKey]
+	if !ok {
+		sortCol = "l.downloaded_at"
+	}
+	if librarySortNotNull[sortCol] {
+		return fmt.Sprintf(" ORDER BY %s %s", sortCol, sortDir)
+	}
+	// "<col> IS NULL" sorts ASC (0 before 1), so nulls always land last
+	// regardless of the requested direction — matches the frontend's old
+	// compareValues behavior.
+	return fmt.Sprintf(" ORDER BY %s IS NULL, %s %s", sortCol, sortCol, sortDir)
+}
+
 // buildFTSMatchQuery turns free-text user input into a safe FTS5 MATCH
 // expression: each whitespace-separated word becomes a quoted prefix term
 // (quotes prevent the user's text from being parsed as FTS5 query syntax —
@@ -254,11 +298,8 @@ func (r *LibraryRepo) Query(ctx context.Context, q LibraryQuery) ([]models.Libra
 		args = append(args, ftsQuery)
 	}
 	if len(q.CollectionIDs) > 0 {
-		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(q.CollectionIDs)), ",")
-		conditions = append(conditions, `l.collection_id IN (`+placeholders+`)`)
-		for _, id := range q.CollectionIDs {
-			args = append(args, id)
-		}
+		conditions = append(conditions, `l.collection_id IN (SELECT value FROM json_each(?))`)
+		args = append(args, jsonArrayArg(q.CollectionIDs))
 	} else if q.CollectionIDIsNull {
 		conditions = append(conditions, `l.collection_id IS NULL`)
 	} else if q.CollectionID != nil {
@@ -297,29 +338,7 @@ func (r *LibraryRepo) Query(ctx context.Context, q LibraryQuery) ([]models.Libra
 		return nil, 0, fmt.Errorf("counting library items: %w", err)
 	}
 
-	sortDir := "DESC"
-	if q.SortDir == "asc" {
-		sortDir = "ASC"
-	}
-	// "<col> IS NULL" sorts ASC (0 before 1), so nulls always land last
-	// regardless of the requested direction — matches the frontend's old
-	// compareValues behavior.
-	var orderBy string
-	if q.SortKey == "seasonNumber" {
-		// The list view's combined Season/Episode column sorts on both
-		// fields together (season first, sequence as the tiebreaker within
-		// a season) — the only sort key backed by two columns instead of one.
-		orderBy = fmt.Sprintf(
-			" ORDER BY l.season_number IS NULL, l.season_number %s, l.sequence_number IS NULL, l.sequence_number %s",
-			sortDir, sortDir,
-		)
-	} else {
-		sortCol, ok := librarySortColumns[q.SortKey]
-		if !ok {
-			sortCol = "l.downloaded_at"
-		}
-		orderBy = fmt.Sprintf(" ORDER BY %s IS NULL, %s %s", sortCol, sortCol, sortDir)
-	}
+	orderBy := libraryOrderBy(q.SortKey, q.SortDir)
 
 	listQuery := librarySelectPrefix + libraryFromClause + joins.String() + where + orderBy
 	listArgs := append([]any{}, args...)

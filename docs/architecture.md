@@ -369,6 +369,24 @@ never leaks outside whatever network path the real download would use. `GET /api
 (a short-timeout `HEAD` through the configured transport) backs the sidebar's live reachability dot,
 independent of any actual download or preview happening.
 
+## Persistence rules (SQLite)
+
+- **Every foreign-key child column needs an index.** SQLite doesn't create one, so deleting a parent
+  row (download, library item, tag, artist, collection) scans each child table once per deleted row —
+  with the single DB connection that blocks every request. Migration 53 added the missing ones;
+  `TestEveryForeignKeyChildColumnIsIndexed` (`repository/schema_indexes_test.go`) fails if a later
+  migration adds an FK column without an index whose leading column it is, and
+  `TestParentDeletesDoNotScanChildTables` checks the parent-delete query plans.
+- **No unbounded `IN (?,?,…)`.** SQLite allows 32,766 bound variables per statement. Read paths that
+  take a list of ids go through `inChunks` (`repository/inchunks.go`, `inChunkSize` = 500) and merge the
+  results; writes chunk inside the same transaction. Filter conditions inside one larger list query
+  (`FindDuplicates`, `LibraryQuery.CollectionIDs`) bind a single JSON array instead:
+  `col IN (SELECT value FROM json_each(?))`. Callers must not ignore the returned error.
+- **Sort columns that are `NOT NULL` skip the `IS NULL` term.** `libraryOrderBy` emits
+  `ORDER BY <col> IS NULL, <col>` only for nullable columns (nulls last in both directions); for
+  `downloaded_at`, `title` and `filename` that term did nothing but force a full scan + temp b-tree, so
+  the default sort now walks `idx_library_downloaded_at`.
+
 ## Full-text search
 
 The `library` table has an FTS5 virtual table (`library_fts`) kept in sync via triggers, covering

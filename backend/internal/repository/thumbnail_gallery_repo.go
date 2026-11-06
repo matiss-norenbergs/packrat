@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	"packrat/backend/internal/models"
 )
@@ -108,30 +107,30 @@ func (r *ThumbnailGalleryRepo) CountsByLibraryItemIDs(ctx context.Context, ids [
 		return out, nil
 	}
 
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
-	}
-
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT library_item_id, COUNT(*) FROM thumbnail_gallery
-		WHERE library_item_id IN (`+placeholders+`)
-		GROUP BY library_item_id`, args...)
-	if err != nil {
-		return nil, fmt.Errorf("batch-counting thumbnail gallery images: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var libraryItemID int64
-		var count int
-		if err := rows.Scan(&libraryItemID, &count); err != nil {
-			return nil, fmt.Errorf("scanning thumbnail gallery count: %w", err)
+	err := inChunks(ids, inChunkSize, func(chunk []int64) error {
+		rows, err := r.db.QueryContext(ctx, `
+			SELECT library_item_id, COUNT(*) FROM thumbnail_gallery
+			WHERE library_item_id IN (`+placeholderList(len(chunk))+`)
+			GROUP BY library_item_id`, anySlice(chunk)...)
+		if err != nil {
+			return fmt.Errorf("batch-counting thumbnail gallery images: %w", err)
 		}
-		out[libraryItemID] = count
+		defer rows.Close()
+
+		for rows.Next() {
+			var libraryItemID int64
+			var count int
+			if err := rows.Scan(&libraryItemID, &count); err != nil {
+				return fmt.Errorf("scanning thumbnail gallery count: %w", err)
+			}
+			out[libraryItemID] += count
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Delete removes one gallery image row. Callers are responsible for

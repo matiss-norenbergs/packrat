@@ -1,0 +1,12 @@
+DROP INDEX IF EXISTS idx_library_download_id;
+DROP INDEX IF EXISTS idx_library_artist_id;
+DROP INDEX IF EXISTS idx_library_tags_tag_id;
+DROP INDEX IF EXISTS idx_history_download_id;
+DROP INDEX IF EXISTS idx_downloads_override_artist_id;
+DROP INDEX IF EXISTS idx_downloads_collection_id;
+DROP INDEX IF EXISTS idx_collections_artist_id;
+DROP INDEX IF EXISTS idx_artist_images_artist_id;
+DROP INDEX IF EXISTS idx_frame_match_queue_library_item_id;
+DROP INDEX IF EXISTS idx_subscription_seen_entries_library_item_id;
+DROP INDEX IF EXISTS idx_thumbnail_enhancement_history_library_item_id;
+DROP INDEX IF EXISTS idx_subscriptions_collection_id;

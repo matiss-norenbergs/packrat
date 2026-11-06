@@ -173,30 +173,30 @@ func (r *SubscriptionsRepo) HasSeenEntries(ctx context.Context, subscriptionID i
 		return out, nil
 	}
 
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(sourceIDs)), ",")
-	args := make([]any, 0, len(sourceIDs)+1)
-	args = append(args, subscriptionID)
-	for _, id := range sourceIDs {
-		args = append(args, id)
-	}
-
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT source_id FROM subscription_seen_entries WHERE subscription_id = ? AND source_id IN (`+placeholders+`)`,
-		args...,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("checking seen subscription entries: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var sourceID string
-		if err := rows.Scan(&sourceID); err != nil {
-			return nil, fmt.Errorf("scanning seen subscription entry: %w", err)
+	err := inChunks(sourceIDs, inChunkSize, func(chunk []string) error {
+		args := append([]any{subscriptionID}, anySlice(chunk)...)
+		rows, err := r.db.QueryContext(ctx,
+			`SELECT source_id FROM subscription_seen_entries WHERE subscription_id = ? AND source_id IN (`+placeholderList(len(chunk))+`)`,
+			args...,
+		)
+		if err != nil {
+			return fmt.Errorf("checking seen subscription entries: %w", err)
 		}
-		out[sourceID] = true
+		defer rows.Close()
+
+		for rows.Next() {
+			var sourceID string
+			if err := rows.Scan(&sourceID); err != nil {
+				return fmt.Errorf("scanning seen subscription entry: %w", err)
+			}
+			out[sourceID] = true
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // RecordSeenEntry marks sourceID as seen for subscriptionID — libraryItemID
