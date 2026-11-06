@@ -442,31 +442,21 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 			ForceOverwrite: isRedownload,
 		}
 
-		var runErr error
-		result, runErr = m.ytdlp.Run(runCtx, job, func(ev downloader.ProgressEvent) {
-			m.onProgress(id, ev)
-		})
-
-		if runErr != nil {
-			m.finishError(parentCtx, runCtx, id, d.URL, runErr.Error(), "", "")
+		var ok bool
+		result, ok = m.runYtDlp(parentCtx, runCtx, id, d, job)
+		if !ok {
 			return
 		}
-		if result.ExitCode != 0 {
-			// A non-zero exit doesn't necessarily mean the video itself failed —
-			// --write-thumbnail/--convert-thumbnails runs as a postprocessing
-			// step inside the same yt-dlp invocation (args.go), and a thumbnail
-			// yt-dlp can't convert (e.g. an AVIF thumbnail on a minimal ffmpeg
-			// build with no AVIF decoder) makes yt-dlp exit non-zero even though
-			// the video already finished downloading and moving into place.
-			// result.FinalPath is only ever populated from the "after_move:"
-			// print hook, which only fires once that move has actually
-			// happened — trust that signal (and confirm the file is really
-			// there) instead of discarding a good download.
-			if !outputFileExists(result.FinalPath) {
-				m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
+		if !isRedownload {
+			// A file another library row owns is never reused: yt-dlp skips a
+			// download whose output path exists, which would make this item a
+			// second row on someone else's file. Redownloads use a scratch file.
+			result, ok = m.resolveNameClash(parentCtx, runCtx, id, d, job, meta, result)
+			if !ok {
 				return
 			}
-			log.Printf("queue: download %d: yt-dlp exited with code %d but %s was written successfully — continuing, likely a postprocessing failure (e.g. thumbnail conversion)", id, result.ExitCode, result.FinalPath)
+		}
+		if result.ExitCode != 0 && outputFileExists(result.FinalPath) {
 			cleanupOrphanedThumbnailArtifacts(result.FinalPath)
 		}
 	}
@@ -519,16 +509,22 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 
 	// The library row comes first: the download is only recorded as completed
 	// once the file has an item to belong to.
+	adopted := strings.Contains(result.StdoutTail, alreadyDownloadedMarker)
+	ghostID := m.runGhostID(id)
 	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, finalDuration, sizeBytes)
 	libItem.GenerateNFO = d.GenerateNFO
 	libID, ghost, err := m.fillOrCreateLibraryItem(parentCtx, id, libItem)
 	if err != nil {
 		log.Printf("queue: creating library item failed for %d: %v", id, err)
 		// Remove what this run wrote so a retry doesn't hit "already
-		// downloaded". An image's "sidecar" path could be another item's jpg.
-		os.Remove(result.FinalPath)
-		if d.DownloadType != "image" {
-			os.Remove(thumbnailPathFor(result.FinalPath))
+		// downloaded" — but only what this run created: a file yt-dlp skipped
+		// because it already existed (adopted, or owned by another item) stays.
+		// An image's "sidecar" path could be another item's jpg.
+		if !adopted && !m.pathClaimedByOther(parentCtx, result.FinalPath, ghostID) {
+			os.Remove(result.FinalPath)
+			if d.DownloadType != "image" {
+				os.Remove(thumbnailPathFor(result.FinalPath))
+			}
 		}
 		m.finishError(parentCtx, runCtx, id, d.URL, "creating library item: "+err.Error(), result.StdoutTail, result.StderrTail)
 		return
@@ -817,10 +813,7 @@ func (m *DownloadManager) buildLibraryItem(downloadID int64, d *models.Download,
 	// read back purely to build URLs for the /media-files static route (the
 	// frontend splits on "/") — filepath.Rel on Windows returns
 	// backslash-separated paths, which would silently 404 as a URL.
-	relPath := filepath.ToSlash(finalPath)
-	if rel, err := filepath.Rel(m.mediaRoot, finalPath); err == nil {
-		relPath = filepath.ToSlash(rel)
-	}
+	relPath := m.relMediaPath(finalPath)
 
 	var thumbRelPtr *string
 	var thumbAbs string
@@ -1401,6 +1394,123 @@ func thumbnailPathFor(finalPath string) string {
 // --write-thumbnail can leave behind when --convert-thumbnails fails. ".jpg"
 // is deliberately absent: that is the wanted thumbnail.
 var orphanThumbnailExts = []string{".webp", ".avif", ".png", ".jpeg", ".gif", ".bmp", ".heic"}
+
+// alreadyDownloadedMarker is what yt-dlp prints (and then exits 0) when the
+// output path already exists and it therefore skipped the download.
+const alreadyDownloadedMarker = "has already been downloaded"
+
+// maxNameClashRetries bounds the re-runs under a disambiguated name.
+const maxNameClashRetries = 5
+
+// relMediaPath is the forward-slash, mediaRoot-relative form library.path stores.
+func (m *DownloadManager) relMediaPath(finalPath string) string {
+	if rel, err := filepath.Rel(m.mediaRoot, finalPath); err == nil {
+		return filepath.ToSlash(rel)
+	}
+	return filepath.ToSlash(finalPath)
+}
+
+// runGhostID is the id of the ghost row this run created or reuses, 0 if none.
+func (m *DownloadManager) runGhostID(downloadID int64) int64 {
+	if g, ok := m.runGhost(downloadID); ok {
+		return g.libraryID
+	}
+	return 0
+}
+
+// pathClaimedByOther reports whether another library row owns finalPath. A
+// failed lookup counts as claimed: callers use it to decide what is safe to delete.
+func (m *DownloadManager) pathClaimedByOther(ctx context.Context, finalPath string, ghostID int64) bool {
+	claimed, err := m.libraryRepo.PathClaimedByOther(ctx, m.relMediaPath(finalPath), ghostID)
+	if err != nil {
+		log.Printf("queue: checking whether %s belongs to another item failed: %v", finalPath, err)
+		return true
+	}
+	return claimed
+}
+
+// runYtDlp runs yt-dlp for job and validates the outcome: a start failure, or
+// a non-zero exit without a written output file, ends the download through
+// finishError (ok is false). A non-zero exit with the output file present is
+// tolerated, see below; the result keeps its ExitCode so the caller can clean up.
+func (m *DownloadManager) runYtDlp(parentCtx, runCtx context.Context, id int64, d *models.Download, job downloader.DownloadJob) (downloader.RunResult, bool) {
+	result, runErr := m.ytdlp.Run(runCtx, job, func(ev downloader.ProgressEvent) {
+		m.onProgress(id, ev)
+	})
+	if runErr != nil {
+		m.finishError(parentCtx, runCtx, id, d.URL, runErr.Error(), "", "")
+		return result, false
+	}
+	if result.ExitCode != 0 {
+		// A non-zero exit doesn't necessarily mean the video itself failed —
+		// --write-thumbnail/--convert-thumbnails runs as a postprocessing
+		// step inside the same yt-dlp invocation (args.go), and a thumbnail
+		// yt-dlp can't convert (e.g. an AVIF thumbnail on a minimal ffmpeg
+		// build with no AVIF decoder) makes yt-dlp exit non-zero even though
+		// the video already finished downloading and moving into place.
+		// result.FinalPath is only ever populated from the "after_move:"
+		// print hook, which only fires once that move has actually
+		// happened — trust that signal (and confirm the file is really
+		// there) instead of discarding a good download.
+		if !outputFileExists(result.FinalPath) {
+			m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
+			return result, false
+		}
+		log.Printf("queue: download %d: yt-dlp exited with code %d but %s was written successfully — continuing, likely a postprocessing failure (e.g. thumbnail conversion)", id, result.ExitCode, result.FinalPath)
+	}
+	return result, true
+}
+
+// disambiguatedName is the file name (without extension) to retry under when
+// the previous attempt's output belongs to another item. base is the explicit
+// name, or for default naming the stem of the clashing file. Default naming
+// tries "<stem> [<video id>]" first; every other attempt numbers from (2).
+func disambiguatedName(base string, defaultNaming bool, videoID string, attempt int) string {
+	if defaultNaming && videoID != "" {
+		if attempt == 1 {
+			return base + " [" + videoID + "]"
+		}
+		return fmt.Sprintf("%s (%d)", base, attempt)
+	}
+	return fmt.Sprintf("%s (%d)", base, attempt+1)
+}
+
+// resolveNameClash checks, once yt-dlp has reported its output path, that no
+// other library row owns that file. If one does, yt-dlp skipped the download
+// ("already been downloaded"), so it is re-run under a disambiguated name
+// until the output is free (a name not on disk makes it download for real).
+// The clashing file and its sidecars are never touched. A file that exists but
+// no row claims is not a clash: it is adopted as before. Returns ok=false after
+// ending the download through finishError.
+func (m *DownloadManager) resolveNameClash(parentCtx, runCtx context.Context, id int64, d *models.Download, job downloader.DownloadJob, meta *downloader.Metadata, result downloader.RunResult) (downloader.RunResult, bool) {
+	ghostID := m.runGhostID(id)
+	defaultNaming := job.Filename == ""
+	base := job.Filename
+	for attempt := 0; outputFileExists(result.FinalPath); attempt++ {
+		claimed, err := m.libraryRepo.PathClaimedByOther(runCtx, m.relMediaPath(result.FinalPath), ghostID)
+		if err != nil {
+			m.finishError(parentCtx, runCtx, id, d.URL, "checking for an existing file with the same name: "+err.Error(), result.StdoutTail, result.StderrTail)
+			return result, false
+		}
+		if !claimed {
+			break
+		}
+		if attempt == maxNameClashRetries {
+			m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("another library item already uses the file name %q and no free name was found after %d attempts", filepath.Base(result.FinalPath), maxNameClashRetries), result.StdoutTail, result.StderrTail)
+			return result, false
+		}
+		if attempt == 0 && defaultNaming {
+			base = strings.TrimSuffix(filepath.Base(result.FinalPath), filepath.Ext(result.FinalPath))
+		}
+		job.Filename = fsutil.SanitizeFilename(disambiguatedName(base, defaultNaming, meta.ID, attempt+1))
+		log.Printf("queue: download %d: %s belongs to another library item — retrying as %q", id, result.FinalPath, job.Filename)
+		var ok bool
+		if result, ok = m.runYtDlp(parentCtx, runCtx, id, d, job); !ok {
+			return result, false
+		}
+	}
+	return result, true
+}
 
 // outputFileExists reports whether yt-dlp's reported output path is a real file.
 func outputFileExists(path string) bool {

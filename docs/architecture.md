@@ -462,6 +462,20 @@ broadcast so the Library refetches.
   file") whatever the exit code, so no item with an empty path is created. After a non-zero exit with
   the file present, only known thumbnail leftovers at exactly `base + .webp/.avif/.png/…` are removed
   — never a glob over the folder.
+- **A file another item owns is never reused.** yt-dlp skips a download whose output path exists
+  (`--no-force-overwrites`: "has already been downloaded", exit 0), which would give a second library
+  row the first one's file (`library.path` has no UNIQUE). The final name isn't known before yt-dlp
+  runs (`%(title)s`, the extension), so `runOne` checks *after* it reports its path:
+  `LibraryRepo.PathClaimedByOther(rel, ghostID)` (the run's own ghost excepted). If another row has
+  the path, `resolveNameClash` re-runs yt-dlp (same download id, same progress) under a new
+  `job.Filename` — default naming: `<stem> [<video id>]`, explicit naming: `<filename> (2)`, `(3)`, …
+  (`(n)` also when the id is empty or that name clashes too) — at most 5 times, then the download
+  fails ("no free name") and no row is created. The clashing file and its sidecars are never touched,
+  and thumbnail cleanup/derivation use the new path only. A file no row claims is not a clash and is
+  adopted as before. Redownloads (scratch file) and images (own name check) skip this. `runYtDlp` is
+  the shared run + exit-code leniency + output validation step. On a failed library write only a file
+  this run created is removed: not one yt-dlp reported as "already been downloaded" (adopted) and not
+  one another row claims.
 - **`downloads.ghost_library_item_id`** (migration 52, FK `library(id)` `ON DELETE SET NULL`) is set
   by the worker when a run creates or reuses a ghost, and by `RetryHistoryItem` on the new download
   when the earlier run's ghost still exists and is still a ghost; `ensureGhost` then reuses that row
