@@ -338,6 +338,9 @@ deleting their files).
   - **Redownload from URL** — re-fetches the thumbnail image from the source. Also works on ghost items
     (no file): it stores only the resized thumbnails, like adding a ghost does, with nothing written next
     to the media; any stale AI-enhancement backup is cleared.
+  - For **image items** the thumbnail is the image file itself, so **Redownload from URL** and **Delete**
+    are not offered (the server answers `400`); a thumbnail picked from the gallery only changes the
+    resized thumbnails and never touches the image file.
   - **Quick Grab** — grabs one random frame from the video file itself.
   - **Choose from Video…** — extracts several candidate frames spread across the video (2/4/6/8/12/24,
     configurable in Settings, along with which portion of the video — by percentage of duration —
@@ -364,7 +367,9 @@ deleting their files).
   checkbox) to reclaim space, while keeping the library entry — tags, collection membership, and
   all other metadata are untouched. The item becomes a ghost placeholder (see below) until you
   redownload it. The `.nfo` sidecar always goes with the media file; ticking the thumbnail box also
-  removes the generated thumbnail sizes and any AI-enhancement backup. Distinct from **Delete**,
+  removes the generated thumbnail sizes and any AI-enhancement backup. For an image item the thumbnail
+  was the image file itself, so its pointer to the file is cleared either way (the generated sizes stay
+  unless the box is ticked). Distinct from **Delete**,
   below, which is permanent.
 - **Delete** — "Remove from library" deletes only the database entry (file stays on disk);
   "Delete files too" also removes the media file, thumbnail and `.nfo` sidecar from disk. Either way
