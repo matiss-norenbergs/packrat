@@ -418,3 +418,40 @@ func TestLibraryRepo_SequenceGapsByCollection(t *testing.T) {
 		}
 	}
 }
+
+func TestLibraryRepo_PathClaimedByOther(t *testing.T) {
+	ctx := context.Background()
+	repo := NewLibraryRepo(openTestDB(t).db)
+
+	a, err := repo.Create(ctx, &models.LibraryItem{Title: "A", Filename: "a.mp4", Path: "dir/a.mp4", Status: "completed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := repo.Create(ctx, &models.LibraryItem{Title: "B", Filename: "b.mp4", Path: "dir/b.mp4", Status: "completed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name   string
+		path   string
+		except int64
+		want   bool
+	}{
+		{"claimed by another row", "dir/a.mp4", b, true},
+		{"claimed by another row, no exception", "dir/a.mp4", 0, true},
+		{"claimed only by the excepted row", "dir/a.mp4", a, false},
+		{"unclaimed", "dir/c.mp4", 0, false},
+		{"case differs", "dir/A.mp4", 0, false},
+		{"empty path", "", 0, false},
+	}
+	for _, tc := range cases {
+		got, err := repo.PathClaimedByOther(ctx, tc.path, tc.except)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if got != tc.want {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

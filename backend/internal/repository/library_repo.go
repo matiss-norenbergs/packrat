@@ -919,6 +919,24 @@ func (r *LibraryRepo) ListPaths(ctx context.Context) (map[string]bool, error) {
 	return out, rows.Err()
 }
 
+// PathClaimedByOther reports whether a library row other than exceptID
+// already points at relPath (the forward-slash, media-root-relative form
+// stored in library.path). The download queue uses it to avoid reusing a file
+// that another item owns; pass the run's own ghost id (0 for none) so that row
+// does not count. The match is exact: file systems the app runs on are
+// case-sensitive.
+func (r *LibraryRepo) PathClaimedByOther(ctx context.Context, relPath string, exceptID int64) (bool, error) {
+	if relPath == "" {
+		return false, nil
+	}
+	var claimed bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM library WHERE path = ? AND id != ?)`, relPath, exceptID).Scan(&claimed)
+	if err != nil {
+		return false, fmt.Errorf("checking library path claim: %w", err)
+	}
+	return claimed, nil
+}
+
 // Stats returns dashboard counts for the library: video/audio split and
 // total storage used. Video/audio is inferred per row: prefer the
 // originating download's download_type when the item came from a real
