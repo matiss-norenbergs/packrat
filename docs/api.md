@@ -1452,8 +1452,10 @@ password unattended) — use the plain Export cards above for a password-protect
   ```
 - **`DELETE /api/backup/history/:id`** — `404` unknown, `204` on success. Also best-effort deletes
   the file on disk.
-- Old backups are pruned automatically after every run, keeping the most recent N (setting
-  `backupRetentionCount`, default 14, `0` = unlimited).
+- Old backups are pruned automatically after every run, keeping the most recent N **successful**
+  ones (setting `backupRetentionCount`, default 14, `0` = unlimited). Failed history rows are
+  capped separately at the newest 20 (always, even when unlimited); a failed run only prunes
+  failed rows, never a successful backup or its file.
 
 ## Import
 

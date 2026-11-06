@@ -1,0 +1,133 @@
+package backup
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strconv"
+	"testing"
+
+	"packrat/backend/internal/models"
+	"packrat/backend/internal/repository"
+)
+
+func newRunDeps(t *testing.T, root string, retention int) RunDeps {
+	t.Helper()
+	repos := openTestRepos(t)
+	if err := repos.settings.Set(context.Background(), models.SettingBackupRetentionCount, strconv.Itoa(retention)); err != nil {
+		t.Fatal(err)
+	}
+	return RunDeps{
+		BackupsRoot:       root,
+		SettingsRepo:      repos.settings,
+		CollectionsRepo:   repos.collections,
+		TagsRepo:          repos.tags,
+		ArtistsRepo:       repos.artists,
+		LibraryRepo:       repos.library,
+		DownloadsRepo:     repos.downloads,
+		BackupHistoryRepo: repository.NewBackupHistoryRepo(repos.db),
+	}
+}
+
+func countByStatus(t *testing.T, deps RunDeps) (success, failed int) {
+	t.Helper()
+	all, err := deps.BackupHistoryRepo.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range all {
+		if e.Status == "success" {
+			success++
+		} else {
+			failed++
+		}
+	}
+	return
+}
+
+func filesIn(t *testing.T, dir string) int {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(entries)
+}
+
+func TestRunBackup_FailuresNeverDeleteSuccesses(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	deps := newRunDeps(t, root, 14)
+
+	for i := 0; i < 14; i++ {
+		if e, err := RunBackup(ctx, deps, "scheduled"); err != nil || e.Status != "success" {
+			t.Fatalf("setup backup %d: %+v %v", i, e, err)
+		}
+	}
+	if s, _ := countByStatus(t, deps); s != 14 || filesIn(t, root) != 14 {
+		t.Fatalf("setup: %d success rows, %d files", s, filesIn(t, root))
+	}
+
+	// Break the backups root so every run fails at the write step.
+	deps.BackupsRoot = filepath.Join(root, "missing")
+	for i := 0; i < 30; i++ {
+		e, err := RunBackup(ctx, deps, "scheduled")
+		if err != nil || e.Status != "failed" {
+			t.Fatalf("failing run %d: %+v %v", i, e, err)
+		}
+	}
+	s, f := countByStatus(t, deps)
+	if s != 14 || f != MaxFailedBackupRows {
+		t.Fatalf("after failures: %d success, %d failed; want 14 and %d", s, f, MaxFailedBackupRows)
+	}
+	if n := filesIn(t, root); n != 14 {
+		t.Fatalf("%d files on disk, want 14", n)
+	}
+}
+
+func TestRunBackup_SuccessAfterFailuresPrunesSuccesses(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	deps := newRunDeps(t, root, 3)
+
+	for i := 0; i < 3; i++ {
+		if _, err := RunBackup(ctx, deps, "scheduled"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	good := deps.BackupsRoot
+	deps.BackupsRoot = filepath.Join(root, "missing")
+	for i := 0; i < 25; i++ {
+		RunBackup(ctx, deps, "scheduled")
+	}
+	deps.BackupsRoot = good
+	if e, err := RunBackup(ctx, deps, "scheduled"); err != nil || e.Status != "success" {
+		t.Fatalf("recovery run: %+v %v", e, err)
+	}
+	s, f := countByStatus(t, deps)
+	if s != 3 || f != MaxFailedBackupRows {
+		t.Fatalf("got %d success, %d failed; want 3 and %d", s, f, MaxFailedBackupRows)
+	}
+	if n := filesIn(t, root); n != 3 {
+		t.Fatalf("%d files on disk, want 3", n)
+	}
+}
+
+func TestRunBackup_UnlimitedStillCapsFailed(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	deps := newRunDeps(t, root, 0)
+	for i := 0; i < 5; i++ {
+		if _, err := RunBackup(ctx, deps, "scheduled"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deps.BackupsRoot = filepath.Join(root, "missing")
+	for i := 0; i < 30; i++ {
+		RunBackup(ctx, deps, "scheduled")
+	}
+	s, f := countByStatus(t, deps)
+	if s != 5 || f != MaxFailedBackupRows || filesIn(t, root) != 5 {
+		t.Fatalf("got %d success, %d failed, %d files", s, f, filesIn(t, root))
+	}
+}
