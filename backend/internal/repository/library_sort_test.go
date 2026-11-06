@@ -36,14 +36,15 @@ func TestLibraryDefaultSortUsesIndex(t *testing.T) {
 	}
 }
 
-// Every sort key and direction orders like a straightforward Go sort with
-// NULLs always last, for a mix of values, ties and NULLs.
+// sortRow is one library row inserted by TestLibraryQuerySortOrder.
 type sortRow struct {
 	title, filename, downloadedAt string
-	year, duration, seq, season  *int
-	lastWatched                  *string
+	year, duration, seq, season   *int
+	lastWatched                   *string
 }
 
+// Every sort key and direction orders like a straightforward Go sort with
+// NULLs always last, for a mix of values, ties and NULLs.
 func TestLibraryQuerySortOrder(t *testing.T) {
 	ctx := context.Background()
 	dl := openTestDB(t)
@@ -160,4 +161,3 @@ func cmpInt(a, b *int, less func(a, b *int) (bool, bool)) int {
 	}
 	return 1
 }
-
