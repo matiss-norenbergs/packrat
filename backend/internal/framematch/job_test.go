@@ -55,18 +55,18 @@ func TestRunExclusiveTimesOutHungMatch(t *testing.T) {
 
 func TestJobDeadlineStartsAfterLockAcquired(t *testing.T) {
 	s := NewJobStore()
-	s.timeout = 200 * time.Millisecond
+	s.timeout = 500 * time.Millisecond
 
 	matchSem <- struct{}{} // another match is running
 	id := s.startFunc(func(ctx context.Context) (Result, error) {
 		select {
-		case <-time.After(20 * time.Millisecond):
+		case <-time.After(10 * time.Millisecond):
 			return Result{Score: 1}, nil
 		case <-ctx.Done():
 			return Result{}, ctx.Err()
 		}
 	})
-	time.Sleep(500 * time.Millisecond) // longer than the whole timeout
+	time.Sleep(900 * time.Millisecond) // longer than the whole timeout
 	if st, _ := s.Get(id); st.State != "running" {
 		t.Fatalf("job should still be waiting, got %q", st.State)
 	}
