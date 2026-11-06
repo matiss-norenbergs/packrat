@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -129,5 +130,28 @@ func TestRunBackup_UnlimitedStillCapsFailed(t *testing.T) {
 	s, f := countByStatus(t, deps)
 	if s != 5 || f != MaxFailedBackupRows || filesIn(t, root) != 5 {
 		t.Fatalf("got %d success, %d failed, %d files", s, f, filesIn(t, root))
+	}
+}
+
+func TestRunBackup_FileIsOwnerOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not meaningful on Windows")
+	}
+	root := t.TempDir()
+	deps := newRunDeps(t, root, 14)
+	e, err := RunBackup(context.Background(), deps, "manual")
+	if err != nil || e.Status != "success" {
+		t.Fatalf("backup: %v %+v", err, e)
+	}
+	entries, _ := os.ReadDir(root)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(entries))
+	}
+	info, err := entries[0].Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Fatalf("backup mode = %o, want 600", mode)
 	}
 }
