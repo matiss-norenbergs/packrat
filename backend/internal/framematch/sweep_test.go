@@ -133,8 +133,8 @@ func TestCoarseSweepStderrIsBounded(t *testing.T) {
 }
 
 func TestCoarseSweepFilter(t *testing.T) {
-	want := "fps=1.000000,scale=256:-2:flags=bicubic"
-	if got := coarseVideoFilter(); got != want {
+	want := "fps=4.000000,scale=256:-2:flags=bicubic"
+	if got := coarseVideoFilter(coarseFPS); got != want {
 		t.Fatalf("filter = %q, want %q", got, want)
 	}
 }
