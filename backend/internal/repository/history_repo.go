@@ -84,7 +84,7 @@ func (r *HistoryRepo) DeleteOlderThan(ctx context.Context, cutoff time.Time) (in
 }
 
 const historySelectColumns = `
-	SELECT h.id, h.download_id, h.url, h.status, h.error_message, h.created_at, d.title, d.thumbnail
+	SELECT h.id, h.download_id, h.url, h.status, h.error_message, h.created_at, d.title, d.thumbnail, d.video_id
 	FROM history h
 	LEFT JOIN downloads d ON d.id = h.download_id`
 
@@ -93,7 +93,7 @@ func scanHistory(row rowScanner) (*models.History, error) {
 	var createdAt string
 
 	err := row.Scan(
-		&h.ID, &h.DownloadID, &h.URL, &h.Status, &h.ErrorMessage, &createdAt, &h.Title, &h.Thumbnail,
+		&h.ID, &h.DownloadID, &h.URL, &h.Status, &h.ErrorMessage, &createdAt, &h.Title, &h.Thumbnail, &h.VideoID,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

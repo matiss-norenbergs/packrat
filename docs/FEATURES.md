@@ -673,7 +673,8 @@ removed when the corresponding entry is deleted from the Downloads queue.
   pruned automatically.
 - If "Anonymize History Links" is on (Settings → Privacy), URLs here are shown as a short
   deterministic hash instead of the real link — the same URL always hashes to the same value, but
-  the underlying link isn't exposed. Retry still works either way.
+  the underlying link isn't exposed (the URL and video id inside an error message are hashed the
+  same way). Retry still works either way.
 
 ## Logs
 
@@ -695,7 +696,9 @@ debugging rather than as a live control panel.
   click-and-drag) even though only a single-row selection can actually be viewed.
 - Retry count is shown when a download needed more than one attempt.
 - Respects the same "Anonymize History Links" setting as History (Settings → Privacy) — URLs are
-  hashed the same way when that's enabled.
+  hashed the same way when that's enabled, and the command line and output tails are hidden too.
+- Proxy credentials, URL credentials and the cookies file path are always masked in the command
+  line shown here.
 
 ## Backup
 

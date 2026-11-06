@@ -401,7 +401,7 @@ func (s *YtDlpService) Run(ctx context.Context, job DownloadJob, onProgress func
 		FinalPath:  finalPath,
 		StdoutTail: stdoutTail.String(),
 		StderrTail: stderrTail.String(),
-		Command:    s.BinPath + " " + strings.Join(args, " "),
+		Command:    s.BinPath + " " + strings.Join(RedactArgs(args), " "),
 	}
 
 	if waitErr != nil {

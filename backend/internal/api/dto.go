@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"packrat/backend/internal/backup"
@@ -1315,13 +1316,14 @@ func toHistoryResponse(h models.History, anonymize bool) HistoryResponse {
 		Title:        h.Title,
 		Thumbnail:    h.Thumbnail,
 		Status:       h.Status,
-		ErrorMessage: h.ErrorMessage,
+		ErrorMessage: redactedPtr(h.ErrorMessage),
 		CreatedAt:    h.CreatedAt.Format(timeFormat),
 	}
 	if anonymize {
 		resp.URL = anonymizeURL(h.URL)
 		resp.Title = nil
 		resp.Thumbnail = nil
+		resp.ErrorMessage = redactedPtr(anonymizedPtr(h.ErrorMessage, h.URL, h.VideoID))
 	}
 	return resp
 }
@@ -1350,12 +1352,12 @@ func toLogEntryResponse(d models.Download, anonymize bool) LogEntryResponse {
 		Title:        d.Title,
 		URL:          d.URL,
 		Status:       string(d.Status),
-		YtDlpCommand: d.YtDlpCommand,
+		YtDlpCommand: redactedCommandPtr(d.YtDlpCommand),
 		ExitCode:     d.ExitCode,
-		StdoutTail:   d.StdoutTail,
-		StderrTail:   d.StderrTail,
+		StdoutTail:   redactedPtr(d.StdoutTail),
+		StderrTail:   redactedPtr(d.StderrTail),
 		RetryCount:   d.RetryCount,
-		ErrorMessage: d.ErrorMessage,
+		ErrorMessage: redactedPtr(d.ErrorMessage),
 		CreatedAt:    d.CreatedAt.Format(timeFormat),
 	}
 	if d.CompletedAt != nil {
@@ -1365,8 +1367,52 @@ func toLogEntryResponse(d models.Download, anonymize bool) LogEntryResponse {
 	if anonymize {
 		resp.URL = anonymizeURL(d.URL)
 		resp.Title = nil
+		// The command line, output tails and error text all repeat the URL (or its video id).
+		resp.YtDlpCommand = nil
+		resp.StdoutTail = nil
+		resp.StderrTail = nil
+		resp.ErrorMessage = redactedPtr(anonymizedPtr(d.ErrorMessage, d.URL, d.VideoID))
 	}
 	return resp
+}
+
+// redactedPtr masks URL credentials in a stored free-text field.
+func redactedPtr(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	r := downloader.RedactText(*s)
+	return &r
+}
+
+// redactedCommandPtr masks credentials and private paths in a stored yt-dlp command line,
+// covering rows written before the command was redacted at build time.
+func redactedCommandPtr(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	r := downloader.RedactCommand(*s)
+	return &r
+}
+
+// minVideoIDLen keeps a very short id from mangling unrelated words in a message.
+const minVideoIDLen = 4
+
+// anonymizedPtr replaces occurrences of the item's URL and video id in s with the same hash
+// placeholder shown in the URL field.
+func anonymizedPtr(s *string, rawURL string, videoID *string) *string {
+	if s == nil {
+		return nil
+	}
+	hash := anonymizeURL(rawURL)
+	out := *s
+	if rawURL != "" {
+		out = strings.ReplaceAll(out, rawURL, hash)
+	}
+	if videoID != nil && len(*videoID) >= minVideoIDLen {
+		out = strings.ReplaceAll(out, *videoID, hash)
+	}
+	return &out
 }
 
 type ScannedFileResponse struct {

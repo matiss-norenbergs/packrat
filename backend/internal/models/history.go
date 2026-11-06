@@ -19,4 +19,7 @@ type History struct {
 	// exists or never got that far (e.g. failed before metadata fetch).
 	Title     *string
 	Thumbnail *string
+	// VideoID is the originating download's video id (same LEFT JOIN), used only to anonymize
+	// error messages.
+	VideoID *string
 }
