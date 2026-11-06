@@ -34,8 +34,12 @@ type QueueDeps struct {
 	// toggle. Nil means "always on".
 	SettingsRepo *repository.SettingsRepo
 	Broadcaster  ws.Broadcaster
-	// MatchTimeout bounds each item's match; zero means matchTimeout.
+	// MatchTimeout, when non-zero, fixes each item's match budget; zero means
+	// the length-scaled matchTimeoutFor.
 	MatchTimeout time.Duration
+	// ProbeDuration reads a video's length (0 = unknown) when the library item
+	// has none stored; nil means ffprobe via FFProbePath.
+	ProbeDuration func(ctx context.Context, path string) time.Duration
 }
 
 // RunQueue processes frame_match_queue rows one at a time for as long as
@@ -129,10 +133,7 @@ func processQueueItem(ctx context.Context, deps QueueDeps, row models.FrameMatch
 
 	videoAbs := filepath.Join(deps.MediaRoot, filepath.FromSlash(item.Path))
 
-	timeout := deps.MatchTimeout
-	if timeout <= 0 {
-		timeout = matchTimeout
-	}
+	timeout := queueMatchTimeout(ctx, deps, item, videoAbs)
 	// Each item gets its own time budget (started once the match lock is held),
 	// so a wedged ffmpeg fails this item instead of blocking the whole queue.
 	result, err := runExclusive(ctx, timeout, func(mctx context.Context) (Result, error) {
@@ -196,4 +197,27 @@ func persistQueueImages(imagesRoot string, queueID int64, result Result) (foundR
 		return "", "", err
 	}
 	return filepath.ToSlash(foundRelPath), filepath.ToSlash(refRelPath), nil
+}
+
+// queueItemDuration is the video length used to size an item's time budget:
+// the library item's stored duration when it has one, else a short ffprobe
+// (0 = unknown, which gets the flat matchTimeout). It runs before the match
+// lock is awaited, so it doesn't count against the match.
+func queueItemDuration(ctx context.Context, deps QueueDeps, item *models.LibraryItem, videoAbs string) time.Duration {
+	if item.Duration != nil && *item.Duration > 0 {
+		return time.Duration(*item.Duration) * time.Second
+	}
+	if deps.ProbeDuration != nil {
+		return deps.ProbeDuration(ctx, videoAbs)
+	}
+	return probeVideoDuration(ctx, deps.FFProbePath, videoAbs)
+}
+
+// queueMatchTimeout is the time budget for one queue item: the configured
+// MatchTimeout when set, otherwise the length-scaled matchTimeoutFor.
+func queueMatchTimeout(ctx context.Context, deps QueueDeps, item *models.LibraryItem, videoAbs string) time.Duration {
+	if deps.MatchTimeout > 0 {
+		return deps.MatchTimeout
+	}
+	return matchTimeoutFor(queueItemDuration(ctx, deps, item, videoAbs))
 }
