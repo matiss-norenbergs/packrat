@@ -332,7 +332,9 @@ deleting their files).
   Duration are checked by default, the rest are opt-in. The item's saved source URL always switches
   to the new one regardless of which fields you check.
 - **Thumbnail** submenu:
-  - **Redownload from URL** — re-fetches the thumbnail image from the source.
+  - **Redownload from URL** — re-fetches the thumbnail image from the source. Also works on ghost items
+    (no file): it stores only the resized thumbnails, like adding a ghost does, with nothing written next
+    to the media; any stale AI-enhancement backup is cleared.
   - **Quick Grab** — grabs one random frame from the video file itself.
   - **Choose from Video…** — extracts several candidate frames spread across the video (2/4/6/8/12/24,
     configurable in Settings, along with which portion of the video — by percentage of duration —

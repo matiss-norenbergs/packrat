@@ -136,7 +136,8 @@ func resolveDuration(ctx context.Context, known *int, mediaAbs, ffprobePath stri
 
 // RedownloadLibraryThumbnail re-fetches just the thumbnail image from the
 // item's original URL, overwriting whatever is there now — reuses the same
-// YtDlpService.FetchThumbnail already used by Import.
+// YtDlpService.FetchThumbnail already used by Import. Ghost items (no file)
+// take the fetchGhostThumbnail route instead: resized tiers only.
 func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -160,7 +161,28 @@ func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 			return
 		}
 		if item.Path == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "item has no media file"})
+			// Ghost: no media file, so no sidecar location. Store the same
+			// resized WebP tiers ghost creation does (plain Thumbnail stays null).
+			if !fetchGhostThumbnail(ctx, libraryRepo, imagesRoot, ytdlp, id, *item.OriginalURL) {
+				c.JSON(http.StatusBadGateway, gin.H{"error": "fetching thumbnail: could not fetch or process the image from the source URL"})
+				return
+			}
+			// The new tiers make any AI-enhancement backup stale (a ghost can be
+			// a former real item that was enhanced before its file was deleted).
+			if err := thumbnailenhance.DeleteOriginal(ctx, thumbnailenhance.Deps{OriginalsRepo: originalsRepo, ImagesRoot: imagesRoot}, id); err != nil && !errors.Is(err, repository.ErrNotFound) {
+				log.Printf("library thumbnail: clearing stale AI-enhancement backup for item %d failed: %v", id, err)
+			}
+			updated, err := libraryRepo.Get(ctx, id)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			resp, err := responder.Response(ctx, *updated)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, resp)
 			return
 		}
 
