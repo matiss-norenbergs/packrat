@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-06
+- **Failed backups no longer count toward retention** — a run of failing (scheduled) backups used to push every good backup past the retention window and delete it and its file. `backupRetentionCount` now applies to successful backups only (`0` still means unlimited), the newest 20 failed history rows are kept and older ones removed (always, new `backup.MaxFailedBackupRows`), and a failed run only prunes failed rows. Backend only; no API or UI change.
 - **Thumbnail → Redownload from URL works on ghost items** — it used to fail with "item has no media file"; for a ghost it now fetches the image from the source URL and stores the small/medium thumbnails (no file is written next to the media) and clears any stale AI-enhancement backup. `502` if the fetch fails. Items with a file are unchanged. Backend only.
 
 ## 2026-11-04

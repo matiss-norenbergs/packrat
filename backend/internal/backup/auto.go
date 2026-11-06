@@ -22,6 +22,13 @@ import (
 // pruning behavior for anyone upgrading without touching the new setting.
 const DefaultBackupRetentionCount = 14
 
+// MaxFailedBackupRows is how many failed history rows are kept; older failed
+// rows are deleted. Failed rows have no file and are only noise once there are
+// many, and they are capped separately from successful backups so a run of
+// failures can never push a good backup out of the retention window. Applies
+// even when backup_retention_count is 0 (unlimited successful backups).
+const MaxFailedBackupRows = 20
+
 // FullBundle combines both existing export kinds into one payload for
 // disk-resident auto/manual backups — the ad-hoc Export cards stay
 // settings-only or library-only for users who want a partial/portable file,
@@ -120,7 +127,7 @@ func RunBackup(ctx context.Context, deps RunDeps, triggerType string) (models.Ba
 	}
 	entry.ID = id
 
-	pruneOldBackups(ctx, deps)
+	pruneOldBackups(ctx, deps, true)
 	return entry, nil
 }
 
@@ -135,40 +142,55 @@ func recordFailure(ctx context.Context, deps RunDeps, triggerType string, cause 
 		return models.BackupHistory{}, fmt.Errorf("recording failed backup (cause: %v): %w", cause, err)
 	}
 	entry.ID = id
-	pruneOldBackups(ctx, deps)
+	// Only failed rows may be pruned here — a failure must never delete a
+	// good backup (which is exactly when the system is unhealthy).
+	pruneOldBackups(ctx, deps, false)
 	return entry, nil
 }
 
-// pruneOldBackups deletes history rows (and their files) past the
-// backup_retention_count setting (reading the raw key directly via
-// deps.SettingsRepo.Get, not the api-package getter, to avoid an import
-// cycle — same reasoning as RunScheduledBackupIfDue's interval read).
+// pruneOldBackups trims the history table. Failed rows are always capped at
+// MaxFailedBackupRows. Successful rows (and their files) are pruned past the
+// backup_retention_count setting only when pruneSuccesses is true — i.e.
+// after a successful run, never after a failure. The setting is read via
+// deps.SettingsRepo.Get (the raw key, not the api-package getter, to avoid an
+// import cycle — same reasoning as RunScheduledBackupIfDue's interval read).
 // Unset/corrupt/negative falls back to DefaultBackupRetentionCount; 0 means
-// unlimited — every backup is kept, pruning is skipped entirely (passing 0
-// straight to DeleteExceedingRetention would instead delete everything).
+// unlimited successful backups, so success pruning is skipped entirely.
 // Best-effort: logs failures rather than propagating them, since a pruning
-// hiccup shouldn't fail the backup that just succeeded.
-func pruneOldBackups(ctx context.Context, deps RunDeps) {
-	keep := DefaultBackupRetentionCount
-	if raw, err := deps.SettingsRepo.Get(ctx, models.SettingBackupRetentionCount); err == nil {
-		if n, convErr := strconv.Atoi(raw); convErr == nil && n >= 0 {
-			keep = n
+// hiccup shouldn't fail the run that was just recorded.
+func pruneOldBackups(ctx context.Context, deps RunDeps, pruneSuccesses bool) {
+	if pruneSuccesses {
+		keep := DefaultBackupRetentionCount
+		if raw, err := deps.SettingsRepo.Get(ctx, models.SettingBackupRetentionCount); err == nil {
+			if n, convErr := strconv.Atoi(raw); convErr == nil && n >= 0 {
+				keep = n
+			}
+		}
+		if keep > 0 {
+			pruned, err := deps.BackupHistoryRepo.DeleteSuccessfulExceedingRetention(ctx, keep)
+			if err != nil {
+				log.Printf("backup retention cleanup failed: %v", err)
+			}
+			removeBackupFiles(deps.BackupsRoot, pruned)
 		}
 	}
-	if keep == 0 {
-		return
-	}
 
-	pruned, err := deps.BackupHistoryRepo.DeleteExceedingRetention(ctx, keep)
+	pruned, err := deps.BackupHistoryRepo.DeleteFailedExceedingRetention(ctx, MaxFailedBackupRows)
 	if err != nil {
-		log.Printf("backup retention cleanup failed: %v", err)
+		log.Printf("failed-backup cleanup failed: %v", err)
 		return
 	}
+	removeBackupFiles(deps.BackupsRoot, pruned) // failed rows have no file; no-op
+}
+
+// removeBackupFiles unlinks the files of pruned rows. A missing file is fine;
+// other failures are only logged.
+func removeBackupFiles(root string, pruned []models.BackupHistory) {
 	for _, entry := range pruned {
 		if entry.FileName == nil {
 			continue
 		}
-		path, err := pathsafe.ResolveUnderRoot(deps.BackupsRoot, *entry.FileName)
+		path, err := pathsafe.ResolveUnderRoot(root, *entry.FileName)
 		if err != nil {
 			log.Printf("backup retention cleanup: resolving path for %q failed: %v", *entry.FileName, err)
 			continue

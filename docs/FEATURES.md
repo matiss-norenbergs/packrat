@@ -723,7 +723,10 @@ row that has a file; they're disabled with a tooltip otherwise (and hidden from 
 count (it permanently deletes the backup files), and reports one summary toast ("Deleted 3
 backups" / "Deleted 2, 1 failed").
 Old backups are pruned automatically past a configurable retention count (default
-14; set to unlimited to keep everything). Scheduled/automatic backups are always unencrypted —
+14; set to unlimited to keep everything). The count applies to **successful** backups only, so a
+run of failing backups never pushes good ones out; the newest 20 failed attempts stay in the
+history table and older failed rows are removed (even when retention is unlimited). A failed run
+only ever prunes failed rows. Scheduled/automatic backups are always unencrypted —
 there's nowhere to type a password unattended — use the plain Export cards above if you need a
 password-protected file to store off-site.
 

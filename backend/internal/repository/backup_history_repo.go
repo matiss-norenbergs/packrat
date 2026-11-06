@@ -44,7 +44,7 @@ func (r *BackupHistoryRepo) Get(ctx context.Context, id int64) (*models.BackupHi
 }
 
 // List returns every backup history entry, most recent first — no LIMIT,
-// since DeleteExceedingRetention keeps this table small in practice.
+// since the retention pruning keeps this table small in practice.
 func (r *BackupHistoryRepo) List(ctx context.Context) ([]models.BackupHistory, error) {
 	rows, err := r.db.QueryContext(ctx, backupHistorySelectColumns+` ORDER BY created_at DESC`)
 	if err != nil {
@@ -83,14 +83,31 @@ func (r *BackupHistoryRepo) LatestSuccessful(ctx context.Context) (*models.Backu
 	return entry, err
 }
 
-// DeleteExceedingRetention deletes every row past the keep most-recent ones
-// and returns the deleted rows, so the caller (backup.RunBackup) can unlink
-// their on-disk files — DB and filesystem concerns stay separated, same as
-// ArtistsRepo.DeleteImage returning a path rather than touching disk itself.
-func (r *BackupHistoryRepo) DeleteExceedingRetention(ctx context.Context, keep int) ([]models.BackupHistory, error) {
-	rows, err := r.db.QueryContext(ctx, backupHistorySelectColumns+` ORDER BY created_at DESC LIMIT -1 OFFSET ?`, keep)
+// DeleteSuccessfulExceedingRetention deletes every successful row past the
+// keep most-recent successful ones and returns the deleted rows, so the
+// caller (backup.pruneOldBackups) can unlink their on-disk files — DB and
+// filesystem concerns stay separated, same as ArtistsRepo.DeleteImage
+// returning a path rather than touching disk itself. Failed rows are never
+// touched, so a run of failures can't push good backups out of the window.
+// keep must be > 0 (the caller treats 0 as "unlimited" and doesn't call).
+func (r *BackupHistoryRepo) DeleteSuccessfulExceedingRetention(ctx context.Context, keep int) ([]models.BackupHistory, error) {
+	return r.deleteExceeding(ctx, "success", keep)
+}
+
+// DeleteFailedExceedingRetention deletes every failed row past the keep
+// most-recent failed ones and returns them. Successful rows are never
+// touched, so it is safe to call after a failed run.
+func (r *BackupHistoryRepo) DeleteFailedExceedingRetention(ctx context.Context, keep int) ([]models.BackupHistory, error) {
+	return r.deleteExceeding(ctx, "failed", keep)
+}
+
+// deleteExceeding prunes one status only; id breaks created_at ties (the
+// column has one-second resolution) so the ordering is stable.
+func (r *BackupHistoryRepo) deleteExceeding(ctx context.Context, status string, keep int) ([]models.BackupHistory, error) {
+	rows, err := r.db.QueryContext(ctx, backupHistorySelectColumns+
+		` WHERE status = ? ORDER BY created_at DESC, id DESC LIMIT -1 OFFSET ?`, status, keep)
 	if err != nil {
-		return nil, fmt.Errorf("finding backups exceeding retention: %w", err)
+		return nil, fmt.Errorf("finding %s backups exceeding retention: %w", status, err)
 	}
 	var toDelete []models.BackupHistory
 	for rows.Next() {
