@@ -183,6 +183,7 @@ func run() error {
 	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFProbePath, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, thumbnailEnhancementHistoryRepo, thumbnailEnhancementOriginalsRepo, jellyfinClient, progressStore, hub)
 	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)
 	frameMatchJobs := framematch.NewJobStore()
+	frameMatchJobs.SetBaseContext(ctx)
 	frameMatchQueueRepo := repository.NewFrameMatchQueueRepo(conn)
 
 	interrupted, err := downloadsRepo.MarkInterruptedIfActive(ctx)

@@ -589,6 +589,8 @@ shouldn't run two-at-once on a resource-capped container:
   the bulk action and the Frame Matching review page. Accepting or discarding a row deletes it
   (a working queue, not a history).
 
+**Memory and time limits.** The coarse sweep runs ffmpeg with `fps=1,scale=256:-2:flags=bicubic` (`coarseScaleWidth`; the hash resizes to 64x64 itself, so 256px keeps 4x headroom while a frame shrinks from hundreds of KB to a few KB) and reads the MJPEG pipe incrementally: `frameSplitter` finds SOI/EOI markers, each frame is hashed as soon as it completes, and only `(timestamp, hash)` is kept — peak memory is one frame plus the hash list, not the video. ffmpeg stderr is kept as a bounded tail. The "one match at a time" rule is a cancellable semaphore (`matchSem`) rather than a mutex; `runExclusive` acquires it (waiting does not count against the match, and is cancellable) and then applies `matchTimeout` (5 min) to that one match — to every queue item as well as to single-item jobs, so a hung ffmpeg fails the item ("match timed out after 5m0s") and the queue moves on. `JobStore` drops finished jobs 30 minutes after they finish (`jobTTL`, swept on each `Start`/`Get`; running jobs are never evicted), so a late poll gets the same 404 as an unknown id.
+
 `ResolveReferenceImage` is shared by both paths so `"url"`/`"current"` mode resolves identically
 either way; it deliberately avoids `YtDlpService.FetchThumbnail`'s `--convert-thumbnails`
 postprocessor (known to fail silently on AVIF) in favor of an explicit fetch-raw-then-decode step.
