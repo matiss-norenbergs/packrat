@@ -947,7 +947,7 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   the dialog closes, and a successful change closes it with a "Password changed" toast; the current
   password must be right; changing it signs out your other devices and sessions). 2FA is optional and off by default; accounts without it log in exactly as before. **Enable**
   opens a 3-step dialog: (1) scan a QR code (drawn in the browser, always dark on a white tile) or type
-  the key shown in groups of four (Copy button); (2) enter a code from the app to confirm; (3) save
+  the key shown in groups of four (Copy button); (2) enter your password and a code from the app to confirm; (3) save
   the 10 recovery codes — shown once, with Copy and Download, and the dialog can't be closed until
   "I've saved these codes" is ticked. Once on, the card shows how many recovery codes are left (a
   warning at 2 or fewer) and offers **Regenerate recovery codes** (password + code; the old set stops

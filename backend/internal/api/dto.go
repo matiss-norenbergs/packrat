@@ -68,7 +68,8 @@ type TwoFactorSetupResponse struct {
 }
 
 type TwoFactorEnableRequest struct {
-	Code string `json:"code" binding:"required"`
+	Password string `json:"password" binding:"required"`
+	Code     string `json:"code" binding:"required"`
 }
 
 type TwoFactorDisableRequest struct {

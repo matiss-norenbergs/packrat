@@ -26,7 +26,8 @@ function fakeServer(initial: { enabled: boolean; remaining: number }) {
     }
     if (url.endsWith("/auth/2fa/setup")) return { status: 200, body: { secret: SECRET, otpauthUrl: URL } }
     if (url.endsWith("/auth/2fa/enable")) {
-      const { code } = JSON.parse(init.body as string)
+      const { code, password } = JSON.parse(init.body as string)
+      if (password !== "s3cret") return { status: 401, body: { error: "incorrect password" } }
       if (code !== "123456") return { status: 401, body: { error: "invalid code" } }
       state.enabled = true
       state.remaining = 10
@@ -62,10 +63,24 @@ describe("TwoFactorCard", () => {
     expect(callsTo(fetchMock, "/auth/2fa/setup")).toHaveLength(1)
     await user.click(screen.getByRole("button", { name: "Next" }))
 
-    // Step 2: a wrong code is rejected and keeps you here...
+    // Step 2: it asks for the password too, and won't submit without it...
     const input = await screen.findByLabelText("Authentication code")
     expect(input).toHaveAttribute("autocomplete", "one-time-code")
-    await user.type(input, "000000")
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password")
+    await user.type(input, "123456")
+    expect(screen.getByRole("button", { name: "Verify and enable" })).toBeDisabled()
+    expect(callsTo(fetchMock, "/auth/2fa/enable")).toHaveLength(0)
+
+    // ...a wrong password is rejected and keeps you here...
+    await user.type(screen.getByLabelText("Password"), "wrong")
+    await user.click(screen.getByRole("button", { name: "Verify and enable" }))
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("incorrect password"))
+    expect(screen.queryByTestId("recovery-codes")).not.toBeInTheDocument()
+    expect(screen.getByLabelText("Password")).toHaveValue("")
+
+    // ...a wrong code is rejected too...
+    await user.type(screen.getByLabelText("Password"), "s3cret")
+    await user.type(await screen.findByLabelText("Authentication code"), "000000")
     await user.click(screen.getByRole("button", { name: "Verify and enable" }))
     await waitFor(() =>
       expect(toastError).toHaveBeenCalledWith("That code didn't work. Check that your phone's clock is correct and try again."),
@@ -77,7 +92,7 @@ describe("TwoFactorCard", () => {
     await user.click(screen.getByRole("button", { name: "Verify and enable" }))
     const grid = await screen.findByTestId("recovery-codes")
     for (const c of CODES) expect(within(grid).getByText(c)).toBeInTheDocument()
-    expect(bodyOf(callsTo(fetchMock, "/auth/2fa/enable").at(-1)!)).toEqual({ code: "123456" })
+    expect(bodyOf(callsTo(fetchMock, "/auth/2fa/enable").at(-1)!)).toEqual({ password: "s3cret", code: "123456" })
 
     // Step 3: can't be closed until the codes are confirmed saved.
     const done = screen.getByRole("button", { name: "Done" })

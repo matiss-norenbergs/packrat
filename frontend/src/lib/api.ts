@@ -287,9 +287,9 @@ export function startTwoFactorSetup(): Promise<TwoFactorSetup> {
   return request<TwoFactorSetup>("/auth/2fa/setup", { method: "POST", body: "{}" })
 }
 
-export async function enableTwoFactor(code: string): Promise<string[]> {
+export async function enableTwoFactor(payload: { password: string; code: string }): Promise<string[]> {
   const res = await withFriendlyCodeError(
-    request<{ recoveryCodes: string[] }>("/auth/2fa/enable", { method: "POST", body: JSON.stringify({ code }) }),
+    request<{ recoveryCodes: string[] }>("/auth/2fa/enable", { method: "POST", body: JSON.stringify(payload) }),
     false,
   )
   return res.recoveryCodes

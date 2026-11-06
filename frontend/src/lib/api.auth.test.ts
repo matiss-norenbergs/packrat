@@ -219,7 +219,7 @@ describe("two-factor login", () => {
     mockFetch(() => ({ status: 401, body: { error: "invalid code" } }))
     await expect(login2fa({ challengeToken: "c1", code: "000000" })).rejects.toMatchObject({ status: 401, message: totp })
     await expect(login2fa({ challengeToken: "c1", recoveryCode: "abcd-efgh" })).rejects.toMatchObject({ status: 401, message: recovery })
-    await expect(enableTwoFactor("000000")).rejects.toMatchObject({ message: totp })
+    await expect(enableTwoFactor({ password: "p", code: "000000" })).rejects.toMatchObject({ message: totp })
     await expect(disableTwoFactor({ password: "p", code: "000000" })).rejects.toMatchObject({ message: totp })
     await expect(disableTwoFactor({ password: "p", recoveryCode: "abcd-efgh" })).rejects.toMatchObject({ message: recovery })
     await expect(regenerateRecoveryCodes({ password: "p", code: "000000" })).rejects.toMatchObject({ message: totp })

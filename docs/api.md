@@ -171,9 +171,11 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
 - **`POST /api/auth/2fa/setup`** — no body; creates a *pending* secret (replacing any earlier one) and
   returns `{ "secret": "<base32>", "otpauthUrl": "otpauth://totp/Packrat:<username>?..." }`. `409` if
   2FA is already enabled. Nothing changes for logins until it is confirmed.
-- **`POST /api/auth/2fa/enable`** — `{ "code": "123456" }` checked against the pending secret; turns
-  2FA on and returns `{ "recoveryCodes": [10 × "XXXX-XXXX"] }` — the **only** time they are shown.
-  `401` bad code, `409` no pending secret / already enabled.
+- **`POST /api/auth/2fa/enable`** — `{ "password", "code": "123456" }`: the current password (checked
+  like the other 2FA endpoints and throttled with the password budget), then the code is checked
+  against the pending secret; turns 2FA on and returns `{ "recoveryCodes": [10 × "XXXX-XXXX"] }` — the
+  **only** time they are shown. `400` no password, `401` wrong password (`"incorrect password"`) or
+  bad code, `409` no pending secret / already enabled.
 - **`POST /api/auth/2fa/disable`** — `{ "password", "code" | "recoveryCode" }`; clears the secret and
   recovery codes. `204`; `401` for a wrong password or code.
 - **`POST /api/auth/2fa/recovery-codes`** — `{ "password", "code" }`; replaces the whole set (old codes
