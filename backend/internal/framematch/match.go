@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"io"
 	"math"
@@ -28,7 +29,7 @@ import (
 const (
 	// topK is how many distinct coarse-sweep regions get refined in the fine
 	// pass (see selectCandidates).
-	topK = 6
+	topK = 10
 	// fineWindowSeconds is the width of each fine-pass window.
 	fineWindowSeconds = downloader.MaxFrameWindowSeconds
 	// candidateSeparation is the minimum distance between two shortlisted
@@ -38,7 +39,7 @@ const (
 	// coarseFPS is the whole-video sampling rate for the initial sweep. ffmpeg
 	// decodes every frame regardless; the rate only sets how many 256 px frames
 	// get hashed.
-	coarseFPS = 1.0
+	coarseFPS = 4.0
 	// coarseScaleWidth is the width (px) ffmpeg downscales each swept frame to
 	// before piping it out. The perceptual hash resizes to 64x64 anyway, so 256
 	// keeps 4x headroom while shrinking a frame from hundreds of KB (native
@@ -148,11 +149,11 @@ func matchWith(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath,
 	if err != nil {
 		return Result{}, fmt.Errorf("coarse sweep: %w", err)
 	}
-	return refine(ctx, ytdlp, ffprobePath, videoAbsPath, referenceJPEG, refHash, coarse, cfg)
+	return refine(ctx, ytdlp, ffprobePath, videoAbsPath, referenceJPEG, refHash, newSignature(refImg), coarse, cfg)
 }
 
 // refine ranks the coarse frames against refHash and runs the fine pass.
-func refine(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath, videoAbsPath string, referenceJPEG []byte, refHash *goimagehash.ImageHash, coarse []hashedFrame, cfg config) (Result, error) {
+func refine(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath, videoAbsPath string, referenceJPEG []byte, refHash *goimagehash.ImageHash, refSig signature, coarse []hashedFrame, cfg config) (Result, error) {
 	if len(coarse) == 0 {
 		return Result{}, fmt.Errorf("coarse sweep produced no frames")
 	}
@@ -165,28 +166,28 @@ func refine(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath, vi
 	// The fine pass hashes every frame of each candidate's window; only the
 	// best (distance, timestamp) is kept. With no usable fine result the best
 	// coarse frame stands.
-	bestTS, bestDist := ranked[0].timestamp, ranked[0].distance
+	best := hit{ts: ranked[0].timestamp, dist: ranked[0].distance}
 	fineFound := false
 	half := fineWindowSeconds / 2
 	for _, c := range candidates {
 		lo := math.Max(0, c.timestamp-half)
-		ts, d, err := fineWindow(ctx, ytdlp.FFmpegPath, ffprobePath, videoAbsPath, lo, c.timestamp+half, refHash)
+		h, err := fineWindow(ctx, ytdlp.FFmpegPath, ffprobePath, videoAbsPath, lo, c.timestamp+half, refHash, refSig)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return Result{}, ctxErr
 			}
 			continue
 		}
-		if !fineFound || d < bestDist {
-			bestTS, bestDist, fineFound = ts, d, true
+		if !fineFound || h.betterThan(best) {
+			best, fineFound = h, true
 		}
 	}
 
-	raw, ts, err := extractFullFrame(ctx, ytdlp, ffprobePath, videoAbsPath, bestTS)
+	raw, ts, err := extractFullFrame(ctx, ytdlp, ffprobePath, videoAbsPath, best.ts)
 	if err != nil {
 		return Result{}, err
 	}
-	score := 100 * float64(refHash.Bits()-bestDist) / float64(refHash.Bits())
+	score := 100 * float64(refHash.Bits()-best.dist) / float64(refHash.Bits())
 	return Result{
 		TimestampSeconds:     ts,
 		Score:                score,
@@ -199,10 +200,10 @@ func refine(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath, vi
 // sweep, no frame cap beyond maxFineFrames), hashes each as it streams in and
 // returns the timestamp and distance of the closest one. Frames are never
 // retained. The i-th decoded frame is paired with the i-th ffprobe timestamp.
-func fineWindow(ctx context.Context, ffmpegPath, ffprobePath, videoAbsPath string, lo, hi float64, ref *goimagehash.ImageHash) (float64, int, error) {
+func fineWindow(ctx context.Context, ffmpegPath, ffprobePath, videoAbsPath string, lo, hi float64, ref *goimagehash.ImageHash, refSig signature) (hit, error) {
 	stamps := downloader.ProbeFrameTimestamps(ctx, ffprobePath, videoAbsPath, lo, hi-lo)
 	if len(stamps) == 0 {
-		return 0, 0, errors.New("no frame timestamps in window")
+		return hit{}, errors.New("no frame timestamps in window")
 	}
 	args := []string{
 		"-y", "-ss", formatSeconds(lo), "-i", videoAbsPath, "-t", formatSeconds(hi - lo),
@@ -210,28 +211,43 @@ func fineWindow(ctx context.Context, ffmpegPath, ffprobePath, videoAbsPath strin
 		"-vf", fmt.Sprintf("scale=%d:-2:flags=bicubic", coarseScaleWidth),
 		"-q:v", "4", "-f", "image2pipe", "-vcodec", "mjpeg", "-",
 	}
-	tr := newBestTracker(ref, stamps)
+	tr := newBestTracker(ref, refSig, stamps)
 	if err := streamMJPEG(ctx, ffmpegPath, args, tr.observe); err != nil {
-		return 0, 0, err
+		return hit{}, err
 	}
-	if tr.bestDist == math.MaxInt {
-		return 0, 0, errors.New("no frame in window could be hashed")
+	if !tr.found {
+		return hit{}, errors.New("no frame in window could be hashed")
 	}
-	return tr.bestTS, tr.bestDist, nil
+	return tr.best, nil
+}
+
+// hit is a frame's closeness to the reference: the perceptual-hash distance,
+// with a coarse luma-signature difference (sad) breaking exact ties — flat or
+// fading scenes give dozens of frames the same hash, and the signature picks
+// the one that really looks most like the reference.
+type hit struct {
+	ts   float64
+	dist int
+	sad  int
+}
+
+func (h hit) betterThan(o hit) bool {
+	return h.dist < o.dist || (h.dist == o.dist && h.sad < o.sad)
 }
 
 // bestTracker keeps the closest frame of a fine window as frames stream in:
-// the i-th frame is paired with stamps[i]; nothing but the best (distance,
-// timestamp) is retained.
+// the i-th frame is paired with stamps[i]; nothing but the best hit is
+// retained.
 type bestTracker struct {
-	ref      *goimagehash.ImageHash
-	stamps   []float64
-	bestDist int
-	bestTS   float64
+	ref    *goimagehash.ImageHash
+	refSig signature
+	stamps []float64
+	best   hit
+	found  bool
 }
 
-func newBestTracker(ref *goimagehash.ImageHash, stamps []float64) *bestTracker {
-	return &bestTracker{ref: ref, stamps: stamps, bestDist: math.MaxInt}
+func newBestTracker(ref *goimagehash.ImageHash, refSig signature, stamps []float64) *bestTracker {
+	return &bestTracker{ref: ref, refSig: refSig, stamps: stamps}
 }
 
 func (b *bestTracker) observe(i int, raw []byte) error {
@@ -246,10 +262,59 @@ func (b *bestTracker) observe(i int, raw []byte) error {
 	if err != nil {
 		return nil
 	}
-	if d, err := b.ref.Distance(h); err == nil && d < b.bestDist {
-		b.bestDist, b.bestTS = d, b.stamps[i]
+	d, err := b.ref.Distance(h)
+	if err != nil || (b.found && d > b.best.dist) {
+		return nil
+	}
+	cand := hit{ts: b.stamps[i], dist: d, sad: b.refSig.distance(newSignature(img))}
+	if !b.found || cand.betterThan(b.best) {
+		b.best, b.found = cand, true
 	}
 	return nil
+}
+
+const sigSide = 16
+
+// signature is a 16x16 luma thumbnail, sampled sparsely — only a tie-break,
+// so it just has to be cheap and stable across the reference's and the
+// frame's different resolutions.
+type signature [sigSide * sigSide]uint8
+
+func newSignature(img image.Image) signature {
+	var s signature
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w == 0 || h == 0 {
+		return s
+	}
+	const sub = 4 // samples per cell side
+	for cy := 0; cy < sigSide; cy++ {
+		for cx := 0; cx < sigSide; cx++ {
+			sum := 0
+			for sy := 0; sy < sub; sy++ {
+				for sx := 0; sx < sub; sx++ {
+					x := b.Min.X + ((cx*sub+sx)*2+1)*w/(sigSide*sub*2)
+					y := b.Min.Y + ((cy*sub+sy)*2+1)*h/(sigSide*sub*2)
+					r, g, bl, _ := img.At(x, y).RGBA()
+					sum += int((299*r + 587*g + 114*bl) / 1000 >> 8)
+				}
+			}
+			s[cy*sigSide+cx] = uint8(sum / (sub * sub))
+		}
+	}
+	return s
+}
+
+func (s signature) distance(o signature) int {
+	n := 0
+	for i := range s {
+		d := int(s[i]) - int(o[i])
+		if d < 0 {
+			d = -d
+		}
+		n += d
+	}
+	return n
 }
 
 // extractFullFrame returns the full-quality JPEG of the frame at ts (and its

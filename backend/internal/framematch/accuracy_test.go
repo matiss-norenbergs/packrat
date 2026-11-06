@@ -109,8 +109,12 @@ func TestAccuracyHarness(t *testing.T) {
 					break
 				}
 			}
+			if os.Getenv("PACKRAT_FM_RANKONLY") != "" {
+				t.Logf("T=%-7v fps=%v k=%-2d sep=%-4v rank=%-5d region=%-3d", T, c.fps, c.topK, c.minSep, rank, region)
+				continue
+			}
 			start := time.Now()
-			res, err := refine(ctx, ytdlp, ffprobe, video, refJPEG, ref, coarse, c)
+			res, err := refine(ctx, ytdlp, ffprobe, video, refJPEG, ref, newSignature(img), coarse, c)
 			el := time.Since(start).Round(100 * time.Millisecond)
 			if err != nil {
 				t.Logf("T=%-7v fps=%v k=%d sep=%v rank=%d region=%d ERROR %v", T, c.fps, c.topK, c.minSep, rank, region, err)

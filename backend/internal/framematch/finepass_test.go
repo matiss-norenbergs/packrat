@@ -76,7 +76,7 @@ func TestBestTrackerBoundedReadAhead(t *testing.T) {
 	const frameLen = 100 << 10
 	g := &genReader{total: 500, frameLen: frameLen}
 	sp := newFrameSplitter(g)
-	tr := newBestTracker(nil, make([]float64, 500))
+	tr := newBestTracker(nil, signature{}, make([]float64, 500))
 	consumed := 0
 	for i := 0; ; i++ {
 		f, err := sp.Next()
@@ -94,7 +94,7 @@ func TestBestTrackerBoundedReadAhead(t *testing.T) {
 			t.Fatalf("read %d bytes ahead", ahead)
 		}
 	}
-	if tr.bestDist != math.MaxInt {
+	if tr.found {
 		t.Fatal("undecodable frames must not produce a best")
 	}
 }
@@ -107,13 +107,13 @@ func TestBestTrackerPairsIndexWithTimestampAndStops(t *testing.T) {
 
 	stamps := []float64{10, 10.1, 10.2, 10.3}
 	stream := bytes.Join([][]byte{a, a, b, a, a, a}, nil) // 6 frames, 4 stamps
-	tr := newBestTracker(ref, stamps)
+	tr := newBestTracker(ref, newSignature(img), stamps)
 	err := scanFrames(bytes.NewReader(stream), tr.observe)
 	if err != errStopScan {
 		t.Fatalf("want errStopScan once frames outrun timestamps, got %v", err)
 	}
-	if tr.bestTS != 10.2 || tr.bestDist != 0 {
-		t.Fatalf("best = %v / %d", tr.bestTS, tr.bestDist)
+	if tr.best.ts != 10.2 || tr.best.dist != 0 {
+		t.Fatalf("best = %v / %d", tr.best.ts, tr.best.dist)
 	}
 }
 
@@ -147,12 +147,12 @@ func TestFineWindowCoversWholeWindowAt60fps(t *testing.T) {
 
 	img, _ := jpeg.Decode(bytes.NewReader(odd))
 	ref, _ := goimagehash.PerceptionHash(img)
-	ts, d, err := fineWindow(context.Background(), ffmpeg, ffprobe, video, 0, 15, ref)
+	h, err := fineWindow(context.Background(), ffmpeg, ffprobe, video, 0, 15, ref, newSignature(img))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("found t=%.3f distance=%d", ts, d)
-	if math.Abs(ts-14.5) > 1.0/fps+1e-6 || d > 4 {
-		t.Fatalf("found t=%.3f d=%d, want 14.5", ts, d)
+	t.Logf("found t=%.3f distance=%d", h.ts, h.dist)
+	if math.Abs(h.ts-14.5) > 1.0/fps+1e-6 || h.dist > 4 {
+		t.Fatalf("found t=%.3f d=%d, want 14.5", h.ts, h.dist)
 	}
 }
