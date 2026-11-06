@@ -14,6 +14,19 @@ import (
 
 type UsersRepo struct {
 	db *sql.DB
+
+	// onSessionsRevoked is called after sessions are deleted (logout, revoke, sign-out-others),
+	// so live connections tied to them can be closed. Set once at startup.
+	onSessionsRevoked func()
+}
+
+// SetOnSessionsRevoked registers fn to run after sessions are deleted through this repo.
+func (r *UsersRepo) SetOnSessionsRevoked(fn func()) { r.onSessionsRevoked = fn }
+
+func (r *UsersRepo) sessionsRevoked() {
+	if r.onSessionsRevoked != nil {
+		r.onSessionsRevoked()
+	}
 }
 
 func NewUsersRepo(db *sql.DB) *UsersRepo {
@@ -228,7 +241,11 @@ func (r *UsersRepo) DeleteSessionByPublicID(ctx context.Context, userID int64, p
 	if err != nil {
 		return fmt.Errorf("deleting session: %w", err)
 	}
-	return checkRowsAffected(res)
+	if err := checkRowsAffected(res); err != nil {
+		return err
+	}
+	r.sessionsRevoked()
+	return nil
 }
 
 // DeleteOtherSessions revokes every session of the user except the one with keepToken and reports
@@ -239,6 +256,9 @@ func (r *UsersRepo) DeleteOtherSessions(ctx context.Context, userID int64, keepT
 		return 0, fmt.Errorf("deleting other sessions: %w", err)
 	}
 	n, err := res.RowsAffected()
+	if err == nil && n > 0 {
+		r.sessionsRevoked()
+	}
 	return int(n), err
 }
 
@@ -258,5 +278,9 @@ func (r *UsersRepo) DeleteSession(ctx context.Context, token string) error {
 	if err != nil {
 		return fmt.Errorf("deleting session: %w", err)
 	}
-	return checkRowsAffected(res)
+	if err := checkRowsAffected(res); err != nil {
+		return err
+	}
+	r.sessionsRevoked()
+	return nil
 }

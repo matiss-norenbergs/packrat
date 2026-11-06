@@ -167,6 +167,11 @@ failure (`fail`), and a deferred `release` gives it back otherwise (success, bad
 leaks. A login challenge works the same way: `Challenges.Lookup` counts a code attempt atomically,
 so at most five codes are ever checked per challenge, however many arrive at once.
 
+A WebSocket client carries the token of the session that opened it. `UsersRepo` calls a hook after
+any session delete; `Hub.RevalidateSessions` then re-checks every client's session (off the hub
+goroutine) and closes the ones that are gone. The same check runs on each client's ping tick, so a
+revocation made by another process (the `--disable-2fa` command) still takes effect within a minute.
+
 ### Two-factor auth (TOTP)
 
 Opt-in per account (`internal/twofactor`). TOTP is RFC 6238 via `github.com/pquerna/otp`

@@ -1989,6 +1989,11 @@ socket exists purely to push live deltas; there is no initial snapshot on connec
 fetches current state via REST first and then listens for updates. Ping every 54s, 10s write
 deadline; a slow/backed-up client is dropped rather than blocking broadcasts for everyone else.
 
+The connection is bound to the session that opened it (cookie, bearer or `?token=`) and is closed
+when that session goes away: on logout, revoking a session, "sign out other sessions" and a
+password change, and — as a safety net — on the next ping tick if the session no longer exists or
+has expired. Other sessions' connections are unaffected.
+
 Each message is `{ "type": "...", "payload": {...} }`. Eight event types are ever broadcast:
 
 **`progress`** — emitted repeatedly during an active download, throttled to roughly once/sec:
