@@ -260,6 +260,11 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		// Sign out every other session (web and desktop tokens); this one stays.
+		if _, err := usersRepo.DeleteOtherSessions(c.Request.Context(), userID, currentSession(c).Token); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.Status(http.StatusNoContent)
 	}
 }

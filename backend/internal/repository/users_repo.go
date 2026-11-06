@@ -243,10 +243,8 @@ func (r *UsersRepo) DeleteOtherSessions(ctx context.Context, userID int64, keepT
 }
 
 // UpdatePasswordHash overwrites the stored bcrypt hash for a user — used by
-// the change-password flow. Existing sessions are left untouched; a changed
-// password doesn't invalidate the session the request itself is using, and
-// this is a single-user app so there's no other-device threat model to
-// address here.
+// the change-password flow. It does not touch sessions; the handler signs
+// out the other ones with DeleteOtherSessions.
 func (r *UsersRepo) UpdatePasswordHash(ctx context.Context, userID int64, passwordHash string) error {
 	res, err := r.db.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, passwordHash, userID)
 	if err != nil {
