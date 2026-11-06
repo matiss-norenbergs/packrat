@@ -186,6 +186,10 @@ func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription
 		if id == "" || seen[id] {
 			continue
 		}
+		if !queue.IsHTTPURL(entry.URL) {
+			log.Printf("subscription %d: skipping entry %q: not an http(s) URL", sub.ID, id)
+			continue
+		}
 
 		var libraryItemID *int64
 		if !baseline {
@@ -242,8 +246,8 @@ func sourceID(entry downloader.PlaylistEntry) string {
 
 // enqueueSubscriptionDownload mirrors enqueueDownload's core
 // (api.downloads_handler) — the HTTP-only concerns it also handles
-// (URL-scheme validation, folder path-safety) don't apply here: entry.URL
-// always comes from yt-dlp itself, and Folder is left empty (resolves to
+// (folder path-safety) don't apply here: URL schemes are enforced by
+// Enqueue and by processEntries, and Folder is left empty (resolves to
 // the collection/media root, which is always safe).
 func enqueueSubscriptionDownload(ctx context.Context, deps CheckDeps, sub models.Subscription, entry downloader.PlaylistEntry) (int64, error) {
 	quality := "best"
@@ -366,6 +370,9 @@ func createGhostForEntry(ctx context.Context, deps CheckDeps, sub models.Subscri
 // fetchThumbnailForEntry mirrors fetchGhostThumbnail (api.ghost_handler) —
 // best-effort, failures are logged and otherwise ignored.
 func fetchThumbnailForEntry(ctx context.Context, deps CheckDeps, id int64, url string) {
+	if !queue.IsHTTPURL(url) {
+		return
+	}
 	tmpDir, err := os.MkdirTemp("", "subscription-thumb-*")
 	if err != nil {
 		log.Printf("subscription ghost item %d: creating scratch dir for thumbnail fetch failed: %v", id, err)

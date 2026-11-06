@@ -122,6 +122,11 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 			return
 		}
 
+		if req.OriginalURL != nil && *req.OriginalURL != "" && !isHTTPURL(*req.OriginalURL) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "originalUrl must be an http or https URL"})
+			return
+		}
+
 		absPath, err := pathsafe.ResolveUnderRoot(mediaRoot, req.Path)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid path: " + err.Error()})
