@@ -313,6 +313,9 @@ failure rather than a generic error.
 
 ## Data flow (single download, end to end)
 
+URL schemes are enforced in one place, `DownloadManager.Enqueue` (`queue.ErrInvalidURL`, mapped to
+`400`), and URLs are always passed to yt-dlp after `--`.
+
 1. `POST /downloads` validates the request, resolves the destination folder against `MEDIA_ROOT`
    via `pathsafe.ResolveUnderRoot`, inserts a `queued` row, and pushes the ID onto the queue
    manager's job channel.

@@ -937,7 +937,7 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   authentication** and **Password**. **Change password** opens a dialog (current, new, confirm; the
   new one needs 8+ characters and a matching confirmation, Enter submits, fields are cleared whenever
   the dialog closes, and a successful change closes it with a "Password changed" toast; the current
-  password must be right). 2FA is optional and off by default; accounts without it log in exactly as before. **Enable**
+  password must be right; changing it signs out your other devices and sessions). 2FA is optional and off by default; accounts without it log in exactly as before. **Enable**
   opens a 3-step dialog: (1) scan a QR code (drawn in the browser, always dark on a white tile) or type
   the key shown in groups of four (Copy button); (2) enter a code from the app to confirm; (3) save
   the 10 recovery codes — shown once, with Copy and Download, and the dialog can't be closed until
