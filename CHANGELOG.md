@@ -12,6 +12,9 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-06
+- **Thumbnail → Redownload from URL works on ghost items** — it used to fail with "item has no media file"; for a ghost it now fetches the image from the source URL and stores the small/medium thumbnails (no file is written next to the media) and clears any stale AI-enhancement backup. `502` if the fetch fails. Items with a file are unchanged. Backend only.
+
 ## 2026-11-04
 - **A ghost's thumbnail shows download progress** — while a download runs, its Library item shows a thin progress bar along the bottom edge of the thumbnail (grid, Folders view and list; nothing while the download is only queued or fetching metadata, a full bar while it post-processes), and it disappears when the download ends. Frontend only; new `DownloadProgressBar` and `useDownloadProgress` (mounted only for items with `activeDownloadId`).
 - **A downloading item is locked, and a retried ghost keeps its own text** — while an item has a queued or running download, its menu shows only Copy URL, Metadata → Compare and Delete (the other entries are now *hidden* instead of the redownload ones being disabled), every single-item route that changes it or its files answers `409`, and the bulk actions (assign tags, delete files, download file(s)/thumbnail(s), frame matching, and the multi-item set year / artist / NFO / bulk edit / renumber dialogs) skip such items and report it ("3 skipped, download in progress"; new `skippedDownloading` on the bulk responses, and `bulk-tags` now returns `200 {updated, skipped, skippedDownloading}` instead of `204`). A ghost a download only reuses (History retry, or one that existed before) now keeps its own title, uploader and description when the download finishes, so edits made on a kept ghost are no longer overwritten.

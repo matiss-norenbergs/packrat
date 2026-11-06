@@ -736,7 +736,9 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
 ### Thumbnails
 
 - **`POST /api/library/:id/thumbnail/redownload`** — no body. Re-fetches the thumbnail from
-  `originalUrl`, overwriting the current one. `400` no source URL, `502` fetch failure.
+  `originalUrl`, overwriting the current one. Ghost items (no file) are accepted: only the resized
+  `thumbnailSmallPath`/`thumbnailMediumPath` tiers are stored (plain `thumbnail` stays null). Responds
+  with the updated item. `400` no source URL, `502` fetch failure.
 - **`POST /api/library/:id/thumbnail/quick-grab`** — no body. Extracts one video frame at a random
   timestamp within the configured pick range (see `thumbnailFrameRangeLow`/`High` below; default
   5%-100% of duration, skipping the likely-blank intro) and sets it immediately. `502` if extraction
