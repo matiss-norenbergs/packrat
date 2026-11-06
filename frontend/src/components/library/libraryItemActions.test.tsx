@@ -110,6 +110,23 @@ describe("library item actions", () => {
     expect(thumb).toContain("Redownload from URL")
   })
 
+  it("hides Redownload from URL and Delete in the Thumbnail submenu for an image, but not for a video", () => {
+    const thumbOf = (item: LibraryItem) =>
+      (tree(actions(item)) as [string, unknown][]).find((e) => Array.isArray(e) && e[0] === "Thumbnail")![1] as string[]
+    const image = thumbOf(make({ mediaType: "image", filename: "a.png" }))
+    expect(image).not.toContain("Redownload from URL")
+    expect(image).not.toContain("Delete (destructive)")
+    expect(image).toContain("Save in Thumbnail Gallery")
+    expect(image).toContain("View Gallery…")
+    expect(image[0]).not.toBe("---")
+    expect(image.at(-1)).not.toBe("---")
+    image.forEach((e, i) => e === "---" && expect(image[i - 1]).not.toBe("---"))
+
+    const video = thumbOf(make())
+    expect(video).toContain("Redownload from URL")
+    expect(video).toContain("Delete (destructive)")
+  })
+
   it("converts to context menu items with the same keys, submenus, separators and flags", () => {
     const defs = toContextMenuItems(actions(make()))
     const sub = defs.find((d) => d.key === "metadata")
