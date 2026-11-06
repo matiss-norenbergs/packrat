@@ -24,25 +24,36 @@ import (
 // next to the script switch behavior mid-test: "fail" makes downloads exit 1,
 // "slow" makes them hang until killed, "nopath" makes them exit 0 without writing
 // a file or printing the path, "exitafter" makes them write the file, print the
-// path and then exit 1 (a failed thumbnail postprocessing step).
+// path and then exit 1 (a failed thumbnail postprocessing step). The video id is
+// the "vid=" query value of the URL (default "vid1") and ends up in the written
+// file's content ("data:<id>", plain "data" without one). Like the real yt-dlp, a download whose target
+// already exists is skipped (unless --force-overwrites): it prints "has already
+// been downloaded" and the path, and writes nothing.
 const fakeYtDlp = `#!/bin/sh
 dir=$(dirname "$0")
-url=""; meta=""; prev=""; out=""
+url=""; meta=""; prev=""; out=""; force=""
 for a in "$@"; do
   [ "$a" = "--dump-single-json" ] && meta=1
+  [ "$a" = "--force-overwrites" ] && force=1
   [ "$prev" = "-o" ] && out="$a"
   prev="$a"; url="$a"
 done
+vid=$(echo "$url" | sed -n 's/.*[?&]vid=\([^&]*\).*/\1/p')
+id=${vid:-vid1}
 case "$url" in *badmeta*) echo "ERROR: unsupported URL" >&2; exit 1;; esac
 if [ -n "$meta" ]; then
-  echo '{"id":"vid1","title":"Fake Title","uploader":"Up","duration":12,"thumbnail":"","description":"desc"}'
+  echo '{"id":"'"$id"'","title":"Fake Title","uploader":"Up","duration":12,"thumbnail":"","description":"desc"}'
   exit 0
 fi
 [ -f "$dir/slow" ] && exec sleep 30
 if [ -f "$dir/fail" ]; then echo "boom" >&2; exit 1; fi
 if [ -f "$dir/nopath" ]; then exit 0; fi
-path=$(echo "$out" | sed 's/%(ext)s/mp4/')
-echo data > "$path"
+path=$(echo "$out" | sed -e 's/%(ext)s/mp4/' -e 's/%(title)s/Fake_Title/')
+if [ -f "$path" ] && [ -z "$force" ]; then
+  echo "[download] $path has already been downloaded"
+else
+  echo "data${vid:+:$vid}" > "$path"
+fi
 echo "PACKRAT-FILEPATH:$path"
 if [ -f "$dir/exitafter" ]; then echo "thumbnail conversion failed" >&2; exit 1; fi
 `
