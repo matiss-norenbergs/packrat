@@ -70,7 +70,8 @@ since Gin matches registered routes before falling back to serving `index.html`.
 `200 {"version": "0.18.2", "latestVersion": "0.18.2" | null, "updateAvailable": false}`. `version` is
 this build's release version (`"dev"` for a build that wasn't made by the release pipeline).
 `latestVersion` is the newest GitHub release, looked up best effort — `null` when the lookup fails —
-and `updateAvailable` is `version != latestVersion`, always `false` for a `dev` build. The desktop app
+through a process-wide cache (one GitHub call at most per hour, retried after 5 minutes following a
+failure, concurrent requests share one call), and `updateAvailable` is `version != latestVersion`, always `false` for a `dev` build. The desktop app
 reads it to compare its own version with the server's (see `docs/FEATURES.md` → Desktop app).
 
 ## Auth

@@ -20,11 +20,20 @@ type githubRelease struct {
 	TagName string `json:"tag_name"`
 }
 
-// Latest queries GitHub's releases API for Repo's latest published release
+// Latest returns the latest published release version (see fetchLatest), cached for
+// LatestCacheTTL (LatestFailureTTL after a failure) with concurrent callers sharing one upstream
+// request, so the public /api/version route can't be used to hammer the GitHub API.
+func Latest(ctx context.Context) (string, error) {
+	return defaultCache.Get(ctx)
+}
+
+var defaultCache = NewCache(fetchLatest, nil)
+
+// fetchLatest queries GitHub's releases API for Repo's latest published release
 // tag (e.g. "v0.2.0"), stripped of its leading "v". Any failure (network,
 // no releases yet, bad JSON) is returned as an error — callers should treat
 // that as "unknown," not fatal, exactly like the yt-dlp PyPI lookup.
-func Latest(ctx context.Context) (string, error) {
+func fetchLatest(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, latestCheckTimeout)
 	defer cancel()
 
