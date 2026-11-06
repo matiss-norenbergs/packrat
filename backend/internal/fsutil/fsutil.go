@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // ErrDestinationExists is returned by RenamePair when the target media or
@@ -92,4 +94,28 @@ func RenamePair(oldMedia, newMedia, oldThumb, newThumb string) error {
 		return fmt.Errorf("renaming thumbnail: %w", err)
 	}
 	return nil
+}
+
+// maxUniqueAttempts bounds UniquePath's counter search.
+const maxUniqueAttempts = 1000
+
+// UniquePath returns path if nothing exists there, otherwise the first free
+// "name (2).ext", "name (3).ext", ... (counter before the extension). After
+// maxUniqueAttempts candidates it falls back to a time-based suffix so a
+// caller never has to handle an error and never overwrites anything.
+// Check-then-use is inherently racy; callers are the single-writer queue
+// workers, which is acceptable.
+func UniquePath(path string) string {
+	if _, err := os.Lstat(path); os.IsNotExist(err) {
+		return path
+	}
+	ext := filepath.Ext(path)
+	stem := strings.TrimSuffix(path, ext)
+	for i := 2; i <= maxUniqueAttempts; i++ {
+		candidate := fmt.Sprintf("%s (%d)%s", stem, i, ext)
+		if _, err := os.Lstat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+	return fmt.Sprintf("%s (%d)%s", stem, time.Now().UnixNano(), ext)
 }

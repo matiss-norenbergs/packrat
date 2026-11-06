@@ -446,17 +446,22 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 			// print hook, which only fires once that move has actually
 			// happened — trust that signal (and confirm the file is really
 			// there) instead of discarding a good download.
-			if result.FinalPath == "" {
-				m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
-				return
-			}
-			if _, statErr := os.Stat(result.FinalPath); statErr != nil {
+			if !outputFileExists(result.FinalPath) {
 				m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
 				return
 			}
 			log.Printf("queue: download %d: yt-dlp exited with code %d but %s was written successfully — continuing, likely a postprocessing failure (e.g. thumbnail conversion)", id, result.ExitCode, result.FinalPath)
 			cleanupOrphanedThumbnailArtifacts(result.FinalPath)
 		}
+	}
+
+	// A run that ends without a stored output file is a failure whatever the
+	// exit code: exit 0 with no after_move path (e.g. a playlist URL that
+	// resolved to zero entries) must not become a "completed" item with an
+	// empty path. A ghost made for this run stays as an ordinary ghost.
+	if !outputFileExists(result.FinalPath) {
+		m.finishError(parentCtx, runCtx, id, d.URL, "yt-dlp finished without reporting an output file", result.StdoutTail, result.StderrTail)
+		return
 	}
 
 	if err := m.downloadsRepo.SetCommand(parentCtx, id, result.Command); err != nil {
@@ -496,19 +501,27 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		return
 	}
 
-	if err := m.downloadsRepo.MarkCompleted(parentCtx, id, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
-		log.Printf("queue: mark completed failed for %d: %v", id, err)
-	}
-	if _, err := m.historyRepo.Create(parentCtx, &id, d.URL, "completed", nil); err != nil {
-		log.Printf("queue: recording history for %d failed: %v", id, err)
-	}
-
+	// The library row comes first: the download is only recorded as completed
+	// once the file has an item to belong to.
 	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, finalDuration, sizeBytes)
 	libItem.GenerateNFO = d.GenerateNFO
 	libID, ghost, err := m.fillOrCreateLibraryItem(parentCtx, id, libItem)
 	if err != nil {
 		log.Printf("queue: creating library item failed for %d: %v", id, err)
+		// Remove what this run wrote so a retry doesn't hit "already
+		// downloaded". An image's "sidecar" path could be another item's jpg.
+		os.Remove(result.FinalPath)
+		if d.DownloadType != "image" {
+			os.Remove(thumbnailPathFor(result.FinalPath))
+		}
+		m.finishError(parentCtx, runCtx, id, d.URL, "creating library item: "+err.Error(), result.StdoutTail, result.StderrTail)
 		return
+	}
+	if err := m.downloadsRepo.MarkCompleted(parentCtx, id, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
+		log.Printf("queue: mark completed failed for %d: %v", id, err)
+	}
+	if _, err := m.historyRepo.Create(parentCtx, &id, d.URL, "completed", nil); err != nil {
+		log.Printf("queue: recording history for %d failed: %v", id, err)
 	}
 
 	// Best-effort — a failed derivative generation shouldn't fail the whole
@@ -643,6 +656,11 @@ func (m *DownloadManager) runImageDownload(ctx context.Context, id int64, d *mod
 			os.Remove(tmp) // best-effort cleanup of any partial output
 		} else {
 			target := strings.TrimSuffix(finalPath, filepath.Ext(finalPath)) + targetExt
+			// Never convert over a file that isn't ours (e.g. an existing
+			// Cat.jpg next to the freshly fetched Cat.png).
+			if target != finalPath {
+				target = fsutil.UniquePath(target)
+			}
 			if err := os.Remove(finalPath); err != nil {
 				log.Printf("queue: removing pre-conversion image %d failed: %v", id, err)
 			}
@@ -901,30 +919,29 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 	}
 	newFilename := fsutil.SanitizeFilename(base + newExt)
 	newPath := filepath.Join(destDir, newFilename)
+	// Replacing the item's own current file is the point of a same-name
+	// redownload; anything else already sitting at newPath belongs to
+	// someone else and must survive, so take a numbered name instead.
+	if _, statErr := os.Lstat(newPath); statErr == nil {
+		ownPath := ""
+		if target.Path != "" {
+			ownPath = filepath.Join(m.mediaRoot, filepath.FromSlash(target.Path))
+		}
+		if filepath.Clean(newPath) != filepath.Clean(ownPath) {
+			newPath = fsutil.UniquePath(newPath)
+			newFilename = filepath.Base(newPath)
+		}
+	}
 	tmpThumbPath := thumbnailPathFor(result.FinalPath)
+	oldAbsPath := ""
+	if target.Path != "" {
+		oldAbsPath = filepath.Join(m.mediaRoot, filepath.FromSlash(target.Path))
+	}
+	samePath := oldAbsPath != "" && filepath.Clean(oldAbsPath) == filepath.Clean(newPath)
 
 	if err := os.Rename(result.FinalPath, newPath); err != nil {
 		fail("replacing file: " + err.Error())
 		return
-	}
-
-	// Extension changed (source now merges to a different container) —
-	// the old file is now orphaned at its old name; best-effort cleanup,
-	// same convention as the thumbnail-derivative error handling below.
-	// target.Path == "" means there was no prior file to begin with (the
-	// ghost-fill-in case) — nothing to clean up.
-	if newFilename != target.Filename && target.Path != "" {
-		oldAbsPath := filepath.Join(m.mediaRoot, filepath.FromSlash(target.Path))
-		if err := os.Remove(oldAbsPath); err != nil && !os.IsNotExist(err) {
-			log.Printf("queue: removing stale redownloaded file %s failed: %v", oldAbsPath, err)
-		}
-	}
-
-	if err := m.downloadsRepo.MarkCompleted(parentCtx, downloadID, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
-		log.Printf("queue: mark completed failed for %d: %v", downloadID, err)
-	}
-	if _, err := m.historyRepo.Create(parentCtx, &downloadID, d.URL, "completed", nil); err != nil {
-		log.Printf("queue: recording history for %d failed: %v", downloadID, err)
 	}
 
 	overwrite := make(map[string]bool, len(d.OverwriteFields))
@@ -966,6 +983,34 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 	}
 	if err := m.libraryRepo.ApplyRedownload(parentCtx, targetID, params); err != nil {
 		log.Printf("queue: applying redownload for library item %d failed: %v", targetID, err)
+		if samePath {
+			// The old content was already replaced in place; nothing to restore.
+			fail("updating library item after replacing the file: " + err.Error())
+		} else {
+			// The old file is still intact and the row still points at it:
+			// drop the new one.
+			os.Remove(newPath)
+			fail("updating library item: " + err.Error())
+		}
+		return
+	}
+
+	// Extension or name changed (source now merges to a different container,
+	// or a clash got a numbered suffix) — the old file is orphaned at its old
+	// name; best-effort cleanup. oldAbsPath == "" means there was no prior
+	// file (the ghost-fill-in case). Only now, after the row points at the
+	// new file.
+	if newFilename != target.Filename && oldAbsPath != "" && !samePath {
+		if err := os.Remove(oldAbsPath); err != nil && !os.IsNotExist(err) {
+			log.Printf("queue: removing stale redownloaded file %s failed: %v", oldAbsPath, err)
+		}
+	}
+
+	if err := m.downloadsRepo.MarkCompleted(parentCtx, downloadID, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
+		log.Printf("queue: mark completed failed for %d: %v", downloadID, err)
+	}
+	if _, err := m.historyRepo.Create(parentCtx, &downloadID, d.URL, "completed", nil); err != nil {
+		log.Printf("queue: recording history for %d failed: %v", downloadID, err)
 	}
 
 	// Thumbnail: swap + regenerate derivative tiers if explicitly requested,
@@ -1336,31 +1381,36 @@ func thumbnailPathFor(finalPath string) string {
 	return base + ".jpg"
 }
 
-// cleanupOrphanedThumbnailArtifacts removes leftover sibling files next to
-// finalPath that aren't the video itself — specifically the original-format
-// thumbnail (e.g. .avif/.webp) yt-dlp's --write-thumbnail step downloaded
-// but --convert-thumbnails then failed to turn into the .jpg Packrat
-// actually uses (see the exit-code leniency in runOne). Without this, that
-// file just sits in the media folder forever: nothing references it, and
-// it's in a completely different location from where a later manual
-// "grab thumbnail" writes (imagesRoot, not next to the video), so it would
-// never get cleaned up or reused on its own. Best-effort — only called from
-// the already-non-fatal non-zero-exit path, and a failure here doesn't
-// affect the download's own success.
-func cleanupOrphanedThumbnailArtifacts(finalPath string) {
-	dir := filepath.Dir(finalPath)
-	base := strings.TrimSuffix(filepath.Base(finalPath), filepath.Ext(finalPath))
-	matches, err := filepath.Glob(filepath.Join(dir, base+".*"))
-	if err != nil {
-		log.Printf("queue: globbing for orphaned thumbnail artifacts of %s failed: %v", finalPath, err)
-		return
+// orphanThumbnailExts are the original-format thumbnail extensions yt-dlp's
+// --write-thumbnail can leave behind when --convert-thumbnails fails. ".jpg"
+// is deliberately absent: that is the wanted thumbnail.
+var orphanThumbnailExts = []string{".webp", ".avif", ".png", ".jpeg", ".gif", ".bmp", ".heic"}
+
+// outputFileExists reports whether yt-dlp's reported output path is a real file.
+func outputFileExists(path string) bool {
+	if path == "" {
+		return false
 	}
-	for _, match := range matches {
-		if match == finalPath || strings.HasSuffix(match, ".jpg") {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// cleanupOrphanedThumbnailArtifacts removes the original-format thumbnail
+// (e.g. .avif/.webp) yt-dlp's --write-thumbnail step downloaded but
+// --convert-thumbnails then failed to turn into the .jpg Packrat actually
+// uses (see the exit-code leniency in runOne). Only the known artifacts at
+// exactly base+ext are removed — never a glob, so sibling files that merely
+// share a prefix (other items' media, .nfo, subtitles, "Name [Live]" names)
+// are never touched. Best-effort.
+func cleanupOrphanedThumbnailArtifacts(finalPath string) {
+	base := strings.TrimSuffix(finalPath, filepath.Ext(finalPath))
+	for _, ext := range orphanThumbnailExts {
+		p := base + ext
+		if p == finalPath {
 			continue
 		}
-		if err := os.Remove(match); err != nil {
-			log.Printf("queue: removing orphaned thumbnail artifact %s failed: %v", match, err)
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			log.Printf("queue: removing orphaned thumbnail artifact %s failed: %v", p, err)
 		}
 	}
 }

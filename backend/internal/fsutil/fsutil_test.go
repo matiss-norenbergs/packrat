@@ -2,6 +2,7 @@ package fsutil
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -129,5 +130,53 @@ func TestRenamePair_RejectsThumbnailDestinationCollision(t *testing.T) {
 	}
 	if b, err := os.ReadFile(newThumb); err != nil || string(b) != "already here" {
 		t.Fatalf("expected existing thumbnail destination left untouched, got %v %q", err, b)
+	}
+}
+
+func TestUniquePath(t *testing.T) {
+	dir := t.TempDir()
+	touch := func(name string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := filepath.Join(dir, "Name.mp4")
+	if got := UniquePath(p); got != p {
+		t.Fatalf("free path changed: %q", got)
+	}
+	touch("Name.mp4")
+	if got, want := UniquePath(p), filepath.Join(dir, "Name (2).mp4"); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	touch("Name (2).mp4")
+	touch("Name (3).mp4")
+	if got, want := UniquePath(p), filepath.Join(dir, "Name (4).mp4"); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	// No extension: counter goes at the end.
+	touch("README")
+	if got, want := UniquePath(filepath.Join(dir, "README")), filepath.Join(dir, "README (2)"); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	// Dots in the stem stay in the stem.
+	touch("a.b.mkv")
+	if got, want := UniquePath(filepath.Join(dir, "a.b.mkv")), filepath.Join(dir, "a.b (2).mkv"); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestUniquePathBounded(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "f.txt")
+	os.WriteFile(p, nil, 0o644)
+	for i := 2; i <= maxUniqueAttempts; i++ {
+		os.WriteFile(filepath.Join(dir, fmt.Sprintf("f (%d).txt", i)), nil, 0o644)
+	}
+	got := UniquePath(p)
+	if _, err := os.Lstat(got); !os.IsNotExist(err) {
+		t.Fatalf("fallback path %q is not free (err=%v)", got, err)
+	}
+	if filepath.Ext(got) != ".txt" {
+		t.Fatalf("fallback lost extension: %q", got)
 	}
 }

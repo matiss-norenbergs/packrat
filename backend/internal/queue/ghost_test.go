@@ -22,7 +22,9 @@ import (
 // metadata (or fails for a URL containing "badmeta"), a download writes a tiny
 // file at the -o template and prints the PACKRAT-FILEPATH line. Marker files
 // next to the script switch behavior mid-test: "fail" makes downloads exit 1,
-// "slow" makes them hang until killed.
+// "slow" makes them hang until killed, "nopath" makes them exit 0 without writing
+// a file or printing the path, "exitafter" makes them write the file, print the
+// path and then exit 1 (a failed thumbnail postprocessing step).
 const fakeYtDlp = `#!/bin/sh
 dir=$(dirname "$0")
 url=""; meta=""; prev=""; out=""
@@ -38,9 +40,11 @@ if [ -n "$meta" ]; then
 fi
 [ -f "$dir/slow" ] && exec sleep 30
 if [ -f "$dir/fail" ]; then echo "boom" >&2; exit 1; fi
+if [ -f "$dir/nopath" ]; then exit 0; fi
 path=$(echo "$out" | sed 's/%(ext)s/mp4/')
 echo data > "$path"
 echo "PACKRAT-FILEPATH:$path"
+if [ -f "$dir/exitafter" ]; then echo "thumbnail conversion failed" >&2; exit 1; fi
 `
 
 type recordingBroadcaster struct {
