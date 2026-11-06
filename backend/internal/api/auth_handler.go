@@ -109,6 +109,16 @@ func AuthStatus(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 	}
 }
 
+// dummyPasswordHash is a throwaway hash at the real cost, used to equalize
+// login work for unknown usernames.
+var dummyPasswordHash = func() []byte {
+	h, err := bcrypt.GenerateFromPassword([]byte("packrat-dummy-password"), bcrypt.DefaultCost)
+	if err != nil {
+		panic(err)
+	}
+	return h
+}()
+
 // AuthSetup creates the single admin account. Only allowed while no user
 // exists yet — once an account exists, this always 409s (there is no
 // route to add a second user, by design).
@@ -171,6 +181,8 @@ func AuthLogin(deps *AuthDeps) gin.HandlerFunc {
 
 		user, err := usersRepo.GetByUsername(c.Request.Context(), req.Username)
 		if errors.Is(err, repository.ErrNotFound) {
+			// Same work as a wrong password so both take similar time.
+			_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(req.Password))
 			deps.fail(c, ratelimit.KindPassword, "password")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 			return
