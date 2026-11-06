@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 
@@ -373,7 +374,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		// overwritten in place at the same path (choose-from-video,
 		// redownload, quick-grab), so a browser that trusted the response
 		// heuristically fresh would keep showing the old image after reload.
-		r.Group("/media-files", RequireAuth(deps.UsersRepo), noCacheHeaders).StaticFS("/", http.Dir(deps.MediaRoot))
+		r.Group("/media-files", RequireAuth(deps.UsersRepo), noCacheHeaders).StaticFS("/", noDirListingFS{http.Dir(deps.MediaRoot)})
 	}
 
 	if deps.ImagesRoot != "" {
@@ -382,7 +383,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		// land at a reused filename (e.g. collections/<id>/cover.jpg is
 		// always overwritten in place), so a browser that cached the old
 		// bytes as heuristically fresh would keep showing them after reload.
-		r.Group("/local-images", RequireAuth(deps.UsersRepo), noCacheHeaders).StaticFS("/", http.Dir(deps.ImagesRoot))
+		r.Group("/local-images", RequireAuth(deps.UsersRepo), noCacheHeaders).StaticFS("/", noDirListingFS{http.Dir(deps.ImagesRoot)})
 	}
 
 	if deps.WSHandler != nil {
@@ -394,4 +395,21 @@ func SetupRouter(deps Deps) *gin.Engine {
 	}
 
 	return r
+}
+
+// noDirListingFS serves files only: opening a directory reports not-found,
+// so the static routes never produce an index page.
+type noDirListingFS struct{ fs http.FileSystem }
+
+func (n noDirListingFS) Open(name string) (http.File, error) {
+	f, err := n.fs.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil || info.IsDir() {
+		f.Close()
+		return nil, os.ErrNotExist
+	}
+	return f, nil
 }
