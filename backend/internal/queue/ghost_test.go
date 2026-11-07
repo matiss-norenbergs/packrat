@@ -3,6 +3,9 @@ package queue
 import (
 	"context"
 	"database/sql"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -38,11 +41,12 @@ for a in "$@"; do
   [ "$prev" = "-o" ] && out="$a"
   prev="$a"; url="$a"
 done
+thumb=""; [ -f "$dir/thumburl" ] && thumb=$(cat "$dir/thumburl")
 vid=$(echo "$url" | sed -n 's/.*[?&]vid=\([^&]*\).*/\1/p')
 id=${vid:-vid1}
 case "$url" in *badmeta*) echo "ERROR: unsupported URL" >&2; exit 1;; esac
 if [ -n "$meta" ]; then
-  echo '{"id":"'"$id"'","title":"Fake Title","uploader":"Up","duration":12,"thumbnail":"","description":"desc"}'
+  echo '{"id":"'"$id"'","title":"Fake Title","uploader":"Up","duration":12,"thumbnail":"'"$thumb"'","description":"desc"}'
   exit 0
 fi
 if [ -f "$dir/partial" ]; then
@@ -461,3 +465,43 @@ func (e *ghostEnv) makeGhost(title string) int64 {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+// A thumbnail URL from remote metadata that points at a private address is
+// refused without touching that address, and the download still completes.
+func TestRefusedPrivateThumbnailDoesNotFailDownload(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Type", "image/png")
+		w.Write([]byte("png"))
+	}))
+	defer srv.Close()
+
+	e := newGhostEnv(t)
+	if err := os.WriteFile(filepath.Join(e.binDir, "thumburl"), []byte(srv.URL+"/t.png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	id := e.newDownload(models.Download{})
+	e.mgr.runOne(context.Background(), id)
+
+	if got := hits.Load(); got != 0 {
+		t.Fatalf("the loopback thumbnail server was contacted %d time(s)", got)
+	}
+	if e.download(id).Status != models.StatusCompleted {
+		t.Fatalf("download status = %s, want completed", e.download(id).Status)
+	}
+	items := e.items()
+	if len(items) != 1 || items[0].Status != "completed" {
+		t.Fatalf("library items = %+v", items)
+	}
+}
+
+func TestFetchRemoteThumbnailErrorHasNoURL(t *testing.T) {
+	_, err := fetchRemoteThumbnail(context.Background(), "http://127.0.0.1:9/secret?token=abc", t.TempDir(), "")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if strings.Contains(err.Error(), "token") || strings.Contains(err.Error(), "127.0.0.1") {
+		t.Fatalf("error leaks the URL: %v", err)
+	}
+}

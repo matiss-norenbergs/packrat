@@ -316,8 +316,11 @@ routing as the `downloadType=image` fetch above. Backs the New Download dialog's
 `<img>` for **both** an image-type URL and a regular video/audio URL's yt-dlp-reported thumbnail: a
 plain client-side `<img src>` pointing at the raw external URL can't honor a backend-configured
 proxy, so both preview paths go through this endpoint instead of loading the external image
-directly. `422` if the fetch fails or the Content-Type isn't a recognized image type; `200` with the
-image bytes streamed through (`Content-Type`/size passed along) on success.
+directly. `422` if the fetch fails, the Content-Type isn't a recognized image type, or the image is
+larger than 25 MB (`{"error": "fetching image: image larger than the 25 MB limit"}` when the
+`Content-Length` says so; a body that outgrows the limit mid-stream is cut off). Unlike thumbnail
+fetches taken from page metadata, the URL here is the admin's, so private/LAN addresses are allowed.
+`200` with the image bytes streamed through (`Content-Type`/size passed along) on success.
 
 ### `POST /api/downloads/playlist`
 

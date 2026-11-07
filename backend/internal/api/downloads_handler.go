@@ -99,7 +99,7 @@ func PreviewImage(settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 
 		proxy, _ := settingsRepo.Get(c.Request.Context(), models.SettingYtdlpProxy)
 
-		body, contentType, size, cancel, err := imagefetch.Open(c.Request.Context(), target, proxy)
+		body, contentType, size, cancel, err := imagefetch.Open(c.Request.Context(), target, proxy, imagefetch.PreviewPolicy)
 		if err != nil {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 			return

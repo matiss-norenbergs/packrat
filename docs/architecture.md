@@ -381,6 +381,32 @@ never leaks outside whatever network path the real download would use. `GET /api
 (a short-timeout `HEAD` through the configured transport) backs the sidebar's live reachability dot,
 independent of any actual download or preview happening.
 
+**Untrusted URLs and size limits (`imagefetch.Policy`).** Every `Fetch`/`Open` takes a `Policy`:
+
+- *Where private addresses are blocked.* Only for URLs a remote party chose: the thumbnail URL from
+  yt-dlp's metadata for a download's ghost item (`queue.fetchRemoteThumbnail`, `ThumbnailPolicy`).
+  The page being downloaded controls that value, so without the block it is an SSRF primitive
+  (`169.254.169.254`, `127.0.0.1:<port>`, a LAN admin UI). Admin-typed URLs are **not** blocked — the
+  image-type download (`DownloadPolicy`) and the New Download preview (`PreviewPolicy`; the URL is the
+  admin's typed image URL or a thumbnail yt-dlp reported for it) — because fetching from a LAN host is a
+  legitimate thing for an admin to ask for and those requests are chosen by the admin, not the page.
+  Other thumbnail fetches (`ghostthumb` callers, subscriptions, import) call yt-dlp as a subprocess and
+  are out of scope here.
+- *Connect-time check.* The transport's `net.Dialer.Control` hook sees the resolved IP being dialed and
+  refuses loopback, unspecified, link-local (incl. the cloud-metadata address), private, CGNAT
+  (100.64/10), multicast, broadcast/reserved and `0.0.0.0/8` ranges, after unmapping IPv4-mapped IPv6
+  (and NAT64 `64:ff9b::/96`) forms. One rule therefore covers DNS rebinding and every redirect hop.
+  Redirects are capped at 10 and re-checked for an http/https scheme (all policies). Untrusted direct
+  fetches do not use `HTTP_PROXY`-style environment proxies.
+- *Proxy mode.* With `ytdlp_proxy` set the dialer only ever connects to the proxy, which may legitimately
+  be on the LAN and is never blocked. Instead the request URL and each redirect target get a
+  pre-flight check: `localhost`, `*.localhost` and literal IPs in the blocked ranges are refused.
+  Name-based private targets (a public hostname that resolves to a private IP) are the proxy's job.
+- *Size limits.* `MaxThumbnailBytes` (25 MB: thumbnails and previews) and `MaxImageDownloadBytes`
+  (200 MB: image downloads). A known `Content-Length` over the limit is rejected before reading; otherwise
+  the body is counted while streaming and fails with "image larger than the N MB limit" (`Fetch` removes
+  its temp file; `Open`'s body returns that error so a stream can't outlive the preview timeout window).
+
 ## Persistence rules (SQLite)
 
 - **Every foreign-key child column needs an index.** SQLite doesn't create one, so deleting a parent

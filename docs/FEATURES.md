@@ -166,7 +166,8 @@ The live download queue.
     with privacy on) its title is shown hashed. Every preview image request — the Image type's own preview and
     the yt-dlp-reported video/audio thumbnail alike — is proxied through the backend rather than
     fetched directly by the browser, so it honors a configured proxy (see Settings → yt-dlp below)
-    the same way the real download does.
+    the same way the real download does. Images over 25 MB (200 MB for an Image-type download) are
+    refused with "image larger than the N MB limit".
   - **Playlists**: pasting a playlist URL offers a mode — download just the one video ("current"),
     the entire playlist, a numbered range, or the first N entries. The server re-resolves the
     playlist itself at submit time rather than trusting a client-built entry list.
@@ -400,6 +401,9 @@ type-appropriate placeholder icon and a "Ghost item" badge instead of a thumbnai
 actions menu hides file-dependent actions (Move, Trim, NFO, frame-grab thumbnails, Delete file)
 since there's nothing to act on yet. Frame-grab thumbnail actions are likewise hidden on an audio
 item, for the same file-doesn't-have-what's-needed reason — see the Thumbnail submenu above.
+A thumbnail URL that a downloaded page reports is only fetched from public addresses: one pointing at
+a private, loopback or link-local address (or redirecting to one) is skipped, the ghost simply has no
+thumbnail, and the download itself is unaffected.
 
 - **Add item** (Library toolbar) creates one directly: paste a source URL to prefill the title from
   a live preview and optionally fetch the thumbnail up front, or just type a title with no URL for
