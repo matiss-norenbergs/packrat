@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/repository"
 )
 
@@ -251,13 +253,26 @@ func findThumbnailFile(destDir, baseFilename string) string {
 	return ""
 }
 
-const metadataEmbedTimeout = 5 * time.Minute
+// MetadataEmbedTimeout bounds one EmbedMetadata ffmpeg run. It doubles as the
+// minimum age before a leftover temp file counts as abandoned (see
+// CleanStaleEmbedTemps).
+const MetadataEmbedTimeout = 5 * time.Minute
 
-// EmbedMetadata rewrites mediaPath in place — via a temp file in the same
-// directory plus a rename over the original, so a failed remux never
-// leaves the original file touched — with title/artist/year written into
-// the container's own metadata tags. Uses -c copy so the audio/video
-// stream itself is never re-encoded (fast, lossless); only the
+// ErrEmbedSkipped is returned by EmbedMetadataGuarded when the guard vetoed
+// the final rename (the item was deleted, moved or its file replaced while
+// ffmpeg ran). The temp file has been removed and the media file untouched.
+var ErrEmbedSkipped = errors.New("metadata embed skipped: media file changed during remux")
+
+// EmbedMetadata is EmbedMetadataGuarded without a guard.
+func (s *YtDlpService) EmbedMetadata(ctx context.Context, mediaPath, title string, artist *string, year, sequenceNumber, seasonNumber *int) error {
+	return s.EmbedMetadataGuarded(ctx, mediaPath, title, artist, year, sequenceNumber, seasonNumber, nil)
+}
+
+// EmbedMetadataGuarded rewrites mediaPath in place — via a uniquely named temp
+// file in the same directory plus a rename over the original, so a failed
+// remux never leaves the original file touched — with title/artist/year
+// written into the container's own metadata tags. Uses -c copy so the
+// audio/video stream itself is never re-encoded (fast, lossless); only the
 // container-level tags change. artist/year/sequenceNumber/seasonNumber may
 // be nil to simply not pass that tag — ffmpeg's default metadata passthrough
 // (-map_metadata 0, implicit with -c copy) leaves any existing tag as-is
@@ -266,12 +281,31 @@ const metadataEmbedTimeout = 5 * time.Minute
 // player-recognized atom on MP4 (tvsn); on the Matroska/WebM containers
 // Packrat mostly produces it's a free-form convention, same as sequence
 // number's "track" tag.
-func (s *YtDlpService) EmbedMetadata(ctx context.Context, mediaPath, title string, artist *string, year, sequenceNumber, seasonNumber *int) error {
-	ctx, cancel := context.WithTimeout(ctx, metadataEmbedTimeout)
+//
+// The caller is expected to hold the library item's lock for the whole call.
+// If beforeReplace is non-nil it runs immediately before the final rename;
+// returning false discards the temp file and yields ErrEmbedSkipped, so a
+// file that was moved, deleted or replaced mid-remux is never resurrected.
+func (s *YtDlpService) EmbedMetadataGuarded(ctx context.Context, mediaPath, title string, artist *string, year, sequenceNumber, seasonNumber *int, beforeReplace func() bool) error {
+	ctx, cancel := context.WithTimeout(ctx, MetadataEmbedTimeout)
 	defer cancel()
 
 	ext := filepath.Ext(mediaPath)
-	tmpPath := strings.TrimSuffix(mediaPath, ext) + ".packrat-tmp" + ext
+	origInfo, err := os.Stat(mediaPath)
+	if err != nil {
+		return fmt.Errorf("embed metadata: %w", err)
+	}
+	// Unique name, same directory (so the rename stays on one filesystem and
+	// atomic), original extension kept so ffmpeg picks the right muxer.
+	tmp, err := os.CreateTemp(filepath.Dir(mediaPath), fsutil.EmbedTmpPrefix+"*"+ext)
+	if err != nil {
+		return fmt.Errorf("creating metadata temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	tmp.Close()
+	// CreateTemp makes the file 0600; keep the original's permissions so the
+	// replaced file stays readable to e.g. a Jellyfin container.
+	_ = os.Chmod(tmpPath, origInfo.Mode().Perm())
 
 	args := []string{"-y", "-i", mediaPath, "-map", "0", "-c", "copy", "-metadata", "title=" + title}
 	if artist != nil {
@@ -295,6 +329,10 @@ func (s *YtDlpService) EmbedMetadata(ctx context.Context, mediaPath, title strin
 		return fmt.Errorf("ffmpeg metadata embed failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
+	if beforeReplace != nil && !beforeReplace() {
+		os.Remove(tmpPath)
+		return ErrEmbedSkipped
+	}
 	if err := os.Rename(tmpPath, mediaPath); err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("replacing original file with re-tagged copy: %w", err)

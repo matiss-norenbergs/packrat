@@ -11,6 +11,7 @@ import (
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/importer"
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/repository"
 )
@@ -145,7 +146,7 @@ func resolveTrimPreviewPath(mediaRoot, previewPath string) (string, error) {
 
 // AcceptLibraryItemTrim overwrites the item's media file with the
 // already-generated preview and updates the stored duration/size to match.
-func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath string, ytdlp *downloader.YtDlpService, responder *ItemResponder) gin.HandlerFunc {
+func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath string, ytdlp *downloader.YtDlpService, responder *ItemResponder, locks *itemlock.Locks) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -158,6 +159,14 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+
+		// The accept renames the preview over the media file; a metadata remux
+		// finishing afterwards would put the untrimmed content back.
+		if !locks.TryLock(id) {
+			writeItemBusy(c)
+			return
+		}
+		defer locks.Unlock(id)
 
 		item, err := repo.Get(c.Request.Context(), id)
 		if err != nil {

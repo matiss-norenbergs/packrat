@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
@@ -181,7 +182,7 @@ func TestBulkTagsSkipsDownloadingItems(t *testing.T) {
 
 func TestBulkDeleteFilesSkipsDownloadingItems(t *testing.T) {
 	b := newBulkEnv(t)
-	h := BulkDeleteLibraryItemFiles(b.conn, b.library, b.downloads, b.originals, b.mediaRoot, b.imagesRoot)
+	h := BulkDeleteLibraryItemFiles(b.conn, b.library, b.downloads, b.originals, itemlock.New(), b.mediaRoot, b.imagesRoot)
 	w := b.do(t, h, http.MethodPost, "/library/bulk-delete-file", "/library/bulk-delete-file", fmt.Sprintf(`{"itemIds":%s}`, b.ids()))
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", w.Code, w.Body)
