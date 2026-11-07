@@ -224,6 +224,15 @@ func run() error {
 		}
 	}
 
+	// Same for frame-match rows: one still "running" belonged to the previous process. It becomes an
+	// error row (not "queued" again — a file that crashes the process would crash-loop the server),
+	// which must happen before the queue runner starts. No clients are connected yet, so nothing to broadcast.
+	if n, err := framematch.ResetInterrupted(ctx, frameMatchQueueRepo); err != nil {
+		return err
+	} else if n > 0 {
+		log.Printf("crash recovery: marked %d interrupted frame-match item(s) as errors", n)
+	}
+
 	// A previously-saved concurrency setting survives a restart — the env
 	// var is only the fallback for a fresh database.
 	workerCount := cfg.MaxConcurrentDownloads

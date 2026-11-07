@@ -780,6 +780,15 @@ On startup, `DownloadsRepo.MarkInterruptedIfActive` scans for rows left in `queu
 process was mid-flight on) and marks them `interrupted`. Nothing is silently resumed — the user
 must manually retry from the Downloads or History page.
 
+Frame-match rows get the same treatment at startup: `framematch.ResetInterrupted` (called in
+`main.go` right after `MarkInterruptedIfActive`, before `RunQueue` starts) moves every `running` row
+to `error` with the message "Interrupted by a restart. Queue it again." (`FrameMatchQueueRepo.ResetRunning`).
+They are deliberately not put back to `queued`: a file that crashes the process (say, by running out of
+memory) would otherwise crash-loop the server. `queued` and `done` rows are untouched. The error row
+still makes `ExistsForLibraryItem` true, so the user discards it (the existing Discard action) and
+queues the item again. A shutdown that cancels a match mid-run writes the same message through a
+detached context (see Graceful shutdown), so a clean restart never leaves a `running` row either.
+
 ## Graceful shutdown
 
 On SIGTERM/SIGINT `run()` in `cmd/server/main.go` shuts down in a fixed order, so nothing is writing

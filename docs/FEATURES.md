@@ -937,6 +937,10 @@ This compares images (perceptual hashing across the whole video, refined around 
   compare, then **Use this frame** (applies it and removes the row) or **Discard**. Rows still
   running or errored can also be discarded/dismissed directly from the table. Live state changes
   stream in over WebSocket rather than polling.
+- If the server stops while a match is running (a restart, update or crash), that row comes back as
+  an error — "Interrupted by a restart. Queue it again." — instead of staying "running" forever. It
+  is not re-queued automatically (a file that crashes the server would crash-loop it): **Discard** the
+  row, then queue the item again.
 - Confidence scores are shown even when low — a correct match can still score in the 70s–80s, so a
   low score is a hint to look closely, not a sign the match is wrong.
 

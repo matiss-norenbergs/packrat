@@ -890,6 +890,10 @@ candidates), **not** duplicate-video detection. Two independent flows: a single-
   `foundFramePath`/`referenceImagePath` (`ImagesRoot`-relative) populate once `state="done"` — a
   snapshot from match-completion time, so the review screen always matches the recorded score even
   if the source or live thumbnail changes before you review it.
+  A row that was `running` when the server stopped (or crashed) comes back as `state="error"` with
+  `"error": "Interrupted by a restart. Queue it again."` — it is never re-queued automatically (a
+  file that crashes the process would crash-loop the server). The row still counts as "already in the
+  queue", so discard it (`DELETE /api/frame-match/queue/:id`) and queue the item again.
 - **`POST /api/frame-match/queue/:id/accept`** — no body. Writes the row's found frame as the
   item's active thumbnail (same commit path as `SetLibraryThumbnail`/gallery-apply), then deletes
   the queue row and its snapshot images — a working queue, not a history. `409` row isn't
