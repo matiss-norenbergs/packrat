@@ -844,6 +844,10 @@ back manually.
 - The subscriptions table shows known-item count (with a "+N new" badge when there's anything
   unseen), last-checked time (with the error, if the last check failed), auto-download status, and
   an Enabled toggle — disabling only pauses the scheduled checks, "Check now" still works.
+- **One check per subscription at a time.** If a check is already running for a subscription (an earlier click, another tab, or
+  the hourly sweep), "Check now" answers "This subscription is already being checked. Try again in a moment." instead of
+  starting a second one, and the scheduled sweep skips that subscription. A new upload is turned into a placeholder or a
+  download exactly once, even if the same video appears twice in the listing.
 - **Known items** (per subscription) is a sortable, paginated table of every upload ever seen,
   most-recently-first-seen first. Select rows (click, shift-click for a range, ctrl/cmd-click to
   toggle, or click-and-drag across rows) and use the toolbar to act on the whole selection at once:

@@ -215,6 +215,28 @@ func (r *SubscriptionsRepo) RecordSeenEntry(ctx context.Context, subscriptionID 
 	return nil
 }
 
+// ClaimSeenEntry atomically records sourceID as seen for subscriptionID and
+// reports whether THIS call inserted the row. It is the first half of the
+// claim-then-act flow in subscriptions.processEntries: only the caller that
+// gets inserted=true performs the ghost/download action for the entry, so
+// two overlapping checks (or a playlist listing an id twice) can never both
+// act on it. The UNIQUE (subscription_id, source_id) constraint from
+// migration 000032 is what makes the INSERT OR IGNORE a race-free claim.
+func (r *SubscriptionsRepo) ClaimSeenEntry(ctx context.Context, subscriptionID int64, sourceID, title, url string, duration float64) (bool, error) {
+	res, err := r.db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO subscription_seen_entries (subscription_id, source_id, title, source_url, duration_seconds) VALUES (?, ?, ?, ?, ?)`,
+		subscriptionID, sourceID, title, url, duration,
+	)
+	if err != nil {
+		return false, fmt.Errorf("claiming seen subscription entry: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("claiming seen subscription entry: %w", err)
+	}
+	return n == 1, nil
+}
+
 // ListSeenEntries returns every entry ever recorded for subscriptionID,
 // most recently seen first — the "Known items" dialog's data source.
 // first_seen_at alone is a weak sort key: every entry recorded by the same

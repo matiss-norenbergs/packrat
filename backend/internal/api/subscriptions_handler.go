@@ -239,6 +239,10 @@ func CheckSubscriptionNow(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		}
 
 		newCount, err := subscriptions.CheckOne(ctx, deps, *sub)
+		if errors.Is(err, subscriptions.ErrCheckInProgress) {
+			c.JSON(http.StatusConflict, gin.H{"error": "This subscription is already being checked. Try again in a moment."})
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "checking subscription failed: " + err.Error()})
 			return

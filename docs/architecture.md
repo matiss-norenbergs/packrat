@@ -799,6 +799,22 @@ entry that fails to enqueue is still recorded (with no `library_item_id`, same s
 unactioned new entry) rather than skipped, which is what stops a persistent per-entry failure from
 being silently retried on every future check and never surfacing anywhere.
 
+**Claim, then act.** `processEntries` no longer reads the seen set once and writes the row last. For each
+entry it first *claims* it — `ClaimSeenEntry`, an `INSERT OR IGNORE` on the `UNIQUE (subscription_id,
+source_id)` constraint that reports whether this call inserted the row — and only the caller that inserted
+it creates the ghost or enqueues the download; the result is then linked to the claimed row
+(`SetSeenEntryLibraryItemID`) on a `context.WithoutCancel` + 10 s context, so a cancelled request cannot
+leave an action without its link. Ids repeated within one listing are deduplicated first, and the claim
+makes that safe even if two checks overlap. An entry whose action fails stays recorded with no
+`library_item_id` (as before). **Trade-off, on purpose:** a crash between the claim and the action loses that
+single entry (it is marked seen but never acted on, and still shows in Known items) instead of duplicating
+it on the next check.
+
+**One check per subscription.** `CheckOne` takes a keyed lock (an `itemlock.Locks` instance, `TryLock` by
+subscription id) and re-reads the subscription once it holds it; a concurrent call returns
+`ErrCheckInProgress`. "Check now" maps that to `409`, the sweep logs one line and moves on. `sweepMu` (one
+sweep at a time) is unchanged. Neither lock is held across a DB transaction.
+
 ## Collection-level defaults for new downloads
 
 Optional collection fields exist to save repetitive manual entry when adding files to a collection.

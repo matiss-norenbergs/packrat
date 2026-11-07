@@ -10,6 +10,7 @@ package subscriptions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/features"
 	"packrat/backend/internal/imageproc"
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
@@ -45,9 +47,21 @@ type CheckDeps struct {
 	// report new items found — the manual "Check now" HTTP handler already
 	// gets its count synchronously via the response, so it doesn't need this.
 	Broadcaster ws.Broadcaster
+	// FetchEntries overrides the yt-dlp listing fetch. Nil (production) uses
+	// YtDlp; tests inject a stub.
+	FetchEntries func(ctx context.Context, url string) ([]downloader.PlaylistEntry, error)
 }
 
 var sweepMu sync.Mutex
+
+// checkLocks serializes checks per subscription id: the sweep and "Check now"
+// (and two "Check now" clicks) must never process the same subscription at
+// once. Always taken with TryLock — never blocks.
+var checkLocks = itemlock.New()
+
+// ErrCheckInProgress is returned by CheckOne when the subscription is already
+// being checked. "Check now" maps it to 409; the sweep just skips.
+var ErrCheckInProgress = errors.New("subscription is already being checked")
 
 // RunDueChecks is called from the shared hourly ticker in cmd/server/main.go
 // (alongside history/download-log cleanup and the scheduled-backup check) —
@@ -84,6 +98,10 @@ func RunDueChecks(ctx context.Context, deps CheckDeps) {
 			continue
 		}
 		newCount, err := CheckOne(ctx, deps, sub)
+		if errors.Is(err, ErrCheckInProgress) {
+			log.Printf("subscription %d (%s): already being checked, skipping this sweep", sub.ID, sub.URL)
+			continue
+		}
 		if err != nil {
 			log.Printf("subscription %d (%s): scheduled check failed: %v", sub.ID, sub.URL, err)
 			continue
@@ -107,8 +125,24 @@ func RunDueChecks(ctx context.Context, deps CheckDeps) {
 // subscription checked, regardless of whether anything new was found.
 // Exported separately from RunDueChecks so the manual "Check now" button's
 // handler can call it directly for immediate feedback.
+//
+// Only one check per subscription runs at a time: a concurrent call returns
+// ErrCheckInProgress immediately instead of waiting. sub is re-read once the
+// lock is held, so a call that queued behind another check never acts on a
+// stale snapshot (notably LastCheckedAt).
 func CheckOne(ctx context.Context, deps CheckDeps, sub models.Subscription) (int, error) {
-	entries, err := fetchEntries(ctx, deps.YtDlp, sub.URL)
+	if !checkLocks.TryLock(sub.ID) {
+		return 0, ErrCheckInProgress
+	}
+	defer checkLocks.Unlock(sub.ID)
+
+	fresh, err := deps.SubscriptionsRepo.Get(ctx, sub.ID)
+	if err != nil {
+		return 0, err
+	}
+	sub = *fresh
+
+	entries, err := fetchEntries(ctx, deps, sub.URL)
 	if err != nil {
 		// Still mark checked — a subscription whose URL has started failing
 		// shouldn't be retried every single tick indefinitely; it gets
@@ -146,8 +180,11 @@ func BaselineOnCreate(ctx context.Context, deps CheckDeps, sub models.Subscripti
 // URL that resolves to a single video (a channel with exactly one upload,
 // or a plain video URL someone subscribed to by mistake) is treated as a
 // one-entry "playlist" rather than a special case.
-func fetchEntries(ctx context.Context, ytdlp *downloader.YtDlpService, url string) ([]downloader.PlaylistEntry, error) {
-	meta, err := ytdlp.FetchMetadata(ctx, url)
+func fetchEntries(ctx context.Context, deps CheckDeps, url string) ([]downloader.PlaylistEntry, error) {
+	if deps.FetchEntries != nil {
+		return deps.FetchEntries(ctx, url)
+	}
+	meta, err := deps.YtDlp.FetchMetadata(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("fetching metadata: %w", err)
 	}
@@ -165,9 +202,22 @@ func EntriesFromMetadata(meta *downloader.Metadata, url string) []downloader.Pla
 	return []downloader.PlaylistEntry{{ID: meta.ID, Title: meta.Title, URL: url, Duration: meta.Duration}}
 }
 
+// linkTimeout bounds the follow-up write that links a claimed entry to the
+// library item its action created.
+const linkTimeout = 10 * time.Second
+
 // processEntries diffs entries against what's already recorded as seen for
 // sub and handles each new one — baseline skips the create/download step
-// entirely (see BaselineOnCreate), a normal check performs it.
+// entirely, a normal check performs it.
+//
+// Claim-then-act: each entry is first CLAIMED by inserting its seen row
+// (INSERT OR IGNORE on UNIQUE (subscription_id, source_id)); only the caller
+// whose insert actually created the row performs the ghost/download action.
+// Overlapping checks and ids repeated within a listing therefore act at most
+// once. Trade-off, chosen on purpose: a crash between the claim and the
+// action loses that single entry (it is recorded as seen but never acted on)
+// instead of duplicating it. The action's result is then linked to the
+// claimed row on a context that survives cancellation.
 func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription, entries []downloader.PlaylistEntry, baseline bool) (int, error) {
 	ids := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -175,54 +225,64 @@ func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription
 			ids = append(ids, id)
 		}
 	}
+	// Cheap prefilter so already-known entries cost one query, not one write
+	// each; the claim below is what actually guarantees exactly-once.
 	seen, err := deps.SubscriptionsRepo.HasSeenEntries(ctx, sub.ID, ids)
 	if err != nil {
 		return 0, fmt.Errorf("checking seen entries: %w", err)
 	}
 
 	newCount := 0
+	handled := make(map[string]bool, len(entries))
 	for _, entry := range entries {
 		id := sourceID(entry)
-		if id == "" || seen[id] {
+		if id == "" || seen[id] || handled[id] {
 			continue
 		}
+		handled[id] = true
 		if !queue.IsHTTPURL(entry.URL) {
 			log.Printf("subscription %d: skipping entry %q: not an http(s) URL", sub.ID, id)
 			continue
 		}
 
+		claimed, err := deps.SubscriptionsRepo.ClaimSeenEntry(ctx, sub.ID, id, entry.Title, entry.URL, entry.Duration)
+		if err != nil {
+			// Not claimed, so not acted on: the next check retries it.
+			log.Printf("subscription %d: claiming entry %q failed: %v", sub.ID, id, err)
+			continue
+		}
+		if !claimed || baseline {
+			continue
+		}
+
 		var libraryItemID *int64
-		if !baseline {
-			if sub.AutoDownload {
-				if _, err := enqueueSubscriptionDownload(ctx, deps, sub, entry); err != nil {
-					// Still falls through to RecordSeenEntry below — an entry
-					// that fails to enqueue is still a real entry Packrat has
-					// seen, not a nonexistent one. Recording it (with no
-					// library_item_id, same as a not-yet-downloaded new entry)
-					// is what makes it show up in Known Items at all, and is
-					// what stops every future check from retrying the exact
-					// same failure forever — without this, a persistent
-					// failure (bad audio format, dead URL, ...) would never
-					// get recorded and would be silently re-attempted on
-					// every single check indefinitely.
-					log.Printf("subscription %d: enqueuing %q failed: %v", sub.ID, entry.URL, err)
-				} else {
-					newCount++
-				}
+		if sub.AutoDownload {
+			if _, err := enqueueSubscriptionDownload(ctx, deps, sub, entry); err != nil {
+				// The entry stays recorded (claimed above) with no
+				// library_item_id. That is what makes it show up in Known
+				// Items and what stops every future check from retrying the
+				// exact same failure forever (bad audio format, dead URL, ...).
+				log.Printf("subscription %d: enqueuing %q failed: %v", sub.ID, entry.URL, err)
 			} else {
-				id, err := createGhostForEntry(ctx, deps, sub, entry)
-				if err != nil {
-					// Same reasoning as the enqueue-failure case above.
-					log.Printf("subscription %d: creating ghost item for %q failed: %v", sub.ID, entry.URL, err)
-				} else {
-					libraryItemID = &id
-					newCount++
-				}
+				newCount++
+			}
+		} else {
+			itemID, err := createGhostForEntry(ctx, deps, sub, entry)
+			if err != nil {
+				// Same reasoning as the enqueue-failure case above.
+				log.Printf("subscription %d: creating ghost item for %q failed: %v", sub.ID, entry.URL, err)
+			} else {
+				libraryItemID = &itemID
+				newCount++
 			}
 		}
 
-		if err := deps.SubscriptionsRepo.RecordSeenEntry(ctx, sub.ID, id, entry.Title, entry.URL, entry.Duration, libraryItemID); err != nil {
-			log.Printf("subscription %d: recording seen entry %q failed: %v", sub.ID, id, err)
+		if libraryItemID != nil {
+			linkCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), linkTimeout)
+			if err := deps.SubscriptionsRepo.SetSeenEntryLibraryItemID(linkCtx, sub.ID, id, *libraryItemID); err != nil {
+				log.Printf("subscription %d: linking ghost item %d to entry %q failed: %v", sub.ID, *libraryItemID, id, err)
+			}
+			cancel()
 		}
 	}
 	return newCount, nil

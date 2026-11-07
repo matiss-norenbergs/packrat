@@ -1675,7 +1675,9 @@ unknown id, `200` with the full updated subscription.
 ### `POST /api/subscriptions/:id/check` — no body
 
 Same code path as the scheduled sweep, for one subscription, blocking until yt-dlp responds. `404`
-unknown id, `502` fetch failure (still records the attempt so it isn't retried every tick).
+unknown id, `502` fetch failure (still records the attempt so it isn't retried every tick),
+`409 {"error": "This subscription is already being checked. Try again in a moment."}` when a check for this
+subscription (a previous click, another tab, or the scheduled sweep) is still running — nothing is changed.
 Response `200 {"newItemsFound": 2}`.
 
 ### `GET /api/subscriptions/:id/entries` — no params
