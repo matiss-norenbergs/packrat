@@ -46,6 +46,7 @@ backend/
                              Stray Files); report-only until a delete is requested
     ratelimit/               in-memory throttling of failed logins (delays only; see Login throttling)
     twofactor/               TOTP, secret-at-rest encryption, recovery codes, login challenges
+    bgtasks/                 goroutine tracker for graceful shutdown (Go/Wait) and terminal-write contexts
     admincmd/                host-side recovery commands (--reset-password, --disable-2fa)
     version/                 the release version, stamped at build time
 ```
@@ -778,6 +779,45 @@ On startup, `DownloadsRepo.MarkInterruptedIfActive` scans for rows left in `queu
 `fetching_metadata`, `downloading`, or `processing` status (i.e. anything a crashed/restarted
 process was mid-flight on) and marks them `interrupted`. Nothing is silently resumed — the user
 must manually retry from the Downloads or History page.
+
+## Graceful shutdown
+
+On SIGTERM/SIGINT `run()` in `cmd/server/main.go` shuts down in a fixed order, so nothing is writing
+when the database closes:
+
+1. `srv.Shutdown` stops accepting requests and lets in-flight ones finish (up to
+   `httpShutdownTimeout` = 10 s). Background jobs keep running meanwhile.
+2. The **root context** is cancelled. Every long-lived or detached job derives from it, not from
+   `context.Background()`: the download workers, `framematch.RunQueue`, the hourly sweep goroutine,
+   the WS hub, the image backfill, and the handler-triggered jobs ("Enhance now", bulk enhance/sharpen,
+   the catch-up subscription check). A second signal during shutdown kills the process at once.
+3. `run()` waits up to `backgroundWaitTimeout` = 15 s for those jobs and for running metadata
+   embeds (`metaembed.Scheduler.Wait`; a remux is never cancelled, and the startup cleanup removes a
+   temp file an interrupted one left). What happened is logged: finished cleanly, or how many jobs
+   were still running when it gave up.
+4. Only then does `run()` return, and the deferred `conn.Close()` closes the database (last).
+
+The tracker is `internal/bgtasks`: `Tracker.Go(fn)` starts a tracked goroutine, `Wait(timeout)`
+reports whether all finished (`Running()` says how many are left), and a nil `*Tracker` just starts an
+untracked goroutine, so code that is not wired to one (tests) is unaffected. `bgtasks.Runner` (root
+context + tracker) is what handlers use for work that outlives the request.
+
+**Terminal writes use a detached context.** By the time a job reports its outcome, the root context
+is usually already cancelled, and a write made with it fails — leaving a row in a stale state.
+Marking a download completed/failed/cancelled, its history row, the library write that comes with
+completion, the frame-match queue's `SetError`/`SetDone` use `bgtasks.TerminalContext(ctx)`
+(`context.WithoutCancel` plus a 5 s timeout). One exception is deliberate: a download cut short *by the
+shutdown itself* is not written as "cancelled by user"; its row is left for startup recovery to mark
+`interrupted`, and its partial files are kept so a retry resumes. A frame-match item cut short by
+shutdown is recorded as an error row with the "Interrupted by a restart. Queue it again." message.
+
+**Budget.** 10 s (HTTP) + 15 s (jobs) = 25 s, and `docker/docker-compose.yml` /
+`docker-compose.dev.yml` set `stop_grace_period: 30s` (Docker's default is 10 s and would SIGKILL the
+container mid-wait), leaving 5 s for final writes and the close. `entrypoint.sh` ends in `exec
+/app/packrat`, so the server is PID 1 and receives the signal directly. Left untracked on purpose:
+goroutines with no database or file writes of their own (the ffmpeg/yt-dlp pipe readers, WS
+read/write pumps, the single-item `framematch.JobStore` jobs, the debounced Jellyfin refresh, the
+version-check cache refresh) and the startup stale-temp-file sweep.
 
 ## Live image resizing
 

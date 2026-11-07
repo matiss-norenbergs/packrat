@@ -46,6 +46,10 @@ services:
     # extra_hosts:
     #   - "jellyfin-host:host-gateway"
     restart: unless-stopped
+    # Docker kills the container this long after SIGTERM. The server's own shutdown budget is up to
+    # 25 s (10 s to drain HTTP, 15 s to wait for downloads and other background jobs), so the default
+    # 10 s would cut it short mid-write. Keep this above that budget.
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:50505/api/health"]
       interval: 30s

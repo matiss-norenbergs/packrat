@@ -1,6 +1,7 @@
 services:
   packrat:
     container_name: packrat-dev
+    stop_grace_period: 30s # server shutdown budget is up to 25 s; see docker-compose.yml
     ports:
       - "51200:50505"
     volumes:

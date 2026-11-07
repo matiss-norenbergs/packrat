@@ -73,3 +73,74 @@ func TestQueueItemTimeoutFailsItemAndQueueAdvances(t *testing.T) {
 		t.Fatalf("queue did not advance: next item still %q", next.State)
 	}
 }
+
+// newQueueTestRepos opens a migrated temp DB and returns the library and queue repos.
+func newQueueTestRepos(t *testing.T) (*repository.LibraryRepo, *repository.FrameMatchQueueRepo) {
+	t.Helper()
+	conn, err := db.Open(filepath.Join(t.TempDir(), "q.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	migrations, _ := filepath.Abs("../../../database/migrations")
+	if err := db.Migrate(conn, migrations); err != nil {
+		t.Fatal(err)
+	}
+	return repository.NewLibraryRepo(conn), repository.NewFrameMatchQueueRepo(conn)
+}
+
+// Cancelling the root context mid-match (shutdown) must still leave the row in a terminal state:
+// the failure write uses a detached context, so it no longer stays "running" forever.
+func TestQueueShutdownMidMatchRecordsInterruptedError(t *testing.T) {
+	lib, qr := newQueueTestRepos(t)
+	ctx := context.Background()
+	thumb := "x.jpg"
+	itemID, err := lib.Create(ctx, &models.LibraryItem{Title: "x", Filename: "x.mp4", Path: "x.mp4", Status: "completed", Thumbnail: &thumb})
+	if err != nil {
+		t.Fatal(err)
+	}
+	qid, err := qr.Create(ctx, itemID, "x", "current")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ffmpeg := useFake(t, "hang")
+	rctx, cancel := context.WithCancel(ctx)
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		RunQueue(rctx, QueueDeps{
+			QueueRepo: qr, LibraryRepo: lib,
+			YtDlp:        &downloader.YtDlpService{FFmpegPath: ffmpeg},
+			FFProbePath:  "ffprobe-does-not-exist",
+			MediaRoot:    t.TempDir(),
+			ImagesRoot:   t.TempDir(),
+			MatchTimeout: time.Minute,
+		})
+	}()
+
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if row, _ := qr.Get(ctx, qid); row.State == "running" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if row, _ := qr.Get(ctx, qid); row.State != "running" {
+		t.Fatalf("item never started running (state %q)", row.State)
+	}
+	cancel()
+	select {
+	case <-finished:
+	case <-time.After(30 * time.Second):
+		t.Fatal("RunQueue did not return after cancel")
+	}
+
+	row, err := qr.Get(ctx, qid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.State != "error" || row.ErrorMsg == nil || *row.ErrorMsg != InterruptedMessage {
+		t.Fatalf("row after shutdown: state %q err %v, want error %q", row.State, row.ErrorMsg, InterruptedMessage)
+	}
+}

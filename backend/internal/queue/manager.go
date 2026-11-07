@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"packrat/backend/internal/bgtasks"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/ghostthumb"
@@ -70,6 +71,7 @@ type DownloadManager struct {
 	thumbnailEnhancementOriginalsRepo *repository.ThumbnailEnhancementOriginalsRepo
 	jellyfinClient                    *jellyfin.Client
 	jellyfinDebounce                  *jellyfin.Debouncer
+	tasks                             *bgtasks.Tracker // shutdown waits for workers and detached jobs; nil = untracked
 	progress                          *ProgressStore
 	broadcaster                       ws.Broadcaster
 	itemLocks                         *itemlock.Locks      // serializes writes/moves/deletes of an item's media file (package itemlock)
@@ -181,6 +183,10 @@ func (m *DownloadManager) ResolveEffectiveRoot(ctx context.Context, collectionID
 	return pathsafe.ResolveUnderRoot(m.mediaRoot, relPath)
 }
 
+// SetTracker makes the worker pool and detached background jobs register with
+// t, so shutdown can wait for them. Call before Start.
+func (m *DownloadManager) SetTracker(t *bgtasks.Tracker) { m.tasks = t }
+
 // Start records the process-lifetime context every download runs under,
 // then brings the worker pool up to workerCount. The number of workers *is*
 // the concurrency limit ("configurable max concurrent downloads") — no
@@ -218,7 +224,7 @@ func (m *DownloadManager) SetWorkerCount(n int) {
 		for i := 0; i < n-current; i++ {
 			stop := make(chan struct{})
 			m.workerStops = append(m.workerStops, stop)
-			go m.worker(stop)
+			m.tasks.Go(func() { m.worker(stop) })
 		}
 	case n < current:
 		for i := 0; i < current-n; i++ {
@@ -541,8 +547,12 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	ghostID := m.runGhostID(id)
 	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, finalDuration, sizeBytes)
 	libItem.GenerateNFO = d.GenerateNFO
-	libID, ghost, err := m.fillOrCreateLibraryItem(parentCtx, id, libItem)
+	// These writes record the outcome, so they must land even if shutdown
+	// cancelled parentCtx while the download was finishing.
+	termCtx, termDone := bgtasks.TerminalContext(parentCtx)
+	libID, ghost, err := m.fillOrCreateLibraryItem(termCtx, id, libItem)
 	if err != nil {
+		termDone()
 		log.Printf("queue: creating library item failed for %d: %v", id, err)
 		// Remove what this run wrote so a retry doesn't hit "already
 		// downloaded" — but only what this run created: a file yt-dlp skipped
@@ -557,12 +567,13 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		m.finishError(parentCtx, runCtx, id, d.URL, "creating library item: "+err.Error(), result.StdoutTail, result.StderrTail)
 		return
 	}
-	if err := m.downloadsRepo.MarkCompleted(parentCtx, id, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
+	if err := m.downloadsRepo.MarkCompleted(termCtx, id, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
 		log.Printf("queue: mark completed failed for %d: %v", id, err)
 	}
-	if _, err := m.historyRepo.Create(parentCtx, &id, d.URL, "completed", nil); err != nil {
+	if _, err := m.historyRepo.Create(termCtx, &id, d.URL, "completed", nil); err != nil {
 		log.Printf("queue: recording history for %d failed: %v", id, err)
 	}
+	termDone()
 
 	// Best-effort — a failed derivative generation shouldn't fail the whole
 	// download; the item just falls back to the original thumbnail until a
@@ -604,7 +615,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		// own goroutine so a slow/unreachable upscaler never blocks this
 		// download worker — same pattern as the metadata-embedding goroutine
 		// below.
-		go m.maybeAutoEnhanceThumbnail(libID)
+		m.tasks.Go(func() { m.maybeAutoEnhanceThumbnail(libID) })
 	}
 
 	// Best-effort: attach any tag override (currently only set by the
@@ -760,7 +771,7 @@ func (m *DownloadManager) maybeAutoEnhanceThumbnail(libraryItemID int64) {
 		FFmpegPath:    m.ytdlp.FFmpegPath,
 		Broadcaster:   m.broadcaster,
 	}
-	if err := thumbnailenhance.MaybeAutoEnhanceOnDownload(context.Background(), deps, libraryItemID); err != nil {
+	if err := thumbnailenhance.MaybeAutoEnhanceOnDownload(m.rootCtx, deps, libraryItemID); err != nil {
 		log.Printf("queue: auto-enhancing thumbnail for library item %d failed: %v", libraryItemID, err)
 	}
 }
@@ -1022,7 +1033,10 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 		description := meta.Description
 		params.Description = &description
 	}
-	if err := m.libraryRepo.ApplyRedownload(parentCtx, targetID, params); err != nil {
+	applyCtx, applyDone := bgtasks.TerminalContext(parentCtx)
+	applyErr := m.libraryRepo.ApplyRedownload(applyCtx, targetID, params)
+	applyDone()
+	if err := applyErr; err != nil {
 		log.Printf("queue: applying redownload for library item %d failed: %v", targetID, err)
 		if samePath {
 			// The old content was already replaced in place; nothing to restore.
@@ -1047,12 +1061,14 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 		}
 	}
 
-	if err := m.downloadsRepo.MarkCompleted(parentCtx, downloadID, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
+	termCtx, termDone := bgtasks.TerminalContext(parentCtx)
+	if err := m.downloadsRepo.MarkCompleted(termCtx, downloadID, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
 		log.Printf("queue: mark completed failed for %d: %v", downloadID, err)
 	}
-	if _, err := m.historyRepo.Create(parentCtx, &downloadID, d.URL, "completed", nil); err != nil {
+	if _, err := m.historyRepo.Create(termCtx, &downloadID, d.URL, "completed", nil); err != nil {
 		log.Printf("queue: recording history for %d failed: %v", downloadID, err)
 	}
+	termDone()
 
 	// Thumbnail: swap + regenerate derivative tiers if explicitly requested,
 	// or if the item has no thumbnail at all yet (most commonly a ghost item
@@ -1618,36 +1634,45 @@ type partialFiles struct {
 // cancel abandons the work, so only that branch removes them. A cancel caused by
 // the server shutting down (parentCtx done) keeps them too, like the ghost.
 func (m *DownloadManager) finishErrorKeepingPartials(parentCtx, runCtx context.Context, id int64, url, errMsg, stdoutTail, stderrTail string, partials partialFiles) {
+	// The outcome is recorded with a context that survives shutdown (the
+	// parent is cancelled by then), bounded so a wedged DB can't stall it.
+	ctx, done := bgtasks.TerminalContext(parentCtx)
+	defer done()
+
 	switch classifyRunCtxErr(runCtx.Err()) {
 	case "timeout":
 		timeoutMsg := "download exceeded the configured time limit and was stopped"
-		if err := m.downloadsRepo.MarkFailed(parentCtx, id, -1, timeoutMsg, stdoutTail, stderrTail); err != nil {
+		if err := m.downloadsRepo.MarkFailed(ctx, id, -1, timeoutMsg, stdoutTail, stderrTail); err != nil {
 			log.Printf("queue: mark failed failed for %d: %v", id, err)
 		}
-		if _, err := m.historyRepo.Create(parentCtx, &id, url, "failed", &timeoutMsg); err != nil {
+		if _, err := m.historyRepo.Create(ctx, &id, url, "failed", &timeoutMsg); err != nil {
 			log.Printf("queue: recording history for %d failed: %v", id, err)
 		}
 		m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "failed", Error: timeoutMsg}})
 		return
 	case "cancelled":
-		if parentCtx.Err() == nil {
-			removePartialFiles(partials)
+		if parentCtx.Err() != nil {
+			// Server shutdown, not a user cancel: leave the row and its partial
+			// files alone — startup recovery marks it interrupted and records
+			// the history entry, and a retry resumes from the .part file.
+			return
 		}
-		m.removeRunGhost(parentCtx, id)
-		if err := m.downloadsRepo.MarkCancelled(parentCtx, id); err != nil {
+		removePartialFiles(partials)
+		m.removeRunGhost(ctx, id)
+		if err := m.downloadsRepo.MarkCancelled(ctx, id); err != nil {
 			log.Printf("queue: mark cancelled failed for %d: %v", id, err)
 		}
-		if _, err := m.historyRepo.Create(parentCtx, &id, url, "cancelled", nil); err != nil {
+		if _, err := m.historyRepo.Create(ctx, &id, url, "cancelled", nil); err != nil {
 			log.Printf("queue: recording history for %d failed: %v", id, err)
 		}
 		m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "cancelled", Error: "cancelled by user"}})
 		return
 	}
 
-	if err := m.downloadsRepo.MarkFailed(parentCtx, id, -1, errMsg, stdoutTail, stderrTail); err != nil {
+	if err := m.downloadsRepo.MarkFailed(ctx, id, -1, errMsg, stdoutTail, stderrTail); err != nil {
 		log.Printf("queue: mark failed failed for %d: %v", id, err)
 	}
-	if _, err := m.historyRepo.Create(parentCtx, &id, url, "failed", &errMsg); err != nil {
+	if _, err := m.historyRepo.Create(ctx, &id, url, "failed", &errMsg); err != nil {
 		log.Printf("queue: recording history for %d failed: %v", id, err)
 	}
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "failed", Error: errMsg}})
