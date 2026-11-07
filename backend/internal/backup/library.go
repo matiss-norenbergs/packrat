@@ -455,15 +455,24 @@ func ApplyLibraryBundle(
 ) ([]ResolvedDownload, ApplyResult, error) {
 	var result ApplyResult
 
+	// Lock order: repo mutexes first, DB connection second. The pool has one
+	// connection, so opening the tx first and then waiting on a mutex that a
+	// connection-hungry goroutine holds would deadlock the whole app. The
+	// tx-scoped repo copies below skip re-locking (the mutex isn't
+	// reentrant). Released only after commit/rollback — defers run LIFO, so
+	// the rollback registered further down runs before this unlock.
+	lk := repository.LockForRestore(tagsRepo, artistsRepo, collectionsRepo)
+	defer lk.Unlock()
+
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, result, fmt.Errorf("beginning import transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	collectionsRepo = collectionsRepo.WithTx(tx)
-	tagsRepo = tagsRepo.WithTx(tx)
-	artistsRepo = artistsRepo.WithTx(tx)
+	collectionsRepo = collectionsRepo.WithLockedTx(tx, lk)
+	tagsRepo = tagsRepo.WithLockedTx(tx, lk)
+	artistsRepo = artistsRepo.WithLockedTx(tx, lk)
 	libraryRepo = libraryRepo.WithTx(tx)
 
 	if len(bundle.Tags) > 0 {

@@ -34,6 +34,10 @@ type TagsRepo struct {
 	// name as free and both create it. A pointer so WithTx copies share the
 	// same lock as the original.
 	mu *sync.Mutex
+
+	// lockHeld is true only on copies made by WithLockedTx: the creator already
+	// holds mu (see LockForRestore), so this copy must not take it again.
+	lockHeld bool
 }
 
 func NewTagsRepo(db *sql.DB) *TagsRepo {
@@ -50,6 +54,24 @@ func (r *TagsRepo) WithTx(tx *sql.Tx) *TagsRepo {
 	return &cp
 }
 
+// WithLockedTx is WithTx for a caller that already holds r's mutex through
+// lk (see LockForRestore): the returned copy skips taking the mutex, which is
+// not reentrant. It panics if lk does not hold r's mutex, so it can't be
+// used to silently bypass the uniqueness lock.
+func (r *TagsRepo) WithLockedTx(tx *sql.Tx, lk *RestoreLock) *TagsRepo {
+	if !lk.holds(r.mu) {
+		panic("repository: TagsRepo.WithLockedTx called without holding its lock")
+	}
+	cp := *r
+	cp.db = tx
+	cp.lockHeld = true
+	return &cp
+}
+
+// lock takes r.mu unless this copy was made by WithLockedTx; use as
+// `defer r.lock()()`.
+func (r *TagsRepo) lock() func() { return lockOrSkip(r.mu, r.lockHeld) }
+
 // nameInUse checks name uniqueness globally — unlike collections, tags have
 // no parent scoping.
 func (r *TagsRepo) nameInUse(ctx context.Context, name string, excludeID int64) (bool, error) {
@@ -65,8 +87,7 @@ func (r *TagsRepo) nameInUse(ctx context.Context, name string, excludeID int64) 
 }
 
 func (r *TagsRepo) Create(ctx context.Context, name string, isPrivate bool) (*models.Tag, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	defer r.lock()()
 	return r.createLocked(ctx, name, isPrivate)
 }
 
@@ -145,8 +166,7 @@ func (r *TagsRepo) List(ctx context.Context) ([]models.TagWithCount, error) {
 // private collection blurs everything inside it (see effectivePrivacyMap /
 // PrivateTagNames).
 func (r *TagsRepo) Update(ctx context.Context, id int64, newName string, isPrivate bool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	defer r.lock()()
 
 	if _, err := r.Get(ctx, id); err != nil {
 		return err
@@ -180,8 +200,7 @@ func (r *TagsRepo) Delete(ctx context.Context, id int64) error {
 // doesn't already exist, and returns the resolved ids (input order,
 // deduplicated by exact match — tags.name has no case-folding).
 func (r *TagsRepo) GetOrCreateByNames(ctx context.Context, names []string) ([]int64, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	defer r.lock()()
 
 	seen := make(map[string]bool, len(names))
 	ids := make([]int64, 0, len(names))

@@ -33,6 +33,10 @@ type CollectionsRepo struct {
 	// serializing it has no meaningful performance cost. A pointer so WithTx
 	// copies share the same lock as the original.
 	mu *sync.Mutex
+
+	// lockHeld is true only on copies made by WithLockedTx: the creator already
+	// holds mu (see LockForRestore), so this copy must not take it again.
+	lockHeld bool
 }
 
 func NewCollectionsRepo(db *sql.DB) *CollectionsRepo {
@@ -46,6 +50,24 @@ func (r *CollectionsRepo) WithTx(tx *sql.Tx) *CollectionsRepo {
 	cp.db = tx
 	return &cp
 }
+
+// WithLockedTx is WithTx for a caller that already holds r's mutex through
+// lk (see LockForRestore): the returned copy skips taking the mutex, which is
+// not reentrant. It panics if lk does not hold r's mutex, so it can't be
+// used to silently bypass the uniqueness lock.
+func (r *CollectionsRepo) WithLockedTx(tx *sql.Tx, lk *RestoreLock) *CollectionsRepo {
+	if !lk.holds(r.mu) {
+		panic("repository: CollectionsRepo.WithLockedTx called without holding its lock")
+	}
+	cp := *r
+	cp.db = tx
+	cp.lockHeld = true
+	return &cp
+}
+
+// lock takes r.mu unless this copy was made by WithLockedTx; use as
+// `defer r.lock()()`.
+func (r *CollectionsRepo) lock() func() { return lockOrSkip(r.mu, r.lockHeld) }
 
 // nameInUse checks name uniqueness scoped to parentID (nil meaning a
 // root-level collection) — collections at different branches of the tree
@@ -72,8 +94,7 @@ func (r *CollectionsRepo) nameInUse(ctx context.Context, name string, parentID *
 }
 
 func (r *CollectionsRepo) Create(ctx context.Context, c *models.Collection) (int64, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	defer r.lock()()
 	return r.createLocked(ctx, c)
 }
 
@@ -185,8 +206,7 @@ func (r *CollectionsRepo) GhostItemCounts(ctx context.Context) (map[int64]int, e
 // included — they're only ever written by SetCoverImageTiers, so a general
 // update here can never clobber them.
 func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collection) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	defer r.lock()()
 
 	existing, err := r.Get(ctx, id)
 	if err != nil {
@@ -298,8 +318,7 @@ func (r *CollectionsRepo) EnsureChain(ctx context.Context, segments []string) (*
 		return nil, nil
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	defer r.lock()()
 
 	cols, err := r.List(ctx)
 	if err != nil {
