@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -305,3 +306,21 @@ func TestCheckOneBaselinesNeverCheckedSubscription(t *testing.T) {
 	}
 }
 
+func TestCheckIntervalClamps(t *testing.T) {
+	cases := map[int]time.Duration{
+		0:                         time.Hour,
+		-5:                        time.Hour,
+		6:                         6 * time.Hour,
+		MaxCheckIntervalHours + 1: MaxCheckIntervalHours * time.Hour,
+		math.MaxInt64:             MaxCheckIntervalHours * time.Hour,
+	}
+	for in, want := range cases {
+		if got := checkInterval(in); got != want {
+			t.Errorf("checkInterval(%d) = %v, want %v", in, got, want)
+		}
+	}
+	if ValidateCheckIntervalHours(0) == nil || ValidateCheckIntervalHours(MaxCheckIntervalHours+1) == nil ||
+		ValidateCheckIntervalHours(1) != nil || ValidateCheckIntervalHours(MaxCheckIntervalHours) != nil {
+		t.Fatal("ValidateCheckIntervalHours bounds wrong")
+	}
+}

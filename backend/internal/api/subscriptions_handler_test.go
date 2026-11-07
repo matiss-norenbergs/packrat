@@ -49,6 +49,66 @@ func doSubscriptionRequest(h gin.HandlerFunc, method, route, path, body string) 
 	return w
 }
 
+func TestResolveCreateInterval(t *testing.T) {
+	for _, tc := range []struct {
+		in, want int
+		wantErr  bool
+	}{
+		{0, subscriptions.DefaultCheckIntervalHours, false},
+		{-3, subscriptions.DefaultCheckIntervalHours, false},
+		{1, 1, false},
+		{subscriptions.MaxCheckIntervalHours, subscriptions.MaxCheckIntervalHours, false},
+		{subscriptions.MaxCheckIntervalHours + 1, 0, true},
+	} {
+		got, err := resolveCreateInterval(tc.in)
+		if (err != nil) != tc.wantErr || got != tc.want {
+			t.Errorf("resolveCreateInterval(%d) = %d, %v; want %d, err=%v", tc.in, got, err, tc.want, tc.wantErr)
+		}
+	}
+}
+
+func TestCreateSubscriptionRejectsIntervalAboveMax(t *testing.T) {
+	deps, subs := newSubscriptionsTestDeps(t)
+	body := `{"url":"https://example.test/c","mediaType":"video","checkIntervalHours":8761}`
+	w := doSubscriptionRequest(CreateSubscription(deps), http.MethodPost, "/subscriptions", "/subscriptions", body)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", w.Code, w.Body)
+	}
+	if list, _ := subs.List(context.Background()); len(list) != 0 {
+		t.Fatalf("a subscription was saved: %+v", list)
+	}
+}
+
+func TestUpdateSubscriptionIntervalBounds(t *testing.T) {
+	deps, subs := newSubscriptionsTestDeps(t)
+	ctx := context.Background()
+	id, err := subs.Create(ctx, &models.Subscription{URL: "https://example.test/c", Title: "t", MediaType: "video", CheckIntervalHours: 12, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/subscriptions/" + strconv.FormatInt(id, 10)
+	patch := func(hours string) *httptest.ResponseRecorder {
+		body := `{"collectionId":null,"tags":[],"autoDownload":false,"generateNfo":false,"enabled":true,"checkIntervalHours":` + hours + `}`
+		return doSubscriptionRequest(UpdateSubscription(deps), http.MethodPatch, "/subscriptions/:id", path, body)
+	}
+
+	for _, bad := range []string{"0", "-1", "8761", "9223372036854775807"} {
+		if w := patch(bad); w.Code != http.StatusBadRequest {
+			t.Errorf("interval %s: status = %d, want 400: %s", bad, w.Code, w.Body)
+		}
+		got, _ := subs.Get(ctx, id)
+		if got.CheckIntervalHours != 12 {
+			t.Fatalf("interval %s changed the stored value to %d", bad, got.CheckIntervalHours)
+		}
+	}
+	if w := patch("24"); w.Code != http.StatusOK {
+		t.Fatalf("in-range update: status = %d: %s", w.Code, w.Body)
+	}
+	if got, _ := subs.Get(ctx, id); got.CheckIntervalHours != 24 {
+		t.Fatalf("stored interval = %d, want 24", got.CheckIntervalHours)
+	}
+}
+
 func TestCheckSubscriptionNowAnswers409WhileChecking(t *testing.T) {
 	deps, subs := newSubscriptionsTestDeps(t)
 	ctx := context.Background()

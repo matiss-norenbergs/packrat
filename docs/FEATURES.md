@@ -834,7 +834,7 @@ back manually.
 - **Add subscription** — paste a channel/playlist URL; a live preview confirms what it resolves to
   (playlist title/count, or a note if it looks like a single video — still allowed, e.g. a channel
   with one upload so far). Set Type (video/audio), Collection (optional), check frequency
-  (1h/6h/12h/24h), Tags, **Auto-download new items** (off by default — off means new uploads become
+  (1h/6h/12h/24h; the API accepts any whole number of hours from 1 to 8760, a year), Tags, **Auto-download new items** (off by default — off means new uploads become
   library placeholders to review; on means straight to the download queue), and Generate NFO.
   Subscribing baselines every upload that already exists at the URL as "known" — it never queues
   the whole back catalog, only uploads from that point forward. The subscription, its known items and its

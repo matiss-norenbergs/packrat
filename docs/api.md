@@ -1647,7 +1647,7 @@ download queue.
 ```
 
 `url` (http/https) and `mediaType` (`video`|`audio`) required; `checkIntervalHours` defaults to 6
-if omitted/zero. `400` bad URL/missing fields, `422` initial metadata fetch failed. On success,
+if omitted or `<= 0`, and must otherwise be 1–8760 (`400` above that). `400` bad URL/missing fields, `422` initial metadata fetch failed. On success,
 every upload currently at the URL is recorded as already-seen (baseline) — subscribing means "tell
 me about new uploads from now on," not "queue the whole back catalog." The subscription row, every baseline
 entry and `lastCheckedAt` are written in one transaction (on a context that survives the client
@@ -1673,8 +1673,9 @@ check — see `POST /api/subscriptions/:id/check`, which then reports `newItemsF
 ```
 
 `url`/`mediaType` are immutable after creation (changing the source is really delete-and-re-add).
-Every other field required (a real `false`/`0` must be distinguishable from "omitted"). `404`
-unknown id, `200` with the full updated subscription.
+Every other field required (a real `false`/`0` must be distinguishable from "omitted"). `checkIntervalHours`
+must be 1–8760; anything else (`0`, negative, too large) is `400 {"error": "checkIntervalHours must be between 1 and 8760"}`
+and nothing is saved. `404` unknown id, `200` with the full updated subscription.
 
 ### `POST /api/subscriptions/:id/check` — no body
 

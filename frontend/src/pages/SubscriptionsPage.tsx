@@ -28,6 +28,7 @@ import {
   useUpdateSubscription,
 } from "@/hooks/useSubscriptions"
 import type { Subscription } from "@/types/api"
+import { clampIntervalHours } from "@/lib/subscriptionInterval"
 
 const PAGE_SIZE = 50
 
@@ -85,7 +86,7 @@ export function SubscriptionsPage() {
           tags: sub.tags,
           autoDownload: sub.autoDownload,
           generateNfo: sub.generateNfo,
-          checkIntervalHours: sub.checkIntervalHours,
+          checkIntervalHours: clampIntervalHours(sub.checkIntervalHours),
           enabled,
         },
       })

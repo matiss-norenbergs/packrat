@@ -63,6 +63,35 @@ var checkLocks = itemlock.New()
 // being checked. "Check now" maps it to 409; the sweep just skips.
 var ErrCheckInProgress = errors.New("subscription is already being checked")
 
+// Allowed range for a subscription's check interval.
+const (
+	DefaultCheckIntervalHours = 6
+	MinCheckIntervalHours     = 1
+	MaxCheckIntervalHours     = 8760 // one year
+)
+
+// ValidateCheckIntervalHours reports whether h is a storable interval.
+func ValidateCheckIntervalHours(h int) error {
+	if h < MinCheckIntervalHours || h > MaxCheckIntervalHours {
+		return fmt.Errorf("checkIntervalHours must be between %d and %d", MinCheckIntervalHours, MaxCheckIntervalHours)
+	}
+	return nil
+}
+
+// checkInterval converts a stored interval to a Duration, clamping to the
+// allowed range so a bad value already in the database (0, negative, or huge
+// enough to overflow time.Duration) can't make a subscription due on every
+// tick or wrap around.
+func checkInterval(hours int) time.Duration {
+	if hours < MinCheckIntervalHours {
+		hours = MinCheckIntervalHours
+	}
+	if hours > MaxCheckIntervalHours {
+		hours = MaxCheckIntervalHours
+	}
+	return time.Duration(hours) * time.Hour
+}
+
 // RunDueChecks is called from the shared hourly ticker in cmd/server/main.go
 // (alongside history/download-log cleanup and the scheduled-backup check) —
 // finds every enabled subscription whose own check_interval_hours has
@@ -93,7 +122,7 @@ func RunDueChecks(ctx context.Context, deps CheckDeps) {
 		if !sub.Enabled {
 			continue
 		}
-		due := sub.LastCheckedAt == nil || time.Since(*sub.LastCheckedAt) >= time.Duration(sub.CheckIntervalHours)*time.Hour
+		due := sub.LastCheckedAt == nil || time.Since(*sub.LastCheckedAt) >= checkInterval(sub.CheckIntervalHours)
 		if !due {
 			continue
 		}

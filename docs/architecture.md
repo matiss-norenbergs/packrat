@@ -820,6 +820,12 @@ interrupted create from an older version): `CheckOne` records its current entrie
 (`BaselineOnCreate`, the same bulk path, one transaction) without acting on them, marks it checked and
 logs one line; later checks act on genuinely new uploads only.
 
+**Check interval.** `subscriptions.MinCheckIntervalHours` (1) and `MaxCheckIntervalHours` (8760) bound the
+interval; `ValidateCheckIntervalHours` is the one shared check (create defaults a missing/`<= 0` value to 6,
+then validates; update validates as given). The due calculation clamps the stored value (`checkInterval`)
+so a bad value already in the database can neither make a subscription due on every tick nor overflow
+`time.Duration`.
+
 **One check per subscription.** `CheckOne` takes a keyed lock (an `itemlock.Locks` instance, `TryLock` by
 subscription id) and re-reads the subscription once it holds it; a concurrent call returns
 `ErrCheckInProgress`. "Check now" maps that to `409`, the sweep logs one line and moves on. `sweepMu` (one

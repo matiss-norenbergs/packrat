@@ -14,10 +14,6 @@ import (
 	"packrat/backend/internal/subscriptions"
 )
 
-// defaultSubscriptionCheckIntervalHours is used whenever
-// CreateSubscriptionRequest.CheckIntervalHours is omitted/zero.
-const defaultSubscriptionCheckIntervalHours = 6
-
 // CreateSubscription saves a channel/playlist URL and immediately baselines
 // it (subscriptions.CreateBaselined) — the subscription row, every entry
 // currently found (recorded as already-seen, without creating any ghost
@@ -37,9 +33,10 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			return
 		}
 
-		interval := req.CheckIntervalHours
-		if interval <= 0 {
-			interval = defaultSubscriptionCheckIntervalHours
+		interval, err := resolveCreateInterval(req.CheckIntervalHours)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 
 		meta, err := deps.YtDlp.FetchMetadata(ctx, req.URL)
@@ -93,6 +90,18 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		}
 		c.JSON(http.StatusCreated, toSubscriptionResponse(*created, collectionName, knownCount, unseenCount))
 	}
+}
+
+// resolveCreateInterval applies the create-time rule: omitted or <= 0 falls
+// back to the default, anything else must be within the allowed range.
+func resolveCreateInterval(requested int) (int, error) {
+	if requested <= 0 {
+		return subscriptions.DefaultCheckIntervalHours, nil
+	}
+	if err := subscriptions.ValidateCheckIntervalHours(requested); err != nil {
+		return 0, err
+	}
+	return requested, nil
 }
 
 func ListSubscriptions(deps subscriptions.CheckDeps) gin.HandlerFunc {
@@ -159,6 +168,11 @@ func UpdateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if err := subscriptions.ValidateCheckIntervalHours(*req.CheckIntervalHours); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
