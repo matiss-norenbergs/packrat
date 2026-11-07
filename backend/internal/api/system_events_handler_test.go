@@ -131,7 +131,7 @@ func TestSystemEventsAPIFilters(t *testing.T) {
 		{"?q=FAILED", []int64{c, b}},
 		{"?q=nothing-like-this", []int64{}},
 		{"?from=2026-03-03", []int64{d, c}},
-		{"?to=2026-03-02", []int64{b, a}},                // a bare date includes that whole day
+		{"?to=2026-03-02", []int64{b, a}},                 // a bare date includes that whole day
 		{"?from=2026-03-02&to=2026-03-03", []int64{c, b}}, // both ends inclusive
 		{"?from=2026-03-02T10:00:00Z&to=2026-03-03T10:00:00Z", []int64{c, b}},
 		{"?to=2026-03-03T09:59:59Z", []int64{b, a}},
