@@ -298,7 +298,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/backup/preview/library", PreviewLibraryImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
 		api.POST("/backup/import/library", ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.SettingsRepo))
 		api.POST("/backup/preview/full", PreviewFullImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
-		api.POST("/backup/import/full", ImportFullBackup(deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager))
+		api.POST("/backup/import/full", ImportFullBackup(deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.YtDlp))
 		api.GET("/backup/history", ListBackupHistory(deps.BackupHistoryRepo))
 		api.POST("/backup/run", RunManualBackup(backup.RunDeps{
 			BackupsRoot:       deps.BackupsRoot,
@@ -313,7 +313,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/backup/history/:id/download", DownloadBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.DELETE("/backup/history/:id", DeleteBackupHistoryEntry(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.GET("/backup/history/:id/preview", PreviewBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
-		api.POST("/backup/history/:id/restore", RestoreFullBackup(deps.BackupsRoot, deps.BackupHistoryRepo, deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager))
+		api.POST("/backup/history/:id/restore", RestoreFullBackup(deps.BackupsRoot, deps.BackupHistoryRepo, deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.YtDlp))
 
 		api.POST("/subscriptions", subscriptionsOnly, CreateSubscription(subCheckDeps))
 		api.GET("/subscriptions", subscriptionsOnly, ListSubscriptions(subCheckDeps))

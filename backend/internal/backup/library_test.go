@@ -523,3 +523,32 @@ func TestApplySettingsBundle_SkipsRetiredKeys(t *testing.T) {
 		t.Fatalf("expected the other key to apply, got %q", got)
 	}
 }
+
+func TestApplySettingsBundle_IsAtomic(t *testing.T) {
+	ctx := context.Background()
+	repos := openTestRepos(t)
+
+	if _, err := repos.db.Exec(`CREATE TRIGGER reject_bad BEFORE INSERT ON settings WHEN NEW.key = 'bad_key'
+		BEGIN SELECT RAISE(ABORT, 'rejected'); END`); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := repos.settings.GetAll(ctx)
+
+	_, err := ApplySettingsBundle(ctx, repos.settings, map[string]string{
+		"max_concurrent_downloads": "9",
+		"default_quality":          "144p",
+		"bad_key":                  "x",
+	})
+	if err == nil {
+		t.Fatal("expected ApplySettingsBundle to fail")
+	}
+	after, _ := repos.settings.GetAll(ctx)
+	if len(after) != len(before) {
+		t.Fatalf("row count changed: %d -> %d", len(before), len(after))
+	}
+	for k, v := range before {
+		if after[k] != v {
+			t.Fatalf("key %q changed from %q to %q after a failed bundle", k, v, after[k])
+		}
+	}
+}

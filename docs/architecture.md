@@ -498,6 +498,23 @@ independent of any actual download or preview happening.
   `ORDER BY <col> IS NULL, <col>` only for nullable columns (nulls last in both directions); for
   `downloaded_at`, `title` and `filename` that term did nothing but force a full scan + temp b-tree, so
   the default sort now walks `idx_library_downloaded_at`.
+- **Settings writes are validate, then one transaction, then side effects.** `UpdateSettings` first validates every
+  field (including the cross-field low/high pairs, which read the stored value for a side not in the
+  request) and only collects the rows into a pending map; then `SettingsRepo.SetMany` writes them all in
+  one transaction; only after the commit does it apply the live side effects (`SetWorkerCount`,
+  `SetMaxConcurrentTranscodes`, the subscriptions-enabled callback). A request that fails validation, or
+  whose write fails, changes nothing, so the worker pool never grows for a row that was not saved.
+  `ApplySettingsBundle` (settings import, full restore) is likewise a single `SetMany`. `SettingsRepo` has
+  no mutex, so `SetMany` only needs the DB connection and trivially respects the lock order below. The
+  side effects of a settings map are one helper, `applySettingsSideEffects`, shared by `UpdateSettings`,
+  `ImportSettings` and the full restore.
+- **Full restore order: library, then settings, then redownloads** (`applyFullBundle`). The library step
+  is the one that can fail, and it is its own transaction, so it runs first: if it fails, nothing else
+  happens and the existing settings (credentials included) are intact. Settings are then replaced in one
+  transaction and their side effects applied, and only then are the redownloads enqueued, so they use
+  the restored settings (`enqueueResolvedDownloads`). If the settings write fails after the library
+  committed, the response is a `500` that says the library half was applied (a small window: one local
+  transaction). Imported setting values are still written verbatim, with no per-key validation.
 - **Lock order: repo mutex first, DB connection second.** The pool has exactly one connection
   (`SetMaxOpenConns(1)`), and `TagsRepo`, `ArtistsRepo` and `CollectionsRepo` each have a `mu` that
   serializes their check-then-write name-uniqueness sequences (`GetOrCreateByNames`, `Create`,

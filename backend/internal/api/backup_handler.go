@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -141,19 +142,9 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 			return
 		}
 
-		// GetSettings reports maxConcurrentDownloads from the live worker
-		// pool, not the settings row, so writing the row alone (above) isn't
-		// enough to actually change it — same as UpdateSettings has to do.
-		if raw, ok := bundle[models.SettingMaxConcurrentDownloads]; ok {
-			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
-				mgr.SetWorkerCount(n)
-			}
-		}
-		if raw, ok := bundle[models.SettingMaxConcurrentTranscodes]; ok {
-			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
-				ytdlp.SetMaxConcurrentTranscodes(n)
-			}
-		}
+		// The write has committed; push the live-process settings (worker pool,
+		// transcodes) into the running components.
+		applySettingsSideEffects(bundle, mgr, ytdlp)
 		c.JSON(http.StatusOK, BackupImportSettingsResponse{Applied: applied})
 	}
 }
@@ -245,7 +236,21 @@ func applyLibraryBundleAndEnqueue(
 	if err != nil {
 		return BackupImportLibraryResponse{}, err
 	}
+	return enqueueResolvedDownloads(ctx, mgr, collectionsRepo, settingsRepo, resolved, result), nil
+}
 
+// enqueueResolvedDownloads is the follow-up half of a library import: it
+// queues a redownload for every resolved item, reading the settings as they
+// are NOW (the full restore calls it after the settings step so redownloads
+// use the restored settings). Best-effort per item.
+func enqueueResolvedDownloads(
+	ctx context.Context,
+	mgr *queue.DownloadManager,
+	collectionsRepo *repository.CollectionsRepo,
+	settingsRepo *repository.SettingsRepo,
+	resolved []backup.ResolvedDownload,
+	result backup.ApplyResult,
+) BackupImportLibraryResponse {
 	defaultType := "video"
 	if def, err := settingsRepo.Get(ctx, models.SettingDefaultDownloadType); err == nil && def != "" {
 		defaultType = def
@@ -280,7 +285,7 @@ func applyLibraryBundleAndEnqueue(
 			resp.DownloadsQueued++
 		}
 	}
-	return resp, nil
+	return resp
 }
 
 // ImportLibrary merges a previously-exported library bundle into the local
@@ -483,6 +488,7 @@ func RestoreFullBackup(
 	artistsRepo *repository.ArtistsRepo,
 	libraryRepo *repository.LibraryRepo,
 	mgr *queue.DownloadManager,
+	ytdlp *downloader.YtDlpService,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -522,7 +528,7 @@ func RestoreFullBackup(
 			return
 		}
 
-		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, bundle, req.Mode == "ghostOnly")
+		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -545,17 +551,28 @@ func applyFullBundle(
 	artistsRepo *repository.ArtistsRepo,
 	libraryRepo *repository.LibraryRepo,
 	mgr *queue.DownloadManager,
+	ytdlp *downloader.YtDlpService,
 	bundle backup.FullBundle,
 	ghostOnly bool,
 ) (BackupRestoreFullResponse, error) {
+	// Order matters. (1) The library step is the one that can fail for
+	// reasons outside our control, and it is its own transaction, so it goes
+	// first: if it fails nothing else happens and the existing settings
+	// (credentials included) are intact. (2) Settings are then replaced in
+	// one transaction and their live side effects applied. (3) Only then are
+	// the redownloads enqueued, so they run with the restored settings. If
+	// step 2 fails after step 1 committed, the library half IS applied; that
+	// window is small (one local transaction) and the error says so.
+	resolved, result, err := backup.ApplyLibraryBundle(ctx, db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, bundle.Library, ghostOnly)
+	if err != nil {
+		return BackupRestoreFullResponse{}, err
+	}
 	settingsApplied, err := backup.ApplySettingsBundle(ctx, settingsRepo, bundle.Settings)
 	if err != nil {
-		return BackupRestoreFullResponse{}, err
+		return BackupRestoreFullResponse{}, fmt.Errorf("library was restored but applying settings failed: %w", err)
 	}
-	libResp, err := applyLibraryBundleAndEnqueue(ctx, db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, settingsRepo, bundle.Library, ghostOnly)
-	if err != nil {
-		return BackupRestoreFullResponse{}, err
-	}
+	applySettingsSideEffects(bundle.Settings, mgr, ytdlp)
+	libResp := enqueueResolvedDownloads(ctx, mgr, collectionsRepo, settingsRepo, resolved, result)
 	return BackupRestoreFullResponse{SettingsApplied: settingsApplied, Library: libResp}, nil
 }
 
@@ -572,6 +589,7 @@ func ImportFullBackup(
 	artistsRepo *repository.ArtistsRepo,
 	libraryRepo *repository.LibraryRepo,
 	mgr *queue.DownloadManager,
+	ytdlp *downloader.YtDlpService,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BackupImportRequest
@@ -595,7 +613,7 @@ func ImportFullBackup(
 			return
 		}
 
-		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, bundle, req.Mode == "ghostOnly")
+		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

@@ -1287,6 +1287,10 @@ Other fields, each configured on its own Settings tab (see `docs/FEATURES.md` â†
 { "maxConcurrentDownloads": 5, "libraryView": "folders" }
 ```
 
+**All-or-nothing:** the whole request is validated first and then written in one transaction, so a
+request that answers `400` (or fails to save with `500`) changes nothing and does not touch the live worker
+pool; the live effects (worker count, transcode limit) are applied only after the write has committed.
+
 Same field set as the `GET` response. Notes:
 
 - The Library sort is not a setting any more (`librarySortKey`/`librarySortDir` and the stored `library_sort` row were removed;
@@ -1438,6 +1442,11 @@ Common errors for all three: `400` for a non-Packrat file, wrong `kind`, or a wr
 `500` otherwise.
 
 ### Full backup
+
+The full import and restore apply the library first, then the settings (one transaction), then queue the
+redownloads. If the library step fails (`500`) the settings are left exactly as they were; the restored
+`maxConcurrentDownloads` and `maxConcurrentTranscodes` also take effect on the running server right away.
+If the settings write itself fails after the library was applied, the `500` message says so.
 
 `POST /api/backup/preview/full` / `POST /api/backup/import/full` take the same
 `{data, password, mode}` body as above, but require exactly `kind: "full"` (they don't accept a

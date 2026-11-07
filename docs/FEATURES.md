@@ -746,6 +746,9 @@ or just as a safety net.
   download-vs-ghost-placeholder choice as Library Data, applied to both halves at once. Plain
   Settings-only or Library-only files can also be dropped onto the Settings/Library cards
   respectively — each just extracts its own half.
+- A full restore applies the library first, then the settings (together, all or nothing), then queues the
+  redownloads, so they use the restored settings. If the library part fails, your current settings are left
+  untouched; restored worker and transcode limits take effect immediately.
 - Both plain exports can optionally be **encrypted with a password** — the exported file is
   unreadable without it, and importing an encrypted file prompts for the same password.
 
