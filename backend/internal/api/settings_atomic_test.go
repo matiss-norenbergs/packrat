@@ -75,7 +75,7 @@ func newAtomicEnv(t *testing.T) *atomicEnv {
 	e.mgr.Start(ctx, 1)
 
 	e.router = gin.New()
-	e.router.PATCH("/settings", UpdateSettings(e.settings, e.mgr, e.ytdlp, func() { e.subsFired++ }))
+	e.router.PATCH("/settings", UpdateSettings(e.settings, e.mgr, e.ytdlp, nil, func() { e.subsFired++ }))
 	e.router.POST("/import/settings", ImportSettings(e.settings, e.mgr, e.ytdlp))
 	e.router.POST("/import/full", ImportFullBackup(conn, e.settings, e.collections, e.tags, e.artists, e.library, e.mgr, e.ytdlp))
 	return e

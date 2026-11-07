@@ -13,6 +13,7 @@ import (
 	"packrat/backend/internal/config"
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 )
 
 // runAdmin handles the host-side recovery commands. It returns handled=false when args ask for
@@ -44,11 +45,13 @@ func runAdmin(args []string) (handled bool, err error) {
 	}
 	defer conn.Close()
 	// Migrate too, so the command works on a database the new version hasn't started against yet.
-	if err := db.MigrateWithSnapshot(conn, migrationsDir(), filepath.Join(cfg.BackupsRoot, db.PreMigrationDirName), cfg.SkipPreMigrationBackup); err != nil {
+	migrated, err := db.MigrateWithSnapshot(conn, migrationsDir(), filepath.Join(cfg.BackupsRoot, db.PreMigrationDirName), cfg.SkipPreMigrationBackup)
+	if err != nil {
 		return true, err
 	}
 	users := repository.NewUsersRepo(conn)
 	ctx := context.Background()
+	recordMigration(ctx, sysevents.New(repository.NewSystemEventsRepo(conn), repository.NewSettingsRepo(conn)), migrated, true)
 
 	switch cmd {
 	case admincmd.CommandResetPassword:

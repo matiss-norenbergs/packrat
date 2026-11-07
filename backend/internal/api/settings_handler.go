@@ -18,6 +18,7 @@ import (
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 )
 
 // ImportIgnoredFolders reads and JSON-decodes the import_ignored_folders
@@ -1264,6 +1265,8 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 			FeatureFrameMatchingEnabled:         features.Enabled(c.Request.Context(), repo, models.SettingFeatureFrameMatchingEnabled),
 			FeatureCompareListEnabled:           features.Enabled(c.Request.Context(), repo, models.SettingFeatureCompareListEnabled),
 			FeatureFileImportEnabled:            features.Enabled(c.Request.Context(), repo, models.SettingFeatureFileImportEnabled),
+			FeatureSystemEventsEnabled:          features.Enabled(c.Request.Context(), repo, models.SettingFeatureSystemEventsEnabled),
+			SystemEventsRetentionCount:          sysevents.RetentionCount(c.Request.Context(), repo),
 			ThumbnailEnhancementEnabled:         thumbnailEnhancementEnabled,
 			ThumbnailEnhancementURL:             thumbnailEnhancementURL,
 			ThumbnailEnhancementUsername:        thumbnailEnhancementUsername,
@@ -1288,7 +1291,7 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 // onSubscriptionsEnabled, if non-nil, is called after the Subscriptions feature
 // goes from off to on, so subscriptions that came due while it was off run
 // straight away instead of waiting for the next hourly sweep.
-func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdlp *downloader.YtDlpService, onSubscriptionsEnabled func()) gin.HandlerFunc {
+func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdlp *downloader.YtDlpService, eventsRepo *repository.SystemEventsRepo, onSubscriptionsEnabled func()) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req UpdateSettingsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -1542,6 +1545,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 			{req.FeatureFrameMatchingEnabled, models.SettingFeatureFrameMatchingEnabled},
 			{req.FeatureCompareListEnabled, models.SettingFeatureCompareListEnabled},
 			{req.FeatureFileImportEnabled, models.SettingFeatureFileImportEnabled},
+			{req.FeatureSystemEventsEnabled, models.SettingFeatureSystemEventsEnabled},
 		} {
 			if f.val == nil {
 				continue
@@ -1551,6 +1555,9 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 			if f.key == models.SettingFeatureSubscriptionsEnabled && *f.val && !wasOn {
 				subscriptionsTurnedOn = true
 			}
+		}
+		if req.SystemEventsRetentionCount != nil {
+			pending[models.SettingSystemEventsRetentionCount] = strconv.Itoa(*req.SystemEventsRetentionCount)
 		}
 		if req.ThumbnailEnhancementEnabled != nil {
 			pending[models.SettingThumbnailEnhancementEnabled] = strconv.FormatBool(*req.ThumbnailEnhancementEnabled)
@@ -1609,6 +1616,10 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+		}
+		// A lower (or newly set) retention count takes effect now, not at the next hourly sweep.
+		if _, ok := pending[models.SettingSystemEventsRetentionCount]; ok {
+			sysevents.Prune(c.Request.Context(), eventsRepo, repo)
 		}
 		if subscriptionsTurnedOn && onSubscriptionsEnabled != nil {
 			onSubscriptionsEnabled()

@@ -124,4 +124,13 @@ const (
 	SettingFeatureFrameMatchingEnabled = "feature_frame_matching_enabled"
 	SettingFeatureCompareListEnabled   = "feature_compare_list_enabled"
 	SettingFeatureFileImportEnabled    = "feature_file_import_enabled"
+
+	// SettingFeatureSystemEventsEnabled switches the system log (persistent server events) on or
+	// off. Like the other feature toggles it defaults to on, but it is shown in Settings -> History
+	// next to its retention, not in Features.
+	SettingFeatureSystemEventsEnabled = "feature_system_events_enabled"
 )
+
+// SettingSystemEventsRetentionCount is how many of the newest system events are kept; 0 (the
+// default) is Unlimited and never prunes.
+const SettingSystemEventsRetentionCount = "system_events_retention_count"

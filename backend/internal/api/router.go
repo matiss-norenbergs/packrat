@@ -21,6 +21,7 @@ import (
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
+	"packrat/backend/internal/sysevents"
 	"packrat/backend/internal/thumbnailenhance"
 	"packrat/backend/internal/ws"
 )
@@ -69,6 +70,10 @@ type Deps struct {
 	// TrustedProxies are the addresses/CIDRs whose X-Forwarded-For is believed when working out the
 	// client IP. Empty (the default) trusts none: the connection's own address is the client.
 	TrustedProxies []string
+	// SystemEventsRepo and Events are the system log's store and recorder. Events may be nil
+	// (nothing is recorded); SystemEventsRepo nil leaves the /system-events routes unregistered.
+	SystemEventsRepo *repository.SystemEventsRepo
+	Events           *sysevents.Recorder
 }
 
 // noCacheHeaders forces revalidation on every request instead of letting the
@@ -287,7 +292,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/artists/:id/selected-image", ClearArtistSelectedImage(deps.ArtistsRepo))
 
 		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp, deps.MediaRoot))
-		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp, onSubscriptionsEnabled))
+		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp, deps.SystemEventsRepo, onSubscriptionsEnabled))
 		api.POST("/settings/backfill-images", StartImageBackfill(deps.ImageBackfillManager))
 		api.GET("/settings/backfill-images", GetImageBackfillStatus(deps.ImageBackfillManager))
 		api.GET("/proxy/status", GetProxyStatus(deps.SettingsRepo))

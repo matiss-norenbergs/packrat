@@ -123,3 +123,20 @@ func normalizeVersion(v string) string {
 	}
 	return strings.Join(parts, ".")
 }
+
+// FFmpegVersion runs `ffmpeg -version` and returns the version token of the first line (e.g.
+// "6.1.1"), or "" with an error when the binary cannot be run.
+func FFmpegVersion(ctx context.Context, ffmpegPath string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, versionCheckTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, ffmpegPath, "-version").Output()
+	if err != nil {
+		return "", fmt.Errorf("checking ffmpeg version: %w", err)
+	}
+	first, _, _ := strings.Cut(string(out), "\n")
+	fields := strings.Fields(first)
+	if len(fields) >= 3 && fields[0] == "ffmpeg" && fields[1] == "version" {
+		return fields[2], nil
+	}
+	return strings.TrimSpace(first), nil
+}
