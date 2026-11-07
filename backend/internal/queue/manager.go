@@ -665,7 +665,7 @@ func (m *DownloadManager) runImageDownload(ctx context.Context, id int64, d *mod
 	// Reuses the same ytdlp_proxy setting yt-dlp's own --proxy flag reads
 	// (see downloader/args.go) — "" if unset, meaning a direct connection.
 	proxy, _ := m.settingsRepo.Get(ctx, models.SettingYtdlpProxy)
-	finalPath, _, err := imagefetch.Fetch(ctx, d.URL, destDir, filename, forceOverwrite, proxy)
+	finalPath, _, err := imagefetch.Fetch(ctx, d.URL, destDir, filename, forceOverwrite, proxy, imagefetch.DownloadPolicy)
 	if err != nil {
 		return downloader.RunResult{}, err
 	}
@@ -1263,13 +1263,26 @@ func (m *DownloadManager) ensureGhost(ctx context.Context, id int64, d *models.D
 		proxy, _ := m.settingsRepo.Get(ctx, models.SettingYtdlpProxy)
 		tctx, cancel := context.WithTimeout(ctx, ghostThumbnailTimeout)
 		ghostthumb.Generate(tctx, m.libraryRepo, m.imagesRoot, m.ytdlp.FFmpegPath, libID, func(c context.Context, dir string) (string, error) {
-			p, _, err := imagefetch.Fetch(c, meta.Thumbnail, dir, "thumb", true, proxy)
-			return p, err
+			return fetchRemoteThumbnail(c, meta.Thumbnail, dir, proxy)
 		})
 		cancel()
 	}
 
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventLibraryChanged, Payload: ws.LibraryChangedPayload{LibraryID: libID, Reason: "ghost_created"}})
+}
+
+// fetchRemoteThumbnail fetches a thumbnail URL that came from remote metadata
+// (the page being downloaded chose it), so it is untrusted: private/loopback/
+// link-local destinations are refused and the size is capped. The thumbnail is
+// best-effort — the caller (ghostthumb.Generate) logs the returned error and
+// the download carries on. A refusal returns a URL-free error so the log line
+// can't leak a query-string secret.
+func fetchRemoteThumbnail(ctx context.Context, thumbURL, dir, proxy string) (string, error) {
+	p, _, err := imagefetch.Fetch(ctx, thumbURL, dir, "thumb", true, proxy, imagefetch.ThumbnailPolicy)
+	if errors.Is(err, imagefetch.ErrBlockedAddress) {
+		return "", errors.New("thumbnail URL refused: it points at a private or non-public address")
+	}
+	return p, err
 }
 
 func (m *DownloadManager) setRunGhost(id int64, g ghostRun) {

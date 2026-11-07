@@ -89,6 +89,12 @@ func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *reposi
 // Routing through the backend (which does honor it, via imagefetch.Open)
 // closes that gap. GET-only and read-only, so no CSRF token is required —
 // same convention as /media-files/*path.
+//
+// The optional `kind` query parameter says who chose the URL: "image"
+// (default) is the direct image URL the admin typed — size cap only, LAN hosts
+// allowed — while "thumbnail" is the thumbnail yt-dlp reported from the page's
+// metadata, which the remote page controls, so private/loopback/link-local
+// addresses are refused (imagefetch.ThumbnailPolicy).
 func PreviewImage(settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		target := c.Query("url")
@@ -97,10 +103,25 @@ func PreviewImage(settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 			return
 		}
 
+		policy := imagefetch.PreviewPolicy
+		switch c.DefaultQuery("kind", "image") {
+		case "image":
+		case "thumbnail":
+			policy = imagefetch.ThumbnailPolicy
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "kind must be \"image\" or \"thumbnail\""})
+			return
+		}
+
 		proxy, _ := settingsRepo.Get(c.Request.Context(), models.SettingYtdlpProxy)
 
-		body, contentType, size, cancel, err := imagefetch.Open(c.Request.Context(), target, proxy)
+		body, contentType, size, cancel, err := imagefetch.Open(c.Request.Context(), target, proxy, policy)
 		if err != nil {
+			if errors.Is(err, imagefetch.ErrBlockedAddress) {
+				// URL-free, like queue.fetchRemoteThumbnail.
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "thumbnail URL refused: it points at a private or non-public address"})
+				return
+			}
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 			return
 		}
