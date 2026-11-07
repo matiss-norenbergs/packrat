@@ -50,6 +50,10 @@ type CheckDeps struct {
 	// FetchEntries overrides the yt-dlp listing fetch. Nil (production) uses
 	// YtDlp; tests inject a stub.
 	FetchEntries func(ctx context.Context, url string) ([]downloader.PlaylistEntry, error)
+
+	// afterClaim, when set (tests only), runs right after an entry is claimed
+	// and before its action, to simulate a cancellation at that point.
+	afterClaim func(sourceID string)
 }
 
 var sweepMu sync.Mutex
@@ -179,6 +183,16 @@ func CheckOne(ctx context.Context, deps CheckDeps, sub models.Subscription) (int
 		// itself is recorded too, so the "Last checked" column's warning
 		// badge has something to show.
 		errMsg := err.Error()
+		if sub.LastCheckedAt == nil {
+			// Never baselined: keep last_checked_at NULL (record only the
+			// error) so the next attempt still baselines it. Stamping it
+			// "checked" here would make that next check act on the whole
+			// unrecorded back catalog. RunDueChecks treats NULL as due, so
+			// a failing one is retried on every hourly tick — one fetch
+			// per hour, which is acceptable.
+			_ = deps.SubscriptionsRepo.SetLastCheckError(ctx, sub.ID, &errMsg)
+			return 0, err
+		}
 		_ = deps.SubscriptionsRepo.MarkChecked(ctx, sub.ID, time.Now(), &errMsg)
 		return 0, err
 	}
@@ -318,15 +332,23 @@ func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription
 		if err != nil {
 			// Not claimed, so not acted on: the next check retries it.
 			log.Printf("subscription %d: claiming entry %q failed: %v", sub.ID, id, err)
+			if ctx.Err() != nil {
+				return newCount, ctx.Err()
+			}
 			continue
 		}
 		if !claimed || baseline {
 			continue
 		}
+		if deps.afterClaim != nil {
+			deps.afterClaim(id)
+		}
 
 		var libraryItemID *int64
+		actionFailed := false
 		if sub.AutoDownload {
 			if _, err := enqueueSubscriptionDownload(ctx, deps, sub, entry); err != nil {
+				actionFailed = true
 				// The entry stays recorded (claimed above) with no
 				// library_item_id. That is what makes it show up in Known
 				// Items and what stops every future check from retrying the
@@ -338,12 +360,27 @@ func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription
 		} else {
 			itemID, err := createGhostForEntry(ctx, deps, sub, entry)
 			if err != nil {
+				actionFailed = true
 				// Same reasoning as the enqueue-failure case above.
 				log.Printf("subscription %d: creating ghost item for %q failed: %v", sub.ID, entry.URL, err)
 			} else {
 				libraryItemID = &itemID
 				newCount++
 			}
+		}
+
+		if actionFailed && ctx.Err() != nil {
+			// The context was cancelled (e.g. "Check now" and the tab
+			// closed): that is not a real failure of this entry. Release the
+			// claim — on a context that survives the cancellation, and only
+			// while the row has no library item — and stop, so the next
+			// check starts clean for this entry and the rest.
+			relCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), linkTimeout)
+			if _, err := deps.SubscriptionsRepo.ReleaseSeenEntryClaim(relCtx, sub.ID, id); err != nil {
+				log.Printf("subscription %d: releasing claim on entry %q failed: %v", sub.ID, id, err)
+			}
+			cancel()
+			return newCount, ctx.Err()
 		}
 
 		if libraryItemID != nil {

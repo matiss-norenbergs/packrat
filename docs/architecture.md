@@ -808,7 +808,11 @@ leave an action without its link. Ids repeated within one listing are deduplicat
 makes that safe even if two checks overlap. An entry whose action fails stays recorded with no
 `library_item_id` (as before). **Trade-off, on purpose:** a crash between the claim and the action loses that
 single entry (it is marked seen but never acted on, and still shows in Known items) instead of duplicating
-it on the next check.
+it on the next check. **Cancellation is not a failure:** if the action fails while the check's context is
+cancelled (the "Check now" tab closed), the claim is released instead (`ReleaseSeenEntryClaim`, a delete that
+only touches a row with no `library_item_id`, on a `WithoutCancel` context) and processing stops with the
+context error, so the next check starts clean for that entry and the rest; only a real failure with a live
+context keeps the claim.
 
 **Atomic create and healing.** `CreateSubscription` does the slow yt-dlp metadata fetch first, then
 `subscriptions.CreateBaselined` -> `SubscriptionsRepo.CreateWithSeenEntries`: one transaction (prepared
@@ -818,7 +822,10 @@ looks new. No repo mutex is taken inside it (lock order: repo mutex before the s
 `last_checked_at IS NULL` is therefore the marker of a never-baselined subscription (only an
 interrupted create from an older version): `CheckOne` records its current entries as seen
 (`BaselineOnCreate`, the same bulk path, one transaction) without acting on them, marks it checked and
-logs one line; later checks act on genuinely new uploads only.
+logs one line; later checks act on genuinely new uploads only. A failed fetch never ends that state: for a
+subscription with `last_checked_at IS NULL` the error text is stored (`SetLastCheckError`) but the timestamp
+stays NULL, so the next attempt baselines it (a checked subscription still gets the timestamp and error, so a
+dead URL is retried on its interval). The hourly sweep treats NULL as due, i.e. one fetch per hour.
 
 **Check interval.** `subscriptions.MinCheckIntervalHours` (1) and `MaxCheckIntervalHours` (8760) bound the
 interval; `ValidateCheckIntervalHours` is the one shared check (create defaults a missing/`<= 0` value to 6,

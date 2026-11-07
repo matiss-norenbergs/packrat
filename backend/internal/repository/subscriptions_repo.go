@@ -164,6 +164,21 @@ func (r *SubscriptionsRepo) MarkChecked(ctx context.Context, id int64, checkedAt
 	return checkRowsAffected(res)
 }
 
+// SetLastCheckError records (or clears) the last check's error text WITHOUT
+// touching last_checked_at. A subscription that was never baselined
+// (last_checked_at NULL) uses it when its fetch fails, so it stays
+// "never baselined" and its next check baselines it instead of treating the
+// whole back catalog as new.
+func (r *SubscriptionsRepo) SetLastCheckError(ctx context.Context, id int64, checkError *string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE subscriptions SET last_check_error = ? WHERE id = ?`, checkError, id,
+	)
+	if err != nil {
+		return fmt.Errorf("recording subscription check error: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // HasSeenEntries batch-checks which of sourceIDs are already recorded for
 // subscriptionID, so a check only needs one query regardless of how many
 // entries a channel/playlist listing returned.
@@ -235,6 +250,26 @@ func (r *SubscriptionsRepo) ClaimSeenEntry(ctx context.Context, subscriptionID i
 		return false, fmt.Errorf("claiming seen subscription entry: %w", err)
 	}
 	return n == 1, nil
+}
+
+// ReleaseSeenEntryClaim deletes a claimed seen row, but only while it has no
+// library_item_id — a row that was successfully linked is never removed. It
+// undoes ClaimSeenEntry when the action never ran because the context was
+// cancelled, so the next check treats the entry as new again. Reports
+// whether a row was deleted.
+func (r *SubscriptionsRepo) ReleaseSeenEntryClaim(ctx context.Context, subscriptionID int64, sourceID string) (bool, error) {
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM subscription_seen_entries WHERE subscription_id = ? AND source_id = ? AND library_item_id IS NULL`,
+		subscriptionID, sourceID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("releasing seen subscription entry claim: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // SeenEntryInput is one entry to record in bulk (baselining).
