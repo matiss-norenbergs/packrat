@@ -142,7 +142,9 @@ The landing page. Two cards summarize current state at a glance, followed by cha
 Read-only — it's a summary view, not a control panel. The cog button in the header opens a popover
 with a switch per card (the two summary cards and all six charts); **Save** hides the switched-off
 ones. The choice is stored server-side (`dashboardHiddenWidgets`), so it's the same on every
-device, and hidden cards aren't rendered, so they don't fetch their data. Cards added in future
+device, and hidden cards aren't rendered, so they don't fetch their data — the page waits for the settings
+before showing any card (placeholders in the same layout, cog disabled; no wait when they're already cached from
+another page), and if that request fails it shows every card. Cards added in future
 versions show up by default. Hiding everything shows a hint pointing at the cog.
 
 ## Downloads

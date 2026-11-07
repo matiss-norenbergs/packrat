@@ -9,10 +9,11 @@ import { DASHBOARD_WIDGETS } from "@/lib/dashboardWidgets"
 interface DashboardSettingsPopoverProps {
   hiddenWidgets: string[]
   saving?: boolean
+  disabled?: boolean
   onSave: (hiddenWidgets: string[]) => void
 }
 
-export function DashboardSettingsPopover({ hiddenWidgets, saving, onSave }: DashboardSettingsPopoverProps) {
+export function DashboardSettingsPopover({ hiddenWidgets, saving, disabled, onSave }: DashboardSettingsPopoverProps) {
   const [open, setOpen] = useState(false)
   const [draftHidden, setDraftHidden] = useState<string[]>([])
 
@@ -35,7 +36,7 @@ export function DashboardSettingsPopover({ hiddenWidgets, saving, onSave }: Dash
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="icon" aria-label="Dashboard settings">
+        <Button variant="outline" size="icon" aria-label="Dashboard settings" disabled={disabled}>
           <Settings className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
