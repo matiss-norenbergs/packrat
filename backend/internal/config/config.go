@@ -44,6 +44,9 @@ type Config struct {
 	// SecretKey is PACKRAT_SECRET_KEY: the key that encrypts 2FA secrets at rest. Empty (default)
 	// uses an auto-generated key file next to the database.
 	SecretKey string
+	// SkipPreMigrationBackup is SKIP_PRE_MIGRATION_BACKUP: when true, pending migrations run
+	// without first writing a safety copy of the database. Default off.
+	SkipPreMigrationBackup bool
 }
 
 func Load() (Config, error) {
@@ -88,6 +91,14 @@ func Load() (Config, error) {
 	}
 
 	cfg.SecretKey = os.Getenv("PACKRAT_SECRET_KEY")
+
+	if raw := os.Getenv("SKIP_PRE_MIGRATION_BACKUP"); raw != "" {
+		b, err := strconv.ParseBool(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid SKIP_PRE_MIGRATION_BACKUP %q: must be true or false", raw)
+		}
+		cfg.SkipPreMigrationBackup = b
+	}
 
 	if raw := os.Getenv("TRUSTED_PROXIES"); raw != "" {
 		proxies, err := parseTrustedProxies(raw)
