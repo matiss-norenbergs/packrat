@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"packrat/backend/internal/framematch"
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
@@ -229,7 +230,7 @@ func TestDeleteImageItemFile(t *testing.T) {
 		t.Run(fmt.Sprint("deleteThumbnail=", withThumb), func(t *testing.T) {
 			e := newCleanupEnv(t)
 			s := e.seedImageItem(t, "pic", ".jpg")
-			h := DeleteLibraryItemFile(e.library, e.originals, e.mediaRoot, e.imagesRoot)
+			h := DeleteLibraryItemFile(e.library, e.originals, itemlock.New(), e.mediaRoot, e.imagesRoot)
 			w := e.do(t, h, http.MethodDelete, fmt.Sprintf("/library/%d/file?deleteThumbnail=%v", s.id, withThumb), "/library/:id/file", "")
 			if w.Code != http.StatusNoContent {
 				t.Fatalf("status %d", w.Code)
@@ -257,7 +258,7 @@ func TestBulkDeleteMixedImageAndVideo(t *testing.T) {
 			e := newCleanupEnv(t)
 			img := e.seedImageItem(t, "pic", ".png")
 			vid := e.seedItem(t, "vid")
-			h := BulkDeleteLibraryItemFiles(e.conn, e.library, e.downloads, e.originals, e.mediaRoot, e.imagesRoot)
+			h := BulkDeleteLibraryItemFiles(e.conn, e.library, e.downloads, e.originals, itemlock.New(), e.mediaRoot, e.imagesRoot)
 			w := e.do(t, h, http.MethodPost, "/library/bulk-delete-file", "/library/bulk-delete-file",
 				fmt.Sprintf(`{"itemIds":[%d,%d],"deleteThumbnail":%v}`, img.id, vid.id, withThumb))
 			if w.Code != http.StatusOK {

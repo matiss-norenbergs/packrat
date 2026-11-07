@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/db"
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
@@ -276,7 +277,7 @@ func TestDeleteLibraryItemFileArtifacts(t *testing.T) {
 	t.Run("without deleteThumbnail only media and nfo go", func(t *testing.T) {
 		e := newCleanupEnv(t)
 		s := e.seedItem(t, "df")
-		h := DeleteLibraryItemFile(e.library, e.originals, e.mediaRoot, e.imagesRoot)
+		h := DeleteLibraryItemFile(e.library, e.originals, itemlock.New(), e.mediaRoot, e.imagesRoot)
 		w := e.do(t, h, http.MethodDelete, fmt.Sprintf("/library/%d/file", s.id), "/library/:id/file", "")
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
@@ -292,7 +293,7 @@ func TestDeleteLibraryItemFileArtifacts(t *testing.T) {
 	t.Run("with deleteThumbnail tiers, original and dimensions go", func(t *testing.T) {
 		e := newCleanupEnv(t)
 		s := e.seedItem(t, "dt")
-		h := DeleteLibraryItemFile(e.library, e.originals, e.mediaRoot, e.imagesRoot)
+		h := DeleteLibraryItemFile(e.library, e.originals, itemlock.New(), e.mediaRoot, e.imagesRoot)
 		w := e.do(t, h, http.MethodDelete, fmt.Sprintf("/library/%d/file?deleteThumbnail=true", s.id), "/library/:id/file", "")
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
@@ -310,7 +311,7 @@ func TestDeleteLibraryItemFileArtifacts(t *testing.T) {
 	t.Run("bulk with deleteThumbnail", func(t *testing.T) {
 		e := newCleanupEnv(t)
 		a, b := e.seedItem(t, "bda"), e.seedItem(t, "bdb")
-		h := BulkDeleteLibraryItemFiles(e.conn, e.library, e.downloads, e.originals, e.mediaRoot, e.imagesRoot)
+		h := BulkDeleteLibraryItemFiles(e.conn, e.library, e.downloads, e.originals, itemlock.New(), e.mediaRoot, e.imagesRoot)
 		body := fmt.Sprintf(`{"itemIds":[%d,%d],"deleteThumbnail":true}`, a.id, b.id)
 		w := e.do(t, h, http.MethodPost, "/library/bulk-delete-file", "/library/bulk-delete-file", body)
 		if w.Code != http.StatusOK {

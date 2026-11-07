@@ -551,6 +551,45 @@ broadcast so the Library refetches.
   separator dangling) and its multi-item dialogs that PATCH per item filter such items out first. Not
   covered: the AI-enhancement bulk/sweep endpoints (they select items themselves) and the frame-match
   queue accept (a queued item already has a file).
+- **The per-item file lock** (`internal/itemlock`, a keyed mutex by library item id whose map entries
+  are deleted when unused; `DownloadManager` owns the instance and hands it to the handlers via
+  `ItemLocks()`). It is separate from the active-download rule above and does not replace it: that rule
+  is about a *download* owning the row; this one stops two writers of the same *media file* overlapping.
+  The background metadata remux (`metaembed.Scheduler` → `YtDlpService.EmbedMetadataGuarded`, started
+  from `UpdateLibraryItem` and from the two completion paths in `queue/manager.go`) holds the lock for
+  the whole ffmpeg run plus the final rename; it can take minutes on a multi-GB file. Every operation
+  that writes, moves or deletes an item's media file takes the same lock:
+  - **Requests use `TryLock`** and answer `409 "This item is being updated. Try again in a moment."`
+    instead of waiting, before anything is changed: `POST .../move`, `POST .../trim/accept`,
+    `DELETE .../file`, `PATCH /library/:id` **only when it carries `filename`** (the rename is the file
+    operation; edits of title/artist/etc. never need the lock), and `DELETE /library/:id` **only with
+    `deleteFiles=true`** (dropping just the row needs no lock: a remux finishing later sees the row gone
+    and discards its output). The bulk endpoints (`bulk-delete` with `deleteFiles`, `bulk-delete-file`)
+    use `TryLockAll`, all-or-nothing: if any selected item is busy the whole request is refused with the
+    same `409` and nothing is touched. The lock is taken before the item row is read so the row is current.
+  - **Workers use `Lock`** (blocking): `completeRedownload` holds the lock for the whole swap, so it
+    waits for an in-flight remux of the old file, and keeps user operations out until the row points at
+    the new file. Waiting is bounded by `MetadataEmbedTimeout` (5 min).
+  - **Coalescing.** `Scheduler.Submit(itemID, path, req)` never blocks. Per item there is at most one run
+    in flight plus one pending request; a new `Submit` while one runs replaces the pending request, so
+    the latest values win and a burst of N saves costs at most two remuxes (a bulk edit still fans out
+    across items, bounded by the scheduler's semaphore of 4 concurrent remuxes). The semaphore is taken
+    *before* the item lock, so a remux queued behind the cap does not make the item refuse requests.
+  - **Safe replace.** The remux writes to a uniquely named temp file (`os.CreateTemp` in the media file's
+    own directory: `.packrat-embed-<digits><ext>`, original permissions kept) instead of a fixed name.
+    Under the lock, immediately before the rename, the scheduler re-checks that the item row still
+    exists, its `path` still equals the path being re-tagged and the file still exists; otherwise the temp
+    file is deleted and the media file left alone (never recreated). The temp file is also removed on every
+    failure path.
+  - **Leftovers.** `importer.Scan` skips the temp names (current and the old `<name>.packrat-tmp<ext>`;
+    `fsutil.IsEmbedTmpName`), and at startup `fsutil.CleanStaleEmbedTemps` deletes regular files with
+    exactly those names under the media root that are older than `MetadataEmbedTimeout`.
+  - **Not covered, on purpose:** thumbnail / NFO sidecar / derivative writes and deletes (they are not
+    the media file; an image item's thumbnail *is* its file but those routes reject image items), the
+    stray-files cleanup (it deletes files that belong to no library item), `ScanMissingLibraryFiles`
+    (database only), and temp files under a collection's custom root outside the media root (the startup
+    cleanup only walks `MEDIA_ROOT`). A fresh download's first embed needs no wait: the item had no file
+    before.
 - **A reused ghost keeps its own text.** `CompleteGhostFromDownload(..., keepMetadata)` is driven by
   `ghostRun.createdByRun`: a ghost the run *created* takes the download's title/uploader/description
   (it was built from the same metadata); one the run merely *reused* (History retry, or any ghost that
@@ -711,7 +750,7 @@ grid/list/strip views; today only the Browse hero uses it.
   every hit touches the file's mtime, which is the "last accessed" time.
 - **Concurrency:** identical in-flight keys are coalesced in a small in-flight map (one ffmpeg
   per key; followers wait on the leader, which runs detached from any single request's context),
-  and at most 2 resizes run at once (a channel semaphore, same shape as `embedMetadataSem`).
+  and at most 2 resizes run at once (a channel semaphore, same shape as the one in `metaembed`).
 - **Eviction:** `cleanupImageCache` runs on the shared hourly ticker and deletes cache files not
   accessed within `imageproc.ResizeCacheMaxAge` (7 days, one constant). Orphaned variants of
   overwritten sources age out the same way.

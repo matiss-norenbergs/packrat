@@ -14,6 +14,7 @@ import (
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/ghostthumb"
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
@@ -160,7 +161,7 @@ func BulkFetchLibraryThumbnails(libraryRepo *repository.LibraryRepo, downloadsRe
 // metadata are left untouched. The inverse of a real download completing;
 // puts the item into the same "ghost" state CreateGhostLibraryItem creates
 // directly (see LibraryRepo.ClearFile).
-func DeleteLibraryItemFile(libraryRepo *repository.LibraryRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, mediaRoot, imagesRoot string) gin.HandlerFunc {
+func DeleteLibraryItemFile(libraryRepo *repository.LibraryRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, locks *itemlock.Locks, mediaRoot, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -168,6 +169,12 @@ func DeleteLibraryItemFile(libraryRepo *repository.LibraryRepo, originalsRepo *r
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 			return
 		}
+
+		if !locks.TryLock(id) {
+			writeItemBusy(c)
+			return
+		}
+		defer locks.Unlock(id)
 
 		item, err := libraryRepo.Get(ctx, id)
 		if err != nil {
@@ -242,7 +249,7 @@ func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRe
 // that's already gone or already has no file (already a ghost) is skipped
 // rather than failing the batch — a bulk selection spanning both real and
 // ghost items is an expected, not exceptional, case here.
-func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, downloadsRepo *repository.DownloadsRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, mediaRoot, imagesRoot string) gin.HandlerFunc {
+func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, downloadsRepo *repository.DownloadsRepo, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, locks *itemlock.Locks, mediaRoot, imagesRoot string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BulkDeleteLibraryItemFilesRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -255,6 +262,14 @@ func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, downlo
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		// All-or-nothing: if any item is busy, no file is touched.
+		release, ok := locks.TryLockAll(itemIDs)
+		if !ok {
+			writeItemBusy(c)
+			return
+		}
+		defer release()
 
 		tx, err := db.BeginTx(c.Request.Context(), nil)
 		if err != nil {

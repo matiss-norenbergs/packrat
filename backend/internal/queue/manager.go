@@ -22,7 +22,9 @@ import (
 	"packrat/backend/internal/imagefetch"
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/importer"
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/jellyfin"
+	"packrat/backend/internal/metaembed"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/nametemplate"
 	"packrat/backend/internal/nfo"
@@ -70,6 +72,8 @@ type DownloadManager struct {
 	jellyfinDebounce                  *jellyfin.Debouncer
 	progress                          *ProgressStore
 	broadcaster                       ws.Broadcaster
+	itemLocks                         *itemlock.Locks      // serializes writes/moves/deletes of an item's media file (package itemlock)
+	embedder                          *metaembed.Scheduler // background metadata remux, run under the item lock
 
 	jobs chan int64
 
@@ -94,6 +98,27 @@ type DownloadManager struct {
 
 	activeCount int32
 	queuedCount int32
+}
+
+// maxConcurrentEmbeds caps simultaneous metadata remuxes (each is an ffmpeg
+// process). A small fixed number rather than the (runtime-editable) download
+// worker count, since a remux is short and CPU-light next to a download.
+const maxConcurrentEmbeds = 4
+
+// ItemLocks is the per-library-item lock shared with the API handlers.
+func (m *DownloadManager) ItemLocks() *itemlock.Locks { return m.itemLocks }
+
+// Embedder is the shared background metadata-embed scheduler.
+func (m *DownloadManager) Embedder() *metaembed.Scheduler { return m.embedder }
+
+// currentMediaPath is the metaembed.CurrentPathFunc: the item's current
+// absolute media path, ok=false when it is gone or has no file.
+func (m *DownloadManager) currentMediaPath(ctx context.Context, id int64) (string, bool) {
+	item, err := m.libraryRepo.Get(ctx, id)
+	if err != nil || item.Path == "" {
+		return "", false
+	}
+	return filepath.Join(m.mediaRoot, filepath.FromSlash(item.Path)), true
 }
 
 func NewDownloadManager(
@@ -134,6 +159,8 @@ func NewDownloadManager(
 		runGhosts:                         make(map[int64]ghostRun),
 		lastBroadcastAt:                   make(map[int64]time.Time),
 	}
+	m.itemLocks = itemlock.New()
+	m.embedder = metaembed.New(m.itemLocks, ytdlp, m.currentMediaPath, maxConcurrentEmbeds)
 	m.jellyfinDebounce = jellyfin.NewDebouncer(jellyfinRefreshDebounce, m.doJellyfinRefresh)
 	return m
 }
@@ -621,11 +648,7 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 				overrideArtistName = &a.Name
 			}
 		}
-		go func(path, title string, artist *string, year, seq, season *int) {
-			if err := m.ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, seq, season); err != nil {
-				log.Printf("queue: embedding metadata into %s failed: %v", path, err)
-			}
-		}(result.FinalPath, libItem.Title, overrideArtistName, d.OverrideYear, d.OverrideSequenceNumber, d.OverrideSeasonNumber)
+		m.embedder.Submit(libID, result.FinalPath, metaembed.Request{Title: libItem.Title, Artist: overrideArtistName, Year: d.OverrideYear, SequenceNumber: d.OverrideSequenceNumber, SeasonNumber: d.OverrideSeasonNumber})
 	}
 
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: id, LibraryID: libID, Title: libItem.Title}})
@@ -900,6 +923,14 @@ var redownloadOverwritableFields = map[string]bool{
 func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, downloadID int64, d *models.Download, effectiveTitle string, meta *downloader.Metadata, result downloader.RunResult, resolution *string, duration int, sizeBytes *int64, effectiveRoot string) {
 	targetID := *d.TargetLibraryItemID
 
+	// Swapping the file in is a write to the item's media file, so it waits for
+	// any in-flight metadata remux of the old file (a worker, not a request, so
+	// blocking is fine) and keeps user operations (move, trim, delete) out until
+	// the row points at the new file. The follow-up embed below is only queued
+	// (Submit never blocks); it runs once this lock is released.
+	m.itemLocks.Lock(targetID)
+	defer m.itemLocks.Unlock(targetID)
+
 	fail := func(msg string) {
 		m.finishError(parentCtx, runCtx, downloadID, d.URL, msg, result.StdoutTail, result.StderrTail)
 		os.Remove(result.FinalPath)
@@ -1147,11 +1178,7 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 		m.broadcaster.Broadcast(ws.Event{Type: ws.EventCompleted, Payload: ws.CompletedPayload{DownloadID: downloadID, LibraryID: targetID, Title: updated.Title}})
 		return
 	}
-	go func(path, title string, artist *string, year, seq, season *int) {
-		if err := m.ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, seq, season); err != nil {
-			log.Printf("queue: embedding metadata into %s failed: %v", path, err)
-		}
-	}(newPath, updated.Title, artistName, updated.ReleaseYear, updated.SequenceNumber, updated.SeasonNumber)
+	m.embedder.Submit(targetID, newPath, metaembed.Request{Title: updated.Title, Artist: artistName, Year: updated.ReleaseYear, SequenceNumber: updated.SequenceNumber, SeasonNumber: updated.SeasonNumber})
 
 	m.triggerJellyfinRefresh(parentCtx, d)
 

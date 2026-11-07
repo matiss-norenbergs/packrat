@@ -623,6 +623,19 @@ item"}`**: `PATCH /library/:id`, `DELETE .../file`, `POST .../move`, `.../refres
 cancels the download) are unaffected. The multi-item endpoints skip such items instead of failing (see
 `skippedDownloading` on each); `bulk-delete` is unchanged and cancels their downloads.
 
+### Items whose file is being rewritten are locked briefly
+
+Editing title/artist/year/season/sequence starts a background ffmpeg remux that rewrites the media
+file's tags; it can run for minutes on a large file. While it (or another file operation on the same
+item) runs, a request that would write, move or delete that file answers **`409 {"error": "This item
+is being updated. Try again in a moment."}`** and changes nothing: `POST .../move`,
+`POST .../trim/accept`, `DELETE .../file`, `PATCH /library/:id` **when the body contains `filename`**,
+`DELETE /library/:id?deleteFiles=true`, and the bulk `POST /library/bulk-delete` (with
+`deleteFiles: true`) and `POST /library/bulk-delete-file`. The bulk endpoints are all-or-nothing: one
+busy item refuses the whole request. Requests never wait for the remux. Several `PATCH` saves of one item
+while a remux runs are coalesced into one follow-up remux with the latest values. This is separate from
+the active-download `409` above.
+
 ### `POST /api/library/:id/redownload` — no body
 
 Re-queues a download from `originalUrl`, reusing the exact original type/quality/filename/

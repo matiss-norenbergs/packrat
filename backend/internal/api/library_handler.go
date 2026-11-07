@@ -16,20 +16,22 @@ import (
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/importer"
+	"packrat/backend/internal/metaembed"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 )
 
-// embedMetadataSem caps how many EmbedMetadata goroutines (below, in
-// UpdateLibraryItem) can run at once — each is an ffmpeg remux, so with no
-// cap a large bulk edit (BulkEditLibraryItemsDialog fires one PATCH per
-// changed row, N in parallel) would fan out N simultaneous ffmpeg processes
-// with no backpressure. Sized as a fixed small constant rather than tied to
-// the (runtime-editable) download worker count, since this is a short,
-// CPU-light remux rather than a full download.
-var embedMetadataSem = make(chan struct{}, 4)
+// itemBusyMessage is the 409 body when a file-changing request finds the item
+// locked (see package itemlock): a metadata remux or another file operation
+// is in flight. Requests never wait for the lock — a remux can take minutes.
+const itemBusyMessage = "This item is being updated. Try again in a moment."
+
+// writeItemBusy answers 409 with itemBusyMessage.
+func writeItemBusy(c *gin.Context) {
+	c.JSON(http.StatusConflict, gin.H{"error": itemBusyMessage})
+}
 
 // writeRenamePairError reports a fsutil.RenamePair failure as 409 when it's
 // a destination-already-exists collision, matching the 409-style handling
@@ -186,6 +188,18 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, downloadsRepo *repository.D
 		}
 		deleteFiles := c.Query("deleteFiles") == "true"
 
+		// Removing the media file must not race a metadata remux (which would
+		// put the file back). Dropping only the row needs no lock: the remux
+		// notices the row is gone and discards its output.
+		if deleteFiles {
+			locks := mgr.ItemLocks()
+			if !locks.TryLock(id) {
+				writeItemBusy(c)
+				return
+			}
+			defer locks.Unlock(id)
+		}
+
 		item, err := repo.Get(c.Request.Context(), id)
 		if err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
@@ -265,6 +279,16 @@ func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, downloadsR
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		// All-or-nothing: if any selected item is busy, nothing is deleted.
+		if req.DeleteFiles {
+			release, ok := mgr.ItemLocks().TryLockAll(req.ItemIDs)
+			if !ok {
+				writeItemBusy(c)
+				return
+			}
+			defer release()
 		}
 
 		cancelActiveDownloads(c.Request.Context(), downloadsRepo, mgr, req.ItemIDs)
@@ -348,7 +372,7 @@ func clearableInt(reqVal *int, current *int) *int {
 	return reqVal
 }
 
-func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *downloader.YtDlpService, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
+func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, mgr *queue.DownloadManager, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -359,6 +383,18 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		// Renaming the file is a file operation: refuse before anything in the
+		// request is applied if a remux (or another file operation) holds the
+		// item. Taken before the Get so the row read below is current.
+		if req.Filename != nil {
+			locks := mgr.ItemLocks()
+			if !locks.TryLock(id) {
+				writeItemBusy(c)
+				return
+			}
+			defer locks.Unlock(id)
 		}
 
 		item, err := repo.Get(c.Request.Context(), id)
@@ -475,17 +511,12 @@ func UpdateLibraryItem(repo *repository.LibraryRepo, mediaRoot string, ytdlp *do
 			year := clearableInt(req.Year, item.ReleaseYear)
 			sequenceNumber := clearableInt(req.SequenceNumber, item.SequenceNumber)
 			seasonNumber := clearableInt(req.SeasonNumber, item.SeasonNumber)
-			// Backgrounded: c.Request.Context() would be cancelled as soon as
-			// the handler returns, so this uses context.Background() instead —
-			// EmbedMetadata applies its own internal timeout regardless.
-			// embedMetadataSem bounds how many of these run concurrently.
-			go func(path, title string, artist *string, year, sequenceNumber, seasonNumber *int) {
-				embedMetadataSem <- struct{}{}
-				defer func() { <-embedMetadataSem }()
-				if err := ytdlp.EmbedMetadata(context.Background(), path, title, artist, year, sequenceNumber, seasonNumber); err != nil {
-					log.Printf("library: embedding metadata into %s failed: %v", path, err)
-				}
-			}(mediaAbs, title, artistName, year, sequenceNumber, seasonNumber)
+			// Backgrounded and never blocks the response. The scheduler runs it
+			// under the item's lock, coalesces rapid saves of one item into at
+			// most one running plus one pending (latest values win) and bounds
+			// how many remuxes run at once across items (a bulk edit fires one
+			// PATCH per row).
+			mgr.Embedder().Submit(id, mediaAbs, metaembed.Request{Title: title, Artist: artistName, Year: year, SequenceNumber: sequenceNumber, SeasonNumber: seasonNumber})
 		}
 
 		if req.OriginalURL != nil {
@@ -604,6 +635,13 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+
+		locks := mgr.ItemLocks()
+		if !locks.TryLock(id) {
+			writeItemBusy(c)
+			return
+		}
+		defer locks.Unlock(id)
 
 		item, err := repo.Get(c.Request.Context(), id)
 		if err != nil {
