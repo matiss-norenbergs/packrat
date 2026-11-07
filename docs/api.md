@@ -714,12 +714,22 @@ deleted (`DELETE /:id/file`) or found missing on disk (`scan-missing`).
   the already-documented `DELETE /api/library/:id?deleteFiles=true`: that one deletes the DB row
   entirely and is permanent — this keeps the row so it can be redownloaded later. `400` item is
   already a ghost, `404` unknown id, `204` on success.
-- **`POST /api/library/scan-missing`** — no body. Checks every non-ghost item's on-record file
+- **`POST /api/library/scan-missing`** — optional body `{"confirm": true}` (a missing or empty body
+  works exactly as before; malformed JSON is `400`). Checks every non-ghost item's on-record file
   against disk; anything gone is converted to a ghost the same way. On-demand only (Settings →
-  Library → "Scan for Missing Files"), never scheduled.
+  Library → "Scan for Missing Files"), never scheduled. Only a definite "does not exist" counts as
+  missing: any other stat error (permissions, I/O error, stale network handle) leaves the item
+  untouched and is counted in `unreadable`.
   ```json
-  { "scanned": 137, "missing": [ { "id": 118, "title": "Some Video" } ] }
+  { "scanned": 137, "missing": [ { "id": 118, "title": "Some Video" } ], "unreadable": 0 }
   ```
+  Guards (nothing is changed when one trips; the full list is decided before any item is cleared):
+  - `409 {"error": "The media folder … Is it mounted? Nothing was changed."}` — the media root does
+    not exist, is not a readable folder, or is completely empty while the library has non-ghost
+    items. `confirm` does not override this.
+  - `409 {"error": "This would convert M of N items to ghosts. …", "requiresConfirm": true,
+    "scanned": N, "wouldClear": M}` — the scan would clear 10 or more items **and** at least half of
+    those scanned. Resend with `{"confirm": true}` to proceed (still `does not exist` only).
 - **`POST /api/library/bulk-redownload`** — `{ "itemIds": [1, 2, 3] }`. Redownloads each item from
   its own `originalUrl` (same resolution/duration-only overwrite as single-item Redownload). Items
   with no URL, with an active download, or whose enqueue fails, are silently skipped.

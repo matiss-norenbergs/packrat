@@ -31,6 +31,7 @@ import {
   redownloadLibraryItemFromUrl,
   redownloadLibraryThumbnail,
   refreshLibraryItemMetadata,
+  scanMissingConfirmInfo,
   scanMissingLibraryFiles,
   setLibraryThumbnail,
   startFrameMatch,
@@ -202,19 +203,30 @@ export function useDeleteLibraryItemThumbnail() {
   })
 }
 
-export function useScanMissingLibraryFiles() {
+// onNeedsConfirm is called (instead of showing an error toast) when the server refuses a scan that
+// would turn a large share of the library into ghosts; call mutate({ confirm: true }) to go ahead.
+export function useScanMissingLibraryFiles(options?: { onNeedsConfirm?: (info: { scanned: number; wouldClear: number }) => void }) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: () => scanMissingLibraryFiles(),
+    mutationFn: (vars?: { confirm?: boolean }) => scanMissingLibraryFiles(vars?.confirm === true),
     onSuccess: (result) => {
+      const unreadable = result.unreadable ?? 0
+      const unreadableNote = unreadable > 0 ? ` · ${unreadable} could not be checked (left unchanged)` : ""
       toast.success(
-        result.missing.length > 0
+        (result.missing.length > 0
           ? `Found ${result.missing.length} missing file(s), marked as ghosts`
-          : `No missing files found (${result.scanned} checked)`,
+          : `No missing files found (${result.scanned} checked)`) + unreadableNote,
       )
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     },
-    onError: (err: Error) => toast.error(`Scan failed: ${err.message}`),
+    onError: (err: Error) => {
+      const info = scanMissingConfirmInfo(err)
+      if (info && options?.onNeedsConfirm) {
+        options.onNeedsConfirm(info)
+        return
+      }
+      toast.error(`Scan failed: ${err.message}`)
+    },
   })
 }
 

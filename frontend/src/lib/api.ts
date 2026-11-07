@@ -131,12 +131,20 @@ export class ApiError extends Error {
   retryAfterSeconds?: number
   // Set when the pending two-factor login is gone (expired, used up or too many wrong codes).
   challengeExpired?: boolean
-  constructor(message: string, status: number, extra?: { retryAfterSeconds?: number; challengeExpired?: boolean }) {
+  // The error response's JSON body, for callers that need more than the message (e.g. the
+  // scan-missing "requiresConfirm" counts).
+  body?: Record<string, unknown>
+  constructor(
+    message: string,
+    status: number,
+    extra?: { retryAfterSeconds?: number; challengeExpired?: boolean; body?: Record<string, unknown> },
+  ) {
     super(message)
     this.name = "ApiError"
     this.status = status
     this.retryAfterSeconds = extra?.retryAfterSeconds
     this.challengeExpired = extra?.challengeExpired
+    this.body = extra?.body
   }
 }
 
@@ -213,6 +221,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(body.error ?? `${res.status} ${res.statusText}`, res.status, {
       challengeExpired: body.challengeExpired === true,
+      body: body && typeof body === "object" ? body : undefined,
     })
   }
   if (res.status === 204) return undefined as T
@@ -556,8 +565,22 @@ export function deleteLibraryItemThumbnail(id: number): Promise<void> {
   return request<void>(`/library/${id}/thumbnail`, { method: "DELETE" })
 }
 
-export function scanMissingLibraryFiles(): Promise<ScanMissingLibraryFilesResult> {
-  return request<ScanMissingLibraryFilesResult>("/library/scan-missing", { method: "POST" })
+// With no argument the request has no body, exactly as before. The server answers 409 with
+// `requiresConfirm` when the scan would ghost a large share of the library; resend with confirm=true
+// to go ahead (see scanMissingConfirmInfo).
+export function scanMissingLibraryFiles(confirm = false): Promise<ScanMissingLibraryFilesResult> {
+  return request<ScanMissingLibraryFilesResult>("/library/scan-missing", {
+    method: "POST",
+    ...(confirm ? { body: JSON.stringify({ confirm: true }) } : {}),
+  })
+}
+
+// The counts from scan-missing's "this would ghost a lot of the library" 409, or null for any other error.
+export function scanMissingConfirmInfo(err: unknown): { scanned: number; wouldClear: number } | null {
+  if (!(err instanceof ApiError) || err.status !== 409 || err.body?.requiresConfirm !== true) return null
+  const { scanned, wouldClear } = err.body
+  if (typeof scanned !== "number" || typeof wouldClear !== "number") return null
+  return { scanned, wouldClear }
 }
 
 export function scanStrayFiles(): Promise<StrayFilesResult> {

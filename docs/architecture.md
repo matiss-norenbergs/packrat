@@ -500,6 +500,13 @@ empty-string sentinel `LibraryRepo.ClearFile` uses elsewhere) — no schema chan
 support them. Three independent paths converge on this state: creating one directly
 (`CreateGhostLibraryItem`), deleting just a real item's file (`DeleteLibraryItemFile`/
 `ClearFile`), or the on-demand `scan-missing` sweep finding a file gone from disk.
+Because `ClearFile` blanks `path`/`filename` irreversibly, `scan-missing` is conservative: it
+converts an item only on `fs.ErrNotExist` (any other `os.Stat` error counts as "unreadable" and is
+left alone), refuses with `409` when the media root is missing, unreadable or empty while the
+library has non-ghost items (an unmounted bind mount looks exactly like a library whose files are
+all gone), and decides the whole to-clear list before writing — a scan that would clear 10 or more
+items and at least half of those scanned answers `409 requiresConfirm` unless the optional body says
+`{"confirm": true}`.
 `fetchGhostThumbnail` (`ghost_handler.go`) is shared between ghost creation and the Library
 toolbar's bulk "Download thumbnail(s)" action — it always writes only the `ImagesRoot`-relative
 WebP tiers, never the `MediaRoot`-relative `thumbnail` field, since a ghost has no `MediaRoot`

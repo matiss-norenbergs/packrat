@@ -624,6 +624,15 @@ type MissingLibraryFileResponse struct {
 type ScanMissingLibraryFilesResponse struct {
 	Scanned int                          `json:"scanned"`
 	Missing []MissingLibraryFileResponse `json:"missing"`
+	// Unreadable counts items whose file could not be checked (a stat error other than "does not
+	// exist": permissions, I/O error, stale network handle). They are left untouched.
+	Unreadable int `json:"unreadable"`
+}
+
+// ScanMissingLibraryFilesRequest is the optional body of POST /api/library/scan-missing. Confirm
+// lets a scan that would convert a large share of the library proceed (see the mass-clear guard).
+type ScanMissingLibraryFilesRequest struct {
+	Confirm bool `json:"confirm"`
 }
 
 // ThumbnailCandidateResponse is one of the candidate frames returned by
