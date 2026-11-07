@@ -414,7 +414,8 @@ item, for the same file-doesn't-have-what's-needed reason — see the Thumbnail 
   the title, thumbnail, collection, artist/year/season/sequence and tags already on it. When the
   download finishes the *same* item is filled in with the file (it keeps its id, so it doesn't jump
   or duplicate). Image downloads create no ghost. **Cancelling** a download removes the ghost it
-  created; a ghost that existed before (Add item, a subscription, or one kept after a failure) is
+  created and deletes the unfinished yt-dlp files (`.part`, `.ytdl`, fragment files) that run left
+  next to it; a failure or timeout keeps them so a retry resumes. A ghost that existed before (Add item, a subscription, or one kept after a failure) is
   never removed by a cancel. **A failure, timeout or app restart keeps the ghost** (the Downloads /
   History row shows the error) — **Retry** in History reuses that ghost rather than creating a
   second item, and **Download now** is the manual alternative. While the download is *downloading*

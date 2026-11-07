@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -330,12 +331,18 @@ func (s *YtDlpService) ExtractFrame(ctx context.Context, mediaPath string, atSec
 // RunResult carries the outcome of a completed (successful or failed)
 // download subprocess.
 type RunResult struct {
-	ExitCode   int
-	FinalPath  string // captured from the PACKRAT-FILEPATH print line; empty if never seen
-	StdoutTail string // last portion of stdout, capped
-	StderrTail string // last portion of stderr, capped
-	Command    string // the full command line, for debugging/logging
+	ExitCode  int
+	FinalPath string // captured from the PACKRAT-FILEPATH print line; empty if never seen
+	// Destinations lists the files yt-dlp reported writing via
+	// "[download] Destination:" lines (deduplicated, in order, capped), so a
+	// user-cancelled run can clean up its .part/.ytdl leftovers.
+	Destinations []string
+	StdoutTail   string // last portion of stdout, capped
+	StderrTail   string // last portion of stderr, capped
+	Command      string // the full command line, for debugging/logging
 }
+
+const maxDestinations = 32 // caps RunResult.Destinations
 
 const logTailCap = 8000 // characters; caps stored stdout/stderr per the Logging Hygiene requirement
 
@@ -361,6 +368,7 @@ func (s *YtDlpService) Run(ctx context.Context, job DownloadJob, onProgress func
 	}
 
 	var finalPath string
+	var destinations []string
 	var stdoutTail, stderrTail tailBuffer
 
 	stdoutDone := make(chan struct{})
@@ -380,6 +388,9 @@ func (s *YtDlpService) Run(ctx context.Context, job DownloadJob, onProgress func
 			if path, ok := ParseFilepathLine(line); ok {
 				finalPath = path
 			}
+			if path, ok := ParseDestinationLine(line); ok && len(destinations) < maxDestinations && !slices.Contains(destinations, path) {
+				destinations = append(destinations, path)
+			}
 		}
 	}()
 
@@ -398,10 +409,11 @@ func (s *YtDlpService) Run(ctx context.Context, job DownloadJob, onProgress func
 	waitErr := cmd.Wait()
 
 	result := RunResult{
-		FinalPath:  finalPath,
-		StdoutTail: stdoutTail.String(),
-		StderrTail: stderrTail.String(),
-		Command:    s.BinPath + " " + strings.Join(RedactArgs(args), " "),
+		FinalPath:    finalPath,
+		Destinations: destinations,
+		StdoutTail:   stdoutTail.String(),
+		StderrTail:   stderrTail.String(),
+		Command:      s.BinPath + " " + strings.Join(RedactArgs(args), " "),
 	}
 
 	if waitErr != nil {

@@ -28,6 +28,22 @@ const ProgressTemplate = progressLinePrefix +
 // changes made during postprocessing.
 const FilepathPrintTemplate = "after_move:" + filepathLinePrefix + "%(filepath)s"
 
+// destinationLinePrefix starts the line yt-dlp logs for each file it begins
+// writing, e.g. "[download] Destination: /media/Clip.f137.mp4" (one per
+// format when video and audio are fetched separately).
+const destinationLinePrefix = "[download] Destination: "
+
+// ParseDestinationLine returns the path and true if line is a yt-dlp
+// "[download] Destination:" log line.
+func ParseDestinationLine(line string) (path string, ok bool) {
+	rest, found := strings.CutPrefix(strings.TrimSpace(line), destinationLinePrefix)
+	rest = strings.TrimSpace(rest)
+	if !found || rest == "" {
+		return "", false
+	}
+	return rest, true
+}
+
 type ProgressEvent struct {
 	Status           string // "downloading" | "finished"
 	Filename         string

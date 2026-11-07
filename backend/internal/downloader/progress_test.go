@@ -78,3 +78,23 @@ func TestBuildFormatSelector(t *testing.T) {
 		t.Fatalf("expected fallback to best, got %s", got)
 	}
 }
+
+func TestParseDestinationLine(t *testing.T) {
+	cases := []struct {
+		line string
+		want string
+		ok   bool
+	}{
+		{"[download] Destination: /media/Clip.f137.mp4", "/media/Clip.f137.mp4", true},
+		{"  [download] Destination: /media/Clip.mp4  ", "/media/Clip.mp4", true},
+		{"[download] Destination: ", "", false},
+		{"[ExtractAudio] Destination: /media/Clip.mp3", "", false},
+		{"[download] /media/Clip.mp4 has already been downloaded", "", false},
+	}
+	for _, tc := range cases {
+		got, ok := ParseDestinationLine(tc.line)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("ParseDestinationLine(%q) = %q, %v; want %q, %v", tc.line, got, ok, tc.want, tc.ok)
+		}
+	}
+}
