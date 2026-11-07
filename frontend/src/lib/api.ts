@@ -104,6 +104,10 @@ import type {
   UpdateLibraryProgressRequest,
   UpdateSettingsRequest,
   UpdateTagRequest,
+  DeleteSystemEventsRequest,
+  SystemEventFacets,
+  SystemEventQuery,
+  SystemEventsResponse,
   UserPreferences,
   TableLayout,
   TableLayouts,
@@ -922,6 +926,29 @@ export function fetchHistory(): Promise<HistoryItem[]> {
 
 export function fetchLogs(): Promise<LogEntry[]> {
   return request<LogEntry[]>("/logs")
+}
+
+export function fetchSystemEvents(params: SystemEventQuery): Promise<SystemEventsResponse> {
+  const search = new URLSearchParams()
+  if (params.levels && params.levels.length > 0) search.set("level", params.levels.join(","))
+  if (params.categories && params.categories.length > 0) search.set("category", params.categories.join(","))
+  if (params.q) search.set("q", params.q)
+  if (params.from) search.set("from", params.from)
+  if (params.to) search.set("to", params.to)
+  if (params.sort) search.set("sort", params.sort)
+  if (params.dir) search.set("dir", params.dir)
+  if (params.page != null) search.set("page", String(params.page))
+  if (params.pageSize != null) search.set("pageSize", String(params.pageSize))
+  const qs = search.toString()
+  return request<SystemEventsResponse>(`/system-events${qs ? `?${qs}` : ""}`)
+}
+
+export function fetchSystemEventFacets(): Promise<SystemEventFacets> {
+  return request<SystemEventFacets>("/system-events/facets")
+}
+
+export function deleteSystemEvents(payload: DeleteSystemEventsRequest): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/system-events", { method: "DELETE", body: JSON.stringify(payload) })
 }
 
 export function retryHistoryItem(id: number): Promise<{ id: number }> {

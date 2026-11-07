@@ -6,6 +6,7 @@ export type FeatureKey =
   | "featureFrameMatchingEnabled"
   | "featureCompareListEnabled"
   | "featureFileImportEnabled"
+  | "featureSystemEventsEnabled"
 
 // Unlike requiresSetting's opt-in features (AI Enhancement), these are on
 // unless the user turned them off, so a feature only counts as disabled once

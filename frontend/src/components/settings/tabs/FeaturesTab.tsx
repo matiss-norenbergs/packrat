@@ -65,7 +65,7 @@ function FeaturesTabBody({ settings }: { settings: Settings }) {
         <SettingsCard
           icon={Puzzle}
           title="Optional features"
-          description="Turn off the parts of Packrat you don't use. A disabled feature disappears from the menu and its background work stops, but its data is never deleted — turning it back on restores everything. AI Enhancement has its own switch in the AI Enhancement tab."
+          description="Turn off the parts of Packrat you don't use. A disabled feature disappears from the menu and its background work stops, but its data is never deleted — turning it back on restores everything. AI Enhancement has its own switch in the AI Enhancement tab, and the system log has its own switch in the History tab."
         >
           <div className="max-w-lg space-y-4">
             {FEATURE_TOGGLES.map(({ key, label, info }) => (
