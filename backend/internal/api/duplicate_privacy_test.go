@@ -123,7 +123,7 @@ func TestBatchSkippedEntriesAreFlaggedBlurred(t *testing.T) {
 	}
 	got := map[int64]bool{}
 	for _, s := range res.Skipped {
-		got[s.LibraryItemID] = s.Blurred
+		got[*s.LibraryItemID] = s.Blurred
 	}
 	if !got[sc.inPrivateParent] || !got[sc.privateTagged] || got[sc.plain] {
 		t.Fatalf("blurred flags wrong: %v", got)
@@ -137,7 +137,7 @@ func TestBatchSkippedEntriesAreFlaggedBlurred(t *testing.T) {
 	}
 	for _, s := range res.Skipped {
 		if s.Blurred {
-			t.Errorf("privacy off but item %d flagged", s.LibraryItemID)
+			t.Errorf("privacy off but item %d flagged", *s.LibraryItemID)
 		}
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,12 +21,43 @@ type QueuedItemResponse struct {
 	URL string `json:"url"`
 }
 
+// Skipped reasons (SkippedItemResponse.Reason).
+const (
+	skipReasonInLibrary        = "in_library"
+	skipReasonDuplicateInBatch = "duplicate_in_batch"
+)
+
 type SkippedItemResponse struct {
-	URL           string `json:"url"`
-	Title         string `json:"title"`
-	LibraryItemID int64  `json:"libraryItemId"`
+	URL   string `json:"url"`
+	Title string `json:"title"`
+	// LibraryItemID is the matched library item. Absent when Reason is
+	// "duplicate_in_batch": the earlier copy in the same request is only
+	// queued, so there is no library item to point at.
+	LibraryItemID *int64 `json:"libraryItemId,omitempty"`
 	// Blurred: the matched item is private by the library item privacy rule; show Title hashed.
 	Blurred bool `json:"blurred"`
+	// Reason is "in_library" (a library item matched) or "duplicate_in_batch"
+	// (an earlier entry of the same request has the same URL or video id).
+	Reason string `json:"reason"`
+}
+
+// normalizeBatchURL is the key for "same URL" within one batch: scheme and
+// host are case-insensitive, the fragment never reaches the server, and a
+// trailing slash on the path is insignificant. Anything unparsable is
+// compared as the trimmed string.
+func normalizeBatchURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return raw
+	}
+	u.Scheme = strings.ToLower(u.Scheme)
+	u.Host = strings.ToLower(u.Host)
+	u.Fragment = ""
+	if u.Path != "/" {
+		u.Path = strings.TrimRight(u.Path, "/")
+	}
+	return u.String()
 }
 
 type FailedItemResponse struct {
@@ -86,16 +119,34 @@ func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRe
 		}
 	}
 
+	// URLs and video ids already queued by THIS call: the library check above
+	// can't see them (nothing is in the library yet), so without this the same
+	// URL pasted twice, or a video a playlist lists twice, would queue twice.
+	queuedURLs := make(map[string]bool, len(entries))
+	queuedVideoIDs := make(map[string]bool, len(entries))
+
 	for i, entry := range entries {
 		if skipDuplicates {
 			if dup, ok := dupsByIndex[i]; ok {
+				dupID := dup.ID
 				result.Skipped = append(result.Skipped, SkippedItemResponse{
 					URL:           entry.req.URL,
 					Title:         dup.Title,
-					LibraryItemID: dup.ID,
+					LibraryItemID: &dupID,
 					Blurred:       blurredByID[dup.ID],
+					Reason:        skipReasonInLibrary,
 				})
 				msg := fmt.Sprintf("Already in library (added %s)", dup.DownloadedAt.Format(time.RFC3339))
+				_, _ = historyRepo.Create(ctx, nil, entry.req.URL, "duplicate", &msg)
+				continue
+			}
+			if queuedURLs[normalizeBatchURL(entry.req.URL)] || (entry.videoID != "" && queuedVideoIDs[entry.videoID]) {
+				result.Skipped = append(result.Skipped, SkippedItemResponse{
+					URL:    entry.req.URL,
+					Title:  entry.req.URL,
+					Reason: skipReasonDuplicateInBatch,
+				})
+				msg := "Duplicate within this request"
 				_, _ = historyRepo.Create(ctx, nil, entry.req.URL, "duplicate", &msg)
 				continue
 			}
@@ -107,6 +158,10 @@ func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRe
 			continue
 		}
 		result.Queued = append(result.Queued, QueuedItemResponse{ID: id, URL: entry.req.URL})
+		queuedURLs[normalizeBatchURL(entry.req.URL)] = true
+		if entry.videoID != "" {
+			queuedVideoIDs[entry.videoID] = true
+		}
 	}
 
 	return result, nil

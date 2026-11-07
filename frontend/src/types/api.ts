@@ -756,9 +756,12 @@ export interface QueuedItem {
 export interface SkippedItem {
   url: string
   title: string
-  libraryItemId: number
+  /** The matched library item. Absent when `reason` is "duplicate_in_batch" (nothing is in the library yet). */
+  libraryItemId?: number
   /** The matched item is private by the library privacy rule: show its title hashed. */
   blurred: boolean
+  /** "in_library" (also assumed when absent, for older servers) or "duplicate_in_batch". */
+  reason?: "in_library" | "duplicate_in_batch"
 }
 
 export interface FailedItem {

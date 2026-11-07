@@ -379,7 +379,13 @@ rather than re-downloaded. Response `201`:
 
 A per-item enqueue failure lands in `failed` (`{url, error}`) rather than aborting the whole batch.
 Each `skipped` entry carries `blurred` — the library item privacy rule applied to the matched item,
-as in the duplicate warning of `POST /api/downloads/preview`.
+as in the duplicate warning of `POST /api/downloads/preview` — and a `reason`:
+`"in_library"` (a library item matched; `libraryItemId` is set, as before) or `"duplicate_in_batch"`
+(with `skipDuplicates`, an earlier entry of the same request has the same normalized URL — scheme/host
+case, fragment and trailing slash ignored — or the same non-empty video id; there is no library item, so
+`libraryItemId` is **absent** and `title` is the URL). The first copy is queued, later copies are skipped
+and recorded in History as `duplicate` ("Duplicate within this request"). Without `skipDuplicates`
+nothing changes. `POST /api/downloads/playlist` returns the same shape.
 
 ### `POST /api/downloads/:id/cancel` — no body
 

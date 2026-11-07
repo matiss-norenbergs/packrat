@@ -207,7 +207,9 @@ The live download queue.
   paste a list of URLs (one per line) into a textarea and add them all as rows in one go. Up to 50
   rows per batch. Rows alternate background shading so it's easy to tell where one ends and the
   next begins when scanning a long list. "Skip duplicates" avoids re-queuing a URL already in the
-  library.
+  library, and queues a URL (or a video id, for playlists) that appears more than once in the same batch only
+  once; the result toast counts those separately ("N duplicate in this batch") and History records them as
+  duplicates ("Duplicate within this request").
 - **Queue list** — each row shows a thumbnail, title, status badge, and live progress (percent,
   speed, ETA) while downloading, streamed over WebSocket rather than polled. A failed or
   interrupted row shows its error message inline.
