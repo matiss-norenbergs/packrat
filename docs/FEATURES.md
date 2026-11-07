@@ -726,6 +726,72 @@ debugging rather than as a live control panel.
 - Proxy credentials, URL credentials and the cookies file path are always masked in the command
   line shown here.
 
+### System view
+
+When the system log is switched on (Settings → History, default on) the Logs page has a second view,
+**System**, next to **Downloads** (`?view=system`; the Downloads view is unchanged and is the only one
+shown while the log is off). It lists the server's own notable events (see [System log](#system-log)
+below), newest first, 50 per page, with a count footer.
+
+- **The query runs on the server.** The table never sorts or filters rows itself: every filter, the
+  sort and the page go to `GET /api/system-events`, so it stays fast with a large log. The filters and
+  the sort live in the URL (they survive navigation); a change of any of them goes back to page 1 and
+  clears the selection.
+- Columns: **Time** (sortable, newest first by default), **Level** (a tag: info neutral, warning amber,
+  error red; sortable), **Category** (sortable) and **Message**. No saved Table layout here.
+- Toolbar: **Delete** (the selected events) on the left (disabled with nothing selected; a confirmation shows the
+  count; the list and the filter dropdowns refresh afterwards). On the right: **Level** and **Category**
+  multi-selects (their options and counts come from the log itself), a **From** / **To** date range (inclusive,
+  in your timezone), **Clear filters** (only while something is filtered) and a search box (debounced,
+  case-insensitive match on the message).
+- The usual selection gestures work (click, shift-click ranges, ctrl/cmd-click, drag). Double-click a row, or
+  right-click → **View details**, for its message, time, level, category and the event's details as
+  pretty-printed JSON in a scrollable block with a copy button.
+- Two empty states: no events at all ("No system events recorded yet…") and none matching the filters
+  ("No events match these filters.").
+
+## System log
+
+A small, curated record of what the server does that you might want to look back on after an update
+recreates the container: stdout is gone then, the system log is in the database and survives. It is not
+a logging framework — console logging is unchanged and only the events below are recorded.
+
+**What is recorded** (category → events; level in brackets):
+
+- `startup` — Packrat started, with the app, schema, yt-dlp and ffmpeg versions (gathered in the
+  background so listening is not delayed) [info].
+- `migration` — database migrated: from/to schema version, how long it took, and the name and size of the
+  pre-migration copy when one was made; also when the `--reset-password` / `--disable-2fa` admin command
+  applied the migrations [info]. Only when migrations were actually applied. A migration that *fails* cannot
+  be written to the very database it is migrating: it stays in the console output.
+- `recovery` — downloads marked interrupted at startup, frame-match items reset (counts, only when above
+  zero) [warning].
+- `shutdown` — shut down cleanly [info], or how many background jobs had not finished when the wait ran out
+  [warning].
+- `restore` — Settings import, Library import and the full restore (from Backup history or an uploaded
+  file): completed with counts [info], refused (unreadable file, wrong password) [warning], failed [error].
+- `maintenance` — Scan for Missing Files (scanned / ghosted / unreadable; refused because the media folder
+  looks unavailable, or stopped by the safety guard) [info/warning], stray files deleted (count) [info],
+  image backfill that finished with failures and a failed scheduled thumbnail-enhancement sweep.
+- `ytdlp` — yt-dlp updated (version before and after) [info] or the update failed [error].
+- `security` — password changed, two-factor enabled / disabled / recovery codes regenerated, other sessions
+  signed out, a password reset or 2FA removal by an admin command, and a login lockout starting (once per
+  lockout, never per failed attempt; individual failed logins are not recorded). These carry the client IP
+  (the same address the login throttle uses, so `TRUSTED_PROXIES` is respected).
+- `backup` — a scheduled backup failed [error].
+- `subscription` — a subscription started failing its checks (recorded once, on the change from OK to
+  failing) [warning], and when it is being checked successfully again [info].
+
+**What is never recorded:** links, titles, file names of library items, tokens, cookies, passwords, backup
+passwords or file contents. Details hold counts, versions, durations, folder or copy names and error text
+with credentials masked; any URL left in a message is replaced by `[url]` and long text is cut.
+
+- **Not part of backups.** Events are not exported, backed up or restored; a full restore leaves the log as it is.
+- **Flood guard.** An event identical in level, category and message to one recorded in the last 60 seconds
+  is dropped (one line in the console says so), so a failing loop cannot fill the log.
+- **Recording never gets in the way:** a failed write is only logged to the console, and it never slows or
+  fails the operation it describes.
+
 ## Backup
 
 Export/import settings and library data as portable JSON files — for moving to a new install,
@@ -1064,7 +1130,14 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   blurred (weak / default / strong) until clicked to reveal, and **Show private items unblurred in
   Browse** (Browse only; Library and Collections keep blurring).
 - **History** — "Anonymize History Links" toggle (see History above); how long to keep history
-  entries before automatic pruning, plus a "Clear all now" button.
+  entries before automatic pruning, plus a "Clear all now" button. A second card, **System log**, holds
+  the [system log](#system-log)'s settings: **Record system events** (default on; off means nothing new is
+  recorded, the Logs page's System view is hidden and its API answers `403`, while the stored events are
+  kept and come back when you turn it on again; console logging is unaffected), **Keep the last**
+  (500 / 1,000 / 5,000 / 10,000 / Unlimited, default Unlimited — the oldest events beyond the count are
+  deleted right after you save a lower value, at startup and in the hourly sweep; Unlimited never deletes
+  anything) and **Clear all now** (a confirmation shows how many events will go; it runs immediately and is
+  not part of Save; unavailable while the log is off). Both settings save with the tab's Save button.
 - **Library** — resolution and thumbnail quality tiers (the color-coded low/medium/high thresholds
   shown on library cards); how many candidate frames "Choose from Video" offers (2/4/6/8/12/24) and
   which portion of the video (by percentage of duration) they're pulled from; whether the medium

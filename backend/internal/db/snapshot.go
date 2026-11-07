@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/shirou/gopsutil/v4/disk"
 )
@@ -49,6 +50,22 @@ func (e *SnapshotError) Error() string {
 
 func (e *SnapshotError) Unwrap() error { return e.Cause }
 
+// MigrationResult reports what MigrateWithSnapshot did. A migration that fails is not reported
+// here: it returns an error and, since the system log lives in the database being migrated, the
+// failure stays in stdout only.
+type MigrationResult struct {
+	// Applied is true when the schema version went up (including a brand-new database).
+	Applied bool
+	// From is the version before (0 for a new database), To the version after.
+	From, To int
+	// Duration is how long applying the migrations took (the safety copy is not included).
+	Duration time.Duration
+	// SnapshotPath and SnapshotSize describe the pre-migration copy, empty/0 when none was made
+	// (new install, nothing pending, or SKIP_PRE_MIGRATION_BACKUP).
+	SnapshotPath string
+	SnapshotSize int64
+}
+
 // MigrateWithSnapshot is Migrate preceded by a safety copy of the database.
 //
 //  1. If the database has no migration applied yet (new install), is dirty, or
@@ -59,17 +76,33 @@ func (e *SnapshotError) Unwrap() error { return e.Cause }
 //     returned. skip=true (SKIP_PRE_MIGRATION_BACKUP) skips the copy with a warning.
 //  3. After a successful Migrate it prunes copies beyond PreMigrationKeep. A
 //     failed Migrate prunes nothing.
-func MigrateWithSnapshot(conn *sql.DB, migrationsDir, snapshotDir string, skip bool) error {
+func MigrateWithSnapshot(conn *sql.DB, migrationsDir, snapshotDir string, skip bool) (MigrationResult, error) {
+	started := time.Now()
 	from, dirty, applied, err := currentVersion(conn)
 	if err != nil {
-		return err
+		return MigrationResult{}, err
+	}
+	res := MigrationResult{From: from}
+	// finish runs Migrate (the part that can fail) and fills in the outcome.
+	finish := func() (MigrationResult, error) {
+		if err := Migrate(conn, migrationsDir); err != nil {
+			return res, err
+		}
+		to, _, _, err := currentVersion(conn)
+		if err != nil {
+			return res, err
+		}
+		res.To = to
+		res.Applied = to > res.From
+		res.Duration = time.Since(started)
+		return res, nil
 	}
 	if !applied || dirty {
-		return Migrate(conn, migrationsDir)
+		return finish()
 	}
 	ups, err := upMigrations(migrationsDir)
 	if err != nil {
-		return fmt.Errorf("reading migrations: %w", err)
+		return res, fmt.Errorf("reading migrations: %w", err)
 	}
 	to := from
 	for v := range ups {
@@ -78,29 +111,33 @@ func MigrateWithSnapshot(conn *sql.DB, migrationsDir, snapshotDir string, skip b
 		}
 	}
 	if to <= from {
-		return Migrate(conn, migrationsDir)
+		return finish()
 	}
 
 	if skip {
 		log.Printf("WARNING: SKIP_PRE_MIGRATION_BACKUP is set: applying migrations v%d -> v%d without a safety copy of the database", from, to)
-		return Migrate(conn, migrationsDir)
+		return finish()
 	}
 
 	path, size, err := writePreMigrationCopy(conn, snapshotDir, from, to)
 	if err != nil {
-		return &SnapshotError{Dir: snapshotDir, Cause: err}
+		return res, &SnapshotError{Dir: snapshotDir, Cause: err}
 	}
+	res.SnapshotPath, res.SnapshotSize = path, size
 	log.Printf("pre-migration safety copy written: %s (%d bytes)", path, size)
 
-	if err := Migrate(conn, migrationsDir); err != nil {
-		return err
+	// Duration covers the migrations only, not the safety copy.
+	started = time.Now()
+	out, err := finish()
+	if err != nil {
+		return out, err
 	}
 	if n, err := prunePreMigrationCopies(snapshotDir, PreMigrationKeep); err != nil {
 		log.Printf("pre-migration copy cleanup failed: %v", err)
 	} else if n > 0 {
 		log.Printf("pruned %d old pre-migration copies (keeping the newest %d)", n, PreMigrationKeep)
 	}
-	return nil
+	return out, nil
 }
 
 // currentVersion reads golang-migrate's bookkeeping. applied is false when
@@ -250,4 +287,10 @@ func prunePreMigrationCopies(dir string, keep int) (int, error) {
 		removed++
 	}
 	return removed, firstErr
+}
+
+// SchemaVersion returns the current migration version (0 for a brand-new database).
+func SchemaVersion(conn *sql.DB) (int, error) {
+	v, _, _, err := currentVersion(conn)
+	return v, err
 }

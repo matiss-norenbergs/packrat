@@ -21,6 +21,7 @@ import (
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
+	"packrat/backend/internal/sysevents"
 	"packrat/backend/internal/thumbnailenhance"
 	"packrat/backend/internal/ws"
 )
@@ -69,6 +70,10 @@ type Deps struct {
 	// TrustedProxies are the addresses/CIDRs whose X-Forwarded-For is believed when working out the
 	// client IP. Empty (the default) trusts none: the connection's own address is the client.
 	TrustedProxies []string
+	// SystemEventsRepo and Events are the system log's store and recorder. Events may be nil
+	// (nothing is recorded); SystemEventsRepo nil leaves the /system-events routes unregistered.
+	SystemEventsRepo *repository.SystemEventsRepo
+	Events           *sysevents.Recorder
 }
 
 // noCacheHeaders forces revalidation on every request instead of letting the
@@ -120,6 +125,11 @@ func SetupRouter(deps Deps) *gin.Engine {
 	r.UseRawPath = true
 	r.Use(limitRequestBody)
 	r.Use(Compress())
+	r.Use(eventsMiddleware(deps.Events))
+	if deps.Auth != nil && deps.Events != nil {
+		// One event per lockout that starts, from the limiter (never per failed attempt).
+		deps.Auth.Limiter.SetOnLockout(lockoutRecorder(deps.Events))
+	}
 
 	// All JSON API routes live under /api so they can never collide with a
 	// frontend client-side route of the same name (e.g. both the SPA and the
@@ -165,6 +175,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 			ImagesRoot:        deps.ImagesRoot,
 			SettingsRepo:      deps.SettingsRepo,
 			Broadcaster:       deps.Broadcaster,
+			Events:            deps.Events,
 		}
 		// Subscriptions that came due while the feature was off run as soon as it
 		// is switched back on, rather than waiting for the next hourly sweep.
@@ -188,6 +199,10 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/auth/2fa/recovery-codes", TwoFactorRegenerateCodes(deps.Auth))
 		api.GET("/auth/security-notice", SecurityNotice(deps.Auth))
 		api.POST("/auth/security-notice/ack", SecurityNoticeAck(deps.Auth))
+
+		if deps.SystemEventsRepo != nil {
+			RegisterSystemEventRoutes(api, deps.SystemEventsRepo, deps.SettingsRepo)
+		}
 
 		api.GET("/actions", ListHostActions(deps.HostActions))
 		api.POST("/actions/:id/run", RunHostAction(deps.HostActions))
@@ -287,7 +302,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/artists/:id/selected-image", ClearArtistSelectedImage(deps.ArtistsRepo))
 
 		api.GET("/settings", GetSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp, deps.MediaRoot))
-		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp, onSubscriptionsEnabled))
+		api.PATCH("/settings", UpdateSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp, deps.SystemEventsRepo, onSubscriptionsEnabled))
 		api.POST("/settings/backfill-images", StartImageBackfill(deps.ImageBackfillManager))
 		api.GET("/settings/backfill-images", GetImageBackfillStatus(deps.ImageBackfillManager))
 		api.GET("/proxy/status", GetProxyStatus(deps.SettingsRepo))

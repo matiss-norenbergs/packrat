@@ -22,6 +22,7 @@ import (
 	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 )
 
 // CreateGhostLibraryItem creates a library item with no downloaded file —
@@ -257,6 +258,9 @@ func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRe
 		// before touching anything.
 		if len(refs) > 0 {
 			if problem := mediaRootProblem(mediaRoot); problem != "" {
+				recordEvent(c, sysevents.LevelWarning, sysevents.CategoryMaintenance,
+					"Scan for missing files refused: the media folder looks unavailable",
+					map[string]any{"scanned": len(refs), "reason": problem})
 				c.JSON(http.StatusConflict, gin.H{"error": "The media folder " + problem + ". Is it mounted? Nothing was changed."})
 				return
 			}
@@ -283,6 +287,9 @@ func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRe
 		// Mass-clear guard: losing most of the library in one click is far more likely an offline
 		// mount than a real mass deletion, and clearing is irreversible.
 		if !req.Confirm && len(toClear) >= scanMissingConfirmMinItems && len(toClear)*2 >= len(refs) {
+			recordEvent(c, sysevents.LevelWarning, sysevents.CategoryMaintenance,
+				"Scan for missing files stopped by the safety guard",
+				map[string]any{"scanned": len(refs), "wouldGhost": len(toClear), "unreadable": unreadable})
 			c.JSON(http.StatusConflict, gin.H{
 				"error":           fmt.Sprintf("This would convert %d of %d items to ghosts. Is the media folder mounted? Nothing was changed.", len(toClear), len(refs)),
 				"requiresConfirm": true,
@@ -301,6 +308,12 @@ func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRe
 			missing = append(missing, MissingLibraryFileResponse{ID: ref.ID, Title: ref.Title})
 		}
 
+		level, msg := sysevents.LevelInfo, "Scan for missing files finished"
+		if unreadable > 0 {
+			level, msg = sysevents.LevelWarning, "Scan for missing files finished, but some files could not be checked"
+		}
+		recordEvent(c, level, sysevents.CategoryMaintenance, msg,
+			map[string]any{"scanned": len(refs), "ghosted": len(missing), "unreadable": unreadable})
 		c.JSON(http.StatusOK, ScanMissingLibraryFilesResponse{Scanned: len(refs), Missing: missing, Unreadable: unreadable})
 	}
 }

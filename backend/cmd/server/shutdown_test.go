@@ -27,7 +27,7 @@ func TestShutdownWaitsForJobsAfterCancellingRoot(t *testing.T) {
 	var embedsWaited atomic.Bool
 
 	srv := &http.Server{}
-	if err := shutdown(srv, cancelRoot, tasks, func() { embedsWaited.Store(true) }); err != nil {
+	if err := shutdown(srv, cancelRoot, tasks, func() { embedsWaited.Store(true) }, nil); err != nil {
 		t.Fatalf("shutdown: %v", err)
 	}
 	if !wroteFinalState.Load() {

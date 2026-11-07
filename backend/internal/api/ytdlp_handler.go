@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/sysevents"
 )
 
 type YtDlpVersionResponse struct {
@@ -43,11 +44,16 @@ func GetYtDlpVersion(ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 // failures are surfaced straight back to the caller rather than just logged.
 func UpdateYtDlp(ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		before, _ := ytdlp.Version(c.Request.Context())
 		version, err := ytdlp.Update(c.Request.Context())
 		if err != nil {
+			recordEvent(c, sysevents.LevelError, sysevents.CategoryYtdlp, "yt-dlp update failed",
+				map[string]any{"versionBefore": before, "error": maskedError(err)})
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
+		recordEvent(c, sysevents.LevelInfo, sysevents.CategoryYtdlp, "yt-dlp updated",
+			map[string]any{"versionBefore": before, "versionAfter": version})
 		c.JSON(http.StatusOK, gin.H{"version": version})
 	}
 }

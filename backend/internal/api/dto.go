@@ -1057,6 +1057,11 @@ type SettingsResponse struct {
 	FeatureCompareListEnabled   bool `json:"featureCompareListEnabled"`
 	FeatureFileImportEnabled    bool `json:"featureFileImportEnabled"`
 
+	// System log (Settings → History): the on/off switch (defaults to true) and how many of the
+	// newest events are kept (0 = Unlimited).
+	FeatureSystemEventsEnabled bool `json:"featureSystemEventsEnabled"`
+	SystemEventsRetentionCount int  `json:"systemEventsRetentionCount"`
+
 	ThumbnailEnhancementEnabled         bool   `json:"thumbnailEnhancementEnabled"`
 	ThumbnailEnhancementURL             string `json:"thumbnailEnhancementUrl"`
 	ThumbnailEnhancementUsername        string `json:"thumbnailEnhancementUsername"`
@@ -1121,6 +1126,8 @@ type UpdateSettingsRequest struct {
 	FeatureFrameMatchingEnabled *bool `json:"featureFrameMatchingEnabled"`
 	FeatureCompareListEnabled   *bool `json:"featureCompareListEnabled"`
 	FeatureFileImportEnabled    *bool `json:"featureFileImportEnabled"`
+	FeatureSystemEventsEnabled  *bool `json:"featureSystemEventsEnabled"`
+	SystemEventsRetentionCount  *int  `json:"systemEventsRetentionCount" binding:"omitempty,min=0"`
 
 	ThumbnailEnhancementEnabled         *bool   `json:"thumbnailEnhancementEnabled"`
 	ThumbnailEnhancementURL             *string `json:"thumbnailEnhancementUrl"`

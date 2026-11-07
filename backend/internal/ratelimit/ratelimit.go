@@ -52,13 +52,43 @@ type globalState struct {
 	lastTrip     time.Time
 }
 
+// Lockout describes a block that has just started.
+type Lockout struct {
+	// IP is the address whose failure started it.
+	IP   string
+	Kind Kind
+	// Global is true when the shared budget for Kind tripped (everyone is blocked from that step),
+	// false when only IP is blocked.
+	Global   bool
+	Duration time.Duration
+}
+
 // Limiter is safe for concurrent use.
 type Limiter struct {
-	mu     sync.Mutex
-	now    func() time.Time
-	ips    map[string]*ipState
-	order  *list.List // front = oldest
-	global map[Kind]*globalState
+	mu        sync.Mutex
+	now       func() time.Time
+	ips       map[string]*ipState
+	order     *list.List // front = oldest
+	global    map[Kind]*globalState
+	onLockout func(Lockout)
+}
+
+// SetOnLockout registers fn to be called once each time a block starts (not per failed attempt).
+// It runs after the limiter's lock is released, so it may do slow work such as a database write.
+func (l *Limiter) SetOnLockout(fn func(Lockout)) {
+	l.mu.Lock()
+	l.onLockout = fn
+	l.mu.Unlock()
+}
+
+// notify delivers lockouts collected under the lock; call it after unlocking.
+func (l *Limiter) notify(fn func(Lockout), lockouts []Lockout) {
+	if fn == nil {
+		return
+	}
+	for _, lo := range lockouts {
+		fn(lo)
+	}
 }
 
 // New returns a Limiter; pass nil to use the wall clock.
@@ -169,13 +199,16 @@ func (r *Reservation) Fail(kind Kind) {
 		return
 	}
 	r.l.mu.Lock()
-	defer r.l.mu.Unlock()
 	if r.done {
+		r.l.mu.Unlock()
 		return
 	}
 	r.done = true
 	r.l.dropPendingLocked(r.ip, r.kinds)
-	r.l.failLocked(r.ip, kind)
+	lockouts := r.l.failLocked(r.ip, kind)
+	fn := r.l.onLockout
+	r.l.mu.Unlock()
+	r.l.notify(fn, lockouts)
 }
 
 // Release gives the reservation back without recording a failure.
@@ -246,11 +279,14 @@ func (g *globalState) nextCooldown(now time.Time) time.Duration {
 // Fail records a failed attempt of the given kind from ip.
 func (l *Limiter) Fail(ip string, kind Kind) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.failLocked(ip, kind)
+	lockouts := l.failLocked(ip, kind)
+	fn := l.onLockout
+	l.mu.Unlock()
+	l.notify(fn, lockouts)
 }
 
-func (l *Limiter) failLocked(ip string, kind Kind) {
+// failLocked records the failure and returns the blocks it started.
+func (l *Limiter) failLocked(ip string, kind Kind) (started []Lockout) {
 	now := l.now()
 
 	st := l.ensureIP(ip)
@@ -259,11 +295,12 @@ func (l *Limiter) failLocked(ip string, kind Kind) {
 	if len(st.failures) >= PerIPMaxFailures {
 		st.blockedUntil = now.Add(PerIPWindow)
 		st.failures = nil
+		started = append(started, Lockout{IP: ip, Kind: kind, Duration: PerIPWindow})
 	}
 
 	g := l.global[kind]
 	if g == nil {
-		return
+		return started
 	}
 	g.failures = prune(g.failures, now, GlobalWindow)
 	g.failures = append(g.failures, now)
@@ -280,7 +317,9 @@ func (l *Limiter) failLocked(ip string, kind Kind) {
 		g.blockedUntil = now.Add(cooldown)
 		g.lastTrip = now
 		g.failures = nil
+		started = append(started, Lockout{IP: ip, Kind: kind, Global: true, Duration: cooldown})
 	}
+	return started
 }
 
 // Success clears the failure counters of ip (call after a completed login). It does not lift an

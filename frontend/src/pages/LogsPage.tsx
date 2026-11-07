@@ -1,14 +1,18 @@
 import { useMemo, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { Eye } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DataTable } from "@/components/data-table"
 import type { ColumnDef } from "@/components/data-table"
 import { LogDetailDialog } from "@/components/logs/LogDetailDialog"
+import { SystemLogView } from "@/components/logs/SystemLogView"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { useLogs } from "@/hooks/useLogs"
+import { useSettings } from "@/hooks/useSettings"
 import { formatDownloadStatus } from "@/lib/utils"
 import type { DownloadStatus, LogEntry } from "@/types/api"
 
@@ -72,7 +76,8 @@ const columns: ColumnDef<LogEntry>[] = [
   },
 ]
 
-export function LogsPage() {
+// The downloads log (yt-dlp command and output per download).
+function DownloadsLogView() {
   const { data, isLoading, isError, error } = useLogs()
   const selection = useIdSelection()
   const { selected, size } = selection
@@ -97,14 +102,7 @@ export function LogsPage() {
           : null
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6">
-      <div className="shrink-0">
-        <h1 className="text-2xl font-semibold">Logs</h1>
-        <p className="text-sm text-muted-foreground">
-          yt-dlp command, exit code, and captured stdout/stderr for each download.
-        </p>
-      </div>
-
+    <>
       <DataTable
         rows={rows}
         getRowId={(entry) => entry.id}
@@ -177,6 +175,43 @@ export function LogsPage() {
           onOpenChange={(open) => !open && setViewing(null)}
         />
       )}
+    </>
+  )
+}
+
+export function LogsPage() {
+  const { data: settings } = useSettings()
+  const [searchParams, setSearchParams] = useSearchParams()
+  // The System view exists only while the system log is switched on (Settings → History).
+  const systemEnabled = settings?.featureSystemEventsEnabled === true
+  const view = systemEnabled && searchParams.get("view") === "system" ? "system" : "downloads"
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-6">
+      <div className="shrink-0">
+        <h1 className="text-2xl font-semibold">Logs</h1>
+        <p className="text-sm text-muted-foreground">
+          {view === "system"
+            ? "Notable server events — startups, migrations, backups, security and more. Kept across updates."
+            : "yt-dlp command, exit code, and captured stdout/stderr for each download."}
+        </p>
+      </div>
+
+      {systemEnabled && (
+        <Tabs
+          value={view}
+          // Switching view drops the other view's filters from the URL, so each starts clean.
+          onValueChange={(v) => setSearchParams(v === "system" ? { view: "system" } : {}, { replace: true })}
+          className="shrink-0"
+        >
+          <TabsList>
+            <TabsTrigger value="downloads">Downloads</TabsTrigger>
+            <TabsTrigger value="system">System</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
+      {view === "system" ? <SystemLogView /> : <DownloadsLogView />}
     </div>
   )
 }

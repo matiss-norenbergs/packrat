@@ -9,6 +9,7 @@ import (
 
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 )
 
 func currentSession(c *gin.Context) *models.Session {
@@ -80,6 +81,7 @@ func RevokeOtherSessions(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			internalError(c, err)
 			return
 		}
+		recordSecurityEvent(c, sysevents.LevelInfo, "Other sessions signed out", map[string]any{"sessionsRevoked": n})
 		c.JSON(http.StatusOK, RevokeOthersResponse{Revoked: n})
 	}
 }

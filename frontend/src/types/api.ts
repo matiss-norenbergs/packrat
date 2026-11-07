@@ -663,6 +663,10 @@ export interface Settings {
   featureFrameMatchingEnabled: boolean
   featureCompareListEnabled: boolean
   featureFileImportEnabled: boolean
+  /** The system log's switch (Settings → History), default on. */
+  featureSystemEventsEnabled: boolean
+  /** How many of the newest system events are kept; 0 = Unlimited. */
+  systemEventsRetentionCount: number
   thumbnailEnhancementEnabled: boolean
   thumbnailEnhancementUrl: string
   thumbnailEnhancementUsername: string
@@ -821,6 +825,8 @@ export interface UpdateSettingsRequest {
   featureFrameMatchingEnabled?: boolean
   featureCompareListEnabled?: boolean
   featureFileImportEnabled?: boolean
+  featureSystemEventsEnabled?: boolean
+  systemEventsRetentionCount?: number
   thumbnailEnhancementEnabled?: boolean
   thumbnailEnhancementUrl?: string
   thumbnailEnhancementUsername?: string
@@ -1202,3 +1208,53 @@ export interface RunHostActionResult {
   status: number
   message: string
 }
+
+// --- System log (Logs page → System, Settings → History) ---
+
+export type SystemEventLevel = "info" | "warning" | "error"
+export type SystemEventSortKey = "createdAt" | "level" | "category"
+
+export interface SystemEvent {
+  id: number
+  /** RFC 3339, UTC. */
+  createdAt: string
+  level: SystemEventLevel
+  category: string
+  message: string
+  /** A small JSON object, or null. */
+  details: Record<string, unknown> | null
+}
+
+/** The server-side query of GET /api/system-events. Empty / undefined fields are not sent. */
+export interface SystemEventQuery {
+  levels?: string[]
+  categories?: string[]
+  q?: string
+  /** YYYY-MM-DD or RFC 3339; inclusive. */
+  from?: string
+  to?: string
+  sort?: SystemEventSortKey
+  dir?: "asc" | "desc"
+  page?: number
+  pageSize?: number
+}
+
+export interface SystemEventsResponse {
+  items: SystemEvent[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface SystemEventFacet {
+  value: string
+  count: number
+}
+
+export interface SystemEventFacets {
+  levels: SystemEventFacet[]
+  categories: SystemEventFacet[]
+}
+
+/** Exactly one of the two. */
+export type DeleteSystemEventsRequest = { ids: number[] } | { all: true }

@@ -28,6 +28,7 @@ import (
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
+	"packrat/backend/internal/sysevents"
 	"packrat/backend/internal/thumbnailenhance"
 	"packrat/backend/internal/twofactor"
 	"packrat/backend/internal/ws"
@@ -143,8 +144,9 @@ func run() error {
 	}
 	defer conn.Close()
 
-	if err := db.MigrateWithSnapshot(conn, migrationsDir(), filepath.Join(cfg.BackupsRoot, db.PreMigrationDirName), cfg.SkipPreMigrationBackup); err != nil {
-		return err
+	migrated, err := db.MigrateWithSnapshot(conn, migrationsDir(), filepath.Join(cfg.BackupsRoot, db.PreMigrationDirName), cfg.SkipPreMigrationBackup)
+	if err != nil {
+		return err // a failed migration cannot be written to the database being migrated: stdout only
 	}
 	log.Println("migrations applied")
 
@@ -152,6 +154,12 @@ func run() error {
 	libraryRepo := repository.NewLibraryRepo(conn)
 	collectionsRepo := repository.NewCollectionsRepo(conn)
 	settingsRepo := repository.NewSettingsRepo(conn)
+	// The system log. Created right after migrating: the table exists by now, including for the
+	// migration that creates it.
+	systemEventsRepo := repository.NewSystemEventsRepo(conn)
+	events := sysevents.New(systemEventsRepo, settingsRepo)
+	recordMigration(context.Background(), events, migrated, false)
+	sysevents.Prune(context.Background(), systemEventsRepo, settingsRepo)
 	historyRepo := repository.NewHistoryRepo(conn)
 	tagsRepo := repository.NewTagsRepo(conn)
 	artistsRepo := repository.NewArtistsRepo(conn)
@@ -181,6 +189,11 @@ func run() error {
 	} else if changed {
 		log.Printf("yt-dlp cookies file brought in line with the saved setting")
 	}
+	// Tool versions are gathered off the startup path, then one startup event is recorded.
+	go func() {
+		schema, _ := db.SchemaVersion(conn)
+		recordStartup(context.Background(), events, schema, ytdlpSvc, cfg.FFmpegPath)
+	}()
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
 
@@ -215,6 +228,7 @@ func run() error {
 	mgr.SetTracker(tasks)
 	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)
 	imageBackfillMgr.SetShutdown(ctx, tasks)
+	imageBackfillMgr.SetEvents(events)
 	frameMatchJobs := framematch.NewJobStore()
 	frameMatchJobs.SetBaseContext(ctx)
 	frameMatchQueueRepo := repository.NewFrameMatchQueueRepo(conn)
@@ -230,6 +244,7 @@ func run() error {
 				log.Printf("crash recovery: recording history for %d failed: %v", d.ID, err)
 			}
 		}
+		recordRecovery(ctx, events, len(interrupted), 0)
 	}
 
 	// Same for frame-match rows: one still "running" belonged to the previous process. It becomes an
@@ -239,6 +254,7 @@ func run() error {
 		return err
 	} else if n > 0 {
 		log.Printf("crash recovery: marked %d interrupted frame-match item(s) as errors", n)
+		recordRecovery(ctx, events, 0, int(n))
 	}
 
 	// A previously-saved concurrency setting survives a restart — the env
@@ -270,6 +286,7 @@ func run() error {
 		DownloadsRepo:     downloadsRepo,
 		BackupHistoryRepo: backupHistoryRepo,
 		Broadcaster:       hub,
+		Events:            events,
 	}
 
 	subCheckDeps := subscriptions.CheckDeps{
@@ -282,6 +299,7 @@ func run() error {
 		ImagesRoot:        cfg.ImagesRoot,
 		SettingsRepo:      settingsRepo,
 		Broadcaster:       hub,
+		Events:            events,
 	}
 
 	enhanceDeps := thumbnailenhance.Deps{
@@ -293,6 +311,7 @@ func run() error {
 		ImagesRoot:    cfg.ImagesRoot,
 		FFmpegPath:    cfg.FFmpegPath,
 		Broadcaster:   hub,
+		Events:        events,
 	}
 
 	imageResizer := imageproc.NewResizer(cfg.FFmpegPath, cfg.CacheRoot)
@@ -307,6 +326,7 @@ func run() error {
 		cleanupImageCache(cfg.CacheRoot)
 		cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
 		cleanupThumbnailEnhancementHistory(ctx, enhanceDeps)
+		sysevents.Prune(ctx, systemEventsRepo, settingsRepo)
 		backup.RunScheduledBackupIfDue(ctx, runDeps)
 		subscriptions.RunDueChecks(ctx, subCheckDeps)
 		thumbnailenhance.RunDueEnhancements(ctx, enhanceDeps)
@@ -321,6 +341,7 @@ func run() error {
 				cleanupImageCache(cfg.CacheRoot)
 				cleanupDownloadLog(ctx, downloadsRepo, settingsRepo)
 				cleanupThumbnailEnhancementHistory(ctx, enhanceDeps)
+				sysevents.Prune(ctx, systemEventsRepo, settingsRepo)
 				backup.RunScheduledBackupIfDue(ctx, runDeps)
 				subscriptions.RunDueChecks(ctx, subCheckDeps)
 				thumbnailenhance.RunDueEnhancements(ctx, enhanceDeps)
@@ -378,6 +399,8 @@ func run() error {
 		CORSAllowedOrigins:                cfg.CORSAllowedOrigins,
 		TrustedProxies:                    cfg.TrustedProxies,
 		Auth:                              api.NewAuthDeps(usersRepo, secretCrypto, nil),
+		SystemEventsRepo:                  systemEventsRepo,
+		Events:                            events,
 	})
 
 	srv := &http.Server{
@@ -405,7 +428,11 @@ func run() error {
 	stopSignals() // a second signal now kills the process instead of being swallowed
 	log.Println("shutting down")
 
-	httpErr := shutdown(srv, cancelRoot, tasks, mgr.Embedder().Wait)
+	httpErr := shutdown(srv, cancelRoot, tasks, mgr.Embedder().Wait, func(jobsLeft int, waited time.Duration) {
+		// After the wait and before the database closes (run returns next). Bounded by the
+		// recorder's own write timeout, well inside the 5 s the budget leaves for final writes.
+		recordShutdown(events, jobsLeft, waited)
+	})
 	// run returns next, and the deferred conn.Close runs: the database closes last.
 	log.Println("shutdown: closing database")
 	return httpErr
@@ -422,7 +449,10 @@ const (
 // shutdown stops accepting requests and lets in-flight ones finish, then cancels the root context
 // so background jobs wind down, then waits (bounded) for them and for running metadata embeds. It
 // never returns before the wait is over, so the caller can close the database safely.
-func shutdown(srv *http.Server, cancelRoot context.CancelFunc, tasks *bgtasks.Tracker, waitEmbeds func()) error {
+//
+// report, if non-nil, is called once at the end with how many tracked jobs were still running
+// (0 for a clean finish) and how long the wait took; the caller records the system event there.
+func shutdown(srv *http.Server, cancelRoot context.CancelFunc, tasks *bgtasks.Tracker, waitEmbeds func(), report func(jobsLeft int, waited time.Duration)) error {
 	httpCtx, cancel := context.WithTimeout(context.Background(), httpShutdownTimeout)
 	defer cancel()
 	httpErr := srv.Shutdown(httpCtx)
@@ -436,7 +466,9 @@ func shutdown(srv *http.Server, cancelRoot context.CancelFunc, tasks *bgtasks.Tr
 	start := time.Now()
 	log.Printf("shutdown: waiting up to %s for %d background job(s)", backgroundWaitTimeout, tasks.Running())
 	finished := tasks.Wait(backgroundWaitTimeout)
+	jobsLeft := 0
 	if !finished {
+		jobsLeft = tasks.Running()
 		log.Printf("shutdown: timed out waiting for %d background job(s); closing the database anyway", tasks.Running())
 	}
 
@@ -454,6 +486,9 @@ func shutdown(srv *http.Server, cancelRoot context.CancelFunc, tasks *bgtasks.Tr
 		}
 	case <-time.After(max(backgroundWaitTimeout-time.Since(start), 0)):
 		log.Println("shutdown: timed out waiting for metadata embeds; closing the database anyway")
+	}
+	if report != nil {
+		report(jobsLeft, time.Since(start))
 	}
 	return httpErr
 }

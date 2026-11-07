@@ -21,6 +21,7 @@ import (
 	"packrat/backend/internal/bgtasks"
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 )
 
 var libraryThumbnailTiers = []imageproc.Tier{
@@ -64,9 +65,15 @@ type Manager struct {
 	rootCtx context.Context
 	tasks   *bgtasks.Tracker
 
+	// events records a finished-with-failures run in the system log; nil records nothing.
+	events *sysevents.Recorder
+
 	mu     sync.Mutex
 	status Status
 }
+
+// SetEvents sets the system-log recorder (nil is fine).
+func (m *Manager) SetEvents(r *sysevents.Recorder) { m.events = r }
 
 // SetShutdown ties background runs to the server's lifetime: a run stops when ctx is cancelled and
 // registers with t so shutdown can wait for it. Without it a run uses context.Background and is untracked.
@@ -136,6 +143,11 @@ func (m *Manager) run() {
 	m.status.Running = false
 	m.mu.Unlock()
 
+	if failed := libFailed + artFailed + covFailed; failed > 0 {
+		m.events.Record(ctx, sysevents.LevelWarning, sysevents.CategoryMaintenance,
+			"Image backfill finished with failures",
+			map[string]any{"failed": failed, "libraryProcessed": libProcessed, "artistProcessed": artProcessed, "coverProcessed": covProcessed})
+	}
 	log.Printf("image backfill: done — library %d processed/%d failed, artists %d/%d failed, covers %d/%d failed",
 		libProcessed, libFailed, artProcessed, artFailed, covProcessed, covFailed)
 }

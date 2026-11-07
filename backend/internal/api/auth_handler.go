@@ -12,6 +12,7 @@ import (
 
 	"packrat/backend/internal/ratelimit"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 	"packrat/backend/internal/twofactor"
 )
 
@@ -263,10 +264,12 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 			return
 		}
 		// Sign out every other session (web and desktop tokens); this one stays.
-		if _, err := usersRepo.DeleteOtherSessions(c.Request.Context(), userID, currentSession(c).Token); err != nil {
+		revoked, err := usersRepo.DeleteOtherSessions(c.Request.Context(), userID, currentSession(c).Token)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		recordSecurityEvent(c, sysevents.LevelInfo, "Password changed", map[string]any{"otherSessionsRevoked": revoked})
 		c.Status(http.StatusNoContent)
 	}
 }

@@ -42,6 +42,7 @@ backend/
                              requests, e.g. to tools/sd-launcher; never editable from the UI
     nametemplate/            filename templates: {artist}/{title}-style tokens → sanitized path segments
     features/                the optional-feature toggles (Settings → Features) the API and sweeps consult
+    sysevents/               the system log's recorder (nil-safe, flood-guarded) and retention pruning
     strayfiles/              finds files on disk no DB record references (Settings → Library → Find
                              Stray Files); report-only until a delete is requested
     ratelimit/               in-memory throttling of failed logins (delays only; see Login throttling)
@@ -342,6 +343,7 @@ names the table); and an interrupted *down* migration is not auto-cleared.
 
 `db.MigrateWithSnapshot` (`internal/db/snapshot.go`) wraps `Migrate` for `cmd/server/main.go` and the
 admin CLI mode (`admin.go`); `Migrate` itself is unchanged, so tests and helpers still call it directly.
+It returns a `MigrationResult` (see System log) so the caller can record what happened.
 It reads `schema_migrations` and the highest `.up.sql` in the migrations directory. A database with no
 migration applied (new install), a dirty one (`Migrate` reports it) or nothing pending just runs `Migrate`.
 With migrations pending it writes the copy first, then migrates, then prunes.
@@ -1002,7 +1004,7 @@ grid/list/strip views; today only the Browse hero uses it.
 ## Retention sweeps
 
 A single shared hourly ticker in `main.go` (`historyCleanupInterval = time.Hour`) also runs the
-image-cache sweep (see Live image resizing) and drives five
+image-cache sweep (see Live image resizing) and the system log's count-based pruning (see System log), and drives five
 independent, sequential, no-op-if-not-due sweeps per tick — one goroutine, not five separate
 tickers: history/download-log retention, thumbnail-enhancement history cleanup, due subscription
 checks (`subscriptions.RunDueChecks`), and due scheduled backups
@@ -1012,6 +1014,57 @@ than two independently-configurable settings — `historyRetentionDays` (History
 "clear all now" action that ignores age entirely. Hourly granularity is deliberate: the smallest
 configurable subscription/backup interval is 6h, so checking hourly is more than sufficient
 resolution without needing per-feature scheduling infrastructure.
+
+## System log
+
+A small database-backed record of curated server events (list and privacy rules in `docs/FEATURES.md`). It
+exists because an update recreates the container and stdout with it. It is not a logging framework: the
+~200 `log.Printf` calls are untouched and are not mirrored.
+
+- **Storage.** Migration `000054_system_events`: `system_events(id, created_at, level, category, message,
+  details)` with `level` limited to `info|warning|error` by a CHECK, no foreign keys, and indexes on
+  `(created_at)`, `(level, created_at)` and `(category, created_at)`. `details` is a small JSON object or
+  NULL. `repository.SystemEventsRepo` has `Create`, `Query`, `Facets`, `DeleteByIDs` (one transaction, ids that
+  do not exist ignored), `DeleteAll` and `PruneToCount`.
+- **The recorder** (`internal/sysevents`): `Recorder.Record(ctx, level, category, message, details)`.
+  - *Never inside a transaction or under a repo mutex.* There is a single DB connection, so a write from
+    inside a transaction would deadlock; callers record after the commit / unlock.
+  - *Never fails or slows the operation:* errors go to stdout and are swallowed; the write uses
+    `context.WithoutCancel` plus a 3 s timeout so a cancelled request or a shutdown does not drop it.
+  - *Nil-safe:* a nil `*Recorder` does nothing, so tests and unwired code paths keep working. Handlers reach
+    the recorder through a request-context middleware (`eventsMiddleware` in `internal/api/system_events.go`)
+    instead of a new constructor argument on every handler; background code gets it as a `Events` field on its
+    `Deps` struct.
+  - *The switch is read on every call* through `features.Enabled` (default on when unset or unreadable); off
+    means no-op, and stored events are kept.
+  - *Flood guard:* an event identical in (level, category, message) to one recorded in the last 60 s is
+    dropped, with one stdout line per key per window. In memory, mutex-protected, with an injectable clock;
+    expired keys are swept once the map reaches 256 entries. A failed write releases its slot.
+  - *Privacy backstop:* every string in the message and details has URLs replaced by `[url]` and is capped at
+    500 characters; details over 8 KB are dropped (the event is still recorded). Callers are still responsible
+    for not passing titles, file names, tokens or passwords, and mask error text with `downloader.RedactText`.
+- **Retention is by count only** (`system_events_retention_count`, `0` = Unlimited, no hidden hard cap).
+  `sysevents.Prune` deletes the oldest events beyond the count; it runs once at startup (after migrating),
+  in the hourly sweep in `cmd/server/main.go`, and right after a `PATCH /api/settings` that includes the count.
+  It runs even while the log is off, so a stored backlog still obeys its limit.
+- **Server-side query.** `GET /api/system-events` filters (level and category lists, case-insensitive
+  substring on the message through `instr(lower(...))` so `%` and `_` are literal, a time range), sorts
+  (allowlist `createdAt|level|category`, time then id as tie-breakers) and pages in SQL, and returns the
+  matching total. The Logs page's System view is a `DataTable` in controlled mode (like the Library list):
+  the page owns the query, keeps the filters and sort in the URL and the page number in `usePageState`, so a
+  filter change returns to page 1. Facets (`GET .../facets`) are two `GROUP BY` counts over all rows.
+- **Why the migration event is written after migrating.** The table is created by a migration, so the event
+  can only be recorded once migrations have finished; the recorder is created right after them. A migration
+  that fails therefore cannot be recorded (it stays in stdout). `db.MigrateWithSnapshot` returns a
+  `MigrationResult` (`Applied`, `From`, `To`, `Duration`, `SnapshotPath`, `SnapshotSize`) for that;
+  `Applied` is true only when the schema version went up (a brand-new database counts), `db.Migrate` itself is
+  unchanged. The server and the admin command (`recordMigration` in `cmd/server/events.go`) record one event
+  only when `Applied`.
+- **Login lockouts** come from the throttle: `ratelimit.Limiter.SetOnLockout` is called once when a block starts
+  (per-address or global), after the limiter's lock is released, never per failed attempt.
+- **Subscription transitions** are derived from the stored `last_check_error` (a failed check while it is empty
+  records the failure; a successful check while it is set records the recovery), so they survive a restart and
+  repeated failures stay silent.
 
 ## Floating action dock
 
@@ -1301,6 +1354,8 @@ Still intentionally out of scope, not forgotten:
   `internal/nametemplate`) only substitute `{variable}` tokens and split on `/`; there is no "drop
   this segment if `{sequence}` is blank". A blank filename and template uses yt-dlp's native
   `%(title)s`; a literal filename is used as given (sanitized).
+- **No delete-by-filter for the system log.** Events are deleted by id (up to 1000 per request), cleared
+  entirely, or pruned by count; there is no "delete everything matching these filters".
 - **No multi-user support.** One user account, created once via the setup wizard; there is no
   invite/second-account flow, and `POST /api/auth/setup` permanently 409s after the first user
   exists. (`user_preferences` is already user-scoped, so a future multi-user change won't need to

@@ -112,6 +112,7 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 
 		env, err := backup.ParseEnvelope(req.Data)
 		if err != nil {
+			recordRestoreRefused(c, restoreSettingsImport, err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -119,6 +120,7 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 		// backup — a full file's library half is simply ignored here.
 		plaintext, kind, err := backup.OpenAny(env, []string{"settings", "full"}, passwordFrom(req.Password))
 		if err != nil {
+			recordRestoreRefused(c, restoreSettingsImport, err)
 			writeBackupOpenError(c, err)
 			return
 		}
@@ -127,17 +129,20 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 		if kind == "full" {
 			var full backup.FullBundle
 			if err := json.Unmarshal(plaintext, &full); err != nil {
+				recordRestoreRefused(c, restoreSettingsImport, err)
 				c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt backup file: " + err.Error()})
 				return
 			}
 			bundle = full.Settings
 		} else if err := json.Unmarshal(plaintext, &bundle); err != nil {
+			recordRestoreRefused(c, restoreSettingsImport, err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt settings export: " + err.Error()})
 			return
 		}
 
 		applied, err := backup.ApplySettingsBundle(c.Request.Context(), settingsRepo, bundle)
 		if err != nil {
+			recordRestoreFailed(c, restoreSettingsImport, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -146,6 +151,7 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 		// transcodes) into the running components.
 		applySettingsSideEffects(bundle, mgr, ytdlp)
 		syncCookiesFileAfterRestore(c.Request.Context(), settingsRepo, ytdlp)
+		recordRestoreDone(c, restoreSettingsImport, map[string]any{"settingsApplied": applied})
 		c.JSON(http.StatusOK, BackupImportSettingsResponse{Applied: applied})
 	}
 }
@@ -296,14 +302,17 @@ func ImportLibrary(db *sql.DB, collectionsRepo *repository.CollectionsRepo, tags
 	return func(c *gin.Context) {
 		bundle, mode, ok := decodeLibraryBundle(c)
 		if !ok {
+			recordRestoreRefused(c, restoreLibraryImport, nil)
 			return
 		}
 
 		resp, err := applyLibraryBundleAndEnqueue(c.Request.Context(), db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, settingsRepo, bundle, mode == "ghostOnly")
 		if err != nil {
+			recordRestoreFailed(c, restoreLibraryImport, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		recordRestoreDone(c, restoreLibraryImport, libraryRestoreDetails(resp))
 		c.JSON(http.StatusOK, resp)
 	}
 }
@@ -520,20 +529,24 @@ func RestoreFullBackup(
 		}
 		plaintext, err := backup.Open(env, "full", "")
 		if err != nil {
+			recordRestoreRefused(c, restoreFullFromHistory, err)
 			writeBackupOpenError(c, err)
 			return
 		}
 		var bundle backup.FullBundle
 		if err := json.Unmarshal(plaintext, &bundle); err != nil {
+			recordRestoreRefused(c, restoreFullFromHistory, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "corrupt backup file: " + err.Error()})
 			return
 		}
 
 		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
 		if err != nil {
+			recordRestoreFailed(c, restoreFullFromHistory, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		recordRestoreDone(c, restoreFullFromHistory, fullRestoreDetails(resp))
 		c.JSON(http.StatusOK, resp)
 	}
 }
@@ -601,25 +614,30 @@ func ImportFullBackup(
 		}
 		env, err := backup.ParseEnvelope(req.Data)
 		if err != nil {
+			recordRestoreRefused(c, restoreFullFromUpload, err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		plaintext, err := backup.Open(env, "full", passwordFrom(req.Password))
 		if err != nil {
+			recordRestoreRefused(c, restoreFullFromUpload, err)
 			writeBackupOpenError(c, err)
 			return
 		}
 		var bundle backup.FullBundle
 		if err := json.Unmarshal(plaintext, &bundle); err != nil {
+			recordRestoreRefused(c, restoreFullFromUpload, err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "corrupt backup file: " + err.Error()})
 			return
 		}
 
 		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
 		if err != nil {
+			recordRestoreFailed(c, restoreFullFromUpload, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		recordRestoreDone(c, restoreFullFromUpload, fullRestoreDetails(resp))
 		c.JSON(http.StatusOK, resp)
 	}
 }

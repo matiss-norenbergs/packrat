@@ -12,6 +12,7 @@ import (
 
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/ratelimit"
+	"packrat/backend/internal/sysevents"
 	"packrat/backend/internal/twofactor"
 )
 
@@ -255,6 +256,7 @@ func TwoFactorEnable(deps *AuthDeps) gin.HandlerFunc {
 			internalError(c, err)
 			return
 		}
+		recordSecurityEvent(c, sysevents.LevelInfo, "Two-factor authentication enabled", nil)
 		c.JSON(http.StatusOK, RecoveryCodesResponse{RecoveryCodes: codes})
 	}
 }
@@ -301,6 +303,7 @@ func TwoFactorDisable(deps *AuthDeps) gin.HandlerFunc {
 			internalError(c, err)
 			return
 		}
+		recordSecurityEvent(c, sysevents.LevelWarning, "Two-factor authentication disabled", nil)
 		c.Status(http.StatusNoContent)
 	}
 }
@@ -347,6 +350,7 @@ func TwoFactorRegenerateCodes(deps *AuthDeps) gin.HandlerFunc {
 			internalError(c, err)
 			return
 		}
+		recordSecurityEvent(c, sysevents.LevelInfo, "Recovery codes regenerated", nil)
 		c.JSON(http.StatusOK, RecoveryCodesResponse{RecoveryCodes: codes})
 	}
 }

@@ -24,6 +24,7 @@ import (
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 	"packrat/backend/internal/ws"
 )
 
@@ -43,6 +44,9 @@ type CheckDeps struct {
 	// SettingsRepo is read only by RunDueChecks, to honour the Subscriptions
 	// feature toggle. Nil means "always on".
 	SettingsRepo *repository.SettingsRepo
+	// Events records the system-log events for a subscription that starts failing and for its
+	// recovery. Nil records nothing.
+	Events *sysevents.Recorder
 	// Broadcaster is used only by RunDueChecks (the scheduled sweep) to
 	// report new items found — the manual "Check now" HTTP handler already
 	// gets its count synchronously via the response, so it doesn't need this.
@@ -183,6 +187,14 @@ func CheckOne(ctx context.Context, deps CheckDeps, sub models.Subscription) (int
 		// itself is recorded too, so the "Last checked" column's warning
 		// badge has something to show.
 		errMsg := err.Error()
+		// Record only the transition from OK to failing: a subscription whose last check
+		// already failed is not reported again on every failed check. The state is the stored
+		// last_check_error, so this also holds across restarts.
+		if sub.LastCheckError == nil || *sub.LastCheckError == "" {
+			deps.Events.Record(ctx, sysevents.LevelWarning, sysevents.CategorySubscription,
+				"A subscription started failing its checks",
+				map[string]any{"subscriptionId": sub.ID, "error": downloader.RedactText(errMsg)})
+		}
 		if sub.LastCheckedAt == nil {
 			// Never baselined: keep last_checked_at NULL (record only the
 			// error) so the next attempt still baselines it. Stamping it
@@ -203,7 +215,11 @@ func CheckOne(ctx context.Context, deps CheckDeps, sub models.Subscription) (int
 		// baselining). Acting on the whole unrecorded back catalog would
 		// flood the library, so this run only records what is there now.
 		log.Printf("subscription %d (%s): never baselined, recording %d current entries as seen instead of acting on them", sub.ID, sub.URL, len(entries))
-		return 0, BaselineOnCreate(ctx, deps, sub, entries)
+		berr := BaselineOnCreate(ctx, deps, sub, entries)
+		if berr == nil {
+			recordSubscriptionRecovered(ctx, deps, sub)
+		}
+		return 0, berr
 	}
 
 	newCount, err := processEntries(ctx, deps, sub, entries, false)
@@ -213,7 +229,19 @@ func CheckOne(ctx context.Context, deps CheckDeps, sub models.Subscription) (int
 	if err := deps.SubscriptionsRepo.MarkChecked(ctx, sub.ID, time.Now(), nil); err != nil {
 		return newCount, err
 	}
+	recordSubscriptionRecovered(ctx, deps, sub)
 	return newCount, nil
+}
+
+// recordSubscriptionRecovered records the return to OK after failing checks. sub is the row as
+// read before this check, so its last_check_error says whether the previous check failed.
+func recordSubscriptionRecovered(ctx context.Context, deps CheckDeps, sub models.Subscription) {
+	if sub.LastCheckError == nil || *sub.LastCheckError == "" {
+		return
+	}
+	deps.Events.Record(ctx, sysevents.LevelInfo, sysevents.CategorySubscription,
+		"A subscription is being checked successfully again",
+		map[string]any{"subscriptionId": sub.ID})
 }
 
 // baselineTimeout bounds the detached baseline transaction.

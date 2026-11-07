@@ -18,6 +18,7 @@ import (
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 	"packrat/backend/internal/ws"
 )
 
@@ -35,6 +36,7 @@ type atomicEnv struct {
 	cookiesPath string
 	router      *gin.Engine
 	subsFired   int
+	events      *repository.SystemEventsRepo
 }
 
 // newAtomicEnv wires the settings / backup handlers against a real migrated
@@ -74,8 +76,10 @@ func newAtomicEnv(t *testing.T) *atomicEnv {
 	t.Cleanup(cancel)
 	e.mgr.Start(ctx, 1)
 
+	e.events = repository.NewSystemEventsRepo(conn)
 	e.router = gin.New()
-	e.router.PATCH("/settings", UpdateSettings(e.settings, e.mgr, e.ytdlp, func() { e.subsFired++ }))
+	e.router.Use(eventsMiddleware(sysevents.New(e.events, e.settings)))
+	e.router.PATCH("/settings", UpdateSettings(e.settings, e.mgr, e.ytdlp, nil, func() { e.subsFired++ }))
 	e.router.POST("/import/settings", ImportSettings(e.settings, e.mgr, e.ytdlp))
 	e.router.POST("/import/full", ImportFullBackup(conn, e.settings, e.collections, e.tags, e.artists, e.library, e.mgr, e.ytdlp))
 	return e

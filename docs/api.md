@@ -1232,6 +1232,7 @@ list.
   "thumbnailResolutionThresholdHigh": 1080,
   "featureSubscriptionsEnabled": true, "featureFrameMatchingEnabled": true,
   "featureCompareListEnabled": true, "featureFileImportEnabled": true,
+  "featureSystemEventsEnabled": true, "systemEventsRetentionCount": 0,
   "thumbnailEnhancementEnabled": false, "thumbnailEnhancementUrl": "",
   "thumbnailEnhancementUsername": "", "thumbnailEnhancementPassword": "",
   "thumbnailEnhancementUpscaler": "R-ESRGAN 4x+", "thumbnailEnhancementMinDim": 720,
@@ -1251,6 +1252,13 @@ route of that feature answers `403 {"error": "<Feature> is turned off in Setting
 `/api/thumbnail-match/:jobId`, `/api/frame-match/*`; `featureCompareListEnabled` → `/api/compare-list*`;
 `featureFileImportEnabled` → `/api/import*`. The flag is read per request, so a change applies
 immediately. Turning Subscriptions from off to on also triggers an immediate sweep of due subscriptions.
+
+`featureSystemEventsEnabled` (default `true`) is the system log's switch, shown in Settings → History rather
+than Features; while `false`, `/api/system-events*` answers `403 {"error": "The system log is turned off in
+Settings → History", "feature": "feature_system_events_enabled"}`, nothing new is recorded and stored events are
+kept. `systemEventsRetentionCount` (integer ≥ 0, default `0` = Unlimited; anything else is a `400` on `PATCH`)
+keeps only the newest N events: a `PATCH` that includes it prunes right away, and the hourly sweep and startup
+prune too. See [System log](#system-log).
 
 `downloadDirectory` and `maxConcurrentDownloads` reflect live config/worker-pool state, not just
 the last saved DB value. `jellyfinApiKey` is returned in plaintext, not masked. `imageConvertFormat`
@@ -1634,6 +1642,70 @@ gated by the same setting; when it is on, `ytdlpCommand`, `stdoutTail` and `stde
 `user:pass@` credentials in URLs, the `--proxy` credentials and the `--cookies` path are masked in
 the command line (at build time for new rows, and again when responding for older ones) and
 credentials are masked in the tails and error text.
+
+## System log
+
+A curated, persistent record of server events (see `docs/FEATURES.md`, "System log"). All routes need a
+session and are rejected with `403` while the switch (`featureSystemEventsEnabled`) is off; `DELETE` needs
+the CSRF token like every mutating route.
+
+| Method | Path |
+|---|---|
+| GET | `/api/system-events` |
+| GET | `/api/system-events/facets` |
+| DELETE | `/api/system-events` |
+
+### Event
+
+```json
+{ "id": 7, "createdAt": "2026-11-07T10:15:02Z", "level": "info", "category": "migration",
+  "message": "Database migrated",
+  "details": { "fromVersion": 53, "toVersion": 54, "durationMs": 12,
+               "snapshotFile": "packrat-pre-migration-v53-to-v54.db", "snapshotBytes": 2162688 } }
+```
+
+`createdAt` is RFC 3339 in UTC. `details` is a small object or `null`. **Levels:** `info`, `warning`, `error`.
+**Categories:** `startup`, `migration`, `recovery`, `shutdown`, `backup`, `restore`, `maintenance`, `ytdlp`,
+`security`, `subscription`. Events are never created through the API.
+
+### `GET /api/system-events`
+
+The query is done on the server (parameterized SQL; the sort column goes through an allowlist). All
+parameters are optional; an invalid value is a `400 {"error": "…"}`.
+
+| Param | Meaning |
+|---|---|
+| `level` | `info`, `warning` or `error`; repeat it or comma-separate for several (`level=warning,error`) |
+| `category` | one of the categories above; repeat or comma-separate |
+| `q` | case-insensitive substring of the message |
+| `from`, `to` | RFC 3339 timestamp or `YYYY-MM-DD` (UTC), both ends inclusive; a bare `to` date covers that whole day; `from` after `to` is a `400` |
+| `page` | 1-based, default `1` |
+| `pageSize` | default `50`, values above `200` are capped to `200` |
+| `sort` | `createdAt` (default), `level` or `category` |
+| `dir` | `desc` (default) or `asc`; rows with equal keys are ordered by time, then id, in the same direction |
+
+```json
+{ "items": [ /* events */ ], "total": 123, "page": 1, "pageSize": 50 }
+```
+
+`total` is the number of events matching the filters, across all pages.
+
+### `GET /api/system-events/facets`
+
+```json
+{ "levels": [ { "value": "error", "count": 2 }, { "value": "info", "count": 40 } ],
+  "categories": [ { "value": "startup", "count": 42 } ] }
+```
+
+The values present among **all** stored events with their counts (empty arrays, not `null`, when there are
+none), sorted by value. For the filter dropdowns.
+
+### `DELETE /api/system-events`
+
+Body: exactly one of `{ "ids": [1, 2, 3] }` (a non-empty list, at most 1000 per request) or
+`{ "all": true }`; neither, both, an empty list or `"all": false` is a `400`. Ids that do not exist are
+ignored. One transaction, all or nothing. Returns `{ "deleted": 3 }`. Deleting by filter is not supported, and
+a deletion is not itself recorded as an event.
 
 ## Subscriptions
 

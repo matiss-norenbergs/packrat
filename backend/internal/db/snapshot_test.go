@@ -94,7 +94,7 @@ func TestSnapshot_CopyIncludesWalAndHasFromVersion(t *testing.T) {
 	addGoodMig(t, migDir, 1)
 
 	// Brand-new database: migrates, no copy, no folder.
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(snapDir); !os.IsNotExist(err) {
@@ -112,7 +112,7 @@ func TestSnapshot_CopyIncludesWalAndHasFromVersion(t *testing.T) {
 	}
 
 	addGoodMig(t, migDir, 2)
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 		t.Fatal(err)
 	}
 	if versionOf(t, conn) != 2 {
@@ -146,7 +146,7 @@ func TestSnapshot_CopyIncludesWalAndHasFromVersion(t *testing.T) {
 	cp.Close()
 
 	// Nothing pending now: no new copy.
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := copies(t, snapDir); len(got) != 1 {
@@ -157,7 +157,7 @@ func TestSnapshot_CopyIncludesWalAndHasFromVersion(t *testing.T) {
 func TestSnapshot_RetentionKeepsNewestFive(t *testing.T) {
 	conn, migDir, snapDir := snapFixture(t)
 	addGoodMig(t, migDir, 1)
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -182,7 +182,7 @@ func TestSnapshot_RetentionKeepsNewestFive(t *testing.T) {
 	base := time.Now().Add(-24 * time.Hour)
 	for v := 2; v <= 8; v++ { // seven successful upgrades
 		addGoodMig(t, migDir, v)
-		if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+		if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 			t.Fatal(err)
 		}
 		p := filepath.Join(snapDir, fmt.Sprintf("packrat-pre-migration-v%d-to-v%d.db", v-1, v))
@@ -221,7 +221,7 @@ func TestSnapshot_RetentionKeepsNewestFive(t *testing.T) {
 func TestSnapshot_FailingMigrationKeepsCopyAndPrunesNothing(t *testing.T) {
 	conn, migDir, snapDir := snapFixture(t)
 	addGoodMig(t, migDir, 1)
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(snapDir, 0o700); err != nil {
@@ -235,7 +235,7 @@ func TestSnapshot_FailingMigrationKeepsCopyAndPrunesNothing(t *testing.T) {
 	}
 
 	addMig(t, migDir, 2, badRebuild)
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err == nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err == nil {
 		t.Fatal("expected the failing migration to return an error")
 	}
 	if len(copies(t, snapDir)) != 6 {
@@ -244,7 +244,7 @@ func TestSnapshot_FailingMigrationKeepsCopyAndPrunesNothing(t *testing.T) {
 
 	// Retrying the same pair (boot loop) replaces the file instead of adding one.
 	for i := 0; i < 3; i++ {
-		if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err == nil {
+		if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err == nil {
 			t.Fatal("expected error on retry")
 		}
 	}
@@ -256,11 +256,11 @@ func TestSnapshot_FailingMigrationKeepsCopyAndPrunesNothing(t *testing.T) {
 func TestSnapshot_SamePairRetriedThenSucceeds(t *testing.T) {
 	conn, migDir, snapDir := snapFixture(t)
 	addGoodMig(t, migDir, 1)
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 		t.Fatal(err)
 	}
 	addMig(t, migDir, 2, badRebuild)
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err == nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err == nil {
 		t.Fatal("expected error")
 	}
 	p := filepath.Join(snapDir, "packrat-pre-migration-v1-to-v2.db")
@@ -268,7 +268,7 @@ func TestSnapshot_SamePairRetriedThenSucceeds(t *testing.T) {
 	os.Chtimes(p, past, past)
 
 	addGoodMig(t, migDir, 2) // fixed release
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := copies(t, snapDir); len(got) != 1 {
@@ -282,18 +282,18 @@ func TestSnapshot_SamePairRetriedThenSucceeds(t *testing.T) {
 func TestSnapshot_DirtyFailureDoesNotCopyAgain(t *testing.T) {
 	conn, migDir, snapDir := snapFixture(t)
 	addGoodMig(t, migDir, 1)
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 		t.Fatal(err)
 	}
 	addMig(t, migDir, 2, "THIS IS NOT SQL;")
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err == nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err == nil {
 		t.Fatal("expected error")
 	}
 	if len(copies(t, snapDir)) != 1 {
 		t.Fatalf("folder = %v, want the one copy", copies(t, snapDir))
 	}
 	// The database is now dirty: later starts report that and never add copies.
-	err := MigrateWithSnapshot(conn, migDir, snapDir, false)
+	_, err := MigrateWithSnapshot(conn, migDir, snapDir, false)
 	var de *DirtyError
 	if !errors.As(err, &de) || len(copies(t, snapDir)) != 1 {
 		t.Fatalf("err=%v folder=%v", err, copies(t, snapDir))
@@ -303,7 +303,7 @@ func TestSnapshot_DirtyFailureDoesNotCopyAgain(t *testing.T) {
 func TestSnapshot_CopyFailureDoesNotMigrate(t *testing.T) {
 	conn, migDir, _ := snapFixture(t)
 	addGoodMig(t, migDir, 1)
-	if err := MigrateWithSnapshot(conn, migDir, filepath.Join(t.TempDir(), "x"), false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, filepath.Join(t.TempDir(), "x"), false); err != nil {
 		t.Fatal(err)
 	}
 	addGoodMig(t, migDir, 2)
@@ -313,7 +313,7 @@ func TestSnapshot_CopyFailureDoesNotMigrate(t *testing.T) {
 	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err := MigrateWithSnapshot(conn, migDir, blocker, false)
+	_, err := MigrateWithSnapshot(conn, migDir, blocker, false)
 	var se *SnapshotError
 	if !errors.As(err, &se) {
 		t.Fatalf("err = %v, want *SnapshotError", err)
@@ -334,13 +334,13 @@ func TestSnapshot_ReadOnlyFolderDoesNotMigrate(t *testing.T) {
 	}
 	conn, migDir, snapDir := snapFixture(t)
 	addGoodMig(t, migDir, 1)
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 		t.Fatal(err)
 	}
 	os.MkdirAll(snapDir, 0o500)
 	t.Cleanup(func() { os.Chmod(snapDir, 0o700) })
 	addGoodMig(t, migDir, 2)
-	err := MigrateWithSnapshot(conn, migDir, snapDir, false)
+	_, err := MigrateWithSnapshot(conn, migDir, snapDir, false)
 	var se *SnapshotError
 	if !errors.As(err, &se) || versionOf(t, conn) != 1 {
 		t.Fatalf("err=%v version=%d", err, versionOf(t, conn))
@@ -350,7 +350,7 @@ func TestSnapshot_ReadOnlyFolderDoesNotMigrate(t *testing.T) {
 func TestSnapshot_SkipMigratesWithWarning(t *testing.T) {
 	conn, migDir, snapDir := snapFixture(t)
 	addGoodMig(t, migDir, 1)
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, true); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, true); err != nil {
 		t.Fatal(err)
 	}
 	addGoodMig(t, migDir, 2)
@@ -358,7 +358,7 @@ func TestSnapshot_SkipMigratesWithWarning(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, true); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, true); err != nil {
 		t.Fatal(err)
 	}
 	if versionOf(t, conn) != 2 {
@@ -378,9 +378,9 @@ func TestSnapshot_Permissions(t *testing.T) {
 	}
 	conn, migDir, snapDir := snapFixture(t)
 	addGoodMig(t, migDir, 1)
-	MigrateWithSnapshot(conn, migDir, snapDir, false)
+	_, _ = MigrateWithSnapshot(conn, migDir, snapDir, false)
 	addGoodMig(t, migDir, 2)
-	if err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
+	if _, err := MigrateWithSnapshot(conn, migDir, snapDir, false); err != nil {
 		t.Fatal(err)
 	}
 	st, err := os.Stat(snapDir)

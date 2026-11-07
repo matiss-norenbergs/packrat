@@ -13,6 +13,7 @@ import (
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 	"packrat/backend/internal/ws"
 )
 
@@ -65,6 +66,8 @@ type RunDeps struct {
 	// outcome — a manual backup already gets its result synchronously via
 	// the HTTP response, so it doesn't need this.
 	Broadcaster ws.Broadcaster
+	// Events records a failed scheduled backup in the system log. Nil records nothing.
+	Events *sysevents.Recorder
 }
 
 // RunBackup builds a full bundle, writes it (always unencrypted — an
@@ -226,6 +229,8 @@ func RunScheduledBackupIfDue(ctx context.Context, deps RunDeps) {
 	entry, err := RunBackup(ctx, deps, "scheduled")
 	if err != nil {
 		log.Printf("scheduled backup failed: %v", err)
+		deps.Events.Record(ctx, sysevents.LevelError, sysevents.CategoryBackup, "Scheduled backup failed",
+			map[string]any{"error": err.Error()})
 		return
 	}
 	// Only the failure case is broadcast — unlike downloads/enhancement,
@@ -233,6 +238,13 @@ func RunScheduledBackupIfDue(ctx context.Context, deps RunDeps) {
 	// routine/expected outcome; it's silently failing for weeks that's the
 	// actual risk worth surfacing to someone who isn't watching the Backup
 	// page.
+	if entry.Status == "failed" {
+		details := map[string]any{}
+		if entry.ErrorMessage != nil {
+			details["error"] = *entry.ErrorMessage
+		}
+		deps.Events.Record(ctx, sysevents.LevelError, sysevents.CategoryBackup, "Scheduled backup failed", details)
+	}
 	if entry.Status == "failed" && deps.Broadcaster != nil {
 		deps.Broadcaster.Broadcast(ws.Event{
 			Type:    ws.EventBackupCompleted,

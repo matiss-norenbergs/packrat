@@ -19,6 +19,7 @@ import (
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 	"packrat/backend/internal/ws"
 )
 
@@ -76,6 +77,8 @@ type Deps struct {
 	ImagesRoot    string
 	FFmpegPath    string
 	Broadcaster   ws.Broadcaster
+	// Events records a failed scheduled sweep in the system log. Nil records nothing.
+	Events *sysevents.Recorder
 }
 
 type config struct {
@@ -185,6 +188,8 @@ func RunDueEnhancements(ctx context.Context, deps Deps) {
 	}
 	if _, err := runSweep(ctx, deps, cfg, "scheduled"); err != nil {
 		log.Printf("thumbnailenhance: scheduled sweep failed: %v", err)
+		deps.Events.Record(ctx, sysevents.LevelError, sysevents.CategoryMaintenance,
+			"Scheduled thumbnail enhancement sweep failed", map[string]any{"error": err.Error()})
 	}
 }
 

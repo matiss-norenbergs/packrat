@@ -13,6 +13,7 @@ import (
 	"packrat/backend/internal/config"
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 )
 
 // runAdmin handles the host-side recovery commands. It returns handled=false when args ask for
@@ -44,22 +45,29 @@ func runAdmin(args []string) (handled bool, err error) {
 	}
 	defer conn.Close()
 	// Migrate too, so the command works on a database the new version hasn't started against yet.
-	if err := db.MigrateWithSnapshot(conn, migrationsDir(), filepath.Join(cfg.BackupsRoot, db.PreMigrationDirName), cfg.SkipPreMigrationBackup); err != nil {
+	migrated, err := db.MigrateWithSnapshot(conn, migrationsDir(), filepath.Join(cfg.BackupsRoot, db.PreMigrationDirName), cfg.SkipPreMigrationBackup)
+	if err != nil {
 		return true, err
 	}
 	users := repository.NewUsersRepo(conn)
 	ctx := context.Background()
+	events := sysevents.New(repository.NewSystemEventsRepo(conn), repository.NewSettingsRepo(conn))
+	recordMigration(ctx, events, migrated, true)
 
 	switch cmd {
 	case admincmd.CommandResetPassword:
 		if err := admincmd.ResetPassword(ctx, users, password); err != nil {
 			return true, err
 		}
+		events.Record(ctx, sysevents.LevelWarning, sysevents.CategorySecurity, "Password reset by an admin command",
+			map[string]any{"allSessionsRevoked": true})
 		fmt.Fprintln(os.Stderr, "Password updated. All sessions were signed out.")
 	case admincmd.CommandDisable2FA:
 		if err := admincmd.Disable2FA(ctx, users); err != nil {
 			return true, err
 		}
+		events.Record(ctx, sysevents.LevelWarning, sysevents.CategorySecurity, "Two-factor authentication disabled by an admin command",
+			map[string]any{"allSessionsRevoked": true})
 		fmt.Fprintln(os.Stderr, "Two-factor authentication disabled and recovery codes removed. All sessions were signed out.")
 	}
 	return true, nil
