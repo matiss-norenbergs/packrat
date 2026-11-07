@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -851,22 +852,56 @@ func YtdlpCookiesFile(ctx context.Context, repo *repository.SettingsRepo) (strin
 }
 
 // writeCookiesFile keeps the on-disk cookies file (see
-// YtDlpService.CookiesFilePath) in sync with the ytdlp_cookies_file
-// setting's content — called from UpdateSettings whenever that field is
-// present in a PATCH, including an empty string, which removes the file
-// rather than leaving a stale one yt-dlp would still pick up. 0600 since
-// cookies.txt can carry live session cookies.
-func writeCookiesFile(path, content string) error {
+// YtDlpService.CookiesFilePath) matching content: non-empty content is
+// written, empty content removes the file rather than leaving a stale one
+// yt-dlp would still pick up. 0600 since cookies.txt can carry live session
+// cookies. It is the only place that touches the file, and reports whether
+// it changed anything (a file that already matches is left alone).
+func writeCookiesFile(path, content string) (changed bool, err error) {
 	if path == "" {
-		return nil
+		return false, nil
 	}
 	if content == "" {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return err
+		if err := os.Remove(path); err != nil {
+			if os.IsNotExist(err) {
+				return false, nil
+			}
+			return false, err
 		}
-		return nil
+		return true, nil
 	}
-	return os.WriteFile(path, []byte(content), 0o600)
+	if current, err := os.ReadFile(path); err == nil && string(current) == content {
+		return false, nil
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SyncCookiesFile makes the on-disk cookies file match the ytdlp_cookies_file
+// setting. Called after a settings PATCH that includes the field, after a
+// settings import / full restore (which write the row but not the file), and
+// once at startup so a missing or stale file is reconciled with the database.
+// The content is never logged.
+func SyncCookiesFile(ctx context.Context, repo *repository.SettingsRepo, ytdlp *downloader.YtDlpService) (changed bool, err error) {
+	if ytdlp == nil {
+		return false, nil
+	}
+	content, err := YtdlpCookiesFile(ctx, repo)
+	if err != nil {
+		return false, err
+	}
+	return writeCookiesFile(ytdlp.CookiesFilePath, content)
+}
+
+// syncCookiesFileAfterRestore runs SyncCookiesFile for an import / restore.
+// The settings are already committed, so a failure to write the file is
+// logged rather than failing the whole restore.
+func syncCookiesFileAfterRestore(ctx context.Context, repo *repository.SettingsRepo, ytdlp *downloader.YtDlpService) {
+	if _, err := SyncCookiesFile(ctx, repo, ytdlp); err != nil {
+		log.Printf("settings: syncing the yt-dlp cookies file after a restore failed: %v", err)
+	}
 }
 
 // YtdlpProxy reads the ytdlp_proxy setting, defaulting to "" (disabled) if
@@ -1261,37 +1296,26 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 			return
 		}
 
+		// Three phases: (1) validate everything and collect the writes into
+		// pending, (2) commit them in one transaction, (3) apply the live side
+		// effects. A request that fails validation changes nothing.
+		pending := make(map[string]string)
+		subscriptionsTurnedOn := false
+
 		if req.MaxConcurrentDownloads != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingMaxConcurrentDownloads, strconv.Itoa(*req.MaxConcurrentDownloads)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			mgr.SetWorkerCount(*req.MaxConcurrentDownloads)
+			pending[models.SettingMaxConcurrentDownloads] = strconv.Itoa(*req.MaxConcurrentDownloads)
 		}
 		if req.MaxConcurrentTranscodes != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingMaxConcurrentTranscodes, strconv.Itoa(*req.MaxConcurrentTranscodes)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			ytdlp.SetMaxConcurrentTranscodes(*req.MaxConcurrentTranscodes)
+			pending[models.SettingMaxConcurrentTranscodes] = strconv.Itoa(*req.MaxConcurrentTranscodes)
 		}
 		if req.DownloadTimeoutMinutes != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingDownloadTimeoutMinutes, strconv.Itoa(*req.DownloadTimeoutMinutes)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingDownloadTimeoutMinutes] = strconv.Itoa(*req.DownloadTimeoutMinutes)
 		}
 		if req.DefaultQuality != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingDefaultQuality, *req.DefaultQuality); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingDefaultQuality] = *req.DefaultQuality
 		}
 		if req.DefaultDownloadType != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingDefaultDownloadType, *req.DefaultDownloadType); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingDefaultDownloadType] = *req.DefaultDownloadType
 		}
 		if req.ImportIgnoredFolders != nil {
 			encoded, err := json.Marshal(*req.ImportIgnoredFolders)
@@ -1299,46 +1323,25 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			if err := repo.Set(c.Request.Context(), models.SettingImportIgnoredFolders, string(encoded)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingImportIgnoredFolders] = string(encoded)
 		}
 		if req.HistoryAnonymizeURLs != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingHistoryAnonymizeURLs, strconv.FormatBool(*req.HistoryAnonymizeURLs)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingHistoryAnonymizeURLs] = strconv.FormatBool(*req.HistoryAnonymizeURLs)
 		}
 		if req.HistoryRetentionDays != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingHistoryRetentionDays, strconv.Itoa(*req.HistoryRetentionDays)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingHistoryRetentionDays] = strconv.Itoa(*req.HistoryRetentionDays)
 		}
 		if req.DownloadLogRetentionDays != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingDownloadLogRetentionDays, strconv.Itoa(*req.DownloadLogRetentionDays)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingDownloadLogRetentionDays] = strconv.Itoa(*req.DownloadLogRetentionDays)
 		}
 		if req.AutoBackupIntervalHours != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingAutoBackupIntervalHours, strconv.Itoa(*req.AutoBackupIntervalHours)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingAutoBackupIntervalHours] = strconv.Itoa(*req.AutoBackupIntervalHours)
 		}
 		if req.BackupRetentionCount != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingBackupRetentionCount, strconv.Itoa(*req.BackupRetentionCount)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingBackupRetentionCount] = strconv.Itoa(*req.BackupRetentionCount)
 		}
 		if req.ResolutionTierMediumEnabled != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingResolutionTierMediumEnabled, strconv.FormatBool(*req.ResolutionTierMediumEnabled)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingResolutionTierMediumEnabled] = strconv.FormatBool(*req.ResolutionTierMediumEnabled)
 		}
 		// The low/high thresholds are validated together (low must stay below
 		// high) even though they're independently-optional fields — resolve
@@ -1372,23 +1375,14 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				return
 			}
 			if req.ResolutionThresholdLow != nil {
-				if err := repo.Set(c.Request.Context(), models.SettingResolutionThresholdLow, strconv.Itoa(*req.ResolutionThresholdLow)); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
+				pending[models.SettingResolutionThresholdLow] = strconv.Itoa(*req.ResolutionThresholdLow)
 			}
 			if req.ResolutionThresholdHigh != nil {
-				if err := repo.Set(c.Request.Context(), models.SettingResolutionThresholdHigh, strconv.Itoa(*req.ResolutionThresholdHigh)); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
+				pending[models.SettingResolutionThresholdHigh] = strconv.Itoa(*req.ResolutionThresholdHigh)
 			}
 		}
 		if req.ThumbnailResolutionTierMediumEnabled != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailResolutionTierMediumEnabled, strconv.FormatBool(*req.ThumbnailResolutionTierMediumEnabled)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailResolutionTierMediumEnabled] = strconv.FormatBool(*req.ThumbnailResolutionTierMediumEnabled)
 		}
 		// Mirrors the video resolution threshold pair above — resolve
 		// whichever side isn't in this request from what's currently stored
@@ -1421,41 +1415,23 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				return
 			}
 			if req.ThumbnailResolutionThresholdLow != nil {
-				if err := repo.Set(c.Request.Context(), models.SettingThumbnailResolutionThresholdLow, strconv.Itoa(*req.ThumbnailResolutionThresholdLow)); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
+				pending[models.SettingThumbnailResolutionThresholdLow] = strconv.Itoa(*req.ThumbnailResolutionThresholdLow)
 			}
 			if req.ThumbnailResolutionThresholdHigh != nil {
-				if err := repo.Set(c.Request.Context(), models.SettingThumbnailResolutionThresholdHigh, strconv.Itoa(*req.ThumbnailResolutionThresholdHigh)); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
+				pending[models.SettingThumbnailResolutionThresholdHigh] = strconv.Itoa(*req.ThumbnailResolutionThresholdHigh)
 			}
 		}
 		if req.LibraryView != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingLibraryView, *req.LibraryView); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingLibraryView] = *req.LibraryView
 		}
 		if req.LibraryMode != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingLibraryMode, *req.LibraryMode); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingLibraryMode] = *req.LibraryMode
 		}
 		if req.LibraryPaginationEnabled != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingLibraryPaginationEnabled, strconv.FormatBool(*req.LibraryPaginationEnabled)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingLibraryPaginationEnabled] = strconv.FormatBool(*req.LibraryPaginationEnabled)
 		}
 		if req.LibraryPageSize != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingLibraryPageSize, strconv.Itoa(*req.LibraryPageSize)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingLibraryPageSize] = strconv.Itoa(*req.LibraryPageSize)
 		}
 		if req.DashboardHiddenWidgets != nil {
 			ids, unknown := normalizeDashboardWidgetIDs(*req.DashboardHiddenWidgets)
@@ -1468,16 +1444,10 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			if err := repo.Set(c.Request.Context(), models.SettingDashboardHiddenWidgets, string(encoded)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingDashboardHiddenWidgets] = string(encoded)
 		}
 		if req.ThumbnailFrameCount != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameCount, strconv.Itoa(*req.ThumbnailFrameCount)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailFrameCount] = strconv.Itoa(*req.ThumbnailFrameCount)
 		}
 		// Mirrors the resolution threshold pairs above — resolve whichever
 		// side isn't in this request from what's currently stored, so a lone
@@ -1510,117 +1480,59 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				return
 			}
 			if req.ThumbnailFrameRangeLow != nil {
-				if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameRangeLow, strconv.Itoa(*req.ThumbnailFrameRangeLow)); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
+				pending[models.SettingThumbnailFrameRangeLow] = strconv.Itoa(*req.ThumbnailFrameRangeLow)
 			}
 			if req.ThumbnailFrameRangeHigh != nil {
-				if err := repo.Set(c.Request.Context(), models.SettingThumbnailFrameRangeHigh, strconv.Itoa(*req.ThumbnailFrameRangeHigh)); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
+				pending[models.SettingThumbnailFrameRangeHigh] = strconv.Itoa(*req.ThumbnailFrameRangeHigh)
 			}
 		}
 		if req.ImageConvertFormat != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingImageConvertFormat, *req.ImageConvertFormat); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingImageConvertFormat] = *req.ImageConvertFormat
 		}
 		if req.PrivacyEnabled != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingPrivacyEnabled, strconv.FormatBool(*req.PrivacyEnabled)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingPrivacyEnabled] = strconv.FormatBool(*req.PrivacyEnabled)
 		}
 		if req.PrivacyBlurStrength != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingPrivacyBlurStrength, *req.PrivacyBlurStrength); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingPrivacyBlurStrength] = *req.PrivacyBlurStrength
 		}
 		if req.BrowseIgnorePrivacy != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingBrowseIgnorePrivacy, strconv.FormatBool(*req.BrowseIgnorePrivacy)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingBrowseIgnorePrivacy] = strconv.FormatBool(*req.BrowseIgnorePrivacy)
 		}
 		if req.SkipDownloadPreview != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingSkipDownloadPreview, strconv.FormatBool(*req.SkipDownloadPreview)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingSkipDownloadPreview] = strconv.FormatBool(*req.SkipDownloadPreview)
 		}
 		if req.JellyfinEnabled != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingJellyfinEnabled, strconv.FormatBool(*req.JellyfinEnabled)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingJellyfinEnabled] = strconv.FormatBool(*req.JellyfinEnabled)
 		}
 		if req.JellyfinURL != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingJellyfinURL, *req.JellyfinURL); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingJellyfinURL] = *req.JellyfinURL
 		}
 		if req.JellyfinRefreshMode != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingJellyfinRefreshMode, *req.JellyfinRefreshMode); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingJellyfinRefreshMode] = *req.JellyfinRefreshMode
 		}
 		if req.JellyfinAPIKey != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingJellyfinAPIKey, *req.JellyfinAPIKey); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingJellyfinAPIKey] = *req.JellyfinAPIKey
 		}
 		if req.LibraryAutoplay != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingLibraryAutoplay, strconv.FormatBool(*req.LibraryAutoplay)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingLibraryAutoplay] = strconv.FormatBool(*req.LibraryAutoplay)
 		}
 		if req.YtdlpCookiesBrowser != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingYtdlpCookiesBrowser, *req.YtdlpCookiesBrowser); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingYtdlpCookiesBrowser] = *req.YtdlpCookiesBrowser
 		}
 		if req.YtdlpCookiesProfile != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingYtdlpCookiesProfile, *req.YtdlpCookiesProfile); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingYtdlpCookiesProfile] = *req.YtdlpCookiesProfile
 		}
 		if req.YtdlpCookiesFile != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingYtdlpCookiesFile, *req.YtdlpCookiesFile); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			if err := writeCookiesFile(ytdlp.CookiesFilePath, *req.YtdlpCookiesFile); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingYtdlpCookiesFile] = *req.YtdlpCookiesFile
 		}
 		if req.YtdlpProxy != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingYtdlpProxy, *req.YtdlpProxy); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingYtdlpProxy] = *req.YtdlpProxy
 		}
 		if req.YtdlpRateLimit != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingYtdlpRateLimit, *req.YtdlpRateLimit); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingYtdlpRateLimit] = *req.YtdlpRateLimit
 		}
 		if req.YtdlpRetries != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingYtdlpRetries, strconv.Itoa(*req.YtdlpRetries)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingYtdlpRetries] = strconv.Itoa(*req.YtdlpRetries)
 		}
 		for _, f := range []struct {
 			val *bool
@@ -1635,98 +1547,92 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				continue
 			}
 			wasOn := features.Enabled(c.Request.Context(), repo, f.key)
-			if err := repo.Set(c.Request.Context(), f.key, strconv.FormatBool(*f.val)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			if f.key == models.SettingFeatureSubscriptionsEnabled && *f.val && !wasOn && onSubscriptionsEnabled != nil {
-				onSubscriptionsEnabled()
+			pending[f.key] = strconv.FormatBool(*f.val)
+			if f.key == models.SettingFeatureSubscriptionsEnabled && *f.val && !wasOn {
+				subscriptionsTurnedOn = true
 			}
 		}
 		if req.ThumbnailEnhancementEnabled != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementEnabled, strconv.FormatBool(*req.ThumbnailEnhancementEnabled)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementEnabled] = strconv.FormatBool(*req.ThumbnailEnhancementEnabled)
 		}
 		if req.ThumbnailEnhancementURL != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementURL, *req.ThumbnailEnhancementURL); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementURL] = *req.ThumbnailEnhancementURL
 		}
 		if req.ThumbnailEnhancementUsername != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementUsername, *req.ThumbnailEnhancementUsername); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementUsername] = *req.ThumbnailEnhancementUsername
 		}
 		if req.ThumbnailEnhancementPassword != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementPassword, *req.ThumbnailEnhancementPassword); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementPassword] = *req.ThumbnailEnhancementPassword
 		}
 		if req.ThumbnailEnhancementUpscaler != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementUpscaler, *req.ThumbnailEnhancementUpscaler); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementUpscaler] = *req.ThumbnailEnhancementUpscaler
 		}
 		if req.ThumbnailEnhancementMinDim != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementMinDim, strconv.Itoa(*req.ThumbnailEnhancementMinDim)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementMinDim] = strconv.Itoa(*req.ThumbnailEnhancementMinDim)
 		}
 		if req.ThumbnailEnhancementFactor != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementFactor, strconv.Itoa(*req.ThumbnailEnhancementFactor)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementFactor] = strconv.Itoa(*req.ThumbnailEnhancementFactor)
 		}
 		if req.ThumbnailEnhancementTargetMode != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementTargetMode, *req.ThumbnailEnhancementTargetMode); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementTargetMode] = *req.ThumbnailEnhancementTargetMode
 		}
 		if req.ThumbnailEnhancementTargetDim != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementTargetDim, strconv.Itoa(*req.ThumbnailEnhancementTargetDim)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementTargetDim] = strconv.Itoa(*req.ThumbnailEnhancementTargetDim)
 		}
 		if req.ThumbnailEnhancementScheduleEnabled != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementScheduleEnabled, strconv.FormatBool(*req.ThumbnailEnhancementScheduleEnabled)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementScheduleEnabled] = strconv.FormatBool(*req.ThumbnailEnhancementScheduleEnabled)
 		}
 		if req.ThumbnailEnhancementRetentionDays != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementRetentionDays, strconv.Itoa(*req.ThumbnailEnhancementRetentionDays)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementRetentionDays] = strconv.Itoa(*req.ThumbnailEnhancementRetentionDays)
 		}
 		if req.ThumbnailEnhancementAutoApprove != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementAutoApprove, strconv.FormatBool(*req.ThumbnailEnhancementAutoApprove)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementAutoApprove] = strconv.FormatBool(*req.ThumbnailEnhancementAutoApprove)
 		}
 		if req.ThumbnailEnhancementAutoOnDownload != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementAutoOnDownload, strconv.FormatBool(*req.ThumbnailEnhancementAutoOnDownload)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			pending[models.SettingThumbnailEnhancementAutoOnDownload] = strconv.FormatBool(*req.ThumbnailEnhancementAutoOnDownload)
 		}
 		if req.ThumbnailEnhancementMaxPerSweep != nil {
-			if err := repo.Set(c.Request.Context(), models.SettingThumbnailEnhancementMaxPerSweep, strconv.Itoa(*req.ThumbnailEnhancementMaxPerSweep)); err != nil {
+			pending[models.SettingThumbnailEnhancementMaxPerSweep] = strconv.Itoa(*req.ThumbnailEnhancementMaxPerSweep)
+		}
+
+		if len(pending) > 0 {
+			if err := repo.SetMany(c.Request.Context(), pending); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 		}
+
+		// Phase 3: the write is committed, so apply the live side effects.
+		applySettingsSideEffects(pending, mgr, ytdlp)
+		if _, ok := pending[models.SettingYtdlpCookiesFile]; ok {
+			if _, err := SyncCookiesFile(c.Request.Context(), repo, ytdlp); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if subscriptionsTurnedOn && onSubscriptionsEnabled != nil {
+			onSubscriptionsEnabled()
+		}
 		c.Status(http.StatusNoContent)
+	}
+}
+
+// applySettingsSideEffects pushes the live-process settings from a just-written
+// settings map into the running components: GetSettings reports
+// maxConcurrentDownloads from the worker pool, not the row, so writing the row
+// alone does not change it. Shared by UpdateSettings, ImportSettings and the
+// full-restore path. Only keys present in the map are applied; values that are
+// not a positive integer (imported settings are written verbatim) are skipped.
+// Call it only after the write has committed.
+func applySettingsSideEffects(settings map[string]string, mgr *queue.DownloadManager, ytdlp *downloader.YtDlpService) {
+	if raw, ok := settings[models.SettingMaxConcurrentDownloads]; ok && mgr != nil {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			mgr.SetWorkerCount(n)
+		}
+	}
+	if raw, ok := settings[models.SettingMaxConcurrentTranscodes]; ok && ytdlp != nil {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			ytdlp.SetMaxConcurrentTranscodes(n)
+		}
 	}
 }

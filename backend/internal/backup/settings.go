@@ -19,19 +19,20 @@ var retiredSettingKeys = map[string]bool{
 	"library_sort": true, // now the account's saved `library` table layout
 }
 
-// ApplySettingsBundle overwrites every key present in bundle — same
-// per-key Set() loop UpdateSettings already uses, just applied to a whole
-// imported map instead of individual request fields. Retired keys are skipped
-// and not counted in applied.
+// ApplySettingsBundle overwrites every key present in bundle in ONE
+// transaction (SettingsRepo.SetMany): all of the bundle is written or none of
+// it, so a failure can't leave a partial mix. Retired keys are skipped and not
+// counted in applied. Values are written verbatim (no per-key validation).
 func ApplySettingsBundle(ctx context.Context, settingsRepo *repository.SettingsRepo, bundle map[string]string) (applied int, err error) {
+	values := make(map[string]string, len(bundle))
 	for key, value := range bundle {
 		if retiredSettingKeys[key] {
 			continue
 		}
-		if err := settingsRepo.Set(ctx, key, value); err != nil {
-			return applied, err
-		}
-		applied++
+		values[key] = value
 	}
-	return applied, nil
+	if err := settingsRepo.SetMany(ctx, values); err != nil {
+		return 0, err
+	}
+	return len(values), nil
 }

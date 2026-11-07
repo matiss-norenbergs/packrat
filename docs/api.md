@@ -1271,7 +1271,9 @@ Other fields, each configured on its own Settings tab (see `docs/FEATURES.md` â†
   page only.
 - `ytdlpCookiesBrowser`/`ytdlpCookiesProfile`/`ytdlpCookiesFile`, `ytdlpProxy`, `ytdlpRateLimit` and
   `ytdlpRetries` (`0` = yt-dlp's defaults, otherwise passed as both `--retries` and `--fragment-retries`) are passed to every yt-dlp call (see the yt-dlp and Proxy
-  sections). A cookies *file* takes precedence over a cookies *browser*.
+  sections). A cookies *file* takes precedence over a cookies *browser*. The cookies file on disk is kept in sync with
+  `ytdlpCookiesFile` on a PATCH that includes it (a failed write is a `500`, the setting stays saved), on
+  settings import and full restore (a failed write is only logged), and at server start.
 - `resolutionTierMediumEnabled`, `resolutionThresholdLow`/`resolutionThresholdHigh` (one of
   480, 720, 1080, 1440, 2160, 4320) are the low/medium/high colour tiers for video resolution on
   library cards; the `thumbnailResolution*` trio is the same for thumbnail resolution.
@@ -1286,6 +1288,10 @@ Other fields, each configured on its own Settings tab (see `docs/FEATURES.md` â†
 ```json
 { "maxConcurrentDownloads": 5, "libraryView": "folders" }
 ```
+
+**All-or-nothing:** the whole request is validated first and then written in one transaction, so a
+request that answers `400` (or fails to save with `500`) changes nothing and does not touch the live worker
+pool; the live effects (worker count, transcode limit) are applied only after the write has committed.
 
 Same field set as the `GET` response. Notes:
 
@@ -1438,6 +1444,11 @@ Common errors for all three: `400` for a non-Packrat file, wrong `kind`, or a wr
 `500` otherwise.
 
 ### Full backup
+
+The full import and restore apply the library first, then the settings (one transaction), then queue the
+redownloads. If the library step fails (`500`) the settings are left exactly as they were; the restored
+`maxConcurrentDownloads` and `maxConcurrentTranscodes` also take effect on the running server right away.
+If the settings write itself fails after the library was applied, the `500` message says so.
 
 `POST /api/backup/preview/full` / `POST /api/backup/import/full` take the same
 `{data, password, mode}` body as above, but require exactly `kind: "full"` (they don't accept a
