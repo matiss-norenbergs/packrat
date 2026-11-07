@@ -170,7 +170,7 @@ export function SystemLogView() {
         toolbar={
           <Button size="sm" variant="outline" disabled={size === 0 || deleteEvents.isPending} onClick={() => setConfirmingDelete(true)}>
             <Trash2 />
-            Delete selected
+            Delete
           </Button>
         }
         filters={

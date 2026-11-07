@@ -170,12 +170,12 @@ describe("LogsPage System view", () => {
     expect(await screen.findByText("No events match these filters.")).toBeInTheDocument()
   })
 
-  it("Delete selected asks for confirmation with the count, then deletes by ids and refetches", async () => {
+  it("Delete asks for confirmation with the count, then deletes by ids and refetches", async () => {
     const s = serve()
     renderSystem()
     await screen.findByText("Event 1")
     const user = userEvent.setup()
-    const del = screen.getByRole("button", { name: /Delete selected/ })
+    const del = screen.getByRole("button", { name: "Delete" })
     expect(del).toBeDisabled()
 
     await user.click(screen.getByRole("checkbox", { name: /Select event 1:/ }))
@@ -195,7 +195,7 @@ describe("LogsPage System view", () => {
     expect(s.deletes[0]).toEqual({ ids: [1, 3] })
     // The list is refetched and the selection is gone.
     await waitFor(() => expect(s.listUrls.length).toBeGreaterThan(listsBefore))
-    await waitFor(() => expect(screen.getByRole("button", { name: /Delete selected/ })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled())
   })
 
   it("opens a details dialog on double-click with the pretty-printed JSON", async () => {

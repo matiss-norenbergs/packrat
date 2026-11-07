@@ -739,7 +739,7 @@ below), newest first, 50 per page, with a count footer.
   clears the selection.
 - Columns: **Time** (sortable, newest first by default), **Level** (a tag: info neutral, warning amber,
   error red; sortable), **Category** (sortable) and **Message**. No saved Table layout here.
-- Toolbar: **Delete selected** on the left (disabled with nothing selected; a confirmation shows the
+- Toolbar: **Delete** (the selected events) on the left (disabled with nothing selected; a confirmation shows the
   count; the list and the filter dropdowns refresh afterwards). On the right: **Level** and **Category**
   multi-selects (their options and counts come from the log itself), a **From** / **To** date range (inclusive,
   in your timezone), **Clear filters** (only while something is filtered) and a search box (debounced,
