@@ -9,6 +9,7 @@ import (
 
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/strayfiles"
+	"packrat/backend/internal/sysevents"
 )
 
 // ScanStrayFiles is the report-only half of the Settings "Find stray files"
@@ -38,6 +39,8 @@ func DeleteStrayFiles(db *sql.DB, mgr *queue.DownloadManager, mediaRoot, imagesR
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		recordEvent(c, sysevents.LevelInfo, sysevents.CategoryMaintenance, "Stray files deleted",
+			map[string]any{"deleted": deleted, "skipped": skipped})
 		c.JSON(http.StatusOK, DeleteStrayFilesResponse{Deleted: deleted, Skipped: skipped})
 	}
 }

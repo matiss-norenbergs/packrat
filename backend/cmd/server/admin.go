@@ -51,18 +51,23 @@ func runAdmin(args []string) (handled bool, err error) {
 	}
 	users := repository.NewUsersRepo(conn)
 	ctx := context.Background()
-	recordMigration(ctx, sysevents.New(repository.NewSystemEventsRepo(conn), repository.NewSettingsRepo(conn)), migrated, true)
+	events := sysevents.New(repository.NewSystemEventsRepo(conn), repository.NewSettingsRepo(conn))
+	recordMigration(ctx, events, migrated, true)
 
 	switch cmd {
 	case admincmd.CommandResetPassword:
 		if err := admincmd.ResetPassword(ctx, users, password); err != nil {
 			return true, err
 		}
+		events.Record(ctx, sysevents.LevelWarning, sysevents.CategorySecurity, "Password reset by an admin command",
+			map[string]any{"allSessionsRevoked": true})
 		fmt.Fprintln(os.Stderr, "Password updated. All sessions were signed out.")
 	case admincmd.CommandDisable2FA:
 		if err := admincmd.Disable2FA(ctx, users); err != nil {
 			return true, err
 		}
+		events.Record(ctx, sysevents.LevelWarning, sysevents.CategorySecurity, "Two-factor authentication disabled by an admin command",
+			map[string]any{"allSessionsRevoked": true})
 		fmt.Fprintln(os.Stderr, "Two-factor authentication disabled and recovery codes removed. All sessions were signed out.")
 	}
 	return true, nil

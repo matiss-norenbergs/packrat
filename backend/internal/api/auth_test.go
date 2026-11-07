@@ -17,6 +17,7 @@ import (
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/ratelimit"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/sysevents"
 	"packrat/backend/internal/twofactor"
 )
 
@@ -36,6 +37,8 @@ type authTestEnv struct {
 	clock *testClock
 	users *repository.UsersRepo
 	conn  *sql.DB
+	// events is the system log the handlers record into (see system_events_callsites_test.go).
+	events *repository.SystemEventsRepo
 }
 
 type testClock struct{ t time.Time }
@@ -67,6 +70,10 @@ func newAuthTestEnv(t *testing.T) *authTestEnv {
 		t.Fatal(err)
 	}
 	r.Use(CORS(config.DefaultCORSAllowedOrigins))
+	eventsRepo := repository.NewSystemEventsRepo(conn)
+	rec := sysevents.New(eventsRepo, repository.NewSettingsRepo(conn))
+	r.Use(eventsMiddleware(rec))
+	deps.Limiter.SetOnLockout(lockoutRecorder(rec))
 	public := r.Group("/api")
 	public.GET("/auth/status", AuthStatus(users))
 	public.POST("/auth/setup", AuthSetup(users))
@@ -95,7 +102,7 @@ func newAuthTestEnv(t *testing.T) *authTestEnv {
 	protected.POST("/auth/2fa/recovery-codes", TwoFactorRegenerateCodes(deps))
 	protected.GET("/auth/security-notice", SecurityNotice(deps))
 	protected.POST("/auth/security-notice/ack", SecurityNoticeAck(deps))
-	return &authTestEnv{r: r, deps: deps, clock: clock, users: users, conn: conn}
+	return &authTestEnv{r: r, deps: deps, clock: clock, users: users, conn: conn, events: eventsRepo}
 }
 
 type authReq struct {

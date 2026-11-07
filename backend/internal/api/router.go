@@ -125,6 +125,11 @@ func SetupRouter(deps Deps) *gin.Engine {
 	r.UseRawPath = true
 	r.Use(limitRequestBody)
 	r.Use(Compress())
+	r.Use(eventsMiddleware(deps.Events))
+	if deps.Auth != nil && deps.Events != nil {
+		// One event per lockout that starts, from the limiter (never per failed attempt).
+		deps.Auth.Limiter.SetOnLockout(lockoutRecorder(deps.Events))
+	}
 
 	// All JSON API routes live under /api so they can never collide with a
 	// frontend client-side route of the same name (e.g. both the SPA and the
@@ -170,6 +175,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 			ImagesRoot:        deps.ImagesRoot,
 			SettingsRepo:      deps.SettingsRepo,
 			Broadcaster:       deps.Broadcaster,
+			Events:            deps.Events,
 		}
 		// Subscriptions that came due while the feature was off run as soon as it
 		// is switched back on, rather than waiting for the next hourly sweep.

@@ -228,6 +228,7 @@ func run() error {
 	mgr.SetTracker(tasks)
 	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)
 	imageBackfillMgr.SetShutdown(ctx, tasks)
+	imageBackfillMgr.SetEvents(events)
 	frameMatchJobs := framematch.NewJobStore()
 	frameMatchJobs.SetBaseContext(ctx)
 	frameMatchQueueRepo := repository.NewFrameMatchQueueRepo(conn)
@@ -243,9 +244,7 @@ func run() error {
 				log.Printf("crash recovery: recording history for %d failed: %v", d.ID, err)
 			}
 		}
-		events.Record(ctx, sysevents.LevelWarning, sysevents.CategoryRecovery,
-			"Downloads interrupted by the last shutdown were marked as interrupted",
-			map[string]any{"downloads": len(interrupted)})
+		recordRecovery(ctx, events, len(interrupted), 0)
 	}
 
 	// Same for frame-match rows: one still "running" belonged to the previous process. It becomes an
@@ -255,9 +254,7 @@ func run() error {
 		return err
 	} else if n > 0 {
 		log.Printf("crash recovery: marked %d interrupted frame-match item(s) as errors", n)
-		events.Record(ctx, sysevents.LevelWarning, sysevents.CategoryRecovery,
-			"Frame-match items interrupted by the last shutdown were reset",
-			map[string]any{"items": n})
+		recordRecovery(ctx, events, 0, int(n))
 	}
 
 	// A previously-saved concurrency setting survives a restart — the env
@@ -289,6 +286,7 @@ func run() error {
 		DownloadsRepo:     downloadsRepo,
 		BackupHistoryRepo: backupHistoryRepo,
 		Broadcaster:       hub,
+		Events:            events,
 	}
 
 	subCheckDeps := subscriptions.CheckDeps{
@@ -301,6 +299,7 @@ func run() error {
 		ImagesRoot:        cfg.ImagesRoot,
 		SettingsRepo:      settingsRepo,
 		Broadcaster:       hub,
+		Events:            events,
 	}
 
 	enhanceDeps := thumbnailenhance.Deps{
@@ -312,6 +311,7 @@ func run() error {
 		ImagesRoot:    cfg.ImagesRoot,
 		FFmpegPath:    cfg.FFmpegPath,
 		Broadcaster:   hub,
+		Events:        events,
 	}
 
 	imageResizer := imageproc.NewResizer(cfg.FFmpegPath, cfg.CacheRoot)
@@ -431,14 +431,7 @@ func run() error {
 	httpErr := shutdown(srv, cancelRoot, tasks, mgr.Embedder().Wait, func(jobsLeft int, waited time.Duration) {
 		// After the wait and before the database closes (run returns next). Bounded by the
 		// recorder's own write timeout, well inside the 5 s the budget leaves for final writes.
-		if jobsLeft > 0 {
-			events.Record(context.Background(), sysevents.LevelWarning, sysevents.CategoryShutdown,
-				"Shut down, but some background jobs did not finish in time",
-				map[string]any{"jobsLeft": jobsLeft, "waitedMs": waited.Milliseconds()})
-			return
-		}
-		events.Record(context.Background(), sysevents.LevelInfo, sysevents.CategoryShutdown,
-			"Shut down cleanly", map[string]any{"waitedMs": waited.Milliseconds()})
+		recordShutdown(events, jobsLeft, waited)
 	})
 	// run returns next, and the deferred conn.Close runs: the database closes last.
 	log.Println("shutdown: closing database")

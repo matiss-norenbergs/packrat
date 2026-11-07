@@ -52,3 +52,30 @@ func recordStartup(ctx context.Context, rec *sysevents.Recorder, schemaVersion i
 	}
 	rec.Record(ctx, sysevents.LevelInfo, sysevents.CategoryStartup, "Packrat started", details)
 }
+
+// recordRecovery records what crash recovery repaired at startup; a count of zero records nothing.
+func recordRecovery(ctx context.Context, rec *sysevents.Recorder, downloads, frameMatchItems int) {
+	if downloads > 0 {
+		rec.Record(ctx, sysevents.LevelWarning, sysevents.CategoryRecovery,
+			"Downloads interrupted by the last shutdown were marked as interrupted",
+			map[string]any{"downloads": downloads})
+	}
+	if frameMatchItems > 0 {
+		rec.Record(ctx, sysevents.LevelWarning, sysevents.CategoryRecovery,
+			"Frame-match items interrupted by the last shutdown were reset",
+			map[string]any{"items": frameMatchItems})
+	}
+}
+
+// recordShutdown records how the background wait ended: a clean finish, or the number of jobs
+// still running when the wait timed out. Called after the wait and before the database closes.
+func recordShutdown(rec *sysevents.Recorder, jobsLeft int, waited time.Duration) {
+	if jobsLeft > 0 {
+		rec.Record(context.Background(), sysevents.LevelWarning, sysevents.CategoryShutdown,
+			"Shut down, but some background jobs did not finish in time",
+			map[string]any{"jobsLeft": jobsLeft, "waitedMs": waited.Milliseconds()})
+		return
+	}
+	rec.Record(context.Background(), sysevents.LevelInfo, sysevents.CategoryShutdown,
+		"Shut down cleanly", map[string]any{"waitedMs": waited.Milliseconds()})
+}
