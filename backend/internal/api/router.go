@@ -200,6 +200,10 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/auth/security-notice", SecurityNotice(deps.Auth))
 		api.POST("/auth/security-notice/ack", SecurityNoticeAck(deps.Auth))
 
+		if deps.SystemEventsRepo != nil {
+			RegisterSystemEventRoutes(api, deps.SystemEventsRepo, deps.SettingsRepo)
+		}
+
 		api.GET("/actions", ListHostActions(deps.HostActions))
 		api.POST("/actions/:id/run", RunHostAction(deps.HostActions))
 

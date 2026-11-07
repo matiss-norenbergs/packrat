@@ -83,6 +83,7 @@ func newAuthTestEnv(t *testing.T) *authTestEnv {
 	protected := r.Group("/api")
 	protected.Use(RequireAuth(users), RequireCSRF())
 	ok := func(c *gin.Context) { c.Status(http.StatusNoContent) }
+	RegisterSystemEventRoutes(protected, eventsRepo, repository.NewSettingsRepo(conn))
 	protected.GET("/thing", ok)
 	protected.POST("/thing", ok)
 	protected.PATCH("/auth/password", ChangePassword(deps))
