@@ -79,6 +79,14 @@ func (s *YtDlpService) ExtractFrameRange(ctx context.Context, ffprobePath, media
 	return frames, nil
 }
 
+// ProbeFrameTimestamps returns the presentation timestamp of every video frame
+// in [start, start+windowLen), in order (nil on any failure). Exported for the
+// frame matcher, which decodes a window itself and needs the same timestamps
+// ExtractFrameRange pairs its frames with.
+func ProbeFrameTimestamps(ctx context.Context, ffprobePath, mediaPath string, start, windowLen float64) []float64 {
+	return probeAllFrameTimestamps(ctx, ffprobePath, mediaPath, start, windowLen)
+}
+
 // probeAllFrameTimestamps lists every video frame's presentation timestamp
 // within [start, start+windowLen) — the same ffprobe -read_intervals
 // technique probeKeyframeTimestamps uses, just without the key_frame filter,

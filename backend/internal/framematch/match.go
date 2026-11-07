@@ -1,10 +1,9 @@
 // Package framematch locates the video frame a thumbnail was most likely
-// taken from. The approach (coarse whole-video pHash sweep at 1fps, then a
-// windowed fine pass on the best few candidates) and its defaults (top-K=6,
-// a 15s fine window) were picked empirically with cmd/framematch-bench —
-// see that tool's doc comment for the benchmark methodology. On the sample
-// video used to tune these defaults: ~83% of degraded/cropped reference
-// thumbnails were relocated to within 1s of their true source frame.
+// taken from. The approach (coarse whole-video pHash sweep, then a windowed
+// fine pass over the best few distinct regions) and its defaults were picked
+// empirically — see docs/architecture.md ("Frame matching") for the constants
+// and the measurements behind them, and cmd/framematch-bench for the original
+// benchmark methodology.
 package framematch
 
 import (
@@ -13,10 +12,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"io"
+	"math"
 	"os/exec"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/corona10/goimagehash"
@@ -25,30 +27,45 @@ import (
 )
 
 const (
-	// topK is how many coarse-sweep candidates get refined in the fine
-	// pass — 6 was the point past which more candidates stopped finding
-	// additional hits in benchmarking (top-k=10 matched top-k=6 exactly).
-	topK = 6
-	// fineWindowSeconds is the width of each fine-pass window, capped at
-	// downloader.MaxFrameWindowSeconds (ExtractFrameRange's own limit).
-	// Benchmarking showed hit rate still climbing at this cap rather than
-	// plateauing, so it's set to the max allowed rather than a smaller
-	// value — narrower windows measurably cost accuracy.
+	// topK is how many distinct coarse-sweep regions get refined in the fine
+	// pass (see selectCandidates).
+	topK = 10
+	// fineWindowSeconds is the width of each fine-pass window.
 	fineWindowSeconds = downloader.MaxFrameWindowSeconds
-	// coarseFPS is the whole-video sampling rate for the initial sweep.
-	// A full per-frame decode (this is not keyframe-only), but 1fps kept
-	// the one-time sweep to roughly a minute on the tuning video.
-	coarseFPS = 1.0
-	// coarseScaleWidth is the width (px) ffmpeg downscales each coarse-sweep
-	// frame to before piping it out. The perceptual hash resizes to 64x64
-	// anyway, so 256 keeps 4x headroom while shrinking a frame from hundreds
-	// of KB (native 1080p JPEG) to a few KB. Height follows the aspect ratio,
-	// rounded to an even number (-2).
+	// candidateSeparation is the minimum distance between two shortlisted
+	// coarse candidates (non-maximum suppression): the best frames of a scene
+	// are adjacent samples, so without it the shortlist is mostly one region.
+	candidateSeparation = fineWindowSeconds / 2
+	// coarseFPS is the whole-video sampling rate for the initial sweep. ffmpeg
+	// decodes every frame regardless; the rate only sets how many 256 px frames
+	// get hashed.
+	coarseFPS = 4.0
+	// coarseScaleWidth is the width (px) ffmpeg downscales each swept frame to
+	// before piping it out. The perceptual hash resizes to 64x64 anyway, so 256
+	// keeps 4x headroom while shrinking a frame from hundreds of KB (native
+	// 1080p JPEG) to a few KB. Height follows the aspect ratio, rounded to an
+	// even number (-2).
 	coarseScaleWidth = 256
+	// maxFineFrames is a safety ceiling on frames decoded for one fine window
+	// (a 15 s window at 120 fps is 1800).
+	maxFineFrames = 2000
 	// maxStderrBytes bounds how much of ffmpeg stderr is kept for error
 	// messages (the tail: the actual failure is printed last).
 	maxStderrBytes = 8 << 10
 )
+
+// config holds the tunables; production uses defaultConfig, the accuracy
+// harness (accuracy_test.go) sweeps others.
+type config struct {
+	fps    float64 // coarse sampling rate
+	topK   int     // distinct regions refined
+	minSep float64 // seconds between shortlisted candidates (0 = plain top-K)
+}
+
+// debugf, when set (by the accuracy harness), traces each fine window.
+var debugf func(format string, args ...any)
+
+var defaultConfig = config{fps: coarseFPS, topK: topK, minSep: candidateSeparation}
 
 // Result is the best-matching frame found for a reference image.
 type Result struct {
@@ -74,6 +91,54 @@ type Result struct {
 // seconds to low minutes depending on video length; callers should run
 // this off the request goroutine (see JobStore).
 func Match(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath, videoAbsPath string, referenceJPEG []byte) (Result, error) {
+	return matchWith(ctx, ytdlp, ffprobePath, videoAbsPath, referenceJPEG, defaultConfig)
+}
+
+type scored struct {
+	hashedFrame
+	distance int
+}
+
+// rankFrames orders the coarse frames by distance to ref (best first; ties
+// keep timestamp order).
+func rankFrames(coarse []hashedFrame, ref *goimagehash.ImageHash) []scored {
+	ranked := make([]scored, 0, len(coarse))
+	for _, f := range coarse {
+		d, err := ref.Distance(f.hash)
+		if err != nil {
+			continue
+		}
+		ranked = append(ranked, scored{f, d})
+	}
+	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].distance < ranked[j].distance })
+	return ranked
+}
+
+// selectCandidates walks the ranked frames and keeps up to k whose timestamps
+// are at least minSep from every already kept one (non-maximum suppression),
+// so the fine pass refines k distinct regions rather than k adjacent seconds
+// of one scene.
+func selectCandidates(ranked []scored, k int, minSep float64) []scored {
+	out := make([]scored, 0, k)
+	for _, c := range ranked {
+		if len(out) >= k {
+			break
+		}
+		ok := true
+		for _, a := range out {
+			if math.Abs(c.timestamp-a.timestamp) < minSep {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func matchWith(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath, videoAbsPath string, referenceJPEG []byte, cfg config) (Result, error) {
 	refImg, err := jpeg.Decode(bytes.NewReader(referenceJPEG))
 	if err != nil {
 		return Result{}, fmt.Errorf("decode reference image: %w", err)
@@ -83,119 +148,220 @@ func Match(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath, vid
 		return Result{}, fmt.Errorf("hash reference image: %w", err)
 	}
 
-	coarse, err := coarseSweep(ctx, ytdlp.FFmpegPath, videoAbsPath)
+	coarse, err := coarseSweepFPS(ctx, ytdlp.FFmpegPath, videoAbsPath, cfg.fps)
 	if err != nil {
 		return Result{}, fmt.Errorf("coarse sweep: %w", err)
 	}
+	return refine(ctx, ytdlp, ffprobePath, videoAbsPath, referenceJPEG, refHash, newSignature(refImg), coarse, cfg)
+}
+
+// refine ranks the coarse frames against refHash and runs the fine pass.
+func refine(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath, videoAbsPath string, referenceJPEG []byte, refHash *goimagehash.ImageHash, refSig signature, coarse []hashedFrame, cfg config) (Result, error) {
 	if len(coarse) == 0 {
 		return Result{}, fmt.Errorf("coarse sweep produced no frames")
 	}
-
-	type scored struct {
-		hashedFrame
-		distance int
-	}
-	candidates := make([]scored, 0, len(coarse))
-	for _, f := range coarse {
-		d, err := refHash.Distance(f.hash)
-		if err != nil {
-			continue
-		}
-		candidates = append(candidates, scored{f, d})
-	}
-	if len(candidates) == 0 {
+	ranked := rankFrames(coarse, refHash)
+	if len(ranked) == 0 {
 		return Result{}, fmt.Errorf("no candidate frames could be hashed")
 	}
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i].distance < candidates[j].distance })
+	candidates := selectCandidates(ranked, cfg.topK, cfg.minSep)
 
-	k := topK
-	if k > len(candidates) {
-		k = len(candidates)
-	}
-
-	bestTS, bestDist := candidates[0].timestamp, candidates[0].distance
-	var bestJPEG []byte
-	covered := make([]struct{ lo, hi float64 }, 0, k)
-	for i := 0; i < k; i++ {
-		center := candidates[i].timestamp
-		half := fineWindowSeconds / 2
-		lo, hi := center-half, center+half
-		if lo < 0 {
-			lo = 0
+	// The fine pass hashes every frame of each candidate's window; only the
+	// best (distance, timestamp) is kept. With no usable fine result the best
+	// coarse frame stands.
+	best := hit{ts: ranked[0].timestamp, dist: ranked[0].distance}
+	coarseBest := true // best is still the coarse sweep's frame
+	half := fineWindowSeconds / 2
+	for _, c := range candidates {
+		lo := math.Max(0, c.timestamp-half)
+		h, err := fineWindow(ctx, ytdlp.FFmpegPath, ffprobePath, videoAbsPath, lo, c.timestamp+half, refHash, refSig)
+		if debugf != nil {
+			debugf("window [%.2f,%.2f] coarse-dist=%d -> hit=%+v err=%v", lo, c.timestamp+half, c.distance, h, err)
 		}
-
-		alreadyCovered := false
-		for _, c := range covered {
-			if lo < c.hi && hi > c.lo {
-				alreadyCovered = true
-				break
-			}
-		}
-		if alreadyCovered {
-			continue
-		}
-		covered = append(covered, struct{ lo, hi float64 }{lo, hi})
-
-		frames, err := ytdlp.ExtractFrameRange(ctx, ffprobePath, videoAbsPath, lo, hi)
-		if err != nil || len(frames) == 0 {
-			continue
-		}
-		for _, f := range frames {
-			raw, err := base64.StdEncoding.DecodeString(f.ImageBase64)
-			if err != nil {
-				continue
-			}
-			img, err := jpeg.Decode(bytes.NewReader(raw))
-			if err != nil {
-				continue
-			}
-			h, err := goimagehash.PerceptionHash(img)
-			if err != nil {
-				continue
-			}
-			d, err := refHash.Distance(h)
-			if err != nil {
-				continue
-			}
-			if bestJPEG == nil || d < bestDist {
-				bestDist = d
-				bestTS = f.TimestampSeconds
-				bestJPEG = raw
-			}
-		}
-	}
-
-	if bestJPEG == nil {
-		// The fine pass never beat (or even matched) the coarse sweep's
-		// own best frame — fall back to re-extracting that single frame
-		// so the result always carries real image bytes.
-		frames, err := ytdlp.ExtractFrameRange(ctx, ffprobePath, videoAbsPath, maxFloat(0, bestTS-1), bestTS+1)
-		if err != nil || len(frames) == 0 {
-			return Result{}, fmt.Errorf("couldn't extract the best-matching frame")
-		}
-		raw, err := base64.StdEncoding.DecodeString(frames[0].ImageBase64)
 		if err != nil {
-			return Result{}, fmt.Errorf("decode fallback frame: %w", err)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return Result{}, ctxErr
+			}
+			continue
 		}
-		bestJPEG = raw
-		bestTS = frames[0].TimestampSeconds
+		if h.betterThan(best) || (coarseBest && h.dist == best.dist) {
+			best, coarseBest = h, false
+		}
 	}
 
-	score := 100 * float64(refHash.Bits()-bestDist) / float64(refHash.Bits())
+	raw, ts, err := extractFullFrame(ctx, ytdlp, ffprobePath, videoAbsPath, best.ts)
+	if err != nil {
+		return Result{}, err
+	}
+	score := 100 * float64(refHash.Bits()-best.dist) / float64(refHash.Bits())
 	return Result{
-		TimestampSeconds:     bestTS,
+		TimestampSeconds:     ts,
 		Score:                score,
-		ImageBase64:          base64.StdEncoding.EncodeToString(bestJPEG),
+		ImageBase64:          base64.StdEncoding.EncodeToString(raw),
 		ReferenceImageBase64: base64.StdEncoding.EncodeToString(referenceJPEG),
 	}, nil
 }
 
-func maxFloat(a, b float64) float64 {
-	if a > b {
-		return a
+// fineWindow decodes every frame of [lo, hi) once (downscaled like the coarse
+// sweep, no frame cap beyond maxFineFrames), hashes each as it streams in and
+// returns the timestamp and distance of the closest one. Frames are never
+// retained. The i-th decoded frame is paired with the i-th ffprobe timestamp.
+func fineWindow(ctx context.Context, ffmpegPath, ffprobePath, videoAbsPath string, lo, hi float64, ref *goimagehash.ImageHash, refSig signature) (hit, error) {
+	stamps := downloader.ProbeFrameTimestamps(ctx, ffprobePath, videoAbsPath, lo, hi-lo)
+	if len(stamps) == 0 {
+		return hit{}, errors.New("no frame timestamps in window")
 	}
-	return b
+	// Downscaling makes the mjpeg encoder reject frames whose millisecond pts
+	// collide (30 fps in a 1/1000 timebase), so the encoder timebase must follow
+	// the filter graph; setpts is the fallback for ffmpeg builds without
+	// -enc_time_base.
+	var tr *bestTracker
+	var err error
+	for _, variant := range [][]string{
+		{"-enc_time_base", "-1", "-vf", fineScale},
+		{"-vf", fineScale + ",setpts=N/FRAME_RATE/TB"},
+	} {
+		args := []string{"-y", "-ss", formatSeconds(lo), "-i", videoAbsPath, "-t", formatSeconds(hi - lo), "-vsync", "0", "-frames:v", strconv.Itoa(maxFineFrames)}
+		args = append(append(args, variant...), "-q:v", "4", "-f", "image2pipe", "-vcodec", "mjpeg", "-")
+		tr = newBestTracker(ref, refSig, stamps)
+		if err = streamMJPEG(ctx, ffmpegPath, args, tr.observe); err == nil || ctx.Err() != nil {
+			break
+		}
+	}
+	if err != nil {
+		return hit{}, err
+	}
+	if !tr.found {
+		return hit{}, errors.New("no frame in window could be hashed")
+	}
+	return tr.best, nil
 }
+
+var fineScale = fmt.Sprintf("scale=%d:-2:flags=bicubic", coarseScaleWidth)
+
+// hit is a frame's closeness to the reference: the perceptual-hash distance,
+// with a coarse luma-signature difference (sad) breaking exact ties — flat or
+// fading scenes give dozens of frames the same hash, and the signature picks
+// the one that really looks most like the reference.
+type hit struct {
+	ts   float64
+	dist int
+	sad  int
+}
+
+func (h hit) betterThan(o hit) bool {
+	return h.dist < o.dist || (h.dist == o.dist && h.sad < o.sad)
+}
+
+// bestTracker keeps the closest frame of a fine window as frames stream in:
+// the i-th frame is paired with stamps[i]; nothing but the best hit is
+// retained.
+type bestTracker struct {
+	ref    *goimagehash.ImageHash
+	refSig signature
+	stamps []float64
+	best   hit
+	found  bool
+}
+
+func newBestTracker(ref *goimagehash.ImageHash, refSig signature, stamps []float64) *bestTracker {
+	return &bestTracker{ref: ref, refSig: refSig, stamps: stamps}
+}
+
+func (b *bestTracker) observe(i int, raw []byte) error {
+	if i >= len(b.stamps) {
+		return errStopScan
+	}
+	img, err := jpeg.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return nil
+	}
+	h, err := goimagehash.PerceptionHash(img)
+	if err != nil {
+		return nil
+	}
+	d, err := b.ref.Distance(h)
+	if err != nil || (b.found && d > b.best.dist) {
+		return nil
+	}
+	cand := hit{ts: b.stamps[i], dist: d, sad: b.refSig.distance(newSignature(img))}
+	if !b.found || cand.betterThan(b.best) {
+		b.best, b.found = cand, true
+	}
+	return nil
+}
+
+const sigSide = 16
+
+// signature is a 16x16 luma thumbnail, sampled sparsely — only a tie-break,
+// so it just has to be cheap and stable across the reference's and the
+// frame's different resolutions.
+type signature [sigSide * sigSide]uint8
+
+func newSignature(img image.Image) signature {
+	var s signature
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w == 0 || h == 0 {
+		return s
+	}
+	const sub = 4 // samples per cell side
+	for cy := 0; cy < sigSide; cy++ {
+		for cx := 0; cx < sigSide; cx++ {
+			sum := 0
+			for sy := 0; sy < sub; sy++ {
+				for sx := 0; sx < sub; sx++ {
+					x := b.Min.X + ((cx*sub+sx)*2+1)*w/(sigSide*sub*2)
+					y := b.Min.Y + ((cy*sub+sy)*2+1)*h/(sigSide*sub*2)
+					r, g, bl, _ := img.At(x, y).RGBA()
+					sum += int((299*r + 587*g + 114*bl) / 1000 >> 8)
+				}
+			}
+			s[cy*sigSide+cx] = uint8(sum / (sub * sub))
+		}
+	}
+	return s
+}
+
+func (s signature) distance(o signature) int {
+	n := 0
+	for i := range s {
+		d := int(s[i]) - int(o[i])
+		if d < 0 {
+			d = -d
+		}
+		n += d
+	}
+	return n
+}
+
+// extractFullFrame returns the full-quality JPEG of the frame at ts (and its
+// exact timestamp), via a narrow ExtractFrameRange with a wider retry.
+func extractFullFrame(ctx context.Context, ytdlp *downloader.YtDlpService, ffprobePath, videoAbsPath string, ts float64) ([]byte, float64, error) {
+	for _, pad := range [][2]float64{{0.005, 0.5}, {1, 1}} {
+		frames, err := ytdlp.ExtractFrameRange(ctx, ffprobePath, videoAbsPath, math.Max(0, ts-pad[0]), ts+pad[1])
+		if err != nil || len(frames) == 0 {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, 0, ctxErr
+			}
+			continue
+		}
+		best := frames[0]
+		for _, f := range frames[1:] {
+			if math.Abs(f.TimestampSeconds-ts) < math.Abs(best.TimestampSeconds-ts) {
+				best = f
+			}
+		}
+		raw, err := base64.StdEncoding.DecodeString(best.ImageBase64)
+		if err != nil {
+			return nil, 0, fmt.Errorf("decode best frame: %w", err)
+		}
+		return raw, best.TimestampSeconds, nil
+	}
+	return nil, 0, fmt.Errorf("couldn't extract the best-matching frame")
+}
+
+func formatSeconds(t float64) string { return strconv.FormatFloat(t, 'f', 3, 64) }
 
 type hashedFrame struct {
 	timestamp float64
@@ -203,37 +369,62 @@ type hashedFrame struct {
 }
 
 // coarseVideoFilter is the ffmpeg -vf chain for the coarse sweep.
-func coarseVideoFilter() string {
-	return fmt.Sprintf("fps=%f,scale=%d:-2:flags=bicubic", coarseFPS, coarseScaleWidth)
+func coarseVideoFilter(fps float64) string {
+	return fmt.Sprintf("fps=%f,scale=%d:-2:flags=bicubic", fps, coarseScaleWidth)
 }
 
-// coarseSweep decodes the whole video at coarseFPS via a single ffmpeg
-// invocation (downscaled to coarseScaleWidth) and hashes each frame as soon
-// as it has been read off the pipe, so peak memory is one frame plus the
-// hash list — not the whole video. Frames are split with frameSplitter (SOI/
-// EOI markers) rather than repeated jpeg.Decode calls on the raw stream; see
-// its doc comment for why.
+// coarseSweep samples the whole video at coarseFPS.
 func coarseSweep(ctx context.Context, ffmpegPath, videoAbsPath string) ([]hashedFrame, error) {
+	return coarseSweepFPS(ctx, ffmpegPath, videoAbsPath, coarseFPS)
+}
+
+// coarseSweepFPS decodes the whole video at fps via a single ffmpeg invocation
+// (downscaled to coarseScaleWidth) and hashes each frame as soon as it has
+// been read off the pipe, so peak memory is one frame plus the hash list — not
+// the whole video.
+func coarseSweepFPS(ctx context.Context, ffmpegPath, videoAbsPath string, fps float64) ([]hashedFrame, error) {
 	args := []string{
 		"-y", "-i", videoAbsPath,
-		"-vf", coarseVideoFilter(),
+		"-vf", coarseVideoFilter(fps),
 		"-q:v", "4", "-f", "image2pipe", "-vcodec", "mjpeg", "-",
 	}
+	var frames []hashedFrame
+	err := streamMJPEG(ctx, ffmpegPath, args, func(i int, raw []byte) error {
+		if f, ok := hashFrame(i, raw, fps); ok {
+			frames = append(frames, f)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return frames, nil
+}
+
+// errStopScan, returned from a streamMJPEG callback, ends the scan early
+// without an error.
+var errStopScan = errors.New("stop scan")
+
+// streamMJPEG runs ffmpeg and calls fn for each frame of its MJPEG stdout as
+// it arrives (the slice is only valid during the call). It owns the process
+// lifecycle: ffmpeg is killed and reaped on any scan error or early stop,
+// context cancellation wins, stderr is kept bounded, and a grandchild holding
+// the pipe can't block Wait forever.
+func streamMJPEG(ctx context.Context, ffmpegPath string, args []string, fn func(i int, raw []byte) error) error {
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
 	stderr := &tailBuffer{max: maxStderrBytes}
 	cmd.Stderr = stderr
-	// If ffmpeg leaves a grandchild holding a pipe open after being killed,
-	// don't let Wait block forever.
 	cmd.WaitDelay = 5 * time.Second
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("ffmpeg stdout pipe: %w", err)
+		return fmt.Errorf("ffmpeg stdout pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("%w: %s", err, stderr.String())
+		return fmt.Errorf("%w: %s", err, stderr.String())
 	}
 
-	frames, scanErr := hashFrameStream(stdout)
+	scanErr := scanFrames(stdout, fn)
+	stopped := errors.Is(scanErr, errStopScan)
 	if scanErr != nil {
 		// Stop ffmpeg so Wait returns promptly; the scan error is reported.
 		_ = cmd.Process.Kill()
@@ -241,41 +432,62 @@ func coarseSweep(ctx context.Context, ffmpegPath, videoAbsPath string) ([]hashed
 	waitErr := cmd.Wait()
 
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return nil, ctxErr
+		return ctxErr
+	}
+	if stopped {
+		return nil
 	}
 	if scanErr != nil {
-		return nil, scanErr
+		return scanErr
 	}
 	if waitErr != nil {
-		return nil, fmt.Errorf("%w: %s", waitErr, stderr.String())
+		return fmt.Errorf("%w: %s", waitErr, stderr.String())
 	}
-	return frames, nil
+	return nil
+}
+
+// scanFrames splits the MJPEG stream r into frames and calls fn(index, frame)
+// for each; a frame that later fails to decode still consumes its index.
+func scanFrames(r io.Reader, fn func(i int, raw []byte) error) error {
+	sp := newFrameSplitter(r)
+	for i := 0; ; i++ {
+		raw, err := sp.Next()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := fn(i, raw); err != nil {
+			return err
+		}
+	}
+}
+
+func hashFrame(i int, raw []byte, fps float64) (hashedFrame, bool) {
+	img, err := jpeg.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return hashedFrame{}, false
+	}
+	h, err := goimagehash.PerceptionHash(img)
+	if err != nil {
+		return hashedFrame{}, false
+	}
+	return hashedFrame{timestamp: float64(i) / fps, hash: h}, true
 }
 
 // hashFrameStream reads an MJPEG stream from r, hashing each frame as it
 // completes. A frame that fails to decode is skipped but still consumes its
 // index, so timestamps stay frame-index / coarseFPS.
 func hashFrameStream(r io.Reader) ([]hashedFrame, error) {
-	sp := newFrameSplitter(r)
 	var frames []hashedFrame
-	for i := 0; ; i++ {
-		raw, err := sp.Next()
-		if err == io.EOF {
-			return frames, nil
+	err := scanFrames(r, func(i int, raw []byte) error {
+		if f, ok := hashFrame(i, raw, coarseFPS); ok {
+			frames = append(frames, f)
 		}
-		if err != nil {
-			return frames, err
-		}
-		img, err := jpeg.Decode(bytes.NewReader(raw))
-		if err != nil {
-			continue
-		}
-		h, err := goimagehash.PerceptionHash(img)
-		if err != nil {
-			continue
-		}
-		frames = append(frames, hashedFrame{timestamp: float64(i) / coarseFPS, hash: h})
-	}
+		return nil
+	})
+	return frames, err
 }
 
 // maxFrameBytes caps a single frame in frameSplitter so a corrupt stream
