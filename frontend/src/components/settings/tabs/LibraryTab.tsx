@@ -1,4 +1,15 @@
+import { useState } from "react"
 import { Gauge, Image as ImageIcon, Play, Wrench } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ResolutionTierSlider } from "@/components/ResolutionTierSlider"
@@ -45,7 +56,10 @@ function LibraryTabBody({ settings }: { settings: Settings }) {
   const updateSettings = useUpdateSettings()
   const { data: backfillStatus } = useImageBackfillStatus()
   const startBackfill = useStartImageBackfill()
-  const scanMissing = useScanMissingLibraryFiles()
+  // Set when the server refuses a scan that would ghost a large share of the library; confirming
+  // re-sends it with confirm: true.
+  const [massClear, setMassClear] = useState<{ scanned: number; wouldClear: number } | null>(null)
+  const scanMissing = useScanMissingLibraryFiles({ onNeedsConfirm: setMassClear })
   const { field, afterSave } = useSettingsDraft(settings, toForm)
   const [mediumEnabled, setMediumEnabled] = field("mediumEnabled")
   const [low, setLow] = field("low")
@@ -271,9 +285,33 @@ function LibraryTabBody({ settings }: { settings: Settings }) {
                   can review and delete them.
                 </InfoPopover>
               </div>
-              <Button variant="outline" onClick={() => scanMissing.mutate()} disabled={scanMissing.isPending}>
+              <Button variant="outline" onClick={() => scanMissing.mutate({})} disabled={scanMissing.isPending}>
                 {scanMissing.isPending ? "Scanning…" : "Scan for Missing Files"}
               </Button>
+              <AlertDialog open={massClear != null} onOpenChange={(open) => !open && setMassClear(null)}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Convert {massClear?.wouldClear} items to ghosts?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This would convert {massClear?.wouldClear} of {massClear?.scanned} items to ghosts. Is the media
+                      folder mounted? If a drive or share is offline, cancel and fix that first — a ghost loses its
+                      file path, which can't be restored from here.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="destructive"
+                      onClick={() => {
+                        setMassClear(null)
+                        scanMissing.mutate({ confirm: true })
+                      }}
+                    >
+                      Convert {massClear?.wouldClear} items
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <StrayFilesRow />
             </div>
           </div>

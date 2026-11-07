@@ -584,6 +584,8 @@ export interface MissingLibraryFile {
 export interface ScanMissingLibraryFilesResult {
   scanned: number
   missing: MissingLibraryFile[]
+  // Files that could not be checked (permissions, I/O error); left untouched.
+  unreadable: number
 }
 
 export type StrayFileRoot = "images" | "media"

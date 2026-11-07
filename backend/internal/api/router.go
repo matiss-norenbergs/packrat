@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/backup"
+	"packrat/backend/internal/bgtasks"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/framematch"
 	"packrat/backend/internal/hostactions"
@@ -63,6 +64,8 @@ type Deps struct {
 	CORSAllowedOrigins []string
 	// Auth carries the login rate limiter and 2FA machinery shared by the credential handlers.
 	Auth *AuthDeps
+	// Background starts handler-triggered jobs that outlive their request (tracked; cancelled on shutdown).
+	Background bgtasks.Runner
 	// TrustedProxies are the addresses/CIDRs whose X-Forwarded-For is believed when working out the
 	// client IP. Empty (the default) trusts none: the connection's own address is the client.
 	TrustedProxies []string
@@ -146,6 +149,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 	api.Use(RequireAuth(deps.UsersRepo), RequireCSRF())
 	{
 		// Optional features (Settings → Features), checked per request.
+		bg := deps.Background
 		subscriptionsOnly := RequireFeature(deps.SettingsRepo, models.SettingFeatureSubscriptionsEnabled, "Subscriptions")
 		frameMatchingOnly := RequireFeature(deps.SettingsRepo, models.SettingFeatureFrameMatchingEnabled, "Frame Matching")
 		compareListOnly := RequireFeature(deps.SettingsRepo, models.SettingFeatureCompareListEnabled, "Compare list")
@@ -165,7 +169,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		// Subscriptions that came due while the feature was off run as soon as it
 		// is switched back on, rather than waiting for the next hourly sweep.
 		onSubscriptionsEnabled := func() {
-			go subscriptions.RunDueChecks(context.Background(), subCheckDeps)
+			bg.Go(func(ctx context.Context) { subscriptions.RunDueChecks(ctx, subCheckDeps) })
 		}
 
 		api.PATCH("/auth/password", ChangePassword(deps.Auth))
@@ -336,12 +340,12 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.DELETE("/thumbnail-enhancement/history/:id", DeleteThumbnailEnhancementHistoryEntry(enhanceDeps))
 		api.POST("/thumbnail-enhancement/history/bulk-delete", BulkDeleteThumbnailEnhancementHistoryEntries(enhanceDeps))
 		api.POST("/thumbnail-enhancement/history/clear", ClearThumbnailEnhancementHistory(enhanceDeps))
-		api.POST("/thumbnail-enhancement/run", RunThumbnailEnhancementNow(enhanceDeps))
+		api.POST("/thumbnail-enhancement/run", RunThumbnailEnhancementNow(enhanceDeps, bg))
 		api.POST("/thumbnail-enhancement/upscalers", ListThumbnailUpscalers())
 		api.GET("/thumbnail-enhancement/status", GetThumbnailEnhancementStatus(enhanceDeps))
 		api.GET("/thumbnail-enhancement/eligible", ListThumbnailEnhancementEligible(enhanceDeps))
-		api.POST("/thumbnail-enhancement/items/bulk-run", EnhanceThumbnailItemsNow(enhanceDeps))
-		api.POST("/thumbnail-enhancement/items/bulk-sharpen", SharpenThumbnailItemsNow(enhanceDeps))
+		api.POST("/thumbnail-enhancement/items/bulk-run", EnhanceThumbnailItemsNow(enhanceDeps, bg))
+		api.POST("/thumbnail-enhancement/items/bulk-sharpen", SharpenThumbnailItemsNow(enhanceDeps, bg))
 		api.POST("/thumbnail-enhancement/items/:id/revert", notDownloading, RevertThumbnailOriginal(enhanceDeps))
 		api.DELETE("/thumbnail-enhancement/items/:id/original", notDownloading, DeleteThumbnailOriginal(enhanceDeps))
 		api.POST("/thumbnail-enhancement/items/bulk-keep-enhanced", BulkDeleteThumbnailOriginals(enhanceDeps))

@@ -221,3 +221,21 @@ func scanFrameMatchQueueRow(s rowScanner) (models.FrameMatchQueueItem, error) {
 	}
 	return item, nil
 }
+
+// ResetRunning moves every row still in the "running" state to "error" with
+// errMsg and returns how many it changed. Meant to run once at startup, before
+// the queue runner: a row can only be "running" then because the previous
+// process stopped (or crashed) mid-match. It is deliberately not put back to
+// "queued" — a file that crashed the process (say, by exhausting memory) would
+// otherwise crash-loop the server. The user re-queues it after dismissing the
+// error row; "queued" and "done" rows are left alone.
+func (r *FrameMatchQueueRepo) ResetRunning(ctx context.Context, errMsg string) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE frame_match_queue SET state = 'error', error_msg = ?, updated_at = datetime('now') WHERE state = 'running'`,
+		errMsg,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("resetting running frame match queue rows: %w", err)
+	}
+	return res.RowsAffected()
+}

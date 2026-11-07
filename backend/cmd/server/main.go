@@ -15,6 +15,7 @@ import (
 
 	"packrat/backend/internal/api"
 	"packrat/backend/internal/backup"
+	"packrat/backend/internal/bgtasks"
 	"packrat/backend/internal/config"
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
@@ -175,11 +176,18 @@ func run() error {
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
 
-	ctx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	// Shutdown: the signal context only announces it. ctx is the root context every background job
+	// derives from; it is cancelled after the HTTP server has drained (see the end of run), so
+	// in-flight requests are not cut off by their own jobs stopping. tasks tracks every long-lived or
+	// detached goroutine so the database is only closed once they have finished.
+	sigCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSignals()
+	ctx, cancelRoot := context.WithCancel(context.Background())
+	defer cancelRoot()
+	tasks := &bgtasks.Tracker{}
 
 	hub := ws.NewHub()
-	go hub.Run(ctx)
+	tasks.Go(func() { hub.Run(ctx) })
 	// A live connection is tied to the session that opened it: it closes when that session goes.
 	hub.SetSessionChecker(func(ctx context.Context, token string) bool {
 		_, err := usersRepo.GetValidSession(ctx, token)
@@ -196,7 +204,9 @@ func run() error {
 		}
 	}()
 	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFProbePath, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, thumbnailEnhancementHistoryRepo, thumbnailEnhancementOriginalsRepo, jellyfinClient, progressStore, hub)
+	mgr.SetTracker(tasks)
 	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)
+	imageBackfillMgr.SetShutdown(ctx, tasks)
 	frameMatchJobs := framematch.NewJobStore()
 	frameMatchJobs.SetBaseContext(ctx)
 	frameMatchQueueRepo := repository.NewFrameMatchQueueRepo(conn)
@@ -212,6 +222,15 @@ func run() error {
 				log.Printf("crash recovery: recording history for %d failed: %v", d.ID, err)
 			}
 		}
+	}
+
+	// Same for frame-match rows: one still "running" belonged to the previous process. It becomes an
+	// error row (not "queued" again — a file that crashes the process would crash-loop the server),
+	// which must happen before the queue runner starts. No clients are connected yet, so nothing to broadcast.
+	if n, err := framematch.ResetInterrupted(ctx, frameMatchQueueRepo); err != nil {
+		return err
+	} else if n > 0 {
+		log.Printf("crash recovery: marked %d interrupted frame-match item(s) as errors", n)
 	}
 
 	// A previously-saved concurrency setting survives a restart — the env
@@ -270,7 +289,7 @@ func run() error {
 
 	imageResizer := imageproc.NewResizer(cfg.FFmpegPath, cfg.CacheRoot)
 
-	go func() {
+	tasks.Go(func() {
 		// All six sweeps share one ticker — they run on the same cadence
 		// and each is already a no-op when its own setting is unset/not due.
 		// The smallest auto-backup interval option is 6h, and subscriptions
@@ -299,17 +318,19 @@ func run() error {
 				thumbnailenhance.RunDueEnhancements(ctx, enhanceDeps)
 			}
 		}
-	}()
+	})
 
-	go framematch.RunQueue(ctx, framematch.QueueDeps{
-		QueueRepo:    frameMatchQueueRepo,
-		LibraryRepo:  libraryRepo,
-		YtDlp:        ytdlpSvc,
-		FFProbePath:  cfg.FFProbePath,
-		MediaRoot:    cfg.MediaRoot,
-		ImagesRoot:   cfg.ImagesRoot,
-		SettingsRepo: settingsRepo,
-		Broadcaster:  hub,
+	tasks.Go(func() {
+		framematch.RunQueue(ctx, framematch.QueueDeps{
+			QueueRepo:    frameMatchQueueRepo,
+			LibraryRepo:  libraryRepo,
+			YtDlp:        ytdlpSvc,
+			FFProbePath:  cfg.FFProbePath,
+			MediaRoot:    cfg.MediaRoot,
+			ImagesRoot:   cfg.ImagesRoot,
+			SettingsRepo: settingsRepo,
+			Broadcaster:  hub,
+		})
 	})
 
 	router := api.SetupRouter(api.Deps{
@@ -334,6 +355,7 @@ func run() error {
 		YtDlp:                             ytdlpSvc,
 		JellyfinClient:                    jellyfinClient,
 		ImageBackfillManager:              imageBackfillMgr,
+		Background:                        bgtasks.Runner{Ctx: ctx, Tracker: tasks},
 		FrameMatchJobs:                    frameMatchJobs,
 		FrameMatchQueueRepo:               frameMatchQueueRepo,
 		MediaRoot:                         cfg.MediaRoot,
@@ -371,10 +393,59 @@ func run() error {
 		}
 	}()
 
-	<-ctx.Done()
+	<-sigCtx.Done()
+	stopSignals() // a second signal now kills the process instead of being swallowed
 	log.Println("shutting down")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	httpErr := shutdown(srv, cancelRoot, tasks, mgr.Embedder().Wait)
+	// run returns next, and the deferred conn.Close runs: the database closes last.
+	log.Println("shutdown: closing database")
+	return httpErr
+}
+
+// Shutdown budget. Docker kills the container stopGracePeriod after SIGTERM, and the compose files
+// set stop_grace_period: 30s, so httpShutdownTimeout + backgroundWaitTimeout (25 s) leaves 5 s for
+// the final writes and closing the database.
+const (
+	httpShutdownTimeout   = 10 * time.Second
+	backgroundWaitTimeout = 15 * time.Second
+)
+
+// shutdown stops accepting requests and lets in-flight ones finish, then cancels the root context
+// so background jobs wind down, then waits (bounded) for them and for running metadata embeds. It
+// never returns before the wait is over, so the caller can close the database safely.
+func shutdown(srv *http.Server, cancelRoot context.CancelFunc, tasks *bgtasks.Tracker, waitEmbeds func()) error {
+	httpCtx, cancel := context.WithTimeout(context.Background(), httpShutdownTimeout)
 	defer cancel()
-	return srv.Shutdown(shutdownCtx)
+	httpErr := srv.Shutdown(httpCtx)
+	if httpErr != nil {
+		log.Printf("shutdown: http server did not drain cleanly: %v", httpErr)
+	} else {
+		log.Println("shutdown: http server stopped")
+	}
+
+	cancelRoot()
+	start := time.Now()
+	log.Printf("shutdown: waiting up to %s for %d background job(s)", backgroundWaitTimeout, tasks.Running())
+	finished := tasks.Wait(backgroundWaitTimeout)
+	if !finished {
+		log.Printf("shutdown: timed out waiting for %d background job(s); closing the database anyway", tasks.Running())
+	}
+
+	// Running metadata remuxes are not cancelled (an interrupted remux is cleaned up at the next
+	// start), so give them whatever is left of the budget.
+	embedsDone := make(chan struct{})
+	go func() {
+		waitEmbeds()
+		close(embedsDone)
+	}()
+	select {
+	case <-embedsDone:
+		if finished {
+			log.Printf("shutdown: background jobs finished cleanly after %s", time.Since(start).Round(time.Millisecond))
+		}
+	case <-time.After(max(backgroundWaitTimeout-time.Since(start), 0)):
+		log.Println("shutdown: timed out waiting for metadata embeds; closing the database anyway")
+	}
+	return httpErr
 }

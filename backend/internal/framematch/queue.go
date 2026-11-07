@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"packrat/backend/internal/bgtasks"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/features"
 	"packrat/backend/internal/models"
@@ -21,6 +22,10 @@ import (
 // just bounds the worst-case latency before a freshly bulk-enqueued batch
 // starts being worked.
 const queuePollInterval = 2 * time.Second
+
+// InterruptedMessage is the error recorded on a queue row whose match was cut
+// short by a shutdown, or found still "running" at the next startup.
+const InterruptedMessage = "Interrupted by a restart. Queue it again."
 
 // QueueDeps bundles everything the background queue runner needs.
 type QueueDeps struct {
@@ -103,7 +108,14 @@ func processQueueItem(ctx context.Context, deps QueueDeps, row models.FrameMatch
 	}
 	fail := func(cause error) {
 		msg := cause.Error()
-		if err := deps.QueueRepo.SetError(ctx, row.ID, msg); err != nil {
+		if ctx.Err() != nil {
+			// The match was cut short by shutdown, not a real failure of the file.
+			msg = InterruptedMessage
+		}
+		// ctx may already be cancelled (shutdown); the row must still leave "running".
+		tctx, done := bgtasks.TerminalContext(ctx)
+		defer done()
+		if err := deps.QueueRepo.SetError(tctx, row.ID, msg); err != nil {
 			log.Printf("framematch: queue item %d: recording failure failed: %v", row.ID, err)
 		}
 		broadcast("error", &msg)
@@ -150,7 +162,10 @@ func processQueueItem(ctx context.Context, deps QueueDeps, row models.FrameMatch
 		return
 	}
 
-	if err := deps.QueueRepo.SetDone(ctx, row.ID, result.TimestampSeconds, result.Score, foundRel, refRel); err != nil {
+	doneCtx, doneCancel := bgtasks.CompletionContext(ctx)
+	err = deps.QueueRepo.SetDone(doneCtx, row.ID, result.TimestampSeconds, result.Score, foundRel, refRel)
+	doneCancel()
+	if err != nil {
 		log.Printf("framematch: queue item %d: recording success failed: %v", row.ID, err)
 		return
 	}

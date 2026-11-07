@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"packrat/backend/internal/bgtasks"
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/repository"
 )
@@ -59,8 +60,19 @@ type Manager struct {
 	artistsRepo                       *repository.ArtistsRepo
 	collectionsRepo                   *repository.CollectionsRepo
 
+	// rootCtx ends the run on shutdown and tasks lets shutdown wait for it; see SetShutdown.
+	rootCtx context.Context
+	tasks   *bgtasks.Tracker
+
 	mu     sync.Mutex
 	status Status
+}
+
+// SetShutdown ties background runs to the server's lifetime: a run stops when ctx is cancelled and
+// registers with t so shutdown can wait for it. Without it a run uses context.Background and is untracked.
+func (m *Manager) SetShutdown(ctx context.Context, t *bgtasks.Tracker) {
+	m.rootCtx = ctx
+	m.tasks = t
 }
 
 func NewManager(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *repository.LibraryRepo, artistsRepo *repository.ArtistsRepo, collectionsRepo *repository.CollectionsRepo) *Manager {
@@ -94,11 +106,14 @@ func (m *Manager) Start() {
 	m.status = Status{Running: true, StartedAt: &now}
 	m.mu.Unlock()
 
-	go m.run()
+	m.tasks.Go(m.run)
 }
 
 func (m *Manager) run() {
-	ctx := context.Background()
+	ctx := m.rootCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	libProcessed, libFailed := m.backfillLibraryThumbnails(ctx)
 	m.mu.Lock()

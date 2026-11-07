@@ -46,6 +46,7 @@ backend/
                              Stray Files); report-only until a delete is requested
     ratelimit/               in-memory throttling of failed logins (delays only; see Login throttling)
     twofactor/               TOTP, secret-at-rest encryption, recovery codes, login challenges
+    bgtasks/                 goroutine tracker for graceful shutdown (Go/Wait) and terminal-write contexts
     admincmd/                host-side recovery commands (--reset-password, --disable-2fa)
     version/                 the release version, stamped at build time
 ```
@@ -499,6 +500,13 @@ empty-string sentinel `LibraryRepo.ClearFile` uses elsewhere) — no schema chan
 support them. Three independent paths converge on this state: creating one directly
 (`CreateGhostLibraryItem`), deleting just a real item's file (`DeleteLibraryItemFile`/
 `ClearFile`), or the on-demand `scan-missing` sweep finding a file gone from disk.
+Because `ClearFile` blanks `path`/`filename` irreversibly, `scan-missing` is conservative: it
+converts an item only on `fs.ErrNotExist` (any other `os.Stat` error counts as "unreadable" and is
+left alone), refuses with `409` when the media root is missing, unreadable or empty while the
+library has non-ghost items (an unmounted bind mount looks exactly like a library whose files are
+all gone), and decides the whole to-clear list before writing — a scan that would clear 10 or more
+items and at least half of those scanned answers `409 requiresConfirm` unless the optional body says
+`{"confirm": true}`.
 `fetchGhostThumbnail` (`ghost_handler.go`) is shared between ghost creation and the Library
 toolbar's bulk "Download thumbnail(s)" action — it always writes only the `ImagesRoot`-relative
 WebP tiers, never the `MediaRoot`-relative `thumbnail` field, since a ghost has no `MediaRoot`
@@ -778,6 +786,65 @@ On startup, `DownloadsRepo.MarkInterruptedIfActive` scans for rows left in `queu
 `fetching_metadata`, `downloading`, or `processing` status (i.e. anything a crashed/restarted
 process was mid-flight on) and marks them `interrupted`. Nothing is silently resumed — the user
 must manually retry from the Downloads or History page.
+
+Frame-match rows get the same treatment at startup: `framematch.ResetInterrupted` (called in
+`main.go` right after `MarkInterruptedIfActive`, before `RunQueue` starts) moves every `running` row
+to `error` with the message "Interrupted by a restart. Queue it again." (`FrameMatchQueueRepo.ResetRunning`).
+They are deliberately not put back to `queued`: a file that crashes the process (say, by running out of
+memory) would otherwise crash-loop the server. `queued` and `done` rows are untouched. The error row
+still makes `ExistsForLibraryItem` true, so the user discards it (the existing Discard action) and
+queues the item again. A shutdown that cancels a match mid-run writes the same message through a
+detached context (see Graceful shutdown), so a clean restart never leaves a `running` row either.
+
+## Graceful shutdown
+
+On SIGTERM/SIGINT `run()` in `cmd/server/main.go` shuts down in a fixed order, so nothing is writing
+when the database closes:
+
+1. `srv.Shutdown` stops accepting requests and lets in-flight ones finish (up to
+   `httpShutdownTimeout` = 10 s). Background jobs keep running meanwhile.
+2. The **root context** is cancelled. Every long-lived or detached job derives from it, not from
+   `context.Background()`: the download workers, `framematch.RunQueue`, the hourly sweep goroutine,
+   the WS hub, the image backfill, and the handler-triggered jobs ("Enhance now", bulk enhance/sharpen,
+   the catch-up subscription check). A second signal during shutdown kills the process at once.
+3. `run()` waits up to `backgroundWaitTimeout` = 15 s for those jobs and for running metadata
+   embeds (`metaembed.Scheduler.Wait`; a remux is never cancelled, and the startup cleanup removes a
+   temp file an interrupted one left). What happened is logged: finished cleanly, or how many jobs
+   were still running when it gave up.
+4. Only then does `run()` return, and the deferred `conn.Close()` closes the database (last).
+
+The tracker is `internal/bgtasks`: `Tracker.Go(fn)` starts a tracked goroutine, `Wait(timeout)`
+reports whether all finished (`Running()` says how many are left), and a nil `*Tracker` just starts an
+untracked goroutine, so code that is not wired to one (tests) is unaffected. `bgtasks.Runner` (root
+context + tracker) is what handlers use for work that outlives the request.
+
+**Terminal writes use a detached context, of two kinds.** By the time a job reports its outcome, the
+root context is usually already cancelled, and a write made with it fails — leaving a row in a stale
+state. Both kinds use `context.WithoutCancel`, so they survive that, but differ in their bound:
+- *Completion writes* (`bgtasks.CompletionContext`, `CompletionWriteTimeout` = 2 min) record a
+  success and decide whether finished work is kept: the library row of a completed download, marking
+  it completed and its history row (also for a redownload's `ApplyRedownload`), the frame-match
+  queue's `SetDone`. The bound is only a safety net against a wedged DB. A short one would be a
+  regression in normal operation: the DB has a single connection, so a backup, restore or big delete
+  can make a write wait, and a timed-out library write sends the run down the error path that deletes
+  the file it just downloaded. It does not stretch shutdown (the 15 s wait is bounded; a write cut off
+  by process exit is recovered at the next start).
+- *Failure bookkeeping* (`bgtasks.TerminalContext`, 5 s) only records a failure — failed/cancelled
+  status and history, the frame-match `SetError` — where a failed write just logs, so a short bound is
+  fine.
+
+One exception is deliberate: a download cut short *by the shutdown itself* is not written as
+"cancelled by user"; its row is left for startup recovery to mark `interrupted`, and its partial
+files are kept so a retry resumes. A frame-match item cut short by shutdown is recorded as an error
+row with the "Interrupted by a restart. Queue it again." message.
+
+**Budget.** 10 s (HTTP) + 15 s (jobs) = 25 s, and `docker/docker-compose.yml` /
+`docker-compose.dev.yml` set `stop_grace_period: 30s` (Docker's default is 10 s and would SIGKILL the
+container mid-wait), leaving 5 s for final writes and the close. `entrypoint.sh` ends in `exec
+/app/packrat`, so the server is PID 1 and receives the signal directly. Left untracked on purpose:
+goroutines with no database or file writes of their own (the ffmpeg/yt-dlp pipe readers, WS
+read/write pumps, the single-item `framematch.JobStore` jobs, the debounced Jellyfin refresh, the
+version-check cache refresh) and the startup stale-temp-file sweep.
 
 ## Live image resizing
 

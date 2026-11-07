@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/bgtasks"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/thumbnailenhance"
@@ -200,18 +201,18 @@ func ClearThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFun
 // the actual sweep detached from this request's context (so closing the tab
 // mid-run no longer cancels it), and responds immediately. Progress streams
 // live over the enhance_progress WebSocket event instead of blocking here.
-func RunThumbnailEnhancementNow(deps thumbnailenhance.Deps) gin.HandlerFunc {
+func RunThumbnailEnhancementNow(deps thumbnailenhance.Deps, bg bgtasks.Runner) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		queued, err := thumbnailenhance.WouldRunCount(c.Request.Context(), deps)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "enhancing thumbnails failed: " + err.Error()})
 			return
 		}
-		go func() {
-			if _, err := thumbnailenhance.RunOnce(context.Background(), deps); err != nil {
+		bg.Go(func(ctx context.Context) {
+			if _, err := thumbnailenhance.RunOnce(ctx, deps); err != nil {
 				log.Printf("thumbnailenhance: manual run failed: %v", err)
 			}
-		}()
+		})
 		c.JSON(http.StatusAccepted, RunThumbnailEnhancementResponse{Queued: queued})
 	}
 }
@@ -315,18 +316,18 @@ func ListThumbnailEnhancementEligible(deps thumbnailenhance.Deps) gin.HandlerFun
 // enhance_progress. Bypasses the sweep cap entirely and ignores the failure
 // cooldown, since this is an explicit, bounded selection the user made by
 // hand.
-func EnhanceThumbnailItemsNow(deps thumbnailenhance.Deps) gin.HandlerFunc {
+func EnhanceThumbnailItemsNow(deps thumbnailenhance.Deps, bg bgtasks.Runner) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req EnhanceItemsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		go func() {
-			if err := thumbnailenhance.EnhanceItems(context.Background(), deps, req.ItemIds); err != nil {
+		bg.Go(func(ctx context.Context) {
+			if err := thumbnailenhance.EnhanceItems(ctx, deps, req.ItemIds); err != nil {
 				log.Printf("thumbnailenhance: bulk enhance failed: %v", err)
 			}
-		}()
+		})
 		c.JSON(http.StatusAccepted, RunThumbnailEnhancementResponse{Queued: len(req.ItemIds)})
 	}
 }
@@ -336,18 +337,18 @@ func EnhanceThumbnailItemsNow(deps thumbnailenhance.Deps) gin.HandlerFunc {
 // entry — same fire-and-forget shape as EnhanceThumbnailItemsNow, but runs a
 // denoise/detail-only pass (no resize) via thumbnailenhance.SharpenItems.
 // Reuses EnhanceItemsRequest since the body shape is identical.
-func SharpenThumbnailItemsNow(deps thumbnailenhance.Deps) gin.HandlerFunc {
+func SharpenThumbnailItemsNow(deps thumbnailenhance.Deps, bg bgtasks.Runner) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req EnhanceItemsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		go func() {
-			if err := thumbnailenhance.SharpenItems(context.Background(), deps, req.ItemIds); err != nil {
+		bg.Go(func(ctx context.Context) {
+			if err := thumbnailenhance.SharpenItems(ctx, deps, req.ItemIds); err != nil {
 				log.Printf("thumbnailenhance: bulk sharpen failed: %v", err)
 			}
-		}()
+		})
 		c.JSON(http.StatusAccepted, RunThumbnailEnhancementResponse{Queued: len(req.ItemIds)})
 	}
 }

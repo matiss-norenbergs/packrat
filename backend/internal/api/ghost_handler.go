@@ -1,9 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -216,9 +221,31 @@ func DeleteLibraryItemFile(libraryRepo *repository.LibraryRepo, originalsRepo *r
 // opt into rather than have happen silently on a timer. Thumbnails are left
 // untouched (ClearFile's clearThumbnail: false) — only the media file has
 // been confirmed missing here, the thumbnail may well still be fine.
+//
+// ClearFile is irreversible, so the scan is deliberately conservative: only
+// fs.ErrNotExist counts as missing (other stat errors are reported as
+// "unreadable" and the item is left alone); an absent, unreadable or empty
+// media root is refused with 409 (an unmounted volume looks like a library
+// of vanished files); and a scan that would clear 10+ items and at least half
+// of those scanned is refused with 409 requiresConfirm unless the optional
+// body says {"confirm": true}. The whole list is decided before any write.
 func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
+
+		// The body is optional ({"confirm": true}); an absent or empty one must keep working.
+		var req ScanMissingLibraryFilesRequest
+		raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 4096))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "reading request body: " + err.Error()})
+			return
+		}
+		if len(bytes.TrimSpace(raw)) > 0 {
+			if err := json.Unmarshal(raw, &req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
+				return
+			}
+		}
 
 		refs, err := libraryRepo.ListNonGhostFiles(ctx)
 		if err != nil {
@@ -226,12 +253,47 @@ func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRe
 			return
 		}
 
-		missing := make([]MissingLibraryFileResponse, 0)
+		// An unmounted media folder looks exactly like a library whose files are all gone; refuse
+		// before touching anything.
+		if len(refs) > 0 {
+			if problem := mediaRootProblem(mediaRoot); problem != "" {
+				c.JSON(http.StatusConflict, gin.H{"error": "The media folder " + problem + ". Is it mounted? Nothing was changed."})
+				return
+			}
+		}
+
+		// Decide everything first, then write: only a definite "does not exist" counts as missing.
+		// Any other stat error (permissions, I/O error, stale network handle) says nothing about
+		// the file, so that item is left alone and reported as unreadable.
+		var toClear []repository.LibraryFileRef
+		unreadable := 0
 		for _, ref := range refs {
 			abs := filepath.Join(mediaRoot, filepath.FromSlash(ref.Path))
-			if _, err := os.Stat(abs); err == nil {
-				continue // file present — nothing to do
+			_, err := os.Stat(abs)
+			switch {
+			case err == nil:
+			case errors.Is(err, fs.ErrNotExist):
+				toClear = append(toClear, ref)
+			default:
+				log.Printf("scan missing files: item %d: cannot check %s: %v", ref.ID, ref.Path, err)
+				unreadable++
 			}
+		}
+
+		// Mass-clear guard: losing most of the library in one click is far more likely an offline
+		// mount than a real mass deletion, and clearing is irreversible.
+		if !req.Confirm && len(toClear) >= scanMissingConfirmMinItems && len(toClear)*2 >= len(refs) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":           fmt.Sprintf("This would convert %d of %d items to ghosts. Is the media folder mounted? Nothing was changed.", len(toClear), len(refs)),
+				"requiresConfirm": true,
+				"scanned":         len(refs),
+				"wouldClear":      len(toClear),
+			})
+			return
+		}
+
+		missing := make([]MissingLibraryFileResponse, 0, len(toClear))
+		for _, ref := range toClear {
 			if err := libraryRepo.ClearFile(ctx, ref.ID, false); err != nil {
 				log.Printf("scan missing files: clearing item %d failed: %v", ref.ID, err)
 				continue
@@ -239,8 +301,39 @@ func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRe
 			missing = append(missing, MissingLibraryFileResponse{ID: ref.ID, Title: ref.Title})
 		}
 
-		c.JSON(http.StatusOK, ScanMissingLibraryFilesResponse{Scanned: len(refs), Missing: missing})
+		c.JSON(http.StatusOK, ScanMissingLibraryFilesResponse{Scanned: len(refs), Missing: missing, Unreadable: unreadable})
 	}
+}
+
+// scanMissingConfirmMinItems is the smallest number of to-be-cleared items that can trip the
+// ScanMissingLibraryFiles mass-clear guard (together with "at least half of those scanned").
+const scanMissingConfirmMinItems = 10
+
+// mediaRootProblem describes why mediaRoot cannot be trusted for a missing-file scan ("" if fine):
+// it does not exist, is not a readable directory, or is completely empty.
+func mediaRootProblem(mediaRoot string) string {
+	info, err := os.Stat(mediaRoot)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "does not exist"
+		}
+		return "cannot be read (" + err.Error() + ")"
+	}
+	if !info.IsDir() {
+		return "is not a folder"
+	}
+	f, err := os.Open(mediaRoot)
+	if err != nil {
+		return "cannot be read (" + err.Error() + ")"
+	}
+	defer f.Close()
+	if _, err := f.Readdirnames(1); err != nil {
+		if errors.Is(err, io.EOF) {
+			return "is empty"
+		}
+		return "cannot be read (" + err.Error() + ")"
+	}
+	return ""
 }
 
 // BulkDeleteLibraryItemFiles mirrors DeleteLibraryItemFile applied to a

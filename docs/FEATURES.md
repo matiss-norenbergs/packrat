@@ -419,7 +419,14 @@ thumbnail, and the download itself is unaffected.
   catalog entry.
 - Settings → Library → **Scan for Missing Files** checks every item's file against disk and
   converts anything gone (deleted, moved, or renamed outside the app) into a ghost automatically.
-  Manual only, never runs on a schedule.
+  Manual only, never runs on a schedule. It is built not to ghost a library because a drive is
+  offline: only a file that definitely does not exist counts as missing (a file it could not check —
+  permissions, an I/O error, a stale network share — is left alone and reported in the result toast
+  as "N could not be checked"); it refuses to run, changing nothing, when the media folder does not
+  exist, cannot be read or is completely empty ("The media folder … Is it mounted?"); and if it would
+  convert 10 or more items that are at least half of those scanned, it stops and asks first — a
+  dialog "This would convert M of N items to ghosts. Is the media folder mounted?" with a destructive
+  **Convert M items** button that runs the scan again with the guard lifted.
 - Subscriptions (below) also create ghosts for new uploads when auto-download is off.
 - **A download shows up as a ghost while it runs.** When a video/audio download has fetched its
   metadata and its destination folder checks out (so an invalid URL, a page with nothing
@@ -937,6 +944,10 @@ This compares images (perceptual hashing across the whole video, refined around 
   compare, then **Use this frame** (applies it and removes the row) or **Discard**. Rows still
   running or errored can also be discarded/dismissed directly from the table. Live state changes
   stream in over WebSocket rather than polling.
+- If the server stops while a match is running (a restart, update or crash), that row comes back as
+  an error — "Interrupted by a restart. Queue it again." — instead of staying "running" forever. It
+  is not re-queued automatically (a file that crashes the server would crash-loop it): **Discard** the
+  row, then queue the item again.
 - Confidence scores are shown even when low — a correct match can still score in the 70s–80s, so a
   low score is a hint to look closely, not a sign the match is wrong.
 
