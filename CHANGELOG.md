@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-07
+- **Shell scripts and Dockerfiles stay LF on Windows clones** — a root `.gitattributes` pins `*.sh`, Dockerfiles, `docker/*.yml` and migrations to LF, so `core.autocrlf=true` no longer checks out a CRLF `entrypoint.sh` that crash-loops the container in a local Windows build. Release images (built on Linux CI) were never affected.
 - **Cancelling a download cleans up its partial files** — a user cancel (or deleting a downloading ghost) now removes the `.part`, `.ytdl` and fragment files yt-dlp left for that run, found from the `[download] Destination:` lines it printed and limited to that file name in the download's folder. Failed, timed-out and shutdown-interrupted downloads keep them so a retry resumes. Backend only.
 - **Unknown paths no longer answer with the web app** — an unknown or removed `/api/*` route now returns `404` `{"error": "not found"}` (it used to return the app's HTML with `200`, which a JSON client reported as a parse error), and a missing `/media-files/*`, `/local-images/*` or `/ws/*` path returns a plain `404`. Client-side routes and assets are unchanged.
 - **Anonymize more of the error text in History and Logs** — with "Anonymize History Links" on, the error text is also scrubbed of identifiers derived from the URL and of the `[extractor] <id>:` prefix, not only the URL and stored video id. Backend only.
