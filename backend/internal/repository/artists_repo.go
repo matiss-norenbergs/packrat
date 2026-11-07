@@ -22,6 +22,10 @@ type ArtistsRepo struct {
 	// comment in tags_repo.go). A pointer so WithTx copies share the same
 	// lock as the original.
 	mu *sync.Mutex
+
+	// lockHeld is true only on copies made by WithLockedTx: the creator already
+	// holds mu (see LockForRestore), so this copy must not take it again.
+	lockHeld bool
 }
 
 func NewArtistsRepo(db *sql.DB) *ArtistsRepo {
@@ -35,6 +39,24 @@ func (r *ArtistsRepo) WithTx(tx *sql.Tx) *ArtistsRepo {
 	cp.db = tx
 	return &cp
 }
+
+// WithLockedTx is WithTx for a caller that already holds r's mutex through
+// lk (see LockForRestore): the returned copy skips taking the mutex, which is
+// not reentrant. It panics if lk does not hold r's mutex, so it can't be
+// used to silently bypass the uniqueness lock.
+func (r *ArtistsRepo) WithLockedTx(tx *sql.Tx, lk *RestoreLock) *ArtistsRepo {
+	if !lk.holds(r.mu) {
+		panic("repository: ArtistsRepo.WithLockedTx called without holding its lock")
+	}
+	cp := *r
+	cp.db = tx
+	cp.lockHeld = true
+	return &cp
+}
+
+// lock takes r.mu unless this copy was made by WithLockedTx; use as
+// `defer r.lock()()`.
+func (r *ArtistsRepo) lock() func() { return lockOrSkip(r.mu, r.lockHeld) }
 
 func (r *ArtistsRepo) nameInUse(ctx context.Context, name string, excludeID int64) (bool, error) {
 	var id int64
@@ -56,8 +78,7 @@ func (r *ArtistsRepo) Create(ctx context.Context, name string, birthday *string)
 
 // CreateWithPrivacy adds an artist with an explicit privacy flag.
 func (r *ArtistsRepo) CreateWithPrivacy(ctx context.Context, name string, birthday *string, isPrivate bool) (*models.Artist, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	defer r.lock()()
 	return r.createLocked(ctx, name, birthday, isPrivate)
 }
 
@@ -232,8 +253,7 @@ func (r *ArtistsRepo) DeleteImage(ctx context.Context, imageID int64) (string, e
 // leaves the privacy flag unchanged, so clients that don't know about it
 // can't reset it.
 func (r *ArtistsRepo) Update(ctx context.Context, id int64, newName string, birthday *string, isPrivate *bool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	defer r.lock()()
 
 	if _, err := r.Get(ctx, id); err != nil {
 		return err

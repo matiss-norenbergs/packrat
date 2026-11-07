@@ -398,6 +398,20 @@ independent of any actual download or preview happening.
   `ORDER BY <col> IS NULL, <col>` only for nullable columns (nulls last in both directions); for
   `downloaded_at`, `title` and `filename` that term did nothing but force a full scan + temp b-tree, so
   the default sort now walks `idx_library_downloaded_at`.
+- **Lock order: repo mutex first, DB connection second.** The pool has exactly one connection
+  (`SetMaxOpenConns(1)`), and `TagsRepo`, `ArtistsRepo` and `CollectionsRepo` each have a `mu` that
+  serializes their check-then-write name-uniqueness sequences (`GetOrCreateByNames`, `Create`,
+  `Update`, `EnsureChain`, …). A goroutine holding `mu` and waiting for the connection, while another
+  holds the connection (an open tx) and waits for `mu`, hangs every DB call until restart. So never
+  call a locking repo method inside an open `BeginTx`. A flow that needs one tx across those repos
+  (only the library restore, `backup.ApplyLibraryBundle`) calls
+  `repository.LockForRestore(tags, artists, collections)` before `BeginTx` (fixed order: tags, artists,
+  collections), holds it until after commit/rollback, and builds the tx-scoped repos with
+  `WithLockedTx(tx, lock)`. Those copies skip taking `mu` (it is not reentrant); `WithLockedTx` panics
+  if the lock does not cover that repo. Plain `WithTx` copies still lock as before, so use `WithTx`
+  only for calls that do not lock (the bulk deletes). A restore therefore waits briefly for in-flight
+  tag/artist/collection writes. Covered by `backup/restore_deadlock_test.go` and
+  `repository/restore_lock_test.go`.
 
 ## Full-text search
 
