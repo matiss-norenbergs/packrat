@@ -9,7 +9,7 @@ import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { ResolutionValue } from "@/components/ResolutionValue"
 import { useRedownloadLibraryItemFromUrl, useRedownloadPreview } from "@/hooks/useLibrary"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
-import { cn, formatDuration } from "@/lib/utils"
+import { cn, duplicateTitle, formatDuration } from "@/lib/utils"
 import type { LibraryItem, RedownloadOverwriteField } from "@/types/api"
 
 interface RedownloadFromUrlDialogProps {
@@ -117,7 +117,7 @@ export function RedownloadFromUrlDialog({ item, open, onOpenChange }: Redownload
         {preview?.duplicate && (
           <div className="rounded-md border border-amber-600/50 bg-amber-500/10 p-3 text-sm break-words">
             This URL is already in your library as{" "}
-            <span className="font-medium">{preview.duplicate.title}</span>.
+            <span className="font-medium">{duplicateTitle(preview.duplicate)}</span>.
           </div>
         )}
 

@@ -54,7 +54,7 @@ func (e *authTestEnv) enable2FA(t *testing.T, token string) (secret string, reco
 	if !strings.HasPrefix(setup.OtpauthURL, "otpauth://totp/Packrat:admin?") || !strings.Contains(setup.OtpauthURL, "secret="+setup.Secret) {
 		t.Fatalf("bad otpauth url %q", setup.OtpauthURL)
 	}
-	w = e.post("/api/auth/2fa/enable", `{"code":"`+e.currentCode(t, setup.Secret)+`"}`, token)
+	w = e.post("/api/auth/2fa/enable", `{"password":"hunter2-hunter2","code":"`+e.currentCode(t, setup.Secret)+`"}`, token)
 	if w.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", w.Code, w.Body)
 	}
@@ -173,7 +173,7 @@ func TestNoOtherPathGivesA2FAAccountASession(t *testing.T) {
 		t.Fatalf("status: %s", w.Body)
 	}
 	// Garbage / missing challenge on the second step.
-	for _, body := range []string{`{"challengeToken":"nope","code":"123456"}`, `{"code":"123456"}`} {
+	for _, body := range []string{`{"challengeToken":"nope","code":"123456"}`, `{"password":"hunter2-hunter2","code":"123456"}`} {
 		if w := e.login2fa(body, false); w.Code == http.StatusNoContent || w.Code == http.StatusOK {
 			t.Fatalf("%s: got a session (%d)", body, w.Code)
 		}
@@ -298,11 +298,11 @@ func TestDisableNeedsPasswordAndSecondFactor(t *testing.T) {
 func TestEnableRejectsBadCodeAndNeedsSetup(t *testing.T) {
 	e := newAuthTestEnv(t)
 	_, token := setupAndLogin(t, e.r)
-	if w := e.post("/api/auth/2fa/enable", `{"code":"123456"}`, token); w.Code != http.StatusConflict {
+	if w := e.post("/api/auth/2fa/enable", `{"password":"hunter2-hunter2","code":"123456"}`, token); w.Code != http.StatusConflict {
 		t.Fatalf("enable without setup: %d", w.Code)
 	}
 	setup := jsonBody[TwoFactorSetupResponse](t, e.post("/api/auth/2fa/setup", `{}`, token))
-	if w := e.post("/api/auth/2fa/enable", `{"code":"000000"}`, token); w.Code != http.StatusUnauthorized {
+	if w := e.post("/api/auth/2fa/enable", `{"password":"hunter2-hunter2","code":"000000"}`, token); w.Code != http.StatusUnauthorized {
 		t.Fatalf("bad code: %d", w.Code)
 	}
 	if st := jsonBody[TwoFactorStatusResponse](t, authDo(e.r, authReq{method: "GET", path: "/api/auth/2fa", headers: e.bearer(token)})); st.Enabled {
@@ -312,7 +312,7 @@ func TestEnableRejectsBadCodeAndNeedsSetup(t *testing.T) {
 	if w := e.loginStep1(false); w.Code != http.StatusNoContent {
 		t.Fatalf("login before enabling: %d", w.Code)
 	}
-	if w := e.post("/api/auth/2fa/enable", `{"code":"`+e.currentCode(t, setup.Secret)+`"}`, token); w.Code != http.StatusOK {
+	if w := e.post("/api/auth/2fa/enable", `{"password":"hunter2-hunter2","code":"`+e.currentCode(t, setup.Secret)+`"}`, token); w.Code != http.StatusOK {
 		t.Fatalf("enable: %d", w.Code)
 	}
 	if w := e.post("/api/auth/2fa/setup", `{}`, token); w.Code != http.StatusConflict {
@@ -412,5 +412,46 @@ func TestSecurityNotice(t *testing.T) {
 	// Notices need a session.
 	if w := authDo(e.r, authReq{method: "GET", path: "/api/auth/security-notice"}); w.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated: %d", w.Code)
+	}
+}
+
+func TestEnableNeedsTheCurrentPassword(t *testing.T) {
+	e := newAuthTestEnv(t)
+	_, token := setupAndLogin(t, e.r)
+	setup := jsonBody[TwoFactorSetupResponse](t, e.post("/api/auth/2fa/setup", `{}`, token))
+	code := e.currentCode(t, setup.Secret)
+
+	// No password: rejected as a bad request.
+	if w := e.post("/api/auth/2fa/enable", `{"code":"`+code+`"}`, token); w.Code != http.StatusBadRequest {
+		t.Fatalf("missing password: %d %s", w.Code, w.Body)
+	}
+	// Wrong password with a correct code: same error as the other endpoints, nothing enabled.
+	w := e.post("/api/auth/2fa/enable", `{"password":"nope-nope-nope","code":"`+code+`"}`, token)
+	if w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "incorrect password") {
+		t.Fatalf("wrong password: %d %s", w.Code, w.Body)
+	}
+	if st := jsonBody[TwoFactorStatusResponse](t, authDo(e.r, authReq{method: "GET", path: "/api/auth/2fa", headers: e.bearer(token)})); st.Enabled {
+		t.Fatal("2FA must stay off after a wrong password")
+	}
+	if w := e.loginStep1(false); w.Code != http.StatusNoContent {
+		t.Fatalf("login must stay one-step: %d", w.Code)
+	}
+	// The right password with the same (still valid) code enables it.
+	if w := e.post("/api/auth/2fa/enable", `{"password":"hunter2-hunter2","code":"`+code+`"}`, token); w.Code != http.StatusOK {
+		t.Fatalf("enable: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestEnableWrongPasswordsAreRateLimited(t *testing.T) {
+	e := newAuthTestEnv(t)
+	_, token := setupAndLogin(t, e.r)
+	jsonBody[TwoFactorSetupResponse](t, e.post("/api/auth/2fa/setup", `{}`, token))
+	for i := 0; i < ratelimit.PerIPMaxFailures; i++ {
+		if w := e.post("/api/auth/2fa/enable", `{"password":"wrong-wrong","code":"000000"}`, token); w.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: %d", i, w.Code)
+		}
+	}
+	if w := e.post("/api/auth/2fa/enable", `{"password":"hunter2-hunter2","code":"000000"}`, token); w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", w.Code)
 	}
 }

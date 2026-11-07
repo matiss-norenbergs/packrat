@@ -162,7 +162,8 @@ The live download queue.
   - A live preview card (thumbnail/title/uploader/duration for video/audio; the image itself for
     Image) fetches before you submit, unless "I trust this source" is enabled in Settings →
     Downloads. If the URL matches something already in the library, a duplicate warning is shown
-    but doesn't block submission. Every preview image request — the Image type's own preview and
+    but doesn't block submission; if the matching item is private (private collection, artist or tag,
+    with privacy on) its title is shown hashed. Every preview image request — the Image type's own preview and
     the yt-dlp-reported video/audio thumbnail alike — is proxied through the backend rather than
     fetched directly by the browser, so it honors a configured proxy (see Settings → yt-dlp below)
     the same way the real download does.
@@ -673,7 +674,8 @@ removed when the corresponding entry is deleted from the Downloads queue.
   pruned automatically.
 - If "Anonymize History Links" is on (Settings → Privacy), URLs here are shown as a short
   deterministic hash instead of the real link — the same URL always hashes to the same value, but
-  the underlying link isn't exposed. Retry still works either way.
+  the underlying link isn't exposed (the URL and video id inside an error message are hashed the
+  same way). Retry still works either way.
 
 ## Logs
 
@@ -695,7 +697,9 @@ debugging rather than as a live control panel.
   click-and-drag) even though only a single-row selection can actually be viewed.
 - Retry count is shown when a download needed more than one attempt.
 - Respects the same "Anonymize History Links" setting as History (Settings → Privacy) — URLs are
-  hashed the same way when that's enabled.
+  hashed the same way when that's enabled, and the command line and output tails are hidden too.
+- Proxy credentials, URL credentials and the cookies file path are always masked in the command
+  line shown here.
 
 ## Backup
 
@@ -944,7 +948,7 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   the dialog closes, and a successful change closes it with a "Password changed" toast; the current
   password must be right; changing it signs out your other devices and sessions). 2FA is optional and off by default; accounts without it log in exactly as before. **Enable**
   opens a 3-step dialog: (1) scan a QR code (drawn in the browser, always dark on a white tile) or type
-  the key shown in groups of four (Copy button); (2) enter a code from the app to confirm; (3) save
+  the key shown in groups of four (Copy button); (2) enter your password and a code from the app to confirm; (3) save
   the 10 recovery codes — shown once, with Copy and Download, and the dialog can't be closed until
   "I've saved these codes" is ticked. Once on, the card shows how many recovery codes are left (a
   warning at 2 or fewer) and offers **Regenerate recovery codes** (password + code; the old set stops

@@ -179,6 +179,12 @@ func run() error {
 
 	hub := ws.NewHub()
 	go hub.Run(ctx)
+	// A live connection is tied to the session that opened it: it closes when that session goes.
+	hub.SetSessionChecker(func(ctx context.Context, token string) bool {
+		_, err := usersRepo.GetValidSession(ctx, token)
+		return err == nil || !errors.Is(err, repository.ErrNotFound) // a DB hiccup never kicks anyone
+	})
+	usersRepo.SetOnSessionsRevoked(hub.RevalidateSessions)
 
 	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFProbePath, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, thumbnailEnhancementHistoryRepo, thumbnailEnhancementOriginalsRepo, jellyfinClient, progressStore, hub)
 	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)

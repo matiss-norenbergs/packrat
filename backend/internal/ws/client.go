@@ -9,10 +9,13 @@ import (
 )
 
 const (
-	writeWait  = 10 * time.Second
-	pongWait   = 60 * time.Second
-	pingPeriod = (pongWait * 9) / 10
+	writeWait = 10 * time.Second
+	pongWait  = 60 * time.Second
 )
+
+// pingPeriod is how often a client is pinged (and its session re-checked); a var so tests can
+// shorten it.
+var pingPeriod = (pongWait * 9) / 10
 
 // Client wraps one connected WebSocket peer. Packrat's clients are
 // broadcast-only consumers this pass — readPump exists solely to detect
@@ -22,6 +25,9 @@ type Client struct {
 	hub  *Hub
 	conn *websocket.Conn
 	send chan []byte
+	// token is the session this connection was opened with ("" when it carries none); the hub
+	// closes the connection once that session is gone.
+	token string
 }
 
 func (c *Client) readPump() {
@@ -62,6 +68,9 @@ func (c *Client) writePump() {
 				return
 			}
 		case <-ticker.C:
+			if !c.hub.sessionValid(c.token) {
+				return
+			}
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return

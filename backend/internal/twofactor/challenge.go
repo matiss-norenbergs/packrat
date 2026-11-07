@@ -67,18 +67,23 @@ func (s *Challenges) Create(userID int64) (string, error) {
 	return token, nil
 }
 
-// Lookup returns the user a live challenge belongs to.
+// Lookup returns the user a live challenge belongs to and counts the lookup as one code attempt,
+// atomically under the store's lock: at most ChallengeMaxAttempts lookups succeed per challenge,
+// however many requests arrive at once, so the limit on guesses holds under concurrency. A caller
+// that gets ok must resolve the attempt with Consume (right code) or Fail (wrong code).
 func (s *Challenges) Lookup(token string) (userID int64, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ch := s.liveLocked(token)
-	if ch == nil {
+	if ch == nil || ch.attempts >= ChallengeMaxAttempts {
 		return 0, false
 	}
+	ch.attempts++
 	return ch.userID, true
 }
 
-// Fail counts a wrong code and reports whether the challenge is now destroyed.
+// Fail reports a wrong code for an attempt Lookup already counted, and whether the challenge is
+// now destroyed (the last allowed attempt was used, or it is already gone).
 func (s *Challenges) Fail(token string) (destroyed bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -86,7 +91,6 @@ func (s *Challenges) Fail(token string) (destroyed bool) {
 	if ch == nil {
 		return true
 	}
-	ch.attempts++
 	if ch.attempts >= ChallengeMaxAttempts {
 		s.removeLocked(ch)
 		return true

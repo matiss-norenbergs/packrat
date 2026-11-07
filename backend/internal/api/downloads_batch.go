@@ -23,6 +23,8 @@ type SkippedItemResponse struct {
 	URL           string `json:"url"`
 	Title         string `json:"title"`
 	LibraryItemID int64  `json:"libraryItemId"`
+	// Blurred: the matched item is private by the library item privacy rule; show Title hashed.
+	Blurred bool `json:"blurred"`
 }
 
 type FailedItemResponse struct {
@@ -53,7 +55,7 @@ type batchEntry struct {
 // (CreatePlaylistDownload) and the Bulk Download endpoint
 // (CreateBatchDownload) — both are "take a list of would-be downloads +a
 // skip-duplicates flag, dedupe, enqueue, aggregate results."
-func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, libraryRepo *repository.LibraryRepo, historyRepo *repository.HistoryRepo, entries []batchEntry, skipDuplicates bool) (EnqueueResultResponse, error) {
+func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, libraryRepo *repository.LibraryRepo, historyRepo *repository.HistoryRepo, responder *ItemResponder, entries []batchEntry, skipDuplicates bool) (EnqueueResultResponse, error) {
 	result := EnqueueResultResponse{
 		Queued:  []QueuedItemResponse{},
 		Skipped: []SkippedItemResponse{},
@@ -63,6 +65,7 @@ func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRe
 	// Batched into one query instead of one FindDuplicate call per entry —
 	// significant for a large playlist/bulk-download submission.
 	var dupsByIndex map[int]*models.LibraryItem
+	var blurredByID map[int64]bool
 	if skipDuplicates {
 		queries := make([]repository.DuplicateQuery, len(entries))
 		for i, entry := range entries {
@@ -74,6 +77,13 @@ func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRe
 			// Don't silently skip dedup: that would re-queue items already in the library.
 			return result, fmt.Errorf("checking for duplicates: %w", err)
 		}
+		matched := make([]models.LibraryItem, 0, len(dupsByIndex))
+		for _, dup := range dupsByIndex {
+			matched = append(matched, *dup)
+		}
+		if blurredByID, err = responder.BlurredItems(ctx, matched); err != nil {
+			return result, fmt.Errorf("checking duplicate privacy: %w", err)
+		}
 	}
 
 	for i, entry := range entries {
@@ -83,6 +93,7 @@ func enqueueBatch(ctx context.Context, mgr *queue.DownloadManager, collectionsRe
 					URL:           entry.req.URL,
 					Title:         dup.Title,
 					LibraryItemID: dup.ID,
+					Blurred:       blurredByID[dup.ID],
 				})
 				msg := fmt.Sprintf("Already in library (added %s)", dup.DownloadedAt.Format(time.RFC3339))
 				_, _ = historyRepo.Create(ctx, nil, entry.req.URL, "duplicate", &msg)
@@ -109,7 +120,7 @@ type CreateBatchDownloadRequest struct {
 	SkipDuplicates bool                    `json:"skipDuplicates"`
 }
 
-func CreateBatchDownload(mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, libraryRepo *repository.LibraryRepo, historyRepo *repository.HistoryRepo) gin.HandlerFunc {
+func CreateBatchDownload(mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, libraryRepo *repository.LibraryRepo, historyRepo *repository.HistoryRepo, responder *ItemResponder) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req CreateBatchDownloadRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -122,7 +133,7 @@ func CreateBatchDownload(mgr *queue.DownloadManager, collectionsRepo *repository
 			entries[i] = batchEntry{req: item}
 		}
 
-		result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, entries, req.SkipDuplicates)
+		result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, responder, entries, req.SkipDuplicates)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -176,7 +187,7 @@ func filterPlaylistEntries(entries []downloader.PlaylistEntry, mode string, star
 	}
 }
 
-func CreatePlaylistDownload(mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, libraryRepo *repository.LibraryRepo, historyRepo *repository.HistoryRepo, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+func CreatePlaylistDownload(mgr *queue.DownloadManager, collectionsRepo *repository.CollectionsRepo, settingsRepo *repository.SettingsRepo, libraryRepo *repository.LibraryRepo, historyRepo *repository.HistoryRepo, responder *ItemResponder, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req CreatePlaylistDownloadRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -196,7 +207,7 @@ func CreatePlaylistDownload(mgr *queue.DownloadManager, collectionsRepo *reposit
 				URL: req.URL, CollectionID: req.CollectionID, DownloadType: req.DownloadType,
 				Quality: req.Quality, AudioFormat: req.AudioFormat,
 			}}}
-			result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, entries, req.SkipDuplicates)
+			result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, responder, entries, req.SkipDuplicates)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -229,7 +240,7 @@ func CreatePlaylistDownload(mgr *queue.DownloadManager, collectionsRepo *reposit
 			}
 		}
 
-		result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, entries, req.SkipDuplicates)
+		result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, responder, entries, req.SkipDuplicates)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

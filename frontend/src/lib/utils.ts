@@ -102,6 +102,12 @@ export function hashText(text: string): string {
   return "Hidden-" + (hash >>> 0).toString(16).padStart(8, "0")
 }
 
+// The title to show for a duplicate-URL match: hashed when the server flags the matched library item
+// as blurred (private collection, artist or tag), so these dialogs never show what privacy hides.
+export function duplicateTitle(dup: { title: string; blurred: boolean }): string {
+  return dup.blurred ? hashText(dup.title) : dup.title
+}
+
 // Triggers a browser "save file" for an in-memory object — the export
 // endpoints just return normal JSON, so "download" is purely this
 // client-side step rather than anything server-driven.

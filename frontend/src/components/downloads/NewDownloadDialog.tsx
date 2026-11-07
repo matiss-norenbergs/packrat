@@ -32,7 +32,7 @@ import { useArtists } from "@/hooks/useArtists"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { useSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
-import { cn, formatDuration } from "@/lib/utils"
+import { cn, duplicateTitle, formatDuration } from "@/lib/utils"
 import { previewImageUrl } from "@/lib/api"
 import { resolveFilenameTemplatePreview } from "@/lib/nametemplate"
 import { resolveInheritedArtistId, sortCollectionsByPath } from "@/lib/collectionTree"
@@ -581,7 +581,7 @@ export function NewDownloadDialog() {
 
           {!preview?.isPlaylist && preview?.duplicate && (
             <div className="rounded-md border border-amber-600/50 bg-amber-500/10 p-3 text-sm break-words">
-              Already in your library: <span className="font-medium">{preview.duplicate.title}</span>, downloaded{" "}
+              Already in your library: <span className="font-medium">{duplicateTitle(preview.duplicate)}</span>, downloaded{" "}
               {new Date(preview.duplicate.downloadedAt).toLocaleDateString()}.
             </div>
           )}

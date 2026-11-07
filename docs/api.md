@@ -36,7 +36,7 @@ since Gin matches registered routes before falling back to serving `index.html`.
   order bearer → cookie → query; the first valid one wins. A request authenticated by bearer or query
   token **skips the CSRF check** (nothing ambient for a forged request to ride on); a cookie-
   authenticated request is checked exactly as before, whatever other headers it carries. The access
-  and panic-recovery logs redact `?token=` values and the `Authorization`, `Cookie` and `X-CSRF-Token`
+  and panic-recovery logs redact `?token=` (and `?password=`, `?pass=`, `?secret=`) values and the `Authorization`, `Cookie` and `X-CSRF-Token`
   headers.
 - **Getting a token**: send `X-Client: desktop` on `POST /api/auth/login` or `/api/auth/setup`. The
   response is then `200 {"token":"..."}` and **no cookies are set**; without the header the response
@@ -70,7 +70,8 @@ since Gin matches registered routes before falling back to serving `index.html`.
 `200 {"version": "0.18.2", "latestVersion": "0.18.2" | null, "updateAvailable": false}`. `version` is
 this build's release version (`"dev"` for a build that wasn't made by the release pipeline).
 `latestVersion` is the newest GitHub release, looked up best effort — `null` when the lookup fails —
-and `updateAvailable` is `version != latestVersion`, always `false` for a `dev` build. The desktop app
+through a process-wide cache (one GitHub call at most per hour, retried after 5 minutes following a
+failure, concurrent requests share one call), and `updateAvailable` is `version != latestVersion`, always `false` for a `dev` build. The desktop app
 reads it to compare its own version with the server's (see `docs/FEATURES.md` → Desktop app).
 
 ## Auth
@@ -171,9 +172,11 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
 - **`POST /api/auth/2fa/setup`** — no body; creates a *pending* secret (replacing any earlier one) and
   returns `{ "secret": "<base32>", "otpauthUrl": "otpauth://totp/Packrat:<username>?..." }`. `409` if
   2FA is already enabled. Nothing changes for logins until it is confirmed.
-- **`POST /api/auth/2fa/enable`** — `{ "code": "123456" }` checked against the pending secret; turns
-  2FA on and returns `{ "recoveryCodes": [10 × "XXXX-XXXX"] }` — the **only** time they are shown.
-  `401` bad code, `409` no pending secret / already enabled.
+- **`POST /api/auth/2fa/enable`** — `{ "password", "code": "123456" }`: the current password (checked
+  like the other 2FA endpoints and throttled with the password budget), then the code is checked
+  against the pending secret; turns 2FA on and returns `{ "recoveryCodes": [10 × "XXXX-XXXX"] }` — the
+  **only** time they are shown. `400` no password, `401` wrong password (`"incorrect password"`) or
+  bad code, `409` no pending secret / already enabled.
 - **`POST /api/auth/2fa/disable`** — `{ "password", "code" | "recoveryCode" }`; clears the secret and
   recovery codes. `204`; `401` for a wrong password or code.
 - **`POST /api/auth/2fa/recovery-codes`** — `{ "password", "code" }`; replaces the whole set (old codes
@@ -286,7 +289,10 @@ running:
 
 Body: `{ "url": "https://..." }`. Fetches yt-dlp metadata for the New Download dialog's pre-submit
 card — a fetch failure returns `422` and the frontend treats it as non-fatal. For a single-video
-URL, also checks for a duplicate already in the library (by URL/video ID).
+URL, also checks for a duplicate already in the library (by URL/video ID). A `duplicate` is
+`{libraryItemId, title, thumbnail, downloadedAt, blurred}`; `blurred` is the library item privacy rule
+(private collection, artist or tag, privacy on) applied to the matched item, and is `false` with the
+privacy switch off. Clients show a blurred match's title hashed and hide its thumbnail.
 
 ```json
 {
@@ -357,12 +363,14 @@ rather than re-downloaded. Response `201`:
 ```json
 {
   "queued": [ { "id": 101, "url": "https://youtube.com/watch?v=aaa" } ],
-  "skipped": [ { "url": "https://youtube.com/watch?v=bbb", "title": "Old Song", "libraryItemId": 55 } ],
+  "skipped": [ { "url": "https://youtube.com/watch?v=bbb", "title": "Old Song", "libraryItemId": 55, "blurred": false } ],
   "failed": []
 }
 ```
 
 A per-item enqueue failure lands in `failed` (`{url, error}`) rather than aborting the whole batch.
+Each `skipped` entry carries `blurred` — the library item privacy rule applied to the matched item,
+as in the duplicate warning of `POST /api/downloads/preview`.
 
 ### `POST /api/downloads/:id/cancel` — no body
 
@@ -628,10 +636,11 @@ audioFormat if the originating download row still exists, else falling back to a
   {
     "title": "Some Video (Alt Upload)", "uploader": "Another Channel", "duration": 220,
     "description": "...", "thumbnail": "https://...jpg", "resolution": "1920x1080",
-    "duplicate": { "libraryItemId": 90, "title": "Other Item", "thumbnail": "...", "downloadedAt": "2026-07-19T10:00:00Z" }
+    "duplicate": { "libraryItemId": 90, "title": "Other Item", "thumbnail": "...", "downloadedAt": "2026-07-19T10:00:00Z", "blurred": false }
   }
   ```
-  `duplicate` is set only when the URL matches a *different* library item, else `null`.
+  `duplicate` is set only when the URL matches a *different* library item, else `null`; it has the
+  same `blurred` flag as in `POST /api/downloads/preview`.
 - **`POST /api/library/:id/redownload/from-url`** —
   ```json
   { "url": "https://youtube.com/watch?v=xyz789", "overwriteFields": ["resolution", "duration"] }
@@ -1531,7 +1540,9 @@ A permanent record of every download attempt, independent of the live Downloads 
 `status` includes `duplicate` in addition to the usual download statuses. When
 "Anonymize History Links" is on (Settings → Privacy), `url` becomes a deterministic hash
 placeholder (`"hidden-<12 hex chars>"` — the same URL always anonymizes to the same string) and
-`title`/`thumbnail` are nulled too (a title alone can leak what was downloaded).
+`title`/`thumbnail` are nulled too (a title alone can leak what was downloaded), and the URL and
+video id are replaced by the same hash inside `errorMessage`. Credentials in URLs (`user:pass@`)
+are masked in `errorMessage` regardless of the setting.
 
 `POST /api/history/:id/retry` — no body. Re-queues from the entry's URL, reusing the original
 type/quality/collection/folder/filename/audioFormat when the source download row still exists.
@@ -1564,7 +1575,11 @@ invocation:
 ```
 
 `stdoutTail`/`stderrTail` are the last ~8000 characters. Same URL/title anonymization as History,
-gated by the same setting.
+gated by the same setting; when it is on, `ytdlpCommand`, `stdoutTail` and `stderrTail` are also
+`null` and the URL/video id inside `errorMessage` become the same hash. Whatever the setting,
+`user:pass@` credentials in URLs, the `--proxy` credentials and the `--cookies` path are masked in
+the command line (at build time for new rows, and again when responding for older ones) and
+credentials are masked in the tails and error text.
 
 ## Subscriptions
 
@@ -1813,7 +1828,7 @@ See [FEATURES.md](FEATURES.md#ai-enhancement) for what this does and how the thr
 | POST | `/api/thumbnail-enhancement/history/bulk-delete` | Delete many history entries |
 | POST | `/api/thumbnail-enhancement/history/clear` | Delete every history entry |
 | POST | `/api/thumbnail-enhancement/run` | Run a sweep now ("Enhance Now") |
-| GET | `/api/thumbnail-enhancement/upscalers` | List upscaler models from a (possibly unsaved) instance URL |
+| POST | `/api/thumbnail-enhancement/upscalers` | List upscaler models from a (possibly unsaved) instance URL |
 | GET | `/api/thumbnail-enhancement/status` | Configured/reachable status |
 | GET | `/api/thumbnail-enhancement/eligible` | Every currently-eligible item (uncapped) |
 | POST | `/api/thumbnail-enhancement/items/bulk-run` | Enhance a specific set of items now |
@@ -1863,10 +1878,11 @@ Fire-and-forget: counts eligible items synchronously, runs the sweep detached fr
 responds immediately. `202 {"queued": 7}`. Progress streams over the `enhance_progress` WebSocket
 event (see WebSocket, below) rather than blocking this response.
 
-### `GET /api/thumbnail-enhancement/upscalers?url=...&username=...&password=...`
+### `POST /api/thumbnail-enhancement/upscalers` — `{url, username?, password?}`
 
-Tests against whatever's currently typed into the Settings form, not necessarily saved yet. `400`
-missing `url`, `502` on failure. `200 {"upscalers": ["R-ESRGAN 4x+", "..."]}`.
+Tests against whatever's currently typed into the Settings form, not necessarily saved yet. The
+credentials travel in the JSON body (CSRF-protected), never in the URL; the old `GET` form is gone.
+`400` missing `url` or bad body, `502` on failure. `200 {"upscalers": ["R-ESRGAN 4x+", "..."]}`.
 
 ### `GET /api/thumbnail-enhancement/status` — no params
 
@@ -1979,6 +1995,11 @@ Requires a valid session cookie (carried by the upgrade request). Server → cli
 socket exists purely to push live deltas; there is no initial snapshot on connect, so the client
 fetches current state via REST first and then listens for updates. Ping every 54s, 10s write
 deadline; a slow/backed-up client is dropped rather than blocking broadcasts for everyone else.
+
+The connection is bound to the session that opened it (cookie, bearer or `?token=`) and is closed
+when that session goes away: on logout, revoking a session, "sign out other sessions" and a
+password change, and — as a safety net — on the next ping tick if the session no longer exists or
+has expired. Other sessions' connections are unaffected.
 
 Each message is `{ "type": "...", "payload": {...} }`. Eight event types are ever broadcast:
 

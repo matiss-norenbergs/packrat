@@ -173,6 +173,7 @@ func AuthLogin(deps *AuthDeps) gin.HandlerFunc {
 		if deps.rateLimited(c, ratelimit.KindPassword) {
 			return
 		}
+		defer deps.release(c)
 		var req LoginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -233,6 +234,7 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 		if deps.rateLimited(c, ratelimit.KindPassword) {
 			return
 		}
+		defer deps.release(c)
 		var req ChangePasswordRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

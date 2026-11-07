@@ -160,6 +160,18 @@ quiet day. A completed login resets that IP's counters. It is in memory, mutex-g
 `Retry-After` + `{error, retryAfterSeconds}` and are logged by IP only. There is deliberately **no
 permanent lockout**: with one account, a hard lock would let anyone lock the owner out on purpose.
 
+An attempt is **reserved when it is checked**, not recorded after it fails: `Limiter.Reserve` counts
+the attempt under the limiter's lock (pending attempts count toward both budgets), so parallel
+requests cannot all pass before the first failure lands. The handler turns the reservation into a
+failure (`fail`), and a deferred `release` gives it back otherwise (success, bad body), so nothing
+leaks. A login challenge works the same way: `Challenges.Lookup` counts a code attempt atomically,
+so at most five codes are ever checked per challenge, however many arrive at once.
+
+A WebSocket client carries the token of the session that opened it. `UsersRepo` calls a hook after
+any session delete; `Hub.RevalidateSessions` then re-checks every client's session (off the hub
+goroutine) and closes the ones that are gone. The same check runs on each client's ping tick, so a
+revocation made by another process (the `--disable-2fa` command) still takes effect within a minute.
+
 ### Two-factor auth (TOTP)
 
 Opt-in per account (`internal/twofactor`). TOTP is RFC 6238 via `github.com/pquerna/otp`
@@ -420,7 +432,9 @@ its response through `ItemResponder` (`Responses` for lists, `Response` for one 
 batch-loads tags and gallery counts and applies the resolver: `GET /api/library` and
 `/library/:id`, the compare list, refresh-metadata, trim accept, the thumbnail writes
 (`writeThumbnailAndRespond`, shared by thumbnail set/quick-grab/redownload, gallery apply and
-frame-match accept), file import and ghost creation. Single-item responses re-read the item's tags
+frame-match accept), file import and ghost creation. Duplicate-URL warnings (`DuplicateInfo`,
+batch `skipped` entries) are not library items but follow the same rule through
+`ItemResponder.BlurredItems`, exposed as a `blurred` flag. Single-item responses re-read the item's tags
 from the DB, so they reflect what was actually stored.
 
 The downloads list is the one deliberate exception to the *tags* and *artist* parts of the rule: queue rows blur

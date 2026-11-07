@@ -722,6 +722,8 @@ export interface DuplicateInfo {
   title: string
   thumbnail: string | null
   downloadedAt: string
+  /** The matched item is private by the library privacy rule: show its title hashed, hide its thumbnail. */
+  blurred: boolean
 }
 
 export type PlaylistMode = "current" | "entire" | "range" | "first_n"
@@ -753,6 +755,8 @@ export interface SkippedItem {
   url: string
   title: string
   libraryItemId: number
+  /** The matched item is private by the library privacy rule: show its title hashed. */
+  blurred: boolean
 }
 
 export interface FailedItem {

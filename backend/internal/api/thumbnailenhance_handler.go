@@ -218,11 +218,17 @@ func RunThumbnailEnhancementNow(deps thumbnailenhance.Deps) gin.HandlerFunc {
 
 // ListThumbnailUpscalers backs the Settings tab's "Load models" button —
 // tests against whatever URL/username/password are currently typed in the
-// form (query params), not necessarily what's saved yet, so a user can
-// populate the dropdown before ever clicking Save.
+// form (JSON body, so the password never appears in a URL), not necessarily
+// what's saved yet, so a user can populate the dropdown before ever clicking
+// Save.
 func ListThumbnailUpscalers() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		url := c.Query("url")
+		var req ThumbnailUpscalersRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+		url := req.URL
 		if url == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "url is required"})
 			return
@@ -230,7 +236,7 @@ func ListThumbnailUpscalers() gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), thumbnailEnhancementProbeTimeout)
 		defer cancel()
 
-		client := thumbnailenhance.NewClient(url, c.Query("username"), c.Query("password"))
+		client := thumbnailenhance.NewClient(url, req.Username, req.Password)
 		names, err := client.ListUpscalers(ctx)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})

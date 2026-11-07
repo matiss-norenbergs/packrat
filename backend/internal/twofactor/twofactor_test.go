@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -190,15 +192,25 @@ func TestChallengeSingleUseExpiryAndAttempts(t *testing.T) {
 
 	tok, _ = s.Create(5)
 	for i := 1; i < ChallengeMaxAttempts; i++ {
+		if _, ok := s.Lookup(tok); !ok {
+			t.Fatalf("lookup %d refused", i)
+		}
 		if s.Fail(tok) {
 			t.Fatalf("destroyed after only %d wrong codes", i)
 		}
+	}
+	if _, ok := s.Lookup(tok); !ok {
+		t.Fatalf("lookup %d refused", ChallengeMaxAttempts)
 	}
 	if !s.Fail(tok) {
 		t.Fatalf("must be destroyed on wrong code %d", ChallengeMaxAttempts)
 	}
 	if s.Consume(tok) {
 		t.Fatal("a destroyed challenge can't be consumed even with the right code")
+	}
+
+	if _, ok := s.Lookup(tok); ok {
+		t.Fatal("a destroyed challenge must not resolve")
 	}
 
 	tok, _ = s.Create(5)
@@ -226,5 +238,64 @@ func TestChallengeStoreIsBounded(t *testing.T) {
 	}
 	if _, ok := s.Lookup(first); ok {
 		t.Fatal("oldest should have been evicted")
+	}
+}
+
+func TestChallengeAttemptsHoldUnderConcurrency(t *testing.T) {
+	s := NewChallenges(nil)
+	tok, _ := s.Create(7)
+
+	const workers = 60
+	var admitted, destroyed atomic.Int32
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if _, ok := s.Lookup(tok); !ok {
+				return
+			}
+			admitted.Add(1)
+			if s.Fail(tok) {
+				destroyed.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	if got := admitted.Load(); got != ChallengeMaxAttempts {
+		t.Fatalf("%d codes were checked, want exactly %d", got, ChallengeMaxAttempts)
+	}
+	if destroyed.Load() == 0 {
+		t.Fatal("the challenge must be destroyed by the last wrong code")
+	}
+	if _, ok := s.Lookup(tok); ok {
+		t.Fatal("challenge still resolves after the allowed attempts")
+	}
+	if s.Consume(tok) {
+		t.Fatal("a destroyed challenge cannot be consumed")
+	}
+}
+
+func TestChallengeCorrectCodeSurvivesInFlightWrongOnes(t *testing.T) {
+	s := NewChallenges(nil)
+	tok, _ := s.Create(7)
+	for i := 0; i < ChallengeMaxAttempts-1; i++ {
+		if _, ok := s.Lookup(tok); !ok {
+			t.Fatal("lookup refused")
+		}
+	}
+	// Four wrong codes still in flight; the fifth lookup is the correct one.
+	if _, ok := s.Lookup(tok); !ok {
+		t.Fatal("last allowed lookup refused")
+	}
+	if _, ok := s.Lookup(tok); ok {
+		t.Fatal("a sixth lookup must be refused")
+	}
+	if !s.Consume(tok) {
+		t.Fatal("the correct code must still be able to complete the login")
 	}
 }

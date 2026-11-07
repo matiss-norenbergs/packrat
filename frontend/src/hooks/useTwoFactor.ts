@@ -26,7 +26,7 @@ export function useStartTwoFactorSetup() {
 export function useEnableTwoFactor() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (code: string) => enableTwoFactor(code),
+    mutationFn: (payload: { password: string; code: string }) => enableTwoFactor(payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: twoFactorQueryKey }),
   })
 }

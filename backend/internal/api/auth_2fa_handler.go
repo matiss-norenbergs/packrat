@@ -68,6 +68,7 @@ func AuthLogin2FA(deps *AuthDeps) gin.HandlerFunc {
 		if deps.rateLimited(c, ratelimit.KindCode) {
 			return
 		}
+		defer deps.release(c)
 		var req Login2FARequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -206,12 +207,14 @@ func TwoFactorSetup(deps *AuthDeps) gin.HandlerFunc {
 }
 
 // TwoFactorEnable confirms the pending secret with a code, switches 2FA on and returns the
-// recovery codes — the only time they are shown.
+// recovery codes — the only time they are shown. Like disabling it, it takes the current password,
+// so a session alone can't change the account's second factor.
 func TwoFactorEnable(deps *AuthDeps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if deps.rateLimited(c, ratelimit.KindCode) {
+		if deps.rateLimited(c, ratelimit.KindPassword, ratelimit.KindCode) {
 			return
 		}
+		defer deps.release(c)
 		var req TwoFactorEnableRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -219,6 +222,9 @@ func TwoFactorEnable(deps *AuthDeps) gin.HandlerFunc {
 		}
 		user, ok := deps.currentUser(c)
 		if !ok {
+			return
+		}
+		if !deps.checkPassword(c, user, req.Password) {
 			return
 		}
 		if user.TOTPEnabled {
@@ -260,6 +266,7 @@ func TwoFactorDisable(deps *AuthDeps) gin.HandlerFunc {
 		if deps.rateLimited(c, ratelimit.KindPassword, ratelimit.KindCode) {
 			return
 		}
+		defer deps.release(c)
 		var req TwoFactorDisableRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -304,6 +311,7 @@ func TwoFactorRegenerateCodes(deps *AuthDeps) gin.HandlerFunc {
 		if deps.rateLimited(c, ratelimit.KindPassword, ratelimit.KindCode) {
 			return
 		}
+		defer deps.release(c)
 		var req TwoFactorRegenerateRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

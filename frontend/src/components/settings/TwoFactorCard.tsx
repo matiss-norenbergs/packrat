@@ -134,6 +134,7 @@ function EnableDialog({ open, onClose }: { open: boolean; onClose: () => void })
   const setup = useStartTwoFactorSetup()
   const enable = useEnableTwoFactor()
   const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [password, setPassword] = useState("")
   const [code, setCode] = useState("")
   const [codes, setCodes] = useState<string[]>([])
   const [saved, setSaved] = useState(false)
@@ -141,6 +142,7 @@ function EnableDialog({ open, onClose }: { open: boolean; onClose: () => void })
   useEffect(() => {
     if (!open) return
     setStep(1)
+    setPassword("")
     setCode("")
     setCodes([])
     setSaved(false)
@@ -152,15 +154,17 @@ function EnableDialog({ open, onClose }: { open: boolean; onClose: () => void })
   const grouped = secret.match(/.{1,4}/g)?.join(" ") ?? ""
 
   const confirm = () => {
-    if (code.length !== 6) return
-    enable.mutate(code, {
+    if (password.length === 0 || code.length !== 6) return
+    enable.mutate({ password, code }, {
       onSuccess: (recovery) => {
+        setPassword("")
         setCodes(recovery)
         setStep(3)
       },
       onError: (err) => {
         toast.error(err.message)
         setCode("")
+        if (err.message === "incorrect password") setPassword("")
       },
     })
   }
@@ -178,7 +182,7 @@ function EnableDialog({ open, onClose }: { open: boolean; onClose: () => void })
           <DialogTitle>Enable two-factor authentication · Step {step} of 3</DialogTitle>
           <DialogDescription>
             {step === 1 && "Scan the QR code with your authenticator app."}
-            {step === 2 && "Type the 6-digit code your app shows now to confirm it works."}
+            {step === 2 && "Confirm with your password and the 6-digit code your app shows now."}
             {step === 3 && "Two-factor authentication is on."}
           </DialogDescription>
         </DialogHeader>
@@ -218,14 +222,18 @@ function EnableDialog({ open, onClose }: { open: boolean; onClose: () => void })
         {step === 2 && (
           <div className="space-y-4">
             <div className="space-y-2">
+              <Label htmlFor="enable-password">Password</Label>
+              <Input id="enable-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="enable-code">Authentication code</Label>
-              <TotpCodeInput id="enable-code" value={code} onChange={setCode} onEnter={confirm} />
+              <TotpCodeInput id="enable-code" value={code} onChange={setCode} onEnter={confirm} autoFocus={false} />
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button onClick={confirm} disabled={code.length !== 6 || enable.isPending}>
+              <Button onClick={confirm} disabled={password.length === 0 || code.length !== 6 || enable.isPending}>
                 {enable.isPending ? "Checking…" : "Verify and enable"}
               </Button>
             </DialogFooter>

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { backupDownloadUrl, disableTwoFactor, enableTwoFactor, fetchAuthStatus, regenerateRecoveryCodes, imageUrl, login, login2fa, logout, mediaFileUrl, rateLimitMessage, resizedImageSrcSet, fetchLibraryFacets } from "@/lib/api"
+import { backupDownloadUrl, disableTwoFactor, enableTwoFactor, fetchAuthStatus, regenerateRecoveryCodes, imageUrl, login, login2fa, logout, mediaFileUrl, rateLimitMessage, resizedImageSrcSet, fetchLibraryFacets, listThumbnailUpscalers } from "@/lib/api"
 import { getServerUrl, getToken, setServerUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
 
 type FetchInit = { credentials?: string; headers: Record<string, string>; method?: string }
@@ -219,7 +219,7 @@ describe("two-factor login", () => {
     mockFetch(() => ({ status: 401, body: { error: "invalid code" } }))
     await expect(login2fa({ challengeToken: "c1", code: "000000" })).rejects.toMatchObject({ status: 401, message: totp })
     await expect(login2fa({ challengeToken: "c1", recoveryCode: "abcd-efgh" })).rejects.toMatchObject({ status: 401, message: recovery })
-    await expect(enableTwoFactor("000000")).rejects.toMatchObject({ message: totp })
+    await expect(enableTwoFactor({ password: "p", code: "000000" })).rejects.toMatchObject({ message: totp })
     await expect(disableTwoFactor({ password: "p", code: "000000" })).rejects.toMatchObject({ message: totp })
     await expect(disableTwoFactor({ password: "p", recoveryCode: "abcd-efgh" })).rejects.toMatchObject({ message: recovery })
     await expect(regenerateRecoveryCodes({ password: "p", code: "000000" })).rejects.toMatchObject({ message: totp })
@@ -240,5 +240,20 @@ describe("two-factor login", () => {
     expect(rateLimitMessage(61)).toBe("Too many attempts — try again in 2 minutes")
     expect(rateLimitMessage(7200)).toBe("Too many attempts — try again in 2 hours")
     expect(rateLimitMessage(undefined)).toBe("Too many attempts — try again later")
+  })
+})
+
+describe("listThumbnailUpscalers", () => {
+  it("POSTs the credentials in a JSON body, never in the URL", async () => {
+    document.cookie = "packrat_csrf=csrf123"
+    const fetchMock = mockFetch(() => ({ status: 200, body: { upscalers: ["Lanczos"] } }))
+    const out = await listThumbnailUpscalers("http://x:7860", "u", "s3cret")
+    expect(out).toEqual(["Lanczos"])
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, FetchInit & { body: string }]
+    expect(url).toBe("/api/thumbnail-enhancement/upscalers")
+    expect(url).not.toContain("s3cret")
+    expect(init.method).toBe("POST")
+    expect(init.headers["X-CSRF-Token"]).toBe("csrf123")
+    expect(JSON.parse(init.body)).toEqual({ url: "http://x:7860", username: "u", password: "s3cret" })
   })
 })

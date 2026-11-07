@@ -39,12 +39,14 @@ const (
 type ipState struct {
 	ip           string
 	failures     []time.Time
+	pending      int // attempts admitted by Reserve that have not resolved yet
 	blockedUntil time.Time
 	elem         *list.Element
 }
 
 type globalState struct {
 	failures     []time.Time
+	pending      int
 	blockedUntil time.Time
 	level        int // number of consecutive trips; the next cooldown is base << level
 	lastTrip     time.Time
@@ -97,12 +99,122 @@ func (l *Limiter) Check(ip string, kind Kind) time.Duration {
 	return wait
 }
 
-// Fail records a failed attempt of the given kind from ip.
-func (l *Limiter) Fail(ip string, kind Kind) {
+// Reservation is one admitted attempt. Reserve counts it against the limits straight away (under
+// the limiter's lock), so concurrent requests cannot all pass the check before any failure is
+// recorded. Resolve it with Fail (the attempt was wrong) or Release (anything else); both are
+// idempotent, so a deferred Release is a safe catch-all. A nil Reservation is a no-op.
+type Reservation struct {
+	l     *Limiter
+	ip    string
+	kinds []Kind
+	done  bool
+}
+
+// Reserve is Check plus an atomic claim: when the caller may proceed (wait == 0) the attempt is
+// held against the per-address and global budgets of kinds until the Reservation is resolved, and
+// attempts that would exceed a budget are refused with the wait a trip would impose. The returned
+// Reservation is nil when wait > 0.
+func (l *Limiter) Reserve(ip string, kinds ...Kind) (*Reservation, time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
 
+	var wait time.Duration
+	if st, ok := l.ips[ip]; ok {
+		if st.blockedUntil.After(now) {
+			wait = st.blockedUntil.Sub(now)
+		} else {
+			st.failures = prune(st.failures, now, PerIPWindow)
+			if len(st.failures)+st.pending >= PerIPMaxFailures {
+				wait = PerIPWindow
+			}
+		}
+	}
+	for _, k := range kinds {
+		g := l.global[k]
+		if g == nil {
+			continue
+		}
+		var w time.Duration
+		if g.blockedUntil.After(now) {
+			w = g.blockedUntil.Sub(now)
+		} else {
+			g.failures = prune(g.failures, now, GlobalWindow)
+			if len(g.failures)+g.pending >= globalLimit(k) {
+				w = g.nextCooldown(now)
+			}
+		}
+		if w > wait {
+			wait = w
+		}
+	}
+	if wait > 0 {
+		return nil, wait
+	}
+
+	st := l.ensureIP(ip)
+	st.pending++
+	for _, k := range kinds {
+		if g := l.global[k]; g != nil {
+			g.pending++
+		}
+	}
+	return &Reservation{l: l, ip: ip, kinds: kinds}, 0
+}
+
+// Fail turns the reservation into a recorded failure of kind (counted once against the address
+// and the global budget for kind); the other kinds it held are released.
+func (r *Reservation) Fail(kind Kind) {
+	if r == nil {
+		return
+	}
+	r.l.mu.Lock()
+	defer r.l.mu.Unlock()
+	if r.done {
+		return
+	}
+	r.done = true
+	r.l.dropPendingLocked(r.ip, r.kinds)
+	r.l.failLocked(r.ip, kind)
+}
+
+// Release gives the reservation back without recording a failure.
+func (r *Reservation) Release() {
+	if r == nil {
+		return
+	}
+	r.l.mu.Lock()
+	defer r.l.mu.Unlock()
+	if r.done {
+		return
+	}
+	r.done = true
+	r.l.dropPendingLocked(r.ip, r.kinds)
+	if st, ok := r.l.ips[r.ip]; ok {
+		r.l.dropIfIdleLocked(st)
+	}
+}
+
+func (l *Limiter) dropPendingLocked(ip string, kinds []Kind) {
+	if st, ok := l.ips[ip]; ok && st.pending > 0 {
+		st.pending--
+	}
+	for _, k := range kinds {
+		if g := l.global[k]; g != nil && g.pending > 0 {
+			g.pending--
+		}
+	}
+}
+
+func (l *Limiter) dropIfIdleLocked(st *ipState) {
+	if st.pending == 0 && len(st.failures) == 0 && !st.blockedUntil.After(l.now()) {
+		l.order.Remove(st.elem)
+		delete(l.ips, st.ip)
+	}
+}
+
+// ensureIP returns the state for ip, creating it (and evicting the oldest beyond the bound).
+func (l *Limiter) ensureIP(ip string) *ipState {
 	st := l.ips[ip]
 	if st == nil {
 		st = &ipState{ip: ip}
@@ -115,6 +227,33 @@ func (l *Limiter) Fail(ip string, kind Kind) {
 			delete(l.ips, old.ip)
 		}
 	}
+	return st
+}
+
+// nextCooldown is the block the next trip of g would impose (the same arithmetic as failLocked).
+func (g *globalState) nextCooldown(now time.Time) time.Duration {
+	level := g.level
+	if !g.lastTrip.IsZero() && now.Sub(g.lastTrip) > globalLevelDecayAfter {
+		level = 0
+	}
+	cooldown := GlobalBaseCooldown << level
+	if cooldown > GlobalMaxCooldown || cooldown <= 0 {
+		cooldown = GlobalMaxCooldown
+	}
+	return cooldown
+}
+
+// Fail records a failed attempt of the given kind from ip.
+func (l *Limiter) Fail(ip string, kind Kind) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.failLocked(ip, kind)
+}
+
+func (l *Limiter) failLocked(ip string, kind Kind) {
+	now := l.now()
+
+	st := l.ensureIP(ip)
 	st.failures = prune(st.failures, now, PerIPWindow)
 	st.failures = append(st.failures, now)
 	if len(st.failures) >= PerIPMaxFailures {
@@ -151,10 +290,7 @@ func (l *Limiter) Success(ip string) {
 	defer l.mu.Unlock()
 	if st, ok := l.ips[ip]; ok {
 		st.failures = nil
-		if !st.blockedUntil.After(l.now()) {
-			l.order.Remove(st.elem)
-			delete(l.ips, ip)
-		}
+		l.dropIfIdleLocked(st)
 	}
 }
 

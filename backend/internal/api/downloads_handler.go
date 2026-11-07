@@ -41,7 +41,7 @@ func CreateDownload(mgr *queue.DownloadManager, collectionsRepo *repository.Coll
 // network error) is reported as 422 — the frontend treats this as non-fatal and never blocks
 // submission on it. For a non-playlist URL, also looks up whether it's already in the library
 // (by original URL or video ID) so the dialog can offer Skip/Replace/Download Anyway.
-func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
+func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *repository.LibraryRepo, responder *ItemResponder) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req PreviewDownloadRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -59,12 +59,18 @@ func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *reposi
 			return
 		}
 
-		var dup *models.LibraryItem
+		var dup *DuplicateInfo
 		if !meta.IsPlaylist() {
-			dup, err = libraryRepo.FindDuplicate(c.Request.Context(), req.URL, meta.ID)
+			item, err := libraryRepo.FindDuplicate(c.Request.Context(), req.URL, meta.ID)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
+			}
+			if item != nil {
+				if dup, err = responder.duplicateInfo(c.Request.Context(), item); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
 			}
 		}
 

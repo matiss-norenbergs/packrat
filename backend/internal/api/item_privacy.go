@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"time"
 
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
@@ -137,4 +138,48 @@ func (r *ItemResponder) Response(ctx context.Context, item models.LibraryItem) (
 		return LibraryItemResponse{}, err
 	}
 	return out[0], nil
+}
+
+// BlurredItems applies the same privacy rule as Responses to items that are not returned as
+// library items (duplicate warnings), loading tags and the resolver once. The map is keyed by
+// item id and is all false when the privacy switch is off.
+func (r *ItemResponder) BlurredItems(ctx context.Context, items []models.LibraryItem) (map[int64]bool, error) {
+	out := make(map[int64]bool, len(items))
+	if len(items) == 0 {
+		return out, nil
+	}
+	privacy, err := LoadItemPrivacy(ctx, r.settingsRepo, r.collectionsRepo, r.tagsRepo, r.artistsRepo)
+	if err != nil {
+		return nil, err
+	}
+	if !privacy.enabled {
+		return out, nil
+	}
+	ids := make([]int64, len(items))
+	for i, item := range items {
+		ids[i] = item.ID
+	}
+	tagsByID, err := r.tagsRepo.TagsByLibraryIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		out[item.ID] = privacy.Blurred(item.CollectionID, item.ArtistID, tagsByID[item.ID])
+	}
+	return out, nil
+}
+
+// duplicateInfo builds the duplicate warning for dup, flagged blurred by the item privacy rule.
+func (r *ItemResponder) duplicateInfo(ctx context.Context, dup *models.LibraryItem) (*DuplicateInfo, error) {
+	blurred, err := r.BlurredItems(ctx, []models.LibraryItem{*dup})
+	if err != nil {
+		return nil, err
+	}
+	return &DuplicateInfo{
+		LibraryItemID: dup.ID,
+		Title:         dup.Title,
+		Thumbnail:     dup.Thumbnail,
+		DownloadedAt:  dup.DownloadedAt.Format(time.RFC3339),
+		Blurred:       blurred[dup.ID],
+	}, nil
 }
