@@ -19,6 +19,7 @@ import (
 	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/framematch"
+	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/imagebackfill"
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/jellyfin"
@@ -186,6 +187,14 @@ func run() error {
 	})
 	usersRepo.SetOnSessionsRevoked(hub.RevalidateSessions)
 
+	// A crash or restart mid-remux leaves EmbedMetadata temp files behind; drop
+	// the abandoned ones (older than a remux can run). Off the startup path:
+	// it walks the whole media tree.
+	go func() {
+		if n := fsutil.CleanStaleEmbedTemps(cfg.MediaRoot, downloader.MetadataEmbedTimeout); n > 0 {
+			log.Printf("startup: removed %d abandoned metadata-embed temp file(s)", n)
+		}
+	}()
 	mgr := queue.NewDownloadManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFProbePath, ytdlpSvc, downloadsRepo, libraryRepo, collectionsRepo, historyRepo, artistsRepo, tagsRepo, settingsRepo, thumbnailEnhancementHistoryRepo, thumbnailEnhancementOriginalsRepo, jellyfinClient, progressStore, hub)
 	imageBackfillMgr := imagebackfill.NewManager(cfg.MediaRoot, cfg.ImagesRoot, cfg.FFmpegPath, libraryRepo, artistsRepo, collectionsRepo)
 	frameMatchJobs := framematch.NewJobStore()

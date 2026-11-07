@@ -4,6 +4,8 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+
+	"packrat/backend/internal/fsutil"
 )
 
 // recognizedExtensions is the allowlist of media file types the scanner
@@ -42,6 +44,12 @@ func Scan(mediaRoot string, known map[string]bool) ([]ScannedFile, error) {
 			if strings.HasPrefix(d.Name(), ".") && p != mediaRoot {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+
+		// EmbedMetadata's in-flight (or crash-leftover) remux output keeps the
+		// media extension and would otherwise import as a duplicate item.
+		if fsutil.IsEmbedTmpName(d.Name()) {
 			return nil
 		}
 

@@ -309,7 +309,11 @@ deleting their files).
   year, season #, sequence #, description, tags, and the original source URL are all editable.
   Editing title/artist/year/season #/sequence # also re-embeds those tags into the actual media
   file's container metadata in the background (an `ffmpeg -c copy` remux) — the Save action itself
-  returns immediately rather than waiting for that to finish. A **Rescan** button next to
+  returns immediately rather than waiting for that to finish. Saves of the same item in quick
+  succession are merged (the latest values win), and while that remux is running, actions that change
+  the file itself (renaming the file, Move, accepting a Trim, deleting the file or the item with its
+  files) are refused with "This item is being updated. Try again in a moment." — retry once it
+  finishes (a bulk delete is refused as a whole if any selected item is busy). A **Rescan** button next to
   Resolution/Duration re-probes the actual file on disk with ffprobe and, if it differs from the
   saved values, offers to pull the probed values into the form — useful after the file was replaced
   outside the app, or to double-check after a Trim.
