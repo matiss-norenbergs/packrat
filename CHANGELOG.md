@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-07
+- **Unknown paths no longer answer with the web app** — an unknown or removed `/api/*` route now returns `404` `{"error": "not found"}` (it used to return the app's HTML with `200`, which a JSON client reported as a parse error), and a missing `/media-files/*`, `/local-images/*` or `/ws/*` path returns a plain `404`. Client-side routes and assets are unchanged.
 - **Anonymize more of the error text in History and Logs** — with "Anonymize History Links" on, the error text is also scrubbed of identifiers derived from the URL and of the `[extractor] <id>:` prefix, not only the URL and stored video id. Backend only.
 
 ## 2026-11-06

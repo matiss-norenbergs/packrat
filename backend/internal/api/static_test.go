@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -44,5 +45,43 @@ func TestServeSPA_CacheControl(t *testing.T) {
 		if got := w.Header().Get("Cache-Control"); got != tc.want {
 			t.Errorf("%s: Cache-Control = %q, want %q", tc.path, got, tc.want)
 		}
+	}
+}
+
+func TestServeSPA_UnknownNamespacedPaths404(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html></html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := gin.New()
+	r.GET("/ws", func(c *gin.Context) { c.String(http.StatusOK, "ws") }) // a real route still wins
+	r.NoRoute(serveSPA(dir))
+
+	w := do(r, "/api/x", nil)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("/api/x: status %d, want 404", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("/api/x: Content-Type %q, want JSON", ct)
+	}
+	if got := strings.TrimSpace(w.Body.String()); got != `{"error":"not found"}` {
+		t.Errorf("/api/x: body %q", got)
+	}
+	for _, p := range []string{"/media-files/x", "/local-images/x", "/ws/x"} {
+		w := do(r, p, nil)
+		if w.Code != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404", p, w.Code)
+		}
+		if strings.Contains(w.Body.String(), "<html") {
+			t.Errorf("%s: served the SPA shell", p)
+		}
+	}
+	if w := do(r, "/ws", nil); w.Code != http.StatusOK || w.Body.String() != "ws" {
+		t.Errorf("/ws: registered route not reached: %d %q", w.Code, w.Body.String())
+	}
+	// Names that merely share a prefix are still client-side routes.
+	if w := do(r, "/wsfoo", nil); w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-cache" {
+		t.Errorf("/wsfoo: status %d, Cache-Control %q", w.Code, w.Header().Get("Cache-Control"))
 	}
 }
