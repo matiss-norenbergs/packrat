@@ -53,14 +53,13 @@ describe("sidebar version row", () => {
     expect(getVersion).not.toHaveBeenCalled()
   })
 
-  it("desktop: shows Desktop with the app version, no dot and no link", async () => {
+  it("desktop: shows Desktop with the app version, no dot, linking to the Desktop settings tab", async () => {
     desktop = true
     renderWithProviders(<SidebarContent />)
     const version = await screen.findByText("v0.18.2")
-    const row = version.parentElement as HTMLElement
+    const row = version.closest("a") as HTMLElement
     expect(row).toHaveTextContent("Desktop")
-    expect(row.tagName).toBe("DIV")
-    expect(row.closest("a")).toBeNull()
+    expect(row).toHaveAttribute("href", "/settings?tab=desktop")
     expect(row.querySelector(".bg-warning")).toBeNull()
     expect(screen.queryByText("v1.4.0")).not.toBeInTheDocument()
   })

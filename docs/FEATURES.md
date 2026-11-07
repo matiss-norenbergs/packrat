@@ -23,7 +23,7 @@ server**. If the server revokes the session while the app is open, it drops back
 **Several servers.** The app keeps a list of saved servers ("profiles": a name, an address and when it
 was last used) and talks to one at a time; each profile has its own login, so switching back to a
 server you were signed in to needs no password. The sidebar footer shows the current server's name
-and version; below it a **Desktop** line shows the app's own version (no update dot or link — the
+and version; below it a **Desktop** line shows the app's own version (no update dot; it links to Settings → Desktop — the
 web UI's "Packrat" line, which shows the server version with an update dot and releases link, is
 replaced by it in the app); its menu lists the saved servers (the current one ticked), **Add server…** and **Manage
 servers**. Picking another server reloads the app on it. **Add server…** opens the connect screen
