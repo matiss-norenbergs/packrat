@@ -108,3 +108,22 @@ func (r Runner) Go(fn func(ctx context.Context)) {
 	}
 	r.Tracker.Go(func() { fn(ctx) })
 }
+
+// CompletionWriteTimeout bounds the writes that record a successful outcome (see CompletionContext).
+// It is only a safety net against a wedged database, not an expectation: the database has a single
+// connection, so a backup, restore or big delete can legitimately keep a write waiting for a while.
+const CompletionWriteTimeout = 2 * time.Minute
+
+// CompletionContext is for the success-path writes that decide whether finished work is kept (the
+// library row of a completed download, marking it completed, a frame match's result). Like
+// TerminalContext it survives cancellation of ctx, so it works during shutdown, but its bound is
+// CompletionWriteTimeout: a short bound there would fail a write that merely queued behind another
+// transaction and make the caller discard work that had already been done. Use TerminalContext for
+// bookkeeping that only records a failure.
+//
+// A completion write does not extend shutdown: the shutdown wait is itself bounded (15 s), and a
+// write cut off by process exit is recovered at the next start (MarkInterruptedIfActive, the
+// frame-match reset).
+func CompletionContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), CompletionWriteTimeout)
+}

@@ -162,7 +162,7 @@ func processQueueItem(ctx context.Context, deps QueueDeps, row models.FrameMatch
 		return
 	}
 
-	doneCtx, doneCancel := bgtasks.TerminalContext(ctx)
+	doneCtx, doneCancel := bgtasks.CompletionContext(ctx)
 	err = deps.QueueRepo.SetDone(doneCtx, row.ID, result.TimestampSeconds, result.Score, foundRel, refRel)
 	doneCancel()
 	if err != nil {

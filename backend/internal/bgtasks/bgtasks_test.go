@@ -128,3 +128,24 @@ func TestRunnerUsesRootContextAndTracks(t *testing.T) {
 	})
 	<-ran
 }
+
+func TestCompletionContext(t *testing.T) {
+	parent, cancel := context.WithCancel(context.Background())
+	cancel()
+	before := time.Now()
+	ctx, done := CompletionContext(parent)
+	defer done()
+	if ctx.Err() != nil {
+		t.Fatalf("completion context already done: %v", ctx.Err())
+	}
+	dl, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("completion context must have a deadline")
+	}
+	if got := dl.Sub(before); got < CompletionWriteTimeout-time.Second || got > CompletionWriteTimeout+time.Second {
+		t.Fatalf("deadline in %v, want about %v", got, CompletionWriteTimeout)
+	}
+	if CompletionWriteTimeout < 10*TerminalWriteTimeout {
+		t.Fatalf("CompletionWriteTimeout %v is not well above %v", CompletionWriteTimeout, TerminalWriteTimeout)
+	}
+}

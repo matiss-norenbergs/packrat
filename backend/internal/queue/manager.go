@@ -548,8 +548,11 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, finalDuration, sizeBytes)
 	libItem.GenerateNFO = d.GenerateNFO
 	// These writes record the outcome, so they must land even if shutdown
-	// cancelled parentCtx while the download was finishing.
-	termCtx, termDone := bgtasks.TerminalContext(parentCtx)
+	// cancelled parentCtx while the download was finishing. The bound is long (CompletionContext):
+	// a short one would fail a write that merely queued behind another transaction on the single DB
+	// connection and delete the finished file below. Shutdown is not extended by it (the shutdown
+	// wait is bounded, and an interrupted write is recovered by MarkInterruptedIfActive at next start).
+	termCtx, termDone := bgtasks.CompletionContext(parentCtx)
 	libID, ghost, err := m.fillOrCreateLibraryItem(termCtx, id, libItem)
 	if err != nil {
 		termDone()
@@ -1033,7 +1036,7 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 		description := meta.Description
 		params.Description = &description
 	}
-	applyCtx, applyDone := bgtasks.TerminalContext(parentCtx)
+	applyCtx, applyDone := bgtasks.CompletionContext(parentCtx)
 	applyErr := m.libraryRepo.ApplyRedownload(applyCtx, targetID, params)
 	applyDone()
 	if err := applyErr; err != nil {
@@ -1061,7 +1064,7 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 		}
 	}
 
-	termCtx, termDone := bgtasks.TerminalContext(parentCtx)
+	termCtx, termDone := bgtasks.CompletionContext(parentCtx)
 	if err := m.downloadsRepo.MarkCompleted(termCtx, downloadID, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
 		log.Printf("queue: mark completed failed for %d: %v", downloadID, err)
 	}

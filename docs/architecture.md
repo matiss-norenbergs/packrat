@@ -818,14 +818,25 @@ reports whether all finished (`Running()` says how many are left), and a nil `*T
 untracked goroutine, so code that is not wired to one (tests) is unaffected. `bgtasks.Runner` (root
 context + tracker) is what handlers use for work that outlives the request.
 
-**Terminal writes use a detached context.** By the time a job reports its outcome, the root context
-is usually already cancelled, and a write made with it fails — leaving a row in a stale state.
-Marking a download completed/failed/cancelled, its history row, the library write that comes with
-completion, the frame-match queue's `SetError`/`SetDone` use `bgtasks.TerminalContext(ctx)`
-(`context.WithoutCancel` plus a 5 s timeout). One exception is deliberate: a download cut short *by the
-shutdown itself* is not written as "cancelled by user"; its row is left for startup recovery to mark
-`interrupted`, and its partial files are kept so a retry resumes. A frame-match item cut short by
-shutdown is recorded as an error row with the "Interrupted by a restart. Queue it again." message.
+**Terminal writes use a detached context, of two kinds.** By the time a job reports its outcome, the
+root context is usually already cancelled, and a write made with it fails — leaving a row in a stale
+state. Both kinds use `context.WithoutCancel`, so they survive that, but differ in their bound:
+- *Completion writes* (`bgtasks.CompletionContext`, `CompletionWriteTimeout` = 2 min) record a
+  success and decide whether finished work is kept: the library row of a completed download, marking
+  it completed and its history row (also for a redownload's `ApplyRedownload`), the frame-match
+  queue's `SetDone`. The bound is only a safety net against a wedged DB. A short one would be a
+  regression in normal operation: the DB has a single connection, so a backup, restore or big delete
+  can make a write wait, and a timed-out library write sends the run down the error path that deletes
+  the file it just downloaded. It does not stretch shutdown (the 15 s wait is bounded; a write cut off
+  by process exit is recovered at the next start).
+- *Failure bookkeeping* (`bgtasks.TerminalContext`, 5 s) only records a failure — failed/cancelled
+  status and history, the frame-match `SetError` — where a failed write just logs, so a short bound is
+  fine.
+
+One exception is deliberate: a download cut short *by the shutdown itself* is not written as
+"cancelled by user"; its row is left for startup recovery to mark `interrupted`, and its partial
+files are kept so a retry resumes. A frame-match item cut short by shutdown is recorded as an error
+row with the "Interrupted by a restart. Queue it again." message.
 
 **Budget.** 10 s (HTTP) + 15 s (jobs) = 25 s, and `docker/docker-compose.yml` /
 `docker-compose.dev.yml` set `stop_grace_period: 30s` (Docker's default is 10 s and would SIGKILL the
