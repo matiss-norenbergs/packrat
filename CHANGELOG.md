@@ -12,6 +12,9 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-07
+- **Anonymize more of the error text in History and Logs** — with "Anonymize History Links" on, the error text is also scrubbed of identifiers derived from the URL and of the `[extractor] <id>:` prefix, not only the URL and stored video id. Backend only.
+
 ## 2026-11-06
 - **Hardening** — credentials stay out of URLs and logs, tighter login/2FA throttling, enabling 2FA asks for your password, sessions close live connections when revoked, duplicate warnings respect privacy, and a cached version check.
 - **Frame matching is more accurate on fast-moving video and examines whole search windows** — the coarse sweep now samples 4 frames per second (was 1) and shortlists the 10 best *distinct* regions (it used to refine 6 adjacent seconds of the same scene), and the fine pass decodes and hashes every frame of its 15 s window (it stopped after 300 frames, so only 10-12 s at 24-30 fps), streamed and downscaled so memory stays bounded; only the winning frame is extracted at full quality. Frames with an identical hash are now ordered by a luma comparison. The per-match time limit now scales with the video's length (5 minutes, or a quarter of the duration plus 2 minutes for long videos, up to 60 minutes) so a 2-hour film no longer hits a fixed 5-minute limit. Backend only; no API or UI change.

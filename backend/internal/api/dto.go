@@ -7,6 +7,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -1395,8 +1397,57 @@ func redactedCommandPtr(s *string) *string {
 // minVideoIDLen keeps a very short id from mangling unrelated words in a message.
 const minVideoIDLen = 4
 
-// anonymizedPtr replaces occurrences of the item's URL and video id in s with the same hash
-// placeholder shown in the URL field.
+// minDerivedTokenLen is the shortest URL-derived token (path segment or query value) that is
+// masked in a message; shorter ones are too likely to match ordinary words.
+const minDerivedTokenLen = 6
+
+// nonIdentifierTokens are common words that are not identifiers and must stay readable.
+var nonIdentifierTokens = map[string]bool{
+	"watch": true, "playlist": true, "playlists": true, "videos": true, "video": true,
+	"embed": true, "shorts": true, "channel": true, "channels": true, "download": true,
+	"downloads": true, "destination": true, "https": true, "http": true,
+}
+
+// extractorPrefixRe matches yt-dlp's "[extractor] <token>:" message prefix.
+var extractorPrefixRe = regexp.MustCompile(`(\[[A-Za-z0-9:_-]+\] )([^\s:]+):`)
+
+// urlDerivedTokens returns identifiers taken from the URL itself (path segments and query
+// values), longest first, so a token containing another is replaced before the shorter one.
+func urlDerivedTokens(rawURL string) []string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil
+	}
+	host := strings.ToLower(u.Hostname())
+	seen := map[string]bool{}
+	var tokens []string
+	add := func(t string) {
+		if len(t) < minDerivedTokenLen || seen[t] {
+			return
+		}
+		lt := strings.ToLower(t)
+		if lt == host || nonIdentifierTokens[lt] {
+			return
+		}
+		seen[t] = true
+		tokens = append(tokens, t)
+	}
+	for _, seg := range strings.Split(u.Path, "/") {
+		add(seg)
+	}
+	for _, vals := range u.Query() {
+		for _, v := range vals {
+			add(v)
+		}
+	}
+	sort.SliceStable(tokens, func(i, j int) bool { return len(tokens[i]) > len(tokens[j]) })
+	return tokens
+}
+
+// anonymizedPtr replaces occurrences of the item's URL, its video id and identifiers derived
+// from the URL (path segments, query values) in s with the same hash placeholder shown in the
+// URL field. It also masks the token in yt-dlp's "[extractor] <token>:" prefix, which carries
+// the bare video id even when none is stored yet (a failure during the metadata fetch).
 func anonymizedPtr(s *string, rawURL string, videoID *string) *string {
 	if s == nil {
 		return nil
@@ -1409,6 +1460,19 @@ func anonymizedPtr(s *string, rawURL string, videoID *string) *string {
 	if videoID != nil && len(*videoID) >= minVideoIDLen {
 		out = strings.ReplaceAll(out, *videoID, hash)
 	}
+	for _, t := range urlDerivedTokens(rawURL) {
+		if strings.Contains(hash, t) {
+			continue
+		}
+		out = strings.ReplaceAll(out, t, hash)
+	}
+	out = extractorPrefixRe.ReplaceAllStringFunc(out, func(m string) string {
+		sub := extractorPrefixRe.FindStringSubmatch(m)
+		if nonIdentifierTokens[strings.ToLower(sub[2])] {
+			return m
+		}
+		return sub[1] + hash + ":"
+	})
 	return &out
 }
 

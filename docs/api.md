@@ -1541,7 +1541,8 @@ A permanent record of every download attempt, independent of the live Downloads 
 "Anonymize History Links" is on (Settings → Privacy), `url` becomes a deterministic hash
 placeholder (`"hidden-<12 hex chars>"` — the same URL always anonymizes to the same string) and
 `title`/`thumbnail` are nulled too (a title alone can leak what was downloaded), and the URL and
-video id are replaced by the same hash inside `errorMessage`. Credentials in URLs (`user:pass@`)
+video id, and identifiers derived from the URL (path segments, query values) are replaced by the
+same hash inside `errorMessage`. Credentials in URLs (`user:pass@`)
 are masked in `errorMessage` regardless of the setting.
 
 `POST /api/history/:id/retry` — no body. Re-queues from the entry's URL, reusing the original
@@ -1576,7 +1577,7 @@ invocation:
 
 `stdoutTail`/`stderrTail` are the last ~8000 characters. Same URL/title anonymization as History,
 gated by the same setting; when it is on, `ytdlpCommand`, `stdoutTail` and `stderrTail` are also
-`null` and the URL/video id inside `errorMessage` become the same hash. Whatever the setting,
+`null` and the URL, video id and URL-derived identifiers inside `errorMessage` become the same hash. Whatever the setting,
 `user:pass@` credentials in URLs, the `--proxy` credentials and the `--cookies` path are masked in
 the command line (at build time for new rows, and again when responding for older ones) and
 credentials are masked in the tails and error text.
