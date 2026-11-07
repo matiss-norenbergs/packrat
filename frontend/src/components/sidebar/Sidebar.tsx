@@ -240,7 +240,7 @@ function VersionLine() {
 
   return (
     <Link
-      to="/settings"
+      to="/settings?tab=ytdlp"
       className="flex items-center justify-between px-4 py-1 text-xs text-muted-foreground hover:text-sidebar-foreground"
     >
       <span>yt-dlp</span>
