@@ -484,7 +484,7 @@ export function NewDownloadDialog() {
                 <div className="flex items-center gap-3">
                   {preview.thumbnail ? (
                     <img
-                      src={previewImageUrl(preview.thumbnail)}
+                      src={previewImageUrl(preview.thumbnail, "thumbnail")}
                       alt=""
                       className="h-12 w-20 shrink-0 rounded object-cover bg-muted"
                     />

@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 

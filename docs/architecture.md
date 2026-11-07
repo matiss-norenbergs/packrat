@@ -384,12 +384,15 @@ independent of any actual download or preview happening.
 **Untrusted URLs and size limits (`imagefetch.Policy`).** Every `Fetch`/`Open` takes a `Policy`:
 
 - *Where private addresses are blocked.* Only for URLs a remote party chose: the thumbnail URL from
-  yt-dlp's metadata for a download's ghost item (`queue.fetchRemoteThumbnail`, `ThumbnailPolicy`).
-  The page being downloaded controls that value, so without the block it is an SSRF primitive
-  (`169.254.169.254`, `127.0.0.1:<port>`, a LAN admin UI). Admin-typed URLs are **not** blocked — the
-  image-type download (`DownloadPolicy`) and the New Download preview (`PreviewPolicy`; the URL is the
-  admin's typed image URL or a thumbnail yt-dlp reported for it) — because fetching from a LAN host is a
-  legitimate thing for an admin to ask for and those requests are chosen by the admin, not the page.
+  yt-dlp's metadata for a download's ghost item (`queue.fetchRemoteThumbnail`, `ThumbnailPolicy`) and
+  the New Download dialog's preview of that same yt-dlp-reported thumbnail
+  (`GET /api/downloads/preview-image?kind=thumbnail`, also `ThumbnailPolicy`; the frontend's
+  `previewImageUrl(url, "thumbnail")`). The page being downloaded controls that value, so without the
+  block it is an SSRF primitive (`169.254.169.254`, `127.0.0.1:<port>`, a LAN admin UI). Admin-typed
+  URLs are **not** blocked — the image-type download (`DownloadPolicy`) and the preview of a typed image
+  URL (`kind=image`, the default; `PreviewPolicy`) — because fetching from a LAN host is a legitimate
+  thing for an admin to ask for and those requests are chosen by the admin, not the page. The endpoint
+  can't tell the two apart on its own, so the caller says which it is.
   Other thumbnail fetches (`ghostthumb` callers, subscriptions, import) call yt-dlp as a subprocess and
   are out of scope here.
 - *Connect-time check.* The transport's `net.Dialer.Control` hook sees the resolved IP being dialed and

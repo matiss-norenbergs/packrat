@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { backupDownloadUrl, disableTwoFactor, enableTwoFactor, fetchAuthStatus, regenerateRecoveryCodes, imageUrl, login, login2fa, logout, mediaFileUrl, rateLimitMessage, resizedImageSrcSet, fetchLibraryFacets, listThumbnailUpscalers } from "@/lib/api"
+import { backupDownloadUrl, disableTwoFactor, enableTwoFactor, fetchAuthStatus, regenerateRecoveryCodes, imageUrl, login, login2fa, logout, mediaFileUrl, rateLimitMessage, resizedImageSrcSet, fetchLibraryFacets, listThumbnailUpscalers, previewImageUrl } from "@/lib/api"
 import { getServerUrl, getToken, setServerUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
 
 type FetchInit = { credentials?: string; headers: Record<string, string>; method?: string }
@@ -255,5 +255,15 @@ describe("listThumbnailUpscalers", () => {
     expect(init.method).toBe("POST")
     expect(init.headers["X-CSRF-Token"]).toBe("csrf123")
     expect(JSON.parse(init.body)).toEqual({ url: "http://x:7860", username: "u", password: "s3cret" })
+  })
+})
+
+describe("previewImageUrl", () => {
+  it("defaults to the plain typed-image URL", () => {
+    expect(previewImageUrl("http://lan/a b.png")).toBe("/api/downloads/preview-image?url=http%3A%2F%2Flan%2Fa%20b.png")
+  })
+  it("adds kind=thumbnail only for page-reported thumbnails", () => {
+    expect(previewImageUrl("http://x/t.jpg", "image")).toBe(previewImageUrl("http://x/t.jpg"))
+    expect(previewImageUrl("http://x/t.jpg", "thumbnail")).toBe("/api/downloads/preview-image?url=http%3A%2F%2Fx%2Ft.jpg&kind=thumbnail")
   })
 })

@@ -166,7 +166,9 @@ The live download queue.
     with privacy on) its title is shown hashed. Every preview image request — the Image type's own preview and
     the yt-dlp-reported video/audio thumbnail alike — is proxied through the backend rather than
     fetched directly by the browser, so it honors a configured proxy (see Settings → yt-dlp below)
-    the same way the real download does. Images over 25 MB (200 MB for an Image-type download) are
+    the same way the real download does. The yt-dlp-reported thumbnail (chosen by the page) is not
+    fetched from private, loopback or link-local addresses — the preview just falls back to the
+    placeholder — while the Image type's typed URL may point at a LAN host. Images over 25 MB (200 MB for an Image-type download) are
     refused with "image larger than the N MB limit".
   - **Playlists**: pasting a playlist URL offers a mode — download just the one video ("current"),
     the entire playlist, a numbered range, or the first N entries. The server re-resolves the

@@ -442,8 +442,13 @@ export function mediaFileUrl(relativePath: string): string {
 // fetch would silently bypass it. Used only for the New Download dialog's
 // pre-submit preview; every other image in the app is already backend-local
 // (mediaFileUrl/imageUrl above).
-export function previewImageUrl(externalUrl: string): string {
-  return serverUrl(`/api/downloads/preview-image?url=${encodeURIComponent(externalUrl)}`)
+//
+// `kind` says who chose the URL: "image" (default) is a direct image URL the
+// admin typed; "thumbnail" is one yt-dlp reported from the page's metadata, so
+// the backend refuses private/loopback addresses for it.
+export function previewImageUrl(externalUrl: string, kind: "image" | "thumbnail" = "image"): string {
+  const base = `/api/downloads/preview-image?url=${encodeURIComponent(externalUrl)}`
+  return serverUrl(kind === "thumbnail" ? `${base}&kind=thumbnail` : base)
 }
 
 // Resolves a relative path under the backend's images root (artist/collection

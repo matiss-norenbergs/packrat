@@ -309,18 +309,22 @@ privacy switch off. Clients show a blurred match's title hashed and hide its thu
 filename-template preview. For a playlist URL, `isPlaylist=true` and only `playlistTitle`/`playlistCount`
 are populated.
 
-### `GET /api/downloads/preview-image?url=...`
+### `GET /api/downloads/preview-image?url=...[&kind=image|thumbnail]`
 
 Streams `url`'s response straight back through — same Content-Type allowlist and `ytdlp_proxy`
 routing as the `downloadType=image` fetch above. Backs the New Download dialog's live preview
 `<img>` for **both** an image-type URL and a regular video/audio URL's yt-dlp-reported thumbnail: a
 plain client-side `<img src>` pointing at the raw external URL can't honor a backend-configured
 proxy, so both preview paths go through this endpoint instead of loading the external image
-directly. `422` if the fetch fails, the Content-Type isn't a recognized image type, or the image is
-larger than 25 MB (`{"error": "fetching image: image larger than the 25 MB limit"}` when the
-`Content-Length` says so; a body that outgrows the limit mid-stream is cut off). Unlike thumbnail
-fetches taken from page metadata, the URL here is the admin's, so private/LAN addresses are allowed.
-`200` with the image bytes streamed through (`Content-Type`/size passed along) on success.
+directly. Optional `kind` says who chose the URL: `image` (default, also when omitted) is a direct
+image URL the admin typed — private/LAN addresses are allowed; `thumbnail` is the thumbnail yt-dlp
+reported from the page's metadata, which the remote page controls, so loopback, link-local, private,
+CGNAT and other non-public addresses (also via redirects) are refused. `400` for any other `kind`.
+`422` if the fetch fails, the Content-Type isn't a recognized image type, the image is larger than
+25 MB (`{"error": "fetching image: image larger than the 25 MB limit"}` when the `Content-Length`
+says so; a body that outgrows the limit mid-stream is cut off), or — `kind=thumbnail` only — the
+address is refused (`{"error": "thumbnail URL refused: it points at a private or non-public address"}`,
+URL-free). `200` with the image bytes streamed through (`Content-Type`/size passed along) on success.
 
 ### `POST /api/downloads/playlist`
 
