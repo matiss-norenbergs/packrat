@@ -154,6 +154,15 @@ func CheckOne(ctx context.Context, deps CheckDeps, sub models.Subscription) (int
 		return 0, err
 	}
 
+	if sub.LastCheckedAt == nil {
+		// Never baselined: the subscription row was committed but its
+		// baseline never finished (older versions inserted the row before
+		// baselining). Acting on the whole unrecorded back catalog would
+		// flood the library, so this run only records what is there now.
+		log.Printf("subscription %d (%s): never baselined, recording %d current entries as seen instead of acting on them", sub.ID, sub.URL, len(entries))
+		return 0, BaselineOnCreate(ctx, deps, sub, entries)
+	}
+
 	newCount, err := processEntries(ctx, deps, sub, entries, false)
 	if err != nil {
 		return newCount, err
@@ -164,16 +173,47 @@ func CheckOne(ctx context.Context, deps CheckDeps, sub models.Subscription) (int
 	return newCount, nil
 }
 
-// BaselineOnCreate is called once, right after a subscription is first
-// inserted — it records every entry currently found at sub.URL as already
-// seen, without creating any ghost items or downloads. "Subscribing" means
-// "tell me about new uploads from now on," not "queue up the entire back
-// catalog" — only entries that appear on a later CheckOne are new.
-func BaselineOnCreate(ctx context.Context, deps CheckDeps, sub models.Subscription, entries []downloader.PlaylistEntry) error {
-	if _, err := processEntries(ctx, deps, sub, entries, true); err != nil {
-		return err
+// baselineTimeout bounds the detached baseline transaction.
+const baselineTimeout = 2 * time.Minute
+
+// seenInputs converts entries to unique, http(s)-only bulk-insert rows
+// (first occurrence wins; same filtering processEntries applies).
+func seenInputs(entries []downloader.PlaylistEntry) []repository.SeenEntryInput {
+	out := make([]repository.SeenEntryInput, 0, len(entries))
+	handled := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		id := sourceID(e)
+		if id == "" || handled[id] || !queue.IsHTTPURL(e.URL) {
+			continue
+		}
+		handled[id] = true
+		out = append(out, repository.SeenEntryInput{SourceID: id, Title: e.Title, URL: e.URL, Duration: e.Duration})
 	}
-	return deps.SubscriptionsRepo.MarkChecked(ctx, sub.ID, time.Now(), nil)
+	return out
+}
+
+// CreateBaselined inserts sub, records every current entry as already seen
+// and stamps last_checked_at in ONE transaction (all or nothing), returning
+// the new id. "Subscribing" means "tell me about new uploads from now on", so
+// no ghosts or downloads are created for the existing back catalog. The
+// transaction runs on a context that survives the client disconnecting, so
+// closing the tab can't abort it halfway; the slow metadata fetch happens
+// before this, outside the transaction.
+func CreateBaselined(ctx context.Context, deps CheckDeps, sub models.Subscription, entries []downloader.PlaylistEntry) (int64, error) {
+	txCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), baselineTimeout)
+	defer cancel()
+	return deps.SubscriptionsRepo.CreateWithSeenEntries(txCtx, &sub, seenInputs(entries), time.Now())
+}
+
+// BaselineOnCreate records every entry currently found at sub.URL as already
+// seen for an existing subscription, without creating any ghost items or
+// downloads, and marks it checked — in one transaction via the shared bulk
+// path. New subscriptions go through CreateBaselined; this is the healing
+// path for one that was never baselined (see CheckOne).
+func BaselineOnCreate(ctx context.Context, deps CheckDeps, sub models.Subscription, entries []downloader.PlaylistEntry) error {
+	txCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), baselineTimeout)
+	defer cancel()
+	return deps.SubscriptionsRepo.RecordSeenEntries(txCtx, sub.ID, seenInputs(entries), time.Now())
 }
 
 // fetchEntries normalizes FetchMetadata's result to a flat entry list — a

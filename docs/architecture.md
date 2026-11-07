@@ -784,7 +784,7 @@ placeholder (off) — reusing the ghost-creation and download-enqueue *logic*, b
 import isn't possible). Downloads triggered this way go through the exact same
 `queue.DownloadManager.Enqueue` as every other download source — same live queue, same WebSocket
 progress events, same worker-pool concurrency limit. Subscribing baselines every currently-existing
-upload as already-seen (`BaselineOnCreate`) without creating anything, so a new subscription only
+upload as already-seen without creating anything, so a new subscription only
 ever surfaces uploads from that point forward. There is no per-subscription goroutine/ticker — see
 Retention sweeps below.
 
@@ -809,6 +809,16 @@ makes that safe even if two checks overlap. An entry whose action fails stays re
 `library_item_id` (as before). **Trade-off, on purpose:** a crash between the claim and the action loses that
 single entry (it is marked seen but never acted on, and still shows in Known items) instead of duplicating
 it on the next check.
+
+**Atomic create and healing.** `CreateSubscription` does the slow yt-dlp metadata fetch first, then
+`subscriptions.CreateBaselined` -> `SubscriptionsRepo.CreateWithSeenEntries`: one transaction (prepared
+insert, `context.WithoutCancel` + 2 min timeout) that inserts the subscription with `last_checked_at` set and
+every baseline entry, so a closed tab or a failure cannot leave a committed subscription whose back catalog
+looks new. No repo mutex is taken inside it (lock order: repo mutex before the single DB connection).
+`last_checked_at IS NULL` is therefore the marker of a never-baselined subscription (only an
+interrupted create from an older version): `CheckOne` records its current entries as seen
+(`BaselineOnCreate`, the same bulk path, one transaction) without acting on them, marks it checked and
+logs one line; later checks act on genuinely new uploads only.
 
 **One check per subscription.** `CheckOne` takes a keyed lock (an `itemlock.Locks` instance, `TryLock` by
 subscription id) and re-reads the subscription once it holds it; a concurrent call returns

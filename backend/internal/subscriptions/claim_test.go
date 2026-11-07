@@ -249,3 +249,59 @@ func TestProcessEntriesFailedActionStaysRecorded(t *testing.T) {
 	}
 }
 
+func TestCreateBaselinedSurvivesCancelledContext(t *testing.T) {
+	env := newTestEnv(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // the client already went away
+	sub := models.Subscription{URL: "https://example.test/c", Title: "t", MediaType: "video", CheckIntervalHours: 6, Enabled: true}
+	entries := append(entriesN(50), entriesN(1)...) // one repeated id
+	id, err := CreateBaselined(ctx, env.deps, sub, entries)
+	if err != nil {
+		t.Fatalf("CreateBaselined: %v", err)
+	}
+	got, err := env.subs.Get(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastCheckedAt == nil {
+		t.Fatal("last_checked_at not set")
+	}
+	if n := env.count(t, "subscription_seen_entries"); n != 50 {
+		t.Fatalf("seen entries = %d, want 50", n)
+	}
+	if env.count(t, "library") != 0 {
+		t.Fatal("baseline must not create ghosts")
+	}
+}
+
+// A subscription whose baseline never finished (last_checked_at NULL) is
+// baselined by its next check instead of flooding the library; later checks
+// act on genuinely new entries only.
+func TestCheckOneBaselinesNeverCheckedSubscription(t *testing.T) {
+	env := newTestEnv(t)
+	sub := env.newSub(t, false)
+	current := entriesN(10)
+	env.deps.FetchEntries = func(ctx context.Context, url string) ([]downloader.PlaylistEntry, error) { return current, nil }
+
+	n, err := CheckOne(context.Background(), env.deps, sub)
+	if err != nil || n != 0 {
+		t.Fatalf("baseline run: n=%d err=%v", n, err)
+	}
+	if env.count(t, "library") != 0 || env.count(t, "downloads") != 0 || env.count(t, "subscription_seen_entries") != 10 {
+		t.Fatal("baseline run must record entries without acting")
+	}
+	got, _ := env.subs.Get(context.Background(), sub.ID)
+	if got.LastCheckedAt == nil {
+		t.Fatal("baseline run must mark the subscription checked")
+	}
+
+	current = append(append([]downloader.PlaylistEntry{}, current...), downloader.PlaylistEntry{ID: "new", Title: "new", URL: "https://example.test/new"})
+	n, err = CheckOne(context.Background(), env.deps, sub) // stale snapshot with nil LastCheckedAt on purpose
+	if err != nil || n != 1 {
+		t.Fatalf("second run: n=%d err=%v, want 1", n, err)
+	}
+	if env.count(t, "library") != 1 {
+		t.Fatalf("ghosts = %d, want 1", env.count(t, "library"))
+	}
+}
+

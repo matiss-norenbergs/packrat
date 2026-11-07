@@ -1649,7 +1649,11 @@ download queue.
 `url` (http/https) and `mediaType` (`video`|`audio`) required; `checkIntervalHours` defaults to 6
 if omitted/zero. `400` bad URL/missing fields, `422` initial metadata fetch failed. On success,
 every upload currently at the URL is recorded as already-seen (baseline) — subscribing means "tell
-me about new uploads from now on," not "queue the whole back catalog." Response `201`:
+me about new uploads from now on," not "queue the whole back catalog." The subscription row, every baseline
+entry and `lastCheckedAt` are written in one transaction (on a context that survives the client
+disconnecting), so either all of it exists or nothing does: a failure answers `500` and leaves no
+subscription. A subscription found with `lastCheckedAt: null` (never baselined) is baselined by its next
+check — see `POST /api/subscriptions/:id/check`, which then reports `newItemsFound: 0`. Response `201`:
 
 ```json
 {

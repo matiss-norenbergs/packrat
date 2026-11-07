@@ -837,7 +837,11 @@ back manually.
   (1h/6h/12h/24h), Tags, **Auto-download new items** (off by default — off means new uploads become
   library placeholders to review; on means straight to the download queue), and Generate NFO.
   Subscribing baselines every upload that already exists at the URL as "known" — it never queues
-  the whole back catalog, only uploads from that point forward.
+  the whole back catalog, only uploads from that point forward. The subscription, its known items and its
+  first "last checked" time are saved in one step: closing the tab mid-way, or an error, leaves no
+  half-created subscription behind. A subscription that somehow was never baselined (created by an
+  older version that was interrupted) is baselined by its next check — scheduled or "Check now" —
+  instead of turning its whole back catalog into placeholders or downloads.
 - **Columns and layout** — Collection, Known items, Last checked and Auto-download can be hidden and the choice saved
   (Title and Enabled always show); see [Table layouts](#table-layouts).
 - The Title, Collection, Known items and Last checked headers sort the table (a subscription that was never checked is always last).

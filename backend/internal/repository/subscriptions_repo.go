@@ -237,6 +237,98 @@ func (r *SubscriptionsRepo) ClaimSeenEntry(ctx context.Context, subscriptionID i
 	return n == 1, nil
 }
 
+// SeenEntryInput is one entry to record in bulk (baselining).
+type SeenEntryInput struct {
+	SourceID string
+	Title    string
+	URL      string
+	Duration float64
+}
+
+const insertSeenEntrySQL = `INSERT INTO subscription_seen_entries (subscription_id, source_id, title, source_url, duration_seconds) VALUES (?, ?, ?, ?, ?)`
+
+// CreateWithSeenEntries inserts the subscription, records every entry as seen
+// and stamps last_checked_at in ONE transaction: either everything persists
+// or nothing does, so an interrupted baseline can never leave a subscription
+// whose back catalog looks new. Entries must have unique SourceIDs (a
+// duplicate fails the whole transaction). No repo mutex is taken inside the
+// transaction (see the lock-order rule in docs/architecture.md).
+func (r *SubscriptionsRepo) CreateWithSeenEntries(ctx context.Context, s *models.Subscription, entries []SeenEntryInput, checkedAt time.Time) (int64, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("starting subscription transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx, `
+		INSERT INTO subscriptions (
+			url, title, media_type, collection_id, tags, auto_download,
+			generate_nfo, check_interval_hours, enabled, last_checked_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		s.URL, s.Title, s.MediaType, s.CollectionID, encodeSubscriptionTags(s.Tags), s.AutoDownload,
+		s.GenerateNFO, s.CheckIntervalHours, s.Enabled, checkedAt.UTC().Format("2006-01-02 15:04:05"),
+	)
+	if err != nil {
+		return 0, fmt.Errorf("inserting subscription: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if err := insertSeenEntries(ctx, tx, id, entries, insertSeenEntrySQL); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("committing subscription: %w", err)
+	}
+	return id, nil
+}
+
+// RecordSeenEntries bulk-records entries as seen for an existing
+// subscription in one transaction, skipping any already recorded, and stamps
+// last_checked_at (clearing any last error) in the same transaction. Used to
+// baseline a subscription that was never baselined.
+func (r *SubscriptionsRepo) RecordSeenEntries(ctx context.Context, subscriptionID int64, entries []SeenEntryInput, checkedAt time.Time) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("starting baseline transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	ignoring := strings.Replace(insertSeenEntrySQL, "INSERT INTO", "INSERT OR IGNORE INTO", 1)
+	if err := insertSeenEntries(ctx, tx, subscriptionID, entries, ignoring); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx,
+		`UPDATE subscriptions SET last_checked_at = ?, last_check_error = NULL WHERE id = ?`,
+		checkedAt.UTC().Format("2006-01-02 15:04:05"), subscriptionID,
+	)
+	if err != nil {
+		return fmt.Errorf("marking subscription checked: %w", err)
+	}
+	if err := checkRowsAffected(res); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing baseline: %w", err)
+	}
+	return nil
+}
+
+func insertSeenEntries(ctx context.Context, tx *sql.Tx, subscriptionID int64, entries []SeenEntryInput, query string) error {
+	stmt, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("preparing seen-entry insert: %w", err)
+	}
+	defer stmt.Close()
+	for _, e := range entries {
+		if _, err := stmt.ExecContext(ctx, subscriptionID, e.SourceID, e.Title, e.URL, e.Duration); err != nil {
+			return fmt.Errorf("recording seen subscription entry %q: %w", e.SourceID, err)
+		}
+	}
+	return nil
+}
+
 // ListSeenEntries returns every entry ever recorded for subscriptionID,
 // most recently seen first — the "Known items" dialog's data source.
 // first_seen_at alone is a weak sort key: every entry recorded by the same

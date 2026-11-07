@@ -19,10 +19,11 @@ import (
 const defaultSubscriptionCheckIntervalHours = 6
 
 // CreateSubscription saves a channel/playlist URL and immediately baselines
-// it (subscriptions.BaselineOnCreate) — every entry currently found is
-// recorded as already-seen without creating any ghost items or downloads,
+// it (subscriptions.CreateBaselined) — the subscription row, every entry
+// currently found (recorded as already-seen, without creating any ghost
+// items or downloads) and last_checked_at are written in one transaction,
 // since "subscribing" means "tell me about new uploads from now on," not
-// "queue up the entire back catalog."
+// "queue up the entire back catalog." Either all of it persists or none.
 func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -36,6 +37,11 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			return
 		}
 
+		interval := req.CheckIntervalHours
+		if interval <= 0 {
+			interval = defaultSubscriptionCheckIntervalHours
+		}
+
 		meta, err := deps.YtDlp.FetchMetadata(ctx, req.URL)
 		if err != nil {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "couldn't fetch this URL: " + err.Error()})
@@ -45,11 +51,6 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		title := meta.Title
 		if title == "" {
 			title = req.URL
-		}
-
-		interval := req.CheckIntervalHours
-		if interval <= 0 {
-			interval = defaultSubscriptionCheckIntervalHours
 		}
 
 		sub := models.Subscription{
@@ -63,16 +64,10 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			CheckIntervalHours: interval,
 			Enabled:            true,
 		}
-		id, err := deps.SubscriptionsRepo.Create(ctx, &sub)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		sub.ID = id
-
 		entries := subscriptions.EntriesFromMetadata(meta, req.URL)
-		if err := subscriptions.BaselineOnCreate(ctx, deps, sub, entries); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "subscription saved, but baselining failed: " + err.Error()})
+		id, err := subscriptions.CreateBaselined(ctx, deps, sub, entries)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "creating subscription failed: " + err.Error()})
 			return
 		}
 
