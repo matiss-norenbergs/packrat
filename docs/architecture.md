@@ -501,7 +501,9 @@ broadcast so the Library refetches.
   `LibraryRepo.PathClaimedByOther(rel, ghostID)` (the run's own ghost excepted). If another row has
   the path, `resolveNameClash` re-runs yt-dlp (same download id, same progress) under a new
   `job.Filename` — default naming: `<stem> [<video id>]`, explicit naming: `<filename> (2)`, `(3)`, …
-  (`(n)` also when the id is empty or that name clashes too) — at most 5 times, then the download
+  (`(n)` also when the id is empty or that name clashes too). "Explicit naming" means any *chosen*
+  name — a collection's filename template, a literal Filename or a filename prefix all make
+  `job.Filename` non-empty; only fully default naming (none of the three) gets ` [video id]` — at most 5 times, then the download
   fails ("no free name") and no row is created. The clashing file and its sidecars are never touched,
   and thumbnail cleanup/derivation use the new path only. A file no row claims is not a clash and is
   adopted as before. Redownloads (scratch file) and images (own name check) skip this. `runYtDlp` is

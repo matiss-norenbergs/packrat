@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -1437,8 +1438,9 @@ func (m *DownloadManager) runYtDlp(parentCtx, runCtx context.Context, id int64, 
 	result, runErr := m.ytdlp.Run(runCtx, job, func(ev downloader.ProgressEvent) {
 		m.onProgress(id, ev)
 	})
+	partials := partialFiles{dir: job.DestDir, destinations: result.Destinations}
 	if runErr != nil {
-		m.finishError(parentCtx, runCtx, id, d.URL, runErr.Error(), "", "")
+		m.finishErrorKeepingPartials(parentCtx, runCtx, id, d.URL, runErr.Error(), "", "", partials)
 		return result, false
 	}
 	if result.ExitCode != 0 {
@@ -1453,7 +1455,7 @@ func (m *DownloadManager) runYtDlp(parentCtx, runCtx context.Context, id int64, 
 		// happened — trust that signal (and confirm the file is really
 		// there) instead of discarding a good download.
 		if !outputFileExists(result.FinalPath) {
-			m.finishError(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail)
+			m.finishErrorKeepingPartials(parentCtx, runCtx, id, d.URL, fmt.Sprintf("yt-dlp exited with code %d", result.ExitCode), result.StdoutTail, result.StderrTail, partials)
 			return result, false
 		}
 		log.Printf("queue: download %d: yt-dlp exited with code %d but %s was written successfully — continuing, likely a postprocessing failure (e.g. thumbnail conversion)", id, result.ExitCode, result.FinalPath)
@@ -1560,6 +1562,22 @@ func classifyRunCtxErr(err error) string {
 // status/broadcast reflects the real cause rather than always reporting "failed" —
 // MarkCancelled/MarkFailed use parentCtx since runCtx is already done by the time this runs.
 func (m *DownloadManager) finishError(parentCtx, runCtx context.Context, id int64, url, errMsg, stdoutTail, stderrTail string) {
+	m.finishErrorKeepingPartials(parentCtx, runCtx, id, url, errMsg, stdoutTail, stderrTail, partialFiles{})
+}
+
+// partialFiles describes the files a yt-dlp run was writing: dir is the
+// download's destination directory and destinations the paths it reported.
+// The zero value means "nothing known", which cleans up nothing.
+type partialFiles struct {
+	dir          string
+	destinations []string
+}
+
+// finishErrorKeepingPartials is finishError for a yt-dlp run. A failed or timed-out
+// run keeps its partial files (a retry resumes from the .part file); only a user
+// cancel abandons the work, so only that branch removes them. A cancel caused by
+// the server shutting down (parentCtx done) keeps them too, like the ghost.
+func (m *DownloadManager) finishErrorKeepingPartials(parentCtx, runCtx context.Context, id int64, url, errMsg, stdoutTail, stderrTail string, partials partialFiles) {
 	switch classifyRunCtxErr(runCtx.Err()) {
 	case "timeout":
 		timeoutMsg := "download exceeded the configured time limit and was stopped"
@@ -1572,6 +1590,9 @@ func (m *DownloadManager) finishError(parentCtx, runCtx context.Context, id int6
 		m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "failed", Error: timeoutMsg}})
 		return
 	case "cancelled":
+		if parentCtx.Err() == nil {
+			removePartialFiles(partials)
+		}
 		m.removeRunGhost(parentCtx, id)
 		if err := m.downloadsRepo.MarkCancelled(parentCtx, id); err != nil {
 			log.Printf("queue: mark cancelled failed for %d: %v", id, err)
@@ -1590,6 +1611,48 @@ func (m *DownloadManager) finishError(parentCtx, runCtx context.Context, id int6
 		log.Printf("queue: recording history for %d failed: %v", id, err)
 	}
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventFailed, Payload: ws.FailedPayload{DownloadID: id, Status: "failed", Error: errMsg}})
+}
+
+// partialSuffixRE matches what yt-dlp appends to a destination file name while
+// the download is unfinished: ".part", ".ytdl" and the fragment files
+// ".part-Frag<N>" / ".part-Frag<N>.part".
+var partialSuffixRE = regexp.MustCompile(`^\.(part|ytdl|part-Frag\d+(\.part)?)$`)
+
+// removePartialFiles deletes the unfinished-download files of the destinations
+// yt-dlp reported. It never globs by title: for each reported destination it
+// reads that file's own directory (which must lie inside p.dir) and removes only
+// regular files named exactly <destination file name> + a partial suffix. The
+// destination itself, siblings sharing a shorter prefix and everything else
+// stay. Nothing reported (or no known directory) removes nothing. Best-effort.
+func removePartialFiles(p partialFiles) {
+	if p.dir == "" {
+		return
+	}
+	root := filepath.Clean(p.dir)
+	for _, dest := range p.destinations {
+		if dest == "" || !filepath.IsAbs(dest) {
+			continue
+		}
+		dest = filepath.Clean(dest)
+		dir, base := filepath.Dir(dest), filepath.Base(dest)
+		if rel, err := filepath.Rel(root, dir); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			name := e.Name()
+			suffix, ok := strings.CutPrefix(name, base)
+			if !ok || !e.Type().IsRegular() || !partialSuffixRE.MatchString(suffix) {
+				continue
+			}
+			if err := os.Remove(filepath.Join(dir, name)); err != nil && !os.IsNotExist(err) {
+				log.Printf("queue: removing partial download file %s failed: %v", name, err)
+			}
+		}
+	}
 }
 
 func (m *DownloadManager) onProgress(id int64, ev downloader.ProgressEvent) {

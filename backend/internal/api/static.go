@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,9 +15,24 @@ import (
 // reached for paths that don't match a registered route — all real API
 // routes live under /api, so there's no risk of shadowing an SPA route of
 // the same name.
+//
+// Paths in a non-SPA namespace (/api, /media-files, /local-images, /ws)
+// never get the fallback: an unknown one answers 404 (JSON for /api)
+// instead of a 200 HTML page a JSON client can't parse.
 func serveSPA(dir string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		reqPath := filepath.Clean(c.Request.URL.Path)
+		slashPath := filepath.ToSlash(reqPath)
+		if strings.HasPrefix(slashPath, "/api/") || slashPath == "/api" {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		for _, prefix := range []string{"/media-files", "/local-images", "/ws"} {
+			if slashPath == prefix || strings.HasPrefix(slashPath, prefix+"/") {
+				c.AbortWithStatus(http.StatusNotFound)
+				return
+			}
+		}
 		fullPath := filepath.Join(dir, reqPath)
 
 		if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {

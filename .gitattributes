@@ -1,0 +1,7 @@
+# Keep files that run inside Linux containers LF in every checkout
+# (a CRLF entrypoint.sh crash-loops the container on Windows clones).
+*.sh text eol=lf
+docker/Dockerfile text eol=lf
+Dockerfile* text eol=lf
+docker/*.yml text eol=lf
+database/migrations/*.sql text eol=lf

@@ -192,7 +192,10 @@ The live download queue.
     The same goes for a *different* video that would get the same file name as an existing library
     item (e.g. two uploads with the same title, or a reused literal **Filename**): it is downloaded
     again under its own name, `Name [video id]` for the default title-based name, `Name (2)`,
-    `Name (3)`, … for a name you chose, and the existing item keeps its file. A file in the folder
+    `Name (3)`, … for a name you chose, and the existing item keeps its file. A *chosen* name is a
+    collection's filename template, a literal **Filename** or a filename prefix: any of them makes
+    a clash get ` (2)`, ` (3)`, …. Only fully default naming (no template, prefix or literal name)
+    gets ` [video id]`. A file in the folder
     that no library item owns is still picked up as before.
 - **Bulk Download** — queue several URLs at once from a set of rows (each with its own
   collection/type/quality/format/tags/advanced fields, and its own optional per-row preview), or
@@ -414,7 +417,8 @@ item, for the same file-doesn't-have-what's-needed reason — see the Thumbnail 
   the title, thumbnail, collection, artist/year/season/sequence and tags already on it. When the
   download finishes the *same* item is filled in with the file (it keeps its id, so it doesn't jump
   or duplicate). Image downloads create no ghost. **Cancelling** a download removes the ghost it
-  created; a ghost that existed before (Add item, a subscription, or one kept after a failure) is
+  created and deletes the unfinished yt-dlp files (`.part`, `.ytdl`, fragment files) that run left
+  next to it; a failure or timeout keeps them so a retry resumes. A ghost that existed before (Add item, a subscription, or one kept after a failure) is
   never removed by a cancel. **A failure, timeout or app restart keeps the ghost** (the Downloads /
   History row shows the error) — **Retry** in History reuses that ghost rather than creating a
   second item, and **Download now** is the manual alternative. While the download is *downloading*

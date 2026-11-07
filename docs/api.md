@@ -8,7 +8,9 @@ All JSON API routes live under `/api` — this is deliberate, not a style choice
 client-side routes named `/downloads`, `/library`, `/collections`, etc. too, and without the prefix
 a hard refresh (or a shared link) on those pages would hit the API route instead of the app shell,
 since Gin matches registered routes before falling back to serving `index.html`. `/media-files` and
-`/ws` stay unprefixed since no frontend route shares those names.
+`/ws` stay unprefixed since no frontend route shares those names. An unknown `/api/*` route answers
+`404` `{"error": "not found"}` (never the app shell); unknown `/media-files/*`, `/local-images/*`
+and `/ws/*` paths answer a plain `404`.
 
 ## Auth and CSRF
 

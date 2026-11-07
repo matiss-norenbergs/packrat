@@ -45,6 +45,13 @@ if [ -n "$meta" ]; then
   echo '{"id":"'"$id"'","title":"Fake Title","uploader":"Up","duration":12,"thumbnail":"","description":"desc"}'
   exit 0
 fi
+if [ -f "$dir/partial" ]; then
+  d=$(dirname "$(echo "$out" | tr '\\' '/')")
+  [ -f "$dir/nodest" ] || echo "[download] Destination: $d/Clip.f137.mp4"
+  echo x > "$d/Clip.f137.mp4.part"; echo x > "$d/Clip.f137.mp4.ytdl"
+  if [ -f "$dir/fail" ]; then echo "boom" >&2; exit 1; fi
+  exec sleep 30
+fi
 [ -f "$dir/slow" ] && exec sleep 30
 if [ -f "$dir/fail" ]; then echo "boom" >&2; exit 1; fi
 if [ -f "$dir/nopath" ]; then exit 0; fi
