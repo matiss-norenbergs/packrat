@@ -207,7 +207,9 @@ The live download queue.
   paste a list of URLs (one per line) into a textarea and add them all as rows in one go. Up to 50
   rows per batch. Rows alternate background shading so it's easy to tell where one ends and the
   next begins when scanning a long list. "Skip duplicates" avoids re-queuing a URL already in the
-  library.
+  library, and queues a URL (or a video id, for playlists) that appears more than once in the same batch only
+  once; the result toast counts those separately ("N duplicate in this batch") and History records them as
+  duplicates ("Duplicate within this request").
 - **Queue list** — each row shows a thumbnail, title, status badge, and live progress (percent,
   speed, ETA) while downloading, streamed over WebSocket rather than polled. A failed or
   interrupted row shows its error message inline.
@@ -834,16 +836,24 @@ back manually.
 - **Add subscription** — paste a channel/playlist URL; a live preview confirms what it resolves to
   (playlist title/count, or a note if it looks like a single video — still allowed, e.g. a channel
   with one upload so far). Set Type (video/audio), Collection (optional), check frequency
-  (1h/6h/12h/24h), Tags, **Auto-download new items** (off by default — off means new uploads become
+  (1h/6h/12h/24h; the API accepts any whole number of hours from 1 to 8760, a year), Tags, **Auto-download new items** (off by default — off means new uploads become
   library placeholders to review; on means straight to the download queue), and Generate NFO.
   Subscribing baselines every upload that already exists at the URL as "known" — it never queues
-  the whole back catalog, only uploads from that point forward.
+  the whole back catalog, only uploads from that point forward. The subscription, its known items and its
+  first "last checked" time are saved in one step: closing the tab mid-way, or an error, leaves no
+  half-created subscription behind. A subscription that somehow was never baselined (created by an
+  older version that was interrupted) is baselined by its next check — scheduled or "Check now" —
+  instead of turning its whole back catalog into placeholders or downloads.
 - **Columns and layout** — Collection, Known items, Last checked and Auto-download can be hidden and the choice saved
   (Title and Enabled always show); see [Table layouts](#table-layouts).
 - The Title, Collection, Known items and Last checked headers sort the table (a subscription that was never checked is always last).
 - The subscriptions table shows known-item count (with a "+N new" badge when there's anything
   unseen), last-checked time (with the error, if the last check failed), auto-download status, and
   an Enabled toggle — disabling only pauses the scheduled checks, "Check now" still works.
+- **One check per subscription at a time.** If a check is already running for a subscription (an earlier click, another tab, or
+  the hourly sweep), "Check now" answers "This subscription is already being checked. Try again in a moment." instead of
+  starting a second one, and the scheduled sweep skips that subscription. A new upload is turned into a placeholder or a
+  download exactly once, even if the same video appears twice in the listing.
 - **Known items** (per subscription) is a sortable, paginated table of every upload ever seen,
   most-recently-first-seen first. Select rows (click, shift-click for a range, ctrl/cmd-click to
   toggle, or click-and-drag across rows) and use the toolbar to act on the whole selection at once:

@@ -14,15 +14,12 @@ import (
 	"packrat/backend/internal/subscriptions"
 )
 
-// defaultSubscriptionCheckIntervalHours is used whenever
-// CreateSubscriptionRequest.CheckIntervalHours is omitted/zero.
-const defaultSubscriptionCheckIntervalHours = 6
-
 // CreateSubscription saves a channel/playlist URL and immediately baselines
-// it (subscriptions.BaselineOnCreate) — every entry currently found is
-// recorded as already-seen without creating any ghost items or downloads,
+// it (subscriptions.CreateBaselined) — the subscription row, every entry
+// currently found (recorded as already-seen, without creating any ghost
+// items or downloads) and last_checked_at are written in one transaction,
 // since "subscribing" means "tell me about new uploads from now on," not
-// "queue up the entire back catalog."
+// "queue up the entire back catalog." Either all of it persists or none.
 func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -33,6 +30,12 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		}
 		if !isHTTPURL(req.URL) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "url must be an http or https URL"})
+			return
+		}
+
+		interval, err := resolveCreateInterval(req.CheckIntervalHours)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -47,11 +50,6 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			title = req.URL
 		}
 
-		interval := req.CheckIntervalHours
-		if interval <= 0 {
-			interval = defaultSubscriptionCheckIntervalHours
-		}
-
 		sub := models.Subscription{
 			URL:                req.URL,
 			Title:              title,
@@ -63,16 +61,10 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			CheckIntervalHours: interval,
 			Enabled:            true,
 		}
-		id, err := deps.SubscriptionsRepo.Create(ctx, &sub)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		sub.ID = id
-
 		entries := subscriptions.EntriesFromMetadata(meta, req.URL)
-		if err := subscriptions.BaselineOnCreate(ctx, deps, sub, entries); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "subscription saved, but baselining failed: " + err.Error()})
+		id, err := subscriptions.CreateBaselined(ctx, deps, sub, entries)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "creating subscription failed: " + err.Error()})
 			return
 		}
 
@@ -98,6 +90,18 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		}
 		c.JSON(http.StatusCreated, toSubscriptionResponse(*created, collectionName, knownCount, unseenCount))
 	}
+}
+
+// resolveCreateInterval applies the create-time rule: omitted or <= 0 falls
+// back to the default, anything else must be within the allowed range.
+func resolveCreateInterval(requested int) (int, error) {
+	if requested <= 0 {
+		return subscriptions.DefaultCheckIntervalHours, nil
+	}
+	if err := subscriptions.ValidateCheckIntervalHours(requested); err != nil {
+		return 0, err
+	}
+	return requested, nil
 }
 
 func ListSubscriptions(deps subscriptions.CheckDeps) gin.HandlerFunc {
@@ -164,6 +168,11 @@ func UpdateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if err := subscriptions.ValidateCheckIntervalHours(*req.CheckIntervalHours); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -239,6 +248,10 @@ func CheckSubscriptionNow(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		}
 
 		newCount, err := subscriptions.CheckOne(ctx, deps, *sub)
+		if errors.Is(err, subscriptions.ErrCheckInProgress) {
+			c.JSON(http.StatusConflict, gin.H{"error": "This subscription is already being checked. Try again in a moment."})
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "checking subscription failed: " + err.Error()})
 			return

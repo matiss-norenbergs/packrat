@@ -22,6 +22,7 @@ import { historyQueryKey } from "@/hooks/useHistory"
 import { NO_ARTIST } from "@/components/library/ArtistSelect"
 import { BulkDownloadRow } from "./BulkDownloadRow"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
+import { skippedSummaryParts } from "@/lib/enqueueSummary"
 
 const NO_COLLECTION = "none"
 const MAX_ROWS = 50
@@ -238,7 +239,7 @@ export function BulkDownloadDialog() {
     queryClient.invalidateQueries({ queryKey: historyQueryKey })
 
     const parts = [`${result.queued.length} queued`]
-    if (result.skipped.length > 0) parts.push(`${result.skipped.length} already in library`)
+    parts.push(...skippedSummaryParts(result.skipped))
     if (result.failed.length > 0) {
       const failedUrls = result.failed.map((f) => f.url).slice(0, 3).join(", ")
       parts.push(`${result.failed.length} failed${failedUrls ? `: ${failedUrls}${result.failed.length > 3 ? "…" : ""}` : ""}`)

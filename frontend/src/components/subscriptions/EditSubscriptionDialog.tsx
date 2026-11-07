@@ -25,6 +25,7 @@ import { useTags } from "@/hooks/useTags"
 import { sortCollectionsByPath } from "@/lib/collectionTree"
 import { TagInput } from "@/components/library/TagInput"
 import type { Subscription } from "@/types/api"
+import { clampIntervalHours } from "@/lib/subscriptionInterval"
 
 const NO_COLLECTION = "none"
 const INTERVAL_OPTIONS = [
@@ -62,7 +63,7 @@ export function EditSubscriptionDialog({ subscription, open, onOpenChange }: Edi
     setTags(subscription.tags ?? [])
     setAutoDownload(subscription.autoDownload)
     setGenerateNfo(subscription.generateNfo)
-    setCheckIntervalHours(String(subscription.checkIntervalHours))
+    setCheckIntervalHours(String(clampIntervalHours(subscription.checkIntervalHours)))
     setEnabled(subscription.enabled)
   }, [open, subscription])
 

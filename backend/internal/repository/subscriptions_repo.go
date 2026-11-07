@@ -164,6 +164,21 @@ func (r *SubscriptionsRepo) MarkChecked(ctx context.Context, id int64, checkedAt
 	return checkRowsAffected(res)
 }
 
+// SetLastCheckError records (or clears) the last check's error text WITHOUT
+// touching last_checked_at. A subscription that was never baselined
+// (last_checked_at NULL) uses it when its fetch fails, so it stays
+// "never baselined" and its next check baselines it instead of treating the
+// whole back catalog as new.
+func (r *SubscriptionsRepo) SetLastCheckError(ctx context.Context, id int64, checkError *string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE subscriptions SET last_check_error = ? WHERE id = ?`, checkError, id,
+	)
+	if err != nil {
+		return fmt.Errorf("recording subscription check error: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // HasSeenEntries batch-checks which of sourceIDs are already recorded for
 // subscriptionID, so a check only needs one query regardless of how many
 // entries a channel/playlist listing returned.
@@ -211,6 +226,140 @@ func (r *SubscriptionsRepo) RecordSeenEntry(ctx context.Context, subscriptionID 
 	)
 	if err != nil {
 		return fmt.Errorf("recording seen subscription entry: %w", err)
+	}
+	return nil
+}
+
+// ClaimSeenEntry atomically records sourceID as seen for subscriptionID and
+// reports whether THIS call inserted the row. It is the first half of the
+// claim-then-act flow in subscriptions.processEntries: only the caller that
+// gets inserted=true performs the ghost/download action for the entry, so
+// two overlapping checks (or a playlist listing an id twice) can never both
+// act on it. The UNIQUE (subscription_id, source_id) constraint from
+// migration 000032 is what makes the INSERT OR IGNORE a race-free claim.
+func (r *SubscriptionsRepo) ClaimSeenEntry(ctx context.Context, subscriptionID int64, sourceID, title, url string, duration float64) (bool, error) {
+	res, err := r.db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO subscription_seen_entries (subscription_id, source_id, title, source_url, duration_seconds) VALUES (?, ?, ?, ?, ?)`,
+		subscriptionID, sourceID, title, url, duration,
+	)
+	if err != nil {
+		return false, fmt.Errorf("claiming seen subscription entry: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("claiming seen subscription entry: %w", err)
+	}
+	return n == 1, nil
+}
+
+// ReleaseSeenEntryClaim deletes a claimed seen row, but only while it has no
+// library_item_id — a row that was successfully linked is never removed. It
+// undoes ClaimSeenEntry when the action never ran because the context was
+// cancelled, so the next check treats the entry as new again. Reports
+// whether a row was deleted.
+func (r *SubscriptionsRepo) ReleaseSeenEntryClaim(ctx context.Context, subscriptionID int64, sourceID string) (bool, error) {
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM subscription_seen_entries WHERE subscription_id = ? AND source_id = ? AND library_item_id IS NULL`,
+		subscriptionID, sourceID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("releasing seen subscription entry claim: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// SeenEntryInput is one entry to record in bulk (baselining).
+type SeenEntryInput struct {
+	SourceID string
+	Title    string
+	URL      string
+	Duration float64
+}
+
+const insertSeenEntrySQL = `INSERT INTO subscription_seen_entries (subscription_id, source_id, title, source_url, duration_seconds) VALUES (?, ?, ?, ?, ?)`
+
+// CreateWithSeenEntries inserts the subscription, records every entry as seen
+// and stamps last_checked_at in ONE transaction: either everything persists
+// or nothing does, so an interrupted baseline can never leave a subscription
+// whose back catalog looks new. Entries must have unique SourceIDs (a
+// duplicate fails the whole transaction). No repo mutex is taken inside the
+// transaction (see the lock-order rule in docs/architecture.md).
+func (r *SubscriptionsRepo) CreateWithSeenEntries(ctx context.Context, s *models.Subscription, entries []SeenEntryInput, checkedAt time.Time) (int64, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("starting subscription transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx, `
+		INSERT INTO subscriptions (
+			url, title, media_type, collection_id, tags, auto_download,
+			generate_nfo, check_interval_hours, enabled, last_checked_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		s.URL, s.Title, s.MediaType, s.CollectionID, encodeSubscriptionTags(s.Tags), s.AutoDownload,
+		s.GenerateNFO, s.CheckIntervalHours, s.Enabled, checkedAt.UTC().Format("2006-01-02 15:04:05"),
+	)
+	if err != nil {
+		return 0, fmt.Errorf("inserting subscription: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if err := insertSeenEntries(ctx, tx, id, entries, insertSeenEntrySQL); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("committing subscription: %w", err)
+	}
+	return id, nil
+}
+
+// RecordSeenEntries bulk-records entries as seen for an existing
+// subscription in one transaction, skipping any already recorded, and stamps
+// last_checked_at (clearing any last error) in the same transaction. Used to
+// baseline a subscription that was never baselined.
+func (r *SubscriptionsRepo) RecordSeenEntries(ctx context.Context, subscriptionID int64, entries []SeenEntryInput, checkedAt time.Time) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("starting baseline transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	ignoring := strings.Replace(insertSeenEntrySQL, "INSERT INTO", "INSERT OR IGNORE INTO", 1)
+	if err := insertSeenEntries(ctx, tx, subscriptionID, entries, ignoring); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx,
+		`UPDATE subscriptions SET last_checked_at = ?, last_check_error = NULL WHERE id = ?`,
+		checkedAt.UTC().Format("2006-01-02 15:04:05"), subscriptionID,
+	)
+	if err != nil {
+		return fmt.Errorf("marking subscription checked: %w", err)
+	}
+	if err := checkRowsAffected(res); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing baseline: %w", err)
+	}
+	return nil
+}
+
+func insertSeenEntries(ctx context.Context, tx *sql.Tx, subscriptionID int64, entries []SeenEntryInput, query string) error {
+	stmt, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("preparing seen-entry insert: %w", err)
+	}
+	defer stmt.Close()
+	for _, e := range entries {
+		if _, err := stmt.ExecContext(ctx, subscriptionID, e.SourceID, e.Title, e.URL, e.Duration); err != nil {
+			return fmt.Errorf("recording seen subscription entry %q: %w", e.SourceID, err)
+		}
 	}
 	return nil
 }

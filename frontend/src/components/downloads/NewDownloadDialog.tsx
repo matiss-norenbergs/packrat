@@ -43,6 +43,7 @@ import { TagInput } from "@/components/library/TagInput"
 import { FilenameCharWarning } from "./FilenameCharWarning"
 import { FilenameTemplateBuilderDialog } from "./FilenameTemplateBuilderDialog"
 import type { AudioFormat, DownloadType, PlaylistMode, VideoQuality } from "@/types/api"
+import { skippedSummaryParts } from "@/lib/enqueueSummary"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
 const AUDIO_FORMATS: AudioFormat[] = ["mp3", "flac", "m4a", "aac", "wav"]
@@ -275,7 +276,7 @@ export function NewDownloadDialog() {
       {
         onSuccess: (result) => {
           const parts = [`${result.queued.length} queued`]
-          if (result.skipped.length > 0) parts.push(`${result.skipped.length} already in library`)
+          parts.push(...skippedSummaryParts(result.skipped))
           if (result.failed.length > 0) parts.push(`${result.failed.length} failed`)
           if (result.failed.length > 0) toast.error(parts.join(", "))
           else toast.success(parts.join(", "))

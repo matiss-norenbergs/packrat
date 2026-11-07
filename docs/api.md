@@ -379,7 +379,13 @@ rather than re-downloaded. Response `201`:
 
 A per-item enqueue failure lands in `failed` (`{url, error}`) rather than aborting the whole batch.
 Each `skipped` entry carries `blurred` — the library item privacy rule applied to the matched item,
-as in the duplicate warning of `POST /api/downloads/preview`.
+as in the duplicate warning of `POST /api/downloads/preview` — and a `reason`:
+`"in_library"` (a library item matched; `libraryItemId` is set, as before) or `"duplicate_in_batch"`
+(with `skipDuplicates`, an earlier entry of the same request has the same normalized URL — scheme/host
+case, fragment and trailing slash ignored — or the same non-empty video id; there is no library item, so
+`libraryItemId` is **absent** and `title` is the URL). The first copy is queued, later copies are skipped
+and recorded in History as `duplicate` ("Duplicate within this request"). Without `skipDuplicates`
+nothing changes. `POST /api/downloads/playlist` returns the same shape.
 
 ### `POST /api/downloads/:id/cancel` — no body
 
@@ -1647,9 +1653,13 @@ download queue.
 ```
 
 `url` (http/https) and `mediaType` (`video`|`audio`) required; `checkIntervalHours` defaults to 6
-if omitted/zero. `400` bad URL/missing fields, `422` initial metadata fetch failed. On success,
+if omitted or `<= 0`, and must otherwise be 1–8760 (`400` above that). `400` bad URL/missing fields, `422` initial metadata fetch failed. On success,
 every upload currently at the URL is recorded as already-seen (baseline) — subscribing means "tell
-me about new uploads from now on," not "queue the whole back catalog." Response `201`:
+me about new uploads from now on," not "queue the whole back catalog." The subscription row, every baseline
+entry and `lastCheckedAt` are written in one transaction (on a context that survives the client
+disconnecting), so either all of it exists or nothing does: a failure answers `500` and leaves no
+subscription. A subscription found with `lastCheckedAt: null` (never baselined) is baselined by its next
+check — see `POST /api/subscriptions/:id/check`, which then reports `newItemsFound: 0`. Response `201`:
 
 ```json
 {
@@ -1669,13 +1679,16 @@ me about new uploads from now on," not "queue the whole back catalog." Response 
 ```
 
 `url`/`mediaType` are immutable after creation (changing the source is really delete-and-re-add).
-Every other field required (a real `false`/`0` must be distinguishable from "omitted"). `404`
-unknown id, `200` with the full updated subscription.
+Every other field required (a real `false`/`0` must be distinguishable from "omitted"). `checkIntervalHours`
+must be 1–8760; anything else (`0`, negative, too large) is `400 {"error": "checkIntervalHours must be between 1 and 8760"}`
+and nothing is saved. `404` unknown id, `200` with the full updated subscription.
 
 ### `POST /api/subscriptions/:id/check` — no body
 
 Same code path as the scheduled sweep, for one subscription, blocking until yt-dlp responds. `404`
-unknown id, `502` fetch failure (still records the attempt so it isn't retried every tick).
+unknown id, `502` fetch failure (still records the attempt so it isn't retried every tick),
+`409 {"error": "This subscription is already being checked. Try again in a moment."}` when a check for this
+subscription (a previous click, another tab, or the scheduled sweep) is still running — nothing is changed.
 Response `200 {"newItemsFound": 2}`.
 
 ### `GET /api/subscriptions/:id/entries` — no params
