@@ -515,6 +515,14 @@ independent of any actual download or preview happening.
   the restored settings (`enqueueResolvedDownloads`). If the settings write fails after the library
   committed, the response is a `500` that says the library half was applied (a small window: one local
   transaction). Imported setting values are still written verbatim, with no per-key validation.
+- **The yt-dlp cookies file is synced from one helper.** `api.SyncCookiesFile` makes `ytdlp-cookies.txt` (next to the
+  database) match the `ytdlp_cookies_file` row: written 0600 when non-empty, removed when empty, left alone
+  (no write) when it already matches; `writeCookiesFile` is the only code that touches the file. It runs after
+  the commit in `UpdateSettings` (when the field is in the request; a failure there stays a `500`), after
+  `ImportSettings` and after the settings step of a full restore (a failure is logged, not fatal: the
+  committed settings are not undone), and once at startup in `cmd/server/main.go`, so an install that
+  restored cookies before this existed, or whose file went missing or stale, is reconciled with the
+  database. Startup logs one line only when it changed something, never the content.
 - **Lock order: repo mutex first, DB connection second.** The pool has exactly one connection
   (`SetMaxOpenConns(1)`), and `TagsRepo`, `ArtistsRepo` and `CollectionsRepo` each have a `mu` that
   serializes their check-then-write name-uniqueness sequences (`GetOrCreateByNames`, `Create`,

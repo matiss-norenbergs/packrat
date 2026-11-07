@@ -173,6 +173,14 @@ func run() error {
 	// volume mount required, since data/db is already persisted in both
 	// docker-compose.yml and docker-compose.dev.yml.
 	ytdlpSvc.CookiesFilePath = filepath.Join(filepath.Dir(cfg.DBPath), "ytdlp-cookies.txt")
+	// Reconcile the file with the ytdlp_cookies_file setting: a restore made before
+	// the file was synced left the row without it, and a stale or deleted file
+	// would otherwise stay wrong until the next save. Never logs the content.
+	if changed, err := api.SyncCookiesFile(context.Background(), settingsRepo, ytdlpSvc); err != nil {
+		log.Printf("syncing the yt-dlp cookies file failed: %v", err)
+	} else if changed {
+		log.Printf("yt-dlp cookies file brought in line with the saved setting")
+	}
 	progressStore := queue.NewProgressStore()
 	jellyfinClient := jellyfin.NewClient()
 

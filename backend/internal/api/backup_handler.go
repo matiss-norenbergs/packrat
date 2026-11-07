@@ -145,6 +145,7 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 		// The write has committed; push the live-process settings (worker pool,
 		// transcodes) into the running components.
 		applySettingsSideEffects(bundle, mgr, ytdlp)
+		syncCookiesFileAfterRestore(c.Request.Context(), settingsRepo, ytdlp)
 		c.JSON(http.StatusOK, BackupImportSettingsResponse{Applied: applied})
 	}
 }
@@ -572,6 +573,7 @@ func applyFullBundle(
 		return BackupRestoreFullResponse{}, fmt.Errorf("library was restored but applying settings failed: %w", err)
 	}
 	applySettingsSideEffects(bundle.Settings, mgr, ytdlp)
+	syncCookiesFileAfterRestore(ctx, settingsRepo, ytdlp)
 	libResp := enqueueResolvedDownloads(ctx, mgr, collectionsRepo, settingsRepo, resolved, result)
 	return BackupRestoreFullResponse{SettingsApplied: settingsApplied, Library: libResp}, nil
 }

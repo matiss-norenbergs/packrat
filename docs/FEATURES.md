@@ -1032,7 +1032,7 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
 - **yt-dlp** — shows the installed version and whether a newer one is available on PyPI; one-click
   update. Also where the cookies, proxy, rate limit and retry count are set. **Cookies file** takes the
   content of a `cookies.txt` (Netscape format), which Packrat writes next to the database and passes to
-  yt-dlp with `--cookies`; this is the option that works in Docker. **Cookies browser/profile** reads a
+  yt-dlp with `--cookies`; it is also rewritten after a settings import / restore and checked at every server start, so it always matches what Settings shows; this is the option that works in Docker. **Cookies browser/profile** reads a
   browser profile on the machine running the server — a Docker container can't reach one on the host — and is
   ignored while a cookies file is set. Retries `0` leaves yt-dlp's
   defaults; otherwise it is passed as `--retries` and `--fragment-retries`. The proxy

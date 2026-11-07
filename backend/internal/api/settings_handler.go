@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -851,22 +852,56 @@ func YtdlpCookiesFile(ctx context.Context, repo *repository.SettingsRepo) (strin
 }
 
 // writeCookiesFile keeps the on-disk cookies file (see
-// YtDlpService.CookiesFilePath) in sync with the ytdlp_cookies_file
-// setting's content — called from UpdateSettings whenever that field is
-// present in a PATCH, including an empty string, which removes the file
-// rather than leaving a stale one yt-dlp would still pick up. 0600 since
-// cookies.txt can carry live session cookies.
-func writeCookiesFile(path, content string) error {
+// YtDlpService.CookiesFilePath) matching content: non-empty content is
+// written, empty content removes the file rather than leaving a stale one
+// yt-dlp would still pick up. 0600 since cookies.txt can carry live session
+// cookies. It is the only place that touches the file, and reports whether
+// it changed anything (a file that already matches is left alone).
+func writeCookiesFile(path, content string) (changed bool, err error) {
 	if path == "" {
-		return nil
+		return false, nil
 	}
 	if content == "" {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return err
+		if err := os.Remove(path); err != nil {
+			if os.IsNotExist(err) {
+				return false, nil
+			}
+			return false, err
 		}
-		return nil
+		return true, nil
 	}
-	return os.WriteFile(path, []byte(content), 0o600)
+	if current, err := os.ReadFile(path); err == nil && string(current) == content {
+		return false, nil
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SyncCookiesFile makes the on-disk cookies file match the ytdlp_cookies_file
+// setting. Called after a settings PATCH that includes the field, after a
+// settings import / full restore (which write the row but not the file), and
+// once at startup so a missing or stale file is reconciled with the database.
+// The content is never logged.
+func SyncCookiesFile(ctx context.Context, repo *repository.SettingsRepo, ytdlp *downloader.YtDlpService) (changed bool, err error) {
+	if ytdlp == nil {
+		return false, nil
+	}
+	content, err := YtdlpCookiesFile(ctx, repo)
+	if err != nil {
+		return false, err
+	}
+	return writeCookiesFile(ytdlp.CookiesFilePath, content)
+}
+
+// syncCookiesFileAfterRestore runs SyncCookiesFile for an import / restore.
+// The settings are already committed, so a failure to write the file is
+// logged rather than failing the whole restore.
+func syncCookiesFileAfterRestore(ctx context.Context, repo *repository.SettingsRepo, ytdlp *downloader.YtDlpService) {
+	if _, err := SyncCookiesFile(ctx, repo, ytdlp); err != nil {
+		log.Printf("settings: syncing the yt-dlp cookies file after a restore failed: %v", err)
+	}
 }
 
 // YtdlpProxy reads the ytdlp_proxy setting, defaulting to "" (disabled) if
@@ -1569,8 +1604,8 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 
 		// Phase 3: the write is committed, so apply the live side effects.
 		applySettingsSideEffects(pending, mgr, ytdlp)
-		if v, ok := pending[models.SettingYtdlpCookiesFile]; ok {
-			if err := writeCookiesFile(ytdlp.CookiesFilePath, v); err != nil {
+		if _, ok := pending[models.SettingYtdlpCookiesFile]; ok {
+			if _, err := SyncCookiesFile(c.Request.Context(), repo, ytdlp); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
