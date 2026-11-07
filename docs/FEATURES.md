@@ -770,6 +770,13 @@ only ever prunes failed rows. Scheduled/automatic backups are always unencrypted
 there's nowhere to type a password unattended — use the plain Export cards above if you need a
 password-protected file to store off-site.
 
+**Pre-migration copies** — separate from everything above: when an update has database migrations to
+apply, Packrat first saves a full copy of the database to `pre-migration/` inside the backups folder
+(`packrat-pre-migration-v<from>-to-v<to>.db`) and keeps the newest 5. They do not appear in Backup
+History, are not counted by its retention, and cannot be restored from this page; they exist for rolling
+back to an older version (README → "Rolling back an update"). If a copy cannot be made, the server stops
+before changing the database instead of migrating without one.
+
 ## Table layouts
 
 Every list table has fixed column widths: columns keep the same width however wide the window is, the table always fills the width

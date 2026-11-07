@@ -143,7 +143,7 @@ func run() error {
 	}
 	defer conn.Close()
 
-	if err := db.Migrate(conn, migrationsDir()); err != nil {
+	if err := db.MigrateWithSnapshot(conn, migrationsDir(), filepath.Join(cfg.BackupsRoot, db.PreMigrationDirName), cfg.SkipPreMigrationBackup); err != nil {
 		return err
 	}
 	log.Println("migrations applied")

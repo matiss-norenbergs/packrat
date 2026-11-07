@@ -155,3 +155,38 @@ func TestRunBackup_FileIsOwnerOnly(t *testing.T) {
 		t.Fatalf("backup mode = %o, want 600", mode)
 	}
 }
+
+// The pre-migration safety copies live in BackupsRoot/pre-migration. Backups are listed and
+// pruned from history rows, never by scanning the directory, so that folder must be left alone
+// by retention even when it is far over the Backup tab limit.
+func TestRunBackup_IgnoresPreMigrationFolder(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	deps := newRunDeps(t, root, 1)
+
+	pre := filepath.Join(root, "pre-migration")
+	if err := os.MkdirAll(pre, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 5; i++ {
+		name := "packrat-pre-migration-v" + strconv.Itoa(i) + "-to-v" + strconv.Itoa(i+1) + ".db"
+		if err := os.WriteFile(filepath.Join(pre, name), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for i := 0; i < 3; i++ {
+		if e, err := RunBackup(ctx, deps, "manual"); err != nil || e.Status != "success" {
+			t.Fatalf("backup %d: %+v %v", i, e, err)
+		}
+	}
+	if s, f := countByStatus(t, deps); s != 1 || f != 0 {
+		t.Fatalf("history has %d success, %d failed; want 1 and 0", s, f)
+	}
+	if n := filesIn(t, pre); n != 5 {
+		t.Fatalf("retention touched the pre-migration folder: %d files left, want 5", n)
+	}
+	if n := filesIn(t, root); n != 2 { // the one kept backup + the pre-migration folder
+		t.Fatalf("%d entries in the backups root, want 2", n)
+	}
+}

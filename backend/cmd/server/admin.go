@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/term"
 
@@ -43,7 +44,7 @@ func runAdmin(args []string) (handled bool, err error) {
 	}
 	defer conn.Close()
 	// Migrate too, so the command works on a database the new version hasn't started against yet.
-	if err := db.Migrate(conn, migrationsDir()); err != nil {
+	if err := db.MigrateWithSnapshot(conn, migrationsDir(), filepath.Join(cfg.BackupsRoot, db.PreMigrationDirName), cfg.SkipPreMigrationBackup); err != nil {
 		return true, err
 	}
 	users := repository.NewUsersRepo(conn)

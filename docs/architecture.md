@@ -338,6 +338,38 @@ and `data/backups` folders).
 Not covered: a database that already has foreign-key violations makes a rebuild fail the check (the error
 names the table); and an interrupted *down* migration is not auto-cleared.
 
+### Pre-migration safety copy
+
+`db.MigrateWithSnapshot` (`internal/db/snapshot.go`) wraps `Migrate` for `cmd/server/main.go` and the
+admin CLI mode (`admin.go`); `Migrate` itself is unchanged, so tests and helpers still call it directly.
+It reads `schema_migrations` and the highest `.up.sql` in the migrations directory. A database with no
+migration applied (new install), a dirty one (`Migrate` reports it) or nothing pending just runs `Migrate`.
+With migrations pending it writes the copy first, then migrates, then prunes.
+
+- **Method:** `VACUUM INTO` on the open connection. A plain file copy of `packrat.db` can miss data that
+  only lives in `-wal`; `VACUUM INTO` is a consistent snapshot of everything committed and works with the
+  single connection. It writes a `.packrat-pre-migration-*.tmp` file in the target folder, fsyncs, then
+  renames it into place, so a crash never leaves a half-written file under a final name (stale temp files
+  are removed on the next copy and removed on any failure).
+- **Where and what:** `<BACKUPS_ROOT>/pre-migration/` (0700), files 0600, named
+  `packrat-pre-migration-v<from>-to-v<to>.db`. The same name is replaced atomically, so a failing migration
+  retried on every boot keeps one file per upgrade instead of pushing good older copies out. Free space of
+  about the database size is checked first (best effort, via gopsutil); otherwise `VACUUM INTO`'s own error
+  is used.
+- **Retention:** the newest `PreMigrationKeep` (5) files by modification time, by count only (no timer),
+  and only names matching `packrat-pre-migration-v<n>-to-v<n>.db` that are regular files. Pruning runs only
+  after `Migrate` succeeds; a failed migration keeps the new copy and all older ones.
+- **Independent of the Backup tab:** Backup history is driven by `backup_history` rows (list, retention,
+  download, restore all resolve the recorded file name under `BACKUPS_ROOT`); nothing scans that directory,
+  so the subfolder is never listed, pruned or restored by it (`TestRunBackup_IgnoresPreMigrationFolder`). The
+  stray-file and import scans walk `MEDIA_ROOT`/`IMAGES_ROOT`, not `BACKUPS_ROOT`.
+- **Failure:** if the copy cannot be made, `Migrate` is not run: a `*db.SnapshotError` is returned (main.go
+  logs it and exits before serving; the admin command prints it and exits non-zero) saying no migration was
+  applied and the database is unchanged, the likely causes and the escape hatch. The old image can still run.
+  `SKIP_PRE_MIGRATION_BACKUP=true` skips the copy with a logged warning (default off).
+- **Not in the copy:** `packrat-secret.key` sits next to the live database and a migration never changes it,
+  so restoring a copy keeps the existing key in place. Rollback steps are in the README.
+
 ## Collection root paths stay under `MEDIA_ROOT`
 
 The original spec's Collections examples show absolute paths (`/media/music`), Sonarr-root-folder

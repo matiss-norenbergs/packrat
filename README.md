@@ -67,7 +67,8 @@ Environment variables (set them in `.env` natively, or under `environment:` in
 | `DB_PATH` | `./data/db/packrat.db` | SQLite database file. |
 | `MEDIA_ROOT` | `./data/media` | Where downloaded media lives (the library's root). |
 | `IMAGES_ROOT` | `./data/images` | Generated thumbnails, artist images and collection covers. |
-| `BACKUPS_ROOT` | `./data/backups` | Automatic and manual backup files. |
+| `BACKUPS_ROOT` | `./data/backups` | Automatic and manual backup files, plus the `pre-migration/` safety copies (see [Rolling back an update](#rolling-back-an-update)). |
+| `SKIP_PRE_MIGRATION_BACKUP` | `false` | `true` applies pending migrations without first copying the database to `BACKUPS_ROOT/pre-migration/`. Only needed if the copy cannot be made (full disk, read-only backups folder). |
 | `CACHE_ROOT` | `./data/cache` | Disposable cache of resized images (rebuilt on demand, swept after 7 days unused). |
 | `MAX_CONCURRENT_DOWNLOADS` | `2` | Parallel downloads. Only seeds a fresh database; Settings → General wins afterwards. |
 | `MAX_CONCURRENT_FFMPEG_TRANSCODES` | `2` | Parallel Trim previews. Same: seeds a fresh database. |
@@ -147,6 +148,29 @@ docker exec <container> /app/packrat --disable-2fa            # clears the secre
 
 The password is never accepted as a command-line argument. Natively, run `packrat --reset-password`
 (or `go run ./cmd/server --reset-password`) with the same environment as the server.
+
+## Rolling back an update
+
+Before it applies pending database migrations, Packrat saves a copy of the database to
+`<BACKUPS_ROOT>/pre-migration/packrat-pre-migration-v<from>-to-v<to>.db` (default
+`data/backups/pre-migration/`), where `<from>` is the schema version before the update. A new
+install, or an update with no new migrations, makes none; the newest 5 are kept. These are not
+the Backup tab's backups (they are not listed there and do not count toward its retention) and are
+whole SQLite databases, so they contain password hashes and encrypted secrets (the folder and files
+are owner-only). If the copy cannot be made the server refuses to start *before* changing anything;
+fix the cause (disk space, permissions on the backups folder) or set `SKIP_PRE_MIGRATION_BACKUP=true`.
+
+To go back to an older image after an update:
+
+1. Stop the container.
+2. Pick the newest `packrat-pre-migration-v<from>-to-v<to>.db` whose `<from>` matches the schema
+   version of the older image you want (the file with the lowest `<from>` that is at or above it,
+   if you skipped versions: it holds the data as of just before that update).
+3. Copy it over `data/db/packrat.db`, and delete `packrat.db-wal` and `packrat.db-shm` next to it.
+4. Start the OLDER image.
+
+Anything done after the update (downloads, settings) is lost with the copy. `packrat-secret.key`
+is not part of the copy and is unchanged by migrations: leave it where it is.
 
 ## Desktop app
 
