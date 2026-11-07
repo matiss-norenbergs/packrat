@@ -300,6 +300,44 @@ the owner after login as the dismissible "N failed login attempts since your las
 password argument) and `--disable-2fa` before the server starts. They open the database from the
 normal config, apply pending migrations, act, exit non-zero on error, and delete **all** sessions.
 
+## Migration runner
+
+`db.Migrate` (`internal/db`) applies `database/migrations` through golang-migrate's sqlite driver with
+`NoTxWrap: true`. That is required: golang-migrate would otherwise wrap each file in a transaction, and
+SQLite's `PRAGMA foreign_keys` is a no-op inside one. A table rebuild (create `X_new`, copy, `DROP TABLE X`,
+rename) must run with foreign keys off, or the implicit `DELETE` of `DROP TABLE` fires `ON DELETE
+CASCADE` / `SET NULL` on every table that references X. Every caller goes through `db.Migrate`: the server,
+the admin commands (`--reset-password`, `--disable-2fa`) and the test helpers. (`scripts/migrate.sh` uses the
+golang-migrate CLI instead and does not know the rebuild marker.)
+
+Plain files are therefore not atomic, so a rebuild that dies partway used to leave a half-rebuilt schema and a
+dirty version row. A file whose first non-empty line is `-- packrat:rebuild` is a **rebuild migration** and is
+run by a `database.Driver` wrapper (`rebuild.go`) on one pinned connection:
+
+1. `PRAGMA foreign_keys = OFF` (outside any transaction), then `BEGIN`;
+2. the file's statements;
+3. `PRAGMA foreign_key_check`, read in Go: any row rolls back and fails the migration, naming the table(s);
+4. `COMMIT`; then `PRAGMA foreign_keys = ON` on every path, including failures, and `ROLLBACK` on any error
+   after `BEGIN`, so the connection never stays with foreign keys off or an open transaction.
+
+A marked file may not contain `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` or `PRAGMA foreign_keys` (trigger bodies
+may use `BEGIN … END`); it is rejected before anything runs. It must recreate the dropped table's indexes and
+triggers itself. Works for `.up.sql` and `.down.sql`. The rules are in `database/migrations/README.md`;
+migrations 000004, 000005 and 000044 predate the marker and were not changed.
+
+**Dirty flag.** golang-migrate marks the target version dirty before running a file. For a marked file the
+wrapper remembers the version before that, and when the file fails (everything rolled back) resets the row to it
+with `dirty = false` and returns the original error, so a retry on the next boot just works. If the process is
+killed instead, the next `Migrate` finds the row dirty at version N; when migration N's up file is marked it was
+transactional, so the schema is at N-1 and the flag is reset (logged) and N is applied again. `Migrate` only
+runs migrations upward, so a dirty row is read as an interrupted up migration. A dirty row at any unmarked
+version is never repaired: the server refuses to start with a `DirtyError` ("database is dirty at migration
+version N: an earlier migration did not finish… restore the database from a backup", pointing at the `data/db`
+and `data/backups` folders).
+
+Not covered: a database that already has foreign-key violations makes a rebuild fail the check (the error
+names the table); and an interrupted *down* migration is not auto-cleared.
+
 ## Collection root paths stay under `MEDIA_ROOT`
 
 The original spec's Collections examples show absolute paths (`/media/music`), Sonarr-root-folder
