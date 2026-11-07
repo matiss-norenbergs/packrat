@@ -23,7 +23,7 @@ server**. If the server revokes the session while the app is open, it drops back
 **Several servers.** The app keeps a list of saved servers ("profiles": a name, an address and when it
 was last used) and talks to one at a time; each profile has its own login, so switching back to a
 server you were signed in to needs no password. The sidebar footer shows the current server's name
-and version; below it a **Desktop** line shows the app's own version (no update dot or link — the
+and version; below it a **Desktop** line shows the app's own version (no update dot; it links to Settings → Desktop — the
 web UI's "Packrat" line, which shows the server version with an update dot and releases link, is
 replaced by it in the app); its menu lists the saved servers (the current one ticked), **Add server…** and **Manage
 servers**. Picking another server reloads the app on it. **Add server…** opens the connect screen
@@ -142,7 +142,9 @@ The landing page. Two cards summarize current state at a glance, followed by cha
 Read-only — it's a summary view, not a control panel. The cog button in the header opens a popover
 with a switch per card (the two summary cards and all six charts); **Save** hides the switched-off
 ones. The choice is stored server-side (`dashboardHiddenWidgets`), so it's the same on every
-device, and hidden cards aren't rendered, so they don't fetch their data. Cards added in future
+device, and hidden cards aren't rendered, so they don't fetch their data — the page waits for the settings
+before showing any card (placeholders in the same layout, cog disabled; no wait when they're already cached from
+another page), and if that request fails it shows every card. Cards added in future
 versions show up by default. Hiding everything shows a hint pointing at the cog.
 
 ## Downloads

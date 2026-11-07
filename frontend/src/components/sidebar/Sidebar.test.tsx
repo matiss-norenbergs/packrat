@@ -19,6 +19,9 @@ beforeEach(() => {
   getVersion.mockReset()
   getVersion.mockResolvedValue("0.18.2")
   mockFetch((url) => {
+    if (url.endsWith("/ytdlp/version")) {
+      return { status: 200, body: { currentVersion: "2026.11.01", updateAvailable: false } }
+    }
     if (url.endsWith("/version")) {
       return { status: 200, body: { version: "1.4.0", latestVersion: "1.5.0", updateAvailable: true } }
     }
@@ -31,6 +34,13 @@ afterEach(() => {
 })
 
 describe("sidebar version row", () => {
+  it("the yt-dlp row opens the yt-dlp settings tab", async () => {
+    desktop = false
+    renderWithProviders(<SidebarContent />)
+    const version = await screen.findByText("v2026.11.01")
+    expect(version.closest("a")).toHaveAttribute("href", "/settings?tab=ytdlp")
+  })
+
   it("web: shows Packrat with the server version, update dot and releases link", async () => {
     desktop = false
     renderWithProviders(<SidebarContent />)
@@ -43,14 +53,13 @@ describe("sidebar version row", () => {
     expect(getVersion).not.toHaveBeenCalled()
   })
 
-  it("desktop: shows Desktop with the app version, no dot and no link", async () => {
+  it("desktop: shows Desktop with the app version, no dot, linking to the Desktop settings tab", async () => {
     desktop = true
     renderWithProviders(<SidebarContent />)
     const version = await screen.findByText("v0.18.2")
-    const row = version.parentElement as HTMLElement
+    const row = version.closest("a") as HTMLElement
     expect(row).toHaveTextContent("Desktop")
-    expect(row.tagName).toBe("DIV")
-    expect(row.closest("a")).toBeNull()
+    expect(row).toHaveAttribute("href", "/settings?tab=desktop")
     expect(row.querySelector(".bg-warning")).toBeNull()
     expect(screen.queryByText("v1.4.0")).not.toBeInTheDocument()
   })

@@ -190,10 +190,13 @@ function DesktopVersionLine() {
   if (!version) return null
 
   return (
-    <div className="flex items-center justify-between px-4 py-1 text-xs text-muted-foreground">
+    <Link
+      to="/settings?tab=desktop"
+      className="flex items-center justify-between px-4 py-1 text-xs text-muted-foreground hover:text-sidebar-foreground"
+    >
       <span>Desktop</span>
       <span>v{version}</span>
-    </div>
+    </Link>
   )
 }
 
@@ -240,7 +243,7 @@ function VersionLine() {
 
   return (
     <Link
-      to="/settings"
+      to="/settings?tab=ytdlp"
       className="flex items-center justify-between px-4 py-1 text-xs text-muted-foreground hover:text-sidebar-foreground"
     >
       <span>yt-dlp</span>

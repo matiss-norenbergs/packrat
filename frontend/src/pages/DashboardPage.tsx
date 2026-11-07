@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DashboardSettingsPopover } from "@/components/dashboard/DashboardSettingsPopover"
@@ -15,9 +16,20 @@ import { formatBytes } from "@/lib/utils"
 const CHART_IDS = ["libraryGrowth", "mediaTypes", "resolutions", "storage", "topArtists", "topTags"]
 
 export function DashboardPage() {
-  const { data: settings } = useSettings()
+  const { data: settings, isLoading } = useSettings()
   const updateSettings = useUpdateSettings()
 
+  // Which cards are hidden lives in the settings, so nothing is mounted until they're known — otherwise
+  // every card would mount (and fetch) first and the hidden ones vanish afterwards. If the settings
+  // request fails, all cards show (no hidden list to apply). With the settings already cached there is
+  // no loading phase at all.
+  //
+  // "Loaded" is sticky: Top Artists / Top Tags also call useSettings(), and mounting them retries a
+  // failed settings query, which puts it back to pending — without this the page would flip between
+  // the skeleton and the cards forever.
+  const [settled, setSettled] = useState(false)
+  if (!isLoading && !settled) setSettled(true)
+  const settingsLoading = isLoading && !settled
   const hiddenWidgets = settings?.dashboardHiddenWidgets ?? []
   const isVisible = (id: string) => !hiddenWidgets.includes(id)
   const showStatCards = isVisible("downloads") || isVisible("library")
@@ -30,31 +42,64 @@ export function DashboardPage() {
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         <DashboardSettingsPopover
           hiddenWidgets={hiddenWidgets}
+          disabled={settingsLoading}
           saving={updateSettings.isPending}
           onSave={(ids) => updateSettings.mutate({ dashboardHiddenWidgets: ids })}
         />
       </div>
-      {allHidden && (
-        <p className="text-sm text-muted-foreground">
-          All dashboard cards are hidden. Use the settings button above to show them again.
-        </p>
+      {settingsLoading ? (
+        <DashboardSkeleton />
+      ) : (
+        <>
+          {allHidden && (
+            <p className="text-sm text-muted-foreground">
+              All dashboard cards are hidden. Use the settings button above to show them again.
+            </p>
+          )}
+          {showStatCards && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {isVisible("downloads") && <DownloadsCard />}
+              {isVisible("library") && <LibraryCard />}
+            </div>
+          )}
+          {showCharts && (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {isVisible("libraryGrowth") && <LibraryGrowthChart />}
+              {isVisible("mediaTypes") && <MediaTypeBreakdownChart />}
+              {isVisible("resolutions") && <ResolutionBreakdownChart />}
+              {isVisible("storage") && <StorageChart />}
+              {isVisible("topArtists") && <TopArtistsChart />}
+              {isVisible("topTags") && <TopTagsChart />}
+            </div>
+          )}
+        </>
       )}
-      {showStatCards && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {isVisible("downloads") && <DownloadsCard />}
-          {isVisible("library") && <LibraryCard />}
-        </div>
-      )}
-      {showCharts && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {isVisible("libraryGrowth") && <LibraryGrowthChart />}
-          {isVisible("mediaTypes") && <MediaTypeBreakdownChart />}
-          {isVisible("resolutions") && <ResolutionBreakdownChart />}
-          {isVisible("storage") && <StorageChart />}
-          {isVisible("topArtists") && <TopArtistsChart />}
-          {isVisible("topTags") && <TopTagsChart />}
-        </div>
-      )}
+    </div>
+  )
+}
+
+// Same grids as the real cards, so nothing jumps when the settings arrive.
+function DashboardSkeleton() {
+  return (
+    <div aria-busy="true" data-testid="dashboard-skeleton" className="space-y-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {[0, 1].map((i) => (
+          <Card key={i}>
+            <CardContent className="pt-6">
+              <Skeleton className="h-28 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {[0, 1, 2, 3].map((i) => (
+          <Card key={i}>
+            <CardContent className="pt-6">
+              <Skeleton className="h-72 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   )
 }
