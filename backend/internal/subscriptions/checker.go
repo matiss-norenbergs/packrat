@@ -374,9 +374,13 @@ func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription
 
 		var libraryItemID *int64
 		actionFailed := false
+		var shutdownErr error
 		if sub.AutoDownload {
 			if _, err := enqueueSubscriptionDownload(ctx, deps, sub, entry); err != nil {
 				actionFailed = true
+				if errors.Is(err, queue.ErrShuttingDown) {
+					shutdownErr = err
+				}
 				// The entry stays recorded (claimed above) with no
 				// library_item_id. That is what makes it show up in Known
 				// Items and what stops every future check from retrying the
@@ -397,9 +401,11 @@ func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription
 			}
 		}
 
-		if actionFailed && ctx.Err() != nil {
+		if actionFailed && (ctx.Err() != nil || shutdownErr != nil) {
 			// The context was cancelled (e.g. "Check now" and the tab
-			// closed): that is not a real failure of this entry. Release the
+			// closed) or the server is shutting down (Enqueue refuses with
+			// ErrShuttingDown): that is not a real failure of this entry.
+			// Release the
 			// claim — on a context that survives the cancellation, and only
 			// while the row has no library item — and stop, so the next
 			// check starts clean for this entry and the rest.
@@ -408,6 +414,9 @@ func processEntries(ctx context.Context, deps CheckDeps, sub models.Subscription
 				log.Printf("subscription %d: releasing claim on entry %q failed: %v", sub.ID, id, err)
 			}
 			cancel()
+			if shutdownErr != nil && ctx.Err() == nil {
+				return newCount, shutdownErr
+			}
 			return newCount, ctx.Err()
 		}
 

@@ -396,6 +396,64 @@ A separate `downloadTimeoutMinutes` setting (0 = no limit) derives each download
 `rootCtx` with a deadline; a run that exceeds it is killed and classified as a timeout-flavored
 failure rather than a generic error.
 
+## Download queue: unbounded FIFO over persisted rows
+
+The `downloads` rows are the source of truth; what waits for a worker is only their *order*, kept by
+`queue.jobQueue` (`queue/jobqueue.go`), an unbounded in-memory FIFO of download ids owned by the
+`DownloadManager`. It replaced a `chan int64` with 100 slots: once 100 ids were waiting, `Enqueue`
+blocked until a worker finished a whole download (hours, potentially) and ignored its context, so a
+200-item bulk request created about 100 rows and then hung until the 2-minute request bound or the
+client gave up, leaving the caller unable to tell what had been queued; at shutdown an in-flight
+`Enqueue` blocked for ever.
+
+- **`Push(id)` never blocks** — a mutex-guarded append (the lock covers slice bookkeeping only, never a DB
+  call or I/O, so it respects the single-connection rule). `Enqueue` therefore returns as soon as the row
+  exists, whatever the queue length, and does not depend on `rootCtx`, so enqueueing before `Start` (tests,
+  the API fixtures) works.
+- **FIFO and wakeups.** A worker calls `Pop(rootCtx, stop)`. If the queue is empty it registers a private
+  one-slot channel in a waiter list *under the same lock that saw "empty"*, then sleeps on it, its `stop`
+  channel (pool shrinking) and `rootCtx`. `Push` appends and hands one token to the oldest waiter. Because
+  "saw empty" and "registered" are one critical section a push cannot fall between them (no lost wakeup),
+  and one push wakes one worker, so with N sleeping workers and M pushes exactly min(N, M) wake. A worker
+  that is woken but loses the item to a worker that was not sleeping just re-registers; a worker that leaves
+  (stop or shutdown) after being handed a token passes it on, so an id never sits unserved next to a sleeping
+  worker. Shrinking the pool keeps queued ids queued for the remaining workers.
+- **`Len()` is the Queued number** of the `queue_update` broadcast (it replaced a separate atomic
+  counter), so "Queued" is always exactly what is waiting.
+- **`Cancel` of a still-queued download** marks the row cancelled *and* removes the id from the FIFO
+  (`Remove`), so the count drops at once and no worker ever pops it. `runOne` still skips a row that is
+  already cancelled when it dequeues it — the safety net for a worker that popped the id just before.
+- **Cancel vs. a worker starting the same download (S4-7).** Cancelling a queued download races with a
+  worker dequeuing it, and the old `runOne` made the start unconditional (`UpdateStatus(...,
+  fetching_metadata)`), so a cancel landing between the worker's "is it cancelled?" check and that write
+  was overwritten and the download ran anyway ("cancelled", then a completed download). Two rules close it:
+  1. `runOne` registers its cancel func in `m.cancels` **first**, and only then makes the start
+     conditional: `DownloadsRepo.MarkFetchingMetadataIfQueued` (`... WHERE id = ? AND status = 'queued'`).
+     Zero rows changed means the download was cancelled (or deleted) after the worker loaded it, so the run
+     is skipped — cancel func and counters released like the early-return path, no subprocess, no history.
+  2. `Cancel`'s not-running branch uses `DownloadsRepo.MarkCancelledIfPending` (`... AND status IN
+     ('queued','fetching_metadata')`) and reports "not cancellable" when it changed nothing (the download
+     already started or finished). The worker's own `MarkCancelled` stays unconditional on purpose: it
+     records a cancelled run from `downloading`/`processing`.
+
+  The order is what makes it airtight. *Cancel before the cancel func is registered:* Cancel finds nothing
+  running, its `MarkCancelledIfPending` lands while the row is still `queued`, and the worker's
+  conditional start changes 0 rows. *Cancel after it is registered:* Cancel takes the running branch and
+  cancels the run context; the worker's start (on that context) fails, and it records the cancel without
+  starting yt-dlp. Redownloads and history retries are `queued` rows like any other, so they take the same
+  path. Tests drive both interleavings deterministically through two unexported hooks on the manager
+  (`hookAfterLoad`, `hookAfterRegister`, nil in production).
+- **Shutdown.** Workers return when `rootCtx` is done. Ids still in the FIFO are simply `queued` rows and
+  are marked `interrupted` at the next startup (see [Crash recovery](#crash-recovery)); nothing tries to
+  run or persist them. While `rootCtx` is done, `Enqueue` returns `queue.ErrShuttingDown` *before*
+  creating a row (a row no worker will ever run would just be interrupted at the next start). The API
+  maps it to `503` (`enqueueErrorStatus`, the bulk endpoints report it as that item's `503`), and the
+  subscription checker treats it like a cancelled context: the entry's claim is released and the check
+  stops, so the upload is picked up again after the restart instead of being left "seen" with no download.
+- **Queued rows are still not durable.** On restart `MarkInterruptedIfActive` marks every active status,
+  `queued` included, as `interrupted`, and the FIFO starts empty. Making the queue survive a restart is a
+  deliberate non-goal here.
+
 ## Data flow (single download, end to end)
 
 URL schemes are enforced in one place, `DownloadManager.Enqueue` (`queue.ErrInvalidURL`, mapped to
@@ -403,7 +461,8 @@ URL schemes are enforced in one place, `DownloadManager.Enqueue` (`queue.ErrInva
 
 1. `POST /downloads` validates the request, resolves the destination folder against `MEDIA_ROOT`
    via `pathsafe.ResolveUnderRoot`, inserts a `queued` row, and pushes the ID onto the queue
-   manager's job channel.
+   manager's in-memory FIFO (see [Download queue](#download-queue-unbounded-fifo-over-persisted-rows));
+   the push never waits for a free worker.
 2. A worker goroutine (one of `maxConcurrentDownloads`) picks up the job, fetches metadata via
    `yt-dlp --dump-json`, then runs the actual download with `--progress-template` emitting
    structured progress lines.
@@ -922,7 +981,8 @@ a configurable retention count after every run.
 On startup, `DownloadsRepo.MarkInterruptedIfActive` scans for rows left in `queued`,
 `fetching_metadata`, `downloading`, or `processing` status (i.e. anything a crashed/restarted
 process was mid-flight on) and marks them `interrupted`. Nothing is silently resumed — the user
-must manually retry from the Downloads or History page.
+must manually retry from the Downloads or History page. That includes `queued` rows: the in-memory FIFO
+is not rebuilt from them (see [Download queue](#download-queue-unbounded-fifo-over-persisted-rows)).
 
 Frame-match rows get the same treatment at startup: `framematch.ResetInterrupted` (called in
 `main.go` right after `MarkInterruptedIfActive`, before `RunQueue` starts) moves every `running` row

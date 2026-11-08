@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/backup"
-	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
@@ -45,18 +44,7 @@ type atomicEnv struct {
 func newAtomicEnv(t *testing.T) *atomicEnv {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	conn, err := db.Open(filepath.Join(t.TempDir(), "packrat_test.db"))
-	if err != nil {
-		t.Fatalf("opening test db: %v", err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	migrationsDir, err := filepath.Abs("../../../database/migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Migrate(conn, migrationsDir); err != nil {
-		t.Fatalf("migrating test db: %v", err)
-	}
+	conn := openMigratedTestDB(t)
 	e := &atomicEnv{
 		t:           t,
 		conn:        conn,

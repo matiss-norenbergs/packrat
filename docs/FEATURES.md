@@ -210,6 +210,13 @@ The live download queue.
   library, and queues a URL (or a video id, for playlists) that appears more than once in the same batch only
   once; the result toast counts those separately ("N duplicate in this batch") and History records them as
   duplicates ("Duplicate within this request").
+- **No queue limit** — any number of downloads can wait for a free slot; queueing is instant. A bulk
+  request of hundreds of URLs (Bulk Download, a playlist, **Retry** on many history entries, **Queue
+  download** on many known subscription items) answers at once with every item queued, however busy the
+  workers are, and the **Queued** count is always exactly the number of downloads waiting. They run
+  strictly in the order they were queued, `Max concurrent downloads` at a time. Cancelling a download that is
+  still queued takes it out of the line immediately and it never starts — even if you cancel at the very
+  moment a free slot picks it up, it ends **Cancelled** and nothing is downloaded.
 - **Queue list** — each row shows a thumbnail, title, status badge, and live progress (percent,
   speed, ETA) while downloading, streamed over WebSocket rather than polled. A failed or
   interrupted row shows its error message inline.
@@ -230,7 +237,10 @@ The live download queue.
 
 If the backend process restarts mid-download, anything left `queued`/`downloading`/etc. is marked
 `interrupted` on the next startup — nothing is silently auto-resumed; retry it manually (from
-Downloads or History).
+Downloads or History). While the server is shutting down it refuses new downloads (`503`, "server is
+shutting down") instead of queuing something that could never run; in a bulk request each item that hit
+this reports it, and a subscription check that hits it stops and picks the upload up again after the
+restart.
 
 ## Library
 

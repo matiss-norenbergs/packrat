@@ -77,7 +77,9 @@ type DownloadManager struct {
 	itemLocks                         *itemlock.Locks      // serializes writes/moves/deletes of an item's media file (package itemlock)
 	embedder                          *metaembed.Scheduler // background metadata remux, run under the item lock
 
-	jobs chan int64
+	// jobs is the unbounded in-memory FIFO of queued download ids waiting for
+	// a worker (see jobQueue). Persisted rows stay the source of truth.
+	jobs *jobQueue
 
 	// rootCtx is the single stable context every runOne call derives its
 	// per-download runCtx from. It is set once in Start and never touched by
@@ -99,7 +101,13 @@ type DownloadManager struct {
 	lastBroadcastAt map[int64]time.Time
 
 	activeCount int32
-	queuedCount int32
+
+	// Test hooks (nil in production) that open the S4-7 race windows in runOne
+	// deterministically: hookAfterLoad runs once the row is loaded and known not
+	// to be cancelled, hookAfterRegister once the cancel func is registered; both
+	// before the conditional queued -> fetching_metadata transition.
+	hookAfterLoad     func(id int64)
+	hookAfterRegister func(id int64)
 }
 
 // maxConcurrentEmbeds caps simultaneous metadata remuxes (each is an ffmpeg
@@ -156,7 +164,7 @@ func NewDownloadManager(
 		jellyfinClient:                    jellyfinClient,
 		progress:                          progress,
 		broadcaster:                       broadcaster,
-		jobs:                              make(chan int64, 100),
+		jobs:                              newJobQueue(),
 		cancels:                           make(map[int64]context.CancelFunc),
 		runGhosts:                         make(map[int64]ghostRun),
 		lastBroadcastAt:                   make(map[int64]time.Time),
@@ -198,15 +206,11 @@ func (m *DownloadManager) Start(ctx context.Context, workerCount int) {
 
 func (m *DownloadManager) worker(stop <-chan struct{}) {
 	for {
-		select {
-		case <-stop:
-			return
-		case <-m.rootCtx.Done():
-			return
-		case id := <-m.jobs:
-			atomic.AddInt32(&m.queuedCount, -1)
-			m.runOne(m.rootCtx, id)
+		id, ok := m.jobs.Pop(m.rootCtx, stop)
+		if !ok {
+			return // pool shrank or the server is shutting down
 		}
+		m.runOne(m.rootCtx, id)
 	}
 }
 
@@ -243,21 +247,37 @@ func (m *DownloadManager) WorkerCount() int {
 	return len(m.workerStops)
 }
 
-// Enqueue creates a queued download row and schedules it for a worker.
+// Enqueue creates a queued download row and schedules it for a worker. It
+// never waits for a free worker: the id goes onto an unbounded FIFO and the
+// call returns, whatever the queue length. While the server is shutting down
+// it refuses with ErrShuttingDown instead of creating a row no worker will
+// ever run.
 func (m *DownloadManager) Enqueue(ctx context.Context, d models.Download) (int64, error) {
 	if !IsHTTPURL(d.URL) {
 		return 0, ErrInvalidURL
+	}
+	if m.shuttingDown() {
+		return 0, ErrShuttingDown
 	}
 	d.Status = models.StatusQueued
 	id, err := m.downloadsRepo.Create(ctx, &d)
 	if err != nil {
 		return 0, err
 	}
-	atomic.AddInt32(&m.queuedCount, 1)
-	m.jobs <- id
+	m.jobs.Push(id)
 	m.broadcastQueueUpdate()
 	return id, nil
 }
+
+// shuttingDown reports whether Start's context has been cancelled. Before Start
+// (tests) there is no root context and the manager is not shutting down.
+func (m *DownloadManager) shuttingDown() bool {
+	return m.rootCtx != nil && m.rootCtx.Err() != nil
+}
+
+// ErrShuttingDown is returned by Enqueue once the server has begun shutting
+// down; the API maps it to 503.
+var ErrShuttingDown = errors.New("server is shutting down; try again once it is back")
 
 // ErrInvalidURL is returned by Enqueue for a URL that is not an absolute
 // http(s) URL. Enqueue is the single place URL schemes are enforced.
@@ -291,9 +311,22 @@ func (m *DownloadManager) Cancel(ctx context.Context, id int64) error {
 	if d.Status != models.StatusQueued && d.Status != models.StatusFetchingMetadata {
 		return fmt.Errorf("download %d is not cancellable in status %q", id, d.Status)
 	}
-	if err := m.downloadsRepo.MarkCancelled(ctx, id); err != nil {
+	// Conditional: a worker may have started or finished the download since
+	// the Get above. Whoever changes the row first wins; if that was not us the
+	// download is no longer cancellable. (If it was a worker that registered its
+	// cancel func in the meantime, runOne's own conditional start sees our
+	// cancelled row and skips the run.)
+	cancelled, err := m.downloadsRepo.MarkCancelledIfPending(ctx, id)
+	if err != nil {
 		return err
 	}
+	if !cancelled {
+		return fmt.Errorf("download %d is not cancellable: it already started or finished", id)
+	}
+	// Take it out of the FIFO now so the Queued count drops at once and no
+	// worker ever pops it. If a worker already did, runOne's cancelled-status
+	// check is the safety net.
+	m.jobs.Remove(id)
 	m.broadcastQueueUpdate()
 	return nil
 }
@@ -306,6 +339,9 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	}
 	if d.Status == models.StatusCancelled {
 		return // cancelled while still queued, nothing to do
+	}
+	if m.hookAfterLoad != nil {
+		m.hookAfterLoad(id)
 	}
 
 	// A configured timeout (0 = disabled, the default) wraps the whole run —
@@ -328,9 +364,43 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	} else {
 		runCtx, cancel = context.WithCancel(parentCtx)
 	}
+	// Register the cancel func BEFORE the conditional queued -> fetching_metadata
+	// transition below. A concurrent Cancel then either sees it (running branch:
+	// it calls cancel, and the transition below fails or is followed by a
+	// cancelled run) or finds none, in which case its MarkCancelledIfPending
+	// has landed (or lands) while the row is still queued and the conditional
+	// transition changes 0 rows. Either way the download ends cancelled and is
+	// never started; the old unconditional UpdateStatus could overwrite a
+	// concurrent cancel with fetching_metadata and download anyway (S4-7).
 	m.mu.Lock()
 	m.cancels[id] = cancel
 	m.mu.Unlock()
+	releaseCancel := func() {
+		m.mu.Lock()
+		delete(m.cancels, id)
+		m.mu.Unlock()
+		cancel()
+	}
+	if m.hookAfterRegister != nil {
+		m.hookAfterRegister(id)
+	}
+
+	started, err := m.downloadsRepo.MarkFetchingMetadataIfQueued(runCtx, id)
+	switch {
+	case err != nil && runCtx.Err() != nil:
+		// Cancelled (or timed out) before it began: record it like any other
+		// cancelled run, without ever starting the subprocess.
+		m.finishError(parentCtx, runCtx, id, d.URL, runCtx.Err().Error(), "", "")
+		releaseCancel()
+		return
+	case err != nil:
+		log.Printf("queue: update status failed for %d: %v", id, err)
+	case !started:
+		// Cancelled (or deleted) after this worker loaded the row: nothing to
+		// run, and nothing to record — Cancel already wrote the outcome.
+		releaseCancel()
+		return
+	}
 
 	atomic.AddInt32(&m.activeCount, 1)
 	defer func() {
@@ -346,10 +416,6 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		m.lastBroadcastMu.Unlock()
 		m.broadcastQueueUpdate()
 	}()
-
-	if err := m.downloadsRepo.UpdateStatus(runCtx, id, models.StatusFetchingMetadata, nil); err != nil {
-		log.Printf("queue: update status failed for %d: %v", id, err)
-	}
 
 	var meta *downloader.Metadata
 	if d.DownloadType == "image" {
@@ -1766,7 +1832,7 @@ func (m *DownloadManager) onProgress(id int64, ev downloader.ProgressEvent) {
 func (m *DownloadManager) broadcastQueueUpdate() {
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventQueueUpdate, Payload: ws.QueueUpdatePayload{
 		Active: int(atomic.LoadInt32(&m.activeCount)),
-		Queued: int(atomic.LoadInt32(&m.queuedCount)),
+		Queued: m.jobs.Len(),
 	}})
 }
 

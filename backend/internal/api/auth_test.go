@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/config"
-	"packrat/backend/internal/db"
 	"packrat/backend/internal/ratelimit"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/sysevents"
@@ -49,18 +47,7 @@ func (c *testClock) advance(d time.Duration) { c.t = c.t.Add(d) }
 func newAuthTestEnv(t *testing.T) *authTestEnv {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	conn, err := db.Open(filepath.Join(t.TempDir(), "packrat_test.db"))
-	if err != nil {
-		t.Fatalf("opening test db: %v", err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	migrationsDir, err := filepath.Abs("../../../database/migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Migrate(conn, migrationsDir); err != nil {
-		t.Fatalf("migrating test db: %v", err)
-	}
+	conn := openMigratedTestDB(t)
 	users := repository.NewUsersRepo(conn)
 	clock := &testClock{t: time.Now()}
 	deps := NewAuthDeps(users, twofactor.NewCrypto([]byte("test-key")), clock.now)

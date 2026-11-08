@@ -34,6 +34,7 @@ import (
 // been downloaded" and the path, and writes nothing.
 const fakeYtDlp = `#!/bin/sh
 dir=$(dirname "$0")
+echo "$@" >> "$dir/calls.log"
 url=""; meta=""; prev=""; out=""; force=""
 for a in "$@"; do
   [ "$a" = "--dump-single-json" ] && meta=1
