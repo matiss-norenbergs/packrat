@@ -215,7 +215,8 @@ The live download queue.
   download** on many known subscription items) answers at once with every item queued, however busy the
   workers are, and the **Queued** count is always exactly the number of downloads waiting. They run
   strictly in the order they were queued, `Max concurrent downloads` at a time. Cancelling a download that is
-  still queued takes it out of the line immediately and it never starts.
+  still queued takes it out of the line immediately and it never starts — even if you cancel at the very
+  moment a free slot picks it up, it ends **Cancelled** and nothing is downloaded.
 - **Queue list** — each row shows a thumbnail, title, status badge, and live progress (percent,
   speed, ETA) while downloading, streamed over WebSocket rather than polled. A failed or
   interrupted row shows its error message inline.

@@ -197,6 +197,49 @@ func (r *DownloadsRepo) MarkCancelled(ctx context.Context, id int64) error {
 	return checkRowsAffected(res)
 }
 
+// MarkCancelledIfPending cancels a download only while it is still waiting to
+// run (queued or fetching_metadata), and reports whether it did. It is the
+// conditional form Cancel uses for a download no worker owns: a worker that
+// has already moved the row on (or finished it) wins, and the caller reports
+// the download as no longer cancellable. MarkCancelled stays unconditional
+// because the worker itself records a cancelled run from downloading /
+// processing.
+func (r *DownloadsRepo) MarkCancelledIfPending(ctx context.Context, id int64) (bool, error) {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE downloads SET status = ?, completed_at = datetime('now'), updated_at = datetime('now')
+		WHERE id = ? AND status IN (?, ?)`,
+		models.StatusCancelled, id, models.StatusQueued, models.StatusFetchingMetadata,
+	)
+	if err != nil {
+		return false, fmt.Errorf("marking download cancelled: %w", err)
+	}
+	return changed(res)
+}
+
+// MarkFetchingMetadataIfQueued is the worker's queued -> fetching_metadata
+// transition. It changes the row only while it is still `queued` and reports
+// whether it did: 0 rows means the download was cancelled (or deleted) after
+// the worker loaded it, and the worker must not start it.
+func (r *DownloadsRepo) MarkFetchingMetadataIfQueued(ctx context.Context, id int64) (bool, error) {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE downloads SET status = ?, updated_at = datetime('now') WHERE id = ? AND status = ?`,
+		models.StatusFetchingMetadata, id, models.StatusQueued,
+	)
+	if err != nil {
+		return false, fmt.Errorf("starting download: %w", err)
+	}
+	return changed(res)
+}
+
+// changed reports whether an UPDATE touched at least one row.
+func changed(res sql.Result) (bool, error) {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 // SetGhostLibraryItem records the library row a download is filling in (see
 // models.Download.GhostLibraryItemID).
 func (r *DownloadsRepo) SetGhostLibraryItem(ctx context.Context, id, libraryItemID int64) error {

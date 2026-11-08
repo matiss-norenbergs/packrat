@@ -96,3 +96,94 @@ func TestDownloadsRepo_GenerateNFO(t *testing.T) {
 		t.Fatalf("expected GenerateNFO to default to false when unset, got %+v", off)
 	}
 }
+
+func newDownloadIn(t *testing.T, repo *DownloadsRepo, status models.DownloadStatus) int64 {
+	t.Helper()
+	id, err := repo.Create(context.Background(), &models.Download{URL: "https://example.com/x", DownloadType: "video", Quality: "best", Status: status})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// The worker's queued -> fetching_metadata transition only changes a row that is
+// still queued; anything else (a concurrent cancel, a missing row) changes 0 rows.
+func TestDownloadsRepo_MarkFetchingMetadataIfQueued(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestDB(t)
+
+	t.Run("queued row moves on", func(t *testing.T) {
+		id := newDownloadIn(t, repo, models.StatusQueued)
+		ok, err := repo.MarkFetchingMetadataIfQueued(ctx, id)
+		if err != nil || !ok {
+			t.Fatalf("ok=%v err=%v, want true,nil", ok, err)
+		}
+		if d, _ := repo.Get(ctx, id); d.Status != models.StatusFetchingMetadata {
+			t.Fatalf("status = %q", d.Status)
+		}
+		// A second call finds it no longer queued.
+		if ok, err := repo.MarkFetchingMetadataIfQueued(ctx, id); err != nil || ok {
+			t.Fatalf("second call ok=%v err=%v, want false,nil", ok, err)
+		}
+	})
+	for _, st := range []models.DownloadStatus{models.StatusCancelled, models.StatusDownloading, models.StatusCompleted, models.StatusFailed, models.StatusInterrupted} {
+		t.Run("leaves a "+string(st)+" row alone", func(t *testing.T) {
+			id := newDownloadIn(t, repo, st)
+			ok, err := repo.MarkFetchingMetadataIfQueued(ctx, id)
+			if err != nil || ok {
+				t.Fatalf("ok=%v err=%v, want false,nil", ok, err)
+			}
+			if d, _ := repo.Get(ctx, id); d.Status != st {
+				t.Fatalf("status changed to %q", d.Status)
+			}
+		})
+	}
+	t.Run("missing row", func(t *testing.T) {
+		if ok, err := repo.MarkFetchingMetadataIfQueued(ctx, 987654); err != nil || ok {
+			t.Fatalf("ok=%v err=%v, want false,nil", ok, err)
+		}
+	})
+}
+
+// Cancel's not-running branch only cancels a download that is still waiting to
+// run; a row a worker has moved on or finished is left untouched.
+func TestDownloadsRepo_MarkCancelledIfPending(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestDB(t)
+
+	for _, st := range []models.DownloadStatus{models.StatusQueued, models.StatusFetchingMetadata} {
+		t.Run("cancels a "+string(st)+" row", func(t *testing.T) {
+			id := newDownloadIn(t, repo, st)
+			ok, err := repo.MarkCancelledIfPending(ctx, id)
+			if err != nil || !ok {
+				t.Fatalf("ok=%v err=%v, want true,nil", ok, err)
+			}
+			d, _ := repo.Get(ctx, id)
+			if d.Status != models.StatusCancelled || d.CompletedAt == nil {
+				t.Fatalf("row = %+v, want cancelled with completed_at", d)
+			}
+		})
+	}
+	for _, st := range []models.DownloadStatus{models.StatusDownloading, models.StatusProcessing, models.StatusCompleted, models.StatusFailed, models.StatusCancelled, models.StatusInterrupted} {
+		t.Run("leaves a "+string(st)+" row alone", func(t *testing.T) {
+			id := newDownloadIn(t, repo, st)
+			ok, err := repo.MarkCancelledIfPending(ctx, id)
+			if err != nil || ok {
+				t.Fatalf("ok=%v err=%v, want false,nil", ok, err)
+			}
+			if d, _ := repo.Get(ctx, id); d.Status != st {
+				t.Fatalf("status changed to %q", d.Status)
+			}
+		})
+	}
+	// The worker's own unconditional MarkCancelled still records a running cancel.
+	t.Run("MarkCancelled still cancels a downloading row", func(t *testing.T) {
+		id := newDownloadIn(t, repo, models.StatusDownloading)
+		if err := repo.MarkCancelled(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		if d, _ := repo.Get(ctx, id); d.Status != models.StatusCancelled {
+			t.Fatalf("status = %q", d.Status)
+		}
+	})
+}

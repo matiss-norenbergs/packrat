@@ -423,6 +423,26 @@ client gave up, leaving the caller unable to tell what had been queued; at shutd
 - **`Cancel` of a still-queued download** marks the row cancelled *and* removes the id from the FIFO
   (`Remove`), so the count drops at once and no worker ever pops it. `runOne` still skips a row that is
   already cancelled when it dequeues it — the safety net for a worker that popped the id just before.
+- **Cancel vs. a worker starting the same download (S4-7).** Cancelling a queued download races with a
+  worker dequeuing it, and the old `runOne` made the start unconditional (`UpdateStatus(...,
+  fetching_metadata)`), so a cancel landing between the worker's "is it cancelled?" check and that write
+  was overwritten and the download ran anyway ("cancelled", then a completed download). Two rules close it:
+  1. `runOne` registers its cancel func in `m.cancels` **first**, and only then makes the start
+     conditional: `DownloadsRepo.MarkFetchingMetadataIfQueued` (`... WHERE id = ? AND status = 'queued'`).
+     Zero rows changed means the download was cancelled (or deleted) after the worker loaded it, so the run
+     is skipped — cancel func and counters released like the early-return path, no subprocess, no history.
+  2. `Cancel`'s not-running branch uses `DownloadsRepo.MarkCancelledIfPending` (`... AND status IN
+     ('queued','fetching_metadata')`) and reports "not cancellable" when it changed nothing (the download
+     already started or finished). The worker's own `MarkCancelled` stays unconditional on purpose: it
+     records a cancelled run from `downloading`/`processing`.
+
+  The order is what makes it airtight. *Cancel before the cancel func is registered:* Cancel finds nothing
+  running, its `MarkCancelledIfPending` lands while the row is still `queued`, and the worker's
+  conditional start changes 0 rows. *Cancel after it is registered:* Cancel takes the running branch and
+  cancels the run context; the worker's start (on that context) fails, and it records the cancel without
+  starting yt-dlp. Redownloads and history retries are `queued` rows like any other, so they take the same
+  path. Tests drive both interleavings deterministically through two unexported hooks on the manager
+  (`hookAfterLoad`, `hookAfterRegister`, nil in production).
 - **Shutdown.** Workers return when `rootCtx` is done. Ids still in the FIFO are simply `queued` rows and
   are marked `interrupted` at the next startup (see [Crash recovery](#crash-recovery)); nothing tries to
   run or persist them. While `rootCtx` is done, `Enqueue` returns `queue.ErrShuttingDown` *before*

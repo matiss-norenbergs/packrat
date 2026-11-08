@@ -447,7 +447,9 @@ nothing changes. `POST /api/downloads/playlist` returns the same shape.
 
 ### `POST /api/downloads/:id/cancel` — no body
 
-`204` on success. `404` unknown id, `409` if it's not in a cancellable state.
+`204` on success. `404` unknown id, `409` if it's not in a cancellable state — including when the
+download started or finished between the check and the cancel (a queued download is cancelled only while
+it is still queued, so it can never be cancelled *and* run).
 
 ### `POST /api/downloads/bulk-delete`
 
