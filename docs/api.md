@@ -12,6 +12,55 @@ since Gin matches registered routes before falling back to serving `index.html`.
 `404` `{"error": "not found"}` (never the app shell); unknown `/media-files/*`, `/local-images/*`
 and `/ws/*` paths answer a plain `404`.
 
+## Bulk endpoints
+
+Several actions only exist as `POST .../bulk-<action>` endpoints that take a list. There is no
+single-item twin: a single-item action in the UI sends a list with **one** element to the same
+endpoint. Rules shared by every one of them:
+
+- **Cap.** At most **1000** ids / items per request; more is `400`. An empty list is `400`, as is a
+  malformed body. Duplicate ids are dropped silently (except `POST /api/library/bulk-update`, where a
+  duplicate id is a `400`: the two changes would be ambiguous).
+- **All-or-nothing** endpoints (deletes, gallery favorite/delete, entry seen/unlink) run in **one
+  transaction**. Ids that do not exist are ignored (deleting something already gone is a success), and
+  the response counts what really changed: `{"deleted": N}` or `{"updated": N}`. When something is
+  *blocked*, nothing changes and the answer is `409 {"error": "...", "blockedIds": [ ... ]}`. Files
+  (backups, gallery images) are removed only after the commit, best effort.
+- **Per-item-result** endpoints (`library/bulk-update`, `history/bulk-retry`,
+  `subscriptions/:id/entries/bulk-add`) process each item independently, in request order, because the
+  work includes disk renames, remux scheduling or enqueueing that a transaction cannot undo. The HTTP
+  status is `200` whenever the request itself is valid:
+  ```json
+  { "results": [ { "id": 5, "ok": true }, { "id": 7, "ok": false, "status": 409, "error": "..." } ],
+    "succeeded": 1, "failed": 1 }
+  ```
+  A failing item does not stop the rest. A success may carry `downloadId` (the queued download) or
+  `libraryItemId` (the created ghost). For the entry endpoint `id` is the entry's source id (a string).
+  The loop runs on a context that survives the client disconnecting (bounded to 2 minutes), so closing
+  the tab cannot leave half a batch undone and unreported.
+
+### Replaced single-item endpoints
+
+**Breaking change:** the single-item endpoints below were removed (they now answer `404`). Scripts
+must use the bulk endpoint with a one-element list.
+
+| Removed | Use instead |
+|---|---|
+| `DELETE /api/downloads/:id` | `POST /api/downloads/bulk-delete` `{"ids":[..]}` |
+| `PATCH /api/library/:id` | `POST /api/library/bulk-update` `{"items":[{"id":1,"changes":{..}}]}` |
+| `DELETE /api/history/:id` | `POST /api/history/bulk-delete` `{"ids":[..]}` |
+| `POST /api/history/:id/retry` | `POST /api/history/bulk-retry` `{"ids":[..]}` |
+| `DELETE /api/subscriptions/:id` | `POST /api/subscriptions/bulk-delete` `{"ids":[..]}` |
+| `POST /api/subscriptions/:id/entries/:sourceId/add` | `POST /api/subscriptions/:id/entries/bulk-add` `{"sourceIds":[..],"mode":".."}` |
+| `POST /api/subscriptions/:id/entries/:sourceId/seen` | `POST /api/subscriptions/:id/entries/bulk-seen` `{"sourceIds":[..]}` |
+| `POST /api/subscriptions/:id/entries/:sourceId/unlink` | `POST /api/subscriptions/:id/entries/bulk-unlink` `{"sourceIds":[..]}` |
+| `DELETE /api/backup/history/:id` | `POST /api/backup/history/bulk-delete` `{"ids":[..]}` |
+| `PATCH /api/library/:id/thumbnail/gallery/:galleryId` | `POST /api/library/:id/thumbnail/gallery/bulk-favorite` `{"galleryIds":[..],"isFavorite":true}` |
+| `DELETE /api/library/:id/thumbnail/gallery/:galleryId` | `POST /api/library/:id/thumbnail/gallery/bulk-delete` `{"galleryIds":[..]}` |
+
+Unchanged: `POST .../entries/:sourceId/link`, `POST /api/subscriptions/:id/check`, saving to and applying
+from the thumbnail gallery, `POST /api/history/clear`, `POST /api/downloads/clear-log`.
+
 ## Auth and CSRF
 
 - **Session**: an opaque 64-char hex token in cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`,
@@ -199,7 +248,7 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
 | POST | `/api/downloads/playlist` | Queue a playlist URL — server expands entries |
 | POST | `/api/downloads/batch` | Queue many independent URLs in one call |
 | POST | `/api/downloads/:id/cancel` | Cancel a queued/in-flight download |
-| DELETE | `/api/downloads/:id` | Remove a terminal download's queue-history row |
+| POST | `/api/downloads/bulk-delete` | Remove terminal downloads' queue-history rows (all-or-nothing) |
 | POST | `/api/downloads/clear-log` | Delete every terminal download row now |
 
 ### `POST /api/downloads` — body
@@ -391,11 +440,16 @@ nothing changes. `POST /api/downloads/playlist` returns the same shape.
 
 `204` on success. `404` unknown id, `409` if it's not in a cancellable state.
 
-### `DELETE /api/downloads/:id` — no body
+### `POST /api/downloads/bulk-delete`
 
-Removes the download's history row — distinct from cancel, which stops an in-flight job. Only
-terminal-status rows can be deleted; an active row is `409 {"error":"cancel this download before deleting it"}`.
-`404` unknown, `204` on success.
+```json
+{ "ids": [1, 2, 3] }
+```
+
+Removes the downloads' log rows — distinct from cancel, which stops an in-flight job. All-or-nothing
+(see [Bulk endpoints](#bulk-endpoints)): if any listed download is in an active status nothing is deleted
+and the answer is `409 {"error":"cancel these downloads before deleting them","blockedIds":[4]}`.
+Unknown ids are ignored. `200 {"deleted": <rows really removed>}`.
 
 ### `POST /api/downloads/clear-log` — no body
 
@@ -540,25 +594,33 @@ original), `thumbnail-gallery/<id>/` and `frame-match/<queueId>/` for each of it
 rows. Files are only touched after the DB delete succeeds. A queued/running download that is filling the
 item in (`activeDownloadId`) is cancelled first. `404` unknown, `204` on success.
 
-### `PATCH /api/library/:id` — partial merge (fields omitted are left untouched)
+### `POST /api/library/bulk-update` — partial merge per item (fields omitted are left untouched)
 
 ```json
-{ "title": "New Title", "artistId": 3, "year": 2023, "tags": ["music", "live"] }
+{ "items": [ { "id": 7, "changes": { "title": "New Title", "artistId": 3, "year": 2023, "tags": ["music", "live"] } } ] }
 ```
 
-All fields optional: `title`, `filename`, `uploader`, `description`, `duration`, `resolution`,
-`artistId` (`0` explicitly clears it — distinct from omitting the field), `year`,
-`sequenceNumber`, `seasonNumber`, `generateNfo`, `originalUrl`, `tags` (whole-array **replace**,
-not merge, when present — creates missing tag names). Side effects:
+Replaces `PATCH /api/library/:id`; a single edit is a one-element list. Per-item results (see
+[Bulk endpoints](#bulk-endpoints)); `400` for an empty list, more than 1000 items, or a duplicate id.
 
-- `filename` set → renames the media file and its thumbnail on disk (sanitized; `400` if that
-  yields an empty name).
-- Changing `title`/`artistId`/`year`/`sequenceNumber`/`seasonNumber` triggers a **background**
-  `ffmpeg -c copy` remux that re-embeds those tags into the file's own container metadata — the
-  response returns immediately, the remux failure (if any) is logged only.
-- If `generateNfo` is on (or just turned on) and any NFO-relevant field changed, the `.nfo`
-  sidecar is rewritten in sync, best-effort.
-- `204 No Content` on success.
+Every `changes` field is optional and means what it did on the old PATCH: `title`, `filename`,
+`uploader`, `description`, `duration`, `resolution`, `artistId` (`0` explicitly clears it — distinct from
+omitting the field), `year`, `sequenceNumber`, `seasonNumber` (`0` clears these three too),
+`generateNfo`, `originalUrl`, `tags` (whole-array **replace**, not merge, when present — creates missing
+tag names). Per item:
+
+- an item with an active download fails with status `409` "a download is already in progress for this
+  item"; an unknown id fails with `404`.
+- `filename` set → takes the item lock, renames the media file and its thumbnail on disk (sanitized;
+  status `400` if that yields an empty name, `409` if the target exists). A busy item (a remux or other
+  file operation holds it) fails with `409` and the usual "This item is being updated. Try again in a
+  moment." without aborting the other items.
+- Changing `title`/`artistId`/`year`/`sequenceNumber`/`seasonNumber` submits one **background**
+  `ffmpeg -c copy` remux per item to the coalescing scheduler that re-embeds those tags into the file's
+  own container metadata — failures are logged only.
+- If `generateNfo` is on (or just turned on) and any NFO-relevant field changed, the `.nfo` sidecar is
+  rewritten in sync, best-effort.
+- Each item's database writes are the same separate statements as before (not one batch transaction).
 
 ### `POST /api/library/bulk-tags`
 
@@ -627,10 +689,10 @@ item.
 
 While an item has a queued/running download (`activeDownloadId` is set) every single-item route that
 changes the item or its files answers **`409 {"error": "a download is already in progress for this
-item"}`**: `PATCH /library/:id`, `DELETE .../file`, `POST .../move`, `.../refresh-metadata`,
+item"}`**: `DELETE .../file`, `POST .../move`, `.../refresh-metadata`,
 `.../trim/accept`, `POST/DELETE .../thumbnail`, `.../thumbnail/redownload`, `.../thumbnail/quick-grab`,
-`POST .../thumbnail/gallery`, `.../thumbnail/gallery/:galleryId/apply`, `PATCH/DELETE
-.../thumbnail/gallery/:galleryId`, `.../thumbnail/match`, `POST/DELETE .../nfo`, `POST .../redownload`,
+`POST .../thumbnail/gallery`, `.../thumbnail/gallery/:galleryId/apply`, `POST
+.../thumbnail/gallery/bulk-favorite` and `.../bulk-delete` (the whole request), `.../thumbnail/match`, `POST/DELETE .../nfo`, `POST .../redownload`,
 `.../redownload/from-url`, plus `POST /thumbnail-enhancement/items/:id/revert` and `DELETE
 /thumbnail-enhancement/items/:id/original`. Reads, `POST .../progress` and `DELETE /library/:id` (which
 cancels the download) are unaffected. The multi-item endpoints skip such items instead of failing (see
@@ -642,10 +704,10 @@ Editing title/artist/year/season/sequence starts a background ffmpeg remux that 
 file's tags; it can run for minutes on a large file. While it (or another file operation on the same
 item) runs, a request that would write, move or delete that file answers **`409 {"error": "This item
 is being updated. Try again in a moment."}`** and changes nothing: `POST .../move`,
-`POST .../trim/accept`, `DELETE .../file`, `PATCH /library/:id` **when the body contains `filename`**,
+`POST .../trim/accept`, `DELETE .../file`, an item of `POST /library/bulk-update` **whose `changes` contain `filename`** (that item alone fails; the others still run),
 `DELETE /library/:id?deleteFiles=true`, and the bulk `POST /library/bulk-delete` (with
-`deleteFiles: true`) and `POST /library/bulk-delete-file`. The bulk endpoints are all-or-nothing: one
-busy item refuses the whole request. Requests never wait for the remux. Several `PATCH` saves of one item
+`deleteFiles: true`) and `POST /library/bulk-delete-file`. Those two bulk endpoints are all-or-nothing: one
+busy item refuses the whole request. Requests never wait for the remux. Several edits of one item
 while a remux runs are coalesced into one follow-up remux with the latest values. This is separate from
 the active-download `409` above.
 
@@ -856,11 +918,15 @@ re-extracting/re-fetching. Cascade-deleted with the library item.
   clears any stale AI-enhancement backup; for an image item only the tiers change, as for
   `POST .../thumbnail`). `400` item has no media file, or `galleryId` belongs to a
   different item; `404` unknown gallery id/item. `200` with the full updated library item.
-- **`PATCH /api/library/:id/thumbnail/gallery/:galleryId`** — body `{ "isFavorite": true }`.
-  `400` belongs to a different item, `404` unknown id, `200` with the updated gallery image.
-- **`DELETE /api/library/:id/thumbnail/gallery/:galleryId`** — removes the saved image; doesn't
-  touch the active thumbnail. `400` belongs to a different item, `404` unknown id, `204` on
-  success.
+- **`POST /api/library/:id/thumbnail/gallery/bulk-favorite`** — body
+  `{ "galleryIds": [12, 13], "isFavorite": true }`. All-or-nothing: a gallery id that belongs to a
+  different item **or does not exist** fails the whole request with `400 {"error": "...",
+  "invalidIds": [..]}` and changes nothing. `200 {"updated": <n>}`.
+- **`POST /api/library/:id/thumbnail/gallery/bulk-delete`** — body `{ "galleryIds": [12, 13] }`.
+  Removes the saved images (rows in one transaction, files after the commit, best effort); doesn't touch
+  the active thumbnail. A gallery id that belongs to a different item fails the whole request with
+  `400 {"error": "...", "invalidIds": [..]}`; ids that do not exist are ignored. `200 {"deleted": <n>}`.
+  Both answer `409` (the whole request) while the item has an active download.
 
 ### Frame matching
 
@@ -1355,7 +1421,7 @@ while already running is a harmless no-op. `finishedAt` stays `null` while `runn
 | GET | `/api/backup/history/:id/download` | Download a backup-history file |
 | GET | `/api/backup/history/:id/preview` | Read-only content summary of a history-resident backup |
 | POST | `/api/backup/history/:id/restore` | Restore a full backup already sitting in history |
-| DELETE | `/api/backup/history/:id` | Delete a backup-history row (+ best-effort unlink its file) |
+| POST | `/api/backup/history/bulk-delete` | Delete backup-history rows (+ best-effort unlink their files after the commit) |
 
 Three envelope `kind`s exist: `"settings"`, `"library"`, and `"full"` (settings + library
 combined — the shape "Run Backup Now" and the scheduler produce). The Settings and Library import
@@ -1530,8 +1596,9 @@ password unattended) — use the plain Export cards above for a password-protect
   ```json
   { "settingsApplied": 23, "library": { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 11, "ghostsCreated": 1 } }
   ```
-- **`DELETE /api/backup/history/:id`** — `404` unknown, `204` on success. Also best-effort deletes
-  the file on disk.
+- **`POST /api/backup/history/bulk-delete`** — body `{ "ids": [41, 40] }`. The rows are deleted in one
+  transaction; after the commit the backup files are removed best effort (a failure is logged).
+  Unknown ids are ignored. `200 {"deleted": <n>}`.
 - Old backups are pruned automatically after every run, keeping the most recent N **successful**
   ones (setting `backupRetentionCount`, default 14, `0` = unlimited). Failed history rows are
   capped separately at the newest 20 (always, even when unlimited); a failed run only prunes
@@ -1584,8 +1651,8 @@ A permanent record of every download attempt, independent of the live Downloads 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/history` | List all history entries |
-| POST | `/api/history/:id/retry` | Re-queue from a history entry |
-| DELETE | `/api/history/:id` | Delete one entry |
+| POST | `/api/history/bulk-retry` | Re-queue from history entries (per-item results) |
+| POST | `/api/history/bulk-delete` | Delete entries (all-or-nothing) |
 | POST | `/api/history/clear` | Delete every entry now |
 
 `GET /api/history` — no params:
@@ -1606,15 +1673,19 @@ video id, and identifiers derived from the URL (path segments, query values) are
 same hash inside `errorMessage`. Credentials in URLs (`user:pass@`)
 are masked in `errorMessage` regardless of the setting.
 
-`POST /api/history/:id/retry` — no body. Re-queues from the entry's URL, reusing the original
+`POST /api/history/bulk-retry` — body `{ "ids": [9, 10] }`. Per-item results (see
+[Bulk endpoints](#bulk-endpoints)); each success carries `"downloadId"`, the new download. Re-queues
+from the entry's URL, reusing the original
 type/quality/collection/folder/filename/audioFormat when the source download row still exists.
 Also carries over the original request's Title/Artist/Year/Season/Sequence overrides, filename
 prefix/template, tags and Generate NFO. If the original run left a ghost library item behind
 (`downloads.ghost_library_item_id`) and it still exists and is still a ghost, the new download
-fills that same item in instead of creating a second one; `409` if that ghost already has an
-active download. Response `201 {"id": <newDownloadId>}`.
+fills that same item in instead of creating a second one; that item fails with status `409` if the
+ghost already has an active download. Other per-item failures: `404` unknown entry, `400` invalid URL or
+folder/collection.
 
-`DELETE /api/history/:id` — `404` unknown, `204` success, permanent.
+`POST /api/history/bulk-delete` — body `{ "ids": [9, 10] }`, permanent, all-or-nothing in one
+transaction; unknown ids are ignored. `200 {"deleted": <n>}`.
 
 `POST /api/history/clear` — no body, deletes every entry regardless of age. `200 {"deleted": <n>}`.
 
@@ -1718,13 +1789,13 @@ download queue.
 | POST | `/api/subscriptions` | Create a subscription (baselines existing uploads as already-seen) |
 | GET | `/api/subscriptions` | List all subscriptions |
 | PATCH | `/api/subscriptions/:id` | Update a subscription (full-state replace, not a partial merge) |
-| DELETE | `/api/subscriptions/:id` | Delete a subscription (library items already created are kept) |
+| POST | `/api/subscriptions/bulk-delete` | Delete subscriptions (library items already created are kept) |
 | POST | `/api/subscriptions/:id/check` | Check now — synchronous |
 | GET | `/api/subscriptions/:id/entries` | List every upload ever seen ("Known items") |
-| POST | `/api/subscriptions/:id/entries/:sourceId/add` | Add one known entry as a ghost or a download |
-| POST | `/api/subscriptions/:id/entries/:sourceId/seen` | Dismiss one entry without acting on it |
+| POST | `/api/subscriptions/:id/entries/bulk-add` | Add known entries as ghosts or downloads (per-item results) |
+| POST | `/api/subscriptions/:id/entries/bulk-seen` | Dismiss entries without acting on them |
 | POST | `/api/subscriptions/:id/entries/:sourceId/link` | Manually associate an entry with an existing library item |
-| POST | `/api/subscriptions/:id/entries/:sourceId/unlink` | Clear an entry's library item association |
+| POST | `/api/subscriptions/:id/entries/bulk-unlink` | Clear entries' library item associations |
 
 ### `POST /api/subscriptions`
 
@@ -1805,23 +1876,30 @@ library — so a video already present through some other route (a manual downlo
 subscription, an import, or an explicit manual link) shows up linked here even when `libraryItemId`
 itself is `null`.
 
-### `POST /api/subscriptions/:id/entries/:sourceId/add`
+### `POST /api/subscriptions/bulk-delete`
+
+Body `{ "ids": [1, 2] }`. Deletes the subscriptions (and their known entries) in one transaction; unknown
+ids are ignored. `200 {"deleted": <n>}`. Needs the Subscriptions feature, like every subscription route.
+
+### `POST /api/subscriptions/:id/entries/bulk-add`
 
 ```json
-{ "mode": "ghost" }
+{ "sourceIds": ["abc123", "def456"], "mode": "ghost" }
 ```
 
 `mode` is `"ghost"` (creates a library placeholder immediately, for review) or `"download"` (queues
 a real download right now) — both mark the entry seen as a side effect. Re-adding an entry that's
 already linked to a library item is allowed (the frontend confirms first when it detects this); an
-existing link is left untouched rather than overwritten by the new ghost/download. `404` unknown
-subscription/entry, `400` no URL recorded for a pre-tracking entry, `502` ghost-create/enqueue
-failure. Response `200 {"mode": "ghost", "libraryItemId": 118}` or
-`{"mode": "download", "downloadId": 55}`.
+existing link is left untouched rather than overwritten by the new ghost/download. `404` if the
+subscription does not exist; otherwise per-item results keyed by source id: an unknown entry fails with
+`404`, one with no URL recorded (a pre-tracking entry) `400`, a ghost-create/enqueue failure `502`. A
+success carries `"libraryItemId"` (ghost) or `"downloadId"` (download). `400` for an unknown `mode`.
 
-### `POST /api/subscriptions/:id/entries/:sourceId/seen` — no body
+### `POST /api/subscriptions/:id/entries/bulk-seen`
 
-Dismisses one entry without creating anything. `404` unknown entry, `204`.
+Body `{ "sourceIds": ["abc123"] }`. Dismisses the entries without creating anything. All-or-nothing;
+source ids that are not entries of the subscription are ignored. `404` unknown subscription;
+`200 {"updated": <n>}`.
 
 ### `POST /api/subscriptions/:id/entries/:sourceId/link`
 
@@ -1836,12 +1914,13 @@ URL/video-id match could never have found it on its own (surfaced in the "Known 
 Multiple entries — even across different subscriptions — can link to the same library item. `404`
 unknown subscription/entry/library item, `204` on success.
 
-### `POST /api/subscriptions/:id/entries/:sourceId/unlink` — no body
+### `POST /api/subscriptions/:id/entries/bulk-unlink`
 
-Clears an entry's manual/auto library item association (`libraryItemId` back to `null`) without
-touching the library item itself or the entry's seen state. A soft URL/video-id match, if one still
-applies, keeps showing as linked in `linkedLibraryItemId` regardless. `404` unknown
-subscription/entry, `204`.
+Body `{ "sourceIds": ["abc123"] }`. Clears the entries' manual/auto library item association
+(`libraryItemId` back to `null`) without touching the library items themselves or the entries' seen
+state. A soft URL/video-id match, if one still applies, keeps showing as linked in `linkedLibraryItemId`
+regardless. All-or-nothing; unknown source ids are ignored. `404` unknown subscription;
+`200 {"updated": <n>}`.
 
 ### Automatic checking
 
