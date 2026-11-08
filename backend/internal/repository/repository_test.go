@@ -122,8 +122,8 @@ func TestDownloadsRepo_DeleteNullsLibraryBackref(t *testing.T) {
 		t.Fatalf("Create library item: %v", err)
 	}
 
-	if err := repo.Delete(ctx, id); err != nil {
-		t.Fatalf("Delete: %v", err)
+	if n, blocked, err := repo.DeleteByIDs(ctx, []int64{id}); err != nil || n != 1 || len(blocked) != 0 {
+		t.Fatalf("DeleteByIDs = %d, %v, %v", n, blocked, err)
 	}
 	if _, err := repo.Get(ctx, id); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound after delete, got %v", err)
@@ -137,8 +137,8 @@ func TestDownloadsRepo_DeleteNullsLibraryBackref(t *testing.T) {
 		t.Fatalf("expected download_id nulled out via ON DELETE SET NULL, got %+v", libItem.DownloadID)
 	}
 
-	if err := repo.Delete(ctx, 99999); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("expected ErrNotFound deleting unknown id, got %v", err)
+	if n, blocked, err := repo.DeleteByIDs(ctx, []int64{99999}); err != nil || n != 0 || len(blocked) != 0 {
+		t.Fatalf("unknown id must be ignored, got %d, %v, %v", n, blocked, err)
 	}
 }
 
@@ -187,7 +187,7 @@ func TestHistoryRepo_CreateAndList(t *testing.T) {
 	// Deleting the originating download must not delete the history entry —
 	// download_id is ON DELETE SET NULL, and title/thumbnail simply stop
 	// being joinable afterward.
-	if err := downloadsRepo.Delete(ctx, dID); err != nil {
+	if _, _, err := downloadsRepo.DeleteByIDs(ctx, []int64{dID}); err != nil {
 		t.Fatalf("deleting download: %v", err)
 	}
 	survived, err := historyRepo.Get(ctx, completedID)

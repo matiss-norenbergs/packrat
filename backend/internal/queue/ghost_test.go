@@ -333,7 +333,7 @@ func TestFailureKeepsGhostAndRetryReusesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Retry: a fresh download row carrying the ghost id (what RetryHistoryItem builds).
+	// Retry: a fresh download row carrying the ghost id (what the history retry builds).
 	e.flag("fail", false)
 	retryID := e.newDownload(models.Download{GhostLibraryItemID: &ghostID})
 	if active, _ := e.downloads.ActiveDownloadIDsByLibraryItem(context.Background(), []int64{ghostID}); active[ghostID] != retryID {

@@ -207,25 +207,6 @@ func UpdateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 	}
 }
 
-func DeleteSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-			return
-		}
-		if err := deps.SubscriptionsRepo.Delete(c.Request.Context(), id); err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.Status(http.StatusNoContent)
-	}
-}
-
 // CheckSubscriptionNow runs subscriptions.CheckOne synchronously so the
 // "Check now" button gets an immediate answer, instead of waiting for the
 // next scheduled tick.
@@ -332,109 +313,6 @@ func ListSubscriptionEntries(deps subscriptions.CheckDeps) gin.HandlerFunc {
 	}
 }
 
-// AddSubscriptionEntry is the "Known items" dialog's per-row "Add as
-// ghost"/"Queue download" action — a manual version of what a normal check
-// does automatically for a new entry (subscriptions.AddKnownEntryAsGhost /
-// AddKnownEntryAsDownload).
-func AddSubscriptionEntry(deps subscriptions.CheckDeps) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-			return
-		}
-		sourceID := c.Param("sourceId")
-
-		var req AddSubscriptionEntryRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		sub, err := deps.SubscriptionsRepo.Get(ctx, id)
-		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		entry, err := deps.SubscriptionsRepo.GetSeenEntry(ctx, id, sourceID)
-		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "entry not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		// Deliberately no "already added" guard — the Known Items dialog
-		// itself now confirms before calling this when the entry already
-		// has a library match, rather than the backend refusing outright.
-		// A fresh ghost/download is always allowed: the same video can
-		// legitimately warrant a second copy.
-		if entry.URL == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "no URL recorded for this entry — re-check the subscription first"})
-			return
-		}
-
-		resp := AddSubscriptionEntryResponse{Mode: req.Mode}
-		switch req.Mode {
-		case "ghost":
-			libraryItemID, err := subscriptions.AddKnownEntryAsGhost(ctx, deps, *sub, *entry)
-			if err != nil {
-				c.JSON(http.StatusBadGateway, gin.H{"error": "adding as ghost item failed: " + err.Error()})
-				return
-			}
-			resp.LibraryItemID = &libraryItemID
-		case "download":
-			downloadID, err := subscriptions.AddKnownEntryAsDownload(ctx, deps, *sub, *entry)
-			if err != nil {
-				c.JSON(http.StatusBadGateway, gin.H{"error": "queuing download failed: " + err.Error()})
-				return
-			}
-			resp.DownloadID = &downloadID
-		}
-		c.JSON(http.StatusOK, resp)
-	}
-}
-
-// MarkSubscriptionEntrySeen is the Known Items dialog's "Mark seen" button
-// — a manual dismiss for an entry the user has noticed but doesn't want to
-// act on right now.
-func MarkSubscriptionEntrySeen(deps subscriptions.CheckDeps) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-			return
-		}
-		sourceID := c.Param("sourceId")
-
-		if _, err := deps.SubscriptionsRepo.Get(ctx, id); err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		if err := deps.SubscriptionsRepo.MarkSeenEntry(ctx, id, sourceID); err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "entry not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.Status(http.StatusNoContent)
-	}
-}
-
 // LinkSubscriptionEntry manually associates a "Known items" row with an
 // *existing* library item — for when the same video was actually
 // downloaded through a different source/URL than the one this subscription
@@ -492,41 +370,6 @@ func LinkSubscriptionEntry(deps subscriptions.CheckDeps) gin.HandlerFunc {
 	}
 }
 
-// UnlinkSubscriptionEntry dissolves a manual (or auto-created) library
-// link on a "Known items" row — never touches the library item itself,
-// only the association. If the entry's own URL/video id still genuinely
-// matches something in the library, the dialog falls back to reporting
-// that soft match again once this clears.
-func UnlinkSubscriptionEntry(deps subscriptions.CheckDeps) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-			return
-		}
-		sourceID := c.Param("sourceId")
-
-		if _, err := deps.SubscriptionsRepo.Get(ctx, id); err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if err := deps.SubscriptionsRepo.UnlinkSeenEntry(ctx, id, sourceID); err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "entry not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.Status(http.StatusNoContent)
-	}
-}
-
 // resolveCollectionName looks up a single collection's name for a response
 // — nil in, nil out; a stale/deleted id (collection removed since the
 // subscription was created) resolves to nil rather than erroring, since a
@@ -543,4 +386,162 @@ func resolveCollectionName(ctx context.Context, collectionsRepo *repository.Coll
 		return nil, err
 	}
 	return &collection.Name, nil
+}
+
+// BulkDeleteSubscriptions is POST /api/subscriptions/bulk-delete: it removes the
+// listed subscriptions (and, through the cascade, their seen entries) in one
+// transaction. Ids that do not exist are ignored; "deleted" counts the rows
+// really removed.
+func BulkDeleteSubscriptions(deps subscriptions.CheckDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkIDsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !checkBulkCount(c, len(req.IDs)) {
+			return
+		}
+		n, err := deps.SubscriptionsRepo.DeleteByIDs(c.Request.Context(), dedupeKeepOrder(req.IDs))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, BulkDeleteResponse{Deleted: n})
+	}
+}
+
+// requireSubscription parses the :id param and answers 400/404/500 itself when
+// the subscription cannot be used; ok is false then.
+func requireSubscription(c *gin.Context, deps subscriptions.CheckDeps) (*models.Subscription, bool) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return nil, false
+	}
+	sub, err := deps.SubscriptionsRepo.Get(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+			return nil, false
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return nil, false
+	}
+	return sub, true
+}
+
+// bulkSubscriptionEntries is the shared shell of the entry bulk-seen and
+// bulk-unlink endpoints: validate the body, require the subscription, then run
+// one transactional repo call and answer {updated}. Source ids that are not
+// entries of the subscription are ignored.
+func bulkSubscriptionEntries(deps subscriptions.CheckDeps, apply func(ctx context.Context, subID int64, sourceIDs []string) (int, error)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkSourceIDsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !checkBulkCount(c, len(req.SourceIDs)) {
+			return
+		}
+		sub, ok := requireSubscription(c, deps)
+		if !ok {
+			return
+		}
+		n, err := apply(c.Request.Context(), sub.ID, dedupeKeepOrder(req.SourceIDs))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, BulkUpdatedResponse{Updated: n})
+	}
+}
+
+// BulkMarkSubscriptionEntriesSeen is POST /api/subscriptions/:id/entries/bulk-seen:
+// dismiss the listed Known-items entries (the "+N new" badge).
+func BulkMarkSubscriptionEntriesSeen(deps subscriptions.CheckDeps) gin.HandlerFunc {
+	return bulkSubscriptionEntries(deps, deps.SubscriptionsRepo.MarkSeenEntries)
+}
+
+// BulkUnlinkSubscriptionEntries is POST /api/subscriptions/:id/entries/bulk-unlink:
+// clear the manual library link of the listed entries (never touches the
+// library items themselves).
+func BulkUnlinkSubscriptionEntries(deps subscriptions.CheckDeps) gin.HandlerFunc {
+	return bulkSubscriptionEntries(deps, deps.SubscriptionsRepo.UnlinkSeenEntries)
+}
+
+// addSubscriptionEntry is the per-entry core of the "Known items" dialog's
+// "Add as ghost"/"Queue download" action — a manual version of what a normal
+// check does automatically for a new entry (subscriptions.AddKnownEntryAsGhost
+// / AddKnownEntryAsDownload). It was the body of the removed single
+// .../entries/:sourceId/add handler. Exactly one of the returned ids is set.
+func addSubscriptionEntry(ctx context.Context, deps subscriptions.CheckDeps, sub models.Subscription, sourceID, mode string) (libraryItemID, downloadID *int64, e *opError) {
+	entry, err := deps.SubscriptionsRepo.GetSeenEntry(ctx, sub.ID, sourceID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil, newOpError(http.StatusNotFound, "entry not found")
+		}
+		return nil, nil, internalOpError(err)
+	}
+	// Deliberately no "already added" guard — the Known Items dialog
+	// itself now confirms before calling this when the entry already
+	// has a library match, rather than the backend refusing outright.
+	// A fresh ghost/download is always allowed: the same video can
+	// legitimately warrant a second copy.
+	if entry.URL == "" {
+		return nil, nil, newOpError(http.StatusBadRequest, "no URL recorded for this entry — re-check the subscription first")
+	}
+
+	switch mode {
+	case "ghost":
+		id, err := subscriptions.AddKnownEntryAsGhost(ctx, deps, sub, *entry)
+		if err != nil {
+			return nil, nil, newOpError(http.StatusBadGateway, "adding as ghost item failed: "+err.Error())
+		}
+		return &id, nil, nil
+	case "download":
+		id, err := subscriptions.AddKnownEntryAsDownload(ctx, deps, sub, *entry)
+		if err != nil {
+			return nil, nil, newOpError(http.StatusBadGateway, "queuing download failed: "+err.Error())
+		}
+		return nil, &id, nil
+	}
+	return nil, nil, newOpError(http.StatusBadRequest, "invalid mode")
+}
+
+// BulkAddSubscriptionEntries is POST /api/subscriptions/:id/entries/bulk-add:
+// each entry is added independently (a ghost row or an enqueued download cannot
+// be rolled back) and the answer is 200 with one result per source id in
+// request order, carrying the new library item or download id on success.
+func BulkAddSubscriptionEntries(deps subscriptions.CheckDeps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkAddSubscriptionEntriesRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !checkBulkCount(c, len(req.SourceIDs)) {
+			return
+		}
+		sub, ok := requireSubscription(c, deps)
+		if !ok {
+			return
+		}
+		sourceIDs := dedupeKeepOrder(req.SourceIDs)
+
+		ctx, cancel := detachedBulkContext(c)
+		defer cancel()
+
+		resp := newBulkResults[string](len(sourceIDs))
+		for _, sid := range sourceIDs {
+			libraryID, downloadID, e := addSubscriptionEntry(ctx, deps, *sub, sid, req.Mode)
+			if e != nil {
+				resp.add(failedResult(sid, e))
+				continue
+			}
+			resp.add(BulkItemResult[string]{ID: sid, OK: true, LibraryItemID: libraryID, DownloadID: downloadID})
+		}
+		c.JSON(http.StatusOK, resp)
+	}
 }

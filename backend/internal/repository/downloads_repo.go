@@ -265,25 +265,13 @@ func (r *DownloadsRepo) ActiveDownloadIDsByLibraryItem(ctx context.Context, item
 	return out, nil
 }
 
-// Delete removes a download's history row. Safe to call even for a download
-// that has a completed library item — library.download_id is
-// ON DELETE SET NULL, so the library item just loses its back-link, it is
-// never itself deleted.
-func (r *DownloadsRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM downloads WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("deleting download: %w", err)
-	}
-	return checkRowsAffected(res)
-}
-
 // DeleteOlderThan removes every download log entry created before cutoff,
 // returning how many rows were deleted — the implementation behind the
 // configurable retention sweep (see cleanupDownloadLog in cmd/server/main.go)
 // and the "clear all" action (called with cutoff = time.Now()). A row still
 // in an active status (queued/fetching_metadata/downloading/processing) is
-// never deleted regardless of age, mirroring DeleteDownload's single-item
-// guard — this is a log-pruning operation, not a queue-cancellation one.
+// never deleted regardless of age, mirroring DownloadsRepo.DeleteByIDs'
+// active-status guard — this is a log-pruning operation, not a queue-cancellation one.
 // created_at is stored as SQLite's datetime('now') text (UTC, "YYYY-MM-DD
 // HH:MM:SS"), which sorts and compares correctly as a plain string, so
 // cutoff is formatted the same way rather than relying on SQLite's own date

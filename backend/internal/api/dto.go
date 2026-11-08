@@ -512,6 +512,56 @@ type UpdateLibraryItemRequest struct {
 	Tags           *[]string `json:"tags"`
 }
 
+// BulkIDsRequest is the body of the id-list bulk endpoints added when the
+// single-item endpoints were removed (downloads / history / subscriptions /
+// backup bulk-delete, history bulk-retry): 1..maxBulkItems ids, duplicates
+// silently dropped.
+type BulkIDsRequest struct {
+	IDs []int64 `json:"ids"`
+}
+
+// BulkSourceIDsRequest is the body of the subscription entry bulk-seen and
+// bulk-unlink endpoints.
+type BulkSourceIDsRequest struct {
+	SourceIDs []string `json:"sourceIds"`
+}
+
+// BulkUpdatedResponse reports how many rows a bulk update really changed.
+type BulkUpdatedResponse struct {
+	Updated int `json:"updated"`
+}
+
+// BulkAddSubscriptionEntriesRequest is POST /api/subscriptions/:id/entries/bulk-add's
+// body; Mode has the same values as AddSubscriptionEntryRequest.
+type BulkAddSubscriptionEntriesRequest struct {
+	SourceIDs []string `json:"sourceIds"`
+	Mode      string   `json:"mode" binding:"required,oneof=ghost download"`
+}
+
+// BulkGalleryFavoriteRequest is the body of the gallery bulk-favorite endpoint.
+type BulkGalleryFavoriteRequest struct {
+	GalleryIDs []int64 `json:"galleryIds"`
+	IsFavorite bool    `json:"isFavorite"`
+}
+
+// BulkGalleryDeleteRequest is the body of the gallery bulk-delete endpoint.
+type BulkGalleryDeleteRequest struct {
+	GalleryIDs []int64 `json:"galleryIds"`
+}
+
+// BulkUpdateLibraryItem is one entry of POST /api/library/bulk-update: the item
+// id plus the same partial-update body the removed PATCH /api/library/:id took
+// (nil = unchanged, artistId 0 clears the artist, ...).
+type BulkUpdateLibraryItem struct {
+	ID      int64                    `json:"id"`
+	Changes UpdateLibraryItemRequest `json:"changes"`
+}
+
+// BulkUpdateLibraryItemsRequest is POST /api/library/bulk-update's body.
+type BulkUpdateLibraryItemsRequest struct {
+	Items []BulkUpdateLibraryItem `json:"items"`
+}
+
 // BulkAssignTagsRequest overwrites the tag set on every listed item — not a
 // merge, matching the frontend's "assign tags" bulk-edit dialog, which warns
 // the user about the overwrite up front rather than offering an add mode.
@@ -659,11 +709,6 @@ type SetLibraryThumbnailRequest struct {
 type SaveThumbnailToGalleryRequest struct {
 	ImageBase64      string   `json:"imageBase64"`
 	TimestampSeconds *float64 `json:"timestampSeconds"`
-}
-
-// SetThumbnailGalleryFavoriteRequest is PATCH .../thumbnail/gallery/:galleryId's body.
-type SetThumbnailGalleryFavoriteRequest struct {
-	IsFavorite bool `json:"isFavorite"`
 }
 
 // ThumbnailGalleryImageResponse is one saved gallery image. ImagePath is
@@ -1777,18 +1822,6 @@ func toSubscriptionEntryResponse(e models.SubscriptionSeenEntry, linked *models.
 		resp.LinkedLibraryItemIsGhost = linked.Status == "ghost"
 	}
 	return resp
-}
-
-// AddSubscriptionEntryRequest drives a single "Known items" row action —
-// see AddSubscriptionEntry (subscriptions_handler.go).
-type AddSubscriptionEntryRequest struct {
-	Mode string `json:"mode" binding:"required,oneof=ghost download"`
-}
-
-type AddSubscriptionEntryResponse struct {
-	Mode          string `json:"mode"`
-	LibraryItemID *int64 `json:"libraryItemId,omitempty"`
-	DownloadID    *int64 `json:"downloadId,omitempty"`
 }
 
 // LinkSubscriptionEntryRequest drives the "Known items" dialog's manual

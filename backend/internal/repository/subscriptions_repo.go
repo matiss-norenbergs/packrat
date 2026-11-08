@@ -141,14 +141,6 @@ func (r *SubscriptionsRepo) Update(ctx context.Context, s *models.Subscription) 
 	return checkRowsAffected(res)
 }
 
-func (r *SubscriptionsRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM subscriptions WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("deleting subscription: %w", err)
-	}
-	return checkRowsAffected(res)
-}
-
 // MarkChecked records that id was just checked and, via checkError, whether
 // that check succeeded — nil clears any prior error, a non-nil message
 // (e.g. from a dead/private URL) is what the "Last checked" column's
@@ -397,7 +389,7 @@ func (r *SubscriptionsRepo) ListSeenEntries(ctx context.Context, subscriptionID 
 	return out, rows.Err()
 }
 
-// GetSeenEntry loads a single seen entry — used by AddSubscriptionEntry to
+// GetSeenEntry loads a single seen entry — used by the bulk-add entry core to
 // resolve the one row it's acting on.
 func (r *SubscriptionsRepo) GetSeenEntry(ctx context.Context, subscriptionID int64, sourceID string) (*models.SubscriptionSeenEntry, error) {
 	row := r.db.QueryRowContext(ctx,
@@ -455,24 +447,6 @@ func (r *SubscriptionsRepo) SetSeenEntryLibraryItemID(ctx context.Context, subsc
 	)
 	if err != nil {
 		return fmt.Errorf("linking seen subscription entry to library item: %w", err)
-	}
-	return checkRowsAffected(res)
-}
-
-// UnlinkSeenEntry dissolves a seen entry's association with a library item
-// — the manual counterpart to SetSeenEntryLibraryItemID, for a link the
-// user set (or that Packrat's own ghost/download creation set) that no
-// longer applies. Never touches the library item itself, only the
-// association; if the entry's own URL/video id still genuinely matches
-// something in the library, the "Known items" dialog falls back to
-// reporting that soft match again once this is cleared.
-func (r *SubscriptionsRepo) UnlinkSeenEntry(ctx context.Context, subscriptionID int64, sourceID string) error {
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE subscription_seen_entries SET library_item_id = NULL WHERE subscription_id = ? AND source_id = ?`,
-		subscriptionID, sourceID,
-	)
-	if err != nil {
-		return fmt.Errorf("unlinking seen subscription entry: %w", err)
 	}
 	return checkRowsAffected(res)
 }

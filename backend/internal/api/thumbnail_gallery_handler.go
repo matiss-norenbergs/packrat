@@ -159,49 +159,6 @@ func ListLibraryThumbnailGallery(libraryRepo *repository.LibraryRepo, galleryRep
 	}
 }
 
-// SetLibraryThumbnailGalleryFavorite toggles a gallery image's favorite flag.
-func SetLibraryThumbnailGalleryFavorite(galleryRepo *repository.ThumbnailGalleryRepo) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-			return
-		}
-		galleryID, err := strconv.ParseInt(c.Param("galleryId"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gallery id"})
-			return
-		}
-		var req SetThumbnailGalleryFavoriteRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		img, err := galleryRepo.Get(ctx, galleryID)
-		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "gallery image not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if img.LibraryItemID != id {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "gallery image does not belong to this item"})
-			return
-		}
-
-		if err := galleryRepo.SetFavorite(ctx, galleryID, req.IsFavorite); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		img.IsFavorite = req.IsFavorite
-		c.JSON(http.StatusOK, toThumbnailGalleryImageResponse(img))
-	}
-}
-
 // ApplyLibraryThumbnailFromGallery makes an already-saved gallery image the
 // item's active thumbnail — the gallery-side equivalent of SetLibraryThumbnail,
 // reusing the same writeThumbnailAndRespond finish (derivatives, stale
@@ -274,49 +231,84 @@ func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, 
 	}
 }
 
-// DeleteLibraryThumbnailGalleryImage removes one saved gallery image, file
-// and row together.
-func DeleteLibraryThumbnailGalleryImage(imagesRoot string, galleryRepo *repository.ThumbnailGalleryRepo) gin.HandlerFunc {
+// writeGalleryForeign answers the 400 for gallery ids that do not belong to the
+// item in the URL.
+func writeGalleryForeign(c *gin.Context, foreign []int64) {
+	c.JSON(http.StatusBadRequest, gin.H{
+		"error":      "gallery images do not belong to this item",
+		"invalidIds": foreign,
+	})
+}
+
+// BulkSetLibraryThumbnailGalleryFavorite is
+// POST /api/library/:id/thumbnail/gallery/bulk-favorite: it sets the favorite
+// flag of the listed gallery images in one transaction. A gallery id that
+// belongs to another item, or does not exist at all, fails the WHOLE request
+// with 400 listing the offending ids ("invalidIds") and changes nothing. The
+// notDownloading route guard applies to the whole request (409).
+func BulkSetLibraryThumbnailGalleryFavorite(galleryRepo *repository.ThumbnailGalleryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		itemID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 			return
 		}
-		galleryID, err := strconv.ParseInt(c.Param("galleryId"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gallery id"})
+		var req BulkGalleryFavoriteRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		img, err := galleryRepo.Get(ctx, galleryID)
+		if !checkBulkCount(c, len(req.GalleryIDs)) {
+			return
+		}
+		updated, foreign, missing, err := galleryRepo.SetFavoriteForItem(c.Request.Context(), itemID, dedupeKeepOrder(req.GalleryIDs), req.IsFavorite)
 		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "gallery image not found"})
-				return
-			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if img.LibraryItemID != id {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "gallery image does not belong to this item"})
+		if bad := append(append([]int64{}, foreign...), missing...); len(bad) > 0 {
+			writeGalleryForeign(c, bad)
 			return
 		}
+		c.JSON(http.StatusOK, BulkUpdatedResponse{Updated: updated})
+	}
+}
 
-		abs := filepath.Join(imagesRoot, filepath.FromSlash(img.ImagePath))
-		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
-			log.Printf("thumbnail gallery: failed to delete %s: %v", abs, err)
+// BulkDeleteLibraryThumbnailGalleryImages is
+// POST /api/library/:id/thumbnail/gallery/bulk-delete: rows are deleted in one
+// transaction, and only after the commit are the image files removed, best
+// effort. A gallery id that belongs to another item fails the WHOLE request
+// with 400 listing the offending ids; ids that do not exist at all are ignored.
+func BulkDeleteLibraryThumbnailGalleryImages(imagesRoot string, galleryRepo *repository.ThumbnailGalleryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		itemID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return
 		}
-
-		if err := galleryRepo.Delete(ctx, galleryID); err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "gallery image not found"})
-				return
-			}
+		var req BulkGalleryDeleteRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !checkBulkCount(c, len(req.GalleryIDs)) {
+			return
+		}
+		removed, foreign, err := galleryRepo.DeleteForItem(c.Request.Context(), itemID, dedupeKeepOrder(req.GalleryIDs))
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.Status(http.StatusNoContent)
+		if len(foreign) > 0 {
+			writeGalleryForeign(c, foreign)
+			return
+		}
+		for _, img := range removed {
+			abs := filepath.Join(imagesRoot, filepath.FromSlash(img.ImagePath))
+			if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+				log.Printf("thumbnail gallery: failed to delete %s: %v", abs, err)
+			}
+		}
+		c.JSON(http.StatusOK, BulkDeleteResponse{Deleted: len(removed)})
 	}
 }

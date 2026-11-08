@@ -63,14 +63,6 @@ func (r *BackupHistoryRepo) List(ctx context.Context) ([]models.BackupHistory, e
 	return out, rows.Err()
 }
 
-func (r *BackupHistoryRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM backup_history WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("deleting backup history entry: %w", err)
-	}
-	return checkRowsAffected(res)
-}
-
 // LatestSuccessful returns the most recent successful backup, or (nil, nil)
 // if none exist yet — "no backups yet" is a normal state for the scheduler's
 // due-check, not an error condition, so it's deliberately not ErrNotFound.

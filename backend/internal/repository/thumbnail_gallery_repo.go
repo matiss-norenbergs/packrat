@@ -67,22 +67,6 @@ func (r *ThumbnailGalleryRepo) Get(ctx context.Context, id int64) (models.Thumbn
 	return img, nil
 }
 
-// SetFavorite flips one gallery image's favorite flag, or ErrNotFound.
-func (r *ThumbnailGalleryRepo) SetFavorite(ctx context.Context, id int64, favorite bool) error {
-	res, err := r.db.ExecContext(ctx, `UPDATE thumbnail_gallery SET is_favorite = ? WHERE id = ?`, favorite, id)
-	if err != nil {
-		return fmt.Errorf("updating thumbnail gallery image %d favorite: %w", id, err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // CountByLibraryItemID returns how many gallery images one item has —
 // for single-item response endpoints (see CountsByLibraryItemIDs for the
 // batched equivalent used by list endpoints).
@@ -131,23 +115,6 @@ func (r *ThumbnailGalleryRepo) CountsByLibraryItemIDs(ctx context.Context, ids [
 		return nil, err
 	}
 	return out, nil
-}
-
-// Delete removes one gallery image row. Callers are responsible for
-// removing the underlying image file first.
-func (r *ThumbnailGalleryRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM thumbnail_gallery WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("deleting thumbnail gallery image %d: %w", id, err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
 }
 
 // scanThumbnailGalleryRow uses the shared rowScanner interface (see
