@@ -16,7 +16,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
@@ -59,18 +58,7 @@ func newBkEnv(t *testing.T) *bkEnv {
 		t.Skip("uses a shell script as a fake ffmpeg")
 	}
 	gin.SetMode(gin.TestMode)
-	conn, err := db.Open(filepath.Join(t.TempDir(), "packrat_test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	migrationsDir, err := filepath.Abs("../../../database/migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Migrate(conn, migrationsDir); err != nil {
-		t.Fatal(err)
-	}
+	conn := openMigratedTestDB(t)
 
 	e := &bkEnv{
 		t: t, conn: conn,

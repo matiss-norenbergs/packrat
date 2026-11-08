@@ -5,32 +5,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 
-	"packrat/backend/internal/db"
 	"packrat/backend/internal/repository"
 )
 
 func previewRouter(t *testing.T) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	conn, err := db.Open(filepath.Join(t.TempDir(), "packrat_test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	migrationsDir, err := filepath.Abs("../../../database/migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Migrate(conn, migrationsDir); err != nil {
-		t.Fatal(err)
-	}
+	conn := openMigratedTestDB(t)
 	r := gin.New()
 	r.GET("/preview", PreviewImage(repository.NewSettingsRepo(conn)))
 	return r

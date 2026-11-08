@@ -110,10 +110,16 @@ func AuthStatus(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 	}
 }
 
+// bcryptCost is the cost every password hash is made at. It is a variable only
+// so the package's tests can lower it (bcrypt at the default cost takes about
+// 0.7 s per operation under -race, and every logged-in fixture hashes and
+// compares several times); nothing in production code changes it.
+var bcryptCost = bcrypt.DefaultCost
+
 // dummyPasswordHash is a throwaway hash at the real cost, used to equalize
 // login work for unknown usernames.
 var dummyPasswordHash = func() []byte {
-	h, err := bcrypt.GenerateFromPassword([]byte("packrat-dummy-password"), bcrypt.DefaultCost)
+	h, err := bcrypt.GenerateFromPassword([]byte("packrat-dummy-password"), bcryptCost)
 	if err != nil {
 		panic(err)
 	}
@@ -141,7 +147,7 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -254,7 +260,7 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 			return
 		}
 
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcryptCost)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

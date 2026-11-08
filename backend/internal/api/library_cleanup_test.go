@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"packrat/backend/internal/db"
 	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/queue"
@@ -34,18 +33,7 @@ type cleanupEnv struct {
 
 func newCleanupEnv(t *testing.T) *cleanupEnv {
 	t.Helper()
-	conn, err := db.Open(filepath.Join(t.TempDir(), "packrat_test.db"))
-	if err != nil {
-		t.Fatalf("opening test db: %v", err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	migrationsDir, err := filepath.Abs("../../../database/migrations")
-	if err != nil {
-		t.Fatalf("resolving migrations dir: %v", err)
-	}
-	if err := db.Migrate(conn, migrationsDir); err != nil {
-		t.Fatalf("migrating test db: %v", err)
-	}
+	conn := openMigratedTestDB(t)
 	e := &cleanupEnv{
 		conn:       conn,
 		library:    repository.NewLibraryRepo(conn),

@@ -4,14 +4,12 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 
-	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
@@ -20,15 +18,7 @@ import (
 
 func newSubscriptionsTestDeps(t *testing.T) (subscriptions.CheckDeps, *repository.SubscriptionsRepo) {
 	t.Helper()
-	conn, err := db.Open(filepath.Join(t.TempDir(), "packrat_test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	migrationsDir, _ := filepath.Abs("../../../database/migrations")
-	if err := db.Migrate(conn, migrationsDir); err != nil {
-		t.Fatal(err)
-	}
+	conn := openMigratedTestDB(t)
 	subs := repository.NewSubscriptionsRepo(conn)
 	return subscriptions.CheckDeps{
 		SubscriptionsRepo: subs,

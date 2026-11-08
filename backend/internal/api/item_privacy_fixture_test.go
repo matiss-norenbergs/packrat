@@ -7,13 +7,11 @@ import (
 	"encoding/json"
 	"io"
 	"net/http/httptest"
-	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 
-	"packrat/backend/internal/db"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
@@ -37,18 +35,7 @@ type privacyFixture struct {
 
 func newPrivacyFixture(t *testing.T) *privacyFixture {
 	t.Helper()
-	conn, err := db.Open(filepath.Join(t.TempDir(), "packrat_test.db"))
-	if err != nil {
-		t.Fatalf("opening test db: %v", err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	migrationsDir, err := filepath.Abs("../../../database/migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Migrate(conn, migrationsDir); err != nil {
-		t.Fatalf("migrating test db: %v", err)
-	}
+	conn := openMigratedTestDB(t)
 	return &privacyFixture{
 		t:           t,
 		conn:        conn,
