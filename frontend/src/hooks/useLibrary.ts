@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  bulkUpdateLibraryItems,
   ApiError,
   acceptLibraryItemTrim,
   bulkAssignTags,
@@ -35,7 +36,6 @@ import {
   scanMissingLibraryFiles,
   setLibraryThumbnail,
   startFrameMatch,
-  updateLibraryItem,
   updateLibraryItemProgress,
 } from "@/lib/api"
 import type {
@@ -233,7 +233,12 @@ export function useScanMissingLibraryFiles(options?: { onNeedsConfirm?: (info: {
 export function useUpdateLibraryItem() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: UpdateLibraryItemRequest }) => updateLibraryItem(id, payload),
+    // A single edit is a one-element bulk update; the item's own result carries its failure.
+    mutationFn: async ({ id, payload }: { id: number; payload: UpdateLibraryItemRequest }) => {
+      const { results } = await bulkUpdateLibraryItems([{ id, changes: payload }])
+      const result = results[0]
+      if (!result?.ok) throw new Error(result?.error ?? "update failed")
+    },
     onSuccess: () => {
       toast.success("Saved")
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })

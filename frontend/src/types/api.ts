@@ -371,6 +371,42 @@ export interface BulkDeleteResponse {
   skipped?: number[]
 }
 
+// Bulk endpoints that process each entry on its own (library bulk-update, history bulk-retry,
+// subscription entries bulk-add) answer HTTP 200 with one result per request entry, in request
+// order. K is the id type of the request: a library item / history id, or an entry's source id.
+export interface BulkItemResult<K extends number | string = number> {
+  id: K
+  ok: boolean
+  // The HTTP status the failing entry would have produced, and its message.
+  status?: number
+  error?: string
+  // On success: the download that was queued / the ghost library item that was created.
+  downloadId?: number
+  libraryItemId?: number
+}
+
+export interface BulkResultsResponse<K extends number | string = number> {
+  results: BulkItemResult<K>[]
+  succeeded: number
+  failed: number
+}
+
+export interface BulkUpdateLibraryItem {
+  id: number
+  changes: UpdateLibraryItemRequest
+}
+
+export interface BulkUpdatedResponse {
+  updated: number
+}
+
+// 409 body of the all-or-nothing deletes when a listed id cannot be deleted (e.g. an active
+// download): nothing was changed. Read from ApiError.body.
+export interface BlockedIdsBody {
+  error: string
+  blockedIds: number[]
+}
+
 export interface BulkDeleteLibraryItemsRequest {
   itemIds: number[]
   deleteFiles: boolean

@@ -55,7 +55,9 @@ function serve(subs: Subscription[]) {
   return mockFetch((url, init) => {
     if (/\/subscriptions\/\d+\/check$/.test(url) && init.method === "POST") return { status: 200, body: { newItemsFound: 0 } }
     if (/\/subscriptions\/\d+$/.test(url) && init.method === "PATCH") return { status: 200, body: {} }
-    if (/\/subscriptions\/\d+$/.test(url) && init.method === "DELETE") return { status: 204 }
+    if (url.endsWith("/subscriptions/bulk-delete") && init.method === "POST") {
+      return { status: 200, body: { deleted: (JSON.parse(init.body as string) as { ids: number[] }).ids.length } }
+    }
     if (url.endsWith("/subscriptions")) return { status: 200, body: subs }
     if (/\/subscriptions\/\d+\/entries$/.test(url)) return { status: 200, body: [] }
     if (url.endsWith("/collections") || url.endsWith("/tags")) return { status: 200, body: [] }
@@ -281,7 +283,7 @@ describe("SubscriptionsPage table", () => {
     for (const name of ["Edit", "Known items"]) expect(toolbarButton(name)).toBeDisabled()
   })
 
-  it("confirms bulk delete with the selection count and deletes each id", async () => {
+  it("confirms bulk delete with the selection count and deletes the ids in one request", async () => {
     const fetchMock = serve([sub(1, "Alpha"), sub(2, "Beta"), sub(3, "Gamma")])
     renderPage()
     await screen.findByText("Alpha")
@@ -292,9 +294,9 @@ describe("SubscriptionsPage table", () => {
     fireEvent.click(del)
     expect(await screen.findByText("Delete 2 selected subscriptions?")).toBeInTheDocument()
     fireEvent.click(screen.getAllByRole("button", { name: "Delete" }).at(-1)!)
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([, i]) => (i as RequestInit)?.method === "DELETE")).toHaveLength(2))
-    const deleted = fetchMock.mock.calls.filter(([, i]) => (i as RequestInit)?.method === "DELETE").map(([url]) => url.split("/").at(-1))
-    expect(deleted.sort()).toEqual(["1", "3"])
+    await waitFor(() => expect(callsTo(fetchMock, "/subscriptions/bulk-delete")).toHaveLength(1))
+    expect(bodyOf(callsTo(fetchMock, "/subscriptions/bulk-delete")[0]).ids.sort()).toEqual([1, 3])
+    expect(fetchMock.mock.calls.filter(([, i]) => (i as RequestInit)?.method === "DELETE")).toHaveLength(0)
   })
 
   it("context menu: items and their enabled states follow the selection", async () => {

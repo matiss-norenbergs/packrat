@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useCollections } from "@/hooks/useCollections"
 import { libraryQueryKey, useLibraryQuery } from "@/hooks/useLibrary"
-import { updateLibraryItem } from "@/lib/api"
+import { runBulkLibraryUpdate } from "@/lib/bulkLibraryUpdate"
 import { buildCollectionTree, collectDescendantIds, findNodeById } from "@/lib/collectionTree"
 import { LibraryItemPreviewRow } from "./LibraryItemPreviewRow"
 import { useSelection } from "./SelectionContext"
@@ -75,13 +75,10 @@ export function BulkSetYearDialog({ open, onOpenChange }: BulkSetYearDialogProps
     // Items with a running download are locked (the server would answer 409): leave them out and say so.
     const editable = affectedItems.filter((item) => item.activeDownloadId == null)
     const skippedDownloading = affectedItems.length - editable.length
-    const results = await Promise.allSettled(
-      editable.map((item) => updateLibraryItem(item.id, { year: parsedYear })),
+    const { succeeded, failed } = await runBulkLibraryUpdate(
+      editable.map((item) => ({ id: item.id, changes: { year: parsedYear } })),
     )
     setIsSaving(false)
-
-    const succeeded = results.filter((r) => r.status === "fulfilled").length
-    const failed = results.length - succeeded
 
     queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     if (succeeded > 0) toast.success(`Updated ${succeeded} file${succeeded === 1 ? "" : "s"}`)

@@ -22,7 +22,7 @@ import type { ColumnDef } from "@/components/data-table"
 import {
   backupHistoryQueryKey,
   useBackupHistory,
-  useDeleteBackupHistoryEntry,
+  useDeleteBackupHistory,
   useRestoreFullBackup,
   useRunManualBackup,
 } from "@/hooks/useBackup"
@@ -90,7 +90,7 @@ export function BackupHistoryTable() {
   const { data, isLoading } = useBackupHistory()
   const queryClient = useQueryClient()
   const runBackup = useRunManualBackup()
-  const deleteEntry = useDeleteBackupHistoryEntry({ silent: true })
+  const deleteEntry = useDeleteBackupHistory({ silent: true })
   const restoreEntry = useRestoreFullBackup()
   const selection = useIdSelection()
   const { selected, clear, selectAll } = selection
@@ -130,21 +130,15 @@ export function BackupHistoryTable() {
     const ids = deleteIds
     setDeleteIds([])
     if (ids.length === 0) return
-    const results = await Promise.allSettled(ids.map((id) => deleteEntry.mutateAsync(id)))
-    const failed = results.filter((r) => r.status === "rejected")
-    const ok = ids.length - failed.length
-    if (failed.length === 0) {
-      toast.success(ids.length === 1 ? "Backup deleted" : `Deleted ${ok} backups`)
-    } else if (ok === 0) {
-      toast.error(
-        ids.length === 1
-          ? `Delete failed: ${(failed[0] as PromiseRejectedResult).reason?.message ?? "unknown error"}`
-          : `Delete failed for ${ids.length} backups`,
-      )
-    } else {
-      toast.error(`Deleted ${ok}, ${failed.length} failed`)
+    try {
+      const { deleted } = await deleteEntry.mutateAsync(ids)
+      toast.success(ids.length === 1 ? "Backup deleted" : `Deleted ${deleted} backups`)
+      clear()
+    } catch (err) {
+      // All-or-nothing: nothing was deleted, so the selection stays for another try.
+      const message = (err as Error).message
+      toast.error(ids.length === 1 ? `Delete failed: ${message}` : `Delete failed for ${ids.length} backups: ${message}`)
     }
-    clear()
     await queryClient.invalidateQueries({ queryKey: backupHistoryQueryKey })
   }
 

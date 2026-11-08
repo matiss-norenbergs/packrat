@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { toast } from "sonner"
 import {
   applyThumbnailFromGallery,
-  deleteThumbnailGalleryImage,
+  bulkDeleteGalleryImages,
   fetchThumbnailGallery,
   saveThumbnailToGallery,
-  setThumbnailGalleryFavorite,
+  bulkSetGalleryFavorites,
   urlToBase64,
 } from "@/lib/api"
 import { libraryQueryKey } from "./useLibrary"
@@ -91,40 +91,29 @@ export function useSaveThumbnailToGalleryFromUrl() {
   })
 }
 
+// Favorite / unfavorite one or more gallery images in one all-or-nothing request (one id for a
+// single image). Ids that don't belong to the item fail the whole request with a message.
 export function useSetThumbnailGalleryFavorite() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, galleryId, isFavorite }: { id: number; galleryId: number; isFavorite: boolean }) =>
-      setThumbnailGalleryFavorite(id, galleryId, isFavorite),
+      bulkSetGalleryFavorites(id, [galleryId], isFavorite),
     onSuccess: (_data, { id }) => queryClient.invalidateQueries({ queryKey: thumbnailGalleryQueryKey(id) }),
     onError: (err: Error) => toast.error(`Failed to update favorite: ${err.message}`),
   })
 }
 
-// Bulk favorite/unfavorite for the gallery's manage mode. Like
-// useSaveThumbnailsToGallery it loops the single-image endpoint — one summary
-// toast and one refetch — and a failure doesn't stop the rest; it only errors
-// if none succeeded.
+// Bulk favorite/unfavorite for the gallery's manage mode: one request, one summary toast, one refetch.
 export function useSetThumbnailGalleryFavorites() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, galleryIds, isFavorite }: { id: number; galleryIds: number[]; isFavorite: boolean }) => {
-      let done = 0
-      let lastError = ""
-      for (const galleryId of galleryIds) {
-        try {
-          await setThumbnailGalleryFavorite(id, galleryId, isFavorite)
-          done++
-        } catch (err) {
-          lastError = (err as Error).message
-        }
-      }
-      if (done === 0) throw new Error(lastError || "nothing to update")
-      return { done, total: galleryIds.length, isFavorite }
+      const { updated } = await bulkSetGalleryFavorites(id, galleryIds, isFavorite)
+      return { updated, isFavorite }
     },
-    onSuccess: ({ done, total, isFavorite }, { id }) => {
+    onSuccess: ({ updated, isFavorite }, { id }) => {
       const verb = isFavorite ? "Added to favorites" : "Removed from favorites"
-      toast.success(done === total ? `${verb}: ${done} image${done === 1 ? "" : "s"}` : `${verb}: ${done} of ${total} images`)
+      toast.success(`${verb}: ${updated} image${updated === 1 ? "" : "s"}`)
       queryClient.invalidateQueries({ queryKey: thumbnailGalleryQueryKey(id) })
     },
     onError: (err: Error, { id }) => {
@@ -134,25 +123,13 @@ export function useSetThumbnailGalleryFavorites() {
   })
 }
 
+// Removes gallery images (files and rows) in one all-or-nothing request.
 export function useDeleteThumbnailGalleryImages() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, galleryIds }: { id: number; galleryIds: number[] }) => {
-      let done = 0
-      let lastError = ""
-      for (const galleryId of galleryIds) {
-        try {
-          await deleteThumbnailGalleryImage(id, galleryId)
-          done++
-        } catch (err) {
-          lastError = (err as Error).message
-        }
-      }
-      if (done === 0) throw new Error(lastError || "nothing to remove")
-      return { done, total: galleryIds.length }
-    },
-    onSuccess: ({ done, total }, { id }) => {
-      toast.success(done === total ? `Removed ${done} image${done === 1 ? "" : "s"} from gallery` : `Removed ${done} of ${total} images from gallery`)
+    mutationFn: ({ id, galleryIds }: { id: number; galleryIds: number[] }) => bulkDeleteGalleryImages(id, galleryIds),
+    onSuccess: ({ deleted }, { id }) => {
+      toast.success(`Removed ${deleted} image${deleted === 1 ? "" : "s"} from gallery`)
       invalidateGalleryCaches(queryClient, id)
     },
     onError: (err: Error, { id }) => {
