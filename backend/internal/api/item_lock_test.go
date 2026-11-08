@@ -43,8 +43,6 @@ func TestFileOperationsRefusedWhileItemLocked(t *testing.T) {
 			}},
 		{"move", http.MethodPost, fmt.Sprintf("/library/%d/move", s.id), "/library/:id/move", `{"folder":"sub"}`,
 			func() gin.HandlerFunc { return MoveLibraryItem(e.library, e.mgr, e.mediaRoot) }},
-		{"rename file", http.MethodPatch, fmt.Sprintf("/library/%d", s.id), "/library/:id", `{"filename":"renamed","title":"New title"}`,
-			func() gin.HandlerFunc { return UpdateLibraryItem(e.library, e.mediaRoot, e.mgr, nil, nil) }},
 		{"trim accept", http.MethodPost, fmt.Sprintf("/library/%d/trim/accept", s.id), "/library/:id/trim/accept", `{"previewPath":".packrat-tmp/x.mp4"}`,
 			func() gin.HandlerFunc { return AcceptLibraryItemTrim(e.library, e.mediaRoot, "", nil, nil, locks) }},
 		{"delete file", http.MethodDelete, fmt.Sprintf("/library/%d/file", s.id), "/library/:id/file", "",

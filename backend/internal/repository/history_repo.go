@@ -61,15 +61,6 @@ func (r *HistoryRepo) List(ctx context.Context) ([]models.History, error) {
 	return out, rows.Err()
 }
 
-// Delete removes a single history entry by id.
-func (r *HistoryRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM history WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("deleting history entry: %w", err)
-	}
-	return checkRowsAffected(res)
-}
-
 // DeleteOlderThan removes every history entry created before cutoff, returning how many rows were
 // deleted — the implementation behind the configurable retention sweep (see cleanupHistory in
 // cmd/server/main.go). created_at is stored as SQLite's datetime('now') text (UTC,

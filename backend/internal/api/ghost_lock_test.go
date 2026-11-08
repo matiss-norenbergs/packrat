@@ -17,11 +17,10 @@ import (
 	"packrat/backend/internal/repository"
 )
 
-// guardedItemRoutes is every single-item route that changes an item or its
+// guardedItemRoutes is every :id route that changes an item or its
 // files and must answer 409 while the item has an active download. Keep in
 // sync with router.go (TestRouterGuardsMutatingItemRoutes checks the wiring).
 var guardedItemRoutes = []struct{ method, path string }{
-	{"PATCH", "/library/:id"},
 	{"DELETE", "/library/:id/file"},
 	{"POST", "/library/:id/move"},
 	{"POST", "/library/:id/refresh-metadata"},
@@ -32,8 +31,8 @@ var guardedItemRoutes = []struct{ method, path string }{
 	{"POST", "/library/:id/thumbnail/quick-grab"},
 	{"POST", "/library/:id/thumbnail/gallery"},
 	{"POST", "/library/:id/thumbnail/gallery/:galleryId/apply"},
-	{"PATCH", "/library/:id/thumbnail/gallery/:galleryId"},
-	{"DELETE", "/library/:id/thumbnail/gallery/:galleryId"},
+	{"POST", "/library/:id/thumbnail/gallery/bulk-favorite"},
+	{"POST", "/library/:id/thumbnail/gallery/bulk-delete"},
 	{"POST", "/library/:id/thumbnail/match"},
 	{"POST", "/library/:id/nfo"},
 	{"DELETE", "/library/:id/nfo"},
@@ -85,7 +84,7 @@ func TestBlockWhenDownloadActiveMiddleware(t *testing.T) {
 		}
 	}
 	// A malformed id is the handler's to reject, not the guard's.
-	if got := do("PATCH", "/library/abc"); got != http.StatusNoContent {
+	if got := do("POST", "/library/abc/move"); got != http.StatusNoContent {
 		t.Fatalf("malformed id should fall through, got %d", got)
 	}
 }

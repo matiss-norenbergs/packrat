@@ -114,7 +114,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 	r.Use(CORS(deps.CORSAllowedOrigins))
 	// Known Items entries whose source has no native video ID key by their
 	// full URL instead (see subscriptions.sourceID) — that URL travels as
-	// the :sourceId path param on routes like .../entries/:sourceId/add,
+	// the :sourceId path param on routes like .../entries/:sourceId/link,
 	// percent-encoded (e.g. "%2F" for its slashes) by the frontend. Gin's
 	// default UseRawPath=false makes it match routes against the
 	// already-decoded req.URL.Path, where those "%2F"s have become literal
@@ -218,7 +218,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/downloads/playlist", CreatePlaylistDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo, deps.LibraryRepo, deps.HistoryRepo, itemResponder, deps.YtDlp))
 		api.POST("/downloads/batch", CreateBatchDownload(deps.Manager, deps.CollectionsRepo, deps.SettingsRepo, deps.LibraryRepo, deps.HistoryRepo, itemResponder))
 		api.POST("/downloads/:id/cancel", CancelDownload(deps.Manager))
-		api.DELETE("/downloads/:id", DeleteDownload(deps.DownloadsRepo))
+		api.POST("/downloads/bulk-delete", BulkDeleteDownloads(deps.DownloadsRepo))
 		api.POST("/downloads/clear-log", ClearDownloadLog(deps.DownloadsRepo))
 
 		api.GET("/library", ListLibrary(deps.LibraryRepo, itemResponder))
@@ -230,8 +230,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/maintenance/stray-files", ScanStrayFiles(deps.DB, deps.Manager, deps.MediaRoot, deps.ImagesRoot))
 		api.POST("/maintenance/stray-files/delete", DeleteStrayFiles(deps.DB, deps.Manager, deps.MediaRoot, deps.ImagesRoot))
 		api.DELETE("/library/:id", DeleteLibraryItem(deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.MediaRoot, deps.ImagesRoot))
-		api.PATCH("/library/:id", notDownloading, UpdateLibraryItem(deps.LibraryRepo, deps.MediaRoot, deps.Manager, deps.TagsRepo, deps.ArtistsRepo))
 		api.POST("/library/:id/progress", UpdateLibraryItemProgress(deps.LibraryRepo))
+		api.POST("/library/bulk-update", BulkUpdateLibraryItems(deps.LibraryRepo, deps.MediaRoot, deps.Manager, deps.TagsRepo, deps.ArtistsRepo, deps.DownloadsRepo))
 		api.POST("/library/bulk-tags", BulkAssignTags(deps.LibraryRepo, deps.TagsRepo, deps.DownloadsRepo, deps.MediaRoot))
 		api.POST("/library/bulk-delete", BulkDeleteLibraryItems(deps.DB, deps.LibraryRepo, deps.DownloadsRepo, deps.Manager, deps.MediaRoot, deps.ImagesRoot))
 		api.POST("/library/bulk-delete-file", BulkDeleteLibraryItemFiles(deps.DB, deps.LibraryRepo, deps.DownloadsRepo, deps.ThumbnailEnhancementOriginalsRepo, deps.Manager.ItemLocks(), deps.MediaRoot, deps.ImagesRoot))
@@ -257,8 +257,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/library/:id/thumbnail/gallery", notDownloading, SaveLibraryThumbnailToGallery(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.ThumbnailGalleryRepo))
 		api.GET("/library/:id/thumbnail/gallery", ListLibraryThumbnailGallery(deps.LibraryRepo, deps.ThumbnailGalleryRepo))
 		api.POST("/library/:id/thumbnail/gallery/:galleryId/apply", notDownloading, ApplyLibraryThumbnailFromGallery(deps.MediaRoot, deps.ImagesRoot, deps.YtDlp.FFmpegPath, deps.LibraryRepo, deps.ThumbnailGalleryRepo, itemResponder, deps.ThumbnailEnhancementOriginalsRepo))
-		api.PATCH("/library/:id/thumbnail/gallery/:galleryId", notDownloading, SetLibraryThumbnailGalleryFavorite(deps.ThumbnailGalleryRepo))
-		api.DELETE("/library/:id/thumbnail/gallery/:galleryId", notDownloading, DeleteLibraryThumbnailGalleryImage(deps.ImagesRoot, deps.ThumbnailGalleryRepo))
+		api.POST("/library/:id/thumbnail/gallery/bulk-favorite", notDownloading, BulkSetLibraryThumbnailGalleryFavorite(deps.ThumbnailGalleryRepo))
+		api.POST("/library/:id/thumbnail/gallery/bulk-delete", notDownloading, BulkDeleteLibraryThumbnailGalleryImages(deps.ImagesRoot, deps.ThumbnailGalleryRepo))
 		api.POST("/library/:id/thumbnail/match", frameMatchingOnly, notDownloading, StartFrameMatch(deps.MediaRoot, deps.LibraryRepo, deps.YtDlp, deps.FFProbePath, deps.FrameMatchJobs, deps.FrameMatchQueueRepo))
 		api.GET("/thumbnail-match/:jobId", frameMatchingOnly, GetFrameMatchStatus(deps.FrameMatchJobs))
 		api.POST("/library/thumbnail/match/bulk", frameMatchingOnly, BulkStartFrameMatch(deps.LibraryRepo, deps.FrameMatchQueueRepo, deps.DownloadsRepo))
@@ -326,20 +326,20 @@ func SetupRouter(deps Deps) *gin.Engine {
 			BackupHistoryRepo: deps.BackupHistoryRepo,
 		}))
 		api.GET("/backup/history/:id/download", DownloadBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
-		api.DELETE("/backup/history/:id", DeleteBackupHistoryEntry(deps.BackupsRoot, deps.BackupHistoryRepo))
+		api.POST("/backup/history/bulk-delete", BulkDeleteBackupHistory(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.GET("/backup/history/:id/preview", PreviewBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.POST("/backup/history/:id/restore", RestoreFullBackup(deps.BackupsRoot, deps.BackupHistoryRepo, deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.YtDlp))
 
 		api.POST("/subscriptions", subscriptionsOnly, CreateSubscription(subCheckDeps))
 		api.GET("/subscriptions", subscriptionsOnly, ListSubscriptions(subCheckDeps))
 		api.PATCH("/subscriptions/:id", subscriptionsOnly, UpdateSubscription(subCheckDeps))
-		api.DELETE("/subscriptions/:id", subscriptionsOnly, DeleteSubscription(subCheckDeps))
+		api.POST("/subscriptions/bulk-delete", subscriptionsOnly, BulkDeleteSubscriptions(subCheckDeps))
 		api.POST("/subscriptions/:id/check", subscriptionsOnly, CheckSubscriptionNow(subCheckDeps))
 		api.GET("/subscriptions/:id/entries", subscriptionsOnly, ListSubscriptionEntries(subCheckDeps))
-		api.POST("/subscriptions/:id/entries/:sourceId/add", subscriptionsOnly, AddSubscriptionEntry(subCheckDeps))
-		api.POST("/subscriptions/:id/entries/:sourceId/seen", subscriptionsOnly, MarkSubscriptionEntrySeen(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/bulk-add", subscriptionsOnly, BulkAddSubscriptionEntries(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/bulk-seen", subscriptionsOnly, BulkMarkSubscriptionEntriesSeen(subCheckDeps))
+		api.POST("/subscriptions/:id/entries/bulk-unlink", subscriptionsOnly, BulkUnlinkSubscriptionEntries(subCheckDeps))
 		api.POST("/subscriptions/:id/entries/:sourceId/link", subscriptionsOnly, LinkSubscriptionEntry(subCheckDeps))
-		api.POST("/subscriptions/:id/entries/:sourceId/unlink", subscriptionsOnly, UnlinkSubscriptionEntry(subCheckDeps))
 
 		enhanceDeps := thumbnailenhance.Deps{
 			SettingsRepo:  deps.SettingsRepo,
@@ -370,8 +370,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/import", fileImportOnly, CreateImport(deps.MediaRoot, deps.ImagesRoot, deps.LibraryRepo, deps.CollectionsRepo, deps.YtDlp, deps.FFProbePath, itemResponder))
 
 		api.GET("/history", ListHistory(deps.HistoryRepo, deps.SettingsRepo))
-		api.POST("/history/:id/retry", RetryHistoryItem(deps.HistoryRepo, deps.DownloadsRepo, deps.LibraryRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
-		api.DELETE("/history/:id", DeleteHistoryItem(deps.HistoryRepo))
+		api.POST("/history/bulk-retry", BulkRetryHistory(deps.HistoryRepo, deps.DownloadsRepo, deps.LibraryRepo, deps.Manager, deps.CollectionsRepo, deps.SettingsRepo))
+		api.POST("/history/bulk-delete", BulkDeleteHistory(deps.HistoryRepo))
 		api.POST("/history/clear", ClearHistory(deps.HistoryRepo))
 
 		api.GET("/logs", GetLogs(deps.DownloadsRepo, deps.SettingsRepo))

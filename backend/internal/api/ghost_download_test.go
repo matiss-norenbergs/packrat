@@ -159,16 +159,20 @@ func TestRetryHistoryReusesGhost(t *testing.T) {
 	settings := newSettingsRepoFor(e)
 	// Not started: the retry just needs to land in the queue.
 	mgr := queue.NewDownloadManager(e.mediaRoot, e.imagesRoot, "", nil, e.downloads, e.library, newCollectionsRepoFor(e), history, nil, nil, settings, nil, nil, nil, queue.NewProgressStore(), ws.NoopBroadcaster{})
-	h := RetryHistoryItem(history, e.downloads, e.library, mgr, newCollectionsRepoFor(e), settings)
-	w := e.do(t, h, http.MethodPost, fmt.Sprintf("/history/%d/retry", histID), "/history/:id/retry", "")
-	if w.Code != http.StatusCreated {
+	h := BulkRetryHistory(history, e.downloads, e.library, mgr, newCollectionsRepoFor(e), settings)
+	body := fmt.Sprintf(`{"ids":[%d]}`, histID)
+	w := e.do(t, h, http.MethodPost, "/history/bulk-retry", "/history/bulk-retry", body)
+	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body)
 	}
-	var out struct{ ID int64 }
+	var out BulkResultsResponse[int64]
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	retry, err := e.downloads.Get(ctx, out.ID)
+	if out.Succeeded != 1 || out.Failed != 0 || out.Results[0].DownloadID == nil {
+		t.Fatalf("first retry: %+v", out)
+	}
+	retry, err := e.downloads.Get(ctx, *out.Results[0].DownloadID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,10 +180,15 @@ func TestRetryHistoryReusesGhost(t *testing.T) {
 		t.Fatalf("retry should carry ghost %d, got %v", itemID, retry.GhostLibraryItemID)
 	}
 
-	// A second retry while the first is still queued is refused (409).
-	w = e.do(t, h, http.MethodPost, fmt.Sprintf("/history/%d/retry", histID), "/history/:id/retry", "")
-	if w.Code != http.StatusConflict {
-		t.Fatalf("second retry status = %d, want 409: %s", w.Code, w.Body)
+	// A second retry while the first is still queued is refused: HTTP 200, the
+	// item itself reports 409.
+	w = e.do(t, h, http.MethodPost, "/history/bulk-retry", "/history/bulk-retry", body)
+	out = BulkResultsResponse[int64]{}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusOK || out.Failed != 1 || out.Results[0].Status != http.StatusConflict {
+		t.Fatalf("second retry = %d %+v, want per-item 409", w.Code, out)
 	}
 
 	// A ghost that was deleted is simply not reused: the retry is a plain one.
@@ -191,9 +200,13 @@ func TestRetryHistoryReusesGhost(t *testing.T) {
 		t.Fatal(err)
 	}
 	mgr2 := queue.NewDownloadManager(e2.mediaRoot, e2.imagesRoot, "", nil, e2.downloads, e2.library, newCollectionsRepoFor(e2), history2, nil, nil, newSettingsRepoFor(e2), nil, nil, nil, queue.NewProgressStore(), ws.NoopBroadcaster{})
-	h2 := RetryHistoryItem(history2, e2.downloads, e2.library, mgr2, newCollectionsRepoFor(e2), newSettingsRepoFor(e2))
-	w = e2.do(t, h2, http.MethodPost, fmt.Sprintf("/history/%d/retry", hist2), "/history/:id/retry", "")
-	if w.Code != http.StatusCreated {
+	h2 := BulkRetryHistory(history2, e2.downloads, e2.library, mgr2, newCollectionsRepoFor(e2), newSettingsRepoFor(e2))
+	w = e2.do(t, h2, http.MethodPost, "/history/bulk-retry", "/history/bulk-retry", fmt.Sprintf(`{"ids":[%d]}`, hist2))
+	out = BulkResultsResponse[int64]{}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusOK || out.Succeeded != 1 {
 		t.Fatalf("status = %d: %s", w.Code, w.Body)
 	}
 }

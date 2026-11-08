@@ -1,15 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
-  addSubscriptionEntry,
+  bulkAddSubscriptionEntries,
   checkSubscriptionNow,
   createSubscription,
-  deleteSubscription,
+  bulkDeleteSubscriptions,
   linkSubscriptionEntry,
   listSubscriptionEntries,
   listSubscriptions,
-  markSubscriptionEntrySeen,
-  unlinkSubscriptionEntry,
+  bulkMarkSubscriptionEntriesSeen,
+  bulkUnlinkSubscriptionEntries,
   updateSubscription,
 } from "@/lib/api"
 import { libraryQueryKey } from "./useLibrary"
@@ -49,27 +49,13 @@ export function useUpdateSubscription() {
   })
 }
 
-export function useDeleteSubscription() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => deleteSubscription(id),
-    onSuccess: () => {
-      toast.success("Subscription removed")
-      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
-    },
-    onError: (err: Error) => toast.error(`Failed to remove subscription: ${err.message}`),
-  })
-}
-
-// No bulk-delete route exists on the backend — loops the same per-id DELETE
-// the single-row action uses (mirrors useBulkDeleteHistoryItems), one call
-// per selected id, and invalidates once at the end.
+// Deletes the given subscriptions in one all-or-nothing request (one id for a single row).
 export function useBulkDeleteSubscriptions() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => deleteSubscription(id))),
-    onSuccess: (_result, ids) => {
-      toast.success(`Removed ${ids.length} subscription${ids.length === 1 ? "" : "s"}`)
+    mutationFn: (ids: number[]) => bulkDeleteSubscriptions(ids),
+    onSuccess: ({ deleted }) => {
+      toast.success(`Removed ${deleted} subscription${deleted === 1 ? "" : "s"}`)
       queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to remove: ${err.message}`),
@@ -112,44 +98,9 @@ export function useSubscriptionEntries(subscriptionId: number, enabled: boolean)
   })
 }
 
-export function useAddSubscriptionEntry() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ subscriptionId, sourceId, mode }: { subscriptionId: number; sourceId: string; mode: AddSubscriptionEntryMode }) =>
-      addSubscriptionEntry(subscriptionId, sourceId, mode),
-    onSuccess: (result, { subscriptionId }) => {
-      toast.success(result.mode === "ghost" ? "Added as ghost item" : "Download queued")
-      // Acting on an entry also marks it seen server-side, so the
-      // Subscriptions table's unseen count needs to refresh too, not just
-      // the entries list.
-      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
-      queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
-      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
-    },
-    onError: (err: Error) => toast.error(`Failed to add item: ${err.message}`),
-  })
-}
-
-// No success toast, deliberately — dismissing several entries back-to-back
-// in the Known Items dialog shouldn't spam toasts the way a one-off action
-// like "Check now" does.
-export function useMarkSubscriptionEntrySeen() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ subscriptionId, sourceId }: { subscriptionId: number; sourceId: string }) =>
-      markSubscriptionEntrySeen(subscriptionId, sourceId),
-    onSuccess: (_data, { subscriptionId }) => {
-      queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
-      queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
-    },
-    onError: (err: Error) => toast.error(`Failed to mark seen: ${err.message}`),
-  })
-}
-
-// No bulk-add route exists on the backend — same fan-out approach as
-// useBulkDeleteSubscriptions, one POST per selected sourceId, single toast/
-// invalidate once every call settles.
+// "Add as ghost" / "Queue download" for the given entries (one source id for a single row).
+// Each entry is handled on its own, so the request can succeed while some entries failed: the
+// success toast counts the ones that went through and a second toast reports the rest.
 export function useBulkAddSubscriptionEntries() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -161,11 +112,15 @@ export function useBulkAddSubscriptionEntries() {
       subscriptionId: number
       sourceIds: string[]
       mode: AddSubscriptionEntryMode
-    }) => Promise.all(sourceIds.map((sourceId) => addSubscriptionEntry(subscriptionId, sourceId, mode))),
-    onSuccess: (_result, { subscriptionId, sourceIds, mode }) => {
-      toast.success(
-        `${mode === "ghost" ? "Added" : "Queued"} ${sourceIds.length} item${sourceIds.length === 1 ? "" : "s"}`,
-      )
+    }) => bulkAddSubscriptionEntries(subscriptionId, sourceIds, mode),
+    onSuccess: ({ results, succeeded, failed }, { subscriptionId, mode }) => {
+      if (succeeded > 0) toast.success(`${mode === "ghost" ? "Added" : "Queued"} ${succeeded} item${succeeded === 1 ? "" : "s"}`)
+      if (failed > 0) {
+        const first = results.find((r) => !r.ok)?.error
+        toast.error(`${failed} item${failed === 1 ? "" : "s"} failed${first ? `: ${first}` : ""}`)
+      }
+      // Acting on an entry also marks it seen server-side, so the Subscriptions table's unseen
+      // count needs to refresh too, not just the entries list.
       queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
       queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
       queryClient.invalidateQueries({ queryKey: libraryQueryKey })
@@ -175,13 +130,13 @@ export function useBulkAddSubscriptionEntries() {
   })
 }
 
-// Same fan-out approach, mirrors useMarkSubscriptionEntrySeen's own
-// no-success-toast choice for the same reason.
+// No success toast, deliberately — dismissing entries in the Known Items dialog shouldn't spam
+// toasts the way a one-off action like "Check now" does.
 export function useBulkMarkSubscriptionEntriesSeen() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ subscriptionId, sourceIds }: { subscriptionId: number; sourceIds: string[] }) =>
-      Promise.all(sourceIds.map((sourceId) => markSubscriptionEntrySeen(subscriptionId, sourceId))),
+      bulkMarkSubscriptionEntriesSeen(subscriptionId, sourceIds),
     onSuccess: (_data, { subscriptionId }) => {
       queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
       queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
@@ -207,15 +162,15 @@ export function useLinkSubscriptionEntry() {
   })
 }
 
-// Unlink is a pure "clear," so — unlike Link — it composes fine as a bulk
-// action; same fan-out approach as the other bulk hooks here.
+// Unlink is a pure "clear," so — unlike Link — it composes fine as a bulk action (one source id
+// for a single row).
 export function useBulkUnlinkSubscriptionEntries() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ subscriptionId, sourceIds }: { subscriptionId: number; sourceIds: string[] }) =>
-      Promise.all(sourceIds.map((sourceId) => unlinkSubscriptionEntry(subscriptionId, sourceId))),
-    onSuccess: (_result, { subscriptionId, sourceIds }) => {
-      toast.success(`Unlinked ${sourceIds.length} item${sourceIds.length === 1 ? "" : "s"}`)
+      bulkUnlinkSubscriptionEntries(subscriptionId, sourceIds),
+    onSuccess: ({ updated }, { subscriptionId }) => {
+      toast.success(`Unlinked ${updated} item${updated === 1 ? "" : "s"}`)
       queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
       queryClient.invalidateQueries({ queryKey: [...subscriptionsQueryKey, subscriptionId, "entries"] })
     },

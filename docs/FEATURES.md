@@ -217,7 +217,9 @@ The live download queue.
     row's action button **cancels** it.
   - Once it reaches a terminal state (completed/failed/cancelled/interrupted), the button instead
     **removes it from the queue list** (with a confirmation) — this only deletes the queue-history
-    row, never the downloaded file itself.
+    row, never the downloaded file itself. Deleting several at once is one all-or-nothing request: if any
+    of them has become active meanwhile, nothing is deleted and the toast shows the server's message
+    ("cancel these downloads before deleting them"), with the selection kept.
   - Rows of private collections (or with private tags) are blurred with a hashed title while
     **Enable privacy** is on. Clicking a row's title or thumbnail reveals just that row; the
     [reveal-all floating button](#reveal-all-floating-button) reveals all of them. Revealed rows stay
@@ -310,6 +312,14 @@ selected item's own source URL — items with none are silently skipped), a Thum
 Delete file (removes just the media file for every selected item, keeping the entries as
 placeholders — see Ghost items below), or Delete selected (remove the items entirely, optionally
 deleting their files).
+
+How a bulk action reports a partial failure depends on what it does. The edit actions (Edit fields, Set
+artist, Set year, Generate NFO, Edit sequence) send **one request**, but every file is still saved on its
+own (renames and metadata remuxes cannot be rolled back): the result toast counts "Updated N" and "N
+failed to update", a file that is busy or has a download is reported as failed without stopping the others,
+and a request that fails as a whole counts every file as failed. Deletes are **all-or-nothing** — see
+[Bulk deletes](#bulk-deletes) below. A single-item action (one card's Edit, one row's Delete) uses the very
+same endpoint with a list of one.
 
 **Per-item actions** (the "⋮" menu on each card), in order:
 - **Edit** — title, filename (renames the file on disk), uploader, duration, resolution, artist,
@@ -459,6 +469,13 @@ thumbnail, and the download itself is unaffected.
   History retry, or one that existed before the run) keeps its own title, uploader and
   description: edits made while it sat there are not overwritten when the download finishes.
 
+### Bulk deletes
+
+Deleting several downloads, history entries, subscriptions, backups or gallery images is **all-or-nothing**:
+one request, one database transaction. If anything in it is blocked (an active download, an image that
+is not the item's) nothing is deleted and the message says why; ids that no longer exist are simply
+ignored. Files (backups, gallery images) are removed only after the rows are gone.
+
 ### Thumbnail gallery
 
 Every library item can keep a small gallery of saved candidate thumbnail images — separate from
@@ -488,7 +505,9 @@ without re-extracting or re-fetching anything.
   per-tile hover buttons give way to a selection circle on each tile, and clicking a tile selects it
   instead of opening the viewer (shift-click selects a range in the displayed order). While on, the
   toolbar adds **Select all / Deselect all** (everything currently displayed), **Favorite**,
-  **Unfavorite**, **Delete** (with a count confirmation) and a selected count. Bulk actions only
+  **Unfavorite**, **Delete** (with a count confirmation) and a selected count. Each is one
+  all-or-nothing request: if it fails (for example an image no longer belongs to the item) nothing
+  changed and the toast says why. Bulk actions only
   apply to selected images that are currently displayed, and Favorite/Unfavorite skip images
   already in that state (each is disabled when nothing in the selection would change). Switching
   Manage off, or pressing Esc once, leaves manage mode and clears the selection; Esc again closes
@@ -693,8 +712,10 @@ removed when the corresponding entry is deleted from the Downloads queue.
 - **Retry** re-queues a fresh download for any non-completed entry (failed/cancelled/interrupted),
   reusing the original type/quality/format/collection/filename where the source download record
   still exists.
-- **Delete** removes a single entry; **Clear all** wipes every entry immediately regardless of the
-  retention setting below.
+- **Delete** removes the selected entries (one request, all-or-nothing: either all of them are removed
+  or none); **Clear all** wipes every entry immediately regardless of the retention setting below.
+  **Retry** on several entries queues each one on its own: the toast reads "N retries queued" and, if some
+  could not be queued, "N retries failed: <reason>".
 - Entries older than the "Keep history for" window (Settings → History; default forever) are
   pruned automatically.
 - If "Anonymize History Links" is on (Settings → Privacy), URLs here are shown as a short
@@ -831,8 +852,9 @@ actions. Preview (contents without downloading), Download and Restore (straight 
 install, same download-vs-ghost-placeholder choice as a manual import) work on exactly one selected
 row that has a file; they're disabled with a tooltip otherwise (and hidden from the context menu).
 **Delete** works on any selection, failed rows included, always after a confirmation showing the
-count (it permanently deletes the backup files), and reports one summary toast ("Deleted 3
-backups" / "Deleted 2, 1 failed").
+count (it permanently deletes the backup files). It is one all-or-nothing request: the toast reads
+"Deleted 3 backups", or, if it fails, "Delete failed for 3 backups: <reason>" with the selection kept;
+the files are removed after the database rows are gone.
 Old backups are pruned automatically past a configurable retention count (default
 14; set to unlimited to keep everything). The count applies to **successful** backups only, so a
 run of failing backups never pushes good ones out; the newest 20 failed attempts stay in the
@@ -931,7 +953,8 @@ back manually.
   library item…** (single-row only — search-and-pick a library item to manually associate with this
   entry, for when the video was actually downloaded through a different source than this
   subscription tracks, so it was never found automatically), and **Unlink** (clears that
-  association). The Status column shows "New" (unseen), "In library" / "In library (ghost)" (linked
+  association). Mark seen and Unlink are one all-or-nothing request; Add as ghost / Queue download handle
+  each entry on its own, so the toast can read "Added 2 items" plus "1 item failed: <reason>". The Status column shows "New" (unseen), "In library" / "In library (ghost)" (linked
   to a library item, automatically or manually — same badge either way), or nothing for a seen entry
   with no link. Re-adding an entry that's already linked prompts for confirmation first rather than
   silently duplicating it, and doesn't overwrite the existing link. An upload that fails to

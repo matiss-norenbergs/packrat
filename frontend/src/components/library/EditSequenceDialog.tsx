@@ -10,7 +10,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { collectionsQueryKey, useCollections } from "@/hooks/useCollections"
 import { libraryQueryKey, useLibraryQuery } from "@/hooks/useLibrary"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
-import { updateLibraryItem } from "@/lib/api"
+import { runBulkLibraryUpdate } from "@/lib/bulkLibraryUpdate"
 import { buildCollectionTree, collectDescendantIds, findNodeById } from "@/lib/collectionTree"
 import { cn } from "@/lib/utils"
 import {
@@ -180,13 +180,10 @@ export function EditSequenceDialog({ open, onOpenChange }: EditSequenceDialogPro
     // Items with a running download are locked (the server would answer 409): leave them out and say so.
     const editable = toSave.filter(({ item }) => item.activeDownloadId == null)
     const skippedDownloading = toSave.length - editable.length
-    const results = await Promise.allSettled(
-      editable.map(({ item, newNumber }) => updateLibraryItem(item.id, { sequenceNumber: newNumber })),
+    const { succeeded, failed } = await runBulkLibraryUpdate(
+      editable.map(({ item, newNumber }) => ({ id: item.id, changes: { sequenceNumber: newNumber } })),
     )
     setIsSaving(false)
-
-    const succeeded = results.filter((r) => r.status === "fulfilled").length
-    const failed = results.length - succeeded
 
     queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     // The collection tile's "missing sequence" warning comes from

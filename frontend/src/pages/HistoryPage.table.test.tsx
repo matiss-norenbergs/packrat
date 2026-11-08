@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { HistoryPage } from "@/pages/HistoryPage"
-import { callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
+import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { HistoryItem } from "@/types/api"
 
 beforeEach(() => {
@@ -34,8 +34,13 @@ const entry = (id: number, title: string | null, over: Partial<HistoryItem> = {}
 
 function serve(items: HistoryItem[]) {
   return mockFetch((url, init) => {
-    if (/\/history\/\d+\/retry$/.test(url) && init.method === "POST") return { status: 200, body: { id: 1 } }
-    if (/\/history\/\d+$/.test(url) && init.method === "DELETE") return { status: 204 }
+    if (url.endsWith("/history/bulk-retry") && init.method === "POST") {
+      const ids = (JSON.parse(init.body as string) as { ids: number[] }).ids
+      return { status: 200, body: { results: ids.map((id) => ({ id, ok: true, downloadId: 100 + id })), succeeded: ids.length, failed: 0 } }
+    }
+    if (url.endsWith("/history/bulk-delete") && init.method === "POST") {
+      return { status: 200, body: { deleted: (JSON.parse(init.body as string) as { ids: number[] }).ids.length } }
+    }
     if (url.endsWith("/history")) return { status: 200, body: items }
     return { status: 404 }
   })
@@ -216,12 +221,10 @@ describe("HistoryPage table", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }))
     expect(toolbarButton("Retry")).toBeEnabled()
     fireEvent.click(toolbarButton("Retry"))
-    await waitFor(() => expect(methodCalls(fetchMock, "POST")).toHaveLength(3))
-    expect(
-      methodCalls(fetchMock, "POST")
-        .map((u) => u.match(/history\/(\d+)\/retry/)![1])
-        .sort(),
-    ).toEqual(["2", "3", "4"])
+    // One batch request carrying every retryable id (not one request per row).
+    await waitFor(() => expect(callsTo(fetchMock, "/history/bulk-retry")).toHaveLength(1))
+    expect(methodCalls(fetchMock, "POST")).toHaveLength(1)
+    expect(bodyOf(callsTo(fetchMock, "/history/bulk-retry")[0]).ids.sort()).toEqual([2, 3, 4])
     // The selection is cleared once the retries were queued.
     await waitFor(() => expect(toolbarButton("Delete")).toBeDisabled())
   })
@@ -235,11 +238,12 @@ describe("HistoryPage table", () => {
     fireEvent.mouseUp(window)
     fireEvent.click(toolbarButton("Delete"))
     expect(await screen.findByText("Delete 2 selected entries?")).toBeInTheDocument()
-    expect(methodCalls(fetchMock, "DELETE")).toHaveLength(0)
+    expect(callsTo(fetchMock, "/history/bulk-delete")).toHaveLength(0)
 
     fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Delete" }))
-    await waitFor(() => expect(methodCalls(fetchMock, "DELETE")).toHaveLength(2))
-    expect(methodCalls(fetchMock, "DELETE").map((u) => u.match(/history\/(\d+)$/)![1]).sort()).toEqual(["1", "3"])
+    await waitFor(() => expect(callsTo(fetchMock, "/history/bulk-delete")).toHaveLength(1))
+    expect(bodyOf(callsTo(fetchMock, "/history/bulk-delete")[0]).ids.sort()).toEqual([1, 3])
+    expect(methodCalls(fetchMock, "DELETE")).toHaveLength(0)
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull())
     await waitFor(() => expect(toolbarButton("Delete")).toBeDisabled())
   })
@@ -279,8 +283,9 @@ describe("HistoryPage table", () => {
     await screen.findByText("Done")
     fireEvent.contextMenu(row("Broke"))
     fireEvent.click(await screen.findByRole("menuitem", { name: "Retry" }))
-    await waitFor(() => expect(callsTo(fetchMock, "/history/2/retry")).toHaveLength(1))
-    expect(callsTo(fetchMock, "/history/1/retry")).toHaveLength(0)
+    // A single-row action sends a one-element list to the same bulk endpoint.
+    await waitFor(() => expect(callsTo(fetchMock, "/history/bulk-retry")).toHaveLength(1))
+    expect(bodyOf(callsTo(fetchMock, "/history/bulk-retry")[0])).toEqual({ ids: [2] })
 
     await waitFor(() => expect(screen.queryByRole("menuitem")).toBeNull())
     fireEvent.contextMenu(row("Done"))

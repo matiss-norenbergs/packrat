@@ -220,27 +220,31 @@ type invalidURLError struct{}
 
 func (e invalidURLError) Error() string { return "url must be an http or https URL" }
 
-// writeEnqueueError maps an enqueueDownload error to an HTTP response.
-func writeEnqueueError(c *gin.Context, err error) {
+// enqueueErrorStatus maps an enqueueDownload failure to the HTTP status and
+// message the handlers answer with (also used as a per-item error by the bulk
+// endpoints).
+func enqueueErrorStatus(err error) (int, string) {
 	var folderErr invalidFolderError
 	if errors.As(err, &folderErr) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid folder: " + folderErr.Error()})
-		return
+		return http.StatusBadRequest, "invalid folder: " + folderErr.Error()
 	}
 	var urlErr invalidURLError
 	if errors.As(err, &urlErr) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": urlErr.Error()})
-		return
+		return http.StatusBadRequest, urlErr.Error()
 	}
 	if errors.Is(err, queue.ErrInvalidURL) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": queue.ErrInvalidURL.Error()})
-		return
+		return http.StatusBadRequest, queue.ErrInvalidURL.Error()
 	}
 	if errors.Is(err, repository.ErrNotFound) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "collection not found"})
-		return
+		return http.StatusBadRequest, "collection not found"
 	}
-	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	return http.StatusInternalServerError, err.Error()
+}
+
+// writeEnqueueError maps an enqueueDownload error to an HTTP response.
+func writeEnqueueError(c *gin.Context, err error) {
+	status, msg := enqueueErrorStatus(err)
+	c.JSON(status, gin.H{"error": msg})
 }
 
 func ListDownloads(mgr *queue.DownloadManager, repo *repository.DownloadsRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
@@ -289,52 +293,11 @@ func CancelDownload(mgr *queue.DownloadManager) gin.HandlerFunc {
 	}
 }
 
-// DeleteDownload removes a download's history row — distinct from
-// CancelDownload, which stops an in-flight job. Only terminal-status rows
-// (completed/failed/cancelled/interrupted) can be deleted; an active one
-// must be cancelled first. Safe with respect to the library table: see
-// DownloadsRepo.Delete.
-func DeleteDownload(repo *repository.DownloadsRepo) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-			return
-		}
-
-		d, err := repo.Get(c.Request.Context(), id)
-		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "download not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		for _, active := range models.ActiveStatuses() {
-			if d.Status == active {
-				c.JSON(http.StatusConflict, gin.H{"error": "cancel this download before deleting it"})
-				return
-			}
-		}
-
-		if err := repo.Delete(c.Request.Context(), id); err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "download not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.Status(http.StatusNoContent)
-	}
-}
-
 // ClearDownloadLog permanently removes every terminal (non-active) download
 // log entry, regardless of age — a manual complement to the automated
 // retention sweep (cleanupDownloadLog in cmd/server/main.go). Never touches
 // an active download: DeleteOlderThan itself excludes those, so this can't
-// be used to short-circuit DeleteDownload's cancel-first guard.
+// be used to short-circuit BulkDeleteDownloads' cancel-first guard.
 func ClearDownloadLog(repo *repository.DownloadsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		n, err := repo.DeleteOlderThan(c.Request.Context(), time.Now())
@@ -343,5 +306,34 @@ func ClearDownloadLog(repo *repository.DownloadsRepo) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"deleted": n})
+	}
+}
+
+// BulkDeleteDownloads is POST /api/downloads/bulk-delete: it removes the
+// download log rows for the given ids, all or nothing. A download in an active
+// status must be cancelled first, so if any listed id is active nothing is
+// deleted and the answer is 409 {error, blockedIds}. Ids that do not exist are
+// ignored; "deleted" counts the rows really removed. Safe with respect to the
+// library table: see DownloadsRepo.Delete's note on library.download_id.
+func BulkDeleteDownloads(repo *repository.DownloadsRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkIDsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !checkBulkCount(c, len(req.IDs)) {
+			return
+		}
+		deleted, blocked, err := repo.DeleteByIDs(c.Request.Context(), dedupeKeepOrder(req.IDs))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if len(blocked) > 0 {
+			writeBlocked(c, "cancel these downloads before deleting them", blocked)
+			return
+		}
+		c.JSON(http.StatusOK, BulkDeleteResponse{Deleted: deleted})
 	}
 }

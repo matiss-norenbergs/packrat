@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
-  deleteBackupHistoryEntry,
+  bulkDeleteBackups,
   exportLibraryBackup,
   exportSettingsBackup,
   fetchBackupHistory,
@@ -125,16 +125,17 @@ export function useRunManualBackup() {
   })
 }
 
-// `silent` leaves toasts and the list refetch to the caller — used when deleting several
-// entries at once, so the caller can report one summary instead of one toast per entry.
-export function useDeleteBackupHistoryEntry({ silent = false }: { silent?: boolean } = {}) {
+// Deletes the given backups in one all-or-nothing request (one id for a single delete); the
+// server removes the files after it committed. `silent` leaves toasts and the list refetch to
+// the caller, which reports one summary.
+export function useDeleteBackupHistory({ silent = false }: { silent?: boolean } = {}) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: deleteBackupHistoryEntry,
-    onSuccess: () => {
+    mutationFn: (ids: number[]) => bulkDeleteBackups(ids),
+    onSuccess: (_result, ids) => {
       if (silent) return
       queryClient.invalidateQueries({ queryKey: backupHistoryQueryKey })
-      toast.success("Backup deleted")
+      toast.success(ids.length === 1 ? "Backup deleted" : `Deleted ${ids.length} backups`)
     },
     onError: (err: Error) => {
       if (silent) return

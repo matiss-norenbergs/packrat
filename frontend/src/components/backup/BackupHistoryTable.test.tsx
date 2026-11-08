@@ -19,7 +19,7 @@ vi.mock("@/hooks/useBackup", () => ({
   backupHistoryQueryKey: ["backup-history"],
   useBackupHistory: () => ({ data: history, isLoading: loading }),
   useRunManualBackup: () => ({ mutate: runMutate, isPending: false }),
-  useDeleteBackupHistoryEntry: () => ({ mutateAsync: deleteAsync }),
+  useDeleteBackupHistory: () => ({ mutateAsync: deleteAsync }),
   useRestoreFullBackup: () => ({ mutate: restoreMutate }),
 }))
 // Tooltip content only exists while a tooltip is open (and never on a disabled button); render it inline so the
@@ -60,7 +60,7 @@ const toolbarBtn = (name: RegExp) => screen.getByRole("button", { name })
 beforeEach(() => {
   history = [OK1, OK2, FAILED]
   loading = false
-  deleteAsync.mockReset().mockResolvedValue(undefined)
+  deleteAsync.mockReset().mockImplementation(async (ids: number[]) => ({ deleted: ids.length }))
   restoreMutate.mockReset()
   runMutate.mockReset()
   toastError.mockReset()
@@ -133,7 +133,8 @@ describe("BackupHistoryTable", () => {
     expect(within(dialog).getByText("Delete 3 backups?")).toBeTruthy()
     await user.click(within(dialog).getByRole("button", { name: "Delete" }))
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Deleted 3 backups"))
-    expect(deleteAsync.mock.calls.map((c) => c[0])).toEqual([1, 2, 3])
+    // One all-or-nothing request carrying every id.
+    expect(deleteAsync.mock.calls).toEqual([[[1, 2, 3]]])
     expect(toastSuccess).toHaveBeenCalledTimes(1)
     expect(toolbarBtn(/delete/i).hasAttribute("disabled")).toBe(true) // selection cleared
   })
@@ -146,20 +147,6 @@ describe("BackupHistoryTable", () => {
     const dialog = await screen.findByRole("alertdialog")
     expect(within(dialog).getByText("Delete this backup?")).toBeTruthy()
     expect(deleteAsync).not.toHaveBeenCalled()
-  })
-
-  it("summarises a partial failure in one toast", async () => {
-    const user = userEvent.setup()
-    deleteAsync.mockImplementation(async (id: number) => {
-      if (id === 2) throw new Error("boom")
-    })
-    renderWithProviders(<BackupHistoryTable />)
-    pick(0)
-    fireEvent.mouseDown(rowEls()[1], { button: 0, shiftKey: true })
-    await user.click(toolbarBtn(/^delete$/i))
-    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }))
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Deleted 1, 1 failed"))
-    expect(toastSuccess).not.toHaveBeenCalled()
   })
 
   it("restores the row the dialog was opened for even if the selection changes", async () => {
@@ -330,7 +317,7 @@ describe("BackupHistoryTable as a DataTable", () => {
     expect(within(dialog).getByText("Delete 2 backups?")).toBeTruthy()
     await user.click(within(dialog).getByRole("button", { name: "Delete" }))
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Deleted 2 backups"))
-    expect(deleteAsync.mock.calls.map((c) => c[0])).toEqual([1, 3])
+    expect(deleteAsync.mock.calls).toEqual([[[1, 3]]])
   })
 
   it("keeps the single-delete toasts for success and failure", async () => {
@@ -350,7 +337,7 @@ describe("BackupHistoryTable as a DataTable", () => {
     expect(toastSuccess).not.toHaveBeenCalled()
   })
 
-  it("reports a total failure of several deletes in one toast", async () => {
+  it("a failed delete of several is all-or-nothing: one toast with the server message, selection kept", async () => {
     const user = userEvent.setup()
     deleteAsync.mockRejectedValue(new Error("boom"))
     renderWithProviders(<BackupHistoryTable />)
@@ -358,7 +345,11 @@ describe("BackupHistoryTable as a DataTable", () => {
     fireEvent.mouseDown(rowEls()[1], { button: 0, shiftKey: true })
     await user.click(toolbarBtn(/^delete$/i))
     await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }))
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Delete failed for 2 backups"))
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Delete failed for 2 backups: boom"))
+    expect(toastError).toHaveBeenCalledTimes(1)
+    expect(toastSuccess).not.toHaveBeenCalled()
+    expect(deleteAsync).toHaveBeenCalledTimes(1)
+    expect(toolbarBtn(/^delete$/i).hasAttribute("disabled")).toBe(false) // selection still there
   })
 
   it("ignores ids of rows that vanished from the data", () => {

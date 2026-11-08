@@ -6,7 +6,7 @@ import {
   createBatchDownload,
   createDownload,
   createPlaylistDownload,
-  deleteDownload,
+  bulkDeleteDownloads,
   fetchDownloads,
   previewDownload,
 } from "@/lib/api"
@@ -117,30 +117,16 @@ export function useCancelDownload() {
   })
 }
 
-export function useDeleteDownload() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => deleteDownload(id),
-    onSuccess: () => {
-      toast.success("Removed")
-      queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
-    },
-    onError: (err: Error) => {
-      toast.error(`Failed to delete: ${err.message}`)
-    },
-  })
-}
-
-// No bulk-delete route exists on the backend — loops the same per-id DELETE
-// the single-item action already uses, one call per selected id, and
-// invalidates once at the end. Callers are expected to filter out
-// still-active downloads first (the backend rejects those with a 409).
+// Deletes the given downloads from the log, all or nothing, in one request — one id for a
+// single-row delete. Callers filter out still-active downloads first; if one slips through (it
+// started meanwhile) the server answers 409 with a message and deletes nothing, which is shown
+// here and leaves the caller's selection alone (it clears it only on success).
 export function useBulkDeleteDownloads() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => deleteDownload(id))),
-    onSuccess: (_result, ids) => {
-      toast.success(`Removed ${ids.length} download${ids.length === 1 ? "" : "s"}`)
+    mutationFn: (ids: number[]) => bulkDeleteDownloads(ids),
+    onSuccess: ({ deleted }) => {
+      toast.success(`Removed ${deleted} download${deleted === 1 ? "" : "s"}`)
       queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
     },
     onError: (err: Error) => {

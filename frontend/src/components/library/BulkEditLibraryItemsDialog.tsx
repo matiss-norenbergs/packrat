@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { useCollections } from "@/hooks/useCollections"
 import { libraryQueryKey, useLibraryQuery } from "@/hooks/useLibrary"
-import { updateLibraryItem } from "@/lib/api"
+import { runBulkLibraryUpdate } from "@/lib/bulkLibraryUpdate"
 import { buildCollectionTree, collectDescendantIds, findNodeById } from "@/lib/collectionTree"
 import { buildLibraryItemUpdatePayload, libraryItemToEditFields, type LibraryItemEditFields } from "@/lib/libraryItemEdit"
 import { BulkEditLibraryItemRow } from "./BulkEditLibraryItemRow"
@@ -96,11 +96,8 @@ export function BulkEditLibraryItemsDialog({ open, onOpenChange }: BulkEditLibra
     // Items with a running download are locked (the server would answer 409): leave them out and say so.
     const editable = toSave.filter(({ item }) => item.activeDownloadId == null)
     const skippedDownloading = toSave.length - editable.length
-    const results = await Promise.allSettled(editable.map(({ item, payload }) => updateLibraryItem(item.id, payload)))
+    const { succeeded, failed } = await runBulkLibraryUpdate(editable.map(({ item, payload }) => ({ id: item.id, changes: payload })))
     setIsSaving(false)
-
-    const succeeded = results.filter((r) => r.status === "fulfilled").length
-    const failed = results.length - succeeded
 
     queryClient.invalidateQueries({ queryKey: libraryQueryKey })
     if (succeeded > 0) toast.success(`Updated ${succeeded} file${succeeded === 1 ? "" : "s"}`)

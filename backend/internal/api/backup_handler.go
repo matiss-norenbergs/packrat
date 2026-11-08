@@ -223,7 +223,7 @@ func PreviewLibraryImport(collectionsRepo *repository.CollectionsRepo, tagsRepo 
 // queued for them; every other resolved item gets a redownload queued —
 // the same enqueueDownload helper CreateDownload and RedownloadLibraryItem
 // use, applying the same default-download-type fallback
-// RetryHistoryItem/RedownloadLibraryItem already use when the export didn't
+// the history retry core/RedownloadLibraryItem already use when the export didn't
 // carry a type (its originating Download row was gone). Each item is
 // enqueued independently and best-effort — one bad URL/folder doesn't abort
 // the rest of the import.
@@ -402,41 +402,6 @@ func DownloadBackupFile(backupsRoot string, repo *repository.BackupHistoryRepo) 
 			return
 		}
 		c.FileAttachment(fullPath, *entry.FileName)
-	}
-}
-
-// DeleteBackupHistoryEntry removes a backup_history row and best-effort
-// unlinks its file — not explicitly requested, but a natural complement to a
-// management table, matching every other list-with-delete page in the app.
-func DeleteBackupHistoryEntry(backupsRoot string, repo *repository.BackupHistoryRepo) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-			return
-		}
-		ctx := c.Request.Context()
-		entry, err := repo.Get(ctx, id)
-		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "backup not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if err := repo.Delete(ctx, id); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if entry.FileName != nil {
-			if path, err := pathsafe.ResolveUnderRoot(backupsRoot, *entry.FileName); err == nil {
-				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-					log.Printf("deleting backup file %q failed: %v", path, err)
-				}
-			}
-		}
-		c.Status(http.StatusNoContent)
 	}
 }
 
@@ -709,5 +674,38 @@ func toBackupContentPreviewResponse(bundle backup.FullBundle) BackupContentPrevi
 		Tags:          tags,
 		Artists:       bundle.Library.Artists,
 		Items:         items,
+	}
+}
+
+// BulkDeleteBackupHistory is POST /api/backup/history/bulk-delete: the rows are
+// deleted in one transaction, and only after the commit are the backup files
+// removed, best effort (a failed removal is logged, as the single handler did).
+// Ids that do not exist are ignored; "deleted" counts the rows really removed.
+func BulkDeleteBackupHistory(backupsRoot string, repo *repository.BackupHistoryRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req BulkIDsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !checkBulkCount(c, len(req.IDs)) {
+			return
+		}
+		removed, err := repo.DeleteByIDs(c.Request.Context(), dedupeKeepOrder(req.IDs))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		for _, entry := range removed {
+			if entry.FileName == nil {
+				continue
+			}
+			if path, err := pathsafe.ResolveUnderRoot(backupsRoot, *entry.FileName); err == nil {
+				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+					log.Printf("deleting backup file %q failed: %v", path, err)
+				}
+			}
+		}
+		c.JSON(http.StatusOK, BulkDeleteResponse{Deleted: len(removed)})
 	}
 }

@@ -709,8 +709,9 @@ broadcast so the Library refetches.
   that writes, moves or deletes an item's media file takes the same lock:
   - **Requests use `TryLock`** and answer `409 "This item is being updated. Try again in a moment."`
     instead of waiting, before anything is changed: `POST .../move`, `POST .../trim/accept`,
-    `DELETE .../file`, `PATCH /library/:id` **only when it carries `filename`** (the rename is the file
-    operation; edits of title/artist/etc. never need the lock), and `DELETE /library/:id` **only with
+    `DELETE .../file`, an item of `POST /library/bulk-update` **only when its changes carry `filename`**
+    (the rename is the file operation; edits of title/artist/etc. never need the lock, and a busy item
+    fails on its own without aborting the rest of the batch), and `DELETE /library/:id` **only with
     `deleteFiles=true`** (dropping just the row needs no lock: a remux finishing later sees the row gone
     and discards its output). The bulk endpoints (`bulk-delete` with `deleteFiles`, `bulk-delete-file`)
     use `TryLockAll`, all-or-nothing: if any selected item is busy the whole request is refused with the
@@ -1345,6 +1346,38 @@ row type and the id type (number or string).
 - **Why no virtualization**: pages are paginated at 50 rows, so virtualization would add complexity for no gain.
 - **Why Collections doesn't use it**: it renders a tree (expand/collapse, nesting, drag to re-parent), which a flat
   row model doesn't fit; its cells could use the same primitives but the table itself stays bespoke.
+
+## Bulk endpoints
+
+Actions on one or more rows exist **only** as `POST .../bulk-<action>` endpoints taking a JSON list;
+the single-item routes were removed (see "Replaced single-item endpoints" in `docs/api.md`). A single-item
+UI action sends a list with one element to the same endpoint, so each action has one code path. The
+conventions (`api/bulk.go`):
+
+- **Naming and shape.** `POST /api/<area>/bulk-<action>`, body `{"ids": [...]}` (or `sourceIds`,
+  `galleryIds`, `items`). At most `maxBulkItems` (1000) entries; empty or oversized is `400`. Duplicates
+  are dropped, except where two changes to one id would be ambiguous (`library/bulk-update`: `400`).
+- **All-or-nothing** when the operation is a pure database change (deletes, gallery favorite/delete, entry
+  seen/unlink): one transaction inside a repository batch method (`DeleteByIDs`, `DeleteForItem`,
+  `MarkSeenEntries`, …), chunked with `inChunks` so no `IN` list exceeds SQLite's variable limit.
+  Everything is validated first inside that transaction; blocked ids answer `409 {error, blockedIds}` and
+  change nothing. Ids that do not exist are ignored, and the response counts rows really affected. The
+  batch methods take no repo mutex and call no recorder while the transaction is open (the lock-order
+  rule above; there is one DB connection).
+- **Files after the commit.** Backup files and gallery images are removed only after the commit, best
+  effort and logged, so a failed transaction leaves the disk untouched.
+- **Per-item results** when the work includes things a transaction cannot undo — disk renames, remux
+  scheduling, enqueueing a download, creating a ghost (`library/bulk-update`, `history/bulk-retry`,
+  `subscriptions/:id/entries/bulk-add`). Each item runs the extracted per-item core of the old single
+  handler (`libraryUpdater.update`, `historyRetrier.retry`, `addSubscriptionEntry`) returning an `*opError`
+  (status + message), sequentially, in request order; the response is `{results, succeeded, failed}` with
+  HTTP 200. The loop runs on `context.WithoutCancel` plus a 2-minute timeout so a closed tab cannot leave
+  half a batch unreported. Locks stay per item: a busy item (`itemlock.TryLock`) or an item with an
+  active download is that item's `409`, not the request's.
+- **Frontend.** `lib/api.ts` has one `bulk…` function per endpoint. The per-item endpoints split a list over
+  1000 into consecutive requests and join the results; the all-or-nothing ones never split (that would
+  break atomicity), so the server's 400 message is shown. A 409 shows the server's message and keeps the
+  selection.
 
 ## Deliberate scope cuts
 

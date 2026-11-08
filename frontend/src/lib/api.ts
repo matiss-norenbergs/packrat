@@ -24,7 +24,9 @@ import type {
   BulkFetchThumbnailsResponse,
   BulkRedownloadLibraryItemsRequest,
   AddSubscriptionEntryMode,
-  AddSubscriptionEntryResult,
+  BulkResultsResponse,
+  BulkUpdatedResponse,
+  BulkUpdateLibraryItem,
   BulkRedownloadResponse,
   BulkThumbnailOriginalsResponse,
   ChangePasswordRequest,
@@ -100,7 +102,6 @@ import type {
   TrimPreviewResult,
   UpdateArtistRequest,
   UpdateCollectionRequest,
-  UpdateLibraryItemRequest,
   UpdateLibraryProgressRequest,
   UpdateSettingsRequest,
   UpdateTagRequest,
@@ -417,8 +418,34 @@ export function cancelDownload(id: number): Promise<void> {
   return request<void>(`/downloads/${id}/cancel`, { method: "POST" })
 }
 
-export function deleteDownload(id: number): Promise<void> {
-  return request<void>(`/downloads/${id}`, { method: "DELETE" })
+// The server accepts at most this many ids / items per bulk request (400 above that).
+export const MAX_BULK_ITEMS = 1000
+
+function postJSON<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: "POST", body: JSON.stringify(body) })
+}
+
+// Per-entry endpoints process every entry independently, so a list longer than the cap is sent
+// as consecutive requests and the results are joined — same outcome as one request. (The
+// all-or-nothing deletes below are NOT split: that would break their atomicity, so a list over
+// the cap is refused with the server's 400 message instead.)
+async function postBulkResults<K extends number | string>(
+  path: string,
+  entries: unknown[],
+  makeBody: (chunk: unknown[]) => unknown,
+): Promise<BulkResultsResponse<K>> {
+  const merged: BulkResultsResponse<K> = { results: [], succeeded: 0, failed: 0 }
+  for (let i = 0; i < entries.length; i += MAX_BULK_ITEMS) {
+    const part = await postJSON<BulkResultsResponse<K>>(path, makeBody(entries.slice(i, i + MAX_BULK_ITEMS)))
+    merged.results.push(...part.results)
+    merged.succeeded += part.succeeded
+    merged.failed += part.failed
+  }
+  return merged
+}
+
+export function bulkDeleteDownloads(ids: number[]): Promise<BulkDeleteResponse> {
+  return postJSON<BulkDeleteResponse>("/downloads/bulk-delete", { ids })
 }
 
 export function fetchLibraryQuery(params: LibraryQueryParams): Promise<LibraryListResponse> {
@@ -598,13 +625,6 @@ export function deleteStrayFiles(paths: StrayFileRef[]): Promise<DeleteStrayFile
   })
 }
 
-export function updateLibraryItem(id: number, payload: UpdateLibraryItemRequest): Promise<void> {
-  return request<void>(`/library/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  })
-}
-
 export function bulkAssignTags(payload: BulkAssignTagsRequest): Promise<BulkAssignTagsResponse> {
   return request<BulkAssignTagsResponse>("/library/bulk-tags", {
     method: "POST",
@@ -647,6 +667,12 @@ export function moveLibraryItem(id: number, payload: MoveLibraryItemRequest): Pr
     method: "POST",
     body: JSON.stringify(payload),
   })
+}
+
+// Edits one or more library items. Each entry is applied independently; a single edit is a
+// one-element list. Duplicate ids are a 400.
+export function bulkUpdateLibraryItems(items: BulkUpdateLibraryItem[]): Promise<BulkResultsResponse<number>> {
+  return postBulkResults<number>("/library/bulk-update", items, (chunk) => ({ items: chunk }))
 }
 
 export function updateLibraryItemProgress(id: number, payload: UpdateLibraryProgressRequest): Promise<void> {
@@ -773,11 +799,12 @@ export function saveThumbnailToGallery(
   })
 }
 
-export function setThumbnailGalleryFavorite(id: number, galleryId: number, isFavorite: boolean): Promise<ThumbnailGalleryImage> {
-  return request<ThumbnailGalleryImage>(`/library/${id}/thumbnail/gallery/${galleryId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ isFavorite }),
-  })
+export function bulkSetGalleryFavorites(id: number, galleryIds: number[], isFavorite: boolean): Promise<BulkUpdatedResponse> {
+  return postJSON<BulkUpdatedResponse>(`/library/${id}/thumbnail/gallery/bulk-favorite`, { galleryIds, isFavorite })
+}
+
+export function bulkDeleteGalleryImages(id: number, galleryIds: number[]): Promise<BulkDeleteResponse> {
+  return postJSON<BulkDeleteResponse>(`/library/${id}/thumbnail/gallery/bulk-delete`, { galleryIds })
 }
 
 export function fetchThumbnailGallery(id: number): Promise<{ images: ThumbnailGalleryImage[] }> {
@@ -786,10 +813,6 @@ export function fetchThumbnailGallery(id: number): Promise<{ images: ThumbnailGa
 
 export function applyThumbnailFromGallery(id: number, galleryId: number): Promise<LibraryItem> {
   return request<LibraryItem>(`/library/${id}/thumbnail/gallery/${galleryId}/apply`, { method: "POST" })
-}
-
-export function deleteThumbnailGalleryImage(id: number, galleryId: number): Promise<void> {
-  return request<void>(`/library/${id}/thumbnail/gallery/${galleryId}`, { method: "DELETE" })
 }
 
 export function startFrameMatch(id: number, mode: FrameMatchMode): Promise<StartFrameMatchResponse> {
@@ -951,12 +974,12 @@ export function deleteSystemEvents(payload: DeleteSystemEventsRequest): Promise<
   return request<{ deleted: number }>("/system-events", { method: "DELETE", body: JSON.stringify(payload) })
 }
 
-export function retryHistoryItem(id: number): Promise<{ id: number }> {
-  return request<{ id: number }>(`/history/${id}/retry`, { method: "POST" })
+export function bulkRetryHistory(ids: number[]): Promise<BulkResultsResponse<number>> {
+  return postBulkResults<number>("/history/bulk-retry", ids, (chunk) => ({ ids: chunk }))
 }
 
-export function deleteHistoryItem(id: number): Promise<void> {
-  return request<void>(`/history/${id}`, { method: "DELETE" })
+export function bulkDeleteHistory(ids: number[]): Promise<BulkDeleteResponse> {
+  return postJSON<BulkDeleteResponse>("/history/bulk-delete", { ids })
 }
 
 export function clearHistory(): Promise<{ deleted: number }> {
@@ -1026,8 +1049,8 @@ export function runManualBackup(): Promise<BackupHistoryEntry> {
   return request<BackupHistoryEntry>("/backup/run", { method: "POST" })
 }
 
-export function deleteBackupHistoryEntry(id: number): Promise<void> {
-  return request<void>(`/backup/history/${id}`, { method: "DELETE" })
+export function bulkDeleteBackups(ids: number[]): Promise<BulkDeleteResponse> {
+  return postJSON<BulkDeleteResponse>("/backup/history/bulk-delete", { ids })
 }
 
 // Not request()-wrapped: this needs to be a real browser navigation (a plain
@@ -1189,8 +1212,8 @@ export function updateSubscription(id: number, payload: UpdateSubscriptionReques
   })
 }
 
-export function deleteSubscription(id: number): Promise<void> {
-  return request<void>(`/subscriptions/${id}`, { method: "DELETE" })
+export function bulkDeleteSubscriptions(ids: number[]): Promise<BulkDeleteResponse> {
+  return postJSON<BulkDeleteResponse>("/subscriptions/bulk-delete", { ids })
 }
 
 export function checkSubscriptionNow(id: number): Promise<CheckSubscriptionResult> {
@@ -1201,15 +1224,20 @@ export function listSubscriptionEntries(id: number): Promise<SubscriptionEntry[]
   return request<SubscriptionEntry[]>(`/subscriptions/${id}/entries`)
 }
 
-export function addSubscriptionEntry(id: number, sourceId: string, mode: AddSubscriptionEntryMode): Promise<AddSubscriptionEntryResult> {
-  return request<AddSubscriptionEntryResult>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/add`, {
-    method: "POST",
-    body: JSON.stringify({ mode }),
-  })
+export function bulkAddSubscriptionEntries(
+  id: number,
+  sourceIds: string[],
+  mode: AddSubscriptionEntryMode,
+): Promise<BulkResultsResponse<string>> {
+  return postBulkResults<string>(`/subscriptions/${id}/entries/bulk-add`, sourceIds, (chunk) => ({ sourceIds: chunk, mode }))
 }
 
-export function markSubscriptionEntrySeen(id: number, sourceId: string): Promise<void> {
-  return request<void>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/seen`, { method: "POST" })
+export function bulkMarkSubscriptionEntriesSeen(id: number, sourceIds: string[]): Promise<BulkUpdatedResponse> {
+  return postJSON<BulkUpdatedResponse>(`/subscriptions/${id}/entries/bulk-seen`, { sourceIds })
+}
+
+export function bulkUnlinkSubscriptionEntries(id: number, sourceIds: string[]): Promise<BulkUpdatedResponse> {
+  return postJSON<BulkUpdatedResponse>(`/subscriptions/${id}/entries/bulk-unlink`, { sourceIds })
 }
 
 export function linkSubscriptionEntry(id: number, sourceId: string, libraryItemId: number): Promise<void> {
@@ -1217,10 +1245,6 @@ export function linkSubscriptionEntry(id: number, sourceId: string, libraryItemI
     method: "POST",
     body: JSON.stringify({ libraryItemId }),
   })
-}
-
-export function unlinkSubscriptionEntry(id: number, sourceId: string): Promise<void> {
-  return request<void>(`/subscriptions/${id}/entries/${encodeURIComponent(sourceId)}/unlink`, { method: "POST" })
 }
 
 export interface ThumbnailEnhancementHistoryParams {
