@@ -474,8 +474,8 @@ func BulkUnlinkSubscriptionEntries(deps subscriptions.CheckDeps) gin.HandlerFunc
 // addSubscriptionEntry is the per-entry core of the "Known items" dialog's
 // "Add as ghost"/"Queue download" action — a manual version of what a normal
 // check does automatically for a new entry (subscriptions.AddKnownEntryAsGhost
-// / AddKnownEntryAsDownload). It was the body of the removed single
-// .../entries/:sourceId/add handler. Exactly one of the returned ids is set.
+// / AddKnownEntryAsDownload). It was the body of the former
+// single-entry add handler. Exactly one of the returned ids is set.
 func addSubscriptionEntry(ctx context.Context, deps subscriptions.CheckDeps, sub models.Subscription, sourceID, mode string) (libraryItemID, downloadID *int64, e *opError) {
 	entry, err := deps.SubscriptionsRepo.GetSeenEntry(ctx, sub.ID, sourceID)
 	if err != nil {

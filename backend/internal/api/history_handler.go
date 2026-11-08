@@ -85,7 +85,7 @@ func BulkDeleteHistory(repo *repository.HistoryRepo) gin.HandlerFunc {
 }
 
 // historyRetrier holds what the per-entry retry core needs. The core was the
-// body of the removed POST /api/history/:id/retry handler.
+// body of the former single-entry retry handler.
 type historyRetrier struct {
 	historyRepo     *repository.HistoryRepo
 	downloadsRepo   *repository.DownloadsRepo

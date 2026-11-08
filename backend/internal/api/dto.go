@@ -550,7 +550,7 @@ type BulkGalleryDeleteRequest struct {
 }
 
 // BulkUpdateLibraryItem is one entry of POST /api/library/bulk-update: the item
-// id plus the same partial-update body the removed PATCH /api/library/:id took
+// id plus the partial-update body
 // (nil = unchanged, artistId 0 clears the artist, ...).
 type BulkUpdateLibraryItem struct {
 	ID      int64                    `json:"id"`

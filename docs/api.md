@@ -464,7 +464,7 @@ automatic retention sweep. `200 {"deleted": <n>}`.
 | GET | `/api/library/facets` | Distinct filter values (currently: years) |
 | GET | `/api/library/:id` | Fetch one item, same response shape as a row from the list endpoint |
 | DELETE | `/api/library/:id` | Remove an item |
-| PATCH | `/api/library/:id` | Edit metadata (partial merge) |
+| POST | `/api/library/bulk-update` | Edit metadata of one or many items (a list of `{id, changes}`; per-item results) |
 | POST | `/api/library/bulk-tags` | Overwrite tags on many items at once |
 | POST | `/api/library/bulk-delete` | Delete many items at once |
 | POST | `/api/library/:id/move` | Relocate to a different collection/folder |
@@ -496,8 +496,8 @@ automatic retention sweep. `200 {"deleted": <n>}`.
 | POST | `/api/library/:id/thumbnail/gallery` | Save an image to the item's thumbnail gallery |
 | GET | `/api/library/:id/thumbnail/gallery` | List the item's saved gallery images |
 | POST | `/api/library/:id/thumbnail/gallery/:galleryId/apply` | Apply a saved gallery image as the active thumbnail |
-| PATCH | `/api/library/:id/thumbnail/gallery/:galleryId` | Favorite/unfavorite a saved gallery image |
-| DELETE | `/api/library/:id/thumbnail/gallery/:galleryId` | Remove a saved gallery image |
+| POST | `/api/library/:id/thumbnail/gallery/bulk-favorite` | Favorite/unfavorite saved gallery images (all-or-nothing) |
+| POST | `/api/library/:id/thumbnail/gallery/bulk-delete` | Remove saved gallery images (all-or-nothing) |
 | POST | `/api/library/:id/thumbnail/match` | Start an ad-hoc frame-match job for this item |
 | GET | `/api/thumbnail-match/:jobId` | Poll an ad-hoc frame-match job |
 | POST | `/api/library/thumbnail/match/bulk` | Bulk-enqueue items onto the durable frame-match queue |
@@ -600,7 +600,7 @@ item in (`activeDownloadId`) is cancelled first. `404` unknown, `204` on success
 { "items": [ { "id": 7, "changes": { "title": "New Title", "artistId": 3, "year": 2023, "tags": ["music", "live"] } } ] }
 ```
 
-Replaces `PATCH /api/library/:id`; a single edit is a one-element list. Per-item results (see
+Edits one or many items; a single edit is a one-element list. Per-item results (see
 [Bulk endpoints](#bulk-endpoints)); `400` for an empty list, more than 1000 items, or a duplicate id.
 
 Every `changes` field is optional and means what it did on the old PATCH: `title`, `filename`,

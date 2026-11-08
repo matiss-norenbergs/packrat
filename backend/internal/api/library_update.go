@@ -17,7 +17,7 @@ import (
 )
 
 // libraryUpdater holds what the per-item edit core needs. The core was the body
-// of the removed PATCH /api/library/:id handler; POST /api/library/bulk-update
+// of the former single-item edit handler; POST /api/library/bulk-update
 // calls it once per item (a single edit is a one-element list).
 type libraryUpdater struct {
 	repo          *repository.LibraryRepo
