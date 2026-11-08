@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/models"
+	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/subscriptions"
 )
@@ -502,6 +503,9 @@ func addSubscriptionEntry(ctx context.Context, deps subscriptions.CheckDeps, sub
 		return &id, nil, nil
 	case "download":
 		id, err := subscriptions.AddKnownEntryAsDownload(ctx, deps, sub, *entry)
+		if errors.Is(err, queue.ErrShuttingDown) {
+			return nil, nil, newOpError(http.StatusServiceUnavailable, queue.ErrShuttingDown.Error())
+		}
 		if err != nil {
 			return nil, nil, newOpError(http.StatusBadGateway, "queuing download failed: "+err.Error())
 		}

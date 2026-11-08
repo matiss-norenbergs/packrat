@@ -37,7 +37,10 @@ endpoint. Rules shared by every one of them:
   A failing item does not stop the rest. A success may carry `downloadId` (the queued download) or
   `libraryItemId` (the created ghost). For the entry endpoint `id` is the entry's source id (a string).
   The loop runs on a context that survives the client disconnecting (bounded to 2 minutes), so closing
-  the tab cannot leave half a batch undone and unreported.
+  the tab cannot leave half a batch undone and unreported. Enqueueing never waits for a free worker (the
+  queue is unbounded), so a request of up to 1000 items answers promptly whatever is running. The one
+  enqueue failure that is not about the item itself is the server shutting down: every remaining item then
+  fails with status `503` ("server is shutting down; ...") and no download row is created for it.
 
 ### Replaced single-item endpoints
 
@@ -250,6 +253,12 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
 | POST | `/api/downloads/:id/cancel` | Cancel a queued/in-flight download |
 | POST | `/api/downloads/bulk-delete` | Remove terminal downloads' queue-history rows (all-or-nothing) |
 | POST | `/api/downloads/clear-log` | Delete every terminal download row now |
+
+Every endpoint that queues a download (`POST /api/downloads`, `/playlist`, `/batch`, library redownload,
+history retry, subscription entry add) answers `503 {"error": "server is shutting down; ..."}` — or, in
+a per-item result, an item with `"status": 503` (in `POST /api/downloads/batch` and `/playlist`, an item
+in `failed` with that message) — while the server is shutting down; no row is created. Queuing itself
+never blocks on busy workers: the response comes back as soon as the rows exist.
 
 ### `POST /api/downloads` — body
 

@@ -235,6 +235,9 @@ func enqueueErrorStatus(err error) (int, string) {
 	if errors.Is(err, queue.ErrInvalidURL) {
 		return http.StatusBadRequest, queue.ErrInvalidURL.Error()
 	}
+	if errors.Is(err, queue.ErrShuttingDown) {
+		return http.StatusServiceUnavailable, queue.ErrShuttingDown.Error()
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		return http.StatusBadRequest, "collection not found"
 	}

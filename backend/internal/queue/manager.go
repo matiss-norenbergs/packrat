@@ -77,7 +77,9 @@ type DownloadManager struct {
 	itemLocks                         *itemlock.Locks      // serializes writes/moves/deletes of an item's media file (package itemlock)
 	embedder                          *metaembed.Scheduler // background metadata remux, run under the item lock
 
-	jobs chan int64
+	// jobs is the unbounded in-memory FIFO of queued download ids waiting for
+	// a worker (see jobQueue). Persisted rows stay the source of truth.
+	jobs *jobQueue
 
 	// rootCtx is the single stable context every runOne call derives its
 	// per-download runCtx from. It is set once in Start and never touched by
@@ -99,7 +101,6 @@ type DownloadManager struct {
 	lastBroadcastAt map[int64]time.Time
 
 	activeCount int32
-	queuedCount int32
 }
 
 // maxConcurrentEmbeds caps simultaneous metadata remuxes (each is an ffmpeg
@@ -156,7 +157,7 @@ func NewDownloadManager(
 		jellyfinClient:                    jellyfinClient,
 		progress:                          progress,
 		broadcaster:                       broadcaster,
-		jobs:                              make(chan int64, 100),
+		jobs:                              newJobQueue(),
 		cancels:                           make(map[int64]context.CancelFunc),
 		runGhosts:                         make(map[int64]ghostRun),
 		lastBroadcastAt:                   make(map[int64]time.Time),
@@ -198,15 +199,11 @@ func (m *DownloadManager) Start(ctx context.Context, workerCount int) {
 
 func (m *DownloadManager) worker(stop <-chan struct{}) {
 	for {
-		select {
-		case <-stop:
-			return
-		case <-m.rootCtx.Done():
-			return
-		case id := <-m.jobs:
-			atomic.AddInt32(&m.queuedCount, -1)
-			m.runOne(m.rootCtx, id)
+		id, ok := m.jobs.Pop(m.rootCtx, stop)
+		if !ok {
+			return // pool shrank or the server is shutting down
 		}
+		m.runOne(m.rootCtx, id)
 	}
 }
 
@@ -243,21 +240,37 @@ func (m *DownloadManager) WorkerCount() int {
 	return len(m.workerStops)
 }
 
-// Enqueue creates a queued download row and schedules it for a worker.
+// Enqueue creates a queued download row and schedules it for a worker. It
+// never waits for a free worker: the id goes onto an unbounded FIFO and the
+// call returns, whatever the queue length. While the server is shutting down
+// it refuses with ErrShuttingDown instead of creating a row no worker will
+// ever run.
 func (m *DownloadManager) Enqueue(ctx context.Context, d models.Download) (int64, error) {
 	if !IsHTTPURL(d.URL) {
 		return 0, ErrInvalidURL
+	}
+	if m.shuttingDown() {
+		return 0, ErrShuttingDown
 	}
 	d.Status = models.StatusQueued
 	id, err := m.downloadsRepo.Create(ctx, &d)
 	if err != nil {
 		return 0, err
 	}
-	atomic.AddInt32(&m.queuedCount, 1)
-	m.jobs <- id
+	m.jobs.Push(id)
 	m.broadcastQueueUpdate()
 	return id, nil
 }
+
+// shuttingDown reports whether Start's context has been cancelled. Before Start
+// (tests) there is no root context and the manager is not shutting down.
+func (m *DownloadManager) shuttingDown() bool {
+	return m.rootCtx != nil && m.rootCtx.Err() != nil
+}
+
+// ErrShuttingDown is returned by Enqueue once the server has begun shutting
+// down; the API maps it to 503.
+var ErrShuttingDown = errors.New("server is shutting down; try again once it is back")
 
 // ErrInvalidURL is returned by Enqueue for a URL that is not an absolute
 // http(s) URL. Enqueue is the single place URL schemes are enforced.
@@ -294,6 +307,10 @@ func (m *DownloadManager) Cancel(ctx context.Context, id int64) error {
 	if err := m.downloadsRepo.MarkCancelled(ctx, id); err != nil {
 		return err
 	}
+	// Take it out of the FIFO now so the Queued count drops at once and no
+	// worker ever pops it. If a worker already did, runOne's cancelled-status
+	// check is the safety net.
+	m.jobs.Remove(id)
 	m.broadcastQueueUpdate()
 	return nil
 }
@@ -1766,7 +1783,7 @@ func (m *DownloadManager) onProgress(id int64, ev downloader.ProgressEvent) {
 func (m *DownloadManager) broadcastQueueUpdate() {
 	m.broadcaster.Broadcast(ws.Event{Type: ws.EventQueueUpdate, Payload: ws.QueueUpdatePayload{
 		Active: int(atomic.LoadInt32(&m.activeCount)),
-		Queued: int(atomic.LoadInt32(&m.queuedCount)),
+		Queued: m.jobs.Len(),
 	}})
 }
 
