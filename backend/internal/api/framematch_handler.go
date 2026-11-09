@@ -13,6 +13,7 @@ import (
 
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/framematch"
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/repository"
 )
 
@@ -206,11 +207,11 @@ func ListFrameMatchQueue(queueRepo *repository.FrameMatchQueueRepo) gin.HandlerF
 
 // AcceptFrameMatchQueueItem backs the Frame Matching page's "Use this
 // frame" action — writes the queue row's already-found frame as the item's
-// thumbnail (reusing writeThumbnailAndRespond, the same commit path
+// thumbnail (reusing writeThumbnailAndRespond, the same safe commit path
 // SetLibraryThumbnail uses) and, once that succeeds, removes the row and
 // its snapshot image files: this is a working queue, not a permanent
 // history, so a resolved row has nothing left to keep.
-func AcceptFrameMatchQueueItem(mediaRoot, imagesRoot, ffmpegPath string, queueRepo *repository.FrameMatchQueueRepo, libraryRepo *repository.LibraryRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
+func AcceptFrameMatchQueueItem(mediaRoot, imagesRoot, ffmpegPath string, queueRepo *repository.FrameMatchQueueRepo, libraryRepo *repository.LibraryRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, locks *itemlock.Locks) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -263,14 +264,14 @@ func AcceptFrameMatchQueueItem(mediaRoot, imagesRoot, ffmpegPath string, queueRe
 				c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
 				return
 			}
-			if err := os.WriteFile(thumbAbs, data, 0o644); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			if !writeThumbnailAndRespond(c, thumbnailCommit{libraryRepo, responder, originalsRepo, locks, mediaRoot, imagesRoot, ffmpegPath}, row.LibraryItemID, item.Path, thumbAbs, data, false) {
+				// The writer already sent its own error response and changed
+				// nothing — leave the queue row in place so the user can retry.
 				return
 			}
-			writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, row.LibraryItemID, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
 		}
 		if c.Writer.Status() != http.StatusOK {
-			// writeThumbnailAndRespond already sent its own error response —
+			// setImageItemThumbnailTiers already sent its own error response —
 			// leave the queue row in place so the user can retry Accept.
 			return
 		}

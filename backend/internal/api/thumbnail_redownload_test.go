@@ -49,7 +49,7 @@ func (e *cleanupEnv) redownloadThumb(t *testing.T, ytdlp *downloader.YtDlpServic
 	t.Helper()
 	responder := NewItemResponder(repository.NewSettingsRepo(e.conn), repository.NewCollectionsRepo(e.conn), repository.NewTagsRepo(e.conn),
 		repository.NewArtistsRepo(e.conn), repository.NewThumbnailGalleryRepo(e.conn), e.downloads, e.mediaRoot)
-	h := RedownloadLibraryThumbnail(e.mediaRoot, e.imagesRoot, e.library, ytdlp, responder, e.originals)
+	h := RedownloadLibraryThumbnail(e.mediaRoot, e.imagesRoot, e.library, ytdlp, responder, e.originals, e.mgr.ItemLocks())
 	w := e.do(t, h, http.MethodPost, fmt.Sprintf("/library/%d/thumbnail/redownload", id), "/library/:id/thumbnail/redownload", "")
 	var resp LibraryItemResponse
 	if w.Code == http.StatusOK {
