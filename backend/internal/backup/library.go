@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"path/filepath"
 	"strings"
 
+	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
@@ -414,23 +414,6 @@ type ApplyResult struct {
 	GhostsCreated int `json:"ghostsCreated"`
 }
 
-// audioFormatFromExtension infers a download type/audio format from a
-// library item's own filename, for the case where the export couldn't carry
-// that information (its originating Download row was already gone at export
-// time — see BuildLibraryBundle). Only recognizes the formats yt-dlp can
-// actually produce via --audio-format (matching CreateDownloadRequest's
-// accepted values) — anything else returns "" so the caller falls back to
-// its own video default, same as before this existed.
-func audioFormatFromExtension(filename string) (downloadType, audioFormat string) {
-	ext := strings.ToLower(filepath.Ext(filename))
-	switch ext {
-	case ".mp3", ".flac", ".m4a", ".aac", ".wav":
-		return "audio", strings.TrimPrefix(ext, ".")
-	default:
-		return "", ""
-	}
-}
-
 // ApplyLibraryBundle merges bundle into the local database — matching
 // collections by path and tags/artists by name, creating only what's
 // missing, never deleting anything. Every step is best-effort in the sense
@@ -656,7 +639,7 @@ func ApplyLibraryBundle(
 		// makes yt-dlp fail outright, since the format it fetches can't be
 		// written into that container).
 		if r.DownloadType == "" {
-			if inferredType, inferredFormat := audioFormatFromExtension(item.Filename); inferredType != "" {
+			if inferredType, inferredFormat := fsutil.AudioFormatFromExtension(item.Filename); inferredType != "" {
 				r.DownloadType = inferredType
 				if r.AudioFormat == "" {
 					r.AudioFormat = inferredFormat

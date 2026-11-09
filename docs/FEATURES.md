@@ -364,8 +364,11 @@ same endpoint with a list of one.
   original source URL, overwriting any manual edits (with a confirmation, since it's destructive
   to those edits). Never touches the file or thumbnail.
 - **Redownload** — re-queues a fresh download using the item's original URL and its original
-  type/quality/format if that download record still exists, falling back to app defaults
-  otherwise. For a ghost item this is relabeled **"Download now"** — the fill-in action that turns
+  type/quality/format if that download record still exists. Once the record is gone ("Clear download
+  log", the retention sweep), the item's own type decides instead — an audio item is refetched as audio
+  in the format of its file (`.m4a` stays m4a, `.flac` flac; never silently mp3), an image item as an
+  image, a video item as video — and only an item whose type can't be told falls back to the app's
+  default download type. For a ghost item this is relabeled **"Download now"** — the fill-in action that turns
   a placeholder into a real item.
 - **Redownload → From Different URL…** — replaces the file with one fetched from a different link
   entirely (the original source went down, or a re-upload exists elsewhere), rather than the

@@ -180,3 +180,28 @@ func TestUniquePathBounded(t *testing.T) {
 		t.Fatalf("fallback lost extension: %q", got)
 	}
 }
+
+func TestAudioFormatAndMediaTypeFromExtension(t *testing.T) {
+	for name, want := range map[string]string{"a.mp3": "mp3", "a.M4A": "m4a", "a.flac": "flac", "a.aac": "aac", "a.wav": "wav"} {
+		typ, format := AudioFormatFromExtension(name)
+		if typ != "audio" || format != want {
+			t.Errorf("AudioFormatFromExtension(%q) = %q, %q", name, typ, format)
+		}
+		if MediaTypeFromExtension(name) != "audio" {
+			t.Errorf("MediaTypeFromExtension(%q) != audio", name)
+		}
+	}
+	for _, name := range []string{"a.jpg", "a.JPEG", "a.png", "a.webp", "a.gif", "a.bmp", "a.avif", "a.tiff"} {
+		if got := MediaTypeFromExtension(name); got != "image" {
+			t.Errorf("MediaTypeFromExtension(%q) = %q, want image", name, got)
+		}
+		if typ, _ := AudioFormatFromExtension(name); typ != "" {
+			t.Errorf("AudioFormatFromExtension(%q) type = %q, want empty", name, typ)
+		}
+	}
+	for _, name := range []string{"a.mp4", "a.mkv", "a.ogg", "noext", ""} {
+		if got := MediaTypeFromExtension(name); got != "" {
+			t.Errorf("MediaTypeFromExtension(%q) = %q, want empty", name, got)
+		}
+	}
+}
