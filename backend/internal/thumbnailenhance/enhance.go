@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"log"
 	"os"
 	"path/filepath"
@@ -16,11 +13,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"packrat/backend/internal/fsutil"
-	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/sysevents"
+	"packrat/backend/internal/thumbwrite"
 	"packrat/backend/internal/ws"
 )
 
@@ -61,11 +57,6 @@ const failureCooldown = time.Hour
 // the effect instead of one being a harmless no-op. See enhanceOne's
 // re-probe immediately after acquiring the lock.
 var enhanceMu sync.Mutex
-
-var thumbnailTiers = []imageproc.Tier{
-	{Name: "small", MaxWidth: imageproc.ThumbnailSmallWidth},
-	{Name: "medium", MaxWidth: imageproc.ThumbnailMediumWidth},
-}
 
 // Deps bundles everything a sweep needs — same shape as
 // subscriptions.CheckDeps.
@@ -293,7 +284,7 @@ func findEligible(ctx context.Context, deps Deps, cfg config, skipRecentFailures
 		}
 
 		thumbAbs := filepath.Join(deps.MediaRoot, filepath.FromSlash(*item.Thumbnail))
-		width, height, size, err := probeImage(thumbAbs)
+		width, height, size, err := thumbwrite.Probe(thumbAbs)
 		if err != nil {
 			continue // file missing/unreadable — not this sweep's problem to fix
 		}
@@ -432,7 +423,7 @@ func SharpenItems(ctx context.Context, deps Deps, libraryItemIDs []int64) error 
 			continue
 		}
 		thumbAbs := filepath.Join(deps.MediaRoot, filepath.FromSlash(*item.Thumbnail))
-		width, height, size, err := probeImage(thumbAbs)
+		width, height, size, err := thumbwrite.Probe(thumbAbs)
 		if err != nil {
 			continue
 		}
@@ -619,7 +610,7 @@ func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item
 	// thumbnail currently is, and running it twice in a row just re-sharpens
 	// rather than compounding anything harmful.
 	if mode == modeUpscale {
-		if w, h, _, err := probeImage(thumbAbs); err == nil {
+		if w, h, _, err := thumbwrite.Probe(thumbAbs); err == nil {
 			longest := w
 			if h > longest {
 				longest = h
@@ -774,155 +765,23 @@ func removeBackup(ctx context.Context, deps Deps, id int64) {
 	}
 }
 
-// Seams for the failure-injection tests; production always uses the defaults.
-var (
-	renameFile  = os.Rename
-	updateTiers = func(ctx context.Context, repo *repository.LibraryRepo, id int64, small, medium *string, w, h *int) error {
-		return repo.UpdateThumbnailTiers(ctx, id, small, medium, w, h)
-	}
-)
-
-// writeThumbnailFile replaces an item's sidecar thumbnail with data and
-// regenerates its WebP tiers, without ever leaving the item half-changed.
-// Gin-context-free so it's callable from a background sweep, and shared
-// between enhancement (writes the upscaled result) and revert (writes the
-// backed-up original back). It duplicates the core of
-// writeThumbnailAndRespond (api.thumbnail_handler), which still writes in place.
-//
-// Order — everything that can fail happens before the sidecar is touched:
-//
-//	a. write data to a temp file next to the sidecar (.packrat-thumb-*, same filesystem)
-//	b. probe the temp file — garbage that isn't an image stops here
-//	c. generate the tiers from the temp file (new uuid file names, nothing overwritten)
-//	d. point the database at the new tiers and dimensions
-//	e. rename the temp file over the sidecar (atomic); if that fails, restore the row
-//	f. only then delete the old derivative files (best effort)
-//
-// On any error before (f) the sidecar, the old derivatives and the library
-// row are as they were, and the temp file and new tier files are removed.
+// writeThumbnailFile replaces an item's sidecar thumbnail with data through the
+// shared safe-replace (thumbwrite.Replace): the sidecar, the old derivatives and
+// the library row are untouched on error. Gin-context-free so it's callable from
+// a background sweep; shared between enhancement (writes the upscaled result)
+// and revert (writes the backed-up original back). The row keeps its existing
+// thumbnail path.
 func writeThumbnailFile(ctx context.Context, deps Deps, id int64, thumbAbs string, data []byte) (width, height int, size int64, err error) {
-	existing, err := deps.LibraryRepo.Get(ctx, id)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("reloading item: %w", err)
-	}
-
-	tmpAbs, err := writeSiblingTemp(thumbAbs, data)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			os.Remove(tmpAbs)
-		}
-	}()
-
-	w, h, s, err := probeImage(tmpAbs)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("probing enhanced thumbnail: %w", err)
-	}
-
-	tiers, err := imageproc.GenerateTiersFromPath(ctx, deps.FFmpegPath, deps.ImagesRoot, "library", id, tmpAbs, thumbnailTiers)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("generating thumbnail derivatives: %w", err)
-	}
-	small, medium := tiers[0], tiers[1]
-	removeNewTiers := func() {
-		for _, rel := range tiers {
-			if err := os.Remove(filepath.Join(deps.ImagesRoot, filepath.FromSlash(rel))); err != nil && !os.IsNotExist(err) {
-				log.Printf("thumbnailenhance: item %d: removing unused new derivative %s failed: %v", id, rel, err)
-			}
-		}
-	}
-
-	if err := updateTiers(ctx, deps.LibraryRepo, id, &small, &medium, &w, &h); err != nil {
-		removeNewTiers()
-		return 0, 0, 0, fmt.Errorf("updating thumbnail tiers: %w", err)
-	}
-
-	if err := renameFile(tmpAbs, thumbAbs); err != nil {
-		// Put the row back before anything is deleted: the old derivatives still exist.
-		if rerr := updateTiers(context.WithoutCancel(ctx), deps.LibraryRepo, id,
-			existing.ThumbnailSmallPath, existing.ThumbnailMediumPath, existing.ThumbnailWidth, existing.ThumbnailHeight); rerr != nil {
-			// The row still names the new tiers, so they must stay on disk.
-			log.Printf("thumbnailenhance: item %d: restoring thumbnail tiers after a failed rename failed: %v", id, rerr)
-		} else {
-			removeNewTiers()
-		}
-		return 0, 0, 0, fmt.Errorf("replacing thumbnail file: %w", err)
-	}
-	committed = true
-
-	for _, p := range []*string{existing.ThumbnailSmallPath, existing.ThumbnailMediumPath} {
-		if p == nil {
-			continue
-		}
-		abs := filepath.Join(deps.ImagesRoot, filepath.FromSlash(*p))
-		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
-			log.Printf("thumbnailenhance: item %d: failed to delete old derivative %s: %v", id, abs, err)
-		}
-	}
-
-	return w, h, s, nil
-}
-
-// writeSiblingTemp writes data to a new ".packrat-thumb-<random><ext>" file in
-// the sidecar's own directory (same filesystem, so the final rename is atomic),
-// with the sidecar's permissions (0644 when it doesn't exist), and returns its
-// path. The file is removed on any error. Abandoned ones (a crash) are removed
-// at startup by fsutil.CleanStaleEmbedTemps and ignored by the importer scan.
-func writeSiblingTemp(thumbAbs string, data []byte) (string, error) {
-	ext := filepath.Ext(thumbAbs)
-	if ext == "" {
-		ext = ".jpg"
-	}
-	perm := os.FileMode(0o644)
-	if info, err := os.Stat(thumbAbs); err == nil {
-		perm = info.Mode().Perm()
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(thumbAbs), fsutil.ThumbTmpPrefix+"*"+ext)
-	if err != nil {
-		return "", fmt.Errorf("creating temp thumbnail file: %w", err)
-	}
-	tmpAbs := tmp.Name()
-	fail := func(err error) (string, error) {
-		tmp.Close()
-		os.Remove(tmpAbs)
-		return "", fmt.Errorf("writing temp thumbnail file: %w", err)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		return fail(err)
-	}
-	if err := tmp.Sync(); err != nil {
-		return fail(err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpAbs)
-		return "", fmt.Errorf("writing temp thumbnail file: %w", err)
-	}
-	if err := os.Chmod(tmpAbs, perm); err != nil {
-		os.Remove(tmpAbs)
-		return "", fmt.Errorf("writing temp thumbnail file: %w", err)
-	}
-	return tmpAbs, nil
-}
-
-// probeImage reads an image file's dimensions (header only, no full decode)
-// and byte size.
-func probeImage(abs string) (width, height int, size int64, err error) {
-	info, err := os.Stat(abs)
+	res, err := thumbwrite.Replace(ctx, thumbwrite.Params{
+		Repo:       deps.LibraryRepo,
+		FFmpegPath: deps.FFmpegPath,
+		ImagesRoot: deps.ImagesRoot,
+		ID:         id,
+		ThumbAbs:   thumbAbs,
+		Data:       data,
+	})
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	f, err := os.Open(abs)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	defer f.Close()
-
-	cfg, _, err := image.DecodeConfig(f)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("decoding image header: %w", err)
-	}
-	return cfg.Width, cfg.Height, info.Size(), nil
+	return res.Width, res.Height, res.Size, nil
 }

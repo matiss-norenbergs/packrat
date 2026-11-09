@@ -28,6 +28,7 @@ import (
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
+	"packrat/backend/internal/thumbwrite"
 )
 
 // ---- migrated test database (built once per test binary, copied per test) ----
@@ -369,16 +370,16 @@ func TestEnhanceOneFailuresLeaveEverythingUntouched(t *testing.T) {
 		{name: "upscaler returns bytes that are not an image", upscaled: []byte("definitely not an image")},
 		{name: "tier generation fails", failFFmpeg: true, upscaled: good},
 		{name: "UpdateThumbnailTiers fails", upscaled: good, hook: func(t *testing.T) {
-			old := updateTiers
-			updateTiers = func(context.Context, *repository.LibraryRepo, int64, *string, *string, *int, *int) error {
+			old := thumbwrite.UpdateRow
+			thumbwrite.UpdateRow = func(context.Context, *repository.LibraryRepo, int64, *string, *string, *string, *int, *int) error {
 				return errors.New("db is down")
 			}
-			t.Cleanup(func() { updateTiers = old })
+			t.Cleanup(func() { thumbwrite.UpdateRow = old })
 		}},
 		{name: "the final rename fails", upscaled: good, hook: func(t *testing.T) {
-			old := renameFile
-			renameFile = func(string, string) error { return errors.New("rename refused") }
-			t.Cleanup(func() { renameFile = old })
+			old := thumbwrite.RenameFile
+			thumbwrite.RenameFile = func(string, string) error { return errors.New("rename refused") }
+			t.Cleanup(func() { thumbwrite.RenameFile = old })
 		}},
 	}
 	for _, tc := range cases {
@@ -427,33 +428,6 @@ func TestEnhanceOneFailureKeepsAnEarlierBackup(t *testing.T) {
 	}
 }
 
-// If putting the row back after a failed rename itself fails, the new tiers stay (the row
-// points at them) rather than leaving the row dangling.
-func TestWriteThumbnailFileRenameFailureThenRestoreFailureKeepsNewTiers(t *testing.T) {
-	f := newFixture(t, false)
-	oldRename, oldUpdate := renameFile, updateTiers
-	t.Cleanup(func() { renameFile, updateTiers = oldRename, oldUpdate })
-	renameFile = func(string, string) error { return errors.New("rename refused") }
-	calls := 0
-	updateTiers = func(ctx context.Context, r *repository.LibraryRepo, id int64, s, m *string, w, h *int) error {
-		calls++
-		if calls == 2 {
-			return errors.New("restore failed")
-		}
-		return r.UpdateThumbnailTiers(ctx, id, s, m, w, h)
-	}
-	_, _, _, err := writeThumbnailFile(context.Background(), f.deps, f.itemID, f.thumbAbs, pngBytes(t, 8, color.RGBA{B: 200, A: 255}))
-	if err == nil {
-		t.Fatal("want an error")
-	}
-	it := f.item()
-	for _, p := range []*string{it.ThumbnailSmallPath, it.ThumbnailMediumPath} {
-		if _, serr := os.Stat(filepath.Join(f.deps.ImagesRoot, filepath.FromSlash(*p))); serr != nil {
-			t.Errorf("the row points at %s but it is gone: %v", *p, serr)
-		}
-	}
-}
-
 // ---- revert ----
 
 func TestRevertGoesThroughTheSafePath(t *testing.T) {
@@ -464,9 +438,9 @@ func TestRevertGoesThroughTheSafePath(t *testing.T) {
 	}
 
 	t.Run("a failing step leaves the enhanced sidecar and row as they were", func(t *testing.T) {
-		old := renameFile
-		renameFile = func(string, string) error { return errors.New("rename refused") }
-		defer func() { renameFile = old }()
+		old := thumbwrite.RenameFile
+		thumbwrite.RenameFile = func(string, string) error { return errors.New("rename refused") }
+		defer func() { thumbwrite.RenameFile = old }()
 		before := f.snapshot()
 		if err := RevertOriginal(context.Background(), f.deps, f.itemID); err == nil {
 			t.Fatal("want an error")
