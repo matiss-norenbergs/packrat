@@ -654,7 +654,9 @@ collection's Artist default — see Collections above).
 display picture (shown wherever the artist is represented, e.g. Browse). Add images from suggested
 candidates (thumbnails already used by that artist's own library items) or by uploading directly.
 Removing the currently-selected image automatically clears the selection (falls back to an
-auto-picked image); removing any other gallery image is unaffected.
+auto-picked image); removing any other gallery image is unaffected. An image can only be removed through
+its own artist — asking to delete another artist's image is refused ("image does not belong to this
+artist") and changes nothing, and the removal and the selection reset happen together.
 - **Resizable side panel.** The right-hand panel's left edge is a drag handle (from the `md` breakpoint up): drag it, or Tab to it and use ←/→ (16px, Shift = 64px), Home (minimum), End (maximum) and Enter to reset. Width is limited to 280px minimum and 50% of the content row; with nothing remembered the panel opens at 500px; double-click the handle or press Enter to reset to that default, which also clears the remembered width. The width is remembered per page in the browser (not on the server); a window too narrow for it clamps the panel narrower for as long as it stays narrow, and growing back restores the remembered width. Phones keep the fixed 320px panel, no handle.
 
 ## Compare list

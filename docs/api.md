@@ -1244,9 +1244,11 @@ is a nullable relative path pointing at one of the artist's own gallery images (
   `404` unknown artist, `400` neither source set. Generates one WebP derivative (single tier, max
   width 400px — unlike collection covers' three-tier split, since artist images are only ever shown
   small). Response `201 {"id": 5, "relativePath": "artists/3/image-<uuid>.webp", "createdAt": "..."}`.
-- **`DELETE /api/artists/:id/images/:imageId`** — `404` unknown artist or image. Deletes the file
-  (best-effort) and row; if this was the artist's currently-selected image, the selection is
-  cleared automatically rather than left dangling. `204`.
+- **`DELETE /api/artists/:id/images/:imageId`** — `404` unknown artist or image, `400` "image does not
+  belong to this artist" (an image of another artist is never deleted, and that artist's selection is
+  untouched — same check as `select`). Deletes the row and, in the same transaction, clears the artist's
+  `selectedImagePath` if it was this image (never left dangling); the file is removed after the commit
+  (best-effort). `204`.
 - **`POST /api/artists/:id/images/:imageId/select`** — no body. `404` unknown image, `400` the
   image belongs to a different artist. Sets `selectedImagePath` to that image's path. `204`.
 - **`DELETE /api/artists/:id/selected-image`** — no body. Clears the selection pointer only — the

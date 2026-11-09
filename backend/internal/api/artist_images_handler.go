@@ -112,8 +112,10 @@ func AddArtistImage(mediaRoot, imagesRoot, ffmpegPath string, artistsRepo *repos
 	}
 }
 
-// DeleteArtistImage removes one gallery image — the file (best-effort) and
-// its row — clearing the artist's selection first if it pointed at this one.
+// DeleteArtistImage removes one of the artist's gallery images — its row and,
+// best-effort after the commit, its file — clearing the artist's selection in
+// the same transaction when it pointed at this image. The image must belong to
+// the artist in the URL (400 otherwise, nothing deleted), like SelectArtistImage.
 func DeleteArtistImage(imagesRoot string, artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -128,8 +130,7 @@ func DeleteArtistImage(imagesRoot string, artistsRepo *repository.ArtistsRepo) g
 			return
 		}
 
-		artist, err := artistsRepo.Get(ctx, artistID)
-		if err != nil {
+		if _, err := artistsRepo.Get(ctx, artistID); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
 				return
@@ -138,7 +139,7 @@ func DeleteArtistImage(imagesRoot string, artistsRepo *repository.ArtistsRepo) g
 			return
 		}
 
-		relPath, err := artistsRepo.DeleteImage(ctx, imageID)
+		img, err := artistsRepo.GetImage(ctx, imageID)
 		if err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "image not found"})
@@ -147,17 +148,29 @@ func DeleteArtistImage(imagesRoot string, artistsRepo *repository.ArtistsRepo) g
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		if img.ArtistID != artistID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "image does not belong to this artist"})
+			return
+		}
+
+		// Row delete + selection clear in one transaction; the repo re-checks
+		// ownership, so a concurrent change between the two reads is caught too.
+		relPath, err := artistsRepo.DeleteImageForArtist(ctx, artistID, imageID)
+		if err != nil {
+			switch {
+			case errors.Is(err, repository.ErrNotFound):
+				c.JSON(http.StatusNotFound, gin.H{"error": "image not found"})
+			case errors.Is(err, repository.ErrArtistImageNotOwned):
+				c.JSON(http.StatusBadRequest, gin.H{"error": "image does not belong to this artist"})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
 
 		abs := filepath.Join(imagesRoot, filepath.FromSlash(relPath))
 		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
 			log.Printf("artist images: failed to delete image file %s: %v", abs, err)
-		}
-
-		if artist.SelectedImagePath != nil && *artist.SelectedImagePath == relPath {
-			if err := artistsRepo.SetSelectedImage(ctx, artistID, nil); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
 		}
 		c.Status(http.StatusNoContent)
 	}
