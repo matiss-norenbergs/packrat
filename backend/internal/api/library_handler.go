@@ -17,6 +17,7 @@ import (
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/importer"
 	"packrat/backend/internal/models"
+	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/queue"
 	"packrat/backend/internal/repository"
@@ -32,10 +33,10 @@ func writeItemBusy(c *gin.Context) {
 	c.JSON(http.StatusConflict, gin.H{"error": itemBusyMessage})
 }
 
-// writeRenamePairError reports a fsutil.RenamePair failure as 409 when it's
+// writeRenameError reports a fsutil.RenameAll failure as 409 when it's
 // a destination-already-exists collision, matching the 409-style handling
 // collections/tags/artists already use for name clashes, or 500 otherwise.
-func writeRenamePairError(c *gin.Context, err error) {
+func writeRenameError(c *gin.Context, err error) {
 	if errors.Is(err, fsutil.ErrDestinationExists) {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
@@ -409,7 +410,20 @@ func BulkAssignTags(repo *repository.LibraryRepo, tagsRepo *repository.TagsRepo,
 	}
 }
 
-// MoveLibraryItem relocates the media file and thumbnail to a new
+// libraryRenameSteps lists the files that move together when an item's media
+// file is renamed or moved: the media file, its thumbnail (when it has one)
+// and the Jellyfin .nfo sidecar, which belongs to the media file by name and
+// moves whether or not the item's generateNfo flag is on (a missing sidecar is
+// simply skipped by fsutil.RenameAll).
+func libraryRenameSteps(oldMediaAbs, newMediaAbs, oldThumbAbs, newThumbAbs string) []fsutil.RenameStep {
+	steps := []fsutil.RenameStep{{Old: oldMediaAbs, New: newMediaAbs, Label: "media file"}}
+	if oldThumbAbs != "" {
+		steps = append(steps, fsutil.RenameStep{Old: oldThumbAbs, New: newThumbAbs, Label: "thumbnail"})
+	}
+	return append(steps, fsutil.RenameStep{Old: nfo.SidecarPath(oldMediaAbs), New: nfo.SidecarPath(newMediaAbs), Label: "NFO sidecar"})
+}
+
+// MoveLibraryItem relocates the media file, thumbnail and .nfo sidecar to a new
 // collection/folder, reusing the same effective-root resolution and
 // path-safety validation as creating a download in the first place.
 func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, mediaRoot string) gin.HandlerFunc {
@@ -476,8 +490,8 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 			newThumbAbs = filepath.Join(destDir, filepath.Base(*item.Thumbnail))
 		}
 
-		if err := fsutil.RenamePair(oldMediaAbs, newMediaAbs, oldThumbAbs, newThumbAbs); err != nil {
-			writeRenamePairError(c, err)
+		if err := fsutil.RenameAll(libraryRenameSteps(oldMediaAbs, newMediaAbs, oldThumbAbs, newThumbAbs)); err != nil {
+			writeRenameError(c, err)
 			return
 		}
 

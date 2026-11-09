@@ -51,47 +51,98 @@ func EnsureDir(path string) error {
 	return os.MkdirAll(path, 0o755)
 }
 
-// RenamePair renames a media file and its companion thumbnail together —
-// used for both Rename (same directory, new base name) and Move (new
-// directory, same base name), which are the same filesystem operation
-// either way. oldThumb/newThumb may be "" if there is no thumbnail. Both
-// destinations are checked for a pre-existing file (returning
-// ErrDestinationExists rather than silently overwriting it) before either
-// rename is attempted. If the thumbnail rename fails after the media rename
-// succeeded, the media file is renamed back so the two never end up split
-// across old and new locations (there's no real filesystem transaction to
-// fall back on).
-func RenamePair(oldMedia, newMedia, oldThumb, newThumb string) error {
-	if newMedia != oldMedia {
-		if _, err := os.Stat(newMedia); err == nil {
-			return fmt.Errorf("renaming media file: %w", ErrDestinationExists)
-		} else if !os.IsNotExist(err) {
-			return fmt.Errorf("checking destination media file: %w", err)
-		}
-	}
-	if oldThumb != "" && newThumb != oldThumb {
-		if _, err := os.Stat(newThumb); err == nil {
-			return fmt.Errorf("renaming thumbnail: %w", ErrDestinationExists)
-		} else if !os.IsNotExist(err) {
-			return fmt.Errorf("checking destination thumbnail file: %w", err)
-		}
-	}
+// RenameStep is one file of a multi-file rename (see RenameAll): Old is
+// renamed to New. Label names the file in error messages ("media file",
+// "thumbnail", "NFO sidecar"); it is optional.
+type RenameStep struct {
+	Old, New string
+	Label    string
+}
 
-	if err := os.Rename(oldMedia, newMedia); err != nil {
-		return fmt.Errorf("renaming media file: %w", err)
+func (s RenameStep) label() string {
+	if s.Label == "" {
+		return "file"
 	}
+	return s.Label
+}
 
-	if oldThumb == "" {
-		return nil
-	}
-	if _, err := os.Stat(oldThumb); err != nil {
-		return nil // thumbnail already missing; nothing to rename
-	}
-	if err := os.Rename(oldThumb, newThumb); err != nil {
-		if rollbackErr := os.Rename(newMedia, oldMedia); rollbackErr != nil {
-			return fmt.Errorf("renaming thumbnail: %w (rollback of media rename also failed: %v)", err, rollbackErr)
+// renameFile is os.Rename; tests replace it (SetRenameFuncForTest) to make a
+// chosen rename fail and exercise the rollback.
+var renameFile = os.Rename
+
+// SetRenameFuncForTest replaces the function RenameAll renames with and
+// returns a function that restores the previous one. Test-only.
+func SetRenameFuncForTest(fn func(oldPath, newPath string) error) (restore func()) {
+	prev := renameFile
+	renameFile = fn
+	return func() { renameFile = prev }
+}
+
+// CheckRenameDestinations reports whether every destination of steps is free,
+// without renaming anything: the first occupied destination returns an error
+// wrapping ErrDestinationExists (naming the step), any other stat failure
+// returns that error. A step with an empty Old or New == Old moves nothing and
+// is not checked. The destination is checked even when the step's source does
+// not exist, so a missing thumbnail never lets the item silently adopt another
+// file already sitting at the new thumbnail name.
+func CheckRenameDestinations(steps []RenameStep) error {
+	for _, st := range steps {
+		if st.Old == "" || st.New == st.Old {
+			continue
 		}
-		return fmt.Errorf("renaming thumbnail: %w", err)
+		if _, err := os.Lstat(st.New); err == nil {
+			return fmt.Errorf("renaming %s: %w", st.label(), ErrDestinationExists)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("checking destination %s: %w", st.label(), err)
+		}
+	}
+	return nil
+}
+
+// RenameAll renames a media file together with its companion files (the
+// thumbnail, the .nfo sidecar, ...) — used for both Rename (same directory,
+// new base name) and Move (new directory, same base name), which are the same
+// filesystem operation either way. steps[0] is the media file and must exist;
+// the others are optional.
+//
+// Guarantees:
+//   - every destination is checked (CheckRenameDestinations) BEFORE any rename;
+//     an occupied one returns ErrDestinationExists and nothing is renamed;
+//   - a step whose source does not exist when its turn comes (no .nfo, a
+//     missing thumbnail, or a thumbnail that is the media file itself and was
+//     just moved) is skipped, as are steps with an empty Old or New == Old;
+//   - if a rename fails, the renames already done are undone in reverse order,
+//     so the files are never split between the old and new locations (there is
+//     no real filesystem transaction to fall back on; if an undo itself fails
+//     the returned error says so).
+func RenameAll(steps []RenameStep) error {
+	if err := CheckRenameDestinations(steps); err != nil {
+		return err
+	}
+	var done []RenameStep
+	for i, st := range steps {
+		if st.Old == "" || st.New == st.Old {
+			continue
+		}
+		if i > 0 {
+			if _, err := os.Lstat(st.Old); err != nil {
+				continue // nothing to move
+			}
+		}
+		if err := renameFile(st.Old, st.New); err != nil {
+			err = fmt.Errorf("renaming %s: %w", st.label(), err)
+			var rollbackErrs []string
+			for j := len(done) - 1; j >= 0; j-- {
+				if rbErr := renameFile(done[j].New, done[j].Old); rbErr != nil {
+					rollbackErrs = append(rollbackErrs, fmt.Sprintf("%s: %v", done[j].label(), rbErr))
+				}
+			}
+			if len(rollbackErrs) > 0 {
+				return fmt.Errorf("%w (rollback also failed for %s)", err, strings.Join(rollbackErrs, "; "))
+			}
+			return err
+		}
+		done = append(done, st)
 	}
 	return nil
 }

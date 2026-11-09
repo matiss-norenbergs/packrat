@@ -622,8 +622,10 @@ tag names). Per item:
 
 - an item with an active download fails with status `409` "a download is already in progress for this
   item"; an unknown id fails with `404`.
-- `filename` set → takes the item lock, renames the media file and its thumbnail on disk (sanitized;
-  status `400` if that yields an empty name, `409` if the target exists). A busy item (a remux or other
+- `filename` set → takes the item lock, renames the media file, its thumbnail and its `.nfo` sidecar (when
+  one exists on disk, even with `generateNfo` off) together on disk (sanitized; status `400` if that yields
+  an empty name, `409` if any of the three target names is already taken, in which case nothing is
+  renamed). A busy item (a remux or other
   file operation holds it) fails with `409` and the usual "This item is being updated. Try again in a
   moment." without aborting the other items.
 - Changing `title`/`artistId`/`year`/`sequenceNumber`/`seasonNumber` submits one **background**
@@ -661,8 +663,10 @@ selected items' active downloads are cancelled first. Response:
 { "collectionId": 5, "folder": "Subfolder" }
 ```
 
-Relocates the media file + thumbnail on disk to the resolved target. `400` invalid
-collection/folder, `500` on FS error, `204` on success.
+Relocates the media file, its thumbnail and its `.nfo` sidecar (when one exists on disk) on disk to the
+resolved target, all or none. `400` invalid collection/folder, `409` if the media file, thumbnail or
+sidecar name is already taken in the target folder (nothing moved), `500` on FS error (anything already
+moved is moved back), `204` on success.
 
 ### `POST /api/library/:id/refresh-metadata` — no body
 

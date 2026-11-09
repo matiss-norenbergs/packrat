@@ -344,7 +344,11 @@ same endpoint with a list of one.
   Resolution/Duration re-probes the actual file on disk with ffprobe and, if it differs from the
   saved values, offers to pull the probed values into the form — useful after the file was replaced
   outside the app, or to double-check after a Trim.
-- **Move** — relocate the file to a different collection and/or folder.
+- **Move** — relocate the file to a different collection and/or folder. Its thumbnail and `.nfo` sidecar
+  move with it (so Jellyfin keeps the metadata), all or none: if the media file, thumbnail or sidecar
+  name is already taken in the target folder the move is refused with "destination already exists" and
+  nothing moves. Renaming the file in Edit moves the sidecar the same way, whether or not Generate NFO is
+  on for the item, and the old `.nfo` no longer stays behind.
 - **Copy URL** — copies the item's original source URL to the clipboard (disabled if it has none,
   e.g. items imported without a source URL).
 - **Trim…** — cut a precise portion off the start and/or end of the file. Set Start/End by number

@@ -542,6 +542,26 @@ independent of any actual download or preview happening.
   the body is counted while streaming and fails with "image larger than the N MB limit" (`Fetch` removes
   its temp file; `Open`'s body returns that error so a stream can't outlive the preview timeout window).
 
+## Renaming and moving an item's files (`fsutil.RenameAll`)
+
+Rename (the Edit dialog's filename) and Move relocate more than the media file: the thumbnail and the
+Jellyfin `.nfo` sidecar (`nfo.SidecarPath(media)`) belong to it by name and move with it, whether or not the
+item's `generateNfo` flag is on. Both go through `fsutil.RenameAll`, which takes an ordered list of
+`RenameStep{Old, New, Label}` (media file first, built by `libraryRenameSteps`) and guarantees:
+
+- **check all first** — every destination is tested (`CheckRenameDestinations`, also exported on its own) before
+  any rename; an occupied destination returns `ErrDestinationExists` (handlers answer `409`) and nothing moves.
+  A destination counts as occupied even when that step's source is missing, so an item never adopts a stray
+  thumbnail or `.nfo` already sitting at the new name;
+- **skip what isn't there** — a step whose source doesn't exist when its turn comes (no `.nfo`, a lost
+  thumbnail, or an image item whose "thumbnail" is the media file that was just moved) is skipped;
+- **roll back in reverse** — if a rename fails, the ones already done are undone last-to-first, so the files
+  are never split between the old and new locations (a failed undo is named in the error).
+
+`fsutil.SetRenameFuncForTest` swaps the rename function so tests can fail a chosen step. Other flows that
+rename files keep the item's name and are deliberately not routed through it: the redownload swap
+(`completeRedownload`), trim accept, the yt-dlp/image temp-file finalisation and the image conversion.
+
 ## Persistence rules (SQLite)
 
 - **Every foreign-key child column needs an index.** SQLite doesn't create one, so deleting a parent

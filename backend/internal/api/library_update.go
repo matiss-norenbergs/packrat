@@ -28,9 +28,9 @@ type libraryUpdater struct {
 	downloadsRepo *repository.DownloadsRepo
 }
 
-// renamePairOpError maps a fsutil.RenamePair failure to 409 for a destination
-// collision and 500 otherwise (the opError twin of writeRenamePairError).
-func renamePairOpError(err error) *opError {
+// renameOpError maps a fsutil.RenameAll failure to 409 for a destination
+// collision and 500 otherwise (the opError twin of writeRenameError).
+func renameOpError(err error) *opError {
 	if errors.Is(err, fsutil.ErrDestinationExists) {
 		return newOpError(http.StatusConflict, err.Error())
 	}
@@ -38,8 +38,8 @@ func renamePairOpError(err error) *opError {
 }
 
 // update applies one item's changes. It updates the display title (DB only)
-// and/or the actual filename (renames the media file and its thumbnail on disk,
-// then updates the DB — see fsutil.RenamePair for the best-effort atomicity)
+// and/or the actual filename (renames the media file, its thumbnail and its .nfo sidecar on disk,
+// then updates the DB — see fsutil.RenameAll for the best-effort atomicity)
 // and/or the display-only metadata fields (uploader, description, duration,
 // resolution, artist, year, ...). Fields omitted from the request are left
 // untouched — the current value is merged in before writing, so a form that
@@ -108,8 +108,8 @@ func (u *libraryUpdater) update(ctx context.Context, id int64, req UpdateLibrary
 			newThumbAbs = filepath.Join(dir, newBase+thumbExt)
 		}
 
-		if err := fsutil.RenamePair(oldMediaAbs, newMediaAbs, oldThumbAbs, newThumbAbs); err != nil {
-			return renamePairOpError(err)
+		if err := fsutil.RenameAll(libraryRenameSteps(oldMediaAbs, newMediaAbs, oldThumbAbs, newThumbAbs)); err != nil {
+			return renameOpError(err)
 		}
 
 		var newThumbRelPtr *string
