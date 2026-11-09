@@ -350,7 +350,8 @@ With migrations pending it writes the copy first, then migrates, then prunes.
 
 - **Method:** `VACUUM INTO` on the open connection. A plain file copy of `packrat.db` can miss data that
   only lives in `-wal`; `VACUUM INTO` is a consistent snapshot of everything committed and works with the
-  single connection. It writes a `.packrat-pre-migration-*.tmp` file in the target folder, fsyncs, then
+  pooled connections (one autocommit statement, so it needs no pinning and does not block readers).
+  It writes a `.packrat-pre-migration-*.tmp` file in the target folder, fsyncs, then
   renames it into place, so a crash never leaves a half-written file under a final name (stale temp files
   are removed on the next copy and removed on any failure).
 - **Where and what:** `<BACKUPS_ROOT>/pre-migration/` (0700), files 0600, named
@@ -407,7 +408,7 @@ client gave up, leaving the caller unable to tell what had been queued; at shutd
 `Enqueue` blocked for ever.
 
 - **`Push(id)` never blocks** — a mutex-guarded append (the lock covers slice bookkeeping only, never a DB
-  call or I/O, so it respects the single-connection rule). `Enqueue` therefore returns as soon as the row
+  call or I/O, so it respects the lock-order rule). `Enqueue` therefore returns as soon as the row
   exists, whatever the queue length, and does not depend on `rootCtx`, so enqueueing before `Start` (tests,
   the API fixtures) works.
 - **FIFO and wakeups.** A worker calls `Pop(rootCtx, stop)`. If the queue is empty it registers a private
@@ -601,11 +602,62 @@ title-first order caused (a rename collision used to leave the title saved and e
 it does not make the edit atomic. The filename-change item-lock rule and the coalesced remux scheduling are
 unchanged.
 
+## Database connections (`internal/db`)
+
+One `*sql.DB` (repositories keep their signatures) over a **pool of `db.MaxOpenConns` (8)** SQLite
+connections in WAL mode. Reads run concurrently with a write; **writes still happen one at a time**
+(SQLite has one write lock), so a write that arrives while another is in progress waits.
+
+- **DSN, applied to every connection the pool opens** (the driver runs each `_pragma` per connection;
+  `TestEveryPooledConnectionGetsTheSetup` checks all eight): `busy_timeout(15000)` first (so the
+  journal-mode change itself waits), `journal_mode(WAL)`, `foreign_keys(on)`, and `_txlock=immediate`.
+- **`_txlock=immediate`: every `BeginTx` takes the write lock at BEGIN.** A deferred transaction that
+  reads and then writes fails *instantly* with `SQLITE_BUSY` (busy_timeout does not apply to the
+  read-to-write upgrade) if another connection committed in between. With immediate, two
+  read-then-write transactions queue and neither loses an update
+  (`TestConcurrentReadModifyWriteTransactionsLoseNothing`; `TestDeferredReadThenWriteFailsWithoutImmediate`
+  shows the failure it prevents). Read-only transactions (`sql.TxOptions{ReadOnly: true}`) stay
+  deferred. A raw `BEGIN` sent as SQL is still deferred, so the rebuild runner sends `BEGIN IMMEDIATE`.
+- **What is no longer true: "a transaction owns the only connection".** Other goroutines' *reads* now run
+  while a write transaction is open and see the last committed state (snapshot); they no longer wait for
+  the commit. Anything that relied on a read waiting for an in-flight transaction must wait on the
+  transaction's commit instead. Non-transactional check-then-write sequences were never atomic (the
+  connection was free between statements) and still are not: they are guarded by a repo mutex or a
+  conditional single statement (`CreateFirst`, `AdvanceTOTPStep`, `MarkFetchingMetadataIfQueued`, …) as
+  before.
+- **What is still a rule: lock order.** A repo mutex (`TagsRepo.mu`, `ArtistsRepo.mu`,
+  `CollectionsRepo.mu`) is taken *before* the transaction, never inside one, and nothing that writes the DB
+  (including `sysevents` `Record`) runs inside an open transaction. Violations no longer hang the whole
+  app: the waiting writer fails with "database is locked" after 15 s (a 503). It is still a bug. See
+  "Lock order" under Persistence rules.
+- **Connection-scoped state needs a pinned connection.** `PRAGMA foreign_keys` (and `ATTACH`, temp
+  tables, any other per-connection PRAGMA) set on `db.Exec` lands on an arbitrary pooled connection. The
+  rebuild-migration runner (`db/rebuild.go`) therefore runs its whole sequence (`foreign_keys` OFF,
+  `BEGIN IMMEDIATE`, body, `foreign_key_check`, COMMIT, `foreign_keys` ON) on one `*sql.Conn`, and
+  *discards* that connection (`driver.ErrBadConn`) if it cannot be put back into the pool's state.
+  `VACUUM INTO` (the pre-migration copy) is a single autocommit statement and needs no pinning. The
+  old unmarked migrations (4, 5, 44) switch the pragma off and on inside one multi-statement `Exec`, i.e.
+  on one connection. `TestRebuildOnAWarmPoolKeepsSiblingsAndForeignKeys` runs a rebuild on a full pool
+  with readers active and checks every connection afterwards. golang-migrate's lock is an in-process
+  flag, not a database lock, and files are applied strictly one after another before the server starts
+  serving.
+- **Busy handling.** `db.IsBusy(err)` recognises `SQLITE_BUSY`/`SQLITE_LOCKED`. Handlers answer an
+  unexpected failure through `writeServerError` (`internal/api/server_error.go`): `503` with
+  `Retry-After: 2` and a short message for a busy database (logged), `500` with the error text
+  otherwise. Background writers log and continue; the writes that decide whether finished work is kept
+  (library row, completed status, history, redownload apply, frame-match `SetDone`) additionally
+  `db.RetryBusy` until their `CompletionContext` bound, because one attempt gives up after the busy
+  timeout and a failed library write deletes the downloaded file. Only single-statement writes are
+  wrapped (a busy error means nothing was applied). Failure bookkeeping (5 s) and the system log (3 s)
+  are shorter than the busy timeout, so they simply fail and log.
+- **Not changed:** `synchronous` stays at SQLite's default (FULL). `synchronous=NORMAL` is the usual WAL
+  setting but trades durability of the last commits on power loss, and is a separate decision.
+
 ## Persistence rules (SQLite)
 
 - **Every foreign-key child column needs an index.** SQLite doesn't create one, so deleting a parent
   row (download, library item, tag, artist, collection) scans each child table once per deleted row —
-  with the single DB connection that blocks every request. Migration 53 added the missing ones;
+  while it holds the write lock, so every other write (and the delete itself) waits for it. Migration 53 added the missing ones;
   `TestEveryForeignKeyChildColumnIsIndexed` (`repository/schema_indexes_test.go`) fails if a later
   migration adds an FK column without an index whose leading column it is, and
   `TestParentDeletesDoNotScanChildTables` checks the parent-delete query plans.
@@ -643,19 +695,21 @@ unchanged.
   committed settings are not undone), and once at startup in `cmd/server/main.go`, so an install that
   restored cookies before this existed, or whose file went missing or stale, is reconciled with the
   database. Startup logs one line only when it changed something, never the content.
-- **Lock order: repo mutex first, DB connection second.** The pool has exactly one connection
-  (`SetMaxOpenConns(1)`), and `TagsRepo`, `ArtistsRepo` and `CollectionsRepo` each have a `mu` that
-  serializes their check-then-write name-uniqueness sequences (`GetOrCreateByNames`, `Create`,
-  `Update`, `EnsureChain`, …). A goroutine holding `mu` and waiting for the connection, while another
-  holds the connection (an open tx) and waits for `mu`, hangs every DB call until restart. So never
-  call a locking repo method inside an open `BeginTx`. A flow that needs one tx across those repos
+- **Lock order: repo mutex first, write transaction second.** `TagsRepo`, `ArtistsRepo` and
+  `CollectionsRepo` each have a `mu` that serializes their check-then-write name-uniqueness sequences
+  (`GetOrCreateByNames`, `Create`, `Update`, `EnsureChain`, …). A goroutine holding `mu` and waiting for
+  the write lock, while another holds the write lock (an open tx) and waits for `mu`, is a deadlock
+  between the two; the mutex holder gives up with "database is locked" after the 15 s busy timeout (it
+  used to hang every DB call until restart, when there was a single connection). So never call a locking
+  repo method inside an open `BeginTx`. A flow that needs one tx across those repos
   (only the library restore, `backup.ApplyLibraryBundle`) calls
   `repository.LockForRestore(tags, artists, collections)` before `BeginTx` (fixed order: tags, artists,
   collections), holds it until after commit/rollback, and builds the tx-scoped repos with
   `WithLockedTx(tx, lock)`. Those copies skip taking `mu` (it is not reentrant); `WithLockedTx` panics
   if the lock does not cover that repo. Plain `WithTx` copies still lock as before, so use `WithTx`
   only for calls that do not lock (the bulk deletes). A restore therefore waits briefly for in-flight
-  tag/artist/collection writes. Covered by `backup/restore_deadlock_test.go` and
+  tag/artist/collection writes. Covered by `backup/restore_deadlock_test.go` (its deadline is kept
+  under the busy timeout so the timeout cannot hide a regression) and
   `repository/restore_lock_test.go`.
 
 ## Full-text search
@@ -912,7 +966,7 @@ has succeeded:
 3. Generate the tiers **from the temp file** (new uuid file names; the old derivatives are not touched).
 4. `LibraryRepo.UpdateThumbnailAndTiers` — **one statement** — points the row at the sidecar path
    (`Params.ThumbRel`, set also when the item had no thumbnail; nil keeps the row's path), the new tiers
-   and the dimensions. No transaction is opened, so the single-connection rule (no repo mutex or
+   and the dimensions. No transaction is opened, so the lock-order rule (no repo mutex or
    system-log call inside a transaction) cannot be violated.
 5. Rename the temp file over the sidecar. If that fails, the row is put back (path, tiers and
    dimensions) and the new tier files are deleted (if even that restore fails it is logged and the new
@@ -1027,7 +1081,7 @@ context keeps the claim.
 `subscriptions.CreateBaselined` -> `SubscriptionsRepo.CreateWithSeenEntries`: one transaction (prepared
 insert, `context.WithoutCancel` + 2 min timeout) that inserts the subscription with `last_checked_at` set and
 every baseline entry, so a closed tab or a failure cannot leave a committed subscription whose back catalog
-looks new. No repo mutex is taken inside it (lock order: repo mutex before the single DB connection).
+looks new. No repo mutex is taken inside it (lock order: repo mutex before the write transaction).
 `last_checked_at IS NULL` is therefore the marker of a never-baselined subscription (only an
 interrupted create from an older version): `CheckOne` records its current entries as seen
 (`BaselineOnCreate`, the same bulk path, one transaction) without acting on them, marks it checked and
@@ -1144,9 +1198,10 @@ state. Both kinds use `context.WithoutCancel`, so they survive that, but differ 
   success and decide whether finished work is kept: the library row of a completed download, marking
   it completed and its history row (also for a redownload's `ApplyRedownload`), the frame-match
   queue's `SetDone`. The bound is only a safety net against a wedged DB. A short one would be a
-  regression in normal operation: the DB has a single connection, so a backup, restore or big delete
+  regression in normal operation: only one transaction writes at a time, so a restore or big delete
   can make a write wait, and a timed-out library write sends the run down the error path that deletes
-  the file it just downloaded. It does not stretch shutdown (the 15 s wait is bounded; a write cut off
+  the file it just downloaded. The same writes retry a busy database (`db.RetryBusy`) until this bound,
+  because a single attempt gives up after the 15 s busy timeout. It does not stretch shutdown (the 15 s wait is bounded; a write cut off
   by process exit is recovered at the next start).
 - *Failure bookkeeping* (`bgtasks.TerminalContext`, 5 s) only records a failure — failed/cancelled
   status and history, the frame-match `SetError` — where a failed write just logs, so a short bound is
@@ -1210,8 +1265,9 @@ exists because an update recreates the container and stdout with it. It is not a
   NULL. `repository.SystemEventsRepo` has `Create`, `Query`, `Facets`, `DeleteByIDs` (one transaction, ids that
   do not exist ignored), `DeleteAll` and `PruneToCount`.
 - **The recorder** (`internal/sysevents`): `Recorder.Record(ctx, level, category, message, details)`.
-  - *Never inside a transaction or under a repo mutex.* There is a single DB connection, so a write from
-    inside a transaction would deadlock; callers record after the commit / unlock.
+  - *Never inside a transaction or under a repo mutex.* A write from
+    inside a transaction would wait for that transaction's own write lock (until the busy timeout);
+    callers record after the commit / unlock.
   - *Never fails or slows the operation:* errors go to stdout and are swallowed; the write uses
     `context.WithoutCancel` plus a 3 s timeout so a cancelled request or a shutdown does not drop it.
   - *Nil-safe:* a nil `*Recorder` does nothing, so tests and unwired code paths keep working. Handlers reach
