@@ -25,6 +25,10 @@ func CreateDownload(mgr *queue.DownloadManager, collectionsRepo *repository.Coll
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if err := req.checkNumberLimits(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		id, err := enqueueDownload(c.Request.Context(), mgr, collectionsRepo, settingsRepo, req)
 		if err != nil {

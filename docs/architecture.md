@@ -1591,6 +1591,13 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
   sidecar only when its `generateNfo` flag is on, on a pool of 8 workers (results keep request order); the
   single-item `Response` always stats. The flag-off value in a list is "not checked" (`false`), which the
   View Contents menu entry accounts for (see `docs/api.md`, `nfoExists`).
+- **Gaps by arithmetic, not by walking the range.** `SequenceGapsByCollection` (`sequenceGaps`) counts a
+  collection's missing sequence numbers as `(max - min + 1)` minus the distinct present values in range, and
+  builds the 50-number sample from the gaps between consecutive present values, so the cost is O(present
+  values + 50) whatever `min` and `max` are (it used to walk every integer: ~15 s for a bound of a billion,
+  never-ending at `math.MaxInt`). The range size is computed in `uint64` and `Count` clamps to `math.MaxInt`.
+  Inputs are also bounded at the API (`models.MaxSequenceValue` = 1,000,000 for season / sequence numbers and a
+  collection's `sequenceMin`/`sequenceMax`, see `docs/api.md`), but the repository is safe for any stored value.
 
 ## Deliberate scope cuts
 

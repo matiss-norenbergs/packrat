@@ -93,6 +93,10 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if err := req.checkNumberLimits(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		if req.DefaultQuality == "" {
 			req.DefaultQuality = "best"
 		}
@@ -166,6 +170,10 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 
 		var req UpdateCollectionRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err := req.checkNumberLimits(); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}

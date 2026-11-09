@@ -585,7 +585,7 @@ selectable from the New Download dialog so you don't have to re-pick them every 
 - **Year (optional)** — like Season #: a new download placed directly into this collection defaults
   its own Year to it.
 - **Sequence range (optional)** — the expected first and last item of the collection (a blank first
-  box means 1). With a range set, the Sequence # fields of items placed here become a picker, the Edit
+  box means 1; season and sequence numbers, here and on items and downloads, go up to 1,000,000). With a range set, the Sequence # fields of items placed here become a picker, the Edit
   Sequence dialog also shows the slots not filled yet, and the Library's folder tiles warn about numbers
   that are missing inside the range (a warning icon whose popover lists "Missing seq: …", first ten).
   Folder tiles also show how many of a collection's files are ghosts.

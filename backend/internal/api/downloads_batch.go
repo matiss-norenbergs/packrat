@@ -185,6 +185,10 @@ func CreateBatchDownload(mgr *queue.DownloadManager, collectionsRepo *repository
 
 		entries := make([]batchEntry, len(req.Items))
 		for i, item := range req.Items {
+			if err := item.checkNumberLimits(); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("item %d: %s", i+1, err.Error())})
+				return
+			}
 			entries[i] = batchEntry{req: item}
 		}
 
