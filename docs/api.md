@@ -622,8 +622,10 @@ tag names). Per item:
 
 - an item with an active download fails with status `409` "a download is already in progress for this
   item"; an unknown id fails with `404`.
-- `filename` set → takes the item lock, renames the media file and its thumbnail on disk (sanitized;
-  status `400` if that yields an empty name, `409` if the target exists). A busy item (a remux or other
+- `filename` set → takes the item lock, renames the media file, its thumbnail and its `.nfo` sidecar (when
+  one exists on disk, even with `generateNfo` off) together on disk (sanitized; status `400` if that yields
+  an empty name, `409` if any of the three target names is already taken, in which case nothing is
+  renamed). A busy item (a remux or other
   file operation holds it) fails with `409` and the usual "This item is being updated. Try again in a
   moment." without aborting the other items.
 - Changing `title`/`artistId`/`year`/`sequenceNumber`/`seasonNumber` submits one **background**
@@ -631,7 +633,11 @@ tag names). Per item:
   own container metadata — failures are logged only.
 - If `generateNfo` is on (or just turned on) and any NFO-relevant field changed, the `.nfo` sidecar is
   rewritten in sync, best-effort.
-- Each item's database writes are the same separate statements as before (not one batch transaction).
+- An item is validated before anything is written: a rejected edit (`400` no media file to rename / invalid
+  filename / unknown `artistId`, `409` a target file name taken) leaves it **completely unchanged** — title,
+  metadata and tags included. The rename runs first and its new path is recorded at once (undone on a
+  failure), then the other fields are written.
+- Each item's database writes after that are still separate statements (not one batch transaction).
 
 ### `POST /api/library/bulk-tags`
 
@@ -661,8 +667,10 @@ selected items' active downloads are cancelled first. Response:
 { "collectionId": 5, "folder": "Subfolder" }
 ```
 
-Relocates the media file + thumbnail on disk to the resolved target. `400` invalid
-collection/folder, `500` on FS error, `204` on success.
+Relocates the media file, its thumbnail and its `.nfo` sidecar (when one exists on disk) on disk to the
+resolved target, all or none. `400` invalid collection/folder, `409` if the media file, thumbnail or
+sidecar name is already taken in the target folder (nothing moved), `500` on FS error (anything already
+moved is moved back), `204` on success.
 
 ### `POST /api/library/:id/refresh-metadata` — no body
 
@@ -1236,9 +1244,11 @@ is a nullable relative path pointing at one of the artist's own gallery images (
   `404` unknown artist, `400` neither source set. Generates one WebP derivative (single tier, max
   width 400px — unlike collection covers' three-tier split, since artist images are only ever shown
   small). Response `201 {"id": 5, "relativePath": "artists/3/image-<uuid>.webp", "createdAt": "..."}`.
-- **`DELETE /api/artists/:id/images/:imageId`** — `404` unknown artist or image. Deletes the file
-  (best-effort) and row; if this was the artist's currently-selected image, the selection is
-  cleared automatically rather than left dangling. `204`.
+- **`DELETE /api/artists/:id/images/:imageId`** — `404` unknown artist or image, `400` "image does not
+  belong to this artist" (an image of another artist is never deleted, and that artist's selection is
+  untouched — same check as `select`). Deletes the row and, in the same transaction, clears the artist's
+  `selectedImagePath` if it was this image (never left dangling); the file is removed after the commit
+  (best-effort). `204`.
 - **`POST /api/artists/:id/images/:imageId/select`** — no body. `404` unknown image, `400` the
   image belongs to a different artist. Sets `selectedImagePath` to that image's path. `204`.
 - **`DELETE /api/artists/:id/selected-image`** — no body. Clears the selection pointer only — the

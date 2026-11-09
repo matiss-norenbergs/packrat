@@ -344,7 +344,16 @@ same endpoint with a list of one.
   Resolution/Duration re-probes the actual file on disk with ffprobe and, if it differs from the
   saved values, offers to pull the probed values into the form — useful after the file was replaced
   outside the app, or to double-check after a Trim.
-- **Move** — relocate the file to a different collection and/or folder.
+  Saving checks everything that can fail first — a file that is missing, an empty or invalid file name, a
+  name already taken by the media file, thumbnail or `.nfo`, an artist that no longer exists — and when
+  something is wrong the file reports the error and **nothing** in that edit is saved (the title, tags and
+  other fields stay as they were), so you can fix the name and save again. Otherwise the file is renamed
+  first and the other fields follow.
+- **Move** — relocate the file to a different collection and/or folder. Its thumbnail and `.nfo` sidecar
+  move with it (so Jellyfin keeps the metadata), all or none: if the media file, thumbnail or sidecar
+  name is already taken in the target folder the move is refused with "destination already exists" and
+  nothing moves. Renaming the file in Edit moves the sidecar the same way, whether or not Generate NFO is
+  on for the item, and the old `.nfo` no longer stays behind.
 - **Copy URL** — copies the item's original source URL to the clipboard (disabled if it has none,
   e.g. items imported without a source URL).
 - **Trim…** — cut a precise portion off the start and/or end of the file. Set Start/End by number
@@ -364,8 +373,11 @@ same endpoint with a list of one.
   original source URL, overwriting any manual edits (with a confirmation, since it's destructive
   to those edits). Never touches the file or thumbnail.
 - **Redownload** — re-queues a fresh download using the item's original URL and its original
-  type/quality/format if that download record still exists, falling back to app defaults
-  otherwise. For a ghost item this is relabeled **"Download now"** — the fill-in action that turns
+  type/quality/format if that download record still exists. Once the record is gone ("Clear download
+  log", the retention sweep), the item's own type decides instead — an audio item is refetched as audio
+  in the format of its file (`.m4a` stays m4a, `.flac` flac; never silently mp3), an image item as an
+  image, a video item as video — and only an item whose type can't be told falls back to the app's
+  default download type. For a ghost item this is relabeled **"Download now"** — the fill-in action that turns
   a placeholder into a real item.
 - **Redownload → From Different URL…** — replaces the file with one fetched from a different link
   entirely (the original source went down, or a re-upload exists elsewhere), rather than the
@@ -642,7 +654,9 @@ collection's Artist default — see Collections above).
 display picture (shown wherever the artist is represented, e.g. Browse). Add images from suggested
 candidates (thumbnails already used by that artist's own library items) or by uploading directly.
 Removing the currently-selected image automatically clears the selection (falls back to an
-auto-picked image); removing any other gallery image is unaffected.
+auto-picked image); removing any other gallery image is unaffected. An image can only be removed through
+its own artist — asking to delete another artist's image is refused ("image does not belong to this
+artist") and changes nothing, and the removal and the selection reset happen together.
 - **Resizable side panel.** The right-hand panel's left edge is a drag handle (from the `md` breakpoint up): drag it, or Tab to it and use ←/→ (16px, Shift = 64px), Home (minimum), End (maximum) and Enter to reset. Width is limited to 280px minimum and 50% of the content row; with nothing remembered the panel opens at 500px; double-click the handle or press Enter to reset to that default, which also clears the remembered width. The width is remembered per page in the browser (not on the server); a window too narrow for it clamps the panel narrower for as long as it stays narrow, and growing back restores the remembered width. Phones keep the fixed 320px panel, no handle.
 
 ## Compare list

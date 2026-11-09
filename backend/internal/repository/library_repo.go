@@ -396,7 +396,7 @@ func (r *LibraryRepo) UpdateTitle(ctx context.Context, id int64, title string) e
 
 // UpdateFilename is used by Rename when the physical filename changes —
 // the file itself has already been renamed on disk by the caller via
-// fsutil.RenamePair before this is called.
+// fsutil.RenameAll before this is called.
 func (r *LibraryRepo) UpdateFilename(ctx context.Context, id int64, filename, path string, thumbnail *string) error {
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE library SET filename = ?, path = ?, thumbnail = ? WHERE id = ?`,
@@ -409,7 +409,7 @@ func (r *LibraryRepo) UpdateFilename(ctx context.Context, id int64, filename, pa
 }
 
 // UpdateLocation is used by Move — the file has already been relocated on
-// disk by the caller via fsutil.RenamePair before this is called.
+// disk by the caller via fsutil.RenameAll before this is called.
 func (r *LibraryRepo) UpdateLocation(ctx context.Context, id int64, collectionID *int64, folder, filename, path string, thumbnail *string) error {
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE library SET collection_id = ?, folder = ?, filename = ?, path = ?, thumbnail = ? WHERE id = ?`,

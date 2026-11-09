@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -28,9 +29,19 @@ type libraryUpdater struct {
 	downloadsRepo *repository.DownloadsRepo
 }
 
-// renamePairOpError maps a fsutil.RenamePair failure to 409 for a destination
-// collision and 500 otherwise (the opError twin of writeRenamePairError).
-func renamePairOpError(err error) *opError {
+// reverseRenameSteps returns steps with every Old/New swapped (media file still
+// first, as RenameAll requires), to undo a completed RenameAll.
+func reverseRenameSteps(steps []fsutil.RenameStep) []fsutil.RenameStep {
+	out := make([]fsutil.RenameStep, len(steps))
+	for i, st := range steps {
+		out[i] = fsutil.RenameStep{Old: st.New, New: st.Old, Label: st.Label}
+	}
+	return out
+}
+
+// renameOpError maps a fsutil.RenameAll failure to 409 for a destination
+// collision and 500 otherwise (the opError twin of writeRenameError).
+func renameOpError(err error) *opError {
 	if errors.Is(err, fsutil.ErrDestinationExists) {
 		return newOpError(http.StatusConflict, err.Error())
 	}
@@ -38,20 +49,27 @@ func renamePairOpError(err error) *opError {
 }
 
 // update applies one item's changes. It updates the display title (DB only)
-// and/or the actual filename (renames the media file and its thumbnail on disk,
-// then updates the DB — see fsutil.RenamePair for the best-effort atomicity)
-// and/or the display-only metadata fields (uploader, description, duration,
-// resolution, artist, year, ...). Fields omitted from the request are left
-// untouched — the current value is merged in before writing, so a form that
-// only sends the fields it changed can never blank out the others. If
-// title/artist/year/season/sequence changed, the file's own container metadata
-// is best-effort updated to match (see metaembed) through the coalescing
-// scheduler in the background; a failure there never fails the request.
+// and/or the actual filename (renames the media file, its thumbnail and its .nfo
+// sidecar on disk, then updates the DB — see fsutil.RenameAll for the
+// best-effort atomicity) and/or the display-only metadata fields (uploader,
+// description, duration, resolution, artist, year, ...). Fields omitted from the
+// request are left untouched — the current value is merged in before writing, so
+// a form that only sends the fields it changed can never blank out the others.
+// If title/artist/year/season/sequence changed, the file's own container
+// metadata is best-effort updated to match (see metaembed) through the
+// coalescing scheduler in the background; a failure there never fails the
+// request.
 //
 // Guards, in order: an item with an active download is a 409 (the old
 // notDownloading route guard); a filename change needs the item lock and a busy
-// item is a 409 with itemBusyMessage. Each DB write is its own statement, as
-// before. A nil return means success.
+// item is a 409 with itemBusyMessage. Then three phases: (1) validate everything
+// that can fail without side effects (filename, rename destinations, tag ids,
+// artist) so a request that cannot be applied changes nothing; (2) rename the
+// files and record the new path at once (rolled back if recording fails); (3)
+// the remaining writes. The phase 3 writes are independent statements, as
+// before — the order and the early validation only remove the partial
+// application the old title-first order caused; the edit as a whole is not one
+// transaction. A nil return means success.
 func (u *libraryUpdater) update(ctx context.Context, id int64, req UpdateLibraryItemRequest) *opError {
 	if _, active, err := activeDownloadFor(ctx, u.downloadsRepo, id); err != nil {
 		return internalOpError(err)
@@ -81,46 +99,107 @@ func (u *libraryUpdater) update(ctx context.Context, id int64, req UpdateLibrary
 	mediaRoot := u.mediaRoot
 	mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 
-	if req.Title != nil {
-		if err := u.repo.UpdateTitle(ctx, id, *req.Title); err != nil {
-			return internalOpError(err)
-		}
-	}
-
+	// Phase 1 — validate everything that can fail, with no side effects, so a
+	// request that cannot be applied changes nothing (it used to save the
+	// title first and only then report the rename failure, leaving the other
+	// fields unapplied).
+	var (
+		renameSteps  []fsutil.RenameStep
+		newBase      string
+		mediaExt     string
+		newMediaAbs  string
+		newThumbAbs  string
+		newThumbRel  *string
+		tagIDs       []int64
+		remuxSubmit  bool
+		remuxArtist  *string
+		newArtistRef = req.ArtistID != nil && *req.ArtistID != 0
+	)
 	if req.Filename != nil {
 		if item.Path == "" {
 			return newOpError(http.StatusBadRequest, "item has no media file to rename")
 		}
-		newBase := fsutil.SanitizeFilename(*req.Filename)
+		newBase = fsutil.SanitizeFilename(*req.Filename)
 		if newBase == "" {
 			return newOpError(http.StatusBadRequest, "invalid filename")
 		}
 
-		mediaExt := filepath.Ext(item.Filename)
+		mediaExt = filepath.Ext(item.Filename)
 		oldMediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		dir := filepath.Dir(oldMediaAbs)
-		newMediaAbs := filepath.Join(dir, newBase+mediaExt)
+		newMediaAbs = filepath.Join(dir, newBase+mediaExt)
 
-		var oldThumbAbs, newThumbAbs string
+		var oldThumbAbs string
 		if item.Thumbnail != nil {
 			thumbExt := filepath.Ext(*item.Thumbnail)
 			oldThumbAbs = filepath.Join(mediaRoot, filepath.FromSlash(*item.Thumbnail))
 			newThumbAbs = filepath.Join(dir, newBase+thumbExt)
-		}
-
-		if err := fsutil.RenamePair(oldMediaAbs, newMediaAbs, oldThumbAbs, newThumbAbs); err != nil {
-			return renamePairOpError(err)
-		}
-
-		var newThumbRelPtr *string
-		if item.Thumbnail != nil {
 			s := toRelSlash(mediaRoot, newThumbAbs)
-			newThumbRelPtr = &s
+			newThumbRel = &s
 		}
-		if err := u.repo.UpdateFilename(ctx, id, newBase+mediaExt, toRelSlash(mediaRoot, newMediaAbs), newThumbRelPtr); err != nil {
+		renameSteps = libraryRenameSteps(oldMediaAbs, newMediaAbs, oldThumbAbs, newThumbAbs)
+		// Destinations only (media, thumbnail, .nfo); nothing is renamed yet.
+		if err := fsutil.CheckRenameDestinations(renameSteps); err != nil {
+			return renameOpError(err)
+		}
+	}
+
+	// Database lookups the later writes depend on.
+	if req.Tags != nil {
+		tagIDs, err = u.tagsRepo.GetOrCreateByNames(ctx, *req.Tags)
+		if err != nil {
+			return internalOpError(err)
+		}
+	}
+	remuxSubmit = (req.Title != nil || req.ArtistID != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil) && item.Path != ""
+	artistID := item.ArtistID
+	if req.ArtistID != nil {
+		if *req.ArtistID == 0 {
+			artistID = nil
+		} else {
+			artistID = req.ArtistID
+		}
+	}
+	if artistID != nil && (remuxSubmit || newArtistRef) {
+		a, err := u.artistsRepo.Get(ctx, *artistID)
+		switch {
+		case err == nil:
+			remuxArtist = &a.Name
+		case errors.Is(err, repository.ErrNotFound) && newArtistRef:
+			return newOpError(http.StatusBadRequest, "artist not found")
+		case errors.Is(err, repository.ErrNotFound):
+			// The item's own stored artist vanished: embed without one, as before.
+		default:
+			return internalOpError(err)
+		}
+	}
+
+	// Phase 2 — the rename is the only fallible disk step, so it runs first
+	// and its result is recorded straight away; if recording fails the files
+	// go back, so the files and the row never disagree.
+	if req.Filename != nil {
+		if err := fsutil.RenameAll(renameSteps); err != nil {
+			return renameOpError(err)
+		}
+		if err := u.repo.UpdateFilename(ctx, id, newBase+mediaExt, toRelSlash(mediaRoot, newMediaAbs), newThumbRel); err != nil {
+			if rbErr := fsutil.RenameAll(reverseRenameSteps(renameSteps)); rbErr != nil {
+				log.Printf("library: rolling back rename of item %d failed: %v", id, rbErr)
+				return internalOpError(fmt.Errorf("%w (rolling the rename back also failed: %v)", err, rbErr))
+			}
 			return internalOpError(err)
 		}
 		mediaAbs = newMediaAbs
+	}
+
+	// Phase 3 — the remaining writes, in the order they always had. They are
+	// independent statements (not one transaction), as before: this ordering
+	// only removes the partial application caused by validating late, it does
+	// not make the whole edit atomic — a database failure here, after the
+	// rename, can still leave the earlier writes of this request applied.
+	if req.Title != nil {
+		if err := u.repo.UpdateTitle(ctx, id, *req.Title); err != nil {
+			return internalOpError(err)
+		}
 	}
 
 	if req.Uploader != nil || req.Description != nil || req.Duration != nil || req.Resolution != nil || req.ArtistID != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil {
@@ -137,14 +216,6 @@ func (u *libraryUpdater) update(ctx context.Context, id int64, req UpdateLibrary
 		if resolution == nil {
 			resolution = item.Resolution
 		}
-		artistID := item.ArtistID
-		if req.ArtistID != nil {
-			if *req.ArtistID == 0 {
-				artistID = nil
-			} else {
-				artistID = req.ArtistID
-			}
-		}
 		year := clearableInt(req.Year, item.ReleaseYear)
 		sequenceNumber := clearableInt(req.SequenceNumber, item.SequenceNumber)
 		seasonNumber := clearableInt(req.SeasonNumber, item.SeasonNumber)
@@ -155,24 +226,10 @@ func (u *libraryUpdater) update(ctx context.Context, id int64, req UpdateLibrary
 		}
 	}
 
-	if (req.Title != nil || req.ArtistID != nil || req.Year != nil || req.SequenceNumber != nil || req.SeasonNumber != nil) && item.Path != "" {
+	if remuxSubmit {
 		title := item.Title
 		if req.Title != nil {
 			title = *req.Title
-		}
-		artistID := item.ArtistID
-		if req.ArtistID != nil {
-			if *req.ArtistID == 0 {
-				artistID = nil
-			} else {
-				artistID = req.ArtistID
-			}
-		}
-		var artistName *string
-		if artistID != nil {
-			if a, err := u.artistsRepo.Get(ctx, *artistID); err == nil {
-				artistName = &a.Name
-			}
 		}
 		year := clearableInt(req.Year, item.ReleaseYear)
 		sequenceNumber := clearableInt(req.SequenceNumber, item.SequenceNumber)
@@ -182,7 +239,7 @@ func (u *libraryUpdater) update(ctx context.Context, id int64, req UpdateLibrary
 		// most one running plus one pending (latest values win) and bounds
 		// how many remuxes run at once across items (a bulk edit submits one
 		// per row).
-		u.mgr.Embedder().Submit(id, mediaAbs, metaembed.Request{Title: title, Artist: artistName, Year: year, SequenceNumber: sequenceNumber, SeasonNumber: seasonNumber})
+		u.mgr.Embedder().Submit(id, mediaAbs, metaembed.Request{Title: title, Artist: remuxArtist, Year: year, SequenceNumber: sequenceNumber, SeasonNumber: seasonNumber})
 	}
 
 	if req.OriginalURL != nil {
@@ -197,10 +254,6 @@ func (u *libraryUpdater) update(ctx context.Context, id int64, req UpdateLibrary
 	}
 
 	if req.Tags != nil {
-		tagIDs, err := u.tagsRepo.GetOrCreateByNames(ctx, *req.Tags)
-		if err != nil {
-			return internalOpError(err)
-		}
 		if err := u.tagsRepo.SetForLibraryItem(ctx, id, tagIDs); err != nil {
 			return internalOpError(err)
 		}

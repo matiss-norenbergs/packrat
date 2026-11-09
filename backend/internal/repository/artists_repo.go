@@ -232,16 +232,53 @@ func (r *ArtistsRepo) UpdateImagePath(ctx context.Context, imageID int64, relati
 	return checkRowsAffected(res)
 }
 
-// DeleteImage removes a gallery image's row and hands back its relative
-// path so the caller can also unlink the file and, if it was the artist's
-// selected image, clear that pointer too.
-func (r *ArtistsRepo) DeleteImage(ctx context.Context, imageID int64) (string, error) {
+// ErrArtistImageNotOwned is returned by DeleteImageForArtist when the image
+// exists but belongs to a different artist.
+var ErrArtistImageNotOwned = errors.New("image does not belong to this artist")
+
+// DeleteImageForArtist removes one of artistID's gallery images and, in the
+// same transaction, clears that artist's selected_image_path when it points at
+// the image, so a committed delete never leaves a dangling selection. It hands
+// back the image's relative path so the caller can unlink the file after the
+// commit. ErrNotFound if there is no such image, ErrArtistImageNotOwned if it
+// belongs to another artist (nothing is changed). Takes no repo mutex: it
+// writes no uniqueness-guarded column, and a mutex held across the single
+// connection's transaction would risk the lock-order deadlock documented in
+// docs/architecture.md.
+func (r *ArtistsRepo) DeleteImageForArtist(ctx context.Context, artistID, imageID int64) (string, error) {
+	// Already inside a caller's transaction (WithTx): join it.
+	sqlDB, ok := r.db.(*sql.DB)
+	if !ok {
+		return r.deleteImageForArtist(ctx, artistID, imageID)
+	}
+	tx, err := sqlDB.BeginTx(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("beginning artist image delete: %w", err)
+	}
+	defer tx.Rollback()
+	relPath, err := r.WithTx(tx).deleteImageForArtist(ctx, artistID, imageID)
+	if err != nil {
+		return "", err
+	}
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("committing artist image delete: %w", err)
+	}
+	return relPath, nil
+}
+
+func (r *ArtistsRepo) deleteImageForArtist(ctx context.Context, artistID, imageID int64) (string, error) {
 	img, err := r.GetImage(ctx, imageID)
 	if err != nil {
 		return "", err
 	}
-	if _, err := r.db.ExecContext(ctx, `DELETE FROM artist_images WHERE id = ?`, imageID); err != nil {
+	if img.ArtistID != artistID {
+		return "", ErrArtistImageNotOwned
+	}
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM artist_images WHERE id = ? AND artist_id = ?`, imageID, artistID); err != nil {
 		return "", fmt.Errorf("deleting artist image: %w", err)
+	}
+	if _, err := r.db.ExecContext(ctx, `UPDATE artists SET selected_image_path = NULL WHERE id = ? AND selected_image_path = ?`, artistID, img.RelativePath); err != nil {
+		return "", fmt.Errorf("clearing artist selected image: %w", err)
 	}
 	return img.RelativePath, nil
 }
