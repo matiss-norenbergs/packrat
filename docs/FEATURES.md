@@ -387,6 +387,16 @@ same endpoint with a list of one.
   Duration are checked by default, the rest are opt-in. The item's saved source URL always switches
   to the new one regardless of which fields you check.
 - **Thumbnail** submenu:
+  - **Safe by design** — every action that replaces the thumbnail (Redownload from URL, Quick Grab,
+    Choose from Video, Set from the gallery, Frame Matching's "Use this frame") builds the new
+    thumbnail beside the old one and only swaps it in once the image, its small/medium versions and the
+    database have all succeeded. A failed action leaves the current thumbnail, its small/medium
+    versions, the item and the AI-enhancement backup (Compare/Revert) exactly as they were; the backup
+    is only discarded when the new thumbnail is actually in place. If the item is being renamed, moved
+    or otherwise updated at that moment, the action answers "This item is being updated. Try again in a
+    moment." and changes nothing. Picking something that isn't a readable image shows "the data is not a
+    decodable image". Redownload fetches into a temporary folder, so nothing yt-dlp leaves behind ends
+    up next to the video.
   - **Redownload from URL** — re-fetches the thumbnail image from the source. Also works on ghost items
     (no file): it stores only the resized thumbnails, like adding a ghost does, with nothing written next
     to the media; any stale AI-enhancement backup is cleared.

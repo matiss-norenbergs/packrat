@@ -892,45 +892,72 @@ populated from "Save in Thumbnail Gallery," a specific frame from "Choose from V
 Matching result. `readCurrentThumbnail` (`thumbnail_gallery_handler.go`) falls back from the
 full-res `MediaRoot` original to the best available `ImagesRoot` derivative, so even a ghost item's
 URL-fetched thumbnail (which only ever gets derivative tiers) can be saved to its gallery. Applying
-a gallery image reuses the same `writeThumbnailAndRespond` finish path as `SetLibraryThumbnail` and
-Frame Matching's accept action, keeping derivatives and stale AI-enhancement backups consistent
-across all three thumbnail-setting entry points.
+a gallery image reuses the same `writeThumbnailAndRespond` finish path as `SetLibraryThumbnail`,
+Quick Grab, Redownload and Frame Matching's accept action, keeping derivatives and stale
+AI-enhancement backups consistent across all five thumbnail-setting entry points (all of them go
+through `thumbwrite.Replace`, below).
 
-## Replacing a sidecar thumbnail safely (`thumbnailenhance.writeThumbnailFile`)
+## Replacing a sidecar thumbnail safely (`internal/thumbwrite`)
 
-AI enhancement and Revert replace an item's sidecar thumbnail (the file Jellyfin reads) and its
-small/medium WebP derivatives. Nothing is changed until everything that can fail has succeeded:
+`thumbwrite.Replace` is the **only** code that writes an item's sidecar thumbnail (the file Jellyfin
+reads) and its small/medium WebP derivatives. It lives in its own small package so `thumbnailenhance`
+and `api` share it without depending on each other's internals; `thumbwrite.Tiers` is the one tier-set
+definition (`api.libraryThumbnailTiers` aliases it). Nothing is changed until everything that can fail
+has succeeded:
 
 1. Write the bytes to a temp file in the **same directory** as the sidecar (same filesystem, so the
    final rename is atomic): `os.CreateTemp` → `.packrat-thumb-<random><ext>`, permissions copied from
    the existing sidecar (0644 if none).
-2. Probe the temp file (`image.DecodeConfig`) — upscaler garbage stops here.
+2. Probe the temp file (`image.DecodeConfig`, JPEG/PNG) — garbage stops here with `thumbwrite.ErrNotAnImage`.
 3. Generate the tiers **from the temp file** (new uuid file names; the old derivatives are not touched).
-4. `UpdateThumbnailTiers` points the row at the new tiers and dimensions.
-5. Rename the temp file over the sidecar. If that fails, the row is put back to the previous tier
-   paths/dimensions and the new tier files are deleted (if even that restore fails it is logged and the
-   new tiers are kept, since the row names them).
-6. Only now delete the old derivative files (best effort, as before).
+4. `LibraryRepo.UpdateThumbnailAndTiers` — **one statement** — points the row at the sidecar path
+   (`Params.ThumbRel`, set also when the item had no thumbnail; nil keeps the row's path), the new tiers
+   and the dimensions. No transaction is opened, so the single-connection rule (no repo mutex or
+   system-log call inside a transaction) cannot be violated.
+5. Rename the temp file over the sidecar. If that fails, the row is put back (path, tiers and
+   dimensions) and the new tier files are deleted (if even that restore fails it is logged and the new
+   tiers are kept, since the row names them).
+6. Only now delete the old derivative files (best effort).
 
 | Fails at | State left |
 |---|---|
 | 1, 2, 3 | sidecar, old derivatives and row untouched; temp file and any new tiers removed |
 | 4 | same (new tiers and temp removed) |
 | 5 | sidecar and old derivatives untouched, row restored, new tiers and temp removed |
-| 6 | enhancement done; an old derivative may linger (logged) |
+| 6 | replacement done; an old derivative may linger (logged) |
 
-So a `failed` history row means the thumbnail was not changed, with or without auto-approve.
+**Callers.** `thumbnailenhance` (enhance, sharpen, Revert; keeps the row's path, so `ThumbRel` is nil) and
+the API's `writeThumbnailAndRespond`, used by Set thumbnail, Quick Grab, Gallery apply, Frame-match
+accept and Redownload. Not touched: ghost thumbnails (`fetchGhostThumbnail`, no media file), image items
+(`setImageItemThumbnailTiers`, the thumbnail is the image file itself) and the delete-thumbnail handler.
+
+**`writeThumbnailAndRespond` order.** (a) `itemlock` `TryLock(id)` — the sidecar is a companion file of
+the media file, which a concurrent Rename/Move relocates; a busy item (or one whose path changed while
+waiting) answers `409` `itemBusyMessage`. The lock covers only the swap: the image is fetched or extracted
+*before* it is taken. The locks come from `DownloadManager.ItemLocks()` through the handler constructors.
+(b) `thumbwrite.Replace`. (c) **Only after success**, delete the now-stale AI-enhancement backup
+(`thumbnailenhance.DeleteOriginal`, best effort). (d) Build and send the response. On any failure the
+backup is left alone. Status codes: `409` busy; `400` for undecodable data on Set thumbnail only (the bytes
+come from the client); every other failure `500` with the error message (bytes from our own storage or
+produced by ffmpeg). Frame-match accept deletes its queue row only when `writeThumbnailAndRespond`
+reports success.
+
+**Redownload** runs `ytdlp.FetchThumbnail` in a unique scratch directory (`.packrat-tmp/thumb-<random>`
+under the downloader's trim scratch root, same volume as the media root), reads the resulting jpg and
+removes the whole directory on every path, then passes the bytes to `Replace`. yt-dlp therefore never
+writes onto the sidecar, nothing it leaves behind (converted or intermediate files) ends up next to the
+media file, and its exact-name matching cannot collide with another file.
+
 `enhanceOne` backs the original up *before* writing (`backupOriginalIfAbsent` now reports whether it
 created the backup); if the write fails, a backup created by that run is removed again (an earlier
-run's backup never is), so a failed run offers no "Revert". `renameFile` and `updateTiers` are
-package variables only so tests can inject failures.
+run's backup never is), so a failed run offers no "Revert". `thumbwrite.RenameFile` and
+`thumbwrite.UpdateRow` are package variables only so tests (in any package) can inject failures.
 
 **Temp file name and cleanup.** `fsutil.ThumbTmpPrefix` (`.packrat-thumb-`) + random letters/digits +
 the sidecar's extension; `fsutil.IsThumbTmpName` matches that exact shape (`IsInternalTmpName` = this or
 the metadata-embed temp). A crash between steps 1 and 5 leaves such a file; the importer scan and the
 stray-files scan ignore it, and the startup `fsutil.CleanStaleEmbedTemps` (regular files only, older
-than 5 minutes) removes abandoned ones along with `.packrat-embed-*`. `writeThumbnailAndRespond` (Set
-thumbnail, Redownload, Gallery apply, Frame-match accept) does **not** use this yet.
+than 5 minutes) removes abandoned ones along with `.packrat-embed-*`.
 
 ## Frame matching
 
