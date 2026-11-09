@@ -36,6 +36,9 @@ type YtDlpService struct {
 	CookiesFilePath string
 
 	transcodes *transcodeLimiter
+
+	// updateMu is held (via TryLock) for the whole of Update, repair included.
+	updateMu sync.Mutex
 }
 
 func NewYtDlpService(binPath, ffmpegPath, pipPath string, settingsRepo *repository.SettingsRepo, maxConcurrentTranscodes int) *YtDlpService {

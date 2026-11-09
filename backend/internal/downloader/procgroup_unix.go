@@ -23,3 +23,12 @@ func killProcessTree(cmd *exec.Cmd) error {
 	}
 	return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 }
+
+// interruptProcessTree sends SIGINT to the whole process group, like Ctrl-C in a terminal, so
+// pip can roll back a half-finished install before it exits.
+func interruptProcessTree(cmd *exec.Cmd) error {
+	if cmd.Process == nil {
+		return nil
+	}
+	return syscall.Kill(-cmd.Process.Pid, syscall.SIGINT)
+}

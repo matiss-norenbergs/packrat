@@ -542,6 +542,31 @@ independent of any actual download or preview happening.
   the body is counted while streaming and fails with "image larger than the N MB limit" (`Fetch` removes
   its temp file; `Open`'s body returns that error so a stream can't outlive the preview timeout window).
 
+## The yt-dlp update (`YtDlpService.Update`)
+
+`POST /api/ytdlp/update` runs `pip install --upgrade [--break-system-packages] yt-dlp`. Because pip
+removes the old package before it installs the new one, killing it in the middle leaves a container
+with no yt-dlp at all, so the flow is built to never do that:
+
+- **One at a time.** `Update` takes `updateMu.TryLock()`; a second request while one is running (a
+  double click, a second tab) gets `ErrUpdateInProgress`, which the handler maps to `409` ("yt-dlp is
+  already being updated. Try again in a moment."). The lock is held until the update, including the
+  repair below, has ended.
+- **Detached from the request.** pip runs on `context.WithoutCancel(requestCtx)` with its own
+  timeout (`updateTimeout`, 5 minutes — a slow link must not be cut off mid-install), so closing the
+  tab never stops it. The handler records the system-log event on the same detached context, so the
+  result is logged and the user sees the new version when they come back.
+- **SIGINT, then kill.** When the timeout fires, `newGracefulStopCmd` sends SIGINT to the pip process
+  group (like Ctrl-C, so pip can roll back its own uninstall) and only kills the group if it is still
+  alive after `updateStopGrace` (20 s). Unlike `newTreeKillCmd` (SIGKILL straight away, used for
+  yt-dlp/ffmpeg) this is for a command that must not be killed first. Windows has no SIGINT for a
+  child process, so there it is the same forced tree kill.
+- **Self-heal.** After a failed or timed-out update the service runs `yt-dlp --version`. If yt-dlp
+  still works nothing more happens. If not, one bounded `pip install --force-reinstall yt-dlp` runs
+  (same lock, same detached-context and timeout rules, same `--break-system-packages` retry) and the
+  error says what happened: "...the update failed and yt-dlp was reinstalled" or "...the update
+  failed and yt-dlp could not be repaired: ...". Both are still `502`.
+
 ## Renaming and moving an item's files (`fsutil.RenameAll`)
 
 Rename (the Edit dialog's filename) and Move relocate more than the media file: the thumbnail and the

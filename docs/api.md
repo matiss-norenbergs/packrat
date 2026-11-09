@@ -2025,7 +2025,10 @@ fails, `204` on success.
 ```
 
 `latestVersion` is `null` if the best-effort PyPI lookup fails (that alone never fails the
-request). `POST /api/ytdlp/update` — no body, `502` on failure, else `200 {"version": "2024.09.27"}`.
+request). `POST /api/ytdlp/update` — no body, `502` on failure (the message says whether yt-dlp was
+reinstalled or could not be repaired after the failed update), `409` `{"error": "yt-dlp is already being
+updated. Try again in a moment."}` while another update is running, else `200 {"version": "2024.09.27"}`.
+The update runs detached from the request: a client that disconnects does not stop it.
 
 ## Proxy
 

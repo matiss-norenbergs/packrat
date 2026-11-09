@@ -1143,7 +1143,12 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   its feature off is allowed to finish. AI Enhancement keeps its own switch in its own tab, since it
   also needs a connection set up.
 - **yt-dlp** — shows the installed version and whether a newer one is available on PyPI; one-click
-  update. Also where the cookies, proxy, rate limit and retry count are set. **Cookies file** takes the
+  update. The update keeps running if you close the tab or reload (the result lands in the system log and
+  the new version shows when you come back); a second click, or a second tab, while it runs answers
+  "yt-dlp is already being updated. Try again in a moment." If an update fails and leaves yt-dlp unusable,
+  Packrat reinstalls it once and the error says so ("the update failed and yt-dlp was reinstalled"), or
+  that it could not be repaired; if yt-dlp still works after a failed update nothing else is touched.
+  Also where the cookies, proxy, rate limit and retry count are set. **Cookies file** takes the
   content of a `cookies.txt` (Netscape format), which Packrat writes next to the database and passes to
   yt-dlp with `--cookies`; it is also rewritten after a settings import / restore and checked at every server start, so it always matches what Settings shows; this is the option that works in Docker. **Cookies browser/profile** reads a
   browser profile on the machine running the server — a Docker container can't reach one on the host — and is

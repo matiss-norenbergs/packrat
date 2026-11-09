@@ -22,3 +22,7 @@ func killProcessTree(cmd *exec.Cmd) error {
 	}
 	return exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid)).Run()
 }
+
+// interruptProcessTree has no graceful form on Windows (console Ctrl-C cannot be sent to a
+// child process), so it is the same forced tree kill.
+func interruptProcessTree(cmd *exec.Cmd) error { return killProcessTree(cmd) }
