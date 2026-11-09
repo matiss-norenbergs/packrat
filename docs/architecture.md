@@ -562,6 +562,20 @@ item's `generateNfo` flag is on. Both go through `fsutil.RenameAll`, which takes
 rename files keep the item's name and are deliberately not routed through it: the redownload swap
 (`completeRedownload`), trim accept, the yt-dlp/image temp-file finalisation and the image conversion.
 
+### Edit order: validate, rename, record the path, then the rest
+
+`libraryUpdater.update` (the per-item core of `POST /api/library/bulk-update`) runs in three phases so that a
+request that cannot be applied changes nothing: (1) **validate** with no side effects — the item has a media
+file when a filename is given, the sanitized name is not empty, the destinations (media, thumbnail, `.nfo`) are
+free (`CheckRenameDestinations`), the tag ids are resolved (`GetOrCreateByNames`) and the artist exists; (2)
+**rename** the files (the only fallible disk step) and **record the new path at once** (`UpdateFilename`),
+undoing the rename if recording fails, so files and row never disagree; (3) the remaining writes in their
+usual order (title, metadata, remux scheduling, original URL, tags, NFO flag, sidecar rewrite). The phase 3
+writes stay independent statements, not one transaction: the ordering removes the partial application the old
+title-first order caused (a rename collision used to leave the title saved and every other field unapplied),
+it does not make the edit atomic. The filename-change item-lock rule and the coalesced remux scheduling are
+unchanged.
+
 ## Persistence rules (SQLite)
 
 - **Every foreign-key child column needs an index.** SQLite doesn't create one, so deleting a parent

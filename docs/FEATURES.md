@@ -344,6 +344,11 @@ same endpoint with a list of one.
   Resolution/Duration re-probes the actual file on disk with ffprobe and, if it differs from the
   saved values, offers to pull the probed values into the form — useful after the file was replaced
   outside the app, or to double-check after a Trim.
+  Saving checks everything that can fail first — a file that is missing, an empty or invalid file name, a
+  name already taken by the media file, thumbnail or `.nfo`, an artist that no longer exists — and when
+  something is wrong the file reports the error and **nothing** in that edit is saved (the title, tags and
+  other fields stay as they were), so you can fix the name and save again. Otherwise the file is renamed
+  first and the other fields follow.
 - **Move** — relocate the file to a different collection and/or folder. Its thumbnail and `.nfo` sidecar
   move with it (so Jellyfin keeps the metadata), all or none: if the media file, thumbnail or sidecar
   name is already taken in the target folder the move is refused with "destination already exists" and

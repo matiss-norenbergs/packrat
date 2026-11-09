@@ -633,7 +633,11 @@ tag names). Per item:
   own container metadata — failures are logged only.
 - If `generateNfo` is on (or just turned on) and any NFO-relevant field changed, the `.nfo` sidecar is
   rewritten in sync, best-effort.
-- Each item's database writes are the same separate statements as before (not one batch transaction).
+- An item is validated before anything is written: a rejected edit (`400` no media file to rename / invalid
+  filename / unknown `artistId`, `409` a target file name taken) leaves it **completely unchanged** — title,
+  metadata and tags included. The rename runs first and its new path is recorded at once (undone on a
+  failure), then the other fields are written.
+- Each item's database writes after that are still separate statements (not one batch transaction).
 
 ### `POST /api/library/bulk-tags`
 
