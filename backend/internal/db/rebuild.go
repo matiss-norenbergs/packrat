@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"io"
@@ -72,7 +73,14 @@ func (d *rebuildDriver) Run(migration io.Reader) error {
 }
 
 // execRebuild runs body on one pinned connection:
-// foreign_keys OFF, BEGIN, body, foreign_key_check, COMMIT, foreign_keys ON.
+// foreign_keys OFF, BEGIN IMMEDIATE, body, foreign_key_check, COMMIT, foreign_keys ON.
+//
+// PRAGMA foreign_keys belongs to a connection, not to the database, and the
+// pool hands out several connections: every statement of the sequence has to
+// go through this one *sql.Conn, and a connection that could not be put back
+// to the state the pool expects (foreign keys on, no open transaction) must be
+// discarded instead of returned, or the next caller would run with foreign
+// keys off.
 func (d *rebuildDriver) execRebuild(ctx context.Context, body string) (err error) {
 	conn, err := d.db.Conn(ctx)
 	if err != nil {
@@ -88,10 +96,15 @@ func (d *rebuildDriver) execRebuild(ctx context.Context, body string) (err error
 	defer func() {
 		if _, ferr := conn.ExecContext(context.Background(), "PRAGMA foreign_keys = ON"); ferr != nil {
 			err = errors.Join(err, fmt.Errorf("re-enabling foreign keys: %w", ferr))
+			discardConn(conn)
 		}
 	}()
 
-	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
+	// IMMEDIATE, not the default deferred BEGIN: take the write lock before
+	// the body's first statement so a concurrent writer can never turn a
+	// read-then-write body into an instant SQLITE_BUSY (this raw BEGIN does
+	// not go through the driver's _txlock setting).
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
 		return fmt.Errorf("begin: %w", err)
 	}
 	inTx := true
@@ -99,6 +112,7 @@ func (d *rebuildDriver) execRebuild(ctx context.Context, body string) (err error
 		if inTx {
 			if _, rerr := conn.ExecContext(context.Background(), "ROLLBACK"); rerr != nil {
 				err = errors.Join(err, fmt.Errorf("rollback: %w", rerr))
+				discardConn(conn) // may still be inside the transaction
 			}
 		}
 	}()
@@ -120,6 +134,11 @@ func (d *rebuildDriver) execRebuild(ctx context.Context, body string) (err error
 	}
 	inTx = false
 	return nil
+}
+
+// discardConn makes database/sql close conn instead of returning it to the pool.
+func discardConn(conn *sql.Conn) {
+	_ = conn.Raw(func(any) error { return driver.ErrBadConn })
 }
 
 // foreignKeyViolations returns the distinct tables PRAGMA foreign_key_check
