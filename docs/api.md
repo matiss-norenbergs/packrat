@@ -295,6 +295,8 @@ optional. Notes:
   invalid folder or unknown collection is a `400`, not a later async failure.
 - `title`/`artistId`/`year`/`seasonNumber`/`sequenceNumber`/`filenamePrefix` are **overrides
   applied once the download completes**, taking priority over whatever yt-dlp reports.
+  `seasonNumber`/`sequenceNumber` must be `0`–`1000000` (see [Season and sequence number limits](#season-and-sequence-number-limits)); the same limit applies to each item of
+  `POST /api/downloads/batch`.
 - **Filename** — the final name is chosen in this order: a literal `filename` (used as given,
   sanitized) beats `filenameTemplate`, which beats `filenamePrefix` (`"<prefix> <title>"`); with none
   set, yt-dlp's own `%(title)s` naming applies. If neither `filename` nor `filenameTemplate` is
@@ -324,7 +326,9 @@ optional. Notes:
 ### `GET /api/downloads` — no params
 
 Returns every queue row (any status), each merged with live in-memory progress when actively
-running:
+running. It is never truncated. The query leaves out the output tails and the yt-dlp command (the
+response has never carried them), so its cost follows the row count, not ~8 KB per row; the response
+is unchanged:
 
 ```json
 {
@@ -569,6 +573,14 @@ accept, file import, ghost creation). `tags` is never `null` — `[]` if none. `
 `null` (unset ghost items only — see Ghost items below). `status` is `"completed"` for a real
 downloaded/imported item or `"ghost"` for a placeholder with no file.
 
+`nfoExists` says whether the item's `.nfo` sidecar is on disk. **Single-item** responses (`GET /api/library/:id`
+and every endpoint that returns the one item it just changed) always check the disk. **List** responses
+(`GET /api/library`, the compare list) check only items whose `generateNfo` is `true`, on a small worker
+pool (8 at a time), so a large library on a network share doesn't cost a file check per item; for an
+item with `generateNfo: false` the list reports `nfoExists: false` **without having looked** (a leftover
+`.nfo` reads `false` there and `true` from `GET /api/library/:id`). So in a list, `nfoExists` is only
+reliable when `generateNfo` is true. `GET /api/library/:id/nfo` answers `404` when there is no file.
+
 `thumbnailSmallPath`/`thumbnailMediumPath` are the WebP derivatives actually rendered in the UI
 (grid thumbnail, card image) — `thumbnail` is the original, full-size sidecar image on disk, never
 rendered directly. `thumbnailWidth`/`thumbnailHeight` are the **original** sidecar image's pixel
@@ -616,7 +628,8 @@ Edits one or many items; a single edit is a one-element list. Per-item results (
 
 Every `changes` field is optional and means what it did on the old PATCH: `title`, `filename`,
 `uploader`, `description`, `duration`, `resolution`, `artistId` (`0` explicitly clears it — distinct from
-omitting the field), `year`, `sequenceNumber`, `seasonNumber` (`0` clears these three too),
+omitting the field), `year`, `sequenceNumber`, `seasonNumber` (`0` clears these three too; `sequenceNumber`/`seasonNumber` above `1000000`
+or negative fail that item with its own `400`, nothing of it applied, the other items unaffected),
 `generateNfo`, `originalUrl`, `tags` (whole-array **replace**, not merge, when present — creates missing
 tag names). Per item:
 
@@ -1064,7 +1077,10 @@ thumbnail anywhere in the collection's subtree.
 this collection's own sequence numbers and is `null` when there is nothing to report (no range, or
 nothing missing): `min`/`max` are the expected range — the items' lowest and highest sequence number,
 each replaced by the collection's `sequenceMin`/`sequenceMax` when that is set — `count` is the true number of
-missing numbers, and `missing` lists them (capped at the first 50).
+missing numbers, and `missing` lists them (capped at the first 50). It is computed from the sequence
+numbers actually present, so its cost doesn't depend on how far apart `min` and `max` are; `count` is
+clamped to the largest `int` (`9223372036854775807`) for an absurd range stored before the limits below
+existed.
 
 ### Cover image
 
@@ -1114,7 +1130,8 @@ traversal). `400` unknown parent or invalid root path, `409` duplicate name (par
 uniqueness). Response `201 {"id": 7}`.
 
 - `seasonNumber` — new downloads placed directly into this collection default their own Season #
-  to this value (not inherited by sub-collections).
+  to this value (not inherited by sub-collections). `seasonNumber`, `sequenceMin` and `sequenceMax`
+  must be `0`–`1000000`, otherwise `400`.
 - `artistId` — new downloads placed into this collection, or any sub-collection that doesn't set
   its own `artistId`, default their own Artist to this value (walks up the ancestor chain).
 - `year` — new downloads placed directly into this collection default their own Year to this value.
@@ -1720,14 +1737,28 @@ transaction; unknown ids are ignored. `200 {"deleted": <n>}`.
 
 `POST /api/history/clear` — no body, deletes every entry regardless of age. `200 {"deleted": <n>}`.
 
+### Season and sequence number limits
+
+Season numbers, sequence numbers and a collection's `sequenceMin`/`sequenceMax` must be integers from `0` to
+**`1000000`** (one limit for all of them, `models.MaxSequenceValue`). Above that, or negative, the request is
+refused with `400` and a message naming the field and the limit (e.g. `sequenceNumber must be between 0 and 1000000`).
+`0` keeps its per-field meaning (on edits it clears the field). Where it applies: `POST /api/downloads`
+and each item of `POST /api/downloads/batch` (`seasonNumber`, `sequenceNumber`; a bad item refuses the whole
+request), `POST /api/library/ghost`, `POST`/`PATCH /api/collections` (`seasonNumber`, `sequenceMin`, `sequenceMax`),
+`POST /api/library/bulk-update` (**per item**: the bad item fails with `status: 400` in its own result and nothing of
+it is written; the rest of the batch is applied) and `POST /api/backup/import/library` (an entry above the limit refuses the import
+with `400` naming the entry, before anything is applied; a full restore does not apply the limit, so a backup always restores).
+Values stored before the limit existed are left alone and handled safely (the collections list no longer walks the range).
+
 ## Logs
 
 | Method | Path |
 |---|---|
 | GET | `/api/logs` |
 
-No params. Returns the most recent **200** download rows (hard-capped) with their captured yt-dlp
-invocation:
+No params. Returns the most recent **200** download rows (hard-capped; the cap is applied in SQL
+`ORDER BY created_at DESC, id DESC LIMIT 200`, so the cost doesn't grow with the table; unchanged
+response) with their captured yt-dlp invocation:
 
 ```json
 {
@@ -2069,7 +2100,7 @@ See [FEATURES.md](FEATURES.md#ai-enhancement) for what this does and how the thr
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/thumbnail-enhancement/history` | Paginated/searchable attempt history |
+| GET | `/api/thumbnail-enhancement/history` | Paginated/searchable attempt history (response unchanged; reads only the page's ≤25 items, not the whole library) |
 | DELETE | `/api/thumbnail-enhancement/history/:id` | Delete one history entry |
 | POST | `/api/thumbnail-enhancement/history/bulk-delete` | Delete many history entries |
 | POST | `/api/thumbnail-enhancement/history/clear` | Delete every history entry |

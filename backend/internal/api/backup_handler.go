@@ -305,6 +305,11 @@ func ImportLibrary(db *sql.DB, collectionsRepo *repository.CollectionsRepo, tags
 			recordRestoreRefused(c, restoreLibraryImport, nil)
 			return
 		}
+		if err := checkBundleNumberLimits(bundle); err != nil {
+			recordRestoreRefused(c, restoreLibraryImport, nil) // the message names an item title; the system log never records titles
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		resp, err := applyLibraryBundleAndEnqueue(c.Request.Context(), db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, settingsRepo, bundle, mode == "ghostOnly")
 		if err != nil {

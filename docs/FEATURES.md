@@ -424,7 +424,11 @@ same endpoint with a list of one.
     album art. Everything else in this submenu still works on one.
 - **NFO** submenu (when Generate NFO is enabled on the item) — generate/regenerate, view the raw
   XML, or delete just the sidecar file (leaves the toggle itself alone, so it's rewritten again on
-  the next relevant edit).
+  the next relevant edit). **View Contents** is greyed out only for an item whose Generate NFO is on
+  and whose file is missing. The library list checks the disk only for items with Generate NFO on (so
+  a big library doesn't cost one file check per item), so for an item with the flag off the entry
+  stays enabled — even if a leftover `.nfo` exists — and the dialog says "No NFO file for this item"
+  when there is none. The item's own page always checks the disk.
 - **Delete file…** — removes just the media file from disk (optionally the thumbnail too, via a
   checkbox) to reclaim space, while keeping the library entry — tags, collection membership, and
   all other metadata are untouched. The item becomes a ghost placeholder (see below) until you
@@ -581,7 +585,7 @@ selectable from the New Download dialog so you don't have to re-pick them every 
 - **Year (optional)** — like Season #: a new download placed directly into this collection defaults
   its own Year to it.
 - **Sequence range (optional)** — the expected first and last item of the collection (a blank first
-  box means 1). With a range set, the Sequence # fields of items placed here become a picker, the Edit
+  box means 1; season and sequence numbers, here and on items and downloads, go up to 1,000,000). With a range set, the Sequence # fields of items placed here become a picker, the Edit
   Sequence dialog also shows the slots not filled yet, and the Library's folder tiles warn about numbers
   that are missing inside the range (a warning icon whose popover lists "Missing seq: …", first ten).
   Folder tiles also show how many of a collection's files are ghosts.
@@ -1006,7 +1010,10 @@ model, scaling mode, minimum-dimension threshold below which a thumbnail is cons
 
 - **Manual runs** — "Enhance Now" processes up to 5 eligible items per click; "Preview Eligible
   Items" lists everything currently under the minimum-dimension threshold (uncapped) with a
-  per-row Enhance button to upscale just that one item.
+  per-row Enhance button to upscale just that one item. Which thumbnails are looked at is decided
+  from the dimensions stored on each library row, so only items stored under the threshold (or
+  never measured) have their file opened; a thumbnail file replaced outside Packrat is not noticed
+  until Packrat writes that thumbnail again.
 - **Scheduled sweeps** — when "Run automatically every hour" is on, the same eligibility check
   runs alongside the other hourly background sweeps, independent of the manual trigger.
 - **Auto-run on new downloads** — when enabled, a freshly-downloaded item's thumbnail is enhanced

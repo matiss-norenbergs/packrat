@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"packrat/backend/internal/models"
@@ -453,5 +454,77 @@ func TestLibraryRepo_PathClaimedByOther(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// GetByIDs must return exactly what List returns for the same ids (same select
+// columns and scan: collection name, artist name, thumbnails, privacy fields),
+// work above the IN-list chunk size, and leave unknown ids out.
+func TestLibraryRepo_GetByIDs(t *testing.T) {
+	ctx := context.Background()
+	downloadsRepo := openTestDB(t)
+	repo := NewLibraryRepo(downloadsRepo.db)
+	collectionsRepo := NewCollectionsRepo(downloadsRepo.db)
+	artistsRepo := NewArtistsRepo(downloadsRepo.db)
+
+	colID, err := collectionsRepo.Create(ctx, &models.Collection{Name: "Vault", RootPath: "vault", IsPrivate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artist, err := artistsRepo.CreateWithPrivacy(ctx, "Someone", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n := inChunkSize*2 + 37 // three chunks
+	all := make([]int64, 0, n)
+	for i := 0; i < n; i++ {
+		item := &models.LibraryItem{Title: "t", Filename: "f.mp4", Path: "f.mp4", Status: "completed"}
+		if i%3 == 0 {
+			item.CollectionID = &colID
+			thumb := "thumbs/a.jpg"
+			item.Thumbnail = &thumb
+		}
+		if i%5 == 0 {
+			item.ArtistID = &artist.ID
+		}
+		id, err := repo.Create(ctx, item)
+		if err != nil {
+			t.Fatal(err)
+		}
+		all = append(all, id)
+	}
+
+	listed, err := repo.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[int64]models.LibraryItem{}
+	for _, it := range listed {
+		byID[it.ID] = it
+	}
+
+	ask := append(append([]int64{}, all...), 999999, 888888) // two unknown ids
+	got, err := repo.GetByIDs(ctx, ask)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != n {
+		t.Fatalf("got %d items, want %d (unknown ids must be absent)", len(got), n)
+	}
+	for _, id := range all {
+		if !reflect.DeepEqual(got[id], byID[id]) {
+			t.Fatalf("item %d differs from List:\nwant %+v\ngot  %+v", id, byID[id], got[id])
+		}
+	}
+	if got[all[0]].CollectionName == nil || *got[all[0]].CollectionName != "Vault" || got[all[0]].ArtistName == nil {
+		t.Errorf("joined names missing: %+v", got[all[0]])
+	}
+	if _, ok := got[999999]; ok {
+		t.Errorf("unknown id present")
+	}
+
+	if empty, err := repo.GetByIDs(ctx, nil); err != nil || len(empty) != 0 {
+		t.Fatalf("empty input: %v %v", empty, err)
 	}
 }

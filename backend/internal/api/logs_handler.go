@@ -8,19 +8,19 @@ import (
 	"packrat/backend/internal/repository"
 )
 
+// logsLimit is how many of the newest downloads GET /api/logs returns.
+const logsLimit = 200
+
 // GetLogs returns the most recent downloads (command/exit-code/tail
-// debugging view). Capped here rather than in DownloadsRepo.List, since
-// List also backs the live /api/downloads queue view, which must never
-// silently truncate.
+// debugging view). The cap is applied in SQL (ListRecent) so the cost follows
+// the 200 rows returned, not the size of the downloads table; the live
+// /api/downloads queue view uses ListLight and must never truncate.
 func GetLogs(downloadsRepo *repository.DownloadsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		rows, err := downloadsRepo.List(c.Request.Context())
+		rows, err := downloadsRepo.ListRecent(c.Request.Context(), logsLimit)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
-		}
-		if len(rows) > 200 {
-			rows = rows[:200]
 		}
 		anonymize, err := HistoryAnonymizeURLs(c.Request.Context(), settingsRepo)
 		if err != nil {

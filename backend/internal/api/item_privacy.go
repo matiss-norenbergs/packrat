@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"packrat/backend/internal/models"
@@ -89,15 +90,32 @@ type ItemResponder struct {
 	galleryRepo     *repository.ThumbnailGalleryRepo
 	downloadsRepo   *repository.DownloadsRepo
 	mediaRoot       string
+	// nfoExists reports whether an item's .nfo sidecar is on disk; a field so
+	// tests can count and fake the stats.
+	nfoExists func(mediaRoot, relPath string) bool
 }
 
 func NewItemResponder(settingsRepo *repository.SettingsRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, galleryRepo *repository.ThumbnailGalleryRepo, downloadsRepo *repository.DownloadsRepo, mediaRoot string) *ItemResponder {
-	return &ItemResponder{settingsRepo, collectionsRepo, tagsRepo, artistsRepo, galleryRepo, downloadsRepo, mediaRoot}
+	return &ItemResponder{settingsRepo, collectionsRepo, tagsRepo, artistsRepo, galleryRepo, downloadsRepo, mediaRoot, nfoSidecarExists}
 }
 
+// nfoStatWorkers bounds how many .nfo existence checks run at once in a list
+// response, so a network share's per-stat latency overlaps instead of adding up.
+const nfoStatWorkers = 8
+
 // Responses batch-loads tags, gallery counts and the privacy resolver once
-// and returns one response per item, in order.
+// and returns one response per item, in order. It is the LIST form: to keep
+// the response from costing one disk stat per library item, `nfoExists` is only
+// looked up (on a bounded worker pool) for items whose `generateNfo` is on; for
+// the others it is false without having been checked. Response (single item)
+// always checks.
 func (r *ItemResponder) Responses(ctx context.Context, items []models.LibraryItem) ([]LibraryItemResponse, error) {
+	return r.responses(ctx, items, false)
+}
+
+// responses builds the responses; statAll makes every item's .nfo existence
+// real (single-item form), otherwise only generateNfo items' (list form).
+func (r *ItemResponder) responses(ctx context.Context, items []models.LibraryItem, statAll bool) ([]LibraryItemResponse, error) {
 	ids := make([]int64, len(items))
 	for i, item := range items {
 		ids[i] = item.ID
@@ -118,22 +136,71 @@ func (r *ItemResponder) Responses(ctx context.Context, items []models.LibraryIte
 	if err != nil {
 		return nil, err
 	}
+	nfoExists := r.nfoExistsFor(ctx, items, statAll)
 	out := make([]LibraryItemResponse, 0, len(items))
-	for _, item := range items {
+	for i, item := range items {
 		tags := tagsByID[item.ID]
 		var activeDownloadID *int64
 		if dlID, ok := activeByID[item.ID]; ok {
 			activeDownloadID = &dlID
 		}
-		out = append(out, toLibraryItemResponse(item, privacy.Blurred(item.CollectionID, item.ArtistID, tags), tags, galleryCountByID[item.ID], activeDownloadID, r.mediaRoot))
+		out = append(out, toLibraryItemResponse(item, privacy.Blurred(item.CollectionID, item.ArtistID, tags), tags, galleryCountByID[item.ID], activeDownloadID, nfoExists[i]))
 	}
 	return out, nil
+}
+
+// nfoExistsFor returns, per item and in item order, whether its .nfo sidecar
+// exists. Items it is not asked to check (generateNfo off in list form, or no
+// file) are false without touching the disk; the rest are stat'ed by at most
+// nfoStatWorkers goroutines.
+func (r *ItemResponder) nfoExistsFor(ctx context.Context, items []models.LibraryItem, statAll bool) []bool {
+	out := make([]bool, len(items))
+	var todo []int
+	for i, item := range items {
+		if item.Path != "" && (statAll || item.GenerateNFO) {
+			todo = append(todo, i)
+		}
+	}
+	check := r.nfoExists
+	if check == nil {
+		check = nfoSidecarExists
+	}
+	if len(todo) <= 1 {
+		for _, i := range todo {
+			out[i] = check(r.mediaRoot, items[i].Path)
+		}
+		return out
+	}
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	workers := nfoStatWorkers
+	if workers > len(todo) {
+		workers = len(todo)
+	}
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				out[i] = check(r.mediaRoot, items[i].Path) // each index is written by one worker only
+			}
+		}()
+	}
+	for _, i := range todo {
+		if ctx.Err() != nil {
+			break // client gone: leave the rest false rather than keep stat'ing
+		}
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+	return out
 }
 
 // Response is Responses for a single item. Tags are read from the DB, so the
 // response reflects what is actually stored.
 func (r *ItemResponder) Response(ctx context.Context, item models.LibraryItem) (LibraryItemResponse, error) {
-	out, err := r.Responses(ctx, []models.LibraryItem{item})
+	out, err := r.responses(ctx, []models.LibraryItem{item}, true)
 	if err != nil {
 		return LibraryItemResponse{}, err
 	}

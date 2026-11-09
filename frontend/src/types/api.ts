@@ -283,6 +283,12 @@ export interface LibraryItem {
   sequenceNumber: number | null
   seasonNumber: number | null
   generateNfo: boolean
+  /**
+   * Whether the item's `.nfo` sidecar is on disk. Single-item responses (the item page, edit results)
+   * always check. In LIST responses (`GET /api/library`, the compare list) it is only checked for items
+   * with `generateNfo` true; for the rest it is `false` without having been looked at, so a `false`
+   * there with `generateNfo` false means "unknown", not "missing".
+   */
   nfoExists: boolean
   downloadedAt: string
   status: string

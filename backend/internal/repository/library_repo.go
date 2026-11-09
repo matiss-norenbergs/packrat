@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -58,6 +59,67 @@ func (r *LibraryRepo) Get(ctx context.Context, id int64) (*models.LibraryItem, e
 		return nil, ErrNotFound
 	}
 	return item, err
+}
+
+// GetByIDs batch-fetches library items by id, keyed by id. It uses the same
+// select columns and scan as Get/List/Query (so collection name, artist name,
+// thumbnail paths and every privacy-relevant field are identical), chunked so
+// an arbitrarily long id list stays under SQLite's variable limit. Ids with no
+// row are simply absent from the map.
+func (r *LibraryRepo) GetByIDs(ctx context.Context, ids []int64) (map[int64]models.LibraryItem, error) {
+	out := make(map[int64]models.LibraryItem, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	err := inChunks(ids, inChunkSize, func(chunk []int64) error {
+		rows, err := r.db.QueryContext(ctx, librarySelectColumns+` WHERE l.id IN (`+placeholderList(len(chunk))+`)`, anySlice(chunk)...)
+		if err != nil {
+			return fmt.Errorf("batch-fetching library items: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			item, err := scanLibraryItem(rows)
+			if err != nil {
+				return err
+			}
+			out[item.ID] = *item
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ListThumbnailEnhancementCandidates returns, newest downloaded first (the
+// order List gives; ties by id, newest first), the library items whose sidecar
+// thumbnail MAY be below minDim, decided from the dimensions stored on the row:
+// a file-backed item (path and thumbnail set) whose stored width/height is
+// missing (never probed — legacy rows) or whose longest stored side is under
+// minDim. Items already stored at minDim or above are left out, so the AI
+// enhancement scan opens only these files instead of every thumbnail. The file
+// stays the authority: the caller probes each candidate and checks it again.
+func (r *LibraryRepo) ListThumbnailEnhancementCandidates(ctx context.Context, minDim int) ([]models.LibraryItem, error) {
+	query := librarySelectColumns + `
+		WHERE l.path != '' AND l.thumbnail IS NOT NULL
+		  AND (l.thumbnail_width IS NULL OR l.thumbnail_height IS NULL
+		       OR MAX(l.thumbnail_width, l.thumbnail_height) < ?)` +
+		libraryOrderBy("downloadedAt", "desc") + `, l.id DESC`
+	rows, err := r.db.QueryContext(ctx, query, minDim)
+	if err != nil {
+		return nil, fmt.Errorf("listing thumbnail enhancement candidates: %w", err)
+	}
+	defer rows.Close()
+	var out []models.LibraryItem
+	for rows.Next() {
+		item, err := scanLibraryItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *item)
+	}
+	return out, rows.Err()
 }
 
 // FindDuplicate returns the library item matching originalURL or videoID
@@ -642,25 +704,76 @@ func (r *LibraryRepo) SequenceGapsByCollection(ctx context.Context, ranges map[i
 		if min >= max {
 			continue
 		}
-		present := make(map[int]bool, len(seqs))
-		for _, s := range seqs {
-			present[s] = true
-		}
 		gap := SequenceGap{Min: min, Max: max}
-		for n := min; n <= max; n++ {
-			if present[n] {
-				continue
-			}
-			gap.Count++
-			if len(gap.Missing) < sequenceGapSampleCap {
-				gap.Missing = append(gap.Missing, n)
-			}
-		}
+		gap.Count, gap.Missing = sequenceGaps(seqs, min, max)
 		if gap.Count > 0 {
 			out[collectionID] = gap
 		}
 	}
 	return out, nil
+}
+
+// sequenceGaps counts the integers in [min, max] that are not in sorted (an
+// ascending list, duplicates and values outside the range allowed) and returns
+// the first sequenceGapSampleCap of them, ascending. It requires min < max.
+//
+// The cost is O(len(sorted) + sequenceGapSampleCap) whatever min and max are:
+// it walks the gaps between consecutive present values instead of every
+// integer in the range (a mistyped bound of 1_000_000_000 used to cost ~15 s per
+// request, and math.MaxInt never terminated). The range size is computed in
+// uint64 — max-min can exceed MaxInt64 — and Count is clamped to math.MaxInt.
+func sequenceGaps(sorted []int, min, max int) (count int, missing []int) {
+	// rangeLess1 = (number of integers in [min, max]) - 1, exact in uint64
+	// (two's-complement subtraction); adding 1 could overflow, so it is kept
+	// as "minus one" until the distinct present values are known.
+	rangeLess1 := uint64(max) - uint64(min)
+
+	var distinct uint64 // distinct present values inside [min, max]
+	next := min         // smallest integer not yet accounted for
+	exhausted := false  // true once next would pass max
+	for _, v := range sorted {
+		if v < min {
+			continue
+		}
+		if v > max {
+			break
+		}
+		if distinct > 0 && v == next-1 {
+			continue // duplicate of the previous value
+		}
+		distinct++
+		for n := next; n < v && len(missing) < sequenceGapSampleCap; n++ {
+			missing = append(missing, n)
+		}
+		if v == max {
+			exhausted = true // also avoids next = max+1 overflowing at MaxInt
+			break
+		}
+		next = v + 1
+	}
+	if !exhausted {
+		for n := next; len(missing) < sequenceGapSampleCap; n++ {
+			missing = append(missing, n)
+			if n == max {
+				break
+			}
+		}
+	}
+
+	// missing total = (rangeLess1 + 1) - distinct. distinct >= 1 makes this
+	// rangeLess1 - (distinct - 1), which cannot overflow.
+	var total uint64
+	if distinct > 0 {
+		total = rangeLess1 - (distinct - 1)
+	} else if rangeLess1 == math.MaxUint64 {
+		total = math.MaxUint64
+	} else {
+		total = rangeLess1 + 1
+	}
+	if total > uint64(math.MaxInt) {
+		return math.MaxInt, missing
+	}
+	return int(total), missing
 }
 
 // UpdateGenerateNFO toggles whether a .nfo sidecar file should be kept in

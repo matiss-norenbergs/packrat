@@ -438,16 +438,16 @@ func nfoSidecarExists(mediaRoot, relPath string) bool {
 	return err == nil
 }
 
-// toLibraryItemResponse builds the API response for a library item. mediaRoot
-// is needed to check whether the item's .nfo sidecar currently exists on
-// disk — GenerateNFO only reflects whether the toggle is on, not whether a
-// file is actually present (it can be turned off after generating, or
-// deleted independently via the "Delete File" action while still on).
-func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string, galleryCount int, activeDownloadID *int64, mediaRoot string) LibraryItemResponse {
+// toLibraryItemResponse builds the API response for a library item. nfoExists
+// says whether the item's .nfo sidecar is on disk — GenerateNFO only reflects
+// whether the toggle is on, not whether a file is actually present (it can be
+// turned off after generating, or deleted independently via the "Delete File"
+// action while still on). The caller decides whether to stat the disk for it:
+// see ItemResponder.Response (always) and Responses (only GenerateNFO items).
+func toLibraryItemResponse(item models.LibraryItem, blurred bool, tags []string, galleryCount int, activeDownloadID *int64, nfoExists bool) LibraryItemResponse {
 	if tags == nil {
 		tags = []string{}
 	}
-	nfoExists := nfoSidecarExists(mediaRoot, item.Path)
 	var lastWatchedAt *string
 	if item.LastWatchedAt != nil {
 		s := item.LastWatchedAt.Format(timeFormat)

@@ -41,6 +41,10 @@ func CreateGhostLibraryItem(libraryRepo *repository.LibraryRepo, imagesRoot stri
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if err := req.checkNumberLimits(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		item := models.LibraryItem{
 			Title:          req.Title,

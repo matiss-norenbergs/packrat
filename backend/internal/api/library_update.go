@@ -71,6 +71,11 @@ func renameOpError(err error) *opError {
 // application the old title-first order caused; the edit as a whole is not one
 // transaction. A nil return means success.
 func (u *libraryUpdater) update(ctx context.Context, id int64, req UpdateLibraryItemRequest) *opError {
+	// Per item (a bulk-update reports it as that item's error, not for the request):
+	// a season / sequence number outside 0..models.MaxSequenceValue changes nothing.
+	if err := req.checkNumberLimits(); err != nil {
+		return newOpError(http.StatusBadRequest, err.Error())
+	}
 	if _, active, err := activeDownloadFor(ctx, u.downloadsRepo, id); err != nil {
 		return internalOpError(err)
 	} else if active {

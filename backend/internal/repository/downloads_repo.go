@@ -110,8 +110,36 @@ func (r *DownloadsRepo) GetByIDs(ctx context.Context, ids []int64) (map[int64]*m
 	return out, nil
 }
 
+// List returns every download, newest first, with every column (including the
+// ~8 KB output tails and the yt-dlp command). It scans the whole table, so
+// request paths use ListRecent (bounded) or ListLight (the live queue)
+// instead; the remaining callers are tests.
 func (r *DownloadsRepo) List(ctx context.Context) ([]models.Download, error) {
-	rows, err := r.db.QueryContext(ctx, downloadSelectColumns+` ORDER BY d.created_at DESC`)
+	return r.listWhere(ctx, downloadSelectColumns+` ORDER BY d.created_at DESC`)
+}
+
+// ListRecent returns the newest `limit` downloads, newest first, with every
+// column (the Logs view needs the tails and command). Ties on created_at (it
+// has one-second resolution) break by id so the page is deterministic. Uses
+// idx_downloads_created_at, so the cost follows the limit, not the table.
+func (r *DownloadsRepo) ListRecent(ctx context.Context, limit int) ([]models.Download, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	return r.listWhere(ctx, downloadSelectColumns+` ORDER BY d.created_at DESC, d.id DESC LIMIT ?`, limit)
+}
+
+// ListLight is List without the heavy text columns: stdout_tail, stderr_tail
+// and ytdlp_command come back as NULL, so scanDownload and every caller work
+// unchanged and those fields are simply nil. It backs the live queue
+// (GET /api/downloads), whose response uses none of them, and — like List — is
+// deliberately unbounded: the queue must never silently truncate.
+func (r *DownloadsRepo) ListLight(ctx context.Context) ([]models.Download, error) {
+	return r.listWhere(ctx, downloadSelectColumnsLight+` ORDER BY d.created_at DESC`)
+}
+
+func (r *DownloadsRepo) listWhere(ctx context.Context, query string, args ...any) ([]models.Download, error) {
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing downloads: %w", err)
 	}
@@ -421,6 +449,14 @@ const downloadSelectColumns = `
 	       d.target_library_item_id, d.overwrite_fields, d.ghost_library_item_id
 	FROM downloads d
 	LEFT JOIN collections c ON c.id = d.collection_id`
+
+// downloadSelectColumnsLight is downloadSelectColumns with the three large
+// text columns replaced by NULL (same column order, so scanDownload works).
+var downloadSelectColumnsLight = strings.NewReplacer(
+	"d.ytdlp_command", "NULL",
+	"d.stdout_tail", "NULL",
+	"d.stderr_tail", "NULL",
+).Replace(downloadSelectColumns)
 
 type rowScanner interface {
 	Scan(dest ...any) error

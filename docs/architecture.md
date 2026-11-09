@@ -1561,6 +1561,52 @@ conventions (`api/bulk.go`):
   break atomicity), so the server's 400 message is shown. A 409 shows the server's message and keeps the
   selection.
 
+## Keeping list endpoints cheap
+
+A request or background job should cost what it returns, not the size of the table or library.
+Where an audit found otherwise, the fix is one of these (extend the list when adding another):
+
+- **Bounded reads in SQL.** `DownloadsRepo.ListRecent(limit)` (`ORDER BY created_at DESC, id DESC LIMIT ?`,
+  on `idx_downloads_created_at`) backs `GET /api/logs` (200 rows); it used to load every download with
+  its ~8 KB tails and keep 200 in Go.
+- **Light variant for unbounded lists.** `DownloadsRepo.ListLight` is `List` with `stdout_tail`,
+  `stderr_tail` and `ytdlp_command` selected as `NULL` (same column order, so `scanDownload` is
+  unchanged). It backs the live queue (`GET /api/downloads`, polled every 10 s), which must stay
+  unbounded but never returned those columns. `List` itself now has only test callers.
+- **Fetch by id, not scan.** `LibraryRepo.GetByIDs(ids)` (chunked with `inChunks`, same select columns and
+  scan as `List`/`Query`, missing ids absent) is for any caller that needs a few items. The AI Enhancement
+  history page uses it for its ≤25 rows instead of `LibraryRepo.List`. Callers that legitimately need the
+  whole library (backup export) still use `List`/`Query`. `EnhanceItems` uses it too.
+- **Candidates in SQL, files only for candidates.** AI enhancement eligibility used to `List` the library and
+  open every thumbnail (`Stat` + `Open` + `DecodeConfig`) on every sweep, count and auto-on-download.
+  `LibraryRepo.ListThumbnailEnhancementCandidates(minDim)` now returns only file-backed items whose stored
+  `thumbnail_width/height` are missing or whose longer side is under `minDim` (newest downloaded first, ties
+  by id, like `List`), and the one per-item rule `thumbnailenhance.checkEligible` probes just those. The file
+  is still the authority (a candidate is probed and compared with `minDim`); a successful probe of a row with
+  no stored dimensions stores them (`UpdateThumbnailDimensions`), so legacy rows stop being candidates after
+  one pass. `MaybeAutoEnhanceOnDownload` loads its single item (`Get`) and applies the same rule, `EnhanceItems`
+  uses `GetByIDs`. A sidecar replaced outside Packrat after its dimensions were stored is not re-probed until
+  it is written again through Packrat.
+- **Disk checks only where they matter.** In list responses `ItemResponder.Responses` stats an item's `.nfo`
+  sidecar only when its `generateNfo` flag is on, on a pool of 8 workers (results keep request order); the
+  single-item `Response` always stats. The flag-off value in a list is "not checked" (`false`), which the
+  View Contents menu entry accounts for (see `docs/api.md`, `nfoExists`).
+- **Gaps by arithmetic, not by walking the range.** `SequenceGapsByCollection` (`sequenceGaps`) counts a
+  collection's missing sequence numbers as `(max - min + 1)` minus the distinct present values in range, and
+  builds the 50-number sample from the gaps between consecutive present values, so the cost is O(present
+  values + 50) whatever `min` and `max` are (it used to walk every integer: ~15 s for a bound of a billion,
+  never-ending at `math.MaxInt`). The range size is computed in `uint64` and `Count` clamps to `math.MaxInt`.
+  Inputs are also bounded at the API (`models.MaxSequenceValue` = 1,000,000 for season / sequence numbers and a
+  collection's `sequenceMin`/`sequenceMax`, see `docs/api.md`), but the repository is safe for any stored value.
+- **One cached transport per proxy.** `imagefetch.ProxyTransport(proxyURL)` returns a shared `*http.Transport`
+  (a clone of `http.DefaultTransport` with only `Proxy` set, so the default dial / TLS-handshake / 90 s idle
+  timeouts stay) for the configured `ytdlp_proxy`. `imagefetch`'s proxied path and the proxy-status probe both use
+  it, so the 30 s status poll, ghost thumbnail fetches, previews and image downloads reuse one keep-alive
+  connection to the proxy instead of each building a transport nobody reuses. There is one proxy setting, so
+  one entry: asking for a different URL replaces it and closes the old transport's idle connections. The proxy URL
+  may carry credentials, so it is never logged and its parse error omits it. The untrusted direct path
+  (`Policy.BlockPrivate`, connect-time address guard) keeps its own dedicated transport, untouched.
+
 ## Deliberate scope cuts
 
 Still intentionally out of scope, not forgotten:

@@ -273,7 +273,10 @@ export function useLibraryItemActions(fixedItem?: LibraryItem, liveItems?: reado
         items: compact([
           !isGhost &&
             !isImage && { key: "nfo-generate", label: "Generate Now", icon: <FilePlus2 />, disabled: !it.generateNfo, onSelect: () => generateNfo.mutate(it.id) },
-          { key: "nfo-view", label: "View Contents", icon: <Eye />, disabled: !it.nfoExists, onSelect: () => open(it, "nfoContent") },
+          // List responses only check the disk for items with Generate NFO on (see LibraryItem.nfoExists),
+          // so a missing file disables the entry only when the flag is on; with it off the entry stays
+          // enabled and the dialog says when there is no file.
+          { key: "nfo-view", label: "View Contents", icon: <Eye />, disabled: !it.nfoExists && it.generateNfo, onSelect: () => open(it, "nfoContent") },
           { key: "nfo-delete", label: "Delete File", icon: <Trash2 />, destructive: true, onSelect: () => open(it, "deleteNfoWarning") },
         ]),
       },
