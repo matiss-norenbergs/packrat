@@ -578,16 +578,27 @@ func DeleteHistoryEntry(ctx context.Context, deps Deps, id int64) error {
 	if libraryItemID == nil {
 		return nil
 	}
+	return freeBackupIfNoHistory(ctx, deps, *libraryItemID)
+}
 
-	remaining, err := deps.HistoryRepo.CountByLibraryItemID(ctx, *libraryItemID)
+// freeBackupIfNoHistory frees the item's original-thumbnail backup when no
+// history row is left for it. "Count the rows, then delete the backup" is a
+// check-then-write, so it runs under enhanceMu: an enhancement of the same item
+// that is in flight holds the mutex until its history row is written, so this
+// waits for it and then sees that row instead of deleting the backup it relies
+// on. enhanceMu is not a transaction or repo mutex: it is taken with no
+// transaction open.
+func freeBackupIfNoHistory(ctx context.Context, deps Deps, libraryItemID int64) error {
+	enhanceMu.Lock()
+	defer enhanceMu.Unlock()
+	remaining, err := deps.HistoryRepo.CountByLibraryItemID(ctx, libraryItemID)
 	if err != nil {
 		return err
 	}
 	if remaining > 0 {
 		return nil
 	}
-
-	if err := DeleteOriginal(ctx, deps, *libraryItemID); err != nil && !errors.Is(err, repository.ErrNotFound) {
+	if err := DeleteOriginal(ctx, deps, libraryItemID); err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
 	return nil
@@ -606,15 +617,7 @@ func CleanupOldHistory(ctx context.Context, deps Deps, cutoff time.Time) (int64,
 		return 0, err
 	}
 	for _, id := range affectedItemIDs {
-		remaining, err := deps.HistoryRepo.CountByLibraryItemID(ctx, id)
-		if err != nil {
-			log.Printf("thumbnailenhance: item %d: checking remaining history after cleanup failed: %v", id, err)
-			continue
-		}
-		if remaining > 0 {
-			continue
-		}
-		if err := DeleteOriginal(ctx, deps, id); err != nil && !errors.Is(err, repository.ErrNotFound) {
+		if err := freeBackupIfNoHistory(ctx, deps, id); err != nil {
 			log.Printf("thumbnailenhance: item %d: freeing backup after history cleanup failed: %v", id, err)
 		}
 	}

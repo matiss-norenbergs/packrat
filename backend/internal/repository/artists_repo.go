@@ -232,6 +232,10 @@ func (r *ArtistsRepo) UpdateImagePath(ctx context.Context, imageID int64, relati
 	return checkRowsAffected(res)
 }
 
+// ErrArtistNotFound is returned by SelectImageForArtist when the image exists
+// but the artist row does not (ErrNotFound then means the image is missing).
+var ErrArtistNotFound = errors.New("artist not found")
+
 // ErrArtistImageNotOwned is returned by DeleteImageForArtist when the image
 // exists but belongs to a different artist.
 var ErrArtistImageNotOwned = errors.New("image does not belong to this artist")
@@ -264,6 +268,43 @@ func (r *ArtistsRepo) DeleteImageForArtist(ctx context.Context, artistID, imageI
 		return "", fmt.Errorf("committing artist image delete: %w", err)
 	}
 	return relPath, nil
+}
+
+// SelectImageForArtist makes imageID the artist's displayed picture, checking
+// in the same transaction that the image still exists and belongs to the artist,
+// so a concurrent DeleteImageForArtist cannot leave the selection pointing at a
+// deleted image. ErrNotFound if the image does not exist, ErrArtistNotFound if
+// the artist does not, ErrArtistImageNotOwned if the image belongs to another artist.
+func (r *ArtistsRepo) SelectImageForArtist(ctx context.Context, artistID, imageID int64) error {
+	sqlDB, ok := r.db.(*sql.DB)
+	if !ok {
+		return r.selectImageForArtist(ctx, artistID, imageID)
+	}
+	tx, err := sqlDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("beginning artist image select: %w", err)
+	}
+	defer tx.Rollback()
+	if err := r.WithTx(tx).selectImageForArtist(ctx, artistID, imageID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *ArtistsRepo) selectImageForArtist(ctx context.Context, artistID, imageID int64) error {
+	img, err := r.GetImage(ctx, imageID)
+	if err != nil {
+		return err
+	}
+	if img.ArtistID != artistID {
+		return ErrArtistImageNotOwned
+	}
+	if err := r.SetSelectedImage(ctx, artistID, &img.RelativePath); errors.Is(err, ErrNotFound) {
+		return ErrArtistNotFound
+	} else if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *ArtistsRepo) deleteImageForArtist(ctx context.Context, artistID, imageID int64) (string, error) {

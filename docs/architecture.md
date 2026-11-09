@@ -625,6 +625,17 @@ connections in WAL mode. Reads run concurrently with a write; **writes still hap
   connection was free between statements) and still are not: they are guarded by a repo mutex or a
   conditional single statement (`CreateFirst`, `AdvanceTOTPStep`, `MarkFetchingMetadataIfQueued`, …) as
   before.
+- **Check-then-write paths without a mutex or constraint use one statement or one transaction.** The
+  single connection never made a multi-statement sequence atomic (it was free between statements), but
+  the pool makes overlapping requests more likely, so every path whose check guards an invariant has a
+  mechanism: a transaction (`deleteExceeding`, `MarkInterruptedIfActive`, `DeleteOlderThan`,
+  `SelectImageForArtist`, `UsersRepo.ChangePassword`), one conditional statement (`FrameMatchQueueRepo.CreateIfAbsent`,
+  `LibraryRepo.ClearFileIfPath`, history `Delete ... RETURNING`), a mutex (`importMu` around the
+  import's "path taken?" check and insert, because `library.path` has no UNIQUE constraint; `enhanceMu`
+  around "last history row gone? free the backup"), a UNIQUE/FK constraint (tags, artists, users,
+  `subscription_seen_entries`, `collections.parent_id ON DELETE RESTRICT`) or a repo mutex (collection
+  names, which are unique per parent only in application code). `check_then_write_test.go` and the
+  tests next to the other fixes race many goroutines at each.
 - **What is still a rule: lock order.** A repo mutex (`TagsRepo.mu`, `ArtistsRepo.mu`,
   `CollectionsRepo.mu`) is taken *before* the transaction, never inside one, and nothing that writes the DB
   (including `sysevents` `Record`) runs inside an open transaction. Violations no longer hang the whole

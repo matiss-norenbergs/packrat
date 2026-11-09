@@ -265,12 +265,9 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 			writeServerError(c, err)
 			return
 		}
-		if err := usersRepo.UpdatePasswordHash(c.Request.Context(), userID, string(hash)); err != nil {
-			writeServerError(c, err)
-			return
-		}
-		// Sign out every other session (web and desktop tokens); this one stays.
-		revoked, err := usersRepo.DeleteOtherSessions(c.Request.Context(), userID, currentSession(c).Token)
+		// Sign out every other session (web and desktop tokens) in the same
+		// transaction as the hash change; this one stays.
+		revoked, err := usersRepo.ChangePassword(c.Request.Context(), userID, string(hash), currentSession(c).Token)
 		if err != nil {
 			writeServerError(c, err)
 			return

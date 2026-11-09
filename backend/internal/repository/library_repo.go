@@ -945,6 +945,21 @@ func (r *LibraryRepo) ClearFile(ctx context.Context, id int64, clearThumbnail bo
 	return checkRowsAffected(res)
 }
 
+// ClearFileIfPath is ClearFile for the missing-file scan: it only clears the
+// item if it still points at path, in one statement. The scan stats files for a
+// while between listing the items and clearing them; an item that was
+// redownloaded, moved or renamed in the meantime must not be turned into a ghost
+// because of the file it used to have. Returns whether a row was cleared.
+func (r *LibraryRepo) ClearFileIfPath(ctx context.Context, id int64, path string) (bool, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE library SET filename = '', path = '', file_size_bytes = NULL, status = 'ghost' WHERE id = ? AND path = ?`, id, path)
+	if err != nil {
+		return false, fmt.Errorf("clearing library item file: %w", err)
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 // ClearThumbnailPointer nulls only the plain thumbnail column (the
 // MediaRoot-relative path), leaving the resized tiers and their dimensions.
 // Used when an image item's file is deleted: its thumbnail was the file itself.
@@ -1048,6 +1063,16 @@ func (r *LibraryRepo) ListNonGhostFiles(ctx context.Context) ([]LibraryFileRef, 
 
 // ListPaths returns the set of relative media paths already tracked in the
 // library table, for the import scanner to skip on disk.
+// PathExists reports whether any library row (ghosts have an empty path) has
+// exactly this path.
+func (r *LibraryRepo) PathExists(ctx context.Context, path string) (bool, error) {
+	var exists bool
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM library WHERE path = ?)`, path).Scan(&exists); err != nil {
+		return false, fmt.Errorf("checking library path: %w", err)
+	}
+	return exists, nil
+}
+
 func (r *LibraryRepo) ListPaths(ctx context.Context) (map[string]bool, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT path FROM library`)
 	if err != nil {

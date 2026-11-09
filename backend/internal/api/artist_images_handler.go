@@ -192,26 +192,19 @@ func SelectArtistImage(artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
 			return
 		}
 
-		img, err := artistsRepo.GetImage(ctx, imageID)
-		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
+		// Checked and set in one transaction (a concurrent image delete cannot
+		// leave the selection dangling).
+		if err := artistsRepo.SelectImageForArtist(ctx, artistID, imageID); err != nil {
+			switch {
+			case errors.Is(err, repository.ErrNotFound):
 				c.JSON(http.StatusNotFound, gin.H{"error": "image not found"})
-				return
-			}
-			writeServerError(c, err)
-			return
-		}
-		if img.ArtistID != artistID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "image does not belong to this artist"})
-			return
-		}
-
-		if err := artistsRepo.SetSelectedImage(ctx, artistID, &img.RelativePath); err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
+			case errors.Is(err, repository.ErrArtistNotFound):
 				c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
-				return
+			case errors.Is(err, repository.ErrArtistImageNotOwned):
+				c.JSON(http.StatusBadRequest, gin.H{"error": "image does not belong to this artist"})
+			default:
+				writeServerError(c, err)
 			}
-			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)

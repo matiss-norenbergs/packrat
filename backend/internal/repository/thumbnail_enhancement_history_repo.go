@@ -212,18 +212,16 @@ func (r *ThumbnailEnhancementHistoryRepo) LatestSuccessRowIDs(ctx context.Contex
 // deleted) — callers use this to decide whether a cascade cleanup (e.g. an
 // orphaned original-thumbnail backup) is needed.
 func (r *ThumbnailEnhancementHistoryRepo) Delete(ctx context.Context, id int64) (*int64, error) {
+	// One statement: the row is deleted and its item id read back together, so
+	// of two concurrent deletes exactly one succeeds.
 	var libraryItemID sql.NullInt64
 	err := r.db.QueryRowContext(ctx,
-		`SELECT library_item_id FROM thumbnail_enhancement_history WHERE id = ?`, id,
+		`DELETE FROM thumbnail_enhancement_history WHERE id = ? RETURNING library_item_id`, id,
 	).Scan(&libraryItemID)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("looking up thumbnail enhancement history entry %d: %w", id, err)
-	}
-
-	if _, err := r.db.ExecContext(ctx, `DELETE FROM thumbnail_enhancement_history WHERE id = ?`, id); err != nil {
 		return nil, fmt.Errorf("deleting thumbnail enhancement history entry %d: %w", id, err)
 	}
 	if !libraryItemID.Valid {
@@ -274,7 +272,15 @@ func (r *ThumbnailEnhancementHistoryRepo) MarkReverted(ctx context.Context, libr
 func (r *ThumbnailEnhancementHistoryRepo) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, []int64, error) {
 	cutoffStr := cutoff.UTC().Format("2006-01-02 15:04:05")
 
-	rows, err := r.db.QueryContext(ctx,
+	// One transaction, so the item ids returned are exactly the items whose rows
+	// this call deleted.
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, nil, fmt.Errorf("cleaning thumbnail enhancement history: %w", err)
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx,
 		`SELECT DISTINCT library_item_id FROM thumbnail_enhancement_history
 			WHERE created_at < ? AND library_item_id IS NOT NULL`, cutoffStr,
 	)
@@ -295,10 +301,16 @@ func (r *ThumbnailEnhancementHistoryRepo) DeleteOlderThan(ctx context.Context, c
 	}
 	rows.Close()
 
-	res, err := r.db.ExecContext(ctx, `DELETE FROM thumbnail_enhancement_history WHERE created_at < ?`, cutoffStr)
+	res, err := tx.ExecContext(ctx, `DELETE FROM thumbnail_enhancement_history WHERE created_at < ?`, cutoffStr)
 	if err != nil {
 		return 0, nil, fmt.Errorf("deleting old thumbnail enhancement history entries: %w", err)
 	}
 	n, err := res.RowsAffected()
-	return n, affected, err
+	if err != nil {
+		return 0, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, nil, fmt.Errorf("cleaning thumbnail enhancement history: %w", err)
+	}
+	return n, affected, nil
 }

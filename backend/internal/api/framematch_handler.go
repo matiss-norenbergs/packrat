@@ -163,7 +163,10 @@ func BulkStartFrameMatch(libraryRepo *repository.LibraryRepo, queueRepo *reposit
 				resp.Skipped++
 				continue
 			}
-			if _, err := queueRepo.Create(ctx, item.ID, item.Title, req.Mode); err != nil {
+			// Atomic against a concurrent request enqueueing the same item (the
+			// alreadyQueued snapshot above can be stale by now).
+			_, created, err := queueRepo.CreateIfAbsent(ctx, item.ID, item.Title, req.Mode)
+			if err != nil {
 				writeServerError(c, err)
 				return
 			}
@@ -171,6 +174,10 @@ func BulkStartFrameMatch(libraryRepo *repository.LibraryRepo, queueRepo *reposit
 			// (e.g. selected directly and also pulled in via a collection)
 			// from enqueuing a duplicate row against itself.
 			alreadyQueued[id] = true
+			if !created {
+				resp.AlreadyQueued++
+				continue
+			}
 			resp.Queued++
 		}
 		c.JSON(http.StatusAccepted, resp)

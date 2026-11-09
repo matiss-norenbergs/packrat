@@ -380,7 +380,15 @@ func (r *DownloadsRepo) MarkInterruptedIfActive(ctx context.Context) ([]models.D
 		args[i] = s
 	}
 
-	rows, err := r.db.QueryContext(ctx, downloadSelectColumns+fmt.Sprintf(` WHERE d.status IN (%s)`, strings.Join(placeholders, ",")), args...)
+	// Select and update in one transaction, so a download that finishes between
+	// the two is not reported (and overwritten) as interrupted.
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("marking interrupted downloads: %w", err)
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx, downloadSelectColumns+fmt.Sprintf(` WHERE d.status IN (%s)`, strings.Join(placeholders, ",")), args...)
 	if err != nil {
 		return nil, fmt.Errorf("finding active downloads: %w", err)
 	}
@@ -408,13 +416,16 @@ func (r *DownloadsRepo) MarkInterruptedIfActive(ctx context.Context) ([]models.D
 	err = inChunks(affectedIDs, inChunkSize, func(chunk []int64) error {
 		query := `UPDATE downloads SET status = ?, updated_at = datetime('now') WHERE id IN (` + placeholderList(len(chunk)) + `)`
 		args := append([]any{models.StatusInterrupted}, anySlice(chunk)...)
-		if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 			return fmt.Errorf("marking interrupted downloads: %w", err)
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("marking interrupted downloads: %w", err)
 	}
 	return affected, nil
 }

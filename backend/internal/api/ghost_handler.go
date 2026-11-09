@@ -305,9 +305,13 @@ func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRe
 
 		missing := make([]MissingLibraryFileResponse, 0, len(toClear))
 		for _, ref := range toClear {
-			if err := libraryRepo.ClearFile(ctx, ref.ID, false); err != nil {
+			cleared, err := libraryRepo.ClearFileIfPath(ctx, ref.ID, ref.Path)
+			if err != nil {
 				log.Printf("scan missing files: clearing item %d failed: %v", ref.ID, err)
 				continue
+			}
+			if !cleared {
+				continue // changed since it was checked: no longer the missing file
 			}
 			missing = append(missing, MissingLibraryFileResponse{ID: ref.ID, Title: ref.Title})
 		}
