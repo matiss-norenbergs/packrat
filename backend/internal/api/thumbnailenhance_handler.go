@@ -63,14 +63,20 @@ func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps, collectionsRepo
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		items, err := deps.LibraryRepo.List(ctx)
+		// Fetch only the items this page's rows point at (at most one page,
+		// not the whole library); a row whose item is gone is simply absent.
+		wantIDs := make([]int64, 0, len(entries))
+		seen := make(map[int64]bool, len(entries))
+		for _, e := range entries {
+			if e.LibraryItemID != nil && !seen[*e.LibraryItemID] {
+				seen[*e.LibraryItemID] = true
+				wantIDs = append(wantIDs, *e.LibraryItemID)
+			}
+		}
+		itemsByID, err := deps.LibraryRepo.GetByIDs(ctx, wantIDs)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
-		}
-		itemsByID := make(map[int64]models.LibraryItem, len(items))
-		for _, item := range items {
-			itemsByID[item.ID] = item
 		}
 
 		itemIDs := make([]int64, 0, len(entries))

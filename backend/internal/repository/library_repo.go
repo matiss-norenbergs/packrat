@@ -60,6 +60,37 @@ func (r *LibraryRepo) Get(ctx context.Context, id int64) (*models.LibraryItem, e
 	return item, err
 }
 
+// GetByIDs batch-fetches library items by id, keyed by id. It uses the same
+// select columns and scan as Get/List/Query (so collection name, artist name,
+// thumbnail paths and every privacy-relevant field are identical), chunked so
+// an arbitrarily long id list stays under SQLite's variable limit. Ids with no
+// row are simply absent from the map.
+func (r *LibraryRepo) GetByIDs(ctx context.Context, ids []int64) (map[int64]models.LibraryItem, error) {
+	out := make(map[int64]models.LibraryItem, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	err := inChunks(ids, inChunkSize, func(chunk []int64) error {
+		rows, err := r.db.QueryContext(ctx, librarySelectColumns+` WHERE l.id IN (`+placeholderList(len(chunk))+`)`, anySlice(chunk)...)
+		if err != nil {
+			return fmt.Errorf("batch-fetching library items: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			item, err := scanLibraryItem(rows)
+			if err != nil {
+				return err
+			}
+			out[item.ID] = *item
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FindDuplicate returns the library item matching originalURL or videoID
 // (either may be empty, in which case that half of the match is skipped),
 // or nil if none exists. Used for duplicate-detection before queuing a new

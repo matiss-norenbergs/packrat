@@ -1573,6 +1573,10 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
   `stderr_tail` and `ytdlp_command` selected as `NULL` (same column order, so `scanDownload` is
   unchanged). It backs the live queue (`GET /api/downloads`, polled every 10 s), which must stay
   unbounded but never returned those columns. `List` itself now has only test callers.
+- **Fetch by id, not scan.** `LibraryRepo.GetByIDs(ids)` (chunked with `inChunks`, same select columns and
+  scan as `List`/`Query`, missing ids absent) is for any caller that needs a few items. The AI Enhancement
+  history page uses it for its ≤25 rows instead of `LibraryRepo.List`. Callers that legitimately need the
+  whole library (backup export, the enhancement sweeps' candidate scan) still use `List`/`Query`.
 
 ## Deliberate scope cuts
 

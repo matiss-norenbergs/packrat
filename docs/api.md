@@ -2072,7 +2072,7 @@ See [FEATURES.md](FEATURES.md#ai-enhancement) for what this does and how the thr
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/thumbnail-enhancement/history` | Paginated/searchable attempt history |
+| GET | `/api/thumbnail-enhancement/history` | Paginated/searchable attempt history (response unchanged; reads only the page's ≤25 items, not the whole library) |
 | DELETE | `/api/thumbnail-enhancement/history/:id` | Delete one history entry |
 | POST | `/api/thumbnail-enhancement/history/bulk-delete` | Delete many history entries |
 | POST | `/api/thumbnail-enhancement/history/clear` | Delete every history entry |
