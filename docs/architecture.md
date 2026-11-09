@@ -1598,6 +1598,14 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
   never-ending at `math.MaxInt`). The range size is computed in `uint64` and `Count` clamps to `math.MaxInt`.
   Inputs are also bounded at the API (`models.MaxSequenceValue` = 1,000,000 for season / sequence numbers and a
   collection's `sequenceMin`/`sequenceMax`, see `docs/api.md`), but the repository is safe for any stored value.
+- **One cached transport per proxy.** `imagefetch.ProxyTransport(proxyURL)` returns a shared `*http.Transport`
+  (a clone of `http.DefaultTransport` with only `Proxy` set, so the default dial / TLS-handshake / 90 s idle
+  timeouts stay) for the configured `ytdlp_proxy`. `imagefetch`'s proxied path and the proxy-status probe both use
+  it, so the 30 s status poll, ghost thumbnail fetches, previews and image downloads reuse one keep-alive
+  connection to the proxy instead of each building a transport nobody reuses. There is one proxy setting, so
+  one entry: asking for a different URL replaces it and closes the old transport's idle connections. The proxy URL
+  may carry credentials, so it is never logged and its parse error omits it. The untrusted direct path
+  (`Policy.BlockPrivate`, connect-time address guard) keeps its own dedicated transport, untouched.
 
 ## Deliberate scope cuts
 

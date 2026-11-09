@@ -3,11 +3,11 @@ package api
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/imagefetch"
 	"packrat/backend/internal/repository"
 )
 
@@ -18,7 +18,9 @@ const proxyProbeTimeout = 5 * time.Second
 // proxyProbeURL is a tiny, well-known endpoint hit only to confirm the
 // configured proxy can actually reach the internet — not to fetch any real
 // content. A bare IP avoids depending on the proxy's own DNS resolution.
-const proxyProbeURL = "https://1.1.1.1/"
+//
+// A variable only so tests can aim it at a local test proxy.
+var proxyProbeURL = "https://1.1.1.1/"
 
 // ProxyStatusResponse backs the sidebar's proxy status dot. Configured is
 // false whenever no ytdlp_proxy is saved, in which case Reachable is
@@ -45,7 +47,7 @@ func GetProxyStatus(settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 			return
 		}
 
-		parsed, err := url.Parse(proxy)
+		transport, err := imagefetch.ProxyTransport(proxy)
 		if err != nil {
 			c.JSON(http.StatusOK, ProxyStatusResponse{Configured: true, Reachable: false})
 			return
@@ -61,7 +63,7 @@ func GetProxyStatus(settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 
 		client := &http.Client{
 			Timeout:   proxyProbeTimeout,
-			Transport: &http.Transport{Proxy: http.ProxyURL(parsed)},
+			Transport: transport, // shared per proxy URL: the 30 s status poll reuses its connection
 		}
 		resp, err := client.Do(req)
 		if err != nil {

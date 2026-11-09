@@ -156,11 +156,14 @@ func newClient(proxyURL string, timeout time.Duration, policy Policy) (*http.Cli
 	var transport http.RoundTripper = http.DefaultTransport
 	proxied := false
 	if proxyURL != "" {
-		parsed, err := url.Parse(proxyURL)
+		// The shared per-proxy transport (see ProxyTransport): connections to the
+		// proxy are reused across fetches. Only this trusted-proxy path shares it;
+		// the untrusted direct path below keeps its own guarded transport.
+		t, err := ProxyTransport(proxyURL)
 		if err != nil {
-			return nil, fmt.Errorf("invalid proxy URL: %w", err)
+			return nil, err
 		}
-		transport = &http.Transport{Proxy: http.ProxyURL(parsed)}
+		transport = t
 		proxied = true
 	} else if policy.BlockPrivate {
 		t := http.DefaultTransport.(*http.Transport).Clone()
