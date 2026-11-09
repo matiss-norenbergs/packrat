@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"packrat/backend/internal/bgtasks"
+	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/ghostthumb"
@@ -614,9 +615,10 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 	libItem := m.buildLibraryItem(id, d, effectiveTitle, meta, result.FinalPath, resolution, finalDuration, sizeBytes)
 	libItem.GenerateNFO = d.GenerateNFO
 	// These writes record the outcome, so they must land even if shutdown
-	// cancelled parentCtx while the download was finishing. The bound is long (CompletionContext):
-	// a short one would fail a write that merely queued behind another transaction on the single DB
-	// connection and delete the finished file below. Shutdown is not extended by it (the shutdown
+	// cancelled parentCtx while the download was finishing. The bound is long (CompletionContext)
+	// and a busy database is retried (db.RetryBusy): a short bound, or giving up after the 15 s
+	// busy timeout, would fail a write that merely queued behind another transaction's write lock
+	// and delete the finished file below. Shutdown is not extended by it (the shutdown
 	// wait is bounded, and an interrupted write is recovered by MarkInterruptedIfActive at next start).
 	termCtx, termDone := bgtasks.CompletionContext(parentCtx)
 	libID, ghost, err := m.fillOrCreateLibraryItem(termCtx, id, libItem)
@@ -636,10 +638,14 @@ func (m *DownloadManager) runOne(parentCtx context.Context, id int64) {
 		m.finishError(parentCtx, runCtx, id, d.URL, "creating library item: "+err.Error(), result.StdoutTail, result.StderrTail)
 		return
 	}
-	if err := m.downloadsRepo.MarkCompleted(termCtx, id, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
+	if err := db.RetryBusy(termCtx, func() error {
+		return m.downloadsRepo.MarkCompleted(termCtx, id, 0, resolution, result.StdoutTail, result.StderrTail)
+	}); err != nil {
 		log.Printf("queue: mark completed failed for %d: %v", id, err)
 	}
-	if _, err := m.historyRepo.Create(termCtx, &id, d.URL, "completed", nil); err != nil {
+	if _, err := db.RetryBusyValue(termCtx, func() (int64, error) {
+		return m.historyRepo.Create(termCtx, &id, d.URL, "completed", nil)
+	}); err != nil {
 		log.Printf("queue: recording history for %d failed: %v", id, err)
 	}
 	termDone()
@@ -1103,7 +1109,7 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 		params.Description = &description
 	}
 	applyCtx, applyDone := bgtasks.CompletionContext(parentCtx)
-	applyErr := m.libraryRepo.ApplyRedownload(applyCtx, targetID, params)
+	applyErr := db.RetryBusy(applyCtx, func() error { return m.libraryRepo.ApplyRedownload(applyCtx, targetID, params) })
 	applyDone()
 	if err := applyErr; err != nil {
 		log.Printf("queue: applying redownload for library item %d failed: %v", targetID, err)
@@ -1131,10 +1137,14 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 	}
 
 	termCtx, termDone := bgtasks.CompletionContext(parentCtx)
-	if err := m.downloadsRepo.MarkCompleted(termCtx, downloadID, 0, resolution, result.StdoutTail, result.StderrTail); err != nil {
+	if err := db.RetryBusy(termCtx, func() error {
+		return m.downloadsRepo.MarkCompleted(termCtx, downloadID, 0, resolution, result.StdoutTail, result.StderrTail)
+	}); err != nil {
 		log.Printf("queue: mark completed failed for %d: %v", downloadID, err)
 	}
-	if _, err := m.historyRepo.Create(termCtx, &downloadID, d.URL, "completed", nil); err != nil {
+	if _, err := db.RetryBusyValue(termCtx, func() (int64, error) {
+		return m.historyRepo.Create(termCtx, &downloadID, d.URL, "completed", nil)
+	}); err != nil {
 		log.Printf("queue: recording history for %d failed: %v", downloadID, err)
 	}
 	termDone()
@@ -1394,7 +1404,9 @@ func (m *DownloadManager) fillOrCreateLibraryItem(ctx context.Context, downloadI
 		if err == nil {
 			// A ghost this run merely reused keeps its own (possibly edited)
 			// title/uploader/description; one it created takes the download's.
-			err = m.libraryRepo.CompleteGhostFromDownload(ctx, g.libraryID, libItem, !g.createdByRun)
+			err = db.RetryBusy(ctx, func() error {
+				return m.libraryRepo.CompleteGhostFromDownload(ctx, g.libraryID, libItem, !g.createdByRun)
+			})
 		}
 		if err == nil {
 			if !g.createdByRun {
@@ -1406,7 +1418,7 @@ func (m *DownloadManager) fillOrCreateLibraryItem(ctx context.Context, downloadI
 		}
 		log.Printf("queue: filling ghost item %d for download %d failed (%v) — creating a new item instead", g.libraryID, downloadID, err)
 	}
-	libID, err := m.libraryRepo.Create(ctx, libItem)
+	libID, err := db.RetryBusyValue(ctx, func() (int64, error) { return m.libraryRepo.Create(ctx, libItem) })
 	return libID, nil, err
 }
 

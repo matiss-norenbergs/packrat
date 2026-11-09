@@ -65,28 +65,28 @@ func CreateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		entries := subscriptions.EntriesFromMetadata(meta, req.URL)
 		id, err := subscriptions.CreateBaselined(ctx, deps, sub, entries)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "creating subscription failed: " + err.Error()})
+			writeServerErrorPrefixed(c, "creating subscription failed: ", err)
 			return
 		}
 
 		created, err := deps.SubscriptionsRepo.Get(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		collectionName, err := resolveCollectionName(ctx, deps.CollectionsRepo, created.CollectionID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		knownCount, err := deps.SubscriptionsRepo.CountSeenEntries(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		unseenCount, err := deps.SubscriptionsRepo.CountUnseenEntries(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, toSubscriptionResponse(*created, collectionName, knownCount, unseenCount))
@@ -110,13 +110,13 @@ func ListSubscriptions(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		subs, err := deps.SubscriptionsRepo.List(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		cols, err := deps.CollectionsRepo.List(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		names := make(map[int64]string, len(cols))
@@ -134,12 +134,12 @@ func ListSubscriptions(deps subscriptions.CheckDeps) gin.HandlerFunc {
 			}
 			count, err := deps.SubscriptionsRepo.CountSeenEntries(ctx, sub.ID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			unseenCount, err := deps.SubscriptionsRepo.CountUnseenEntries(ctx, sub.ID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			out = append(out, toSubscriptionResponse(sub, collectionName, count, unseenCount))
@@ -168,7 +168,7 @@ func UpdateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -185,23 +185,23 @@ func UpdateSubscription(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		sub.Enabled = *req.Enabled
 
 		if err := deps.SubscriptionsRepo.Update(ctx, sub); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		collectionName, err := resolveCollectionName(ctx, deps.CollectionsRepo, sub.CollectionID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		count, err := deps.SubscriptionsRepo.CountSeenEntries(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		unseenCount, err := deps.SubscriptionsRepo.CountUnseenEntries(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, toSubscriptionResponse(*sub, collectionName, count, unseenCount))
@@ -225,7 +225,7 @@ func CheckSubscriptionNow(deps subscriptions.CheckDeps) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -257,13 +257,13 @@ func ListSubscriptionEntries(deps subscriptions.CheckDeps) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		entries, err := deps.SubscriptionsRepo.ListSeenEntries(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -275,7 +275,7 @@ func ListSubscriptionEntries(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		}
 		matches, err := deps.LibraryRepo.FindDuplicates(ctx, queries)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -344,7 +344,7 @@ func LinkSubscriptionEntry(deps subscriptions.CheckDeps) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if _, err := deps.LibraryRepo.Get(ctx, req.LibraryItemID); err != nil {
@@ -352,7 +352,7 @@ func LinkSubscriptionEntry(deps subscriptions.CheckDeps) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -361,7 +361,7 @@ func LinkSubscriptionEntry(deps subscriptions.CheckDeps) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "entry not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if err := deps.SubscriptionsRepo.MarkSeenEntry(ctx, id, sourceID); err != nil {
@@ -405,7 +405,7 @@ func BulkDeleteSubscriptions(deps subscriptions.CheckDeps) gin.HandlerFunc {
 		}
 		n, err := deps.SubscriptionsRepo.DeleteByIDs(c.Request.Context(), dedupeKeepOrder(req.IDs))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, BulkDeleteResponse{Deleted: n})
@@ -426,7 +426,7 @@ func requireSubscription(c *gin.Context, deps subscriptions.CheckDeps) (*models.
 			c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
 			return nil, false
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return nil, false
 	}
 	return sub, true
@@ -452,7 +452,7 @@ func bulkSubscriptionEntries(deps subscriptions.CheckDeps, apply func(ctx contex
 		}
 		n, err := apply(c.Request.Context(), sub.ID, dedupeKeepOrder(req.SourceIDs))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, BulkUpdatedResponse{Updated: n})

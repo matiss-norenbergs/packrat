@@ -62,18 +62,18 @@ func CreateGhostLibraryItem(libraryRepo *repository.LibraryRepo, imagesRoot stri
 		}
 		id, err := libraryRepo.Create(ctx, &item)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		if len(req.Tags) > 0 {
 			tagIDs, err := tagsRepo.GetOrCreateByNames(ctx, req.Tags)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			if err := tagsRepo.SetForLibraryItem(ctx, id, tagIDs); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 		}
@@ -84,12 +84,12 @@ func CreateGhostLibraryItem(libraryRepo *repository.LibraryRepo, imagesRoot stri
 
 		created, err := libraryRepo.Get(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		resp, err := responder.Response(ctx, *created)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, resp)
@@ -131,7 +131,7 @@ func BulkFetchLibraryThumbnails(libraryRepo *repository.LibraryRepo, downloadsRe
 
 		active, err := downloadsRepo.ActiveDownloadIDsByLibraryItem(ctx, req.ItemIDs)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -148,7 +148,7 @@ func BulkFetchLibraryThumbnails(libraryRepo *repository.LibraryRepo, downloadsRe
 					resp.Skipped++
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			if item.OriginalURL == nil {
@@ -192,7 +192,7 @@ func DeleteLibraryItemFile(libraryRepo *repository.LibraryRepo, originalsRepo *r
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if item.Path == "" {
@@ -202,7 +202,7 @@ func DeleteLibraryItemFile(libraryRepo *repository.LibraryRepo, originalsRepo *r
 
 		clearThumbnail := c.Query("deleteThumbnail") == "true"
 		if err := libraryRepo.ClearFile(ctx, id, clearThumbnail); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if isImageItem(item) && !clearThumbnail {
@@ -254,7 +254,7 @@ func ScanMissingLibraryFiles(mediaRoot string, libraryRepo *repository.LibraryRe
 
 		refs, err := libraryRepo.ListNonGhostFiles(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -369,7 +369,7 @@ func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, downlo
 
 		itemIDs, skippedDownloading, err := splitActiveItems(c.Request.Context(), downloadsRepo, req.ItemIDs)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -383,7 +383,7 @@ func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, downlo
 
 		tx, err := db.BeginTx(c.Request.Context(), nil)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		defer tx.Rollback()
@@ -397,7 +397,7 @@ func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, downlo
 				if errors.Is(err, repository.ErrNotFound) {
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			if item.Path == "" {
@@ -405,12 +405,12 @@ func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, downlo
 			}
 
 			if err := txRepo.ClearFile(c.Request.Context(), id, req.DeleteThumbnail); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			if isImageItem(item) && !req.DeleteThumbnail {
 				if err := txRepo.ClearThumbnailPointer(c.Request.Context(), id); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					writeServerError(c, err)
 					return
 				}
 			}
@@ -419,7 +419,7 @@ func BulkDeleteLibraryItemFiles(db *sql.DB, repo *repository.LibraryRepo, downlo
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		// Files only go once the commit has succeeded.

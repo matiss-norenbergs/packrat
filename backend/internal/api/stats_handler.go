@@ -13,12 +13,12 @@ func GetStats(downloadsRepo *repository.DownloadsRepo, libraryRepo *repository.L
 	return func(c *gin.Context) {
 		active, queued, completedToday, err := downloadsRepo.Stats(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		videoCount, audioCount, imageCount, videoGhostCount, audioGhostCount, imageGhostCount, totalBytes, err := libraryRepo.Stats(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -62,7 +62,7 @@ func GetResolutionBreakdown(libraryRepo *repository.LibraryRepo) gin.HandlerFunc
 	return func(c *gin.Context) {
 		points, err := libraryRepo.CountByResolutionStep(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -92,7 +92,7 @@ func GetLibraryGrowth(libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		points, err := libraryRepo.GrowthByDay(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 

@@ -3,11 +3,16 @@ package repository
 import "sync"
 
 // Lock order (see docs/architecture.md): a repo mutex (TagsRepo.mu,
-// ArtistsRepo.mu, CollectionsRepo.mu) is always taken BEFORE the DB
-// connection, never while a transaction is open. The pool has exactly one
-// connection (SetMaxOpenConns(1)), so a goroutine that holds a mutex and waits
-// for the connection while another holds the connection (an open tx) and waits
-// for the mutex hangs the whole app.
+// ArtistsRepo.mu, CollectionsRepo.mu) is always taken BEFORE the write
+// transaction, never while one is open. The database is a small connection
+// pool, but SQLite still has one writer at a time and every transaction takes
+// the write lock when it begins (_txlock=immediate). A goroutine that holds a
+// mutex and waits for the write lock while another holds the write lock (an
+// open tx) and waits for the mutex is still a deadlock between the two. What
+// changed with the pool is the blast radius: reads keep working, and the
+// mutex holder gives up after db.BusyTimeout with "database is locked" (a 503)
+// instead of the whole app hanging for good. That is a bug, not a recovery
+// path.
 //
 // A caller that needs a transaction spanning several of these repos therefore
 // takes their mutexes up front with LockForRestore, then opens the tx, and

@@ -43,17 +43,17 @@ func ExportSettings(settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 
 		bundle, err := backup.BuildSettingsBundle(c.Request.Context(), settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		plaintext, err := json.Marshal(bundle)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		env, err := backup.Seal("settings", plaintext, passwordFrom(req.Password))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, env)
@@ -73,17 +73,17 @@ func ExportLibrary(collectionsRepo *repository.CollectionsRepo, tagsRepo *reposi
 
 		bundle, err := backup.BuildLibraryBundle(c.Request.Context(), collectionsRepo, tagsRepo, artistsRepo, libraryRepo, downloadsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		plaintext, err := json.Marshal(bundle)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		env, err := backup.Seal("library", plaintext, passwordFrom(req.Password))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, env)
@@ -98,7 +98,7 @@ func writeBackupOpenError(c *gin.Context, err error) {
 	case errors.Is(err, backup.ErrNotPackratExport), errors.Is(err, backup.ErrWrongKind), errors.Is(err, backup.ErrIncorrectPassword):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 	}
 }
 
@@ -143,7 +143,7 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 		applied, err := backup.ApplySettingsBundle(c.Request.Context(), settingsRepo, bundle)
 		if err != nil {
 			recordRestoreFailed(c, restoreSettingsImport, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -209,7 +209,7 @@ func PreviewLibraryImport(collectionsRepo *repository.CollectionsRepo, tagsRepo 
 
 		preview, err := backup.PreviewLibraryBundle(c.Request.Context(), collectionsRepo, tagsRepo, artistsRepo, libraryRepo, bundle)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, preview)
@@ -314,7 +314,7 @@ func ImportLibrary(db *sql.DB, collectionsRepo *repository.CollectionsRepo, tags
 		resp, err := applyLibraryBundleAndEnqueue(c.Request.Context(), db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, settingsRepo, bundle, mode == "ghostOnly")
 		if err != nil {
 			recordRestoreFailed(c, restoreLibraryImport, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		recordRestoreDone(c, restoreLibraryImport, libraryRestoreDetails(resp))
@@ -329,7 +329,7 @@ func ListBackupHistory(repo *repository.BackupHistoryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		entries, err := repo.List(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		resp := make([]BackupHistoryResponse, 0, len(entries))
@@ -349,7 +349,7 @@ func RunManualBackup(deps backup.RunDeps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		entry, err := backup.RunBackup(c.Request.Context(), deps, "manual")
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, toBackupHistoryResponse(entry))
@@ -367,7 +367,7 @@ func resolveBackupFile(c *gin.Context, backupsRoot string, repo *repository.Back
 			c.JSON(http.StatusNotFound, gin.H{"error": "backup not found"})
 			return nil, "", false
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return nil, "", false
 	}
 	if entry.FileName == nil {
@@ -376,7 +376,7 @@ func resolveBackupFile(c *gin.Context, backupsRoot string, repo *repository.Back
 	}
 	fullPath, err = pathsafe.ResolveUnderRoot(backupsRoot, *entry.FileName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return nil, "", false
 	}
 	if _, err := os.Stat(fullPath); err != nil {
@@ -428,12 +428,12 @@ func PreviewBackupFile(backupsRoot string, repo *repository.BackupHistoryRepo) g
 
 		raw, err := os.ReadFile(fullPath)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		env, err := backup.ParseEnvelope(string(raw))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		plaintext, err := backup.Open(env, "full", "")
@@ -489,12 +489,12 @@ func RestoreFullBackup(
 
 		raw, err := os.ReadFile(fullPath)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		env, err := backup.ParseEnvelope(string(raw))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		plaintext, err := backup.Open(env, "full", "")
@@ -513,7 +513,7 @@ func RestoreFullBackup(
 		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
 		if err != nil {
 			recordRestoreFailed(c, restoreFullFromHistory, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		recordRestoreDone(c, restoreFullFromHistory, fullRestoreDetails(resp))
@@ -604,7 +604,7 @@ func ImportFullBackup(
 		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
 		if err != nil {
 			recordRestoreFailed(c, restoreFullFromUpload, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		recordRestoreDone(c, restoreFullFromUpload, fullRestoreDetails(resp))
@@ -643,7 +643,7 @@ func PreviewFullImport(collectionsRepo *repository.CollectionsRepo, tagsRepo *re
 
 		libPreview, err := backup.PreviewLibraryBundle(c.Request.Context(), collectionsRepo, tagsRepo, artistsRepo, libraryRepo, bundle.Library)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, FullImportPreviewResponse{
@@ -698,7 +698,7 @@ func BulkDeleteBackupHistory(backupsRoot string, repo *repository.BackupHistoryR
 		}
 		removed, err := repo.DeleteByIDs(c.Request.Context(), dedupeKeepOrder(req.IDs))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		for _, entry := range removed {

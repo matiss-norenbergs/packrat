@@ -31,7 +31,7 @@ func ArtistImageCandidates(libraryRepo *repository.LibraryRepo) gin.HandlerFunc 
 
 		thumbnails, err := libraryRepo.ThumbnailsByArtist(c.Request.Context(), id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -54,7 +54,7 @@ func ListArtistImages(artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
 
 		images, err := artistsRepo.ListImages(c.Request.Context(), id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -81,7 +81,7 @@ func AddArtistImage(mediaRoot, imagesRoot, ffmpegPath string, artistsRepo *repos
 				c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -99,13 +99,13 @@ func AddArtistImage(mediaRoot, imagesRoot, ffmpegPath string, artistsRepo *repos
 
 		tiers, err := imageproc.GenerateTiers(ctx, ffmpegPath, imagesRoot, "artists", id, data, nameHint, artistImageTiers)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		img, err := artistsRepo.AddImage(ctx, id, tiers[0])
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, toArtistImageResponse(*img))
@@ -135,7 +135,7 @@ func DeleteArtistImage(imagesRoot string, artistsRepo *repository.ArtistsRepo) g
 				c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -145,7 +145,7 @@ func DeleteArtistImage(imagesRoot string, artistsRepo *repository.ArtistsRepo) g
 				c.JSON(http.StatusNotFound, gin.H{"error": "image not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if img.ArtistID != artistID {
@@ -163,7 +163,7 @@ func DeleteArtistImage(imagesRoot string, artistsRepo *repository.ArtistsRepo) g
 			case errors.Is(err, repository.ErrArtistImageNotOwned):
 				c.JSON(http.StatusBadRequest, gin.H{"error": "image does not belong to this artist"})
 			default:
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 			}
 			return
 		}
@@ -198,7 +198,7 @@ func SelectArtistImage(artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "image not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if img.ArtistID != artistID {
@@ -211,7 +211,7 @@ func SelectArtistImage(artistsRepo *repository.ArtistsRepo) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -233,7 +233,7 @@ func ClearArtistSelectedImage(artistsRepo *repository.ArtistsRepo) gin.HandlerFu
 				c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)

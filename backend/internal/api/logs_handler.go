@@ -19,12 +19,12 @@ func GetLogs(downloadsRepo *repository.DownloadsRepo, settingsRepo *repository.S
 	return func(c *gin.Context) {
 		rows, err := downloadsRepo.ListRecent(c.Request.Context(), logsLimit)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		anonymize, err := HistoryAnonymizeURLs(c.Request.Context(), settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		out := make([]LogEntryResponse, 0, len(rows))

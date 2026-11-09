@@ -58,7 +58,7 @@ func (d *AuthDeps) verifySecondFactor(ctx context.Context, user *models.User, co
 
 func internalError(c *gin.Context, err error) {
 	log.Printf("auth: %v", err)
-	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	writeServerError(c, err)
 }
 
 // AuthLogin2FA completes a login that AuthLogin answered with a challenge: a TOTP code or a

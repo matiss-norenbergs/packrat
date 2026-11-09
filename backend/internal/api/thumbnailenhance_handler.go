@@ -50,17 +50,17 @@ func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps, collectionsRepo
 			PageSize:    thumbnailEnhancementHistoryPageSize,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		withBackup, err := deps.OriginalsRepo.ListItemIDsWithBackup(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		latestSuccessID, err := deps.HistoryRepo.LatestSuccessRowIDs(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		// Fetch only the items this page's rows point at (at most one page,
@@ -75,7 +75,7 @@ func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps, collectionsRepo
 		}
 		itemsByID, err := deps.LibraryRepo.GetByIDs(ctx, wantIDs)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -89,12 +89,12 @@ func ListThumbnailEnhancementHistory(deps thumbnailenhance.Deps, collectionsRepo
 		}
 		tagsByID, err := tagsRepo.TagsByLibraryIDs(ctx, itemIDs)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		privacy, err := LoadItemPrivacy(ctx, deps.SettingsRepo, collectionsRepo, tagsRepo, artistsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -155,7 +155,7 @@ func DeleteThumbnailEnhancementHistoryEntry(deps thumbnailenhance.Deps) gin.Hand
 				c.JSON(http.StatusNotFound, gin.H{"error": "history entry not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -180,7 +180,7 @@ func BulkDeleteThumbnailEnhancementHistoryEntries(deps thumbnailenhance.Deps) gi
 				if errors.Is(err, repository.ErrNotFound) {
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			resp.Deleted++
@@ -195,7 +195,7 @@ func ClearThumbnailEnhancementHistory(deps thumbnailenhance.Deps) gin.HandlerFun
 	return func(c *gin.Context) {
 		n, err := thumbnailenhance.ClearAllHistory(c.Request.Context(), deps)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"deleted": n})
@@ -261,12 +261,12 @@ func GetThumbnailEnhancementStatus(deps thumbnailenhance.Deps) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		enabled, err := ThumbnailEnhancementEnabled(ctx, deps.SettingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		url, err := deps.SettingsRepo.Get(ctx, models.SettingThumbnailEnhancementURL)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if !enabled || url == "" {
@@ -276,12 +276,12 @@ func GetThumbnailEnhancementStatus(deps thumbnailenhance.Deps) gin.HandlerFunc {
 
 		username, err := deps.SettingsRepo.Get(ctx, models.SettingThumbnailEnhancementUsername)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		password, err := deps.SettingsRepo.Get(ctx, models.SettingThumbnailEnhancementPassword)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -304,7 +304,7 @@ func ListThumbnailEnhancementEligible(deps thumbnailenhance.Deps) gin.HandlerFun
 	return func(c *gin.Context) {
 		items, err := thumbnailenhance.ListEligible(c.Request.Context(), deps)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		out := make([]ThumbnailEnhancementEligibleItemResponse, 0, len(items))
@@ -373,7 +373,7 @@ func RevertThumbnailOriginal(deps thumbnailenhance.Deps) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "no original backup for this item"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -395,7 +395,7 @@ func DeleteThumbnailOriginal(deps thumbnailenhance.Deps) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "no original backup for this item"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -422,7 +422,7 @@ func BulkDeleteThumbnailOriginals(deps thumbnailenhance.Deps) gin.HandlerFunc {
 					resp.Skipped++
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			resp.Updated++
@@ -449,7 +449,7 @@ func BulkRevertThumbnailOriginals(deps thumbnailenhance.Deps) gin.HandlerFunc {
 					resp.Skipped++
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			resp.Updated++

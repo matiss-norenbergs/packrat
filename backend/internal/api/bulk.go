@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -85,9 +86,14 @@ func (e *opError) Error() string { return e.Msg }
 
 func newOpError(status int, msg string) *opError { return &opError{Status: status, Msg: msg} }
 
-// internalOpError wraps an unexpected error as a 500.
+// internalOpError wraps an unexpected error as a 500 (503 when the database is
+// busy, see serverErrorStatus).
 func internalOpError(err error) *opError {
-	return &opError{Status: http.StatusInternalServerError, Msg: err.Error()}
+	status, msg := serverErrorStatus(err)
+	if status == http.StatusServiceUnavailable {
+		log.Printf("api: database busy: %v", err)
+	}
+	return &opError{Status: status, Msg: msg}
 }
 
 // BulkItemResult is one entry of a per-item-results response. K is the id type

@@ -16,7 +16,7 @@ import (
 const systemEventsTimeLayout = "2006-01-02 15:04:05"
 
 // SystemEventsRepo stores the persistent system log. Callers that record events go through the
-// sysevents package, which must never be called inside a transaction (there is a single connection).
+// sysevents package, which must never be called inside a transaction (the write would wait for the transaction's own write lock).
 type SystemEventsRepo struct {
 	db *sql.DB
 }

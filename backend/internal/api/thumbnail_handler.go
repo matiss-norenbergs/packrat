@@ -155,7 +155,7 @@ func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if item.Path != "" && rejectImageItem(c, item) {
@@ -179,12 +179,12 @@ func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 			}
 			updated, err := libraryRepo.Get(ctx, id)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			resp, err := responder.Response(ctx, *updated)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			c.JSON(http.StatusOK, resp)
@@ -253,7 +253,7 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -269,12 +269,12 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 		duration := resolveDuration(ctx, item.Duration, mediaAbs, ffprobePath)
 		rangeLow, err := ThumbnailFrameRangeLow(ctx, settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		rangeHigh, err := ThumbnailFrameRangeHigh(ctx, settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		ts := pickFrameTimestamps(duration, float64(rangeLow), float64(rangeHigh), 1, nil)[0]
@@ -358,7 +358,7 @@ func GetLibraryThumbnailTimestamps(mediaRoot string, libraryRepo *repository.Lib
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if item.Path == "" {
@@ -368,17 +368,17 @@ func GetLibraryThumbnailTimestamps(mediaRoot string, libraryRepo *repository.Lib
 
 		count, err := ThumbnailFrameCount(ctx, settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		settingLow, err := ThumbnailFrameRangeLow(ctx, settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		settingHigh, err := ThumbnailFrameRangeHigh(ctx, settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -446,7 +446,7 @@ func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.Lib
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -471,7 +471,7 @@ func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.Lib
 		} else {
 			frameCount, err := ThumbnailFrameCount(ctx, settingsRepo)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			var exclude []float64
@@ -484,12 +484,12 @@ func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.Lib
 			}
 			rangeLow, err := ThumbnailFrameRangeLow(ctx, settingsRepo)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			rangeHigh, err := ThumbnailFrameRangeHigh(ctx, settingsRepo)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			duration := resolveDuration(ctx, item.Duration, mediaAbs, ffprobePath)
@@ -539,7 +539,7 @@ func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -592,7 +592,7 @@ func DeleteLibraryItemThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if rejectImageItem(c, item) {
@@ -624,7 +624,7 @@ func DeleteLibraryItemThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 		}
 
 		if err := libraryRepo.ClearThumbnail(ctx, id); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		// The enhanced image was the thumbnail itself; with it gone the
@@ -701,7 +701,7 @@ func writeThumbnailAndRespond(c *gin.Context, tc thumbnailCommit, id int64, medi
 		case errors.Is(err, repository.ErrNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 		}
 		return false
 	}
@@ -715,12 +715,12 @@ func writeThumbnailAndRespond(c *gin.Context, tc thumbnailCommit, id int64, medi
 
 	updated, err := tc.libraryRepo.Get(ctx, id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return false
 	}
 	resp, err := tc.responder.Response(ctx, *updated)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return false
 	}
 	c.JSON(http.StatusOK, resp)

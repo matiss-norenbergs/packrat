@@ -50,8 +50,8 @@ func TestFinishErrorLeavesShutdownInterruptedRunAlone(t *testing.T) {
 	}
 }
 
-// A completion write that has to wait for the single DB connection longer than the 5 s failure-
-// bookkeeping bound (a backup, a restore, a big delete holding it) must still succeed: failing it
+// A completion write that has to wait for the database's write lock longer than the 5 s failure-
+// bookkeeping bound (a restore or a big delete holding it) must still succeed: failing it
 // would send the run down the error path that deletes the file it just downloaded.
 func TestCompletionSurvivesSlowDatabase(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -61,7 +61,7 @@ func TestCompletionSurvivesSlowDatabase(t *testing.T) {
 	id := e.newDownload(models.Download{})
 
 	// Once the run has recorded the yt-dlp command (just before its completion writes begin), take the
-	// only DB connection and sit on it past the old 5 s bound.
+	// write lock and sit on it past the old 5 s bound.
 	go func() {
 		for i := 0; i < 5000; i++ {
 			var cmd sql.NullString

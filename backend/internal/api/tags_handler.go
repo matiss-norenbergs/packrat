@@ -15,7 +15,7 @@ func ListTags(repo *repository.TagsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		out := make([]TagResponse, 0, len(rows))
@@ -40,7 +40,7 @@ func CreateTag(repo *repository.TagsRepo) gin.HandlerFunc {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -71,7 +71,7 @@ func UpdateTag(repo *repository.TagsRepo) gin.HandlerFunc {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -91,7 +91,7 @@ func DeleteTag(repo *repository.TagsRepo) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "tag not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -113,7 +113,7 @@ func BulkDeleteTags(db *sql.DB, repo *repository.TagsRepo) gin.HandlerFunc {
 
 		tx, err := db.BeginTx(c.Request.Context(), nil)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		defer tx.Rollback()
@@ -125,14 +125,14 @@ func BulkDeleteTags(db *sql.DB, repo *repository.TagsRepo) gin.HandlerFunc {
 				if errors.Is(err, repository.ErrNotFound) {
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			resp.Deleted++
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, resp)

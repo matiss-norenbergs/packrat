@@ -57,7 +57,7 @@ func CollectionCoverCandidates(mediaRoot string, collectionsRepo *repository.Col
 				c.JSON(http.StatusNotFound, gin.H{"error": "collection not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		absDir, err := pathsafe.ResolveUnderRoot(mediaRoot, relDir)
@@ -68,7 +68,7 @@ func CollectionCoverCandidates(mediaRoot string, collectionsRepo *repository.Col
 
 		images, err := importer.ScanImages(absDir)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -99,7 +99,7 @@ func SetCollectionCover(mediaRoot, imagesRoot, ffmpegPath string, collectionsRep
 				c.JSON(http.StatusNotFound, gin.H{"error": "collection not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -117,7 +117,7 @@ func SetCollectionCover(mediaRoot, imagesRoot, ffmpegPath string, collectionsRep
 
 		tiers, err := imageproc.GenerateTiers(ctx, ffmpegPath, imagesRoot, "collections", id, data, nameHint, coverImageTiers)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		small, medium, original := tiers[0], tiers[1], tiers[2]
@@ -126,13 +126,13 @@ func SetCollectionCover(mediaRoot, imagesRoot, ffmpegPath string, collectionsRep
 		removeCoverFiles(imagesRoot, existing)
 
 		if err := collectionsRepo.SetCoverImageTiers(ctx, id, &small, &medium, &original); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		updated, err := collectionsRepo.Get(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
@@ -160,14 +160,14 @@ func DeleteCollectionCover(imagesRoot string, collectionsRepo *repository.Collec
 				c.JSON(http.StatusNotFound, gin.H{"error": "collection not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		removeCoverFiles(imagesRoot, existing)
 
 		if err := collectionsRepo.SetCoverImageTiers(ctx, id, nil, nil, nil); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)

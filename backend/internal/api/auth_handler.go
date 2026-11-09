@@ -74,7 +74,7 @@ func respondWithSession(c *gin.Context, token string) {
 	}
 	csrf, err := generateCSRFToken()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return
 	}
 	setSessionCookie(c, token)
@@ -94,7 +94,7 @@ func AuthStatus(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		count, err := usersRepo.Count(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if count == 0 {
@@ -139,7 +139,7 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 
 		count, err := usersRepo.Count(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if count > 0 {
@@ -149,7 +149,7 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 
 		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		user, err := usersRepo.CreateFirst(c.Request.Context(), req.Username, string(hash))
@@ -158,13 +158,13 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		token, err := startSession(c, usersRepo, user.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		respondWithSession(c, token)
@@ -196,7 +196,7 @@ func AuthLogin(deps *AuthDeps) gin.HandlerFunc {
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
@@ -210,7 +210,7 @@ func AuthLogin(deps *AuthDeps) gin.HandlerFunc {
 		if user.TOTPEnabled {
 			challenge, err := deps.Challenges.Create(user.ID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			c.JSON(http.StatusOK, TwoFactorChallengeResponse{
@@ -224,7 +224,7 @@ func AuthLogin(deps *AuthDeps) gin.HandlerFunc {
 
 		token, err := startSession(c, usersRepo, user.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		respondWithSession(c, token)
@@ -251,7 +251,7 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 		userID := c.MustGet("userID").(int64)
 		user, err := usersRepo.GetByID(c.Request.Context(), userID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)) != nil {
@@ -262,17 +262,17 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 
 		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcryptCost)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if err := usersRepo.UpdatePasswordHash(c.Request.Context(), userID, string(hash)); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		// Sign out every other session (web and desktop tokens); this one stays.
 		revoked, err := usersRepo.DeleteOtherSessions(c.Request.Context(), userID, currentSession(c).Token)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		recordSecurityEvent(c, sysevents.LevelInfo, "Password changed", map[string]any{"otherSessionsRevoked": revoked})
@@ -286,7 +286,7 @@ func AuthLogout(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		for _, cand := range sessionCandidates(c) {
 			if err := usersRepo.DeleteSession(c.Request.Context(), cand.token); err != nil && !errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 		}

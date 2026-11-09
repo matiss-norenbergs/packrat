@@ -38,7 +38,7 @@ func StartFrameMatch(mediaRoot string, libraryRepo *repository.LibraryRepo, ytdl
 
 		alreadyQueued, err := queueRepo.ExistsForLibraryItem(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if alreadyQueued {
@@ -52,7 +52,7 @@ func StartFrameMatch(mediaRoot string, libraryRepo *repository.LibraryRepo, ytdl
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if rejectImageItem(c, item) {
@@ -125,13 +125,13 @@ func BulkStartFrameMatch(libraryRepo *repository.LibraryRepo, queueRepo *reposit
 
 		alreadyQueued, err := queueRepo.LibraryItemIDsInQueue(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		active, err := downloadsRepo.ActiveDownloadIDsByLibraryItem(ctx, req.ItemIds)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -164,7 +164,7 @@ func BulkStartFrameMatch(libraryRepo *repository.LibraryRepo, queueRepo *reposit
 				continue
 			}
 			if _, err := queueRepo.Create(ctx, item.ID, item.Title, req.Mode); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			// Guards against the same item appearing twice in one request
@@ -183,7 +183,7 @@ func ListFrameMatchQueue(queueRepo *repository.FrameMatchQueueRepo) gin.HandlerF
 	return func(c *gin.Context) {
 		items, err := queueRepo.List(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		out := make([]FrameMatchQueueItemResponse, 0, len(items))
@@ -226,7 +226,7 @@ func AcceptFrameMatchQueueItem(mediaRoot, imagesRoot, ffmpegPath string, queueRe
 				c.JSON(http.StatusNotFound, gin.H{"error": "queue item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if row.State != "done" || row.FoundFramePath == nil {
@@ -240,7 +240,7 @@ func AcceptFrameMatchQueueItem(mediaRoot, imagesRoot, ffmpegPath string, queueRe
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if item.Path == "" {
@@ -303,7 +303,7 @@ func DiscardFrameMatchQueueItem(imagesRoot string, queueRepo *repository.FrameMa
 				c.JSON(http.StatusNotFound, gin.H{"error": "queue item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		removeFrameMatchQueueFiles(imagesRoot, id)

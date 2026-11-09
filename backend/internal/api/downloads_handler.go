@@ -3,12 +3,14 @@ package api
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/imagefetch"
@@ -67,12 +69,12 @@ func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *reposi
 		if !meta.IsPlaylist() {
 			item, err := libraryRepo.FindDuplicate(c.Request.Context(), req.URL, meta.ID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			if item != nil {
 				if dup, err = responder.duplicateInfo(c.Request.Context(), item); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					writeServerError(c, err)
 					return
 				}
 			}
@@ -245,12 +247,16 @@ func enqueueErrorStatus(err error) (int, string) {
 	if errors.Is(err, repository.ErrNotFound) {
 		return http.StatusBadRequest, "collection not found"
 	}
-	return http.StatusInternalServerError, err.Error()
+	return serverErrorStatus(err)
 }
 
 // writeEnqueueError maps an enqueueDownload error to an HTTP response.
 func writeEnqueueError(c *gin.Context, err error) {
 	status, msg := enqueueErrorStatus(err)
+	if status == http.StatusServiceUnavailable && db.IsBusy(err) {
+		log.Printf("api: %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
+		c.Header("Retry-After", "2")
+	}
 	c.JSON(status, gin.H{"error": msg})
 }
 
@@ -261,13 +267,13 @@ func ListDownloads(mgr *queue.DownloadManager, repo *repository.DownloadsRepo, c
 		// row on each 10 s poll. Still unbounded: the queue never truncates.
 		rows, err := repo.ListLight(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		privacy, err := LoadItemPrivacy(c.Request.Context(), settingsRepo, collectionsRepo, tagsRepo, artistsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -312,7 +318,7 @@ func ClearDownloadLog(repo *repository.DownloadsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		n, err := repo.DeleteOlderThan(c.Request.Context(), time.Now())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"deleted": n})
@@ -337,7 +343,7 @@ func BulkDeleteDownloads(repo *repository.DownloadsRepo) gin.HandlerFunc {
 		}
 		deleted, blocked, err := repo.DeleteByIDs(c.Request.Context(), dedupeKeepOrder(req.IDs))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if len(blocked) > 0 {

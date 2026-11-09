@@ -25,7 +25,7 @@ func writeLibraryItemGetError(c *gin.Context, err error) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 		return
 	}
-	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	writeServerError(c, err)
 }
 
 // writeNFO builds and writes item's .nfo sidecar to disk, overwriting
@@ -71,7 +71,7 @@ func GenerateLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRep
 		}
 
 		if err := writeNFO(c.Request.Context(), mediaRoot, tagsRepo, item); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -108,7 +108,7 @@ func GetLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRepo) gi
 				c.JSON(http.StatusNotFound, gin.H{"error": "no .nfo file has been generated for this item"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"content": string(content)})
@@ -142,7 +142,7 @@ func DeleteLibraryItemNFO(mediaRoot string, libraryRepo *repository.LibraryRepo)
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
 		if err := os.Remove(nfo.SidecarPath(mediaAbs)); err != nil && !os.IsNotExist(err) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)

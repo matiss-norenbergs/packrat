@@ -18,7 +18,7 @@ func ScanStrayFiles(db *sql.DB, mgr *queue.DownloadManager, mediaRoot, imagesRoo
 	return func(c *gin.Context) {
 		res, err := strayfiles.Scan(c.Request.Context(), strayConfig(db, mgr, mediaRoot, imagesRoot), time.Now())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, res)
@@ -36,7 +36,7 @@ func DeleteStrayFiles(db *sql.DB, mgr *queue.DownloadManager, mediaRoot, imagesR
 		}
 		deleted, skipped, err := strayfiles.Delete(c.Request.Context(), strayConfig(db, mgr, mediaRoot, imagesRoot), req.Paths, time.Now())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		recordEvent(c, sysevents.LevelInfo, sysevents.CategoryMaintenance, "Stray files deleted",

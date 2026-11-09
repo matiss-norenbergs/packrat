@@ -34,26 +34,26 @@ func ScanImport(mediaRoot string, libraryRepo *repository.LibraryRepo, collectio
 
 		known, err := libraryRepo.ListPaths(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		files, err := importer.Scan(mediaRoot, known)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		ignoredFolders, err := ImportIgnoredFolders(ctx, settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		files = importer.FilterIgnored(files, ignoredFolders)
 
 		cols, err := collectionsRepo.List(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -141,7 +141,7 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 		relPath := path.Clean(filepath.ToSlash(req.Path))
 		known, err := libraryRepo.ListPaths(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if known[relPath] {
@@ -160,7 +160,7 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 		// create their own duplicate collection — see its doc comment.
 		parentID, err := collectionsRepo.EnsureChain(ctx, segments)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -200,7 +200,7 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 		}
 		id, err := libraryRepo.Create(ctx, &item)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -226,13 +226,13 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 
 		created, err := libraryRepo.Get(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		resp, err := responder.Response(ctx, *created)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, resp)

@@ -952,268 +952,268 @@ func GetSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdl
 	return func(c *gin.Context) {
 		defaultQuality, err := repo.Get(c.Request.Context(), models.SettingDefaultQuality)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		defaultDownloadType, err := repo.Get(c.Request.Context(), models.SettingDefaultDownloadType)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		downloadTimeoutMinutes, err := DownloadTimeoutMinutes(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		ignoredFolders, err := ImportIgnoredFolders(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		anonymizeHistory, err := HistoryAnonymizeURLs(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		historyRetentionDays, err := HistoryRetentionDays(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		downloadLogRetentionDays, err := DownloadLogRetentionDays(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		libraryView, err := LibraryView(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		libraryMode, err := LibraryMode(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		libraryPaginationEnabled, err := LibraryPaginationEnabled(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		dashboardHiddenWidgets, err := DashboardHiddenWidgets(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		libraryPageSize, err := LibraryPageSize(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailFrameCount, err := ThumbnailFrameCount(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailFrameRangeLow, err := ThumbnailFrameRangeLow(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailFrameRangeHigh, err := ThumbnailFrameRangeHigh(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		imageConvertFormat, err := ImageConvertFormat(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		privacyEnabled, err := PrivacyEnabled(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		privacyBlurStrength, err := PrivacyBlurStrength(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		browseIgnorePrivacy, err := BrowseIgnorePrivacy(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		skipDownloadPreview, err := SkipDownloadPreview(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		jellyfinEnabled, err := JellyfinEnabled(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		jellyfinURL, err := repo.Get(c.Request.Context(), models.SettingJellyfinURL)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		jellyfinAPIKey, err := repo.Get(c.Request.Context(), models.SettingJellyfinAPIKey)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		jellyfinRefreshMode, err := JellyfinRefreshMode(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		libraryAutoplay, err := LibraryAutoplay(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		ytdlpCookiesBrowser, err := YtdlpCookiesBrowser(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		ytdlpCookiesProfile, err := YtdlpCookiesProfile(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		ytdlpCookiesFile, err := YtdlpCookiesFile(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		ytdlpProxy, err := YtdlpProxy(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		ytdlpRateLimit, err := YtdlpRateLimit(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		ytdlpRetries, err := YtdlpRetries(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		autoBackupIntervalHours, err := AutoBackupIntervalHours(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		backupRetentionCount, err := BackupRetentionCount(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		resolutionTierMediumEnabled, err := ResolutionTierMediumEnabled(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		resolutionThresholdLow, err := ResolutionThresholdLow(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		resolutionThresholdHigh, err := ResolutionThresholdHigh(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailResolutionTierMediumEnabled, err := ThumbnailResolutionTierMediumEnabled(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailResolutionThresholdLow, err := ThumbnailResolutionThresholdLow(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailResolutionThresholdHigh, err := ThumbnailResolutionThresholdHigh(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementEnabled, err := ThumbnailEnhancementEnabled(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementURL, err := repo.Get(c.Request.Context(), models.SettingThumbnailEnhancementURL)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementUsername, err := repo.Get(c.Request.Context(), models.SettingThumbnailEnhancementUsername)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementPassword, err := repo.Get(c.Request.Context(), models.SettingThumbnailEnhancementPassword)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementUpscaler, err := ThumbnailEnhancementUpscaler(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementMinDim, err := ThumbnailEnhancementMinDim(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementFactor, err := ThumbnailEnhancementFactor(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementTargetMode, err := ThumbnailEnhancementTargetMode(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementTargetDim, err := ThumbnailEnhancementTargetDim(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementScheduleEnabled, err := ThumbnailEnhancementScheduleEnabled(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementRetentionDays, err := ThumbnailEnhancementRetentionDays(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementAutoApprove, err := ThumbnailEnhancementAutoApprove(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementAutoOnDownload, err := ThumbnailEnhancementAutoOnDownload(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		thumbnailEnhancementMaxPerSweep, err := ThumbnailEnhancementMaxPerSweep(c.Request.Context(), repo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, SettingsResponse{
@@ -1323,7 +1323,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		if req.ImportIgnoredFolders != nil {
 			encoded, err := json.Marshal(*req.ImportIgnoredFolders)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			pending[models.SettingImportIgnoredFolders] = string(encoded)
@@ -1358,7 +1358,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				var err error
 				effectiveLow, err = ResolutionThresholdLow(c.Request.Context(), repo)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					writeServerError(c, err)
 					return
 				}
 			}
@@ -1369,7 +1369,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				var err error
 				effectiveHigh, err = ResolutionThresholdHigh(c.Request.Context(), repo)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					writeServerError(c, err)
 					return
 				}
 			}
@@ -1398,7 +1398,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				var err error
 				effectiveLow, err = ThumbnailResolutionThresholdLow(c.Request.Context(), repo)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					writeServerError(c, err)
 					return
 				}
 			}
@@ -1409,7 +1409,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				var err error
 				effectiveHigh, err = ThumbnailResolutionThresholdHigh(c.Request.Context(), repo)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					writeServerError(c, err)
 					return
 				}
 			}
@@ -1444,7 +1444,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 			}
 			encoded, err := json.Marshal(ids)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			pending[models.SettingDashboardHiddenWidgets] = string(encoded)
@@ -1463,7 +1463,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				var err error
 				effectiveLow, err = ThumbnailFrameRangeLow(c.Request.Context(), repo)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					writeServerError(c, err)
 					return
 				}
 			}
@@ -1474,7 +1474,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 				var err error
 				effectiveHigh, err = ThumbnailFrameRangeHigh(c.Request.Context(), repo)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					writeServerError(c, err)
 					return
 				}
 			}
@@ -1604,7 +1604,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 
 		if len(pending) > 0 {
 			if err := repo.SetMany(c.Request.Context(), pending); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 		}
@@ -1613,7 +1613,7 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		applySettingsSideEffects(pending, mgr, ytdlp)
 		if _, ok := pending[models.SettingYtdlpCookiesFile]; ok {
 			if _, err := SyncCookiesFile(c.Request.Context(), repo, ytdlp); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 		}

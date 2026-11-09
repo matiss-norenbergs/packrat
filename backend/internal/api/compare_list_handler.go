@@ -17,13 +17,13 @@ func ListCompareList(repo *repository.CompareListRepo, responder *ItemResponder)
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		out, err := responder.Responses(c.Request.Context(), rows)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, out)
@@ -40,7 +40,7 @@ func AddToCompareList(repo *repository.CompareListRepo) gin.HandlerFunc {
 			return
 		}
 		if err := repo.Add(c.Request.Context(), req.ItemIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -59,7 +59,7 @@ func RemoveFromCompareList(repo *repository.CompareListRepo) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "not in compare list"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -69,7 +69,7 @@ func RemoveFromCompareList(repo *repository.CompareListRepo) gin.HandlerFunc {
 func ClearCompareList(repo *repository.CompareListRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if err := repo.Clear(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)

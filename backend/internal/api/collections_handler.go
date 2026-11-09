@@ -23,22 +23,22 @@ func ListCollections(repo *repository.CollectionsRepo, libraryRepo *repository.L
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		itemCounts, err := repo.ItemCounts(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		ghostItemCounts, err := repo.GhostItemCounts(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		latestThumbnails, err := libraryRepo.LatestThumbnailsByCollection(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		ranges := make(map[int64]repository.SequenceRange, len(rows))
@@ -47,7 +47,7 @@ func ListCollections(repo *repository.CollectionsRepo, libraryRepo *repository.L
 		}
 		sequenceGaps, err := libraryRepo.SequenceGapsByCollection(c.Request.Context(), ranges)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		paths := collectionPaths(rows)
@@ -118,7 +118,7 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 				c.JSON(http.StatusBadRequest, gin.H{"error": "parent collection not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if _, err := pathsafe.ResolveUnderRoot(mgr.MediaRoot(), prospectivePath); err != nil {
@@ -152,7 +152,7 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 				c.JSON(http.StatusBadRequest, gin.H{"error": "parent collection not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -198,7 +198,7 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 				c.JSON(http.StatusNotFound, gin.H{"error": "collection not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -207,7 +207,7 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 		// media root.
 		prospectivePath, err := prospectiveCollectionPath(c.Request.Context(), repo, existing.ParentID, req.RootPath)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if _, err := pathsafe.ResolveUnderRoot(mgr.MediaRoot(), prospectivePath); err != nil {
@@ -239,7 +239,7 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -264,7 +264,7 @@ func DeleteCollection(repo *repository.CollectionsRepo, imagesRoot string) gin.H
 				c.JSON(http.StatusConflict, gin.H{"error": "collection has sub-collections — move or delete them first"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		removeDirBestEffort(filepath.Join(imagesRoot, "collections", strconv.FormatInt(id, 10)))
@@ -325,7 +325,7 @@ func BulkDeleteCollections(db *sql.DB, repo *repository.CollectionsRepo, imagesR
 
 		tx, err := db.BeginTx(c.Request.Context(), nil)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		defer tx.Rollback()
@@ -333,7 +333,7 @@ func BulkDeleteCollections(db *sql.DB, repo *repository.CollectionsRepo, imagesR
 
 		all, err := txRepo.List(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -348,7 +348,7 @@ func BulkDeleteCollections(db *sql.DB, repo *repository.CollectionsRepo, imagesR
 					resp.Skipped = append(resp.Skipped, id)
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			deletedIDs = append(deletedIDs, id)
@@ -356,7 +356,7 @@ func BulkDeleteCollections(db *sql.DB, repo *repository.CollectionsRepo, imagesR
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		for _, id := range deletedIDs {
