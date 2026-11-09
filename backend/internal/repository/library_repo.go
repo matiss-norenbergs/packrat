@@ -468,6 +468,21 @@ func (r *LibraryRepo) UpdateThumbnailTiers(ctx context.Context, id int64, small,
 	return checkRowsAffected(res)
 }
 
+// UpdateThumbnailAndTiers sets the sidecar thumbnail path, the small/medium
+// WebP derivative paths and the sidecar's probed pixel dimensions in ONE
+// statement, so the row's thumbnail, tiers and dimensions always change
+// together (or not at all). thumbnail may be nil (NULL) to clear the path.
+func (r *LibraryRepo) UpdateThumbnailAndTiers(ctx context.Context, id int64, thumbnail, small, medium *string, width, height *int) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE library SET thumbnail = ?, thumbnail_small_path = ?, thumbnail_medium_path = ?, thumbnail_width = ?, thumbnail_height = ? WHERE id = ?`,
+		thumbnail, small, medium, width, height, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating library thumbnail and tiers: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // UpdateThumbnailDimensions sets only the original thumbnail's probed pixel
 // dimensions, leaving the small/medium derivative paths untouched — used by
 // the backfill sweep for items that already have derivatives generated but

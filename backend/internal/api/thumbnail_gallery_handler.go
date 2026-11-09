@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
@@ -161,9 +162,9 @@ func ListLibraryThumbnailGallery(libraryRepo *repository.LibraryRepo, galleryRep
 
 // ApplyLibraryThumbnailFromGallery makes an already-saved gallery image the
 // item's active thumbnail — the gallery-side equivalent of SetLibraryThumbnail,
-// reusing the same writeThumbnailAndRespond finish (derivatives, stale
+// reusing the same writeThumbnailAndRespond finish (safe replace, stale
 // AI-enhancement backup cleanup, response shape).
-func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *repository.LibraryRepo, galleryRepo *repository.ThumbnailGalleryRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
+func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *repository.LibraryRepo, galleryRepo *repository.ThumbnailGalleryRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, locks *itemlock.Locks) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -222,12 +223,8 @@ func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, 
 			c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
 			return
 		}
-		if err := os.WriteFile(thumbAbs, data, 0o644); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
 
-		writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, id, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
+		writeThumbnailAndRespond(c, thumbnailCommit{libraryRepo, responder, originalsRepo, locks, mediaRoot, imagesRoot, ffmpegPath}, id, item.Path, thumbAbs, data, false)
 	}
 }
 

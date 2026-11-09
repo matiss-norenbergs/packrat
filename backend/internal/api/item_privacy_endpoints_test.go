@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/repository"
 )
 
@@ -86,7 +87,7 @@ func TestSetLibraryThumbnailBlurred(t *testing.T) {
 	body := map[string]any{"imageBase64": base64.StdEncoding.EncodeToString(raw)}
 
 	mount := func(r *gin.Engine) {
-		r.POST("/api/library/:id/thumbnail", SetLibraryThumbnail(f.mediaRoot, imagesRoot, "ffmpeg", f.library, f.responder(), repository.NewThumbnailEnhancementOriginalsRepo(conn)))
+		r.POST("/api/library/:id/thumbnail", SetLibraryThumbnail(f.mediaRoot, imagesRoot, "ffmpeg", f.library, f.responder(), repository.NewThumbnailEnhancementOriginalsRepo(conn), itemlock.New()))
 	}
 	want := map[int64]bool{s.inPrivateParent: true, s.privateTagged: true, s.plain: false}
 	for _, on := range []bool{false, true} {

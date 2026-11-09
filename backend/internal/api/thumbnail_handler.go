@@ -17,16 +17,15 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"packrat/backend/internal/downloader"
-	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/importer"
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/thumbnailenhance"
+	"packrat/backend/internal/thumbwrite"
 )
 
-var libraryThumbnailTiers = []imageproc.Tier{
-	{Name: "small", MaxWidth: imageproc.ThumbnailSmallWidth},
-	{Name: "medium", MaxWidth: imageproc.ThumbnailMediumWidth},
-}
+// libraryThumbnailTiers is the one shared tier set (see thumbwrite.Tiers).
+var libraryThumbnailTiers = thumbwrite.Tiers
 
 // endOfVideoGraceSeconds keeps the upper end of the pick range a fraction of
 // a second short of the true duration — an ffmpeg -ss seek to (or past)
@@ -135,10 +134,13 @@ func resolveDuration(ctx context.Context, known *int, mediaAbs, ffprobePath stri
 }
 
 // RedownloadLibraryThumbnail re-fetches just the thumbnail image from the
-// item's original URL, overwriting whatever is there now — reuses the same
-// YtDlpService.FetchThumbnail already used by Import. Ghost items (no file)
+// item's original URL and replaces the current one — reuses the same
+// YtDlpService.FetchThumbnail already used by Import, but yt-dlp runs in a
+// unique scratch directory (never next to the media file), and only the
+// resulting jpg's bytes go through the safe replace, so a failed fetch or
+// write leaves the current thumbnail exactly as it was. Ghost items (no file)
 // take the fetchGhostThumbnail route instead: resized tiers only.
-func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
+func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, locks *itemlock.Locks) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -194,22 +196,49 @@ func RedownloadLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 			c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
 			return
 		}
-		dir := filepath.Dir(mediaAbs)
-		base := strings.TrimSuffix(filepath.Base(mediaAbs), filepath.Ext(mediaAbs))
+		thumbAbs := thumbnailAbsPathFor(mediaAbs)
 
-		thumbPath, err := ytdlp.FetchThumbnail(ctx, *item.OriginalURL, dir, base)
+		// yt-dlp (and its converters) run in a scratch directory of their own
+		// and may leave intermediate files; the whole directory goes away on
+		// every path, so nothing from yt-dlp can remain next to the media file.
+		data, err := fetchThumbnailBytes(ctx, ytdlp, mediaRoot, *item.OriginalURL)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "fetching thumbnail: " + err.Error()})
 			return
 		}
 
-		writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, id, mediaRoot, imagesRoot, ytdlp.FFmpegPath, thumbPath)
+		writeThumbnailAndRespond(c, thumbnailCommit{libraryRepo, responder, originalsRepo, locks, mediaRoot, imagesRoot, ytdlp.FFmpegPath}, id, item.Path, thumbAbs, data, false)
 	}
+}
+
+// fetchThumbnailBytes runs yt-dlp's thumbnail fetch for url inside a fresh
+// scratch directory under the downloader's scratch area (.packrat-tmp, same
+// volume as the media root) and returns the jpg's bytes. The directory is
+// removed before returning, on success and on every error.
+func fetchThumbnailBytes(ctx context.Context, ytdlp *downloader.YtDlpService, mediaRoot, url string) ([]byte, error) {
+	tmpRoot := downloader.TrimTmpDir(mediaRoot)
+	if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
+		return nil, err
+	}
+	dir, err := os.MkdirTemp(tmpRoot, "thumb-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			log.Printf("library thumbnail: removing scratch directory %s failed: %v", dir, err)
+		}
+	}()
+	jpg, err := ytdlp.FetchThumbnail(ctx, url, dir, "thumbnail")
+	if err != nil {
+		return nil, err
+	}
+	return os.ReadFile(jpg)
 }
 
 // QuickGrabLibraryThumbnail extracts one frame from the video file at a
 // random timestamp and immediately makes it the thumbnail.
-func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, ffprobePath string, settingsRepo *repository.SettingsRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
+func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryRepo, ytdlp *downloader.YtDlpService, ffprobePath string, settingsRepo *repository.SettingsRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, locks *itemlock.Locks) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -261,12 +290,8 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 			c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
 			return
 		}
-		if err := os.WriteFile(thumbAbs, frame, 0o644); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
 
-		writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, id, mediaRoot, imagesRoot, ytdlp.FFmpegPath, thumbAbs)
+		writeThumbnailAndRespond(c, thumbnailCommit{libraryRepo, responder, originalsRepo, locks, mediaRoot, imagesRoot, ytdlp.FFmpegPath}, id, item.Path, thumbAbs, frame, false)
 	}
 }
 
@@ -494,7 +519,7 @@ func GetLibraryThumbnailCandidates(mediaRoot string, libraryRepo *repository.Lib
 // thumbnail — the finalize step for the "choose from video" flow (the
 // frontend sends back exactly the bytes it displayed, so no server-side
 // temp state is needed in between).
-func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *repository.LibraryRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo) gin.HandlerFunc {
+func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *repository.LibraryRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, locks *itemlock.Locks) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -540,12 +565,9 @@ func SetLibraryThumbnail(mediaRoot, imagesRoot, ffmpegPath string, libraryRepo *
 			c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemThumbnail})
 			return
 		}
-		if err := os.WriteFile(thumbAbs, data, 0o644); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
 
-		writeThumbnailAndRespond(c, libraryRepo, responder, originalsRepo, id, mediaRoot, imagesRoot, ffmpegPath, thumbAbs)
+		// The bytes come from the client: undecodable data is a 400.
+		writeThumbnailAndRespond(c, thumbnailCommit{libraryRepo, responder, originalsRepo, locks, mediaRoot, imagesRoot, ffmpegPath}, id, item.Path, thumbAbs, data, true)
 	}
 }
 
@@ -612,71 +634,95 @@ func DeleteLibraryItemThumbnail(mediaRoot, imagesRoot string, libraryRepo *repos
 	}
 }
 
-func writeThumbnailAndRespond(c *gin.Context, libraryRepo *repository.LibraryRepo, responder *ItemResponder, originalsRepo *repository.ThumbnailEnhancementOriginalsRepo, id int64, mediaRoot, imagesRoot, ffmpegPath, thumbAbs string) {
-	ctx := c.Request.Context()
+// thumbnailCommit bundles what the thumbnail-replacing handlers share.
+type thumbnailCommit struct {
+	libraryRepo   *repository.LibraryRepo
+	responder     *ItemResponder
+	originalsRepo *repository.ThumbnailEnhancementOriginalsRepo
+	locks         *itemlock.Locks
+	mediaRoot     string
+	imagesRoot    string
+	ffmpegPath    string
+}
 
-	existing, err := libraryRepo.Get(ctx, id)
+// errThumbnailBusy means another file-changing request holds the item.
+var errThumbnailBusy = errors.New(itemBusyMessage)
+
+// replaceThumbnail swaps data in as the item's sidecar thumbnail under the
+// item lock (the sidecar is a companion file of the media file, which a
+// concurrent rename/move relocates). Only the swap is locked — callers fetch
+// or extract the image before. mediaPath is the item's path as the caller saw
+// it; if it changed by the time the lock is held, the item is busy.
+func (tc thumbnailCommit) replaceThumbnail(ctx context.Context, id int64, mediaPath, thumbAbs string, data []byte) error {
+	if !tc.locks.TryLock(id) {
+		return errThumbnailBusy
+	}
+	defer tc.locks.Unlock(id)
+
+	current, err := tc.libraryRepo.Get(ctx, id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return err
+	}
+	if current.Path != mediaPath {
+		return errThumbnailBusy
 	}
 
-	// thumbAbs just overwrote whatever image was there — any AI-enhancement
-	// backup on file now describes a "before" unrelated to this new
-	// thumbnail. Clear it so Compare/Revert don't act on stale data
-	// (best-effort; ErrNotFound just means this item was never enhanced).
-	if err := thumbnailenhance.DeleteOriginal(ctx, thumbnailenhance.Deps{OriginalsRepo: originalsRepo, ImagesRoot: imagesRoot}, id); err != nil && !errors.Is(err, repository.ErrNotFound) {
+	thumbRel := toRelSlash(tc.mediaRoot, thumbAbs)
+	_, err = thumbwrite.Replace(ctx, thumbwrite.Params{
+		Repo:       tc.libraryRepo,
+		FFmpegPath: tc.ffmpegPath,
+		ImagesRoot: tc.imagesRoot,
+		ID:         id,
+		ThumbAbs:   thumbAbs,
+		ThumbRel:   &thumbRel,
+		Data:       data,
+	})
+	return err
+}
+
+// writeThumbnailAndRespond replaces the sidecar with data (see
+// thumbwrite.Replace for the order and the failure guarantee) and answers
+// with the updated item. Order here: (a) item lock, (b) safe replace, (c) only
+// after success clear the now-stale AI-enhancement backup, (d) respond. On any
+// failure nothing was changed and the AI backup is untouched. It reports
+// whether the 200 response was sent.
+//
+// Failures: busy item 409; with clientData, undecodable data 400; otherwise 500
+// with the error message.
+func writeThumbnailAndRespond(c *gin.Context, tc thumbnailCommit, id int64, mediaPath, thumbAbs string, data []byte, clientData bool) bool {
+	ctx := c.Request.Context()
+
+	if err := tc.replaceThumbnail(ctx, id, mediaPath, thumbAbs, data); err != nil {
+		switch {
+		case errors.Is(err, errThumbnailBusy):
+			writeItemBusy(c)
+		case clientData && errors.Is(err, thumbwrite.ErrNotAnImage):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "the data is not a decodable image"})
+		case errors.Is(err, repository.ErrNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return false
+	}
+
+	// The new image makes any AI-enhancement backup stale — its "before" is
+	// unrelated to this thumbnail. Clear it so Compare/Revert don't act on
+	// stale data (best-effort; ErrNotFound just means this item was never enhanced).
+	if err := thumbnailenhance.DeleteOriginal(ctx, thumbnailenhance.Deps{OriginalsRepo: tc.originalsRepo, ImagesRoot: tc.imagesRoot}, id); err != nil && !errors.Is(err, repository.ErrNotFound) {
 		log.Printf("library thumbnail: clearing stale AI-enhancement backup for item %d failed: %v", id, err)
 	}
 
-	thumbRel := toRelSlash(mediaRoot, thumbAbs)
-	if err := libraryRepo.UpdateThumbnail(ctx, id, &thumbRel); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	tiers, err := imageproc.GenerateTiersFromPath(ctx, ffmpegPath, imagesRoot, "library", id, thumbAbs, libraryThumbnailTiers)
+	updated, err := tc.libraryRepo.Get(ctx, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return false
 	}
-	small, medium := tiers[0], tiers[1]
-
-	// Clean up the old derivatives now that the DB will stop pointing at
-	// them (the original sidecar thumbnail itself is left alone here —
-	// thumbAbs already overwrote it in place, same file path as before).
-	for _, p := range []*string{existing.ThumbnailSmallPath, existing.ThumbnailMediumPath} {
-		if p == nil {
-			continue
-		}
-		abs := filepath.Join(imagesRoot, filepath.FromSlash(*p))
-		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
-			log.Printf("library thumbnail: failed to delete old derivative %s: %v", abs, err)
-		}
-	}
-
-	var width, height *int
-	if w, h, err := imageproc.ProbeDimensions(thumbAbs); err != nil {
-		log.Printf("library thumbnail: probing dimensions for item %d failed: %v", id, err)
-	} else {
-		width, height = &w, &h
-	}
-
-	if err := libraryRepo.UpdateThumbnailTiers(ctx, id, &small, &medium, width, height); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	updated, err := libraryRepo.Get(ctx, id)
+	resp, err := tc.responder.Response(ctx, *updated)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	resp, err := responder.Response(ctx, *updated)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return false
 	}
 	c.JSON(http.StatusOK, resp)
+	return true
 }

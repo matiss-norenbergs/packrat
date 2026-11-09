@@ -869,11 +869,13 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   `originalUrl`, overwriting the current one. Ghost items (no file) are accepted: only the resized
   `thumbnailSmallPath`/`thumbnailMediumPath` tiers are stored (plain `thumbnail` stays null). Responds
   with the updated item. `400` no source URL — or the item is an image (`mediaType=image`: its
-  thumbnail is the image file itself), `502` fetch failure.
+  thumbnail is the image file itself), `502` fetch failure, `409` the item is being updated (see
+  "Thumbnail writes" below). yt-dlp runs in a scratch directory and the result replaces the thumbnail
+  only if everything succeeds.
 - **`POST /api/library/:id/thumbnail/quick-grab`** — no body. Extracts one video frame at a random
   timestamp within the configured pick range (see `thumbnailFrameRangeLow`/`High` below; default
   5%-100% of duration, skipping the likely-blank intro) and sets it immediately. `502` if extraction
-  fails. `400` for an image item (its thumbnail is the image file itself).
+  fails. `400` for an image item (its thumbnail is the image file itself). `409` the item is being updated.
 - **`GET /api/library/:id/thumbnail/timestamps`** — read-only; extracts nothing. Picks the
   timestamps for a "choose from video" batch: `count` frames spread across the pick range, one
   random point per equal bucket. Optional query params `count` (1–50), `low` and `high` (percent of
@@ -894,8 +896,9 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   { "candidates": [ { "timestampSeconds": 34.2, "imageBase64": "/9j/4AAQ..." } ] }
   ```
 - **`POST /api/library/:id/thumbnail`** — `{ "imageBase64": "/9j/4AAQ..." }`. Writes the given
-  bytes as the thumbnail — finalize step for "choose from video." `400` invalid base64. All three
-  thumbnail endpoints respond `200` with the full updated library item. For an **image item**
+  bytes as the thumbnail — finalize step for "choose from video." `400` invalid base64, or
+  `{"error": "the data is not a decodable image"}` when the bytes are not a JPEG/PNG (nothing is changed);
+  `409` the item is being updated. All thumbnail endpoints respond `200` with the full updated library item. For an **image item**
   (`mediaType=image`) the bytes only regenerate the small/medium tiers (`thumbnailSmallPath`/
   `thumbnailMediumPath`, stale tiers and AI-enhancement backup removed); the media file and `thumbnail`
   are never written.
@@ -904,6 +907,13 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   compare against or revert onto). `400` for an image item (`"an image item's thumbnail is the image
   file itself"` — the thumbnail would be the image), `404` unknown item,
   `204` on success.
+
+**Thumbnail writes.** Set thumbnail, Quick Grab, Redownload, gallery apply and frame-match accept replace
+the sidecar through one safe path (`internal/thumbwrite`, see `docs/architecture.md`): a failure at any
+step answers an error and leaves the sidecar, the small/medium versions, the row and the AI-enhancement
+backup as they were. They hold the item lock only for the swap, so a request that finds the item busy
+(a rename/move/remux in progress) answers **`409 {"error": "This item is being updated. Try again in a
+moment."}`** and changes nothing. Failures other than those listed per endpoint answer `500` with the error message.
 
 ### Thumbnail gallery
 
@@ -936,7 +946,7 @@ re-extracting/re-fetching. Cascade-deleted with the library item.
   image the item's active thumbnail (same finish as `POST .../thumbnail`: regenerates derivatives,
   clears any stale AI-enhancement backup; for an image item only the tiers change, as for
   `POST .../thumbnail`). `400` item has no media file, or `galleryId` belongs to a
-  different item; `404` unknown gallery id/item. `200` with the full updated library item.
+  different item; `404` unknown gallery id/item; `409` the item is being updated. `200` with the full updated library item.
 - **`POST /api/library/:id/thumbnail/gallery/bulk-favorite`** — body
   `{ "galleryIds": [12, 13], "isFavorite": true }`. All-or-nothing: a gallery id that belongs to a
   different item **or does not exist** fails the whole request with `400 {"error": "...",
@@ -998,7 +1008,7 @@ candidates), **not** duplicate-video detection. Two independent flows: a single-
 - **`POST /api/frame-match/queue/:id/accept`** — no body. Writes the row's found frame as the
   item's active thumbnail (same commit path as `SetLibraryThumbnail`/gallery-apply), then deletes
   the queue row and its snapshot images — a working queue, not a history. `409` row isn't
-  `state="done"`, `400` item has no media file (an image item takes the tiers-only route), `200` with the full updated library item.
+  `state="done"` or the item is being updated (the queue row is kept), `400` item has no media file (an image item takes the tiers-only route), `500` the write failed (nothing changed, queue row kept), `200` with the full updated library item.
 - **`DELETE /api/frame-match/queue/:id`** — no body. Removes the row and its snapshot files without
   touching the item's thumbnail; also cancels a still-running row. `404` unknown id, `204`.
 

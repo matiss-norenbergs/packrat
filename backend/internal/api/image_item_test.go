@@ -127,7 +127,7 @@ func TestImageItemRejectedEndpoints(t *testing.T) {
 			return code
 		},
 		"quickgrab": func() int {
-			h := QuickGrabLibraryThumbnail(e.mediaRoot, e.imagesRoot, e.library, ytdlp, "ffprobe", repository.NewSettingsRepo(e.conn), e.responder(), e.originals)
+			h := QuickGrabLibraryThumbnail(e.mediaRoot, e.imagesRoot, e.library, ytdlp, "ffprobe", repository.NewSettingsRepo(e.conn), e.responder(), e.originals, e.mgr.ItemLocks())
 			return e.do(t, h, http.MethodPost, fmt.Sprintf("/library/%d/thumbnail/quick-grab", s.id), "/library/:id/thumbnail/quick-grab", "").Code
 		},
 		"framematch": func() int {
@@ -175,7 +175,7 @@ func TestImageItemSetThumbnailIsTiersOnly(t *testing.T) {
 				var code int
 				var body string
 				if via == "set" {
-					h := SetLibraryThumbnail(e.mediaRoot, e.imagesRoot, "ffmpeg", e.library, e.responder(), e.originals)
+					h := SetLibraryThumbnail(e.mediaRoot, e.imagesRoot, "ffmpeg", e.library, e.responder(), e.originals, e.mgr.ItemLocks())
 					w := e.do(t, h, http.MethodPut, fmt.Sprintf("/library/%d/thumbnail", s.id), "/library/:id/thumbnail",
 						fmt.Sprintf(`{"imageBase64":%q}`, base64.StdEncoding.EncodeToString(data)))
 					code, body = w.Code, w.Body.String()
@@ -192,7 +192,7 @@ func TestImageItemSetThumbnailIsTiersOnly(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					h := ApplyLibraryThumbnailFromGallery(e.mediaRoot, e.imagesRoot, "ffmpeg", e.library, gal, e.responder(), e.originals)
+					h := ApplyLibraryThumbnailFromGallery(e.mediaRoot, e.imagesRoot, "ffmpeg", e.library, gal, e.responder(), e.originals, e.mgr.ItemLocks())
 					w := e.do(t, h, http.MethodPost, fmt.Sprintf("/library/%d/thumbnail/gallery/%d/apply", s.id, gid), "/library/:id/thumbnail/gallery/:galleryId/apply", "")
 					code, body = w.Code, w.Body.String()
 				}
