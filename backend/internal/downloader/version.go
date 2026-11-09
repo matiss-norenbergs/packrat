@@ -3,10 +3,12 @@ package downloader
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -67,7 +69,22 @@ func (s *YtDlpService) LatestVersion(ctx context.Context) (string, error) {
 	return parsed.Info.Version, nil
 }
 
-const updateTimeout = 2 * time.Minute
+// updateTimeout bounds one pip run of the yt-dlp update (the upgrade, and separately the repair).
+// Generous on purpose: killing pip between "uninstall old" and "install new" leaves no yt-dlp, so
+// a slow link must not be cut off mid-install. A variable only so tests can shorten it.
+const defaultUpdateTimeout = 5 * time.Minute
+
+// defaultUpdateStopGrace is how long pip gets after SIGINT to roll back its own uninstall before
+// the process tree is killed.
+const defaultUpdateStopGrace = 20 * time.Second
+
+var (
+	updateTimeout   = defaultUpdateTimeout
+	updateStopGrace = defaultUpdateStopGrace
+)
+
+// ErrUpdateInProgress is returned by Update when another update (or repair) is still running.
+var ErrUpdateInProgress = errors.New("yt-dlp is already being updated. Try again in a moment.")
 
 // Update runs `pip install --upgrade --break-system-packages yt-dlp` and, on success, returns the
 // new version by calling Version again. If pip rejects --break-system-packages (older pip that
@@ -75,31 +92,106 @@ const updateTimeout = 2 * time.Minute
 // pip that doesn't need or recognize it. Deliberately goes through pip (the tool that actually
 // installed yt-dlp here) rather than yt-dlp's own -U/--update, which is documented as unreliable
 // for pip installs — it only reliably self-replaces standalone release binaries.
+//
+// Safety, because pip uninstalls the old package before installing the new one:
+//   - One update at a time (TryLock); a concurrent call returns ErrUpdateInProgress.
+//   - The pip work runs on a context detached from ctx (context.WithoutCancel) with its own
+//     timeout, so a closed tab or cancelled request never stops it.
+//   - Stopping (timeout) sends SIGINT first so pip can roll back, and only kills after a grace.
+//   - After a failed or timed-out update, if yt-dlp no longer runs, one bounded
+//     `pip install --force-reinstall yt-dlp` is attempted, and the error says what happened.
 func (s *YtDlpService) Update(ctx context.Context) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, updateTimeout)
-	defer cancel()
-
-	out, err := s.runPipUpgrade(ctx, true)
-	if err != nil && strings.Contains(strings.ToLower(out), "no such option") {
-		out, err = s.runPipUpgrade(ctx, false)
+	if !s.updateMu.TryLock() {
+		return "", ErrUpdateInProgress
 	}
+	defer s.updateMu.Unlock()
+
+	base := context.WithoutCancel(ctx)
+
+	upCtx, cancel := context.WithTimeout(base, updateTimeout)
+	out, err := s.runPip(upCtx, "--upgrade")
+	cancel()
 	if err != nil {
-		return "", fmt.Errorf("updating yt-dlp: %w: %s", err, strings.TrimSpace(out))
+		upErr := fmt.Errorf("updating yt-dlp: %w: %s", err, strings.TrimSpace(out))
+		if _, verr := s.Version(base); verr == nil {
+			return "", upErr
+		}
+		return "", s.repair(base, upErr)
 	}
 
-	return s.Version(ctx)
+	return s.Version(base)
 }
 
-func (s *YtDlpService) runPipUpgrade(ctx context.Context, breakSystemPackages bool) (string, error) {
-	args := []string{"install", "--upgrade"}
+// repair reinstalls yt-dlp after a failed update left it unusable, and returns upErr annotated
+// with the outcome. The update lock is held by the caller.
+func (s *YtDlpService) repair(base context.Context, upErr error) error {
+	rCtx, cancel := context.WithTimeout(base, updateTimeout)
+	defer cancel()
+	out, err := s.runPip(rCtx, "--force-reinstall")
+	if err == nil {
+		_, err = s.Version(base)
+	}
+	if err != nil {
+		return fmt.Errorf("%w; the update failed and yt-dlp could not be repaired: %v %s", upErr, err, strings.TrimSpace(out))
+	}
+	return fmt.Errorf("%w; the update failed and yt-dlp was reinstalled", upErr)
+}
+
+// runPip runs `pip install <mode> [--break-system-packages] yt-dlp`, retrying once without the
+// flag when pip does not know it.
+func (s *YtDlpService) runPip(ctx context.Context, mode string) (string, error) {
+	out, err := s.runPipOnce(ctx, mode, true)
+	if err != nil && strings.Contains(strings.ToLower(out), "no such option") {
+		out, err = s.runPipOnce(ctx, mode, false)
+	}
+	return out, err
+}
+
+func (s *YtDlpService) runPipOnce(ctx context.Context, mode string, breakSystemPackages bool) (string, error) {
+	args := []string{"install", mode}
 	if breakSystemPackages {
 		args = append(args, "--break-system-packages")
 	}
 	args = append(args, "yt-dlp")
 
-	cmd := exec.CommandContext(ctx, s.PipPath, args...)
+	cmd, done := newGracefulStopCmd(ctx, updateStopGrace, s.PipPath, args...)
+	defer done()
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// newGracefulStopCmd is newTreeKillCmd's gentler sibling for commands that must not be
+// SIGKILLed first (pip mid-install): on cancel/timeout it sends SIGINT to the process group
+// (a plain kill on Windows, which has no child SIGINT), then kills the tree if it is still
+// alive after grace. The returned func must be called once the command has finished; it
+// disarms the pending kill.
+func newGracefulStopCmd(ctx context.Context, grace time.Duration, name string, args ...string) (*exec.Cmd, func()) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	configureProcessGroup(cmd)
+	var (
+		mu    sync.Mutex
+		timer *time.Timer
+		over  bool
+	)
+	cmd.Cancel = func() error {
+		err := interruptProcessTree(cmd)
+		mu.Lock()
+		defer mu.Unlock()
+		if !over {
+			timer = time.AfterFunc(grace, func() { _ = killProcessTree(cmd) })
+		}
+		return err
+	}
+	// Backstop only: the timer above kills the tree first; this closes pipes held by strays.
+	cmd.WaitDelay = grace + processTreeKillGrace
+	return cmd, func() {
+		mu.Lock()
+		defer mu.Unlock()
+		over = true
+		if timer != nil {
+			timer.Stop()
+		}
+	}
 }
 
 // VersionsEqual compares a yt-dlp --version string (zero-padded date, e.g.

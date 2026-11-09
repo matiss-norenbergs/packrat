@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
@@ -674,19 +675,29 @@ func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item
 		return recordFailure(ctx, deps, entry, broadcast, fmt.Errorf("upscaling: %w", err))
 	}
 
+	// backupCreated is true only when THIS run wrote the backup, so a failed run removes exactly
+	// that one and never an older (true original) backup from an earlier enhancement.
+	backupCreated := false
 	if !cfg.autoApprove {
 		// Best-effort — a backup failure shouldn't block the enhancement
 		// itself, same tolerance the derivative-cleanup step below already
 		// gets. Only ever runs once per item: backupOriginalIfAbsent no-ops
 		// if a backup already exists, so re-enhancing an item later never
 		// clobbers the true original with an already-enhanced version.
-		if err := backupOriginalIfAbsent(ctx, deps, item.ID, original); err != nil {
+		created, err := backupOriginalIfAbsent(ctx, deps, item.ID, original)
+		if err != nil {
 			log.Printf("thumbnailenhance: item %d: backing up original thumbnail failed: %v", item.ID, err)
 		}
+		backupCreated = created
 	}
 
 	newW, newH, newSize, err := writeThumbnailFile(ctx, deps, item.ID, thumbAbs, upscaled)
 	if err != nil {
+		// writeThumbnailFile leaves the thumbnail untouched on error, so a backup made for this
+		// run would offer a "Revert" to an identical image — take it back out.
+		if backupCreated {
+			removeBackup(context.WithoutCancel(ctx), deps, item.ID)
+		}
 		return recordFailure(ctx, deps, entry, broadcast, fmt.Errorf("writing enhanced thumbnail: %w", err))
 	}
 
@@ -719,50 +730,128 @@ func recordFailure(ctx context.Context, deps Deps, entry *models.ThumbnailEnhanc
 // re-enhance must never reuse a stale browser-cached URL). No-ops if a
 // backup already exists for this item, so the original is only ever
 // captured once — the true pre-AI version, not whatever it looked like
-// before the most recent re-enhancement.
-func backupOriginalIfAbsent(ctx context.Context, deps Deps, id int64, originalData []byte) error {
+// before the most recent re-enhancement. created reports whether this call
+// wrote the backup (false for the no-op and for any error).
+func backupOriginalIfAbsent(ctx context.Context, deps Deps, id int64, originalData []byte) (created bool, err error) {
 	if _, err := deps.OriginalsRepo.Get(ctx, id); err == nil {
-		return nil
+		return false, nil
 	} else if !errors.Is(err, repository.ErrNotFound) {
-		return err
+		return false, err
 	}
 
 	destDir := filepath.Join(deps.ImagesRoot, "library", strconv.FormatInt(id, 10), "original")
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return fmt.Errorf("creating original backup dir: %w", err)
+		return false, fmt.Errorf("creating original backup dir: %w", err)
 	}
 	destAbs := filepath.Join(destDir, uuid.NewString()+".jpg")
 	if err := os.WriteFile(destAbs, originalData, 0o644); err != nil {
-		return fmt.Errorf("writing original backup: %w", err)
+		os.Remove(destAbs)
+		return false, fmt.Errorf("writing original backup: %w", err)
 	}
 	rel, err := filepath.Rel(deps.ImagesRoot, destAbs)
 	if err != nil {
-		return fmt.Errorf("computing original backup relative path: %w", err)
+		os.Remove(destAbs)
+		return false, fmt.Errorf("computing original backup relative path: %w", err)
 	}
-	return deps.OriginalsRepo.Create(ctx, id, filepath.ToSlash(rel))
+	if err := deps.OriginalsRepo.Create(ctx, id, filepath.ToSlash(rel)); err != nil {
+		os.Remove(destAbs)
+		return false, err
+	}
+	return true, nil
 }
 
-// writeThumbnailFile duplicates writeThumbnailAndRespond's core
-// (api.thumbnail_handler) — write the new image over the original sidecar
-// path, regenerate WebP tiers, update the library row, clean up the old
-// derivatives. Gin-context-free so it's callable from a background sweep,
-// and shared between enhancement (writes the upscaled result) and revert
-// (writes the backed-up original back).
+// removeBackup deletes the item's backup file and row (best effort, logged).
+func removeBackup(ctx context.Context, deps Deps, id int64) {
+	rel, err := deps.OriginalsRepo.Get(ctx, id)
+	if err != nil {
+		return
+	}
+	if err := os.Remove(filepath.Join(deps.ImagesRoot, filepath.FromSlash(rel))); err != nil && !os.IsNotExist(err) {
+		log.Printf("thumbnailenhance: item %d: removing unused original backup failed: %v", id, err)
+	}
+	if err := deps.OriginalsRepo.Delete(ctx, id); err != nil {
+		log.Printf("thumbnailenhance: item %d: removing unused original backup row failed: %v", id, err)
+	}
+}
+
+// Seams for the failure-injection tests; production always uses the defaults.
+var (
+	renameFile  = os.Rename
+	updateTiers = func(ctx context.Context, repo *repository.LibraryRepo, id int64, small, medium *string, w, h *int) error {
+		return repo.UpdateThumbnailTiers(ctx, id, small, medium, w, h)
+	}
+)
+
+// writeThumbnailFile replaces an item's sidecar thumbnail with data and
+// regenerates its WebP tiers, without ever leaving the item half-changed.
+// Gin-context-free so it's callable from a background sweep, and shared
+// between enhancement (writes the upscaled result) and revert (writes the
+// backed-up original back). It duplicates the core of
+// writeThumbnailAndRespond (api.thumbnail_handler), which still writes in place.
+//
+// Order — everything that can fail happens before the sidecar is touched:
+//
+//	a. write data to a temp file next to the sidecar (.packrat-thumb-*, same filesystem)
+//	b. probe the temp file — garbage that isn't an image stops here
+//	c. generate the tiers from the temp file (new uuid file names, nothing overwritten)
+//	d. point the database at the new tiers and dimensions
+//	e. rename the temp file over the sidecar (atomic); if that fails, restore the row
+//	f. only then delete the old derivative files (best effort)
+//
+// On any error before (f) the sidecar, the old derivatives and the library
+// row are as they were, and the temp file and new tier files are removed.
 func writeThumbnailFile(ctx context.Context, deps Deps, id int64, thumbAbs string, data []byte) (width, height int, size int64, err error) {
 	existing, err := deps.LibraryRepo.Get(ctx, id)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("reloading item: %w", err)
 	}
 
-	if err := os.WriteFile(thumbAbs, data, 0o644); err != nil {
-		return 0, 0, 0, fmt.Errorf("writing thumbnail file: %w", err)
+	tmpAbs, err := writeSiblingTemp(thumbAbs, data)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			os.Remove(tmpAbs)
+		}
+	}()
+
+	w, h, s, err := probeImage(tmpAbs)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("probing enhanced thumbnail: %w", err)
 	}
 
-	tiers, err := imageproc.GenerateTiersFromPath(ctx, deps.FFmpegPath, deps.ImagesRoot, "library", id, thumbAbs, thumbnailTiers)
+	tiers, err := imageproc.GenerateTiersFromPath(ctx, deps.FFmpegPath, deps.ImagesRoot, "library", id, tmpAbs, thumbnailTiers)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("generating thumbnail derivatives: %w", err)
 	}
 	small, medium := tiers[0], tiers[1]
+	removeNewTiers := func() {
+		for _, rel := range tiers {
+			if err := os.Remove(filepath.Join(deps.ImagesRoot, filepath.FromSlash(rel))); err != nil && !os.IsNotExist(err) {
+				log.Printf("thumbnailenhance: item %d: removing unused new derivative %s failed: %v", id, rel, err)
+			}
+		}
+	}
+
+	if err := updateTiers(ctx, deps.LibraryRepo, id, &small, &medium, &w, &h); err != nil {
+		removeNewTiers()
+		return 0, 0, 0, fmt.Errorf("updating thumbnail tiers: %w", err)
+	}
+
+	if err := renameFile(tmpAbs, thumbAbs); err != nil {
+		// Put the row back before anything is deleted: the old derivatives still exist.
+		if rerr := updateTiers(context.WithoutCancel(ctx), deps.LibraryRepo, id,
+			existing.ThumbnailSmallPath, existing.ThumbnailMediumPath, existing.ThumbnailWidth, existing.ThumbnailHeight); rerr != nil {
+			// The row still names the new tiers, so they must stay on disk.
+			log.Printf("thumbnailenhance: item %d: restoring thumbnail tiers after a failed rename failed: %v", id, rerr)
+		} else {
+			removeNewTiers()
+		}
+		return 0, 0, 0, fmt.Errorf("replacing thumbnail file: %w", err)
+	}
+	committed = true
 
 	for _, p := range []*string{existing.ThumbnailSmallPath, existing.ThumbnailMediumPath} {
 		if p == nil {
@@ -774,16 +863,48 @@ func writeThumbnailFile(ctx context.Context, deps Deps, id int64, thumbAbs strin
 		}
 	}
 
-	w, h, s, err := probeImage(thumbAbs)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("probing enhanced thumbnail: %w", err)
-	}
-
-	if err := deps.LibraryRepo.UpdateThumbnailTiers(ctx, id, &small, &medium, &w, &h); err != nil {
-		return 0, 0, 0, fmt.Errorf("updating thumbnail tiers: %w", err)
-	}
-
 	return w, h, s, nil
+}
+
+// writeSiblingTemp writes data to a new ".packrat-thumb-<random><ext>" file in
+// the sidecar's own directory (same filesystem, so the final rename is atomic),
+// with the sidecar's permissions (0644 when it doesn't exist), and returns its
+// path. The file is removed on any error. Abandoned ones (a crash) are removed
+// at startup by fsutil.CleanStaleEmbedTemps and ignored by the importer scan.
+func writeSiblingTemp(thumbAbs string, data []byte) (string, error) {
+	ext := filepath.Ext(thumbAbs)
+	if ext == "" {
+		ext = ".jpg"
+	}
+	perm := os.FileMode(0o644)
+	if info, err := os.Stat(thumbAbs); err == nil {
+		perm = info.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(thumbAbs), fsutil.ThumbTmpPrefix+"*"+ext)
+	if err != nil {
+		return "", fmt.Errorf("creating temp thumbnail file: %w", err)
+	}
+	tmpAbs := tmp.Name()
+	fail := func(err error) (string, error) {
+		tmp.Close()
+		os.Remove(tmpAbs)
+		return "", fmt.Errorf("writing temp thumbnail file: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpAbs)
+		return "", fmt.Errorf("writing temp thumbnail file: %w", err)
+	}
+	if err := os.Chmod(tmpAbs, perm); err != nil {
+		os.Remove(tmpAbs)
+		return "", fmt.Errorf("writing temp thumbnail file: %w", err)
+	}
+	return tmpAbs, nil
 }
 
 // probeImage reads an image file's dimensions (header only, no full decode)

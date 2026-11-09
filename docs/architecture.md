@@ -542,6 +542,31 @@ independent of any actual download or preview happening.
   the body is counted while streaming and fails with "image larger than the N MB limit" (`Fetch` removes
   its temp file; `Open`'s body returns that error so a stream can't outlive the preview timeout window).
 
+## The yt-dlp update (`YtDlpService.Update`)
+
+`POST /api/ytdlp/update` runs `pip install --upgrade [--break-system-packages] yt-dlp`. Because pip
+removes the old package before it installs the new one, killing it in the middle leaves a container
+with no yt-dlp at all, so the flow is built to never do that:
+
+- **One at a time.** `Update` takes `updateMu.TryLock()`; a second request while one is running (a
+  double click, a second tab) gets `ErrUpdateInProgress`, which the handler maps to `409` ("yt-dlp is
+  already being updated. Try again in a moment."). The lock is held until the update, including the
+  repair below, has ended.
+- **Detached from the request.** pip runs on `context.WithoutCancel(requestCtx)` with its own
+  timeout (`updateTimeout`, 5 minutes — a slow link must not be cut off mid-install), so closing the
+  tab never stops it. The handler records the system-log event on the same detached context, so the
+  result is logged and the user sees the new version when they come back.
+- **SIGINT, then kill.** When the timeout fires, `newGracefulStopCmd` sends SIGINT to the pip process
+  group (like Ctrl-C, so pip can roll back its own uninstall) and only kills the group if it is still
+  alive after `updateStopGrace` (20 s). Unlike `newTreeKillCmd` (SIGKILL straight away, used for
+  yt-dlp/ffmpeg) this is for a command that must not be killed first. Windows has no SIGINT for a
+  child process, so there it is the same forced tree kill.
+- **Self-heal.** After a failed or timed-out update the service runs `yt-dlp --version`. If yt-dlp
+  still works nothing more happens. If not, one bounded `pip install --force-reinstall yt-dlp` runs
+  (same lock, same detached-context and timeout rules, same `--break-system-packages` retry) and the
+  error says what happened: "...the update failed and yt-dlp was reinstalled" or "...the update
+  failed and yt-dlp could not be repaired: ...". Both are still `502`.
+
 ## Renaming and moving an item's files (`fsutil.RenameAll`)
 
 Rename (the Edit dialog's filename) and Move relocate more than the media file: the thumbnail and the
@@ -870,6 +895,42 @@ URL-fetched thumbnail (which only ever gets derivative tiers) can be saved to it
 a gallery image reuses the same `writeThumbnailAndRespond` finish path as `SetLibraryThumbnail` and
 Frame Matching's accept action, keeping derivatives and stale AI-enhancement backups consistent
 across all three thumbnail-setting entry points.
+
+## Replacing a sidecar thumbnail safely (`thumbnailenhance.writeThumbnailFile`)
+
+AI enhancement and Revert replace an item's sidecar thumbnail (the file Jellyfin reads) and its
+small/medium WebP derivatives. Nothing is changed until everything that can fail has succeeded:
+
+1. Write the bytes to a temp file in the **same directory** as the sidecar (same filesystem, so the
+   final rename is atomic): `os.CreateTemp` → `.packrat-thumb-<random><ext>`, permissions copied from
+   the existing sidecar (0644 if none).
+2. Probe the temp file (`image.DecodeConfig`) — upscaler garbage stops here.
+3. Generate the tiers **from the temp file** (new uuid file names; the old derivatives are not touched).
+4. `UpdateThumbnailTiers` points the row at the new tiers and dimensions.
+5. Rename the temp file over the sidecar. If that fails, the row is put back to the previous tier
+   paths/dimensions and the new tier files are deleted (if even that restore fails it is logged and the
+   new tiers are kept, since the row names them).
+6. Only now delete the old derivative files (best effort, as before).
+
+| Fails at | State left |
+|---|---|
+| 1, 2, 3 | sidecar, old derivatives and row untouched; temp file and any new tiers removed |
+| 4 | same (new tiers and temp removed) |
+| 5 | sidecar and old derivatives untouched, row restored, new tiers and temp removed |
+| 6 | enhancement done; an old derivative may linger (logged) |
+
+So a `failed` history row means the thumbnail was not changed, with or without auto-approve.
+`enhanceOne` backs the original up *before* writing (`backupOriginalIfAbsent` now reports whether it
+created the backup); if the write fails, a backup created by that run is removed again (an earlier
+run's backup never is), so a failed run offers no "Revert". `renameFile` and `updateTiers` are
+package variables only so tests can inject failures.
+
+**Temp file name and cleanup.** `fsutil.ThumbTmpPrefix` (`.packrat-thumb-`) + random letters/digits +
+the sidecar's extension; `fsutil.IsThumbTmpName` matches that exact shape (`IsInternalTmpName` = this or
+the metadata-embed temp). A crash between steps 1 and 5 leaves such a file; the importer scan and the
+stray-files scan ignore it, and the startup `fsutil.CleanStaleEmbedTemps` (regular files only, older
+than 5 minutes) removes abandoned ones along with `.packrat-embed-*`. `writeThumbnailAndRespond` (Set
+thumbnail, Redownload, Gallery apply, Frame-match accept) does **not** use this yet.
 
 ## Frame matching
 

@@ -37,6 +37,7 @@ import (
 	"strings"
 	"time"
 
+	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/pathsafe"
 )
 
@@ -430,6 +431,11 @@ func scanMedia(ctx context.Context, cfg Config, now time.Time) ([]Entry, error) 
 		}
 		rel, err := filepath.Rel(root, p)
 		if err != nil {
+			return nil
+		}
+		// An in-flight enhancement copy (.packrat-thumb-*) is never a stray; startup
+		// cleanup removes abandoned ones (fsutil.CleanStaleEmbedTemps).
+		if fsutil.IsThumbTmpName(d.Name()) {
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
