@@ -48,8 +48,9 @@ func Scan(mediaRoot string, known map[string]bool) ([]ScannedFile, error) {
 		}
 
 		// EmbedMetadata's in-flight (or crash-leftover) remux output keeps the
-		// media extension and would otherwise import as a duplicate item.
-		if fsutil.IsEmbedTmpName(d.Name()) {
+		// media extension and would otherwise import as a duplicate item; the
+		// enhancement's ".packrat-thumb-*" copy keeps the image extension.
+		if fsutil.IsInternalTmpName(d.Name()) {
 			return nil
 		}
 

@@ -54,3 +54,52 @@ func TestCleanStaleEmbedTemps(t *testing.T) {
 		}
 	}
 }
+
+func TestIsThumbTmpName(t *testing.T) {
+	yes := []string{".packrat-thumb-123456.jpg", ".packrat-thumb-1.png", ".packrat-thumb-ab12Cd.webp"}
+	no := []string{"Video.jpg", ".packrat-thumb-.jpg", ".packrat-thumb-12-3.jpg", ".packrat-thumb-123", "x.packrat-thumb-1.jpg", "packrat-thumb-1.jpg", ".packrat-thumb-1/2.jpg"}
+	for _, n := range yes {
+		if !IsThumbTmpName(n) || !IsInternalTmpName(n) {
+			t.Errorf("%q should be a thumb temp name", n)
+		}
+	}
+	for _, n := range no {
+		if IsThumbTmpName(n) {
+			t.Errorf("IsThumbTmpName(%q) = true, want false", n)
+		}
+	}
+	if IsThumbTmpName(".packrat-embed-1.mp4") || !IsInternalTmpName(".packrat-embed-1.mp4") {
+		t.Error("embed names are internal temp names but not thumb temp names")
+	}
+}
+
+// A crash between creating the sidecar copy and renaming it leaves a .packrat-thumb-* file.
+func TestCleanStaleEmbedTempsRemovesAbandonedThumbTemps(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "show")
+	os.MkdirAll(sub, 0o755)
+	old := time.Now().Add(-time.Hour)
+	mk := func(p string, age time.Time) string {
+		os.WriteFile(p, []byte("x"), 0o644)
+		os.Chtimes(p, age, age)
+		return p
+	}
+	stale := mk(filepath.Join(sub, ".packrat-thumb-4242.jpg"), old)
+	fresh := mk(filepath.Join(sub, ".packrat-thumb-7.jpg"), time.Now())
+	sidecar := mk(filepath.Join(sub, "Video.jpg"), old)
+	lookalike := mk(filepath.Join(sub, "my.packrat-thumb-1.jpg"), old)
+	dir := filepath.Join(root, ".packrat-thumb-9.png")
+	os.MkdirAll(dir, 0o755)
+
+	if n := CleanStaleEmbedTemps(root, 5*time.Minute); n != 1 {
+		t.Fatalf("removed %d, want 1", n)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Error("stale thumb temp should be gone")
+	}
+	for _, p := range []string{fresh, sidecar, lookalike, dir} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s should remain: %v", p, err)
+		}
+	}
+}

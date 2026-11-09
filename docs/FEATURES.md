@@ -1012,6 +1012,12 @@ model, scaling mode, minimum-dimension threshold below which a thumbnail is cons
   hashed title is plain text rather than a link. Rows whose item was deleted are never hashed. The
   Eligible Items and Compare dialogs and the search box are not blurred (yet): search still matches
   real titles.
+- **A failed run changes nothing** — the enhanced image is written to a temporary copy next to the
+  thumbnail and checked (it must be a readable image, its small/medium versions must generate, the
+  database must accept them) before it replaces the thumbnail. If any step fails, the history row says
+  "failed" and the thumbnail, its small/medium versions and the item are exactly as they were (even with
+  auto-approve on), no Revert is offered for a run that changed nothing, and no leftover files remain.
+  Revert uses the same safe replacement.
 - **Compare / Revert** — a successful enhancement keeps the pre-enhancement thumbnail as a backup
   (unless "Auto-approve enhanced thumbnails" is on, which skips the backup entirely — no
   Compare/Revert for that item afterward). From the history table's Compare action: "Keep Original"

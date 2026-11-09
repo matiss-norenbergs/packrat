@@ -354,3 +354,15 @@ func TestMediaTempFilesHeldBackWhileDownloadActive(t *testing.T) {
 		t.Error("nil guard should behave as nothing active")
 	}
 }
+
+// An abandoned enhancement temp copy is cleaned at startup, never offered as a stray — even next
+// to an orphan .nfo of the same stem, which would otherwise flag a lone .jpg.
+func TestMediaScanIgnoresThumbnailTempFiles(t *testing.T) {
+	e := newEnv(t)
+	e.put(t, RootMedia, "Music/.packrat-thumb-77.jpg", false)
+	e.put(t, RootMedia, "Music/.packrat-thumb-77.nfo", false)
+	e.put(t, RootMedia, "Music/gone.nfo", false)
+	got := e.scan(t)
+	notWant(t, got, "media:Music/.packrat-thumb-77.jpg")
+	want(t, got, "media:Music/gone.nfo", ReasonOrphanNFO)
+}

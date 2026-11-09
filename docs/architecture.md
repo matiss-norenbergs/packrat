@@ -896,6 +896,42 @@ a gallery image reuses the same `writeThumbnailAndRespond` finish path as `SetLi
 Frame Matching's accept action, keeping derivatives and stale AI-enhancement backups consistent
 across all three thumbnail-setting entry points.
 
+## Replacing a sidecar thumbnail safely (`thumbnailenhance.writeThumbnailFile`)
+
+AI enhancement and Revert replace an item's sidecar thumbnail (the file Jellyfin reads) and its
+small/medium WebP derivatives. Nothing is changed until everything that can fail has succeeded:
+
+1. Write the bytes to a temp file in the **same directory** as the sidecar (same filesystem, so the
+   final rename is atomic): `os.CreateTemp` → `.packrat-thumb-<random><ext>`, permissions copied from
+   the existing sidecar (0644 if none).
+2. Probe the temp file (`image.DecodeConfig`) — upscaler garbage stops here.
+3. Generate the tiers **from the temp file** (new uuid file names; the old derivatives are not touched).
+4. `UpdateThumbnailTiers` points the row at the new tiers and dimensions.
+5. Rename the temp file over the sidecar. If that fails, the row is put back to the previous tier
+   paths/dimensions and the new tier files are deleted (if even that restore fails it is logged and the
+   new tiers are kept, since the row names them).
+6. Only now delete the old derivative files (best effort, as before).
+
+| Fails at | State left |
+|---|---|
+| 1, 2, 3 | sidecar, old derivatives and row untouched; temp file and any new tiers removed |
+| 4 | same (new tiers and temp removed) |
+| 5 | sidecar and old derivatives untouched, row restored, new tiers and temp removed |
+| 6 | enhancement done; an old derivative may linger (logged) |
+
+So a `failed` history row means the thumbnail was not changed, with or without auto-approve.
+`enhanceOne` backs the original up *before* writing (`backupOriginalIfAbsent` now reports whether it
+created the backup); if the write fails, a backup created by that run is removed again (an earlier
+run's backup never is), so a failed run offers no "Revert". `renameFile` and `updateTiers` are
+package variables only so tests can inject failures.
+
+**Temp file name and cleanup.** `fsutil.ThumbTmpPrefix` (`.packrat-thumb-`) + random letters/digits +
+the sidecar's extension; `fsutil.IsThumbTmpName` matches that exact shape (`IsInternalTmpName` = this or
+the metadata-embed temp). A crash between steps 1 and 5 leaves such a file; the importer scan and the
+stray-files scan ignore it, and the startup `fsutil.CleanStaleEmbedTemps` (regular files only, older
+than 5 minutes) removes abandoned ones along with `.packrat-embed-*`. `writeThumbnailAndRespond` (Set
+thumbnail, Redownload, Gallery apply, Frame-match accept) does **not** use this yet.
+
 ## Frame matching
 
 `internal/framematch` finds the video frame that best perceptually matches a reference image
