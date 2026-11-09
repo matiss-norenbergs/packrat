@@ -571,6 +571,14 @@ accept, file import, ghost creation). `tags` is never `null` — `[]` if none. `
 `null` (unset ghost items only — see Ghost items below). `status` is `"completed"` for a real
 downloaded/imported item or `"ghost"` for a placeholder with no file.
 
+`nfoExists` says whether the item's `.nfo` sidecar is on disk. **Single-item** responses (`GET /api/library/:id`
+and every endpoint that returns the one item it just changed) always check the disk. **List** responses
+(`GET /api/library`, the compare list) check only items whose `generateNfo` is `true`, on a small worker
+pool (8 at a time), so a large library on a network share doesn't cost a file check per item; for an
+item with `generateNfo: false` the list reports `nfoExists: false` **without having looked** (a leftover
+`.nfo` reads `false` there and `true` from `GET /api/library/:id`). So in a list, `nfoExists` is only
+reliable when `generateNfo` is true. `GET /api/library/:id/nfo` answers `404` when there is no file.
+
 `thumbnailSmallPath`/`thumbnailMediumPath` are the WebP derivatives actually rendered in the UI
 (grid thumbnail, card image) — `thumbnail` is the original, full-size sidecar image on disk, never
 rendered directly. `thumbnailWidth`/`thumbnailHeight` are the **original** sidecar image's pixel

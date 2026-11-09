@@ -1577,6 +1577,10 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
   scan as `List`/`Query`, missing ids absent) is for any caller that needs a few items. The AI Enhancement
   history page uses it for its ≤25 rows instead of `LibraryRepo.List`. Callers that legitimately need the
   whole library (backup export, the enhancement sweeps' candidate scan) still use `List`/`Query`.
+- **Disk checks only where they matter.** In list responses `ItemResponder.Responses` stats an item's `.nfo`
+  sidecar only when its `generateNfo` flag is on, on a pool of 8 workers (results keep request order); the
+  single-item `Response` always stats. The flag-off value in a list is "not checked" (`false`), which the
+  View Contents menu entry accounts for (see `docs/api.md`, `nfoExists`).
 
 ## Deliberate scope cuts
 

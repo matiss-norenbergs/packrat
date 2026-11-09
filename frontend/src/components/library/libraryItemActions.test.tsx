@@ -46,6 +46,23 @@ describe("library item actions", () => {
     expect(labels).toContainEqual(["Redownload", ["From Current URL", "From Different URL…"]])
   })
 
+  describe("NFO › View Contents", () => {
+    const viewEntry = (it: LibraryItem) => {
+      const nfo = actions(it).find((a) => "items" in a && a.key === "nfo")
+      const entry = nfo && "items" in nfo ? nfo.items.find((i) => i.key === "nfo-view") : undefined
+      return entry && "disabled" in entry ? entry : undefined
+    }
+
+    // List responses only check the disk for items with Generate NFO on, so nfoExists=false is
+    // "missing" only there; with the flag off it is "not checked" and the entry must stay usable.
+    it("is disabled only when Generate NFO is on and the file is missing", () => {
+      expect(viewEntry(make({ generateNfo: true, nfoExists: false }))?.disabled).toBe(true)
+      expect(viewEntry(make({ generateNfo: true, nfoExists: true }))?.disabled).toBeFalsy()
+      expect(viewEntry(make({ generateNfo: false, nfoExists: false }))?.disabled).toBeFalsy()
+      expect(viewEntry(make({ generateNfo: false, nfoExists: true }))?.disabled).toBeFalsy()
+    })
+  })
+
   it("relabels Redownload for a ghost and hides the file-dependent actions", () => {
     const list = tree(actions(make({ status: "ghost" })))
     expect(list).not.toContain("Move")
