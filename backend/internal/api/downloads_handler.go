@@ -252,7 +252,10 @@ func writeEnqueueError(c *gin.Context, err error) {
 
 func ListDownloads(mgr *queue.DownloadManager, repo *repository.DownloadsRepo, collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		rows, err := repo.List(c.Request.Context())
+		// ListLight: the response carries none of the stdout/stderr tails or
+		// the yt-dlp command, so don't read them (~8 KB per row) for every
+		// row on each 10 s poll. Still unbounded: the queue never truncates.
+		rows, err := repo.ListLight(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

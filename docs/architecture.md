@@ -1561,6 +1561,19 @@ conventions (`api/bulk.go`):
   break atomicity), so the server's 400 message is shown. A 409 shows the server's message and keeps the
   selection.
 
+## Keeping list endpoints cheap
+
+A request or background job should cost what it returns, not the size of the table or library.
+Where an audit found otherwise, the fix is one of these (extend the list when adding another):
+
+- **Bounded reads in SQL.** `DownloadsRepo.ListRecent(limit)` (`ORDER BY created_at DESC, id DESC LIMIT ?`,
+  on `idx_downloads_created_at`) backs `GET /api/logs` (200 rows); it used to load every download with
+  its ~8 KB tails and keep 200 in Go.
+- **Light variant for unbounded lists.** `DownloadsRepo.ListLight` is `List` with `stdout_tail`,
+  `stderr_tail` and `ytdlp_command` selected as `NULL` (same column order, so `scanDownload` is
+  unchanged). It backs the live queue (`GET /api/downloads`, polled every 10 s), which must stay
+  unbounded but never returned those columns. `List` itself now has only test callers.
+
 ## Deliberate scope cuts
 
 Still intentionally out of scope, not forgotten:

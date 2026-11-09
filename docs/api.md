@@ -324,7 +324,9 @@ optional. Notes:
 ### `GET /api/downloads` — no params
 
 Returns every queue row (any status), each merged with live in-memory progress when actively
-running:
+running. It is never truncated. The query leaves out the output tails and the yt-dlp command (the
+response has never carried them), so its cost follows the row count, not ~8 KB per row; the response
+is unchanged:
 
 ```json
 {
@@ -1726,8 +1728,9 @@ transaction; unknown ids are ignored. `200 {"deleted": <n>}`.
 |---|---|
 | GET | `/api/logs` |
 
-No params. Returns the most recent **200** download rows (hard-capped) with their captured yt-dlp
-invocation:
+No params. Returns the most recent **200** download rows (hard-capped; the cap is applied in SQL
+`ORDER BY created_at DESC, id DESC LIMIT 200`, so the cost doesn't grow with the table; unchanged
+response) with their captured yt-dlp invocation:
 
 ```json
 {
