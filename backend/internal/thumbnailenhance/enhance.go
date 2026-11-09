@@ -254,19 +254,29 @@ type eligibleCandidate struct {
 	recentlyFailedAt *time.Time
 }
 
-// findEligible scans the whole library for items whose sidecar thumbnail's
-// longest side is under cfg.minDim — shared by runSweep (which then caps
-// and processes the first cfg.maxPerSweep), ListEligible (which reports
-// the full set for the "preview eligible items" dialog, uncapped), and
-// EnhanceItems/MaybeAutoEnhanceOnDownload. Every candidate is annotated with
-// its most recent failure time (if any, within failureCooldown) regardless
-// of skipRecentFailures — only whether it's *filtered out* depends on that
-// flag, so a manual trigger can still see and act on it while an automatic
-// one skips it.
+// probeThumbnail reads a sidecar's dimensions and size (thumbwrite.Probe); a
+// variable so tests can count the files the eligibility checks open.
+var probeThumbnail = thumbwrite.Probe
+
+// findEligible returns the items whose sidecar thumbnail's longest side is
+// under cfg.minDim — shared by runSweep (which then caps and processes the
+// first cfg.maxPerSweep) and ListEligible (which reports the full set for the
+// "preview eligible items" dialog, uncapped); WouldRunCount counts it. Every
+// candidate is annotated with its most recent failure time (if any, within
+// failureCooldown) regardless of skipRecentFailures — only whether it's
+// *filtered out* depends on that flag, so a manual trigger can still see and
+// act on it while an automatic one skips it.
+//
+// It does not probe the whole library: the SQL query returns only the items
+// whose STORED thumbnail dimensions are missing or under minDim, and
+// checkEligible probes just those (same order as LibraryRepo.List: newest
+// downloaded first). A sidecar replaced outside Packrat after its dimensions
+// were stored is therefore not re-probed until it is written again through
+// Packrat (every Packrat write stores the new dimensions).
 func findEligible(ctx context.Context, deps Deps, cfg config, skipRecentFailures bool) ([]eligibleCandidate, error) {
-	items, err := deps.LibraryRepo.List(ctx)
+	items, err := deps.LibraryRepo.ListThumbnailEnhancementCandidates(ctx, cfg.minDim)
 	if err != nil {
-		return nil, fmt.Errorf("listing library: %w", err)
+		return nil, fmt.Errorf("listing candidates: %w", err)
 	}
 
 	recentFailures, err := deps.HistoryRepo.RecentlyFailedItemIDs(ctx, time.Now().Add(-failureCooldown))
@@ -276,47 +286,67 @@ func findEligible(ctx context.Context, deps Deps, cfg config, skipRecentFailures
 
 	var out []eligibleCandidate
 	for _, item := range items {
-		// Ghost items (no media file) have no sidecar thumbnail file to
-		// enhance — only WebP derivatives generated from a fetch that never
-		// touched disk under MediaRoot.
-		if item.Path == "" || item.Thumbnail == nil {
-			continue
+		if c, ok := checkEligible(ctx, deps, cfg, item, recentFailures, skipRecentFailures); ok {
+			out = append(out, c)
 		}
-
-		thumbAbs := filepath.Join(deps.MediaRoot, filepath.FromSlash(*item.Thumbnail))
-		width, height, size, err := thumbwrite.Probe(thumbAbs)
-		if err != nil {
-			continue // file missing/unreadable — not this sweep's problem to fix
-		}
-		longest := width
-		if height > longest {
-			longest = height
-		}
-		if longest >= cfg.minDim {
-			continue // already good enough
-		}
-
-		var recentlyFailedAt *time.Time
-		if failedAt, ok := recentFailures[item.ID]; ok {
-			if skipRecentFailures {
-				continue
-			}
-			t := failedAt
-			recentlyFailedAt = &t
-		}
-
-		out = append(out, eligibleCandidate{
-			item:             item,
-			thumbAbs:         thumbAbs,
-			width:            width,
-			height:           height,
-			size:             size,
-			artistName:       item.ArtistName,
-			collectionName:   item.CollectionName,
-			recentlyFailedAt: recentlyFailedAt,
-		})
 	}
 	return out, nil
+}
+
+// checkEligible is the one per-item eligibility rule every trigger shares
+// (sweeps, ListEligible, EnhanceItems, MaybeAutoEnhanceOnDownload): the item
+// has a media file and a sidecar thumbnail, the sidecar probes as an image
+// whose longest side is under cfg.minDim, and — when skipRecentFailures — its
+// latest attempt did not fail inside the cooldown. recentFailures may be nil
+// (nothing annotated or skipped). The file stays the authority; the stored
+// dimensions only decide which files are worth probing. A successful probe of
+// a row that never had dimensions stores them, so legacy rows stop being
+// candidates after one pass.
+func checkEligible(ctx context.Context, deps Deps, cfg config, item models.LibraryItem, recentFailures map[int64]time.Time, skipRecentFailures bool) (eligibleCandidate, bool) {
+	// Ghost items (no media file) have no sidecar thumbnail file to
+	// enhance — only WebP derivatives generated from a fetch that never
+	// touched disk under MediaRoot.
+	if item.Path == "" || item.Thumbnail == nil {
+		return eligibleCandidate{}, false
+	}
+
+	thumbAbs := filepath.Join(deps.MediaRoot, filepath.FromSlash(*item.Thumbnail))
+	width, height, size, err := probeThumbnail(thumbAbs)
+	if err != nil {
+		return eligibleCandidate{}, false // file missing/unreadable — not this sweep's problem to fix
+	}
+	if item.ThumbnailWidth == nil || item.ThumbnailHeight == nil {
+		if err := deps.LibraryRepo.UpdateThumbnailDimensions(ctx, item.ID, &width, &height); err != nil {
+			log.Printf("thumbnailenhance: item %d: storing probed dimensions: %v", item.ID, err)
+		}
+	}
+	longest := width
+	if height > longest {
+		longest = height
+	}
+	if longest >= cfg.minDim {
+		return eligibleCandidate{}, false // already good enough
+	}
+
+	var recentlyFailedAt *time.Time
+	if failedAt, ok := recentFailures[item.ID]; ok {
+		if skipRecentFailures {
+			return eligibleCandidate{}, false
+		}
+		t := failedAt
+		recentlyFailedAt = &t
+	}
+
+	return eligibleCandidate{
+		item:             item,
+		thumbAbs:         thumbAbs,
+		width:            width,
+		height:           height,
+		size:             size,
+		artistName:       item.ArtistName,
+		collectionName:   item.CollectionName,
+		recentlyFailedAt: recentlyFailedAt,
+	}, true
 }
 
 // EligibleItem is one library item currently eligible for enhancement under
@@ -380,18 +410,21 @@ func EnhanceItems(ctx context.Context, deps Deps, libraryItemIDs []int64) error 
 	if !cfg.enabled || cfg.url == "" {
 		return fmt.Errorf("thumbnail enhancement is not enabled/configured")
 	}
-	candidates, err := findEligible(ctx, deps, cfg, false)
+	// Fetch just the requested items and apply the per-item rule, instead of
+	// building the whole eligible set. The failure cooldown is ignored, so no
+	// failure lookup is needed.
+	items, err := deps.LibraryRepo.GetByIDs(ctx, libraryItemIDs)
 	if err != nil {
-		return err
-	}
-	byID := make(map[int64]eligibleCandidate, len(candidates))
-	for _, c := range candidates {
-		byID[c.item.ID] = c
+		return fmt.Errorf("loading items: %w", err)
 	}
 
 	client := NewClient(cfg.url, cfg.username, cfg.password)
 	for _, id := range libraryItemIDs {
-		c, ok := byID[id]
+		item, ok := items[id]
+		if !ok {
+			continue
+		}
+		c, ok := checkEligible(ctx, deps, cfg, item, nil, false)
 		if !ok {
 			continue
 		}
@@ -446,18 +479,25 @@ func MaybeAutoEnhanceOnDownload(ctx context.Context, deps Deps, libraryItemID in
 	if !cfg.enabled || !cfg.autoOnDownload || cfg.url == "" {
 		return nil
 	}
-	candidates, err := findEligible(ctx, deps, cfg, true)
+	// Just this one item: the per-item rule findEligible uses, not a scan of
+	// the library.
+	item, err := deps.LibraryRepo.Get(ctx, libraryItemID)
 	if err != nil {
-		return err
-	}
-	for _, c := range candidates {
-		if c.item.ID != libraryItemID {
-			continue
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil
 		}
-		client := NewClient(cfg.url, cfg.username, cfg.password)
-		return enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, "auto", modeUpscale)
+		return fmt.Errorf("loading item: %w", err)
 	}
-	return nil
+	recentFailures, err := deps.HistoryRepo.RecentlyFailedItemIDs(ctx, time.Now().Add(-failureCooldown))
+	if err != nil {
+		return fmt.Errorf("loading recent failures: %w", err)
+	}
+	c, ok := checkEligible(ctx, deps, cfg, *item, recentFailures, true)
+	if !ok {
+		return nil
+	}
+	client := NewClient(cfg.url, cfg.username, cfg.password)
+	return enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, "auto", modeUpscale)
 }
 
 // RevertOriginal restores an item's thumbnail to its pre-enhancement

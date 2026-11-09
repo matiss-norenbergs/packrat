@@ -91,6 +91,36 @@ func (r *LibraryRepo) GetByIDs(ctx context.Context, ids []int64) (map[int64]mode
 	return out, nil
 }
 
+// ListThumbnailEnhancementCandidates returns, newest downloaded first (the
+// order List gives; ties by id, newest first), the library items whose sidecar
+// thumbnail MAY be below minDim, decided from the dimensions stored on the row:
+// a file-backed item (path and thumbnail set) whose stored width/height is
+// missing (never probed — legacy rows) or whose longest stored side is under
+// minDim. Items already stored at minDim or above are left out, so the AI
+// enhancement scan opens only these files instead of every thumbnail. The file
+// stays the authority: the caller probes each candidate and checks it again.
+func (r *LibraryRepo) ListThumbnailEnhancementCandidates(ctx context.Context, minDim int) ([]models.LibraryItem, error) {
+	query := librarySelectColumns + `
+		WHERE l.path != '' AND l.thumbnail IS NOT NULL
+		  AND (l.thumbnail_width IS NULL OR l.thumbnail_height IS NULL
+		       OR MAX(l.thumbnail_width, l.thumbnail_height) < ?)` +
+		libraryOrderBy("downloadedAt", "desc") + `, l.id DESC`
+	rows, err := r.db.QueryContext(ctx, query, minDim)
+	if err != nil {
+		return nil, fmt.Errorf("listing thumbnail enhancement candidates: %w", err)
+	}
+	defer rows.Close()
+	var out []models.LibraryItem
+	for rows.Next() {
+		item, err := scanLibraryItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *item)
+	}
+	return out, rows.Err()
+}
+
 // FindDuplicate returns the library item matching originalURL or videoID
 // (either may be empty, in which case that half of the match is skipped),
 // or nil if none exists. Used for duplicate-detection before queuing a new

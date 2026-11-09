@@ -1010,7 +1010,10 @@ model, scaling mode, minimum-dimension threshold below which a thumbnail is cons
 
 - **Manual runs** — "Enhance Now" processes up to 5 eligible items per click; "Preview Eligible
   Items" lists everything currently under the minimum-dimension threshold (uncapped) with a
-  per-row Enhance button to upscale just that one item.
+  per-row Enhance button to upscale just that one item. Which thumbnails are looked at is decided
+  from the dimensions stored on each library row, so only items stored under the threshold (or
+  never measured) have their file opened; a thumbnail file replaced outside Packrat is not noticed
+  until Packrat writes that thumbnail again.
 - **Scheduled sweeps** — when "Run automatically every hour" is on, the same eligibility check
   runs alongside the other hourly background sweeps, independent of the manual trigger.
 - **Auto-run on new downloads** — when enabled, a freshly-downloaded item's thumbnail is enhanced
