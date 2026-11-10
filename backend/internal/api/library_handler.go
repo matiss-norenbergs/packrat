@@ -41,7 +41,7 @@ func writeRenameError(c *gin.Context, err error) {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	writeServerError(c, err)
 }
 
 // ListLibrary supports search/filter/sort/pagination via query params —
@@ -116,13 +116,13 @@ func ListLibrary(repo *repository.LibraryRepo, responder *ItemResponder) gin.Han
 
 		rows, total, err := repo.Query(c.Request.Context(), q)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		out, err := responder.Responses(c.Request.Context(), rows)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, LibraryListResponse{Items: out, Total: total})
@@ -147,13 +147,13 @@ func GetLibraryItem(repo *repository.LibraryRepo, responder *ItemResponder) gin.
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		resp, err := responder.Response(c.Request.Context(), *item)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, resp)
@@ -167,7 +167,7 @@ func GetLibraryFacets(repo *repository.LibraryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		years, err := repo.DistinctYears(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, LibraryFacetsResponse{Years: years})
@@ -206,7 +206,7 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, downloadsRepo *repository.D
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -217,7 +217,7 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, downloadsRepo *repository.D
 		// The queue rows cascade away with the library row, so grab their ids first.
 		artifacts, err := collectLibraryItemArtifacts(c.Request.Context(), repo, item)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -226,7 +226,7 @@ func DeleteLibraryItem(repo *repository.LibraryRepo, downloadsRepo *repository.D
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -258,7 +258,7 @@ func UpdateLibraryItemProgress(repo *repository.LibraryRepo) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -295,7 +295,7 @@ func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, downloadsR
 
 		tx, err := db.BeginTx(c.Request.Context(), nil)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		defer tx.Rollback()
@@ -309,13 +309,13 @@ func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, downloadsR
 				if errors.Is(err, repository.ErrNotFound) {
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 
 			artifacts, err := collectLibraryItemArtifacts(c.Request.Context(), txRepo, item)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 
@@ -323,7 +323,7 @@ func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, downloadsR
 				if errors.Is(err, repository.ErrNotFound) {
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			deleted = append(deleted, artifacts)
@@ -331,7 +331,7 @@ func BulkDeleteLibraryItems(db *sql.DB, repo *repository.LibraryRepo, downloadsR
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		for _, a := range deleted {
@@ -376,7 +376,7 @@ func BulkAssignTags(repo *repository.LibraryRepo, tagsRepo *repository.TagsRepo,
 		// not overwrite tags, but the item is locked while it runs).
 		itemIDs, skipped, err := splitActiveItems(c.Request.Context(), downloadsRepo, req.ItemIDs)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if len(itemIDs) == 0 {
@@ -386,11 +386,11 @@ func BulkAssignTags(repo *repository.LibraryRepo, tagsRepo *repository.TagsRepo,
 
 		tagIDs, err := tagsRepo.GetOrCreateByNames(c.Request.Context(), req.Tags)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if err := tagsRepo.SetForLibraryItems(c.Request.Context(), itemIDs, tagIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -452,7 +452,7 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -477,7 +477,7 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 			return
 		}
 		if err := fsutil.EnsureDir(destDir); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -501,7 +501,7 @@ func MoveLibraryItem(repo *repository.LibraryRepo, mgr *queue.DownloadManager, m
 			newThumbRelPtr = &s
 		}
 		if err := repo.UpdateLocation(c.Request.Context(), id, req.CollectionID, req.Folder, item.Filename, toRelSlash(mediaRoot, newMediaAbs), newThumbRelPtr); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -526,7 +526,7 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -553,13 +553,13 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 		// (yt-dlp doesn't reliably expose them) — pass the item's existing
 		// values through so this refresh never clobbers them.
 		if err := repo.UpdateMetadata(c.Request.Context(), id, &title, &uploader, &duration, resolution, &description, item.ArtistID, item.ReleaseYear, item.SequenceNumber, item.SeasonNumber); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		updated, err := repo.Get(c.Request.Context(), id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -571,7 +571,7 @@ func RefreshLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 
 		resp, err := responder.Response(c.Request.Context(), *updated)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, resp)
@@ -607,7 +607,7 @@ func ProbeLibraryItemMetadata(repo *repository.LibraryRepo, mediaRoot, ffprobePa
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -646,7 +646,7 @@ func CompareLibraryItemMetadata(repo *repository.LibraryRepo, ytdlp *downloader.
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -682,7 +682,7 @@ func activeDownloadFor(ctx context.Context, downloadsRepo *repository.DownloadsR
 func rejectIfDownloadActive(c *gin.Context, downloadsRepo *repository.DownloadsRepo, id int64) bool {
 	_, active, err := activeDownloadFor(c.Request.Context(), downloadsRepo, id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return true
 	}
 	if active {
@@ -774,7 +774,7 @@ func RedownloadLibraryItem(libraryRepo *repository.LibraryRepo, downloadsRepo *r
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -822,7 +822,7 @@ func BulkRedownloadLibraryItems(libraryRepo *repository.LibraryRepo, downloadsRe
 					resp.Skipped++
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			if item.OriginalURL == nil {
@@ -891,7 +891,7 @@ func RedownloadLibraryItemFromURL(libraryRepo *repository.LibraryRepo, downloads
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -993,7 +993,7 @@ func PreviewRedownloadURL(libraryRepo *repository.LibraryRepo, ytdlp *downloader
 		if dup, err := libraryRepo.FindDuplicate(c.Request.Context(), url, meta.ID); err == nil && dup != nil && dup.ID != id {
 			info, err := responder.duplicateInfo(c.Request.Context(), dup)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			resp.Duplicate = info

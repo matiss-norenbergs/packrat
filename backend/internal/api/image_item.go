@@ -56,24 +56,24 @@ func setImageItemThumbnailTiers(c *gin.Context, libraryRepo *repository.LibraryR
 
 	tmpDir, err := os.MkdirTemp("", "image-item-thumb-*")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return
 	}
 	defer os.RemoveAll(tmpDir)
 	scratch := filepath.Join(tmpDir, "source")
 	if err := os.WriteFile(scratch, data, 0o600); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return
 	}
 
 	tiers, err := imageproc.GenerateTiersFromPath(ctx, ffmpegPath, imagesRoot, "library", item.ID, scratch, libraryThumbnailTiers)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return
 	}
 	if err := libraryRepo.UpdateThumbnailTiers(ctx, item.ID, &tiers[0], &tiers[1], item.ThumbnailWidth, item.ThumbnailHeight); err != nil {
 		removeThumbnailTiers(imagesRoot, &tiers[0], &tiers[1])
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return
 	}
 	removeThumbnailTiers(imagesRoot, item.ThumbnailSmallPath, item.ThumbnailMediumPath)
@@ -87,12 +87,12 @@ func setImageItemThumbnailTiers(c *gin.Context, libraryRepo *repository.LibraryR
 func respondWithItem(c *gin.Context, libraryRepo *repository.LibraryRepo, responder *ItemResponder, ctx context.Context, id int64) {
 	updated, err := libraryRepo.Get(ctx, id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return
 	}
 	resp, err := responder.Response(ctx, *updated)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, resp)

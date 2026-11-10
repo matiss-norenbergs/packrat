@@ -8,17 +8,22 @@ import (
 	"testing"
 	"time"
 
+	"packrat/backend/internal/db"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
 
 // The restore used to hold the only DB connection (open tx, SetMaxOpenConns(1))
 // while waiting on a repo mutex held by a goroutine that was itself waiting
-// for that connection — an app-wide hang. These tests run the restore against
+// for that connection — an app-wide hang. With the connection pool the same
+// lock-order mistake would instead make the mutex holder fail with "database
+// is locked" after db.BusyTimeout, so the deadline below is kept well under that
+// timeout: a regression must not be able to hide behind the busy timeout
+// breaking the cycle. These tests run the restore against
 // goroutines hammering the same mutex-taking repo methods, under a timeout so
 // a regression fails fast instead of hanging the suite.
 
-const restoreDeadline = 20 * time.Second
+const restoreDeadline = db.BusyTimeout * 2 / 3
 
 // runRestoreAgainstHammers starts `workers` goroutines running hammer in a
 // loop, then runs ApplyLibraryBundle and fails if it doesn't finish in time.

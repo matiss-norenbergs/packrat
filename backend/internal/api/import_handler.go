@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 
@@ -34,26 +37,26 @@ func ScanImport(mediaRoot string, libraryRepo *repository.LibraryRepo, collectio
 
 		known, err := libraryRepo.ListPaths(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		files, err := importer.Scan(mediaRoot, known)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		ignoredFolders, err := ImportIgnoredFolders(ctx, settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		files = importer.FilterIgnored(files, ignoredFolders)
 
 		cols, err := collectionsRepo.List(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -141,7 +144,7 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 		relPath := path.Clean(filepath.ToSlash(req.Path))
 		known, err := libraryRepo.ListPaths(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if known[relPath] {
@@ -160,7 +163,7 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 		// create their own duplicate collection — see its doc comment.
 		parentID, err := collectionsRepo.EnsureChain(ctx, segments)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -198,9 +201,17 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 			FileSizeBytes: &sizeBytes,
 			Status:        "completed",
 		}
-		id, err := libraryRepo.Create(ctx, &item)
+		// library.path has no UNIQUE constraint, so the "already imported" check
+		// above is repeated together with the insert under importMu: two requests
+		// for the same file (a double click, overlapping Import Selected and Import
+		// All) cannot both pass it. No transaction is open here.
+		id, err := createImportedItem(ctx, libraryRepo, &item)
+		if errors.Is(err, errAlreadyImported) {
+			c.JSON(http.StatusConflict, gin.H{"error": "file already imported"})
+			return
+		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -226,13 +237,13 @@ func CreateImport(mediaRoot, imagesRoot string, libraryRepo *repository.LibraryR
 
 		created, err := libraryRepo.Get(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		resp, err := responder.Response(ctx, *created)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, resp)
@@ -252,4 +263,23 @@ func findSidecarThumbnail(mediaRoot, absPath string) *string {
 		}
 	}
 	return nil
+}
+
+// importMu serializes the final "is this path taken? / insert it" step of an
+// import (see CreateImport).
+var importMu sync.Mutex
+
+var errAlreadyImported = errors.New("file already imported")
+
+func createImportedItem(ctx context.Context, repo *repository.LibraryRepo, item *models.LibraryItem) (int64, error) {
+	importMu.Lock()
+	defer importMu.Unlock()
+	taken, err := repo.PathExists(ctx, item.Path)
+	if err != nil {
+		return 0, err
+	}
+	if taken {
+		return 0, errAlreadyImported
+	}
+	return repo.Create(ctx, item)
 }

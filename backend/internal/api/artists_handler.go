@@ -30,7 +30,7 @@ func ListArtists(repo *repository.ArtistsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		out := make([]ArtistResponse, 0, len(rows))
@@ -59,7 +59,7 @@ func CreateArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -94,7 +94,7 @@ func UpdateArtist(repo *repository.ArtistsRepo) gin.HandlerFunc {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -114,7 +114,7 @@ func DeleteArtist(repo *repository.ArtistsRepo, imagesRoot string) gin.HandlerFu
 				c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		removeDirBestEffort(filepath.Join(imagesRoot, "artists", strconv.FormatInt(id, 10)))
@@ -138,7 +138,7 @@ func BulkDeleteArtists(db *sql.DB, repo *repository.ArtistsRepo, imagesRoot stri
 
 		tx, err := db.BeginTx(c.Request.Context(), nil)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		defer tx.Rollback()
@@ -151,7 +151,7 @@ func BulkDeleteArtists(db *sql.DB, repo *repository.ArtistsRepo, imagesRoot stri
 				if errors.Is(err, repository.ErrNotFound) {
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			deletedIDs = append(deletedIDs, id)
@@ -159,7 +159,7 @@ func BulkDeleteArtists(db *sql.DB, repo *repository.ArtistsRepo, imagesRoot stri
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		for _, id := range deletedIDs {

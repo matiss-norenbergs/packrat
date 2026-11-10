@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"packrat/backend/internal/bgtasks"
+	"packrat/backend/internal/db"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/features"
 	"packrat/backend/internal/models"
@@ -163,7 +164,9 @@ func processQueueItem(ctx context.Context, deps QueueDeps, row models.FrameMatch
 	}
 
 	doneCtx, doneCancel := bgtasks.CompletionContext(ctx)
-	err = deps.QueueRepo.SetDone(doneCtx, row.ID, result.TimestampSeconds, result.Score, foundRel, refRel)
+	err = db.RetryBusy(doneCtx, func() error {
+		return deps.QueueRepo.SetDone(doneCtx, row.ID, result.TimestampSeconds, result.Score, foundRel, refRel)
+	})
 	doneCancel()
 	if err != nil {
 		log.Printf("framematch: queue item %d: recording success failed: %v", row.ID, err)

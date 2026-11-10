@@ -202,7 +202,7 @@ func ListSystemEvents(repo *repository.SystemEventsRepo) gin.HandlerFunc {
 		}
 		events, total, err := repo.Query(c.Request.Context(), q)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		items := make([]SystemEventResponse, len(events))
@@ -227,7 +227,7 @@ func SystemEventFacets(repo *repository.SystemEventsRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		levels, categories, err := repo.Facets(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, SystemEventFacetsResponse{Levels: facetResponses(levels), Categories: facetResponses(categories)})
@@ -260,7 +260,7 @@ func DeleteSystemEvents(repo *repository.SystemEventsRepo) gin.HandlerFunc {
 			deleted, err = repo.DeleteByIDs(c.Request.Context(), req.IDs)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"deleted": deleted})

@@ -96,7 +96,14 @@ func (r *BackupHistoryRepo) DeleteFailedExceedingRetention(ctx context.Context, 
 // deleteExceeding prunes one status only; id breaks created_at ties (the
 // column has one-second resolution) so the ordering is stable.
 func (r *BackupHistoryRepo) deleteExceeding(ctx context.Context, status string, keep int) ([]models.BackupHistory, error) {
-	rows, err := r.db.QueryContext(ctx, backupHistorySelectColumns+
+	// One transaction: two concurrent prunes must not both return (and so both
+	// delete the files of) the same rows.
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("pruning %s backups: %w", status, err)
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, backupHistorySelectColumns+
 		` WHERE status = ? ORDER BY created_at DESC, id DESC LIMIT -1 OFFSET ?`, status, keep)
 	if err != nil {
 		return nil, fmt.Errorf("finding %s backups exceeding retention: %w", status, err)
@@ -116,9 +123,12 @@ func (r *BackupHistoryRepo) deleteExceeding(ctx context.Context, status string, 
 	}
 
 	for _, entry := range toDelete {
-		if _, err := r.db.ExecContext(ctx, `DELETE FROM backup_history WHERE id = ?`, entry.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM backup_history WHERE id = ?`, entry.ID); err != nil {
 			return nil, fmt.Errorf("deleting backup history entry %d: %w", entry.ID, err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("pruning %s backups: %w", status, err)
 	}
 	return toDelete, nil
 }

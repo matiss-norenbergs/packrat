@@ -110,8 +110,10 @@ func (r Runner) Go(fn func(ctx context.Context)) {
 }
 
 // CompletionWriteTimeout bounds the writes that record a successful outcome (see CompletionContext).
-// It is only a safety net against a wedged database, not an expectation: the database has a single
-// connection, so a backup, restore or big delete can legitimately keep a write waiting for a while.
+// It is only a safety net against a wedged database, not an expectation: only one transaction can
+// write at a time, so a restore or big delete can legitimately keep a write waiting for a while.
+// Callers retry a busy database (db.RetryBusy) until this bound, because one attempt gives up after
+// db.BusyTimeout.
 const CompletionWriteTimeout = 2 * time.Minute
 
 // CompletionContext is for the success-path writes that decide whether finished work is kept (the

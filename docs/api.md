@@ -4,6 +4,14 @@ Base URL: same origin as the web UI (the Go binary serves both the API and the b
 This is a **solo-admin app** — there is never more than one user account. All timestamps are
 RFC3339. Unless noted, error responses are `{"error": "..."}`.
 
+**Busy database (`503`).** Writes take turns (SQLite has one write lock). A write that cannot get the
+lock within 15 seconds (another long write is running) answers `503 {"error": "The database is busy.
+Try again in a moment."}` with a `Retry-After: 2` header, never a `500` carrying SQLite's own text.
+Nothing was changed, so the request is safe to repeat; it is also logged on the server. It can come
+from any endpoint that writes, so it is not repeated in the per-endpoint lists below. In a
+per-item-results response (see "Bulk endpoints") the affected item carries `"status": 503`. Reads are
+never blocked by a write.
+
 All JSON API routes live under `/api` — this is deliberate, not a style choice: the frontend has
 client-side routes named `/downloads`, `/library`, `/collections`, etc. too, and without the prefix
 a hard refresh (or a shared link) on those pages would hit the API route instead of the app shell,

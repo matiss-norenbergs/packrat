@@ -68,7 +68,7 @@ func SaveLibraryThumbnailToGallery(mediaRoot, imagesRoot string, libraryRepo *re
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -104,25 +104,25 @@ func SaveLibraryThumbnailToGallery(mediaRoot, imagesRoot string, libraryRepo *re
 
 		dir := filepath.Join(imagesRoot, "thumbnail-gallery", strconv.FormatInt(id, 10))
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		filename := uuid.NewString() + ext
 		abs := filepath.Join(dir, filename)
 		if err := os.WriteFile(abs, data, 0o644); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		rel := filepath.ToSlash(filepath.Join("thumbnail-gallery", strconv.FormatInt(id, 10), filename))
 
 		galleryID, err := galleryRepo.Create(ctx, id, rel, width, height, req.TimestampSeconds)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		img, err := galleryRepo.Get(ctx, galleryID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, toThumbnailGalleryImageResponse(img))
@@ -143,13 +143,13 @@ func ListLibraryThumbnailGallery(libraryRepo *repository.LibraryRepo, galleryRep
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		images, err := galleryRepo.ListByLibraryItemID(ctx, id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		out := make([]ThumbnailGalleryImageResponse, len(images))
@@ -184,7 +184,7 @@ func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, 
 				c.JSON(http.StatusNotFound, gin.H{"error": "gallery image not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if img.LibraryItemID != id {
@@ -198,7 +198,7 @@ func ApplyLibraryThumbnailFromGallery(mediaRoot, imagesRoot, ffmpegPath string, 
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if item.Path == "" {
@@ -260,7 +260,7 @@ func BulkSetLibraryThumbnailGalleryFavorite(galleryRepo *repository.ThumbnailGal
 		}
 		updated, foreign, missing, err := galleryRepo.SetFavoriteForItem(c.Request.Context(), itemID, dedupeKeepOrder(req.GalleryIDs), req.IsFavorite)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if bad := append(append([]int64{}, foreign...), missing...); len(bad) > 0 {
@@ -293,7 +293,7 @@ func BulkDeleteLibraryThumbnailGalleryImages(imagesRoot string, galleryRepo *rep
 		}
 		removed, foreign, err := galleryRepo.DeleteForItem(c.Request.Context(), itemID, dedupeKeepOrder(req.GalleryIDs))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if len(foreign) > 0 {

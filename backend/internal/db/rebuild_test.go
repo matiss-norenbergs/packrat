@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"os"
@@ -89,17 +90,57 @@ func seeded(t *testing.T) (*sql.DB, string) {
 	return conn, dir
 }
 
-// assertHealthy checks foreign keys are on and the pool connection has no
+// pinAllConns pins every connection the pool can hold at the same time, so a
+// check can look at each connection's own state: PRAGMA foreign_keys belongs to
+// a connection, and a plain conn.QueryRow lands on an arbitrary one.
+//
+// The caller must call the returned release before pinning again (and before
+// the pool is needed for anything else): the connections are all in use until
+// then.
+func pinAllConns(t *testing.T, conn *sql.DB) (conns []*sql.Conn, release func()) {
+	t.Helper()
+	ctx := context.Background()
+	var pinned []*sql.Conn
+	for i := 0; i < MaxOpenConns; i++ {
+		c, err := conn.Conn(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pinned = append(pinned, c)
+	}
+	release = func() {
+		for _, c := range pinned {
+			c.Close()
+		}
+	}
+	t.Cleanup(release) // Close on an already-closed Conn is a harmless error
+	return pinned, release
+}
+
+func pragmaInt(t *testing.T, c *sql.Conn, pragma string) int {
+	t.Helper()
+	var n int
+	if err := c.QueryRowContext(context.Background(), pragma).Scan(&n); err != nil {
+		t.Fatalf("%s: %v", pragma, err)
+	}
+	return n
+}
+
+// assertHealthy checks that EVERY pooled connection has foreign keys on and no
 // open transaction.
 func assertHealthy(t *testing.T, conn *sql.DB) {
 	t.Helper()
-	if n := count(t, conn, "PRAGMA foreign_keys"); n != 1 {
-		t.Errorf("foreign_keys = %d, want 1", n)
-	}
-	if _, err := conn.Exec("BEGIN"); err != nil {
-		t.Errorf("connection still in a transaction: %v", err)
-	} else {
-		mustExec(t, conn, "ROLLBACK")
+	conns, release := pinAllConns(t, conn)
+	defer release()
+	for i, c := range conns {
+		if n := pragmaInt(t, c, "PRAGMA foreign_keys"); n != 1 {
+			t.Errorf("connection %d: foreign_keys = %d, want 1", i, n)
+		}
+		if _, err := c.ExecContext(context.Background(), "BEGIN"); err != nil {
+			t.Errorf("connection %d still in a transaction: %v", i, err)
+		} else if _, err := c.ExecContext(context.Background(), "ROLLBACK"); err != nil {
+			t.Errorf("connection %d: %v", i, err)
+		}
 	}
 }
 
@@ -325,8 +366,18 @@ func TestUnmarkedMigrationKeepsOldBehavior(t *testing.T) {
 	if err := Migrate(conn, dir); err == nil {
 		t.Fatal("expected failure")
 	}
-	if n := count(t, conn, "PRAGMA foreign_keys"); n != 0 {
-		t.Errorf("foreign_keys = %d, want 0 (PRAGMA took effect, no tx)", n)
+	// The pragma belongs to the one connection that ran the file; the others
+	// are untouched.
+	off := 0
+	conns, release := pinAllConns(t, conn)
+	for _, c := range conns {
+		if pragmaInt(t, c, "PRAGMA foreign_keys") == 0 {
+			off++
+		}
+	}
+	release()
+	if off != 1 {
+		t.Errorf("%d connections have foreign_keys off, want exactly 1 (PRAGMA took effect, no tx, on one connection)", off)
 	}
 	if n := count(t, conn, "SELECT COUNT(*) FROM sqlite_master WHERE name='plain'"); n != 1 {
 		t.Error("unmarked file ran in a transaction")

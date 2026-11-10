@@ -27,7 +27,7 @@ func GetYtDlpVersion(ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 
 		current, err := ytdlp.Version(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 

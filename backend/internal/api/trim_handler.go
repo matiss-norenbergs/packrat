@@ -45,7 +45,7 @@ func GetLibraryItemTrimFrames(repo *repository.LibraryRepo, mediaRoot string, yt
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -98,7 +98,7 @@ func PreviewLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot string, ytdl
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -174,7 +174,7 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 				c.JSON(http.StatusNotFound, gin.H{"error": "library item not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -191,7 +191,7 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 		}
 
 		if err := ytdlp.AcceptTrim(previewAbs, mediaAbs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -201,19 +201,19 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 			durationSeconds = *probe.DurationSeconds
 		}
 		if err := repo.UpdateDurationAndSize(c.Request.Context(), id, durationSeconds, probe.SizeBytes); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		updated, err := repo.Get(c.Request.Context(), id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
 		resp, err := responder.Response(c.Request.Context(), *updated)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, resp)
@@ -246,7 +246,7 @@ func DiscardLibraryItemTrim(mediaRoot string, ytdlp *downloader.YtDlpService) gi
 		}
 
 		if err := ytdlp.DiscardTrimPreview(resolved); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 

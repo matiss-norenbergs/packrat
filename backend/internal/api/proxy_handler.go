@@ -39,7 +39,7 @@ func GetProxyStatus(settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		proxy, err := YtdlpProxy(ctx, settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if proxy == "" {

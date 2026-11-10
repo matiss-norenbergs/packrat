@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"packrat/backend/internal/db"
 	"packrat/backend/internal/models"
 )
 
@@ -50,8 +51,8 @@ func TestFinishErrorLeavesShutdownInterruptedRunAlone(t *testing.T) {
 	}
 }
 
-// A completion write that has to wait for the single DB connection longer than the 5 s failure-
-// bookkeeping bound (a backup, a restore, a big delete holding it) must still succeed: failing it
+// A completion write that has to wait for the database's write lock longer than the 5 s failure-
+// bookkeeping bound (a restore or a big delete holding it) must still succeed: failing it
 // would send the run down the error path that deletes the file it just downloaded.
 func TestCompletionSurvivesSlowDatabase(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -61,7 +62,7 @@ func TestCompletionSurvivesSlowDatabase(t *testing.T) {
 	id := e.newDownload(models.Download{})
 
 	// Once the run has recorded the yt-dlp command (just before its completion writes begin), take the
-	// only DB connection and sit on it past the old 5 s bound.
+	// write lock and sit on it past the old 5 s bound.
 	go func() {
 		for i := 0; i < 5000; i++ {
 			var cmd sql.NullString
@@ -78,6 +79,66 @@ func TestCompletionSurvivesSlowDatabase(t *testing.T) {
 		tx.Rollback()
 	}()
 	e.mgr.runOne(context.Background(), id)
+
+	if got := e.download(id).Status; got != models.StatusCompleted {
+		t.Fatalf("download status = %q, want completed", got)
+	}
+	items := e.items()
+	if len(items) != 1 || items[0].Status != "completed" || items[0].Path == "" {
+		t.Fatalf("library item not completed: %+v", items)
+	}
+	if _, err := os.Stat(filepath.Join(e.mediaRoot, filepath.FromSlash(items[0].Path))); err != nil {
+		t.Fatalf("the downloaded file was removed: %v", err)
+	}
+}
+
+// Like the test above, but the wait outlasts the database's busy timeout (shortened here to
+// 200 ms; it is 15 s in production): the first attempt of a completion write fails with
+// "database is locked", and the run must retry it rather than treat it as a failure, which would
+// delete the file it just downloaded.
+func TestCompletionSurvivesBusyTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("needs the fake yt-dlp shell script")
+	}
+	e := newGhostEnv(t)
+	id := e.newDownload(models.Download{})
+
+	// The run's pool shrinks to one connection with a short busy timeout; the lock is held from a
+	// second pool on the same file, so the holder never competes for that connection.
+	e.conn.SetMaxOpenConns(1)
+	if _, err := e.conn.Exec(`PRAGMA busy_timeout = 200`); err != nil {
+		t.Fatal(err)
+	}
+	var seq int
+	var name, file string
+	if err := e.conn.QueryRow(`PRAGMA database_list`).Scan(&seq, &name, &file); err != nil {
+		t.Fatal(err)
+	}
+	holderDB, err := db.Open(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer holderDB.Close()
+
+	held := make(chan struct{})
+	go func() {
+		defer close(held)
+		for i := 0; i < 5000; i++ {
+			var cmd sql.NullString
+			if err := e.conn.QueryRow(`SELECT ytdlp_command FROM downloads WHERE id = ?`, id).Scan(&cmd); err == nil && cmd.Valid && cmd.String != "" {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		tx, err := holderDB.BeginTx(context.Background(), nil)
+		if err != nil {
+			return
+		}
+		time.Sleep(2 * time.Second) // ten times the busy timeout
+		tx.Rollback()
+	}()
+	e.mgr.runOne(context.Background(), id)
+	<-held
 
 	if got := e.download(id).Status; got != models.StatusCompleted {
 		t.Fatalf("download status = %q, want completed", got)

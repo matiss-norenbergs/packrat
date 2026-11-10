@@ -262,6 +262,40 @@ func (r *UsersRepo) DeleteOtherSessions(ctx context.Context, userID int64, keepT
 	return int(n), err
 }
 
+// ChangePassword stores the new hash and signs out every session except the one
+// with keepToken in ONE transaction, so a failure between the two cannot leave
+// the new password set with old sessions still alive (the admin commands already
+// do the same, see AdminResetPassword). It reports how many sessions went.
+func (r *UsersRepo) ChangePassword(ctx context.Context, userID int64, passwordHash, keepToken string) (int, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, passwordHash, userID)
+	if err != nil {
+		return 0, fmt.Errorf("updating password hash: %w", err)
+	}
+	if err := checkRowsAffected(res); err != nil {
+		return 0, err
+	}
+	res, err = tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token <> ?`, userID, keepToken)
+	if err != nil {
+		return 0, fmt.Errorf("deleting other sessions: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	if n > 0 {
+		r.sessionsRevoked()
+	}
+	return int(n), nil
+}
+
 // UpdatePasswordHash overwrites the stored bcrypt hash for a user — used by
 // the change-password flow. It does not touch sessions; the handler signs
 // out the other ones with DeleteOtherSessions.

@@ -28,12 +28,12 @@ func ListHistory(repo *repository.HistoryRepo, settingsRepo *repository.Settings
 	return func(c *gin.Context) {
 		rows, err := repo.List(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		anonymize, err := HistoryAnonymizeURLs(c.Request.Context(), settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 
@@ -53,7 +53,7 @@ func ClearHistory(repo *repository.HistoryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		n, err := repo.DeleteOlderThan(c.Request.Context(), time.Now())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"deleted": n})
@@ -77,7 +77,7 @@ func BulkDeleteHistory(repo *repository.HistoryRepo) gin.HandlerFunc {
 		}
 		n, err := repo.DeleteByIDs(c.Request.Context(), dedupeKeepOrder(req.IDs))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, BulkDeleteResponse{Deleted: n})

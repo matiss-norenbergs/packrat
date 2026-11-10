@@ -194,7 +194,7 @@ func CreateBatchDownload(mgr *queue.DownloadManager, collectionsRepo *repository
 
 		result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, responder, entries, req.SkipDuplicates)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, result)
@@ -268,7 +268,7 @@ func CreatePlaylistDownload(mgr *queue.DownloadManager, collectionsRepo *reposit
 			}}}
 			result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, responder, entries, req.SkipDuplicates)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				writeServerError(c, err)
 				return
 			}
 			c.JSON(http.StatusCreated, result)
@@ -301,7 +301,7 @@ func CreatePlaylistDownload(mgr *queue.DownloadManager, collectionsRepo *reposit
 
 		result, err := enqueueBatch(c.Request.Context(), mgr, collectionsRepo, settingsRepo, libraryRepo, historyRepo, responder, entries, req.SkipDuplicates)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, result)

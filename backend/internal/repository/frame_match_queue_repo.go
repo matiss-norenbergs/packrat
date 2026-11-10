@@ -30,6 +30,29 @@ func (r *FrameMatchQueueRepo) Create(ctx context.Context, libraryItemID int64, i
 	return res.LastInsertId()
 }
 
+// CreateIfAbsent enqueues a match unless the item already has a row in any
+// state, in ONE statement (the write lock makes the NOT EXISTS check and the
+// insert atomic). frame_match_queue has no UNIQUE(library_item_id), so a
+// "check ExistsForLibraryItem, then Create" pair would let two concurrent bulk
+// requests both enqueue the same item.
+func (r *FrameMatchQueueRepo) CreateIfAbsent(ctx context.Context, libraryItemID int64, itemTitle, mode string) (id int64, created bool, err error) {
+	res, err := r.db.ExecContext(ctx, `
+		INSERT INTO frame_match_queue (library_item_id, item_title, mode, state)
+		SELECT ?, ?, ?, 'queued'
+		WHERE NOT EXISTS (SELECT 1 FROM frame_match_queue WHERE library_item_id = ?)`,
+		libraryItemID, itemTitle, mode, libraryItemID,
+	)
+	if err != nil {
+		return 0, false, fmt.Errorf("enqueuing frame match for item %d: %w", libraryItemID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil || n == 0 {
+		return 0, false, err
+	}
+	id, err = res.LastInsertId()
+	return id, err == nil, err
+}
+
 // ExistsForLibraryItem reports whether a library item already has a row
 // (any state) sitting in the queue — used to reject a redundant single-item
 // match request before it wastes a scan on something already pending or

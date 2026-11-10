@@ -22,7 +22,7 @@ func RescanJellyfinLibrary(settingsRepo *repository.SettingsRepo, jellyfinClient
 
 		enabled, err := JellyfinEnabled(ctx, settingsRepo)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			writeServerError(c, err)
 			return
 		}
 		if !enabled {
