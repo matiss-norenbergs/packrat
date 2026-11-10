@@ -39,8 +39,15 @@ type atomicEnv struct {
 }
 
 // newAtomicEnv wires the settings / backup handlers against a real migrated
-// database, a real (never-Started) download manager and a yt-dlp service whose
-// cookies file lives in a temp dir.
+// database, a real download manager and a yt-dlp service whose cookies file
+// lives in a temp dir.
+//
+// The manager is Started with ZERO workers: the full-restore test queues a
+// real download row, and a live worker would pick it up, fail the metadata
+// fetch (no yt-dlp in CI) and run the failure path against history. Tests that
+// grow the pool through the handlers (SetWorkerCount) still get workers, but
+// never a queued job. Every repo the failure path touches is real, never nil;
+// TestAtomicEnvManagerHasNoWorkers guards the zero-worker start.
 func newAtomicEnv(t *testing.T) *atomicEnv {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -58,11 +65,11 @@ func newAtomicEnv(t *testing.T) *atomicEnv {
 	}
 	e.ytdlp = downloader.NewYtDlpService("", "", "", e.settings, 1)
 	e.ytdlp.CookiesFilePath = e.cookiesPath
-	e.mgr = queue.NewDownloadManager(t.TempDir(), t.TempDir(), "", e.ytdlp, e.downloads, e.library, e.collections, nil, nil, nil, e.settings, nil, nil, nil, queue.NewProgressStore(), ws.NoopBroadcaster{})
+	e.mgr = queue.NewDownloadManager(t.TempDir(), t.TempDir(), "", e.ytdlp, e.downloads, e.library, e.collections, repository.NewHistoryRepo(conn), nil, nil, e.settings, nil, nil, nil, queue.NewProgressStore(), ws.NoopBroadcaster{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	e.mgr.Start(ctx, 1)
+	e.mgr.Start(ctx, 0) // no workers: see newAtomicEnv doc
 
 	e.events = repository.NewSystemEventsRepo(conn)
 	e.router = gin.New()
@@ -111,6 +118,15 @@ func sealImport(t *testing.T, kind string, payload any) map[string]any {
 		t.Fatal(err)
 	}
 	return map[string]any{"data": string(data)}
+}
+
+// TestAtomicEnvManagerHasNoWorkers keeps the fixture from silently starting
+// workers again (they would race restore tests that queue real downloads).
+func TestAtomicEnvManagerHasNoWorkers(t *testing.T) {
+	e := newAtomicEnv(t)
+	if got := e.mgr.WorkerCount(); got != 0 {
+		t.Fatalf("fixture manager has %d workers, want 0", got)
+	}
 }
 
 func TestUpdateSettings_ValidationFailureChangesNothing(t *testing.T) {
