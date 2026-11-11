@@ -95,6 +95,9 @@ func ExportLibrary(collectionsRepo *repository.CollectionsRepo, tagsRepo *reposi
 // corrupt file is a client mistake (400), not a server error.
 func writeBackupOpenError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, backup.ErrMalformedExport):
+		// Fixed text: the decoder's own message stays out of the response.
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The backup file is not valid."})
 	case errors.Is(err, backup.ErrNotPackratExport), errors.Is(err, backup.ErrWrongKind), errors.Is(err, backup.ErrIncorrectPassword):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:

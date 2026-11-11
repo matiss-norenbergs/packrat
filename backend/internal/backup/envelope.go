@@ -52,6 +52,9 @@ func Seal(kind string, plaintext []byte, password string) (Envelope, error) {
 var (
 	ErrNotPackratExport = errors.New("not a packrat export file")
 	ErrWrongKind        = errors.New("wrong export type for this import")
+	// ErrMalformedExport marks an envelope whose base64 data or salt cannot be
+	// decoded: malformed input, not a server fault.
+	ErrMalformedExport = errors.New("the backup file is not valid")
 )
 
 // Open validates env and returns the plaintext bundle bytes, decrypting with
@@ -84,7 +87,7 @@ func OpenAny(env Envelope, wantKinds []string, password string) (plaintext []byt
 
 	data, err := base64.StdEncoding.DecodeString(env.Data)
 	if err != nil {
-		return nil, "", fmt.Errorf("decoding export data: %w", err)
+		return nil, "", fmt.Errorf("%w: decoding export data: %v", ErrMalformedExport, err)
 	}
 
 	if !env.Encrypted {
@@ -93,7 +96,7 @@ func OpenAny(env Envelope, wantKinds []string, password string) (plaintext []byt
 
 	salt, err := base64.StdEncoding.DecodeString(env.Salt)
 	if err != nil {
-		return nil, "", fmt.Errorf("decoding salt: %w", err)
+		return nil, "", fmt.Errorf("%w: decoding salt: %v", ErrMalformedExport, err)
 	}
 	plaintext, err = decrypt(salt, data, password)
 	return plaintext, env.Kind, err

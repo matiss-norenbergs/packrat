@@ -1570,8 +1570,9 @@ finishes.
 { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 12, "ghostsCreated": 1 }
 ```
 
-Common errors for all three: `400` for a non-Packrat file, wrong `kind`, or a wrong password;
-`500` otherwise.
+Common errors for all three: `400` for a non-Packrat file, wrong `kind`, a wrong password, or an
+envelope whose base64 `data`/`salt` cannot be decoded (`{"error": "The backup file is not valid."}`,
+the same for `preview/full` and `import/full`); `500` otherwise.
 
 ### Full backup
 
