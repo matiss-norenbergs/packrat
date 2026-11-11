@@ -316,6 +316,9 @@ func run() error {
 
 	imageResizer := imageproc.NewResizer(cfg.FFmpegPath, cfg.CacheRoot)
 
+	// Expired sessions are already rejected on lookup; this only reclaims the rows (once now, then daily).
+	tasks.Go(func() { runSessionSweep(ctx, usersRepo, sessionSweepInterval) })
+
 	tasks.Go(func() {
 		// All six sweeps share one ticker — they run on the same cadence
 		// and each is already a no-op when its own setting is unset/not due.

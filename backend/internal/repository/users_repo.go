@@ -373,3 +373,15 @@ func (r *UsersRepo) DeleteSession(ctx context.Context, token string) error {
 	r.sessionsRevoked()
 	return nil
 }
+
+// DeleteExpiredSessions removes every session whose expiry has passed and reports how many went.
+// It deliberately does NOT call sessionsRevoked: an expired session is already rejected by
+// GetValidSession, and every live WebSocket bound to it is closed by the hub's own ping-tick check
+// (which treats expiry as "gone"), so there is nothing to tell the hub.
+func (r *UsersRepo) DeleteExpiredSessions(ctx context.Context) (int64, error) {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= ?`, r.Now().UTC().Format(sessionTimeLayout))
+	if err != nil {
+		return 0, fmt.Errorf("deleting expired sessions: %w", err)
+	}
+	return res.RowsAffected()
+}

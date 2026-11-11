@@ -194,6 +194,14 @@ failure (`fail`), and a deferred `release` gives it back otherwise (success, bad
 leaks. A login challenge works the same way: `Challenges.Lookup` counts a code attempt atomically,
 so at most five codes are ever checked per challenge, however many arrive at once.
 
+**Expired-session cleanup:** an expired row is already rejected on lookup; `UsersRepo.DeleteExpiredSessions`
+(one `DELETE … WHERE expires_at <= now`) only reclaims the rows. `cmd/server/session_sweep.go`
+(`runSessionSweep`) runs it once at startup, after migrations, and every 24 h from a goroutine
+started with `tasks.Go` (so shutdown cancels it and waits for it). It logs only a count > 0; a busy
+database (`db.IsBusy`) logs one line and waits for the next tick. It does not call
+`onSessionsRevoked`: expired sessions are already invalid, and the hub's ping-tick check closes any
+socket bound to one.
+
 A WebSocket client carries the raw token of the session that opened it (in memory only) and re-checks
 it with `GetValidSession`, which hashes it, so revocation by hash still closes it. `UsersRepo` calls a hook after
 any session delete; `Hub.RevalidateSessions` then re-checks every client's session (off the hub

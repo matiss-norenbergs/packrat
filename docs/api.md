@@ -89,6 +89,8 @@ from the thumbnail gallery, `POST /api/history/clear`, `POST /api/downloads/clea
   already holds, not a new one) with a fresh 30-day max-age and the same `HttpOnly`/`SameSite=Lax`/
   `Secure=false` attributes as login; otherwise the browser would drop them 30 days after login.
   Bearer and `?token=` clients have no cookie and only get the server-side extension.
+- **Expired sessions are deleted** by a background job at server start and then every 24 hours (they
+  are rejected with `401` long before that; this only removes the rows).
 - **Tokens are stored hashed.** The `token` column holds the SHA-256 hex of the token the client
   holds; the raw token exists only in the cookie / bearer header / `?token=` the client sends and in
   memory for the length of a request. The repository does the hashing, so a database or backup copy
