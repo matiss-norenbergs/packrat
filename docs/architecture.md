@@ -62,8 +62,9 @@ names as several REST resources. Registering the API at those exact top-level pa
 refresh (or a shared link) on those pages returned raw JSON instead of the app shell, since Gin
 matches a registered route before ever falling back to serving `index.html`. All JSON API routes
 are grouped under `/api` (see `internal/api/router.go`) to make that collision structurally
-impossible, no matter how many more pages are added later. `/media-files` and `/ws` stay
-unprefixed since no frontend route shares those names.
+impossible, no matter how many more pages are added later. `/media-files`, `/local-images` and `/ws` stay
+unprefixed since no frontend route shares those names. `GET /api/version` (the running and latest
+version) is public, like `/api/health`.
 
 ## Request body limits
 
@@ -135,8 +136,8 @@ for the same failure but is redundant, and a handler that calls `preventDefault`
 ## Auth and CSRF
 
 The app is single-user (no registration beyond a one-time setup wizard) but is fully
-session-gated: `RequireAuth` covers every `/api/*` route except `/api/health` and
-`/api/auth/{status,setup,login,login/2fa,logout}`, plus `/media-files/*` and `/ws`. Sessions are opaque
+session-gated: `RequireAuth` covers every `/api/*` route except `/api/health`, `/api/version` and
+`/api/auth/{status,setup,login,login/2fa,logout}`, plus `/media-files/*`, `/local-images/*` and `/ws`. Sessions are opaque
 64-char hex tokens validated against a server-side sessions table (not signed/stateless JWTs),
 30-day expiry, cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`). Each row also records the
 device that logged in (client, IP, truncated User-Agent), a throttled `last_seen_at`, and a separate

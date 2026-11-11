@@ -15,8 +15,8 @@ never blocked by a write.
 All JSON API routes live under `/api` — this is deliberate, not a style choice: the frontend has
 client-side routes named `/downloads`, `/library`, `/collections`, etc. too, and without the prefix
 a hard refresh (or a shared link) on those pages would hit the API route instead of the app shell,
-since Gin matches registered routes before falling back to serving `index.html`. `/media-files` and
-`/ws` stay unprefixed since no frontend route shares those names. An unknown `/api/*` route answers
+since Gin matches registered routes before falling back to serving `index.html`. `/media-files`,
+`/local-images` and `/ws` stay unprefixed since no frontend route shares those names. An unknown `/api/*` route answers
 `404` `{"error": "not found"}` (never the app shell); unknown `/media-files/*`, `/local-images/*`
 and `/ws/*` paths answer a plain `404`.
 
@@ -2256,6 +2256,18 @@ Static file server rooted at `MEDIA_ROOT`. Directories are not listed (`404`); o
 (GET-only). Responses carry `Cache-Control: no-cache` (not `no-store`) — still revalidates cheaply
 via `If-Modified-Since`, but never assumes a stale byte range is fresh, since sidecar thumbnails
 get overwritten in place at the same path.
+
+## Local images
+
+| Method | Path |
+|---|---|
+| GET | `/local-images/*path` |
+
+Static file server rooted at `IMAGES_ROOT` (generated thumbnails, artist images, collection covers and the
+AI-enhancement originals; registered only when that folder is configured).
+Same rules as `/media-files`: requires a valid session cookie but no CSRF header (GET-only), directories
+are not listed (`404`), responses carry `Cache-Control: no-cache` because a replaced cover or selected
+image can reuse its filename.
 
 ## Resized images
 
