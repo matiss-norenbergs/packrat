@@ -20,8 +20,6 @@ Effort is a rough guess: **S** = under an hour of agent work, **M** = a few hour
   - Compatibility: the first server release must accept both token forms (older desktop apps only know
     the query session token); a follow-up release removes the old form.
   - Worth doing mainly if the server is ever reachable beyond a private network (Tailscale/LAN).
-- **Clean up old sessions (S).** Expired sessions are never deleted from the database; they don't show in
-  the Sessions list or work, they just accumulate. A sweep (hourly, like the log retention sweeps) would do.
 - **Failed-attempts notice edge (S).** The "failed attempts since last login" notice compares timestamps
   at one-second resolution with a strict `>`, so failures in the same second as the last
   acknowledgement aren't counted. Harmless in real use.
@@ -80,6 +78,75 @@ the `Run` command; a real sign-out/sign-in of Windows wasn't tested).
   (the bundle's `artists` list is plain strings), so a restore loses the artist private flag, birthday and images.
   Carrying the flag needs an object form for that list with a backward-compatible import (old bundles with bare
   strings must keep importing).
+
+## Backend audit leftovers
+
+From the full backend audit: every numbered finding is fixed. What follows is its "low confidence" list
+(real but unlikely to matter, or needing a decision), plus a few loose ends found while fixing the rest.
+None are scheduled. Sizes are guesses.
+
+**Could show wrong data**
+
+- **Collection PATCH is a full replace (S).** Omitted `isPrivate`, `browseAsShow` and `artistId` are cleared
+  instead of left alone. Decide whether PATCH should merge, then make it so (and update `api.md`).
+- **Ghost create keeps the row on a tagging failure (S).** It answers 500 but the ghost stays, so a retry makes a
+  second ghost. Create and tag in one transaction, or delete the row on failure.
+- **Duration stored as 0 after a trim when ffprobe fails (S).** It should be NULL so the UI shows "unknown".
+- **Double redownload race (S).** The active-download check and the enqueue are not atomic, so two quick
+  redownloads of one item can both queue.
+- **Unvalidated thumbnail bytes in `SetLibraryThumbnail` (S).** Any bytes are written as the sidecar. Decode with
+  `thumbwrite.Probe` first (JPEG/PNG), as the other thumbnail writers now do.
+- **Gallery extension (S).** `readCurrentThumbnail` labels every thumbnail `.jpg`, whatever the real format.
+- **Trim preview not bound to an item (S).** `trim_handler.go`: accept takes any valid `.trim-preview-*` path, not
+  just the one created for that item.
+- **Collection path segments from an uploaded bundle are not sanitized (S).** `..` or `a/b` in a name. Downloads
+  stay contained by `pathsafe`, but the segment should be cleaned on import.
+- **Restore bypasses settings validation (S to M).** Values are written verbatim (only `maxConcurrentDownloads` is
+  clamped now). Run the same validation as `PATCH /api/settings`, clamping or skipping bad values instead of failing.
+
+**Behavior to decide or finish**
+
+- **Collection `rootPath` change moves nothing on disk (S).** `FEATURES.md` doesn't say whether that is intended.
+- **A restore that re-enables subscriptions doesn't run the catch-up check (S)** that `UpdateSettings` runs.
+- **Subscription tags are comma-joined (S).** A tag containing `,` splits in two.
+- **"Current" playlist mode on a pure playlist URL (M).** It downloads every entry but only the last becomes an item.
+- **Serial bulk thumbnail fetch (S).** One yt-dlp run per id inside the request, with no cap or dedupe.
+- **`ScanImport` runs one ffprobe per untracked file inside the request (M).** Move it to a background job with
+  progress, like the other scans.
+- **Backfill progress shows 0 during the library pass (S).**
+- **No per-click cancel for an AI enhancement (S).** The goroutines are tracked and stop on shutdown, but a single
+  Enhance or Sharpen can't be cancelled.
+- **N+1 queries in the subscriptions list and bulk frame match (S).** Only visible at large sizes.
+
+**Small hardening**
+
+- **Logout has no CSRF check (S).** `SameSite=Lax` makes it a nuisance at most.
+- **WebSocket has no `SetReadLimit`, and at shutdown each `readPump` blocks on `unregister` (S).**
+- **`pathsafe` does not resolve symlinks (S).** Exploiting it needs host access.
+- **Jellyfin item id is not escaped in the URL path (S).** It is an admin-set value.
+- **`%` in output names (S).** A remote title with `%(...)s` is expanded by yt-dlp. Paths stay contained.
+- **`synchronous=FULL` under WAL (S).** `NORMAL` is the usual setting and is safe with WAL; a durability trade to decide.
+- **The FTS `library_au` trigger has no column list (S).** Every playback-position heartbeat rewrites the FTS row
+  (about 3 ms). Restrict it to the indexed columns.
+- **A1111 output writes PNG bytes into a `.jpg` sidecar (S).** Check whether consumers (Jellyfin, the frontend)
+  sniff the content or trust the extension.
+- **`pruneEmptyParents` can race tier generation for the same directory (S).** A tiny window.
+- **Case-sensitive stray-file matching and Windows reserved names (S).** `SanitizeFilename` doesn't reject `CON`,
+  `NUL`, `COM1`. Windows hosts only.
+
+**Loose ends**
+
+- **Run `govulncheck` (S).** It has never run: the vulnerability database download was blocked in the audit
+  sandbox, so dependency CVEs are unchecked. Try it from a normal network, or add it as a CI job.
+- **Backup upload UI size check (S).** The server accepts 128 MB on the backup import routes (the global body limit
+  stays 50 MB). Check whether the upload dialog has its own client-side limit and raise it to match.
+- **Trim UI frame cap (S).** `ExtractFrameRange` stops at 300 frames (`maxFrameCount` in
+  `downloader/trim_frames.go`), so a very long range is cut off.
+- **CI step timeouts (S).** The `desktop` and `e2e` jobs have hung for hours on the "Install Linux dependencies"
+  step (an `apt` stall, not a code problem), and only a manual re-run recovered. A `timeout-minutes` on those jobs
+  (and a retry around `apt-get update`) would make a hang fail in minutes.
+- **Slow arm64 release build.** The release workflow builds the arm64 Docker image under QEMU, which is slow.
+  Decided to do nothing for now; a native arm64 runner is the fix if it starts to matter.
 
 ## Dependencies
 
