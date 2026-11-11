@@ -15,8 +15,8 @@ never blocked by a write.
 All JSON API routes live under `/api` — this is deliberate, not a style choice: the frontend has
 client-side routes named `/downloads`, `/library`, `/collections`, etc. too, and without the prefix
 a hard refresh (or a shared link) on those pages would hit the API route instead of the app shell,
-since Gin matches registered routes before falling back to serving `index.html`. `/media-files` and
-`/ws` stay unprefixed since no frontend route shares those names. An unknown `/api/*` route answers
+since Gin matches registered routes before falling back to serving `index.html`. `/media-files`,
+`/local-images` and `/ws` stay unprefixed since no frontend route shares those names. An unknown `/api/*` route answers
 `404` `{"error": "not found"}` (never the app shell); unknown `/media-files/*`, `/local-images/*`
 and `/ws/*` paths answer a plain `404`.
 
@@ -162,7 +162,7 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
 | GET | `/api/auth/security-notice` | session |
 | POST | `/api/auth/security-notice/ack` | session + CSRF |
 
-- **`POST /api/auth/setup`** — `{ "username": "...", "password": "min 8 chars" }`. Only succeeds
+- **`POST /api/auth/setup`** — `{ "username": "...", "password": "8 chars to 72 bytes" }`. A password over 72 **bytes** (bcrypt's limit; a multi-byte character counts as several) is refused with `400 {"error":"Password must be at most 72 bytes."}`, never truncated. Only succeeds
   while zero users exist (`409` otherwise, also when several calls arrive at once). Creates the user, sets both cookies, `204`.
 - **`POST /api/auth/login`** — `{ "username": "...", "password": "..." }`. Wrong username *or*
   password both return `401 {"error":"invalid username or password"}` — never reveals which was
@@ -185,7 +185,7 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
   connection address; `X-Forwarded-For` is only honored from `TRUSTED_PROXIES`.
 - **`POST /api/auth/logout`** — no body. Deletes the session row server-side (a replayed old cookie
   stops working immediately) and clears both cookies. `204`, idempotent even with no session.
-- **`PATCH /api/auth/password`** — `{ "currentPassword": "...", "newPassword": "min 8 chars" }`.
+- **`PATCH /api/auth/password`** — `{ "currentPassword": "...", "newPassword": "8 chars to 72 bytes" }`. A new password over 72 bytes is `400 {"error":"Password must be at most 72 bytes."}` (checked before the current password). Logging in or confirming with an over-long password is the normal `401`.
   Requires the *current* password even though the route is already session-protected, so a
   hijacked/left-open session can't lock out the real owner. `401` if current password is wrong,
   else `204`. All other sessions of the user (including desktop tokens) are signed out; the current
@@ -1161,7 +1161,7 @@ name, `204` on success.
 ### `DELETE /api/collections/:id`
 
 `404` unknown, `409 {"error":"collection has sub-collections — move or delete them first"}` if it
-has children, `204` on success. Never deletes the files inside it — items just lose their
+has children (also when a child is created while the delete is running — the foreign key refuses the delete and that is mapped to the same `409`, not a `500`), `204` on success. Never deletes the files inside it — items just lose their
 collection association — but removes the collection's own cover images (`ImagesRoot/collections/<id>/`).
 `bulk-delete` does the same for each deleted collection, after commit.
 
@@ -1432,7 +1432,8 @@ Same field set as the `GET` response. Notes:
 - `dashboardHiddenWidgets` is the list of Dashboard card IDs to hide (default `[]` = all shown).
   Valid IDs: `downloads`, `library`, `libraryGrowth`, `mediaTypes`, `resolutions`, `storage`,
   `topArtists`, `topTags`. Duplicates are collapsed; an unknown ID is a `400`.
-- `maxConcurrentDownloads` **immediately resizes the live worker pool**, no restart needed.
+- `maxConcurrentDownloads` **immediately resizes the live worker pool**, no restart needed. It must be
+  1 to 16 (`models.MaxConcurrentDownloadsLimit`); above 16 is `400 {"error":"maxConcurrentDownloads must be between 1 and 16"}` and nothing in the request is saved.
 - `downloadDirectory` (`MEDIA_ROOT`) is **not** patchable here — env-config only.
 
 `204 No Content` on success.
@@ -1538,7 +1539,9 @@ ever shipped**; re-import re-queues downloads from those URLs. `downloadType`/`q
 `kind` is the endpoint's own or `"full"` (`400` if neither), decrypts if needed (`400` on wrong
 password). `mode` (import only, ignored by preview) is `"download"` (default) or `"ghostOnly"`.
 Settings import overwrites every key present in the bundle (never deletes keys absent from it) and
-live-resizes the worker pool if `maxConcurrentDownloads` was included:
+live-resizes the worker pool if `maxConcurrentDownloads` was included. A `maxConcurrentDownloads` above 16 is
+**clamped to 16** (logged) instead of refused, so a restore never fails halfway; the same applies to `import/full` and
+`POST /api/backup/history/:id/restore`:
 
 ```json
 { "applied": 23 }
@@ -1570,8 +1573,14 @@ finishes.
 { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 12, "ghostsCreated": 1 }
 ```
 
-Common errors for all three: `400` for a non-Packrat file, wrong `kind`, or a wrong password;
-`500` otherwise.
+The request body of these three, `preview/full` and `import/full` may be up to **128 MB**
+(`maxBackupImportBodyBytes`; the global limit for every other endpoint stays 50 MB). Over it — by declared
+`Content-Length` or while reading a chunked body — is `413 {"error":"The backup file is too large (the limit is 128 MB)."}`.
+A 20,000-item full backup is about 19 MB, so the limit covers libraries of ~130,000 items.
+
+Common errors for all three: `400` for a non-Packrat file, wrong `kind`, a wrong password, or an
+envelope whose base64 `data`/`salt` cannot be decoded (`{"error": "The backup file is not valid."}`,
+the same for `preview/full` and `import/full`); `500` otherwise.
 
 ### Full backup
 
@@ -2247,6 +2256,18 @@ Static file server rooted at `MEDIA_ROOT`. Directories are not listed (`404`); o
 (GET-only). Responses carry `Cache-Control: no-cache` (not `no-store`) — still revalidates cheaply
 via `If-Modified-Since`, but never assumes a stale byte range is fresh, since sidecar thumbnails
 get overwritten in place at the same path.
+
+## Local images
+
+| Method | Path |
+|---|---|
+| GET | `/local-images/*path` |
+
+Static file server rooted at `IMAGES_ROOT` (generated thumbnails, artist images, collection covers and the
+AI-enhancement originals; registered only when that folder is configured).
+Same rules as `/media-files`: requires a valid session cookie but no CSRF header (GET-only), directories
+are not listed (`404`), responses carry `Cache-Control: no-cache` because a replaced cover or selected
+image can reuse its filename.
 
 ## Resized images
 

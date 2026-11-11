@@ -70,7 +70,7 @@ Environment variables (set them in `.env` natively, or under `environment:` in
 | `BACKUPS_ROOT` | `./data/backups` | Automatic and manual backup files, plus the `pre-migration/` safety copies (see [Rolling back an update](#rolling-back-an-update)). |
 | `SKIP_PRE_MIGRATION_BACKUP` | `false` | `true` applies pending migrations without first copying the database to `BACKUPS_ROOT/pre-migration/`. Only needed if the copy cannot be made (full disk, read-only backups folder). |
 | `CACHE_ROOT` | `./data/cache` | Disposable cache of resized images (rebuilt on demand, swept after 7 days unused). |
-| `MAX_CONCURRENT_DOWNLOADS` | `2` | Parallel downloads. Only seeds a fresh database; Settings → General wins afterwards. |
+| `MAX_CONCURRENT_DOWNLOADS` | `2` | Parallel downloads, 1 to 16 (a larger value is capped at 16). Only seeds a fresh database; Settings → General wins afterwards. |
 | `MAX_CONCURRENT_FFMPEG_TRANSCODES` | `2` | Parallel Trim previews. Same: seeds a fresh database. |
 | `YTDLP_PATH`, `FFMPEG_PATH`, `FFPROBE_PATH`, `PIP_PATH` | `yt-dlp`, `ffmpeg`, `ffprobe`, `pip` | Tool locations. The Docker image keeps yt-dlp in a venv under the data volume so "Update yt-dlp" survives restarts. |
 | `STATIC_DIR` | empty | Built frontend to serve (the Docker image sets it; empty in dev, where Vite serves the UI). |
@@ -78,6 +78,10 @@ Environment variables (set them in `.env` natively, or under `environment:` in
 | `CORS_ALLOWED_ORIGINS` | the Tauri app origins | Origins allowed to call the API cross-origin (the desktop app). See [`docs/api.md`](docs/api.md#auth-and-csrf). |
 | `TRUSTED_PROXIES`, `PACKRAT_SECRET_KEY` | empty | Login rate limiting and 2FA: see [Security and admin commands](#security-and-admin-commands). |
 | `PACKRAT_ACTION_<N>_*` | none | Optional sidebar "Actions" (see [`docs/FEATURES.md`](docs/FEATURES.md) → Host actions). |
+
+**Request size limits.** API requests are limited to 50 MB; uploading a backup file (Backup page imports and
+previews) may be up to 128 MB, about 130,000 library items. A reverse proxy in front of Packrat needs its own
+body limit raised to match (nginx `client_max_body_size 128m`).
 
 ### Dependabot
 
@@ -146,7 +150,7 @@ echo 'new-password' | docker exec -i <container> /app/packrat --reset-password -
 docker exec <container> /app/packrat --disable-2fa            # clears the secret and recovery codes
 ```
 
-The password is never accepted as a command-line argument. Natively, run `packrat --reset-password`
+A new password must be 8 characters to 72 bytes long (bcrypt's limit; a longer one is refused, not truncated). The password is never accepted as a command-line argument. Natively, run `packrat --reset-password`
 (or `go run ./cmd/server --reset-password`) with the same environment as the server.
 
 ## Rolling back an update

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
+	"packrat/backend/internal/models"
 	"packrat/backend/internal/ratelimit"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/sysevents"
@@ -137,6 +138,11 @@ func AuthSetup(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 			return
 		}
 
+		if models.PasswordTooLong(req.Password) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": models.PasswordTooLongMessage})
+			return
+		}
+
 		count, err := usersRepo.Count(c.Request.Context())
 		if err != nil {
 			writeServerError(c, err)
@@ -245,6 +251,11 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 		var req ChangePasswordRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if models.PasswordTooLong(req.NewPassword) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": models.PasswordTooLongMessage})
 			return
 		}
 

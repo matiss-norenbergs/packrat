@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"sync"
 	"testing"
 
 	"packrat/backend/internal/models"
@@ -79,5 +81,49 @@ func TestCollectionsRepo_CRUD(t *testing.T) {
 	}
 	if err := repo.Delete(ctx, 99999); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound deleting unknown id, got %v", err)
+	}
+}
+
+// racingDB runs the real query and then, once, calls hook: it lets a test put
+// a child collection in place between Delete's child count and its DELETE.
+type racingDB struct {
+	dbtx
+	hook func()
+}
+
+func (r *racingDB) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	row := r.dbtx.QueryRowContext(ctx, query, args...)
+	if r.hook != nil {
+		h := r.hook
+		r.hook = nil
+		h()
+	}
+	return row
+}
+
+// A child that appears after the count but before the DELETE is refused by the
+// parent_id foreign key; Delete must answer ErrHasChildren (409), not an
+// opaque error (500).
+func TestCollectionsRepo_DeleteChildAppearsAfterCount(t *testing.T) {
+	ctx := context.Background()
+	conn := openTestDB(t).db
+	repo := NewCollectionsRepo(conn)
+	parent, err := repo.Create(ctx, &models.Collection{Name: "Parent", RootPath: "Parent", DefaultQuality: "best", DefaultDownloadType: "video"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	racing := &CollectionsRepo{db: &racingDB{dbtx: conn, hook: func() {
+		_, err := conn.ExecContext(ctx, `INSERT INTO collections (name, root_path, parent_id, default_quality, default_download_type) VALUES ('Child', 'Child', ?, 'best', 'video')`, parent)
+		if err != nil {
+			t.Errorf("inserting the racing child: %v", err)
+		}
+	}}, mu: &sync.Mutex{}}
+	err = racing.Delete(ctx, parent)
+	if !errors.Is(err, ErrHasChildren) {
+		t.Fatalf("Delete = %v, want ErrHasChildren", err)
+	}
+	if _, err := repo.Get(ctx, parent); err != nil {
+		t.Errorf("the parent must still exist: %v", err)
 	}
 }

@@ -210,7 +210,7 @@ export function LoginPage() {
             />
             {isSetup && (
               <p className={`text-xs ${passwordTooShort ? "text-destructive" : "text-muted-foreground"}`}>
-                Must be at least 8 characters
+                At least 8 characters, at most 72 bytes
               </p>
             )}
           </div>

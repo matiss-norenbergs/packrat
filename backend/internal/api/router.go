@@ -89,6 +89,7 @@ func noCacheHeaders(c *gin.Context) {
 const maxRequestBodyBytes = 50 << 20 // 50MB
 
 func limitRequestBody(c *gin.Context) {
+	c.Set(rawBodyKey, c.Request.Body) // routes with their own limit (allowLargeBody) start from this
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBodyBytes)
 	c.Next()
 }
@@ -309,11 +310,13 @@ func SetupRouter(deps Deps) *gin.Engine {
 
 		api.POST("/backup/export/settings", ExportSettings(deps.SettingsRepo))
 		api.POST("/backup/export/library", ExportLibrary(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.DownloadsRepo))
-		api.POST("/backup/import/settings", ImportSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp))
-		api.POST("/backup/preview/library", PreviewLibraryImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
-		api.POST("/backup/import/library", ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.SettingsRepo))
-		api.POST("/backup/preview/full", PreviewFullImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
-		api.POST("/backup/import/full", ImportFullBackup(deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.YtDlp))
+		// The routes that take an uploaded backup file have their own, larger body limit.
+		largeBackupBody := allowLargeBody(maxBackupImportBodyBytes)
+		api.POST("/backup/import/settings", largeBackupBody, ImportSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp))
+		api.POST("/backup/preview/library", largeBackupBody, PreviewLibraryImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
+		api.POST("/backup/import/library", largeBackupBody, ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.SettingsRepo))
+		api.POST("/backup/preview/full", largeBackupBody, PreviewFullImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
+		api.POST("/backup/import/full", largeBackupBody, ImportFullBackup(deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.YtDlp))
 		api.GET("/backup/history", ListBackupHistory(deps.BackupHistoryRepo))
 		api.POST("/backup/run", RunManualBackup(backup.RunDeps{
 			BackupsRoot:       deps.BackupsRoot,

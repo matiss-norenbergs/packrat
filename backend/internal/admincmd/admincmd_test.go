@@ -138,3 +138,30 @@ func TestCommandsWithoutAnAccount(t *testing.T) {
 		t.Error("disable without an account must fail")
 	}
 }
+
+// bcrypt takes at most 72 bytes; the command-line reset refuses a longer one
+// with a clear error and leaves the account and its sessions alone.
+func TestResetPasswordRejectsMoreThan72Bytes(t *testing.T) {
+	users := newUsers(t)
+	ctx := context.Background()
+	hash, _ := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.MinCost)
+	u, _ := users.Create(ctx, "admin", string(hash))
+	if err := users.CreateSession(ctx, "tok", u.ID, time.Now().Add(time.Hour), repository.SessionMeta{}); err != nil {
+		t.Fatal(err)
+	}
+	for name, pw := range map[string]string{
+		"73 ascii bytes":        strings.Repeat("a", 73),
+		"40 chars but 80 bytes": strings.Repeat("é", 40),
+	} {
+		err := ResetPassword(ctx, users, pw)
+		if err == nil || !strings.Contains(err.Error(), "at most 72 bytes") {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+	if n, _ := users.CountSessions(ctx); n != 1 {
+		t.Fatalf("a rejected reset must leave sessions alone, have %d", n)
+	}
+	if err := ResetPassword(ctx, users, strings.Repeat("a", 72)); err != nil {
+		t.Fatalf("72 bytes must be accepted: %v", err)
+	}
+}

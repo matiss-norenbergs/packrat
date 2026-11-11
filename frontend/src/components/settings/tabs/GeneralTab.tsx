@@ -9,6 +9,9 @@ import { SaveRow } from "@/components/settings/SaveRow"
 import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
 import { useSettingsDraft } from "@/hooks/useSettingsDraft"
 
+// Mirrors models.MaxConcurrentDownloadsLimit on the backend (PATCH answers 400 above it).
+const MAX_CONCURRENT_DOWNLOADS = 16
+
 function toForm(s: Settings) {
   return {
     maxConcurrent: String(s.maxConcurrentDownloads),
@@ -34,7 +37,8 @@ function GeneralTabBody({ settings }: { settings: Settings }) {
 
   const payload: UpdateSettingsRequest = {}
   const n = Number(maxConcurrent)
-  if (n > 0 && n !== settings.maxConcurrentDownloads) payload.maxConcurrentDownloads = n
+  const maxConcurrentTooHigh = n > MAX_CONCURRENT_DOWNLOADS
+  if (n > 0 && !maxConcurrentTooHigh && n !== settings.maxConcurrentDownloads) payload.maxConcurrentDownloads = n
   const nTranscodes = Number(maxConcurrentTranscodes)
   if (nTranscodes > 0 && nTranscodes !== settings.maxConcurrentTranscodes) payload.maxConcurrentTranscodes = nTranscodes
   const timeout = Number(downloadTimeout)
@@ -66,9 +70,13 @@ function GeneralTabBody({ settings }: { settings: Settings }) {
                 id="max-concurrent"
                 type="number"
                 min="1"
+                max={MAX_CONCURRENT_DOWNLOADS}
                 value={maxConcurrent}
                 onChange={(e) => setMaxConcurrent(e.target.value)}
               />
+              <p className={`text-xs ${maxConcurrentTooHigh ? "text-destructive" : "text-muted-foreground"}`}>
+                1 to {MAX_CONCURRENT_DOWNLOADS}
+              </p>
             </div>
 
             <div className="space-y-2">

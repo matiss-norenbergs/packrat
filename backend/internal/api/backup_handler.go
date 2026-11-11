@@ -95,6 +95,9 @@ func ExportLibrary(collectionsRepo *repository.CollectionsRepo, tagsRepo *reposi
 // corrupt file is a client mistake (400), not a server error.
 func writeBackupOpenError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, backup.ErrMalformedExport):
+		// Fixed text: the decoder's own message stays out of the response.
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The backup file is not valid."})
 	case errors.Is(err, backup.ErrNotPackratExport), errors.Is(err, backup.ErrWrongKind), errors.Is(err, backup.ErrIncorrectPassword):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
@@ -105,8 +108,7 @@ func writeBackupOpenError(c *gin.Context, err error) {
 func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BackupImportRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if !bindBackupImport(c, &req) {
 			return
 		}
 
@@ -166,8 +168,7 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 // download, "ghostOnly" skips every redownload).
 func decodeLibraryBundle(c *gin.Context) (bundle backup.LibraryBundle, mode string, ok bool) {
 	var req BackupImportRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindBackupImport(c, &req) {
 		return bundle, "", false
 	}
 
@@ -578,8 +579,7 @@ func ImportFullBackup(
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BackupImportRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if !bindBackupImport(c, &req) {
 			return
 		}
 		env, err := backup.ParseEnvelope(req.Data)
@@ -621,8 +621,7 @@ func ImportFullBackup(
 func PreviewFullImport(collectionsRepo *repository.CollectionsRepo, tagsRepo *repository.TagsRepo, artistsRepo *repository.ArtistsRepo, libraryRepo *repository.LibraryRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BackupImportRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if !bindBackupImport(c, &req) {
 			return
 		}
 		env, err := backup.ParseEnvelope(req.Data)

@@ -874,6 +874,10 @@ or just as a safety net.
 - A full restore applies the library first, then the settings (together, all or nothing), then queues the
   redownloads, so they use the restored settings. If the library part fails, your current settings are left
   untouched; restored worker and transcode limits take effect immediately.
+- A backup file can be up to **128 MB** to import (the Settings, Library Data and Full Backup cards and
+  their previews; every other request is limited to 50 MB). That is roughly 130,000 library items; a
+  larger file is refused with "The backup file is too large (the limit is 128 MB)." (413). Behind a
+  reverse proxy, its own body limit (nginx `client_max_body_size`) must allow it too.
 - Both plain exports can optionally be **encrypted with a password** — the exported file is
   unreadable without it, and importing an encrypted file prompts for the same password.
 
@@ -1118,8 +1122,9 @@ Notifications tab is a per-device preference and Appearance is saved to your acc
 immediately).
 If the settings can't be loaded, a tab shows an error with a **Retry** button instead of its form.
 
-- **General** — max concurrent downloads (applies to the live worker pool immediately, no
-  restart needed), max concurrent transcodes (how many Trim previews ffmpeg may generate at once;
+- **General** — max concurrent downloads (1 to 16; applies to the live worker pool immediately, no
+  restart needed; the field shows the range and Save stays off above 16; a settings import or
+  backup restore that carries a larger value is clamped to 16 rather than refused), max concurrent transcodes (how many Trim previews ffmpeg may generate at once;
   also applies immediately, and both limits survive a restart — the `MAX_CONCURRENT_DOWNLOADS` /
   `MAX_CONCURRENT_FFMPEG_TRANSCODES` environment variables only seed a fresh database) and a
   download timeout in minutes (kills and marks failed any download still
@@ -1127,7 +1132,7 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   via the `MEDIA_ROOT` environment variable).
 - **Account** — three cards of the same width, top to bottom: **Active sessions**, **Two-factor
   authentication** and **Password**. **Change password** opens a dialog (current, new, confirm; the
-  new one needs 8+ characters and a matching confirmation, Enter submits, fields are cleared whenever
+  new one needs 8+ characters, at most 72 bytes (a multi-byte character counts as several), a matching confirmation, Enter submits, fields are cleared whenever
   the dialog closes, and a successful change closes it with a "Password changed" toast; the current
   password must be right; changing it signs out your other devices and sessions). 2FA is optional and off by default; accounts without it log in exactly as before. **Enable**
   opens a 3-step dialog: (1) scan a QR code (drawn in the browser, always dark on a white tile) or type

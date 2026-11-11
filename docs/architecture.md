@@ -62,8 +62,24 @@ names as several REST resources. Registering the API at those exact top-level pa
 refresh (or a shared link) on those pages returned raw JSON instead of the app shell, since Gin
 matches a registered route before ever falling back to serving `index.html`. All JSON API routes
 are grouped under `/api` (see `internal/api/router.go`) to make that collision structurally
-impossible, no matter how many more pages are added later. `/media-files` and `/ws` stay
-unprefixed since no frontend route shares those names.
+impossible, no matter how many more pages are added later. `/media-files`, `/local-images` and `/ws` stay
+unprefixed since no frontend route shares those names. `GET /api/version` (the running and latest
+version) is public, like `/api/health`.
+
+## Request body limits
+
+`limitRequestBody` (router.go) caps every request body at `maxRequestBodyBytes` (50 MB) with
+`http.MaxBytesReader`. The five routes that take an uploaded backup file (`POST /api/backup/import/settings`,
+`.../preview/library`, `.../import/library`, `.../preview/full`, `.../import/full`) replace it with the route
+middleware `allowLargeBody(maxBackupImportBodyBytes)` (128 MB, `internal/api/body_limits.go`); the global
+limit is untouched for everything else. A declared `Content-Length` over the limit is refused with 413
+before anything is read; an undeclared (chunked) body is cut off while read, and `bindBackupImport` turns
+that into the same 413. The number comes from a measurement: a synthetic 20,000-item full backup is a
+18.7 MiB body (about 980 bytes of request per item), so 128 MB is ~6.8x that. It is not higher because
+decoding holds several copies at once (request string, parsed envelope, base64-decoded bytes, decrypted
+bytes, the unmarshalled bundle): the peak heap measured ~7.3x the body, so a body at the limit needs
+roughly 0.9 GiB of live heap. Streaming the decode would lift that; until then the limit stays
+conservative.
 
 ## Response compression and static caching
 
@@ -120,8 +136,8 @@ for the same failure but is redundant, and a handler that calls `preventDefault`
 ## Auth and CSRF
 
 The app is single-user (no registration beyond a one-time setup wizard) but is fully
-session-gated: `RequireAuth` covers every `/api/*` route except `/api/health` and
-`/api/auth/{status,setup,login,login/2fa,logout}`, plus `/media-files/*` and `/ws`. Sessions are opaque
+session-gated: `RequireAuth` covers every `/api/*` route except `/api/health`, `/api/version` and
+`/api/auth/{status,setup,login,login/2fa,logout}`, plus `/media-files/*`, `/local-images/*` and `/ws`. Sessions are opaque
 64-char hex tokens validated against a server-side sessions table (not signed/stateless JWTs),
 30-day expiry, cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`). Each row also records the
 device that logged in (client, IP, truncated User-Agent), a throttled `last_seen_at`, and a separate
@@ -299,7 +315,7 @@ the owner after login as the dismissible "N failed login attempts since your las
 
 `cmd/server` handles `--reset-password` (prompts twice without echo, or `--password-stdin`; never a
 password argument) and `--disable-2fa` before the server starts. They open the database from the
-normal config, apply pending migrations, act, exit non-zero on error, and delete **all** sessions.
+normal config, apply pending migrations, act, exit non-zero on error, and delete **all** sessions. A new password must be 8 characters to 72 bytes (bcrypt's limit); a longer one is an error, never truncated.
 
 ## Migration runner
 
@@ -392,6 +408,8 @@ its context from a single stable `rootCtx` set once in `Start`. Shrinking the po
 `PATCH /api/settings`) never cancels a download that's already running; it just stops that many
 workers from claiming new jobs. The setting is persisted via `SettingsRepo` and re-read at startup,
 so a saved value survives a restart instead of reverting to the `MAX_CONCURRENT_DOWNLOADS` env var.
+`models.MaxConcurrentDownloadsLimit` (16) bounds it: PATCH answers 400 above it, a settings import / restore clamps (a
+restore must not fail halfway), and `SetWorkerCount` clamps as a last guard (a saved or env value from before the limit).
 
 A separate `downloadTimeoutMinutes` setting (0 = no limit) derives each download's context from
 `rootCtx` with a deadline; a run that exceeds it is killed and classified as a timeout-flavored

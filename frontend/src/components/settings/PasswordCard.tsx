@@ -66,7 +66,7 @@ function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () =>
         >
           <DialogHeader>
             <DialogTitle>Change password</DialogTitle>
-            <DialogDescription>Enter your current password, then choose a new one (at least 8 characters).</DialogDescription>
+            <DialogDescription>Enter your current password, then choose a new one (at least 8 characters, at most 72 bytes).</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
