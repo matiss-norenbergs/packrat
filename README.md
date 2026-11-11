@@ -79,6 +79,10 @@ Environment variables (set them in `.env` natively, or under `environment:` in
 | `TRUSTED_PROXIES`, `PACKRAT_SECRET_KEY` | empty | Login rate limiting and 2FA: see [Security and admin commands](#security-and-admin-commands). |
 | `PACKRAT_ACTION_<N>_*` | none | Optional sidebar "Actions" (see [`docs/FEATURES.md`](docs/FEATURES.md) → Host actions). |
 
+**Request size limits.** API requests are limited to 50 MB; uploading a backup file (Backup page imports and
+previews) may be up to 128 MB, about 130,000 library items. A reverse proxy in front of Packrat needs its own
+body limit raised to match (nginx `client_max_body_size 128m`).
+
 ### Dependabot
 
 `.github/dependabot.yml` opens dependency PRs every Monday for Go (`/backend`), npm (`/frontend`,

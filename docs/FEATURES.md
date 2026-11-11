@@ -874,6 +874,10 @@ or just as a safety net.
 - A full restore applies the library first, then the settings (together, all or nothing), then queues the
   redownloads, so they use the restored settings. If the library part fails, your current settings are left
   untouched; restored worker and transcode limits take effect immediately.
+- A backup file can be up to **128 MB** to import (the Settings, Library Data and Full Backup cards and
+  their previews; every other request is limited to 50 MB). That is roughly 130,000 library items; a
+  larger file is refused with "The backup file is too large (the limit is 128 MB)." (413). Behind a
+  reverse proxy, its own body limit (nginx `client_max_body_size`) must allow it too.
 - Both plain exports can optionally be **encrypted with a password** — the exported file is
   unreadable without it, and importing an encrypted file prompts for the same password.
 

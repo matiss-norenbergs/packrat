@@ -1573,6 +1573,11 @@ finishes.
 { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 12, "ghostsCreated": 1 }
 ```
 
+The request body of these three, `preview/full` and `import/full` may be up to **128 MB**
+(`maxBackupImportBodyBytes`; the global limit for every other endpoint stays 50 MB). Over it — by declared
+`Content-Length` or while reading a chunked body — is `413 {"error":"The backup file is too large (the limit is 128 MB)."}`.
+A 20,000-item full backup is about 19 MB, so the limit covers libraries of ~130,000 items.
+
 Common errors for all three: `400` for a non-Packrat file, wrong `kind`, a wrong password, or an
 envelope whose base64 `data`/`salt` cannot be decoded (`{"error": "The backup file is not valid."}`,
 the same for `preview/full` and `import/full`); `500` otherwise.
