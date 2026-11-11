@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-11
+- **"Max concurrent downloads" now has an upper limit of 16** — any integer was accepted and the manager started that many workers (a restored file carrying 10,000,000 would have started ten million goroutines). `PATCH /api/settings` answers 400 above 16, a settings import or full-backup restore clamps to 16 and logs it (a restore must not fail halfway), `SetWorkerCount` never grows the pool past 16 (also for a saved or `MAX_CONCURRENT_DOWNLOADS` value from before), and the Settings → General field shows the range and won't save above it.
 - **A password over 72 bytes is refused with a clear message instead of a 500** — bcrypt cannot hash more than 72 bytes (multi-byte characters count as several), so first-run setup and change-password answered 500 with bcrypt's error text and `--reset-password` printed it. All three now say "Password must be at most 72 bytes." (400 / a clear error) and never truncate; the Setup and Change-password forms mention the limit. Logging in with an over-long password stays the normal 401.
 - **A backup file with broken base64 now answers 400 instead of 500** — an uploaded envelope whose `data` or `salt` could not be decoded surfaced the decoder's error as a server error; every import and preview endpoint (settings, library, full) now says "The backup file is not valid." with a 400. A wrong password and a corrupted ciphertext keep their existing 400.
 

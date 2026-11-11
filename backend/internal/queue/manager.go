@@ -220,6 +220,12 @@ func (m *DownloadManager) worker(stop <-chan struct{}) {
 // job — any download it's currently running keeps going via rootCtx, which
 // is never touched here.
 func (m *DownloadManager) SetWorkerCount(n int) {
+	if n > models.MaxConcurrentDownloadsLimit {
+		// Last guard: the API and the restore path already limit it, but a saved
+		// value from before the limit (or the env var) can still arrive here.
+		log.Printf("queue: worker count %d is above the limit, using %d", n, models.MaxConcurrentDownloadsLimit)
+		n = models.MaxConcurrentDownloadsLimit
+	}
 	m.workerMu.Lock()
 	defer m.workerMu.Unlock()
 

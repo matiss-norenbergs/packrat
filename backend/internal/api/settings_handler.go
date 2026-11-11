@@ -1306,6 +1306,10 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		subscriptionsTurnedOn := false
 
 		if req.MaxConcurrentDownloads != nil {
+			if *req.MaxConcurrentDownloads > models.MaxConcurrentDownloadsLimit {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("maxConcurrentDownloads must be between 1 and %d", models.MaxConcurrentDownloadsLimit)})
+				return
+			}
 			pending[models.SettingMaxConcurrentDownloads] = strconv.Itoa(*req.MaxConcurrentDownloads)
 		}
 		if req.MaxConcurrentTranscodes != nil {

@@ -2,7 +2,10 @@ package backup
 
 import (
 	"context"
+	"log"
+	"strconv"
 
+	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
 
@@ -28,6 +31,14 @@ func ApplySettingsBundle(ctx context.Context, settingsRepo *repository.SettingsR
 	for key, value := range bundle {
 		if retiredSettingKeys[key] {
 			continue
+		}
+		if key == models.SettingMaxConcurrentDownloads {
+			// A restore must not fail halfway, so an out-of-range worker count is
+			// clamped (not rejected): it would otherwise start that many workers.
+			if n, err := strconv.Atoi(value); err == nil && n > models.MaxConcurrentDownloadsLimit {
+				log.Printf("backup: %s %d is above the limit, restoring %d", key, n, models.MaxConcurrentDownloadsLimit)
+				value = strconv.Itoa(models.MaxConcurrentDownloadsLimit)
+			}
 		}
 		values[key] = value
 	}

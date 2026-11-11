@@ -1118,8 +1118,9 @@ Notifications tab is a per-device preference and Appearance is saved to your acc
 immediately).
 If the settings can't be loaded, a tab shows an error with a **Retry** button instead of its form.
 
-- **General** — max concurrent downloads (applies to the live worker pool immediately, no
-  restart needed), max concurrent transcodes (how many Trim previews ffmpeg may generate at once;
+- **General** — max concurrent downloads (1 to 16; applies to the live worker pool immediately, no
+  restart needed; the field shows the range and Save stays off above 16; a settings import or
+  backup restore that carries a larger value is clamped to 16 rather than refused), max concurrent transcodes (how many Trim previews ffmpeg may generate at once;
   also applies immediately, and both limits survive a restart — the `MAX_CONCURRENT_DOWNLOADS` /
   `MAX_CONCURRENT_FFMPEG_TRANSCODES` environment variables only seed a fresh database) and a
   download timeout in minutes (kills and marks failed any download still

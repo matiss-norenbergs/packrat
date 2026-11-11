@@ -56,7 +56,7 @@ describe("GeneralTab", () => {
 
     const input = await screen.findByLabelText("Max Concurrent Downloads")
     await user.clear(input)
-    await user.type(input, "50")
+    await user.type(input, "12")
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument()
     const save = screen.getByRole("button", { name: "Save" })
     expect(save).toBeEnabled()
@@ -66,11 +66,28 @@ describe("GeneralTab", () => {
     await waitFor(() => expect(screen.getByText("Saved")).toBeInTheDocument())
     const patches = callsTo(fetchMock, "/settings").filter(([, init]) => (init as RequestInit).method === "PATCH")
     expect(patches).toHaveLength(1)
-    expect(bodyOf(patches[0])).toEqual({ maxConcurrentDownloads: 50 })
+    expect(bodyOf(patches[0])).toEqual({ maxConcurrentDownloads: 12 })
     expect(toastSuccess).toHaveBeenCalledWith("Settings saved")
     // The server stored 8, not what was typed.
     expect(screen.getByLabelText("Max Concurrent Downloads")).toHaveValue(8)
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  it("does not offer to save a Max Concurrent Downloads above the limit of 16", async () => {
+    fakeServer()
+    renderWithProviders(<GeneralTab />)
+    const user = userEvent.setup()
+
+    const input = await screen.findByLabelText("Max Concurrent Downloads")
+    expect(input).toHaveAttribute("max", "16")
+    await user.clear(input)
+    await user.type(input, "17")
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+    expect(screen.getByText("1 to 16")).toHaveClass("text-destructive")
+
+    await user.clear(input)
+    await user.type(input, "16")
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled()
   })
 
   it("shows an error with Retry instead of a skeleton when the settings can't be loaded", async () => {

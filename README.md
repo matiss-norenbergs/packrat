@@ -70,7 +70,7 @@ Environment variables (set them in `.env` natively, or under `environment:` in
 | `BACKUPS_ROOT` | `./data/backups` | Automatic and manual backup files, plus the `pre-migration/` safety copies (see [Rolling back an update](#rolling-back-an-update)). |
 | `SKIP_PRE_MIGRATION_BACKUP` | `false` | `true` applies pending migrations without first copying the database to `BACKUPS_ROOT/pre-migration/`. Only needed if the copy cannot be made (full disk, read-only backups folder). |
 | `CACHE_ROOT` | `./data/cache` | Disposable cache of resized images (rebuilt on demand, swept after 7 days unused). |
-| `MAX_CONCURRENT_DOWNLOADS` | `2` | Parallel downloads. Only seeds a fresh database; Settings → General wins afterwards. |
+| `MAX_CONCURRENT_DOWNLOADS` | `2` | Parallel downloads, 1 to 16 (a larger value is capped at 16). Only seeds a fresh database; Settings → General wins afterwards. |
 | `MAX_CONCURRENT_FFMPEG_TRANSCODES` | `2` | Parallel Trim previews. Same: seeds a fresh database. |
 | `YTDLP_PATH`, `FFMPEG_PATH`, `FFPROBE_PATH`, `PIP_PATH` | `yt-dlp`, `ffmpeg`, `ffprobe`, `pip` | Tool locations. The Docker image keeps yt-dlp in a venv under the data volume so "Update yt-dlp" survives restarts. |
 | `STATIC_DIR` | empty | Built frontend to serve (the Docker image sets it; empty in dev, where Vite serves the UI). |

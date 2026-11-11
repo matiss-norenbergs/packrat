@@ -392,6 +392,8 @@ its context from a single stable `rootCtx` set once in `Start`. Shrinking the po
 `PATCH /api/settings`) never cancels a download that's already running; it just stops that many
 workers from claiming new jobs. The setting is persisted via `SettingsRepo` and re-read at startup,
 so a saved value survives a restart instead of reverting to the `MAX_CONCURRENT_DOWNLOADS` env var.
+`models.MaxConcurrentDownloadsLimit` (16) bounds it: PATCH answers 400 above it, a settings import / restore clamps (a
+restore must not fail halfway), and `SetWorkerCount` clamps as a last guard (a saved or env value from before the limit).
 
 A separate `downloadTimeoutMinutes` setting (0 = no limit) derives each download's context from
 `rootCtx` with a deadline; a run that exceeds it is killed and classified as a timeout-flavored

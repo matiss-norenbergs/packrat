@@ -1432,7 +1432,8 @@ Same field set as the `GET` response. Notes:
 - `dashboardHiddenWidgets` is the list of Dashboard card IDs to hide (default `[]` = all shown).
   Valid IDs: `downloads`, `library`, `libraryGrowth`, `mediaTypes`, `resolutions`, `storage`,
   `topArtists`, `topTags`. Duplicates are collapsed; an unknown ID is a `400`.
-- `maxConcurrentDownloads` **immediately resizes the live worker pool**, no restart needed.
+- `maxConcurrentDownloads` **immediately resizes the live worker pool**, no restart needed. It must be
+  1 to 16 (`models.MaxConcurrentDownloadsLimit`); above 16 is `400 {"error":"maxConcurrentDownloads must be between 1 and 16"}` and nothing in the request is saved.
 - `downloadDirectory` (`MEDIA_ROOT`) is **not** patchable here — env-config only.
 
 `204 No Content` on success.
@@ -1538,7 +1539,9 @@ ever shipped**; re-import re-queues downloads from those URLs. `downloadType`/`q
 `kind` is the endpoint's own or `"full"` (`400` if neither), decrypts if needed (`400` on wrong
 password). `mode` (import only, ignored by preview) is `"download"` (default) or `"ghostOnly"`.
 Settings import overwrites every key present in the bundle (never deletes keys absent from it) and
-live-resizes the worker pool if `maxConcurrentDownloads` was included:
+live-resizes the worker pool if `maxConcurrentDownloads` was included. A `maxConcurrentDownloads` above 16 is
+**clamped to 16** (logged) instead of refused, so a restore never fails halfway; the same applies to `import/full` and
+`POST /api/backup/history/:id/restore`:
 
 ```json
 { "applied": 23 }
