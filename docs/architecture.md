@@ -299,7 +299,7 @@ the owner after login as the dismissible "N failed login attempts since your las
 
 `cmd/server` handles `--reset-password` (prompts twice without echo, or `--password-stdin`; never a
 password argument) and `--disable-2fa` before the server starts. They open the database from the
-normal config, apply pending migrations, act, exit non-zero on error, and delete **all** sessions.
+normal config, apply pending migrations, act, exit non-zero on error, and delete **all** sessions. A new password must be 8 characters to 72 bytes (bcrypt's limit); a longer one is an error, never truncated.
 
 ## Migration runner
 

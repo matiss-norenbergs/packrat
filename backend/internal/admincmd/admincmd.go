@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
 
@@ -72,6 +73,9 @@ func ParseArgs(args []string) (cmd Command, passwordStdin bool, err error) {
 func ValidatePassword(password string) error {
 	if utf8.RuneCountInString(password) < MinPasswordLength {
 		return fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+	}
+	if models.PasswordTooLong(password) {
+		return fmt.Errorf("password must be at most %d bytes (a multi-byte character counts as several)", models.MaxPasswordBytes)
 	}
 	return nil
 }

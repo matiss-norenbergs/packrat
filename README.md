@@ -146,7 +146,7 @@ echo 'new-password' | docker exec -i <container> /app/packrat --reset-password -
 docker exec <container> /app/packrat --disable-2fa            # clears the secret and recovery codes
 ```
 
-The password is never accepted as a command-line argument. Natively, run `packrat --reset-password`
+A new password must be 8 characters to 72 bytes long (bcrypt's limit; a longer one is refused, not truncated). The password is never accepted as a command-line argument. Natively, run `packrat --reset-password`
 (or `go run ./cmd/server --reset-password`) with the same environment as the server.
 
 ## Rolling back an update

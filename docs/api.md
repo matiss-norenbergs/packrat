@@ -162,7 +162,7 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
 | GET | `/api/auth/security-notice` | session |
 | POST | `/api/auth/security-notice/ack` | session + CSRF |
 
-- **`POST /api/auth/setup`** — `{ "username": "...", "password": "min 8 chars" }`. Only succeeds
+- **`POST /api/auth/setup`** — `{ "username": "...", "password": "8 chars to 72 bytes" }`. A password over 72 **bytes** (bcrypt's limit; a multi-byte character counts as several) is refused with `400 {"error":"Password must be at most 72 bytes."}`, never truncated. Only succeeds
   while zero users exist (`409` otherwise, also when several calls arrive at once). Creates the user, sets both cookies, `204`.
 - **`POST /api/auth/login`** — `{ "username": "...", "password": "..." }`. Wrong username *or*
   password both return `401 {"error":"invalid username or password"}` — never reveals which was
@@ -185,7 +185,7 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
   connection address; `X-Forwarded-For` is only honored from `TRUSTED_PROXIES`.
 - **`POST /api/auth/logout`** — no body. Deletes the session row server-side (a replayed old cookie
   stops working immediately) and clears both cookies. `204`, idempotent even with no session.
-- **`PATCH /api/auth/password`** — `{ "currentPassword": "...", "newPassword": "min 8 chars" }`.
+- **`PATCH /api/auth/password`** — `{ "currentPassword": "...", "newPassword": "8 chars to 72 bytes" }`. A new password over 72 bytes is `400 {"error":"Password must be at most 72 bytes."}` (checked before the current password). Logging in or confirming with an over-long password is the normal `401`.
   Requires the *current* password even though the route is already session-protected, so a
   hijacked/left-open session can't lock out the real owner. `401` if current password is wrong,
   else `204`. All other sessions of the user (including desktop tokens) are signed out; the current

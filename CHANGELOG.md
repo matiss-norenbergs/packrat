@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-11
+- **A password over 72 bytes is refused with a clear message instead of a 500** — bcrypt cannot hash more than 72 bytes (multi-byte characters count as several), so first-run setup and change-password answered 500 with bcrypt's error text and `--reset-password` printed it. All three now say "Password must be at most 72 bytes." (400 / a clear error) and never truncate; the Setup and Change-password forms mention the limit. Logging in with an over-long password stays the normal 401.
 - **A backup file with broken base64 now answers 400 instead of 500** — an uploaded envelope whose `data` or `salt` could not be decoded surfaced the decoder's error as a server error; every import and preview endpoint (settings, library, full) now says "The backup file is not valid." with a 400. A wrong password and a corrupted ciphertext keep their existing 400.
 
 ## 2026-11-09

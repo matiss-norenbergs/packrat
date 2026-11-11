@@ -1127,7 +1127,7 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   via the `MEDIA_ROOT` environment variable).
 - **Account** — three cards of the same width, top to bottom: **Active sessions**, **Two-factor
   authentication** and **Password**. **Change password** opens a dialog (current, new, confirm; the
-  new one needs 8+ characters and a matching confirmation, Enter submits, fields are cleared whenever
+  new one needs 8+ characters, at most 72 bytes (a multi-byte character counts as several), a matching confirmation, Enter submits, fields are cleared whenever
   the dialog closes, and a successful change closes it with a "Password changed" toast; the current
   password must be right; changing it signs out your other devices and sessions). 2FA is optional and off by default; accounts without it log in exactly as before. **Enable**
   opens a 3-step dialog: (1) scan a QR code (drawn in the browser, always dark on a white tile) or type
