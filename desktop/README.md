@@ -192,7 +192,10 @@ isn't wired up yet.
   file in the app data directory, so it isn't exposed by disk images, backups or syncs of AppData/the
   home folder. **What it doesn't:** malware already running as your user can ask the keychain for it
   (as can any app on a session that has the keychain unlocked) — it's the same credential a browser
-  session would hold. Log out (or remove the server) to discard it.
+  session would hold. Log out (or remove the server) to discard it. The server stores only a SHA-256
+  hash of this token. **Upgrading a server to the version that introduced that signs everyone out
+  once**: the desktop app's saved token stops working, the app falls back to the login screen, and
+  you sign in again (no data is lost).
 - **Updates** — manual, from Settings → Desktop → **Check for updates**. Nothing contacts GitHub until
   the button is pressed and nothing installs until **Install and restart** is. The app reads
   `latest.json` from the newest GitHub Release, downloads the update for its platform, verifies its

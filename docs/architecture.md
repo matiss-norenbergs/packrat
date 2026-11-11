@@ -144,6 +144,15 @@ device that logged in (client, IP, truncated User-Agent), a throttled `last_seen
 random `public_id` — the only handle the sessions list/revoke API exposes, so the token never leaves
 the server after login.
 
+**Token hashing rule:** the `sessions.token` column holds `hex(SHA-256(token))` (migration 000055,
+which deleted all existing sessions: unhashable in SQLite, so everyone signed in once after that
+upgrade). `UsersRepo` is the only place that hashes (`HashSessionToken`): every method takes the RAW
+token (`CreateSession`, `GetValidSession`, `TouchSession`, `DeleteSession`, `DeleteOtherSessions`,
+`ChangePassword`) and hashes it, so no caller can forget. `models.Session.TokenHash` is the stored
+value; `models.Session.Token` is the raw token the caller presented, copied from the lookup
+argument (never read from the database, empty in `ListSessions`), kept in memory only. Plain SHA-256
+without salt is deliberate: the token is 256 random bits, not a password.
+
 `Secure=false` is deliberate, not an oversight — the app is commonly run over plain HTTP on a
 trusted LAN, and requiring HTTPS would break that default deployment. CSRF is handled separately
 via a double-submit cookie (`packrat_csrf`, readable by JS, echoed back as `X-CSRF-Token` on every
@@ -185,7 +194,8 @@ failure (`fail`), and a deferred `release` gives it back otherwise (success, bad
 leaks. A login challenge works the same way: `Challenges.Lookup` counts a code attempt atomically,
 so at most five codes are ever checked per challenge, however many arrive at once.
 
-A WebSocket client carries the token of the session that opened it. `UsersRepo` calls a hook after
+A WebSocket client carries the raw token of the session that opened it (in memory only) and re-checks
+it with `GetValidSession`, which hashes it, so revocation by hash still closes it. `UsersRepo` calls a hook after
 any session delete; `Hub.RevalidateSessions` then re-checks every client's session (off the hub
 goroutine) and closes the ones that are gone. The same check runs on each client's ping tick, so a
 revocation made by another process (the `--disable-2fa` command) still takes effect within a minute.

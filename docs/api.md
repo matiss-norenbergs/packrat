@@ -76,7 +76,15 @@ from the thumbnail gallery, `POST /api/history/clear`, `POST /api/downloads/clea
 
 - **Session**: an opaque 64-char hex token in cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`,
   `Secure=false` — deliberate, since the app is commonly run over plain HTTP on a LAN). 30-day
-  expiry, validated server-side against a sessions table — not a signed/stateless token.
+  expiry, validated server-side against a sessions table — not a signed/stateless token. The table
+  stores only `hex(SHA-256(token))`, never the token (see below). **One-time sign-out:** the upgrade
+  that introduced this deleted every existing session (SQLite cannot hash them in place), so every
+  web browser, the desktop app and any API client signed in again once.
+- **Tokens are stored hashed.** The `token` column holds the SHA-256 hex of the token the client
+  holds; the raw token exists only in the cookie / bearer header / `?token=` the client sends and in
+  memory for the length of a request. The repository does the hashing, so a database or backup copy
+  contains nothing that can be presented as a credential (presenting a stored value fails with
+  `401`). The sessions API never returns either form.
 - **`RequireAuth`** gates every `/api/*` route except `/api/health`, `/api/version` and
   `/api/auth/{status,setup,login,login/2fa,logout}`, and also protects `/media-files/*`,
   `/local-images/*` and `/ws`. Missing/invalid session → `401`.

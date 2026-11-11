@@ -43,7 +43,7 @@ func ListSessions(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 				UserAgent:  s.UserAgent,
 				CreatedAt:  formatSessionTime(s.CreatedAt),
 				LastSeenAt: formatSessionTime(lastSeen),
-				Current:    s.Token == cur.Token,
+				Current:    s.TokenHash == cur.TokenHash,
 			})
 		}
 		c.JSON(http.StatusOK, SessionsResponse{Sessions: out})

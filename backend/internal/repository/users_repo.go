@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -135,6 +136,16 @@ const sessionTimeLayout = "2006-01-02 15:04:05"
 // SessionTouchInterval is the most often a session's last_seen_at is written.
 const SessionTouchInterval = time.Minute
 
+// HashSessionToken is what the sessions table stores for a raw token: hex(SHA-256(token)). The
+// token is 256 bits of randomness, not a password, so a plain unsalted hash is enough — it only has
+// to make a leaked database or backup useless for signing in. Every UsersRepo method that takes a
+// token hashes it here; callers always pass the raw token and can't forget.
+func HashSessionToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// CreateSession stores the session under HashSessionToken(token); the raw token is not kept.
 func (r *UsersRepo) CreateSession(ctx context.Context, token string, userID int64, expiresAt time.Time, meta SessionMeta) error {
 	publicID, err := newSessionPublicID()
 	if err != nil {
@@ -142,7 +153,7 @@ func (r *UsersRepo) CreateSession(ctx context.Context, token string, userID int6
 	}
 	_, err = r.db.ExecContext(ctx,
 		`INSERT INTO sessions (token, user_id, expires_at, public_id, client, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		token, userID, expiresAt.UTC().Format(sessionTimeLayout), publicID, meta.Client, meta.IP, meta.UserAgent,
+		HashSessionToken(token), userID, expiresAt.UTC().Format(sessionTimeLayout), publicID, meta.Client, meta.IP, meta.UserAgent,
 	)
 	if err != nil {
 		return fmt.Errorf("creating session: %w", err)
@@ -162,11 +173,12 @@ func newSessionPublicID() (string, error) {
 
 const sessionColumns = `token, user_id, expires_at, created_at, COALESCE(public_id, ''), last_seen_at, client, ip, user_agent`
 
+// scanSession fills TokenHash from the database; Token (raw) is left empty for the caller to set.
 func scanSession(row rowScanner) (*models.Session, error) {
 	var s models.Session
 	var expiresAt, createdAt string
 	var lastSeen sql.NullString
-	if err := row.Scan(&s.Token, &s.UserID, &expiresAt, &createdAt, &s.PublicID, &lastSeen, &s.Client, &s.IP, &s.UserAgent); err != nil {
+	if err := row.Scan(&s.TokenHash, &s.UserID, &expiresAt, &createdAt, &s.PublicID, &lastSeen, &s.Client, &s.IP, &s.UserAgent); err != nil {
 		return nil, err
 	}
 	var err error
@@ -186,18 +198,19 @@ func scanSession(row rowScanner) (*models.Session, error) {
 	return &s, nil
 }
 
-// GetValidSession looks up a session by token, treating an expired or
+// GetValidSession looks up a session by raw token, treating an expired or
 // missing token identically (ErrNotFound) — callers only need to know
 // whether the session is currently usable, not why it isn't.
 func (r *UsersRepo) GetValidSession(ctx context.Context, token string) (*models.Session, error) {
 	s, err := scanSession(r.db.QueryRowContext(ctx,
-		`SELECT `+sessionColumns+` FROM sessions WHERE token = ? AND expires_at > datetime('now')`, token))
+		`SELECT `+sessionColumns+` FROM sessions WHERE token = ? AND expires_at > datetime('now')`, HashSessionToken(token)))
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("scanning session: %w", err)
 	}
+	s.Token = token // the raw token this caller already holds; never from the database
 	return s, nil
 }
 
@@ -206,7 +219,7 @@ func (r *UsersRepo) GetValidSession(ctx context.Context, token string) (*models.
 func (r *UsersRepo) TouchSession(ctx context.Context, token string, now time.Time) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE sessions SET last_seen_at = ? WHERE token = ? AND (last_seen_at IS NULL OR last_seen_at <= ?)`,
-		now.UTC().Format(sessionTimeLayout), token, now.Add(-SessionTouchInterval).UTC().Format(sessionTimeLayout),
+		now.UTC().Format(sessionTimeLayout), HashSessionToken(token), now.Add(-SessionTouchInterval).UTC().Format(sessionTimeLayout),
 	)
 	if err != nil {
 		return fmt.Errorf("touching session: %w", err)
@@ -248,10 +261,10 @@ func (r *UsersRepo) DeleteSessionByPublicID(ctx context.Context, userID int64, p
 	return nil
 }
 
-// DeleteOtherSessions revokes every session of the user except the one with keepToken and reports
+// DeleteOtherSessions revokes every session of the user except the one with keepToken (raw) and reports
 // how many went.
 func (r *UsersRepo) DeleteOtherSessions(ctx context.Context, userID int64, keepToken string) (int, error) {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token <> ?`, userID, keepToken)
+	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token <> ?`, userID, HashSessionToken(keepToken))
 	if err != nil {
 		return 0, fmt.Errorf("deleting other sessions: %w", err)
 	}
@@ -279,7 +292,7 @@ func (r *UsersRepo) ChangePassword(ctx context.Context, userID int64, passwordHa
 	if err := checkRowsAffected(res); err != nil {
 		return 0, err
 	}
-	res, err = tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token <> ?`, userID, keepToken)
+	res, err = tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token <> ?`, userID, HashSessionToken(keepToken))
 	if err != nil {
 		return 0, fmt.Errorf("deleting other sessions: %w", err)
 	}
@@ -308,7 +321,7 @@ func (r *UsersRepo) UpdatePasswordHash(ctx context.Context, userID int64, passwo
 }
 
 func (r *UsersRepo) DeleteSession(ctx context.Context, token string) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE token = ?`, token)
+	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE token = ?`, HashSessionToken(token))
 	if err != nil {
 		return fmt.Errorf("deleting session: %w", err)
 	}
