@@ -66,6 +66,7 @@ Manager (*Control Panel → Credential Manager → Windows Credentials*, entries
 | W-02 | Enter the server address (e.g. `192.168.1.20:50505`) and press Connect. | The login page (or "Create admin account" on a fresh server) for that server appears; the server's name is shown under the form. | Pass 2026-10-24 v0.18.1 (fresh :51201 server showed "Create admin account") |
 | W-03 | Enter a wrong address (`192.168.1.20:1`) and press Connect. | An error is shown under the field; nothing is saved. | Pass 2026-10-24 v0.18.1 — "Couldn't reach the server…" under the field; localStorage empty |
 | W-04 | Log in. | The dashboard opens; no "can't reach the server" or CORS-style error. | Pass 2026-10-24 v0.18.1 |
+| W-04a | **Server upgrade:** while signed in, upgrade the server to the version that stores session tokens hashed (migration 000055) and restart it. | The app falls back to the login screen once (the old token is gone); logging in again works and the new session appears in Settings → Account → Sessions. | Not run |
 
 ### Keychain (Windows Credential Manager)
 

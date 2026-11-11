@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -91,10 +90,28 @@ func RequireAuth(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 		c.Set(authSourceKey, source)
 		healLegacyCSRFCookie(c, session.Token, source)
 		// last_seen_at is only written when the row we just read is stale, so a busy session costs
-		// one write a minute, not one per request. Best effort: a failed touch never fails the request.
-		if session.LastSeenAt == nil || time.Since(*session.LastSeenAt) >= repository.SessionTouchInterval {
-			_ = usersRepo.TouchSession(c.Request.Context(), session.Token, time.Now())
+		// one write a minute, not one per request. The same write slides the expiry (at most once a
+		// day); when it did, a cookie client's cookies must be re-issued or the browser drops them
+		// 30 days after login. Best effort: a failed touch never fails the request.
+		now := usersRepo.Now()
+		if session.LastSeenAt == nil || now.Sub(*session.LastSeenAt) >= repository.SessionTouchInterval {
+			if extended, _ := usersRepo.TouchSession(c.Request.Context(), session.Token, now); extended && source == authSourceCookie {
+				reissueSessionCookies(c, session.Token)
+			}
 		}
 		c.Next()
+	}
+}
+
+// reissueSessionCookies gives the session cookie, and the CSRF cookie with the value the browser
+// already holds, a fresh sessionDuration max-age after the server moved the expiry. The CSRF value
+// is kept (never rotated) so requests in flight stay valid; a missing cookie has nothing to extend,
+// and a legacy one equal to the session token is left to healLegacyCSRFCookie. Only cookie-
+// authenticated requests call this: bearer and ?token= clients have no cookie, the server-side
+// extension is all they need. Attributes are exactly those of login (setSessionCookie/setCSRFCookie).
+func reissueSessionCookies(c *gin.Context, token string) {
+	setSessionCookie(c, token)
+	if cur, err := c.Cookie(csrfCookieName); err == nil && cur != "" && cur != token {
+		setCSRFCookie(c, cur)
 	}
 }

@@ -17,8 +17,17 @@ type User struct {
 	SecurityAckAt *time.Time
 }
 
+// Session is one signed-in device.
+//
+// Token rule: the database (and TokenHash) only ever holds hex(SHA-256(token)). Token is the RAW
+// token the caller presented to UsersRepo.GetValidSession — it is copied from the lookup argument,
+// never read from the database, so it is empty on sessions from ListSessions. It exists so
+// handlers can re-set the cookie and so a WebSocket can re-check its own session; it lives in
+// memory for the request only and must never be serialized or logged. UsersRepo methods take raw
+// tokens and hash them themselves.
 type Session struct {
 	Token     string
+	TokenHash string
 	UserID    int64
 	ExpiresAt time.Time
 	CreatedAt time.Time

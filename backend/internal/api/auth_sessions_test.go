@@ -277,7 +277,7 @@ func TestLastSeenIsThrottled(t *testing.T) {
 
 	// Pin the stored value a few seconds ago: a request inside the interval must not move it.
 	recent := time.Now().UTC().Add(-10 * time.Second).Format(layout)
-	if _, err := e.conn.Exec(`UPDATE sessions SET last_seen_at = ? WHERE token = ?`, recent, token); err != nil {
+	if _, err := e.conn.Exec(`UPDATE sessions SET last_seen_at = ? WHERE token = ?`, recent, repository.HashSessionToken(token)); err != nil {
 		t.Fatal(err)
 	}
 	authDo(e.r, authReq{method: "GET", path: "/api/thing", cookies: cookies})
@@ -287,7 +287,7 @@ func TestLastSeenIsThrottled(t *testing.T) {
 
 	// Once it is older than the interval it is refreshed.
 	old := time.Now().UTC().Add(-5 * time.Minute).Format(layout)
-	if _, err := e.conn.Exec(`UPDATE sessions SET last_seen_at = ? WHERE token = ?`, old, token); err != nil {
+	if _, err := e.conn.Exec(`UPDATE sessions SET last_seen_at = ? WHERE token = ?`, old, repository.HashSessionToken(token)); err != nil {
 		t.Fatal(err)
 	}
 	authDo(e.r, authReq{method: "GET", path: "/api/thing", cookies: cookies})
@@ -299,8 +299,8 @@ func TestLastSeenIsThrottled(t *testing.T) {
 func TestSessionsFromBeforeTheMigrationKeepWorking(t *testing.T) {
 	e := newAuthTestEnv(t)
 	cookies, _ := setupAndLogin(t, e.r)
-	// A row exactly as the old code wrote it: only the original columns.
-	if _, err := e.conn.Exec(`INSERT INTO sessions (token, user_id, expires_at) VALUES ('legacy-token', 1, datetime('now', '+1 day'))`); err != nil {
+	// A row exactly as the old code wrote it (only the original columns, hashed token).
+	if _, err := e.conn.Exec(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?, 1, datetime('now', '+1 day'))`, repository.HashSessionToken("legacy-token")); err != nil {
 		t.Fatal(err)
 	}
 	if w := authDo(e.r, authReq{method: "GET", path: "/api/thing", headers: map[string]string{"Authorization": "Bearer legacy-token"}}); w.Code != http.StatusNoContent {

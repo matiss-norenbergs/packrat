@@ -76,7 +76,26 @@ from the thumbnail gallery, `POST /api/history/clear`, `POST /api/downloads/clea
 
 - **Session**: an opaque 64-char hex token in cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`,
   `Secure=false` — deliberate, since the app is commonly run over plain HTTP on a LAN). 30-day
-  expiry, validated server-side against a sessions table — not a signed/stateless token.
+  expiry, validated server-side against a sessions table — not a signed/stateless token. The table
+  stores only `hex(SHA-256(token))`, never the token (see below). **One-time sign-out:** the upgrade
+  that introduced this deleted every existing session (SQLite cannot hash them in place), so every
+  web browser, the desktop app and any API client signed in again once.
+- **Sliding expiry.** A session lasts 30 days from its last activity, not from login. When
+  `RequireAuth` records activity (at most once a minute per session) and fewer than 29 days are left,
+  the same SQL statement moves `expires_at` to now + 30 days — so it moves at most once a day, an
+  active session never expires, and an unused one expires 30 days after it was last used. An
+  already-expired session is never revived. When the expiry moved for a **cookie-authenticated**
+  request, that response re-sets `packrat_session` and `packrat_csrf` (the CSRF value the browser
+  already holds, not a new one) with a fresh 30-day max-age and the same `HttpOnly`/`SameSite=Lax`/
+  `Secure=false` attributes as login; otherwise the browser would drop them 30 days after login.
+  Bearer and `?token=` clients have no cookie and only get the server-side extension.
+- **Expired sessions are deleted** by a background job at server start and then every 24 hours (they
+  are rejected with `401` long before that; this only removes the rows).
+- **Tokens are stored hashed.** The `token` column holds the SHA-256 hex of the token the client
+  holds; the raw token exists only in the cookie / bearer header / `?token=` the client sends and in
+  memory for the length of a request. The repository does the hashing, so a database or backup copy
+  contains nothing that can be presented as a credential (presenting a stored value fails with
+  `401`). The sessions API never returns either form.
 - **`RequireAuth`** gates every `/api/*` route except `/api/health`, `/api/version` and
   `/api/auth/{status,setup,login,login/2fa,logout}`, and also protects `/media-files/*`,
   `/local-images/*` and `/ws`. Missing/invalid session → `401`.

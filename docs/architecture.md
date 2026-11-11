@@ -139,10 +139,19 @@ The app is single-user (no registration beyond a one-time setup wizard) but is f
 session-gated: `RequireAuth` covers every `/api/*` route except `/api/health`, `/api/version` and
 `/api/auth/{status,setup,login,login/2fa,logout}`, plus `/media-files/*`, `/local-images/*` and `/ws`. Sessions are opaque
 64-char hex tokens validated against a server-side sessions table (not signed/stateless JWTs),
-30-day expiry, cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`). Each row also records the
+30-day sliding expiry (`UsersRepo.TouchSession` writes `last_seen_at` and extends `expires_at` in one `UPDATE … RETURNING`, at most once a minute / once a day; `RequireAuth` re-issues the cookies when it reports an extension), cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`). Each row also records the
 device that logged in (client, IP, truncated User-Agent), a throttled `last_seen_at`, and a separate
 random `public_id` — the only handle the sessions list/revoke API exposes, so the token never leaves
 the server after login.
+
+**Token hashing rule:** the `sessions.token` column holds `hex(SHA-256(token))` (migration 000055,
+which deleted all existing sessions: unhashable in SQLite, so everyone signed in once after that
+upgrade). `UsersRepo` is the only place that hashes (`HashSessionToken`): every method takes the RAW
+token (`CreateSession`, `GetValidSession`, `TouchSession`, `DeleteSession`, `DeleteOtherSessions`,
+`ChangePassword`) and hashes it, so no caller can forget. `models.Session.TokenHash` is the stored
+value; `models.Session.Token` is the raw token the caller presented, copied from the lookup
+argument (never read from the database, empty in `ListSessions`), kept in memory only. Plain SHA-256
+without salt is deliberate: the token is 256 random bits, not a password.
 
 `Secure=false` is deliberate, not an oversight — the app is commonly run over plain HTTP on a
 trusted LAN, and requiring HTTPS would break that default deployment. CSRF is handled separately
@@ -185,7 +194,16 @@ failure (`fail`), and a deferred `release` gives it back otherwise (success, bad
 leaks. A login challenge works the same way: `Challenges.Lookup` counts a code attempt atomically,
 so at most five codes are ever checked per challenge, however many arrive at once.
 
-A WebSocket client carries the token of the session that opened it. `UsersRepo` calls a hook after
+**Expired-session cleanup:** an expired row is already rejected on lookup; `UsersRepo.DeleteExpiredSessions`
+(one `DELETE … WHERE expires_at <= now`) only reclaims the rows. `cmd/server/session_sweep.go`
+(`runSessionSweep`) runs it once at startup, after migrations, and every 24 h from a goroutine
+started with `tasks.Go` (so shutdown cancels it and waits for it). It logs only a count > 0; a busy
+database (`db.IsBusy`) logs one line and waits for the next tick. It does not call
+`onSessionsRevoked`: expired sessions are already invalid, and the hub's ping-tick check closes any
+socket bound to one.
+
+A WebSocket client carries the raw token of the session that opened it (in memory only) and re-checks
+it with `GetValidSession`, which hashes it, so revocation by hash still closes it. `UsersRepo` calls a hook after
 any session delete; `Hub.RevalidateSessions` then re-checks every client's session (off the hub
 goroutine) and closes the ones that are gone. The same check runs on each client's ping tick, so a
 revocation made by another process (the `--disable-2fa` command) still takes effect within a minute.
