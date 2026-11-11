@@ -8,6 +8,7 @@ import (
 	"path"
 	"sync"
 
+	"packrat/backend/internal/db"
 	"packrat/backend/internal/models"
 )
 
@@ -273,6 +274,12 @@ func (r *CollectionsRepo) Delete(ctx context.Context, id int64) error {
 
 	res, err := r.db.ExecContext(ctx, `DELETE FROM collections WHERE id = ?`, id)
 	if err != nil {
+		// parent_id is ON DELETE RESTRICT (the only restricting reference to a
+		// collection): a child created after the count above makes the delete
+		// fail here, and that is the same "has children" answer, not a 500.
+		if db.IsForeignKeyViolation(err) {
+			return ErrHasChildren
+		}
 		return fmt.Errorf("deleting collection: %w", err)
 	}
 	n, err := res.RowsAffected()

@@ -1161,7 +1161,7 @@ name, `204` on success.
 ### `DELETE /api/collections/:id`
 
 `404` unknown, `409 {"error":"collection has sub-collections — move or delete them first"}` if it
-has children, `204` on success. Never deletes the files inside it — items just lose their
+has children (also when a child is created while the delete is running — the foreign key refuses the delete and that is mapped to the same `409`, not a `500`), `204` on success. Never deletes the files inside it — items just lose their
 collection association — but removes the collection's own cover images (`ImagesRoot/collections/<id>/`).
 `bulk-delete` does the same for each deleted collection, after commit.
 

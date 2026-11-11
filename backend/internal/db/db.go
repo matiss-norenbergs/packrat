@@ -79,6 +79,29 @@ func IsBusy(err error) bool {
 	return strings.Contains(err.Error(), "database is locked")
 }
 
+// IsForeignKeyViolation reports whether err is SQLite's "FOREIGN KEY constraint
+// failed": a write that a foreign key refuses, such as deleting a row an
+// ON DELETE RESTRICT reference still points at. A plain violation carries
+// SQLITE_CONSTRAINT_FOREIGNKEY, but a RESTRICT action reports the extended code
+// SQLITE_CONSTRAINT_TRIGGER (1811) with the same message, so the message is
+// what identifies it.
+func IsForeignKeyViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	var se *sqlite.Error
+	if errors.As(err, &se) {
+		switch se.Code() {
+		case sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY:
+			return true
+		case sqlite3.SQLITE_CONSTRAINT_TRIGGER:
+			return strings.Contains(err.Error(), "FOREIGN KEY constraint failed")
+		}
+		return false
+	}
+	return strings.Contains(err.Error(), "FOREIGN KEY constraint failed")
+}
+
 // Migrate applies all pending migrations from migrationsDir against conn.
 //
 // NoTxWrap is required, not just a preference: golang-migrate otherwise runs
