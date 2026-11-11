@@ -1159,7 +1159,9 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   at once, no confirmation (signing out *this* device is a normal logout). **Sign out all other
   devices** asks first, with the count, and keeps this one; it is disabled when nobody else is
   signed in. Sessions from before this existed show as "Unknown device". Session tokens are stored
-  hashed; **after upgrading to the version that introduced this you are signed out once** (every
+  hashed, and a session now expires 30 days after you last used it, not 30 days after you signed
+  in (the expiry moves forward when you use it; browsers keep their cookie fresh too).
+  **After upgrading to the version that introduced this you are signed out once** (every
   browser, the desktop app and any API client) and sign in again. Last-active is recorded at
   most once a minute per session.
 - **Features** — switches for the optional parts of the app: **Subscriptions**, **File Import**,

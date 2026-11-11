@@ -139,7 +139,7 @@ The app is single-user (no registration beyond a one-time setup wizard) but is f
 session-gated: `RequireAuth` covers every `/api/*` route except `/api/health`, `/api/version` and
 `/api/auth/{status,setup,login,login/2fa,logout}`, plus `/media-files/*`, `/local-images/*` and `/ws`. Sessions are opaque
 64-char hex tokens validated against a server-side sessions table (not signed/stateless JWTs),
-30-day expiry, cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`). Each row also records the
+30-day sliding expiry (`UsersRepo.TouchSession` writes `last_seen_at` and extends `expires_at` in one `UPDATE … RETURNING`, at most once a minute / once a day; `RequireAuth` re-issues the cookies when it reports an extension), cookie `packrat_session` (`HttpOnly`, `SameSite=Lax`). Each row also records the
 device that logged in (client, IP, truncated User-Agent), a throttled `last_seen_at`, and a separate
 random `public_id` — the only handle the sessions list/revoke API exposes, so the token never leaves
 the server after login.

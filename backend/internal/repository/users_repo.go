@@ -19,6 +19,20 @@ type UsersRepo struct {
 	// onSessionsRevoked is called after sessions are deleted (logout, revoke, sign-out-others),
 	// so live connections tied to them can be closed. Set once at startup.
 	onSessionsRevoked func()
+
+	// now is the clock for session expiry (nil means time.Now); tests inject one.
+	now func() time.Time
+}
+
+// SetClock replaces the clock session expiry is judged and extended by (tests).
+func (r *UsersRepo) SetClock(now func() time.Time) { r.now = now }
+
+// Now is the repository's current time: what login stamps expiries from and the middleware touches with.
+func (r *UsersRepo) Now() time.Time {
+	if r.now != nil {
+		return r.now()
+	}
+	return time.Now()
 }
 
 // SetOnSessionsRevoked registers fn to run after sessions are deleted through this repo.
@@ -136,6 +150,14 @@ const sessionTimeLayout = "2006-01-02 15:04:05"
 // SessionTouchInterval is the most often a session's last_seen_at is written.
 const SessionTouchInterval = time.Minute
 
+// SessionLifetime is how long a session lasts after login and after each slide.
+const SessionLifetime = 30 * 24 * time.Hour
+
+// SessionSlideAfter is how much of the lifetime must be used up before the expiry moves forward
+// again, so it is written at most once a day: a touch extends only when less than
+// SessionLifetime-SessionSlideAfter remains.
+const SessionSlideAfter = 24 * time.Hour
+
 // HashSessionToken is what the sessions table stores for a raw token: hex(SHA-256(token)). The
 // token is 256 bits of randomness, not a password, so a plain unsalted hash is enough — it only has
 // to make a leaked database or backup useless for signing in. Every UsersRepo method that takes a
@@ -203,7 +225,8 @@ func scanSession(row rowScanner) (*models.Session, error) {
 // whether the session is currently usable, not why it isn't.
 func (r *UsersRepo) GetValidSession(ctx context.Context, token string) (*models.Session, error) {
 	s, err := scanSession(r.db.QueryRowContext(ctx,
-		`SELECT `+sessionColumns+` FROM sessions WHERE token = ? AND expires_at > datetime('now')`, HashSessionToken(token)))
+		`SELECT `+sessionColumns+` FROM sessions WHERE token = ? AND expires_at > ?`,
+		HashSessionToken(token), r.Now().UTC().Format(sessionTimeLayout)))
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -214,24 +237,43 @@ func (r *UsersRepo) GetValidSession(ctx context.Context, token string) (*models.
 	return s, nil
 }
 
-// TouchSession records activity, but writes at most once per SessionTouchInterval per session
-// (the guard is in the UPDATE, so concurrent requests can't both write).
-func (r *UsersRepo) TouchSession(ctx context.Context, token string, now time.Time) error {
-	_, err := r.db.ExecContext(ctx,
-		`UPDATE sessions SET last_seen_at = ? WHERE token = ? AND (last_seen_at IS NULL OR last_seen_at <= ?)`,
-		now.UTC().Format(sessionTimeLayout), HashSessionToken(token), now.Add(-SessionTouchInterval).UTC().Format(sessionTimeLayout),
-	)
-	if err != nil {
-		return fmt.Errorf("touching session: %w", err)
+// TouchSession records activity and slides the expiry, in ONE statement so concurrent requests
+// cannot both write. It writes only when last_seen_at is older than SessionTouchInterval, and in
+// that same write moves expires_at to now+SessionLifetime when less than
+// SessionLifetime-SessionSlideAfter is left (so at most once a day, and an active session never
+// expires). A session already expired at now is never touched or revived. extended reports whether
+// the expiry moved, decided by the statement itself (no re-query), so the caller can re-issue the
+// cookies. A row that was not written (throttled, expired, unknown) is (false, nil).
+func (r *UsersRepo) TouchSession(ctx context.Context, token string, now time.Time) (extended bool, err error) {
+	nowS := now.UTC().Format(sessionTimeLayout)
+	newExpiry := now.Add(SessionLifetime).UTC().Format(sessionTimeLayout)
+	slideBelow := now.Add(SessionLifetime - SessionSlideAfter).UTC().Format(sessionTimeLayout)
+	var got string
+	err = r.db.QueryRowContext(ctx,
+		`UPDATE sessions SET last_seen_at = ?, expires_at = CASE WHEN expires_at < ? THEN ? ELSE expires_at END
+		 WHERE token = ? AND expires_at > ? AND (last_seen_at IS NULL OR last_seen_at <= ?)
+		 RETURNING expires_at`,
+		nowS, slideBelow, newExpiry, HashSessionToken(token), nowS, now.Add(-SessionTouchInterval).UTC().Format(sessionTimeLayout),
+	).Scan(&got)
+	if err == sql.ErrNoRows {
+		return false, nil
 	}
-	return nil
+	if err != nil {
+		return false, fmt.Errorf("touching session: %w", err)
+	}
+	// RETURNING sees the new row, so "extended" is "the expiry now equals newExpiry". An unextended
+	// row keeps an expiry >= slideBelow; it equals newExpiry only if it was already exactly
+	// now+SessionLifetime (login in the same second), where one redundant cookie re-issue with the
+	// same lifetime is harmless. A concurrent writer at this instant is stopped by the
+	// last_seen_at guard, so two callers never both see true.
+	return got == newExpiry, nil
 }
 
 // ListSessions returns the user's unexpired sessions, most recently active first.
 func (r *UsersRepo) ListSessions(ctx context.Context, userID int64) ([]models.Session, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT `+sessionColumns+` FROM sessions WHERE user_id = ? AND expires_at > datetime('now')
-		 ORDER BY COALESCE(last_seen_at, created_at) DESC, created_at DESC`, userID)
+		`SELECT `+sessionColumns+` FROM sessions WHERE user_id = ? AND expires_at > ?
+		 ORDER BY COALESCE(last_seen_at, created_at) DESC, created_at DESC`, userID, r.Now().UTC().Format(sessionTimeLayout))
 	if err != nil {
 		return nil, fmt.Errorf("listing sessions: %w", err)
 	}

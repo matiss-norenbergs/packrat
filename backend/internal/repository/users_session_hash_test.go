@@ -97,3 +97,62 @@ func TestDeleteSessionAndOthersTakeRawTokens(t *testing.T) {
 		t.Fatalf("second delete = %v, want ErrNotFound", err)
 	}
 }
+
+func TestTouchSessionSlidesOnceUnderConcurrency(t *testing.T) {
+	users := NewUsersRepo(openPoolTestDB(t))
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	users.SetClock(func() time.Time { return now })
+	ctx := context.Background()
+	u, _ := users.Create(ctx, "admin", "h")
+	if err := users.CreateSession(ctx, "tok", u.ID, now.Add(10*24*time.Hour), SessionMeta{}); err != nil {
+		t.Fatal(err)
+	}
+	const n = 8
+	res := make(chan bool, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			ext, err := users.TouchSession(ctx, "tok", now)
+			if err != nil {
+				t.Error(err)
+			}
+			res <- ext
+		}()
+	}
+	extended := 0
+	for i := 0; i < n; i++ {
+		if <-res {
+			extended++
+		}
+	}
+	if extended != 1 {
+		t.Fatalf("%d concurrent touches extended the session, want exactly 1", extended)
+	}
+	s, err := users.GetValidSession(ctx, "tok")
+	if err != nil || !s.ExpiresAt.Equal(now.Add(SessionLifetime)) {
+		t.Fatalf("expiry = %v (%v), want now+30d", s.ExpiresAt, err)
+	}
+}
+
+func TestTouchSessionBoundary(t *testing.T) {
+	users := NewUsersRepo(openPoolTestDB(t))
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	ctx := context.Background()
+	u, _ := users.Create(ctx, "admin", "h")
+	threshold := now.Add(SessionLifetime - SessionSlideAfter)
+	for _, c := range []struct {
+		tok    string
+		expiry time.Time
+		want   bool
+	}{
+		{"edge", threshold, false},                       // exactly 29 days left: not yet
+		{"justUnder", threshold.Add(-time.Second), true}, // a second less: slides
+		{"fresh", now.Add(SessionLifetime - time.Hour), false},
+	} {
+		if err := users.CreateSession(ctx, c.tok, u.ID, c.expiry, SessionMeta{}); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := users.TouchSession(ctx, c.tok, now); err != nil || got != c.want {
+			t.Errorf("%s: extended = %v, %v; want %v", c.tok, got, err, c.want)
+		}
+	}
+}

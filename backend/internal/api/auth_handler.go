@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -18,7 +17,9 @@ import (
 )
 
 const sessionCookieName = "packrat_session"
-const sessionDuration = 30 * 24 * time.Hour
+
+// sessionDuration is the one lifetime: login, the sliding extension and both cookies' max-age.
+const sessionDuration = repository.SessionLifetime
 
 // generateSessionToken returns a 64-character hex-encoded random token — an
 // opaque value with no embedded/signed data, validated purely by a
@@ -50,7 +51,7 @@ func startSession(c *gin.Context, usersRepo *repository.UsersRepo, userID int64)
 		ua = string(r[:maxUserAgentLen])
 	}
 	meta := repository.SessionMeta{Client: client, IP: c.ClientIP(), UserAgent: ua}
-	if err := usersRepo.CreateSession(c.Request.Context(), token, userID, time.Now().Add(sessionDuration), meta); err != nil {
+	if err := usersRepo.CreateSession(c.Request.Context(), token, userID, usersRepo.Now().Add(sessionDuration), meta); err != nil {
 		return "", err
 	}
 	return token, nil
