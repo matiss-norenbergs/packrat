@@ -196,7 +196,8 @@ isn't wired up yet.
   hash of this token. **Upgrading a server to the version that introduced that signs everyone out
   once**: the desktop app's saved token stops working, the app falls back to the login screen, and
   you sign in again (no data is lost).
-- **Updates** — manual, from Settings → Desktop → **Check for updates**. Nothing contacts GitHub until
+- **Updates** — manual, from Settings → Desktop → **Check for updates** (also from the login screen, so a
+  version mismatch that blocks sign-in can be fixed signed out). Nothing contacts GitHub until
   the button is pressed and nothing installs until **Install and restart** is. The app reads
   `latest.json` from the newest GitHub Release, downloads the update for its platform, verifies its
   signature against the public key in `tauri.conf.json` (`plugins.updater.pubkey`) and only then

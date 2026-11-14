@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { TotpCodeInput } from "@/components/TotpCodeInput"
 import { useAuthStatus, useLogin, useLogin2fa, useSetupAccount } from "@/hooks/useAuth"
 import { ApiError } from "@/lib/api"
+import { AppUpdateEntry } from "@/components/desktop/AppUpdateEntry"
 import { ServerSwitcherMenu } from "@/components/ServerSwitcher"
 import { getActiveProfileName, getServerUrl, isDesktop } from "@/lib/server"
 
@@ -168,8 +169,8 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Toaster />
+    <div className="flex h-screen w-full flex-col items-center justify-center gap-3 bg-background">
+      <Toaster />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="mb-2 flex items-center gap-2">
@@ -257,6 +258,7 @@ export function LoginPage() {
           )}
         </CardContent>
       </Card>
+      <AppUpdateEntry allowMatch />
     </div>
   )
 }
