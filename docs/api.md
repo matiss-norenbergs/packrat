@@ -1547,7 +1547,9 @@ row. The library bundle:
 ```
 
 Collections/artists/tags are referenced by path/name, never numeric ID, so a bundle is portable
-across installs.
+across installs. **Only library items with a saved `originalUrl` are included — no media bytes are
+ever shipped**; re-import re-queues downloads from those URLs. `downloadType`/`quality`/
+`audioFormat` are omitted if the originating download row is already gone at export time.
 
 `artists` entries carry `name`, `isPrivate` (omitted when false) and `birthday` (omitted when
 unset; date-only `YYYY-MM-DD`) — nothing else: artist images (display picture, gallery) are never
@@ -1558,9 +1560,7 @@ on an older server. Restore rules for an artist that already exists locally: `is
 makes it private, but `false`/absent never makes a private artist public; `birthday` is set only if
 the artist has none, never overwriting one. An artist the restore creates gets the entry's flag and
 birthday. A birthday that is not a real `YYYY-MM-DD` date is skipped (logged) for that artist and
-never fails the restore. `preview` is unchanged (names and the new-artist count). **Only library items with a saved `originalUrl` are included — no media bytes are
-ever shipped**; re-import re-queues downloads from those URLs. `downloadType`/`quality`/
-`audioFormat` are omitted if the originating download row is already gone at export time.
+never fails the restore. `preview` is unchanged (names and the new-artist count).
 
 ### `POST /api/backup/preview/library` / `POST /api/backup/import/settings` / `POST /api/backup/import/library`
 
