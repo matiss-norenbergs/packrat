@@ -34,13 +34,15 @@ function Entry({ allowMatch }: { allowMatch: boolean }) {
           className="sm:max-w-md"
           showCloseButton={!installing}
           onEscapeKeyDown={(e) => installing && e.preventDefault()}
-          onPointerDownOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => installing && e.preventDefault()}
         >
           <DialogHeader>
             <DialogTitle>App updates</DialogTitle>
             <DialogDescription>{version ? `Packrat Desktop v${version}` : "Packrat Desktop"}</DialogDescription>
           </DialogHeader>
-          <AppUpdatePanel allowMatch={allowMatch} serverName={getActiveProfileName()}
+          <AppUpdatePanel
+            allowMatch={allowMatch}
+            serverName={getActiveProfileName()}
             onInstallingChange={setInstalling}
           />
         </DialogContent>
