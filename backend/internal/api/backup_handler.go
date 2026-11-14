@@ -672,11 +672,15 @@ func toBackupContentPreviewResponse(bundle backup.FullBundle) BackupContentPrevi
 			IsGhost:        it.Status == "ghost" || it.OriginalURL == "",
 		})
 	}
+	artists := make([]string, 0, len(bundle.Library.Artists))
+	for _, a := range bundle.Library.Artists {
+		artists = append(artists, a.Name)
+	}
 	return BackupContentPreviewResponse{
 		SettingsCount: len(bundle.Settings),
 		Collections:   collections,
 		Tags:          tags,
-		Artists:       bundle.Library.Artists,
+		Artists:       artists,
 		Items:         items,
 	}
 }

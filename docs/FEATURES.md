@@ -670,8 +670,7 @@ collection's Artist default — see Collections above).
   open (selecting another artist, clearing or multi-selecting, or closing the panel re-blurs). The
   [reveal-all floating button](#reveal-all-floating-button) reveals them too, and turning it off re-blurs
   everything, including click-revealed images. The artist dialog (and its images), the Edit item / Bulk edit dialogs, the artist
-  picker, the Library filter, Downloads, Browse and the dashboard charts keep showing real names. Library backups don't carry the flag yet (see
-  [`TODO.md`](TODO.md)).
+  picker, the Library filter, Downloads, Browse and the dashboard charts keep showing real names. Library backups carry the flag (see [Backup](#backup)).
 
 **Image gallery (optional)** — build a gallery of images for an artist and pick one as their
 display picture (shown wherever the artist is represented, e.g. Browse). Add images from suggested
@@ -868,9 +867,13 @@ or just as a safety net.
 - **Settings** card — exports every setting to one file; importing overwrites your current
   settings with the file's values (never deletes a setting the file doesn't mention).
 - **Library Data** card — exports collections, tags, artists, and every library item that has a
-  saved source URL. **No media files are included** — it's a recipe, not an archive. Importing
+  saved source URL. **No media files are included** — it's a recipe, not an archive. Each artist
+  is exported with its name, private flag and birthday (not its images, which are files), so a
+  restore keeps a private artist's items blurred. Importing
   creates any missing collections/tags/artists (matched by name/path, never overwriting existing
-  ones); a **Preview** step shows what's new versus already-in-library before you commit. Choose
+  ones — except that an existing artist is made private if the backup says so, and gets the
+  backup's birthday if it has none; a private artist is never made public and a birthday is never
+  overwritten); a **Preview** step shows what's new versus already-in-library before you commit. Choose
   **"Import and download"** to queue a fresh download for every item with a saved URL (items
   without one are always created as [ghosts](#ghost-items)), or **"Import as ghost items"** to
   recreate everything as a placeholder instead of downloading anything. Tags on redownloaded items

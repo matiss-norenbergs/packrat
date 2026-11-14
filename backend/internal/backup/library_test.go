@@ -413,7 +413,7 @@ func TestPreviewLibraryBundle(t *testing.T) {
 			{Name: "existing-tag"},
 			{Name: "new-tag"},
 		},
-		Artists: []string{"Existing Artist", "New Artist"},
+		Artists: []ArtistEntry{{Name: "Existing Artist"}, {Name: "New Artist"}},
 		LibraryItems: []LibraryItemEntry{
 			{Title: "Existing Song", OriginalURL: existingURL, CollectionPath: []string{"Music"}, Filename: "existing.mp3"},
 			{Title: "New Song", OriginalURL: "https://example.com/new", CollectionPath: []string{"Shows", "Anime"}, ArtistName: "New Artist", Filename: "new.mp4"},

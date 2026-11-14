@@ -773,8 +773,9 @@ unchanged). It is no longer panel-only: an item is also blurred when its *own* a
 always its own stored `artist_id` — a collection's artist only fills the field as a default when a download starts, so
 there is no tree-walking), and the Artists page's right-hand image panel still blurs on it (frontend-gated on
 `privacyEnabled && artist.isPrivate`; the API returns the raw flag). Private artist *names* are hashed on the Artists
-page and in the Library (`useArtistNameMask`, below). Browse and dialogs don't use the flag, and library backups don't
-carry it yet (restore creates public artists; see `TODO.md`).
+page and in the Library (`useArtistNameMask`, below). Browse and dialogs don't use the flag. Library backups carry it
+(with the birthday) as `ArtistEntry` objects; a restore only ever upgrades an existing artist (private never cleared,
+birthday only fills a blank), so restoring can't un-blur content.
 
 An item is `blurred` if the privacy master switch (`privacy_enabled`) is on **and** any of three
 independent things is true: its collection (or an ancestor collection) is marked private, its own artist
@@ -1714,6 +1715,10 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
 
 Still intentionally out of scope, not forgotten:
 
+- **No artist images in backups.** A library backup carries each artist's name, private flag and birthday
+  but not the display picture, `selected_image_path` or the `artist_images` gallery: backups carry
+  references, never file bytes (same reason no media files are shipped), so restored artists start
+  without pictures.
 - **No conditional logic in filename templates.** Templates (`{artist}/{title}`, see
   `internal/nametemplate`) only substitute `{variable}` tokens and split on `/`; there is no "drop
   this segment if `{sequence}` is blank". A blank filename and template uses yt-dlp's native
