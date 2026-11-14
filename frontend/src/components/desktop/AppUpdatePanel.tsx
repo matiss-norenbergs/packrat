@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { UpdateProgress } from "@/components/settings/UpdateProgress"
@@ -13,12 +14,15 @@ interface AppUpdatePanelProps {
   // Name of the selected server profile. When given (the signed-out screens), the match button and
   // hints name it; Settings leaves it out and keeps the generic "your server" wording.
   serverName?: string | null
+  // Called whenever "an install is running" (app update or match update) changes, so a host dialog
+  // can refuse to close mid-install. Also called with false when the panel unmounts.
+  onInstallingChange?: (installing: boolean) => void
 }
 
 // Manual app updates: nothing is contacted until "Check for updates" is pressed, and nothing is
 // installed until "Install and restart" is. See useAppUpdate. Needs no signed-in session, so it is
 // shared by Settings → Desktop and the login screen's update dialog.
-export function AppUpdatePanel({ allowMatch = true, serverName }: AppUpdatePanelProps) {
+export function AppUpdatePanel({ allowMatch = true, serverName, onInstallingChange }: AppUpdatePanelProps) {
   const { state, check, install } = useAppUpdate()
   const match = useMatchServerVersion()
   const currentVersion = useDesktopAppVersion()
@@ -29,6 +33,17 @@ export function AppUpdatePanel({ allowMatch = true, serverName }: AppUpdatePanel
     state.status === "installing" ||
     match.state.status === "checking" ||
     match.state.status === "installing"
+  const installing = state.status === "installing" || match.state.status === "installing"
+
+  const report = useRef(onInstallingChange)
+  useEffect(() => {
+    report.current = onInstallingChange
+  })
+  useEffect(() => {
+    report.current?.(installing)
+  }, [installing])
+  useEffect(() => () => report.current?.(false), [])
+
   const canMatch = allowMatch && isReleaseVersion(serverVersion) && !!currentVersion
   const matches = canMatch && compareSemver(serverVersion, currentVersion) === 0
   const target = serverName ?? "your server"

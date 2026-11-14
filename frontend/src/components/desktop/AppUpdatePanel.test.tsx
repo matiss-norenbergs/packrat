@@ -3,18 +3,24 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { AppUpdatePanel } from "@/components/desktop/AppUpdatePanel"
 
 let serverVersion: string | undefined
+let appState: { status: string; downloaded?: number; total?: number | null } = { status: "idle" }
+let matchState: { status: string; downloaded?: number; total?: number | null } = { status: "idle" }
 vi.mock("@/hooks/useSettings", () => ({
   useAppVersion: () => ({ data: serverVersion ? { version: serverVersion } : undefined }),
 }))
 vi.mock("@/hooks/useDesktopAppVersion", () => ({ useDesktopAppVersion: () => "1.4.0" }))
 vi.mock("@/hooks/useAppUpdate", () => ({
-  useAppUpdate: () => ({ state: { status: "idle" }, check: vi.fn(), install: vi.fn() }),
+  useAppUpdate: () => ({ state: appState, check: vi.fn(), install: vi.fn() }),
 }))
 vi.mock("@/hooks/useMatchServerVersion", () => ({
-  useMatchServerVersion: () => ({ state: { status: "idle" }, check: vi.fn(), install: vi.fn(), cancel: vi.fn() }),
+  useMatchServerVersion: () => ({ state: matchState, check: vi.fn(), install: vi.fn(), cancel: vi.fn() }),
 }))
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  appState = { status: "idle" }
+  matchState = { status: "idle" }
+})
 
 describe("AppUpdatePanel", () => {
   it("always offers Check for updates", () => {
@@ -52,5 +58,36 @@ describe("AppUpdatePanel", () => {
     render(<AppUpdatePanel serverName="Home" />)
     expect(screen.getByText("Matches Home.")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /^Match/ })).not.toBeInTheDocument()
+  })
+
+  describe("onInstallingChange", () => {
+    it.each([
+      ["app update", () => (appState = { status: "installing", downloaded: 1, total: 10 })],
+      ["match update", () => (matchState = { status: "installing", downloaded: 1, total: 10 })],
+    ])("reports an installing %s and then its end", (_name, startInstall) => {
+      serverVersion = undefined
+      const onChange = vi.fn()
+      const { rerender } = render(<AppUpdatePanel onInstallingChange={onChange} />)
+      expect(onChange).toHaveBeenLastCalledWith(false)
+
+      startInstall()
+      rerender(<AppUpdatePanel onInstallingChange={onChange} />)
+      expect(onChange).toHaveBeenLastCalledWith(true)
+
+      appState = { status: "error" }
+      matchState = { status: "idle" }
+      rerender(<AppUpdatePanel onInstallingChange={onChange} />)
+      expect(onChange).toHaveBeenLastCalledWith(false)
+    })
+
+    it("reports false when it unmounts mid-install", () => {
+      serverVersion = undefined
+      appState = { status: "installing", downloaded: 0, total: null }
+      const onChange = vi.fn()
+      const { unmount } = render(<AppUpdatePanel onInstallingChange={onChange} />)
+      expect(onChange).toHaveBeenLastCalledWith(true)
+      unmount()
+      expect(onChange).toHaveBeenLastCalledWith(false)
+    })
   })
 })

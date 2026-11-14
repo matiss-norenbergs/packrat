@@ -16,6 +16,9 @@ export function AppUpdateEntry({ allowMatch = false }: { allowMatch?: boolean })
 
 function Entry({ allowMatch }: { allowMatch: boolean }) {
   const [open, setOpen] = useState(false)
+  // True while an update is downloading/installing: closing the dialog would unmount the progress
+  // while the install and restart carry on, so it is held open until the install ends or fails.
+  const [installing, setInstalling] = useState(false)
   const version = useDesktopAppVersion()
 
   return (
@@ -26,13 +29,20 @@ function Entry({ allowMatch }: { allowMatch: boolean }) {
           Check for updates
         </Button>
       </p>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={open} onOpenChange={(next) => !(installing && !next) && setOpen(next)}>
+        <DialogContent
+          className="sm:max-w-md"
+          showCloseButton={!installing}
+          onEscapeKeyDown={(e) => installing && e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>App updates</DialogTitle>
             <DialogDescription>{version ? `Packrat Desktop v${version}` : "Packrat Desktop"}</DialogDescription>
           </DialogHeader>
-          <AppUpdatePanel allowMatch={allowMatch} serverName={getActiveProfileName()} />
+          <AppUpdatePanel allowMatch={allowMatch} serverName={getActiveProfileName()}
+            onInstallingChange={setInstalling}
+          />
         </DialogContent>
       </Dialog>
     </>

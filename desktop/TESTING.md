@@ -157,6 +157,7 @@ Needs a published release newer than the installed build, or an older/newer serv
 | W-77 | Sign out. On the login screen, look under the card, then click **Check for updates**. | A quiet "Desktop vX.Y.Z · Check for updates" line (not on the two-factor step); the click opens an "App updates" dialog without signing in. | Not run — needs the Windows desktop shell |
 | W-78 | In that dialog, **Check for updates**. | Same result as W-70/W-71 (up to date, or "Version X is available" with Install and restart). | Not run — needs the Windows desktop shell |
 | W-79 | In that dialog with the server reachable on a release version, then with the server stopped (or an unreadable version). | "Match <server name> (vX)" is offered with the server up and a different version; with the server down it is absent, with no error text. | Not run — needs the Windows desktop shell |
+| W-80 | Start an install from the login-screen dialog (Install and restart, or Match), then try to close the dialog with Escape and by clicking outside. | The dialog stays open (no X) until the app restarts; if the install fails it shows the error and can be closed. | Not run — needs the Windows desktop shell |
 
 ### Server version and connection notices
 
