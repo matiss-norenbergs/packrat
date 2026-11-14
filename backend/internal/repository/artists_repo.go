@@ -351,6 +351,22 @@ func (r *ArtistsRepo) Update(ctx context.Context, id int64, newName string, birt
 	return checkRowsAffected(res)
 }
 
+// MergeFromBackup applies a restored backup entry to an existing artist
+// without ever downgrading it: makePrivate only turns the private flag on
+// (false leaves it as is), and birthday, when non-nil, only fills a blank one.
+// Takes no repo mutex, like SetSelectedImage: it writes no uniqueness-guarded
+// column, so it is safe inside the restore transaction (see LockForRestore).
+func (r *ArtistsRepo) MergeFromBackup(ctx context.Context, id int64, makePrivate bool, birthday *string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE artists SET
+		is_private = CASE WHEN ? THEN 1 ELSE is_private END,
+		birthday = COALESCE(NULLIF(birthday, ''), ?)
+		WHERE id = ?`, makePrivate, birthday, id)
+	if err != nil {
+		return fmt.Errorf("merging backup artist: %w", err)
+	}
+	return checkRowsAffected(res)
+}
+
 // Delete removes an artist; ON DELETE SET NULL on library.artist_id and
 // downloads.override_artist_id clears the reference on affected rows
 // automatically rather than deleting anything.

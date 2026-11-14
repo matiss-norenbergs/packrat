@@ -1531,7 +1531,10 @@ row. The library bundle:
     }
   ],
   "tags": [ { "name": "music", "isPrivate": false } ],
-  "artists": ["Some Artist"],
+  "artists": [
+    { "name": "Some Artist" },
+    { "name": "Some Private Artist", "isPrivate": true, "birthday": "1987-03-14" }
+  ],
   "libraryItems": [
     {
       "title": "Some Video", "originalUrl": "https://youtube.com/watch?v=abc123",
@@ -1544,7 +1547,18 @@ row. The library bundle:
 ```
 
 Collections/artists/tags are referenced by path/name, never numeric ID, so a bundle is portable
-across installs. **Only library items with a saved `originalUrl` are included — no media bytes are
+across installs.
+
+`artists` entries carry `name`, `isPrivate` (omitted when false) and `birthday` (omitted when
+unset; date-only `YYYY-MM-DD`) — nothing else: artist images (display picture, gallery) are never
+included. Items and collections still reference an artist by `artistName`. Import also accepts the
+older form where an entry is a bare name string (read as a public artist with no birthday), per
+element, so old backup files keep importing; a backup written by this version does **not** import
+on an older server. Restore rules for an artist that already exists locally: `isPrivate: true`
+makes it private, but `false`/absent never makes a private artist public; `birthday` is set only if
+the artist has none, never overwriting one. An artist the restore creates gets the entry's flag and
+birthday. A birthday that is not a real `YYYY-MM-DD` date is skipped (logged) for that artist and
+never fails the restore. `preview` is unchanged (names and the new-artist count). **Only library items with a saved `originalUrl` are included — no media bytes are
 ever shipped**; re-import re-queues downloads from those URLs. `downloadType`/`quality`/
 `audioFormat` are omitted if the originating download row is already gone at export time.
 

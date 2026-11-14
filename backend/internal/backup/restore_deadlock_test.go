@@ -92,7 +92,9 @@ func TestApplyLibraryBundle_NoDeadlockWithConcurrentArtistWriters(t *testing.T) 
 	for i := range names {
 		names[i] = fmt.Sprintf("artist-%02d", i)
 	}
-	bundle.Artists = names
+	for _, n := range names {
+		bundle.Artists = append(bundle.Artists, ArtistEntry{Name: n})
+	}
 
 	runRestoreAgainstHammers(t, repos, bundle, 4, func(ctx context.Context, _ int) {
 		for _, n := range names {
@@ -167,7 +169,7 @@ func TestApplyLibraryBundle_NoDeadlockMixedWriters(t *testing.T) {
 
 	bundle := LibraryBundle{
 		Tags:        []TagEntry{{Name: "mix-a"}, {Name: "mix-b"}},
-		Artists:     []string{"Mixed Artist"},
+		Artists:     []ArtistEntry{{Name: "Mixed Artist"}},
 		Collections: []CollectionEntry{{Path: []string{"Mixed", "Sub"}, Name: "Sub", DefaultQuality: "best", DefaultDownloadType: "video"}},
 	}
 	for i := 0; i < 20; i++ {

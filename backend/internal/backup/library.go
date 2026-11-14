@@ -1,11 +1,14 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/models"
@@ -35,6 +38,40 @@ type CollectionEntry struct {
 type TagEntry struct {
 	Name      string `json:"name"`
 	IsPrivate bool   `json:"isPrivate,omitempty"`
+}
+
+// ArtistEntry is an artist definition in the library bundle: name, private
+// flag and birthday, and nothing else — images stay out on purpose (backups
+// carry references, never file bytes). Items and collections still reference
+// artists by name (ArtistName).
+type ArtistEntry struct {
+	Name      string `json:"name"`
+	IsPrivate bool   `json:"isPrivate,omitempty"`
+	// Birthday is the date-only string "YYYY-MM-DD" (see models.Artist.Birthday).
+	Birthday string `json:"birthday,omitempty"`
+}
+
+// UnmarshalJSON accepts both the current object form and the bare name string
+// older backups used for artists, deciding per element from its first byte.
+func (a *ArtistEntry) UnmarshalJSON(b []byte) error {
+	b = bytes.TrimSpace(b)
+	if len(b) > 0 && b[0] == '"' {
+		*a = ArtistEntry{}
+		return json.Unmarshal(b, &a.Name)
+	}
+	type plain ArtistEntry // no methods, so no recursion into this function
+	var p plain
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+	*a = ArtistEntry(p)
+	return nil
+}
+
+// validBirthday reports whether s is a real calendar date in YYYY-MM-DD form.
+func validBirthday(s string) bool {
+	t, err := time.Parse("2006-01-02", s)
+	return err == nil && t.Format("2006-01-02") == s
 }
 
 type LibraryItemEntry struct {
@@ -67,7 +104,7 @@ type LibraryItemEntry struct {
 type LibraryBundle struct {
 	Collections  []CollectionEntry  `json:"collections"`
 	Tags         []TagEntry         `json:"tags"`
-	Artists      []string           `json:"artists"`
+	Artists      []ArtistEntry      `json:"artists"`
 	LibraryItems []LibraryItemEntry `json:"libraryItems"`
 }
 
@@ -124,7 +161,11 @@ func BuildLibraryBundle(
 	}
 	artistNames := make(map[int64]string, len(artistRows))
 	for _, a := range artistRows {
-		bundle.Artists = append(bundle.Artists, a.Name)
+		entry := ArtistEntry{Name: a.Name, IsPrivate: a.IsPrivate}
+		if a.Birthday != nil {
+			entry.Birthday = *a.Birthday
+		}
+		bundle.Artists = append(bundle.Artists, entry)
 		artistNames[a.ID] = a.Name
 	}
 
@@ -337,8 +378,8 @@ func PreviewLibraryBundle(
 			preview.ArtistsNew++
 		}
 	}
-	for _, name := range bundle.Artists {
-		addArtist(name)
+	for _, a := range bundle.Artists {
+		addArtist(a.Name)
 	}
 	for _, item := range bundle.LibraryItems {
 		addArtist(item.ArtistName)
@@ -496,28 +537,47 @@ func ApplyLibraryBundle(
 	for _, a := range artistRows {
 		artistIDs[a.Name] = a.ID
 	}
-	ensureArtist := func(name string) {
+	// ensureArtist makes sure name exists. entry carries the backup's flag and
+	// birthday (nil for artists only referenced by an item or collection).
+	// Created artists get them as-is; existing ones only upgrade: the private
+	// flag is never cleared and a birthday only fills a blank.
+	ensureArtist := func(name string, entry *ArtistEntry) {
 		if name == "" {
 			return
 		}
-		if _, ok := artistIDs[name]; ok {
+		var bd *string
+		if entry != nil && entry.Birthday != "" {
+			if validBirthday(entry.Birthday) {
+				bd = &entry.Birthday
+			} else {
+				log.Printf("backup restore: skipping invalid birthday %q for artist %q", entry.Birthday, name)
+			}
+		}
+		private := entry != nil && entry.IsPrivate
+
+		if id, ok := artistIDs[name]; ok {
+			if private || bd != nil {
+				if err := artistsRepo.MergeFromBackup(ctx, id, private, bd); err != nil {
+					log.Printf("backup restore: updating artist %q: %v", name, err)
+				}
+			}
 			return
 		}
-		created, err := artistsRepo.Create(ctx, name, nil) // backup never captured birthday, so imported artists start without one
+		created, err := artistsRepo.CreateWithPrivacy(ctx, name, bd, private)
 		if err != nil {
 			return // best-effort — e.g. a race with a concurrent creator
 		}
 		artistIDs[created.Name] = created.ID
 		result.ArtistsCreated++
 	}
-	for _, name := range bundle.Artists {
-		ensureArtist(name)
+	for i := range bundle.Artists {
+		ensureArtist(bundle.Artists[i].Name, &bundle.Artists[i])
 	}
 	for _, item := range bundle.LibraryItems {
-		ensureArtist(item.ArtistName)
+		ensureArtist(item.ArtistName, nil)
 	}
 	for _, entry := range bundle.Collections {
-		ensureArtist(entry.ArtistName)
+		ensureArtist(entry.ArtistName, nil)
 	}
 
 	collectionIDs := make(map[string]int64) // key: path segments joined by "/"
