@@ -59,13 +59,6 @@ pre-profiles release), **W-71 to W-73** and the install half of **W-74/W-76** (r
 "Match server version"; each installs another build), and **W-21/W-22** done only by simulation (running
 the `Run` command; a real sign-out/sign-in of Windows wasn't tested).
 
-## Web app polish
-
-- **Image loading (S to M).** From [`live-image-resize.md`](live-image-resize.md): tiles and the cover
-  picker already use lazy loading and live resizing. What's left: the Frame Matching review page still loads
-  full-size reference/found frames, and the resized-image cache has no size cap (age-based eviction only; a cap
-  with LRU eviction is the possible next step if it grows large). The artist image picker was left alone on purpose.
-
 ## Backend audit leftovers
 
 From the full backend audit: every numbered finding is fixed. What follows is its "low confidence" list

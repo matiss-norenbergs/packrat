@@ -119,7 +119,7 @@ frame resolution in a grid of small tiles (`aspect-video`).
 | Pick-from-folder dialogs | `ArtistDialog.tsx:282`, ~~`CollectionCoverDialog.tsx:69`~~ | arbitrary user files via `mediaFileUrl(c.relPath)`; unbounded source size; no write path, so live resizing is the only clean fix. **Collection cover picker: done** (Part 3). The artist picker's candidates are the artist's own library thumbnails (~100-300 KB), so it was left alone |
 | AI compare dialog | `CompareThumbnailDialog.tsx:59,94,172` | full size on purpose (wipe comparison at full resolution) — leave |
 | Gallery viewer | `ThumbnailGalleryViewerDialog.tsx:136` | full size on purpose — leave |
-| Frame matching review | `FrameMatchingPage.tsx:351` | reference and found frames, full size |
+| Frame matching review | `FrameMatchingPage.tsx:351` | reference and found frames, full size. **Decided to leave as is**: it is an occasional, one-dialog view of two images, and a real saving needs the frames' pixel size from the backend (`ThumbnailResolutionValue` loads the full file to read it), so resizing only the displayed `<img>` would save almost nothing |
 
 ## Design
 
@@ -222,7 +222,7 @@ WebP, quality 80 (same as the existing tiers), via the same ffmpeg scale filter
 - **Eviction (decided, v1):** age-based. Stale entries (source mtime changed) are orphaned, not
   removed on their own, so the existing hourly ticker in `main.go` deletes cache files not accessed
   in N days — **default 7 days** (decided; adjustable at any time, so keep it a single named
-  constant or setting, not a literal scattered in the sweep). A size cap with LRU eviction is a possible later step if the cache proves large in practice.
+  constant or setting, not a literal scattered in the sweep). A size cap with LRU eviction is a possible later step if the cache proves large in practice. **Measured 2026-11-14 on a real instance in regular use: 300 files, 3.9 MB (about 13 KB each), so no cap is planned**; revisit only if a much larger library shows otherwise.
 - **Write:** to a temp file then atomic rename, so a concurrent reader never sees a partial file.
 
 ### Concurrency and abuse limits
