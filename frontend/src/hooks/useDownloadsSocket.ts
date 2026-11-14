@@ -163,16 +163,20 @@ export function useDownloadsSocket() {
 
     const connect = () => {
       if (stopped) return
-      socket = connectDownloadsSocket(handleEvent)
+      const current = connectDownloadsSocket((event) => {
+        if (!stopped) handleEvent(event)
+      })
+      socket = current
 
-      socket.addEventListener("open", () => {
+      current.addEventListener("open", () => {
+        if (stopped) return
         attemptRef.current = 0
         reportReachable()
         queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
         queryClient.invalidateQueries({ queryKey: libraryQueryKey })
       })
 
-      socket.addEventListener("close", () => {
+      current.addEventListener("close", () => {
         if (stopped) return
         // Desktop only (no-op on the web): a dropped socket on an idle page is often the first sign
         // the server went away — no request is in flight to notice it.
@@ -191,7 +195,16 @@ export function useDownloadsSocket() {
     return () => {
       stopped = true
       if (reconnectTimer) clearTimeout(reconnectTimer)
-      socket?.close()
+      // Closing a socket that is still CONNECTING makes the browser log "WebSocket is closed before
+      // the connection is established" (StrictMode's mount/unmount/mount in dev, or a quick route
+      // change), so let it finish opening first and close it then. `stopped` keeps it from
+      // reconnecting or touching the cache meanwhile.
+      const closing = socket
+      if (closing?.readyState === WebSocket.CONNECTING) {
+        closing.addEventListener("open", () => closing.close(), { once: true })
+      } else {
+        closing?.close()
+      }
     }
   }, [queryClient])
 }

@@ -53,12 +53,19 @@ const BrowseItemPage = page(() => import("@/pages/BrowseItemPage"), "BrowseItemP
 const BrowseShowPage = page(() => import("@/pages/BrowseShowPage"), "BrowseShowPage")
 const BrowseArtistPage = page(() => import("@/pages/BrowseArtistPage"), "BrowseArtistPage")
 
+// Route `lazy` also leaves the router uninitialised on the first load, and React Router warns
+// (once, in dev) when no top-level route says what to show meanwhile. Nothing is the right answer:
+// the page appears when its chunk arrives, exactly as before — this only states it (an empty
+// fragment, as the router ignores a null element). It never shows after the first load.
+const hydrateFallbackElement = <></>
+
 // Each top-level branch carries the error element (failed page chunk, render
 // error); see RouteError.
 export const router = createBrowserRouter([
-  { path: "/login", errorElement: <RouteError />, ...LoginPage },
+  { path: "/login", hydrateFallbackElement, errorElement: <RouteError />, ...LoginPage },
   {
     element: <AppLayout />,
+    hydrateFallbackElement,
     errorElement: <RouteError />,
     children: [
       { path: "/", ...DashboardPage },
@@ -95,6 +102,7 @@ export const router = createBrowserRouter([
     // A deliberately separate branch from AppLayout — see BrowseLayout for
     // why (no shared Sidebar/MobileNav with the management area).
     element: <BrowseLayout />,
+    hydrateFallbackElement,
     errorElement: <RouteError />,
     children: [
       { path: "/browse", ...BrowsePage },
@@ -107,6 +115,7 @@ export const router = createBrowserRouter([
     // A third, deliberately chrome-less branch — see ImmersiveLayout for why
     // this can't just reuse BrowseLayout or AppLayout.
     element: <ImmersiveLayout />,
+    hydrateFallbackElement,
     errorElement: <RouteError />,
     children: [
       {

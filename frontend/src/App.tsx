@@ -15,6 +15,19 @@ import { router } from "@/routes"
 // has been visited yet.
 import "@/hooks/useAccentColor"
 
+// next-themes renders an inline "no flash" <script> for server-rendered pages. This app is
+// client-rendered only, where React never executes a script it renders (and logs an error about it
+// in dev) — so it was always inert here. Typing it as a data block keeps React quiet and changes
+// nothing else; the theme is applied by the provider's effect and the localStorage cache (see
+// "Appearance preferences" in docs/architecture.md). An inline script in index.html would be the
+// real pre-paint fix but is blocked by the desktop shell's CSP (script-src 'self').
+const themeProviderProps = {
+  attribute: "class",
+  defaultTheme: "system",
+  enableSystem: true,
+  scriptProps: { type: "application/json" },
+} as const
+
 function App() {
   useTrayServers()
 
@@ -32,14 +45,14 @@ function App() {
   // Desktop with no server chosen yet (or "Add server…"): nothing to render the router against.
   if (showsConnectScreen()) {
     return (
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <ThemeProvider {...themeProviderProps}>
         <ConnectPage />
       </ThemeProvider>
     )
   }
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider {...themeProviderProps}>
       <QueryClientProvider client={queryClient}>
         <DesktopGate>
           <RouterProvider router={router} />

@@ -61,9 +61,6 @@ the `Run` command; a real sign-out/sign-in of Windows wasn't tested).
 
 ## Web app polish
 
-- **Console noise (S).** Every page logs a React error about a `<script>` tag rendered inside a
-  component, a React Router `HydrateFallback` warning, and a WebSocket "closed before the connection was
-  established" warning in dev. A permanently noisy console hides real errors.
 - **Edit Sequence dialog (S).** The left panel's 40% minimum can't be reached because the right panel's
   50% maximum limits it first (that was already the case before the library upgrade); one of the two
   limits is pointless.
