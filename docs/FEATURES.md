@@ -109,6 +109,15 @@ shows "No desktop build is published for server version X"; the download is sign
 any update, and the release manifest must offer exactly the requested version (otherwise the
 install is refused with an error). Never automatic; **Check for updates** still looks for the latest release.
 
+**Updating from the login screen**: so an app/server mismatch that blocks sign-in can still be fixed, the
+signed-out screens in the desktop shell (password step, first-run setup, "Connect to a server" and "Can't
+reach the server") show a quiet line under the card: "Desktop vX.Y.Z · **Check for updates**" (the version is
+hidden until it resolves; not shown on the two-factor step or in the web UI). It opens an "App updates" dialog
+with the same panel as Settings → Desktop (check, install and restart, progress, errors). The entry doesn't
+depend on any server. On the login screen the dialog also offers **Match <server name> (vX.Y.Z)** for the
+selected server, but only when that server's version could be read and is a plain release version; otherwise
+the option is simply absent. Connect and "Can't reach the server" offer Check for updates only.
+
 For development, `VITE_DESKTOP=true npm run dev` runs the client mode in a plain browser (add
 `http://localhost:5173` to `CORS_ALLOWED_ORIGINS` on the server).
 

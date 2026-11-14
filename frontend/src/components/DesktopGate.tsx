@@ -7,6 +7,7 @@ import { SecurityNotice } from "@/components/SecurityNotice"
 import { VersionMismatchNotice } from "@/components/VersionMismatchNotice"
 import { useAuthStatus } from "@/hooks/useAuth"
 import { useDownloadToasts } from "@/hooks/useDownloadToasts"
+import { AppUpdateEntry } from "@/components/desktop/AppUpdateEntry"
 import { ServerSwitcherMenu } from "@/components/ServerSwitcher"
 import { getActiveProfileName, getServerUrl, isDesktop, isTauri } from "@/lib/server"
 
@@ -28,7 +29,7 @@ export function DesktopGate({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-background">
+    <div className="flex h-screen w-full flex-col items-center justify-center gap-3 bg-background">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="mb-2 flex items-center gap-2">
@@ -55,6 +56,7 @@ export function DesktopGate({ children }: { children: ReactNode }) {
           />
         </CardContent>
       </Card>
+      <AppUpdateEntry />
     </div>
   )
 }

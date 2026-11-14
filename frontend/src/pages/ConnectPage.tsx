@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AppUpdateEntry } from "@/components/desktop/AppUpdateEntry"
 import { openProfile } from "@/lib/serverSwitch"
 import {
   deriveProfileName,
@@ -57,7 +58,7 @@ export function ConnectPage() {
   }
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-background">
+    <div className="flex h-screen w-full flex-col items-center justify-center gap-3 bg-background">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="mb-2 flex items-center gap-2">
@@ -124,6 +125,7 @@ export function ConnectPage() {
           )}
         </CardContent>
       </Card>
+      <AppUpdateEntry />
     </div>
   )
 }

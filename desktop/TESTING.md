@@ -154,6 +154,9 @@ Needs a published release newer than the installed build, or an older/newer serv
 | W-74 | Connect to a server running an **older** release; press **Match server version**. | The confirmation warns it is an older version; confirming downgrades. | Partial 2026-10-24 v0.18.1 — against a 0.18.0 server the confirmation reads "Install an older version? This replaces v0.18.1 with the older v0.18.0…"; Cancel pressed, downgrade not installed |
 | W-75 | Connect to a server whose version has no desktop build. | "No desktop build is published for server version …"; nothing changes. | Pass 2026-10-24 v0.18.1 — 0.14.0 server: "Couldn't check for a matching version: No desktop build is published for server version 0.14.0" |
 | W-76 | After an update, check the Updates section. | "You have version <new>", and "Matches your server" when equal. | Partial 2026-10-24 v0.18.1 — no update done; against a 0.18.1 server it shows "You have version 0.18.1." and "Matches your server." |
+| W-77 | Sign out. On the login screen, look under the card, then click **Check for updates**. | A quiet "Desktop vX.Y.Z · Check for updates" line (not on the two-factor step); the click opens an "App updates" dialog without signing in. | Not run — needs the Windows desktop shell |
+| W-78 | In that dialog, **Check for updates**. | Same result as W-70/W-71 (up to date, or "Version X is available" with Install and restart). | Not run — needs the Windows desktop shell |
+| W-79 | In that dialog with the server reachable on a release version, then with the server stopped (or an unreadable version). | "Match <server name> (vX)" is offered with the server up and a different version; with the server down it is absent, with no error text. | Not run — needs the Windows desktop shell |
 
 ### Server version and connection notices
 

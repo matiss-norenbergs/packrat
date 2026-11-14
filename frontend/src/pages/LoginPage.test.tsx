@@ -201,3 +201,34 @@ describe("LoginPage with 2FA (desktop, bearer token)", () => {
     expect(bodyOf(callsTo(fetchMock, "/auth/login/2fa")[0])).toEqual({ challengeToken: "chal-1", code: "654321" })
   })
 })
+
+describe("LoginPage update entry", () => {
+  it("is absent in the web UI", async () => {
+    mockFetch((url) => (url.endsWith("/auth/status") ? { status: 200, body: LOGGED_OUT } : { status: 404 }))
+    page()
+    await screen.findByLabelText("Username")
+    expect(screen.queryByRole("button", { name: "Check for updates" })).not.toBeInTheDocument()
+  })
+
+  it("opens the update dialog in the desktop shell, and is hidden on the two-factor step", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { value: {}, configurable: true })
+    setServerUrl("http://nas:50505")
+    mockFetch((url) => {
+      if (url.endsWith("/auth/status")) return { status: 200, body: LOGGED_OUT }
+      if (url.endsWith("/auth/login")) return { status: 200, body: CHALLENGE }
+      return { status: 404 }
+    })
+    page()
+    const user = userEvent.setup()
+    await user.type(await screen.findByLabelText("Username"), "admin")
+    await user.click(await screen.findByRole("button", { name: "Check for updates" }))
+    expect(await screen.findByRole("dialog", { name: "App updates" })).toBeInTheDocument()
+    await user.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+
+    await user.type(screen.getByLabelText("Password"), "hunter2-hunter2")
+    await user.click(screen.getByRole("button", { name: "Log in" }))
+    await screen.findByLabelText("Authentication code")
+    expect(screen.queryByRole("button", { name: "Check for updates" })).not.toBeInTheDocument()
+  })
+})

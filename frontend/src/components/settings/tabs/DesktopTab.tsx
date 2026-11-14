@@ -1,6 +1,4 @@
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { AppWindow, RefreshCw } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { isTauri } from "@/lib/server"
@@ -8,10 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAppVersion } from "@/hooks/useSettings"
 import { DownloadsSection } from "@/components/settings/DownloadsSection"
 import { ServersSection } from "@/components/settings/ServersSection"
-import { UpdateProgress } from "@/components/settings/UpdateProgress"
-import { useAppUpdate } from "@/hooks/useAppUpdate"
-import { useMatchServerVersion } from "@/hooks/useMatchServerVersion"
-import { compareSemver, isReleaseVersion } from "@/lib/semver"
+import { AppUpdatePanel } from "@/components/desktop/AppUpdatePanel"
 import { useDesktopAppVersion } from "@/hooks/useDesktopAppVersion"
 import { useCloseToTray } from "@/hooks/useCloseToTray"
 import { useStartup, type StartupMode } from "@/hooks/useStartup"
@@ -92,21 +87,10 @@ function ShellSettings() {
   )
 }
 
-// Manual app updates: nothing is contacted until "Check for updates" is pressed, and nothing is
-// installed until "Install and restart" is. See useAppUpdate.
+// The update UI is shared with the login screen (AppUpdateEntry); see AppUpdatePanel.
 function UpdatesSection() {
-  const { state, check, install } = useAppUpdate()
-  const match = useMatchServerVersion()
   const currentVersion = useDesktopAppVersion()
   const serverVersion = useAppVersion().data?.version
-
-  const busy =
-    state.status === "checking" ||
-    state.status === "installing" ||
-    match.state.status === "checking" ||
-    match.state.status === "installing"
-  const canMatch = isReleaseVersion(serverVersion) && !!currentVersion
-  const matches = canMatch && compareSemver(serverVersion, currentVersion) === 0
 
   return (
     <Card>
@@ -121,73 +105,8 @@ function UpdatesSection() {
             : "Checking your version…"}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
-
-        {state.status === "available" ? (
-          <div className="space-y-2 rounded-md border p-3 text-sm">
-            <p>
-              Version <span className="font-medium">{state.version}</span> is available.
-            </p>
-            {state.notes && <p className="text-muted-foreground">{state.notes}</p>}
-            <Button size="sm" onClick={install}>
-              Install and restart
-            </Button>
-          </div>
-        ) : (
-          <Button size="sm" variant="outline" onClick={check} disabled={busy}>
-            {state.status === "checking" ? "Checking…" : "Check for updates"}
-          </Button>
-        )}
-
-        {canMatch &&
-          (matches ? (
-            <p className="text-sm text-muted-foreground">Matches your server.</p>
-          ) : (
-            <div className="space-y-1">
-              <Button size="sm" variant="outline" onClick={() => match.check(serverVersion)} disabled={busy}>
-                {match.state.status === "checking" ? "Checking…" : "Match server version"}
-              </Button>
-              <p className="text-sm text-muted-foreground">Install v{serverVersion} to match your server.</p>
-            </div>
-          ))}
-
-        {state.status === "installing" && <UpdateProgress downloaded={state.downloaded} total={state.total} />}
-        {match.state.status === "installing" && (
-          <UpdateProgress downloaded={match.state.downloaded} total={match.state.total} />
-        )}
-        {state.status === "upToDate" && <p className="text-sm text-muted-foreground">You're up to date.</p>}
-        {state.status === "error" && (
-          <p className="text-sm text-destructive">
-            {state.during === "check" ? "Couldn't check for updates" : "Couldn't install the update"}: {state.message}
-          </p>
-        )}
-        {match.state.status === "error" && (
-          <p className="text-sm text-destructive">
-            {match.state.during === "check" ? "Couldn't check for a matching version" : "Couldn't install the update"}:{" "}
-            {match.state.message}
-          </p>
-        )}
-
-        <AlertDialog open={match.state.status === "confirm"} onOpenChange={(open) => !open && match.cancel()}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {match.state.status === "confirm" &&
-                  (match.state.downgrade ? "Install an older version?" : `Install v${match.state.version}?`)}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {match.state.status === "confirm" &&
-                  (match.state.downgrade
-                    ? `This replaces v${match.state.currentVersion} with the older v${match.state.version}. It matches your server, but older versions may lack features you're used to.`
-                    : `This replaces v${match.state.currentVersion} with v${match.state.version} to match your server. Packrat will restart when it's done.`)}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={match.install}>Install and restart</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+      <CardContent>
+        <AppUpdatePanel />
       </CardContent>
     </Card>
   )

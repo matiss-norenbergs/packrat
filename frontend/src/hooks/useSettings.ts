@@ -48,11 +48,12 @@ export const appVersionQueryKey = ["app", "version"] as const
 
 // staleTime: Infinity — the running binary's version can't change without a
 // restart, so there's nothing to ever refetch this for.
-export function useAppVersion() {
+export function useAppVersion({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: appVersionQueryKey,
     queryFn: fetchAppVersion,
     staleTime: Infinity,
+    enabled,
   })
 }
 
