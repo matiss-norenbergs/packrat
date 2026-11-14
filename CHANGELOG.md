@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-14
+- **The browser console is clean in dev** — every page logged three things: a React error about a `<script>` tag (next-themes' no-flash script; React never runs a script it renders on the client, so it was inert here and is now typed as a data block via `scriptProps`; no `next-themes` release fixes it, and an inline script in `index.html` is blocked by the desktop CSP), a React Router `HydrateFallback` warning (the top-level routes now declare an empty `hydrateFallbackElement`, same as what rendered before), and a WebSocket "closed before the connection is established" warning (the downloads socket is now closed once it opens when the hook unmounts while it is still connecting, and a socket we closed no longer reconnects, refetches or dispatches).
 - **The desktop app can be updated from the login screen** — an update that left the app and server unable to sign in used to need a manual reinstall, since updating lived in Settings → Desktop. A quiet "Desktop vX · Check for updates" line under the login card (also on first-run setup, Connect and "Can't reach the server"; not on the two-factor step) opens a dialog with the same update panel as Settings, now one shared component. It needs no server; **Match <server> (vX)** appears on the login screen only when the selected server's release version is readable. While an update is installing the dialog can't be closed, so the progress can't vanish while the install and restart carry on.
 
 ## 2026-11-11
