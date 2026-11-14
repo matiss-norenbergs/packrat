@@ -125,8 +125,6 @@ None are scheduled. Sizes are guesses.
 - **CI step timeouts (S).** The `desktop` and `e2e` jobs have hung for hours on the "Install Linux dependencies"
   step (an `apt` stall, not a code problem), and only a manual re-run recovered. A `timeout-minutes` on those jobs
   (and a retry around `apt-get update`) would make a hang fail in minutes.
-- **Slow arm64 release build.** The release workflow builds the arm64 Docker image under QEMU, which is slow.
-  Decided to do nothing for now; a native arm64 runner is the fix if it starts to matter.
 
 ## Dependencies
 
