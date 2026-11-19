@@ -12,6 +12,9 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-19
+- **A "Use the fetched title" button in the Title field of New Download and Bulk Download rows** — the Advanced Title field only showed the fetched title as a placeholder, so editing it meant retyping or copying it from elsewhere. Once the preview has a title, a small button at the field's right edge copies it in as editable text and focuses the field with the cursor at the end; it hides while the field already equals the title. The field is still never pre-filled, so an empty Title remains "no override".
+
 ## 2026-11-14
 - **The arm64 release image is built on a native arm64 runner** — the release workflow used to build it under QEMU emulation, which made releases very slow; it now runs on GitHub's `ubuntu-24.04-arm` runner (free for public repos) alongside the amd64 leg, so releases finish much faster. The image itself is unchanged (same Dockerfile).
 - **Library backups now carry each artist's private flag and birthday** — a restore used to create every artist as public with no birthday, silently un-blurring the items of a private artist. The bundle's `artists` list is now objects (`name`, `isPrivate`, `birthday`; the last two omitted when empty) instead of bare names. Restore rules for artists that already exist: the private flag only upgrades (a backup's `false` never makes a private artist public) and a birthday only fills a blank (never overwrites); artists the restore creates get both as backed up, and an invalid birthday is skipped and logged rather than failing the restore. Artist images stay out of backups on purpose (backups carry references, not files). **A backup made after this change will not import on an older server**; old backups (bare-string artists) still import fine.

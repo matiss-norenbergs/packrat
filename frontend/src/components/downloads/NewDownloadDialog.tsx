@@ -41,6 +41,7 @@ import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
 import { SequenceNumberField } from "@/components/library/SequenceNumberField"
 import { TagInput } from "@/components/library/TagInput"
 import { FilenameCharWarning } from "./FilenameCharWarning"
+import { UseFetchedTitleInput } from "./UseFetchedTitleInput"
 import { FilenameTemplateBuilderDialog } from "./FilenameTemplateBuilderDialog"
 import type { AudioFormat, DownloadType, PlaylistMode, VideoQuality } from "@/types/api"
 import { skippedSummaryParts } from "@/lib/enqueueSummary"
@@ -310,11 +311,12 @@ export function NewDownloadDialog() {
 
       <div className="space-y-2">
         <Label htmlFor="dl-title">Title</Label>
-        <Input
+        <UseFetchedTitleInput
           id="dl-title"
           placeholder={preview?.title || "Video title"}
           value={titleOverride}
-          onChange={(e) => setTitleOverride(e.target.value)}
+          onChange={setTitleOverride}
+          previewTitle={preview?.title}
         />
         {!filename.trim() && !filenameTemplate.trim() && (
           <FilenameCharWarning chars={invalidSegmentChars(titleOverride)} />

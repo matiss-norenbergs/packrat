@@ -20,6 +20,7 @@ import { useTags } from "@/hooks/useTags"
 import { ArtistSelect } from "@/components/library/ArtistSelect"
 import { TagInput } from "@/components/library/TagInput"
 import { FilenameCharWarning } from "./FilenameCharWarning"
+import { UseFetchedTitleInput } from "./UseFetchedTitleInput"
 import { FilenameTemplateBuilderDialog } from "./FilenameTemplateBuilderDialog"
 import { cn, formatDuration } from "@/lib/utils"
 import { resolveInheritedArtistId } from "@/lib/collectionTree"
@@ -294,10 +295,11 @@ export function BulkDownloadRow({
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div className="space-y-1 lg:col-span-2">
               <Label>Title</Label>
-              <Input
+              <UseFetchedTitleInput
                 placeholder={preview?.title || "Video title"}
                 value={row.titleOverride}
-                onChange={(e) => onChange({ titleOverride: e.target.value })}
+                onChange={(v) => onChange({ titleOverride: v })}
+                previewTitle={preview?.title}
               />
               {!row.filename.trim() && !row.filenameTemplate.trim() && (
                 <FilenameCharWarning chars={invalidSegmentChars(row.titleOverride)} />
