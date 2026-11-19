@@ -186,7 +186,11 @@ The live download queue.
     playlist itself at submit time rather than trusting a client-built entry list.
   - **Advanced** section: Title/Artist/Year/Season #/Sequence # overrides (applied once the
     download completes, taking priority over whatever yt-dlp reports), Tags, and a "Generate NFO"
-    checkbox (writes a Kodi/Jellyfin-style `.nfo` sidecar alongside the file).
+    checkbox (writes a Kodi/Jellyfin-style `.nfo` sidecar alongside the file). Once the link
+    preview has a title, the Title field shows a small button at its right edge ("Use the fetched
+    title") that copies that title into the field as editable text and puts the cursor at the end;
+    it hides while the field already equals the title. The field is never pre-filled, so an empty
+    Title still means no override. Bulk Download rows have the same button, using that row's own preview.
   - **Filename Template** — names the file (and optionally its subfolders) from the download's own
     details, e.g. `{artist}/{title}` or `{title} S{season:02}E{sequence:02}`. Tokens: `{title}`,
     `{uploader}` (also `{channel}`), `{date}` (upload date, `YYYYMMDD`), `{artist}`, `{year}`,
