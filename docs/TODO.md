@@ -69,8 +69,6 @@ None are scheduled. Sizes are guesses.
 
 - **Collection PATCH is a full replace (S).** Omitted `isPrivate`, `browseAsShow` and `artistId` are cleared
   instead of left alone. Decide whether PATCH should merge, then make it so (and update `api.md`).
-- **Trim preview not bound to an item (S).** `trim_handler.go`: accept takes any valid `.trim-preview-*` path, not
-  just the one created for that item.
 - **Collection path segments from an uploaded bundle are not sanitized (S).** `..` or `a/b` in a name. Downloads
   stay contained by `pathsafe`, but the segment should be cleaned on import.
 - **Restore bypasses settings validation (S to M).** Values are written verbatim (only `maxConcurrentDownloads` is

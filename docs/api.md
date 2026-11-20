@@ -890,16 +890,17 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   both fields omitted or item has no media file, `404` unknown item, `422` ffmpeg failure. Response
   `200`:
   ```json
-  { "previewPath": ".trim-tmp/.trim-preview-abc123.mp4", "durationSeconds": 113, "fileSizeBytes": 48213099 }
+  { "previewPath": ".packrat-tmp/vid.trim-preview-118-k3j2h.mp4", "durationSeconds": 113, "fileSizeBytes": 48213099 }
   ```
   `previewPath` is `MediaRoot`-relative, playable via the existing `/media-files/*path` route.
-- **`POST /api/library/:id/trim/accept`** — `{ "previewPath": ".trim-tmp/.trim-preview-abc123.mp4" }`.
+- **`POST /api/library/:id/trim/accept`** — `{ "previewPath": ".packrat-tmp/vid.trim-preview-118-k3j2h.mp4" }`.
   The server re-validates that the path resolves under `mediaRoot`, sits directly inside the shared
-  trim scratch dir, and matches the `.trim-preview-` naming convention (`400` otherwise — defense
-  against accepting an unrelated file). Overwrites the item's real media file with the preview,
+  trim scratch dir, matches the `.trim-preview-` naming convention, and carries *this item's* id in its name
+  (`<base>.trim-preview-<itemId>-<uid>.<ext>`; `400` otherwise — defense against accepting an unrelated
+  file or another item's preview). Overwrites the item's real media file with the preview,
   re-probes duration/size, updates the DB (if ffprobe cannot read the result the stored duration becomes
   `null`, i.e. "unknown", never `0`). Response `200` with the full updated library item.
-- **`POST /api/library/:id/trim/discard`** — same body/validation as accept, just deletes the
+- **`POST /api/library/:id/trim/discard`** — same body/validation as accept (another item's preview is `400`), just deletes the
   preview file without touching the original. `204`.
 - **`GET /api/library/:id/trim/frames?start=5.0&end=8.0`** — read-only, nothing persisted. Decodes
   every frame in `[start, end)` (window up to 15 s) for frame-accurate seeking the browser's own
