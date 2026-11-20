@@ -210,6 +210,9 @@ it with `GetValidSession`, which hashes it, so revocation by hash still closes i
 any session delete; `Hub.RevalidateSessions` then re-checks every client's session (off the hub
 goroutine) and closes the ones that are gone. The same check runs on each client's ping tick, so a
 revocation made by another process (the `--disable-2fa` command) still takes effect within a minute.
+Clients never send anything meaningful, so `readPump` sets a 4 KiB read limit (an oversized message closes
+the connection instead of being buffered), and its `unregister` send selects on the hub's `done` channel so
+no pump blocks forever once the hub has stopped (`register` already did, and `Broadcast` never blocks).
 
 ### Two-factor auth (TOTP)
 
