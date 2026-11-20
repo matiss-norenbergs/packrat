@@ -1465,6 +1465,42 @@ Same field set as the `GET` response. Notes:
   1 to 16 (`models.MaxConcurrentDownloadsLimit`); above 16 is `400 {"error":"maxConcurrentDownloads must be between 1 and 16"}` and nothing in the request is saved.
 - `downloadDirectory` (`MEDIA_ROOT`) is **not** patchable here — env-config only.
 
+**Validation rules** (shared with the settings import / restore, which applies the same rules by clamping or skipping
+instead of failing, see Backup; they live in `models/settings_rules.go`). A violation is `400 {"error": "..."}` and
+nothing in the request is saved:
+
+- **Upper limits** — `"<field> must be at most <limit>"`. Lower bounds are unchanged (`min=` on the request).
+
+  | Field | Limit | Why |
+  |---|---|---|
+  | `maxConcurrentDownloads` | 16 (also needs ≥ 1; message `... must be between 1 and 16`) | one worker + yt-dlp process per slot |
+  | `maxConcurrentTranscodes` | 16 | one ffmpeg re-encode per slot |
+  | `thumbnailFrameCount` | 50 (the request also only accepts 2, 4, 6, 8, 12, 24) | the candidate-frame endpoint refuses more |
+  | `thumbnailEnhancementFactor` | 16 | multiplier sent to the external upscaler |
+  | `thumbnailEnhancementTargetDim` | 16384 | target size (becomes a multiplier) sent to the upscaler |
+  | `ytdlpRetries` | 100 | passed to yt-dlp as `--retries`; a failing download would retry practically forever |
+  | `downloadTimeoutMinutes` | 5,256,000 (10 years) | larger overflows the timeout duration (cancels every download at once) |
+  | `historyRetentionDays`, `downloadLogRetentionDays`, `thumbnailEnhancementRetentionDays` | 36,500 (100 years) | larger overflows the cutoff date arithmetic |
+  | `autoBackupIntervalHours` | 87,600 (10 years; the request also only accepts 0, 6, 12, 24, 72, 168) | larger overflows the interval (a backup on every tick) |
+
+- **Fixed lists** — `"<field> must be one of: a, b, c"`:
+
+  | Field | Allowed |
+  |---|---|
+  | `defaultQuality` | `best`, `2160p`, `1440p`, `1080p`, `720p`, `480p`, `360p`, `worst` |
+  | `defaultDownloadType` | `video`, `audio`, `image` |
+  | `libraryView` | `grid`, `list`, `folders` |
+  | `libraryMode` | `manage`, `view`, `details` |
+  | `imageConvertFormat` | `original`, `jpg`, `png`, `webp` |
+  | `privacyBlurStrength` | `weak`, `default`, `strong` |
+  | `jellyfinRefreshMode` | `entire`, `specific`, `none` |
+  | `thumbnailEnhancementTargetMode` | `factor`, `resolution` |
+
+- **Low/high pairs** must satisfy low < high, taking the stored value for a side the request omits: the video resolution
+  thresholds, the thumbnail resolution thresholds and the thumbnail frame range (`400`, e.g.
+  `"resolution low threshold must be less than the high threshold"`).
+- `dashboardHiddenWidgets` with an unknown ID (above).
+
 `204 No Content` on success.
 
 ### Image derivative backfill

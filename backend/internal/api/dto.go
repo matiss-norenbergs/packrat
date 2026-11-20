@@ -1127,29 +1127,29 @@ type UpdateSettingsRequest struct {
 	MaxConcurrentDownloads      *int      `json:"maxConcurrentDownloads" binding:"omitempty,min=1"`
 	MaxConcurrentTranscodes     *int      `json:"maxConcurrentTranscodes" binding:"omitempty,min=1"`
 	DownloadTimeoutMinutes      *int      `json:"downloadTimeoutMinutes" binding:"omitempty,min=0"`
-	DefaultQuality              *string   `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType         *string   `json:"defaultDownloadType" binding:"omitempty,oneof=video audio image"`
+	DefaultQuality              *string   `json:"defaultQuality"`
+	DefaultDownloadType         *string   `json:"defaultDownloadType"`
 	ImportIgnoredFolders        *[]string `json:"importIgnoredFolders"`
 	HistoryAnonymizeURLs        *bool     `json:"historyAnonymizeUrls"`
 	HistoryRetentionDays        *int      `json:"historyRetentionDays" binding:"omitempty,min=0"`
 	DownloadLogRetentionDays    *int      `json:"downloadLogRetentionDays" binding:"omitempty,min=0"`
-	LibraryView                 *string   `json:"libraryView" binding:"omitempty,oneof=grid folders list"`
-	LibraryMode                 *string   `json:"libraryMode" binding:"omitempty,oneof=manage details"`
+	LibraryView                 *string   `json:"libraryView"`
+	LibraryMode                 *string   `json:"libraryMode"`
 	LibraryPaginationEnabled    *bool     `json:"libraryPaginationEnabled"`
 	LibraryPageSize             *int      `json:"libraryPageSize" binding:"omitempty,min=1"`
 	DashboardHiddenWidgets      *[]string `json:"dashboardHiddenWidgets"`
 	ThumbnailFrameCount         *int      `json:"thumbnailFrameCount" binding:"omitempty,oneof=2 4 6 8 12 24"`
 	ThumbnailFrameRangeLow      *int      `json:"thumbnailFrameRangeLow" binding:"omitempty,min=0,max=100"`
 	ThumbnailFrameRangeHigh     *int      `json:"thumbnailFrameRangeHigh" binding:"omitempty,min=0,max=100"`
-	ImageConvertFormat          *string   `json:"imageConvertFormat" binding:"omitempty,oneof=original jpg png webp"`
+	ImageConvertFormat          *string   `json:"imageConvertFormat"`
 	PrivacyEnabled              *bool     `json:"privacyEnabled"`
-	PrivacyBlurStrength         *string   `json:"privacyBlurStrength" binding:"omitempty,oneof=weak default strong"`
+	PrivacyBlurStrength         *string   `json:"privacyBlurStrength"`
 	BrowseIgnorePrivacy         *bool     `json:"browseIgnorePrivacy"`
 	SkipDownloadPreview         *bool     `json:"skipDownloadPreview"`
 	JellyfinEnabled             *bool     `json:"jellyfinEnabled"`
 	JellyfinURL                 *string   `json:"jellyfinUrl"`
 	JellyfinAPIKey              *string   `json:"jellyfinApiKey"`
-	JellyfinRefreshMode         *string   `json:"jellyfinRefreshMode" binding:"omitempty,oneof=entire specific none"`
+	JellyfinRefreshMode         *string   `json:"jellyfinRefreshMode"`
 	LibraryAutoplay             *bool     `json:"libraryAutoplay"`
 	YtdlpCookiesBrowser         *string   `json:"ytdlpCookiesBrowser"`
 	YtdlpCookiesProfile         *string   `json:"ytdlpCookiesProfile"`
@@ -1181,7 +1181,7 @@ type UpdateSettingsRequest struct {
 	ThumbnailEnhancementUpscaler        *string `json:"thumbnailEnhancementUpscaler"`
 	ThumbnailEnhancementMinDim          *int    `json:"thumbnailEnhancementMinDim" binding:"omitempty,min=1"`
 	ThumbnailEnhancementFactor          *int    `json:"thumbnailEnhancementFactor" binding:"omitempty,min=1"`
-	ThumbnailEnhancementTargetMode      *string `json:"thumbnailEnhancementTargetMode" binding:"omitempty,oneof=factor resolution"`
+	ThumbnailEnhancementTargetMode      *string `json:"thumbnailEnhancementTargetMode"`
 	ThumbnailEnhancementTargetDim       *int    `json:"thumbnailEnhancementTargetDim" binding:"omitempty,min=1"`
 	ThumbnailEnhancementScheduleEnabled *bool   `json:"thumbnailEnhancementScheduleEnabled"`
 	ThumbnailEnhancementRetentionDays   *int    `json:"thumbnailEnhancementRetentionDays" binding:"omitempty,min=0"`

@@ -433,6 +433,21 @@ A separate `downloadTimeoutMinutes` setting (0 = no limit) derives each download
 `rootCtx` with a deadline; a run that exceeds it is killed and classified as a timeout-flavored
 failure rather than a generic error.
 
+## Settings validation rules are shared
+
+`models/settings_rules.go` holds the rules that apply to a setting's *value* as plain data plus pure functions:
+upper limits for the numbers where a huge value does real harm (`SettingMaxValues`, limits next to
+`MaxConcurrentDownloadsLimit` in `models/limits.go`), the fixed value lists (`SettingEnums`), the low/high pairs
+(`SettingPairs`, with the defaults the getters fall back to) and the known Dashboard widget IDs. **Both**
+`PATCH /api/settings` (`UpdateSettings`) and the settings import / full restore (`backup.ApplySettingsBundle`) must use
+them, so the two paths cannot drift: a new capped, enumerated or paired setting is added there once, never as a
+separate check in a handler. The handler answers `400` for a violation; the restore, which must never fail halfway,
+clamps or skips instead. Only keys where a large value overflows a `time.Duration`/date, sizes a pool or loop or is
+sent to an external service are capped; a bound that only compares against a row count (retention counts, page size,
+min dimension, max per sweep) is deliberately left alone. The request DTO no longer carries `oneof=` tags for the
+enumerated settings (the shared list gives the clear message); the numeric `min=`/`oneof=` tags that remain are
+stricter than the shared limits and stay.
+
 ## Download queue: unbounded FIFO over persisted rows
 
 The `downloads` rows are the source of truth; what waits for a worker is only their *order*, kept by

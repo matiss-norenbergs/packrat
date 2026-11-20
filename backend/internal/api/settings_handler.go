@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -39,19 +40,6 @@ func ImportIgnoredFolders(ctx context.Context, repo *repository.SettingsRepo) ([
 	return folders, nil
 }
 
-// dashboardWidgetIDs is the allowlist of Dashboard blocks that can be hidden;
-// keep in sync with DASHBOARD_WIDGETS in the frontend.
-var dashboardWidgetIDs = map[string]bool{
-	"downloads":     true,
-	"library":       true,
-	"libraryGrowth": true,
-	"mediaTypes":    true,
-	"resolutions":   true,
-	"storage":       true,
-	"topArtists":    true,
-	"topTags":       true,
-}
-
 // DashboardHiddenWidgets reads and JSON-decodes the dashboard_hidden_widgets
 // setting, defaulting to an empty list (everything visible) if it's never been
 // set. Unknown IDs (e.g. a widget since removed) are dropped. Shared by
@@ -76,19 +64,7 @@ func DashboardHiddenWidgets(ctx context.Context, repo *repository.SettingsRepo) 
 // drops unknown ones, returning them as the second value so the PATCH handler
 // can reject them while the reader just ignores them.
 func normalizeDashboardWidgetIDs(ids []string) (valid, unknown []string) {
-	seen := make(map[string]bool, len(ids))
-	valid = make([]string, 0, len(ids))
-	for _, id := range ids {
-		if !dashboardWidgetIDs[id] {
-			unknown = append(unknown, id)
-			continue
-		}
-		if !seen[id] {
-			seen[id] = true
-			valid = append(valid, id)
-		}
-	}
-	return valid, unknown
+	return models.NormalizeDashboardWidgetIDs(ids)
 }
 
 // defaultImageConvertFormat matches the existing convention that video
@@ -219,8 +195,8 @@ func BackupRetentionCount(ctx context.Context, repo *repository.SettingsRepo) (i
 // buckets without requiring anyone to configure anything for sensible
 // out-of-the-box coloring.
 const (
-	defaultResolutionThresholdLow  = 720
-	defaultResolutionThresholdHigh = 2160
+	defaultResolutionThresholdLow  = models.DefaultResolutionThresholdLow
+	defaultResolutionThresholdHigh = models.DefaultResolutionThresholdHigh
 )
 
 // ResolutionTierMediumEnabled reads the resolution_tier_medium_enabled
@@ -285,8 +261,8 @@ func ResolutionThresholdHigh(ctx context.Context, repo *repository.SettingsRepo)
 // tier — lower, since a thumbnail is a small preview image that rarely
 // exceeds 1080p, unlike a video's much wider practical range.
 const (
-	defaultThumbnailResolutionThresholdLow  = 480
-	defaultThumbnailResolutionThresholdHigh = 1080
+	defaultThumbnailResolutionThresholdLow  = models.DefaultThumbnailResolutionThresholdLow
+	defaultThumbnailResolutionThresholdHigh = models.DefaultThumbnailResolutionThresholdHigh
 )
 
 // ThumbnailResolutionTierMediumEnabled reads the
@@ -446,8 +422,8 @@ func ThumbnailFrameCount(ctx context.Context, repo *repository.SettingsRepo) (in
 // middle 5%-100% of the video, matching pickFrameTimestamps' historical
 // hardcoded behavior before this became configurable.
 const (
-	defaultThumbnailFrameRangeLow  = 5
-	defaultThumbnailFrameRangeHigh = 100
+	defaultThumbnailFrameRangeLow  = models.DefaultThumbnailFrameRangeLow
+	defaultThumbnailFrameRangeHigh = models.DefaultThumbnailFrameRangeHigh
 )
 
 // ThumbnailFrameRangeLow reads the thumbnail_frame_range_low setting
@@ -1305,6 +1281,30 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		pending := make(map[string]string)
 		subscriptionsTurnedOn := false
 
+		// Shared rules (models/settings_rules.go — the same ones a settings
+		// import / restore applies, which clamps or skips instead of failing):
+		// numeric caps, fixed-value lists, low/high pairs.
+		if msg := validateSettingCaps(req); msg != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
+		if msg := validateSettingEnums(req); msg != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
+		pairWrites, msg, err := validateSettingPairs(c.Request.Context(), repo, req)
+		if err != nil {
+			writeServerError(c, err)
+			return
+		}
+		if msg != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
+		for k, v := range pairWrites {
+			pending[k] = v
+		}
+
 		if req.MaxConcurrentDownloads != nil {
 			if *req.MaxConcurrentDownloads > models.MaxConcurrentDownloadsLimit {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("maxConcurrentDownloads must be between 1 and %d", models.MaxConcurrentDownloadsLimit)})
@@ -1350,83 +1350,8 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		if req.ResolutionTierMediumEnabled != nil {
 			pending[models.SettingResolutionTierMediumEnabled] = strconv.FormatBool(*req.ResolutionTierMediumEnabled)
 		}
-		// The low/high thresholds are validated together (low must stay below
-		// high) even though they're independently-optional fields — resolve
-		// whichever side isn't in this request from what's currently stored,
-		// so a lone update can't silently invert the pair.
-		if req.ResolutionThresholdLow != nil || req.ResolutionThresholdHigh != nil {
-			effectiveLow := 0
-			if req.ResolutionThresholdLow != nil {
-				effectiveLow = *req.ResolutionThresholdLow
-			} else {
-				var err error
-				effectiveLow, err = ResolutionThresholdLow(c.Request.Context(), repo)
-				if err != nil {
-					writeServerError(c, err)
-					return
-				}
-			}
-			effectiveHigh := 0
-			if req.ResolutionThresholdHigh != nil {
-				effectiveHigh = *req.ResolutionThresholdHigh
-			} else {
-				var err error
-				effectiveHigh, err = ResolutionThresholdHigh(c.Request.Context(), repo)
-				if err != nil {
-					writeServerError(c, err)
-					return
-				}
-			}
-			if effectiveLow >= effectiveHigh {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "resolution low threshold must be less than the high threshold"})
-				return
-			}
-			if req.ResolutionThresholdLow != nil {
-				pending[models.SettingResolutionThresholdLow] = strconv.Itoa(*req.ResolutionThresholdLow)
-			}
-			if req.ResolutionThresholdHigh != nil {
-				pending[models.SettingResolutionThresholdHigh] = strconv.Itoa(*req.ResolutionThresholdHigh)
-			}
-		}
 		if req.ThumbnailResolutionTierMediumEnabled != nil {
 			pending[models.SettingThumbnailResolutionTierMediumEnabled] = strconv.FormatBool(*req.ThumbnailResolutionTierMediumEnabled)
-		}
-		// Mirrors the video resolution threshold pair above — resolve
-		// whichever side isn't in this request from what's currently stored
-		// so a lone update can't invert the pair.
-		if req.ThumbnailResolutionThresholdLow != nil || req.ThumbnailResolutionThresholdHigh != nil {
-			effectiveLow := 0
-			if req.ThumbnailResolutionThresholdLow != nil {
-				effectiveLow = *req.ThumbnailResolutionThresholdLow
-			} else {
-				var err error
-				effectiveLow, err = ThumbnailResolutionThresholdLow(c.Request.Context(), repo)
-				if err != nil {
-					writeServerError(c, err)
-					return
-				}
-			}
-			effectiveHigh := 0
-			if req.ThumbnailResolutionThresholdHigh != nil {
-				effectiveHigh = *req.ThumbnailResolutionThresholdHigh
-			} else {
-				var err error
-				effectiveHigh, err = ThumbnailResolutionThresholdHigh(c.Request.Context(), repo)
-				if err != nil {
-					writeServerError(c, err)
-					return
-				}
-			}
-			if effectiveLow >= effectiveHigh {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "thumbnail resolution low threshold must be less than the high threshold"})
-				return
-			}
-			if req.ThumbnailResolutionThresholdLow != nil {
-				pending[models.SettingThumbnailResolutionThresholdLow] = strconv.Itoa(*req.ThumbnailResolutionThresholdLow)
-			}
-			if req.ThumbnailResolutionThresholdHigh != nil {
-				pending[models.SettingThumbnailResolutionThresholdHigh] = strconv.Itoa(*req.ThumbnailResolutionThresholdHigh)
-			}
 		}
 		if req.LibraryView != nil {
 			pending[models.SettingLibraryView] = *req.LibraryView
@@ -1455,43 +1380,6 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		}
 		if req.ThumbnailFrameCount != nil {
 			pending[models.SettingThumbnailFrameCount] = strconv.Itoa(*req.ThumbnailFrameCount)
-		}
-		// Mirrors the resolution threshold pairs above — resolve whichever
-		// side isn't in this request from what's currently stored, so a lone
-		// update can't invert the pair.
-		if req.ThumbnailFrameRangeLow != nil || req.ThumbnailFrameRangeHigh != nil {
-			effectiveLow := 0
-			if req.ThumbnailFrameRangeLow != nil {
-				effectiveLow = *req.ThumbnailFrameRangeLow
-			} else {
-				var err error
-				effectiveLow, err = ThumbnailFrameRangeLow(c.Request.Context(), repo)
-				if err != nil {
-					writeServerError(c, err)
-					return
-				}
-			}
-			effectiveHigh := 0
-			if req.ThumbnailFrameRangeHigh != nil {
-				effectiveHigh = *req.ThumbnailFrameRangeHigh
-			} else {
-				var err error
-				effectiveHigh, err = ThumbnailFrameRangeHigh(c.Request.Context(), repo)
-				if err != nil {
-					writeServerError(c, err)
-					return
-				}
-			}
-			if effectiveLow >= effectiveHigh {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "thumbnail frame range low must be less than the high bound"})
-				return
-			}
-			if req.ThumbnailFrameRangeLow != nil {
-				pending[models.SettingThumbnailFrameRangeLow] = strconv.Itoa(*req.ThumbnailFrameRangeLow)
-			}
-			if req.ThumbnailFrameRangeHigh != nil {
-				pending[models.SettingThumbnailFrameRangeHigh] = strconv.Itoa(*req.ThumbnailFrameRangeHigh)
-			}
 		}
 		if req.ImageConvertFormat != nil {
 			pending[models.SettingImageConvertFormat] = *req.ImageConvertFormat
@@ -1630,6 +1518,115 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 		}
 		c.Status(http.StatusNoContent)
 	}
+}
+
+// validateSettingCaps checks the numeric upper limits (models.SettingMaxValues)
+// for the fields present in req and returns the 400 message, or "". The
+// downloads cap keeps its own message in UpdateSettings.
+func validateSettingCaps(req UpdateSettingsRequest) string {
+	for _, f := range []struct {
+		key  string
+		name string
+		val  *int
+	}{
+		{models.SettingMaxConcurrentTranscodes, "maxConcurrentTranscodes", req.MaxConcurrentTranscodes},
+		{models.SettingDownloadTimeoutMinutes, "downloadTimeoutMinutes", req.DownloadTimeoutMinutes},
+		{models.SettingHistoryRetentionDays, "historyRetentionDays", req.HistoryRetentionDays},
+		{models.SettingDownloadLogRetentionDays, "downloadLogRetentionDays", req.DownloadLogRetentionDays},
+		{models.SettingAutoBackupIntervalHours, "autoBackupIntervalHours", req.AutoBackupIntervalHours},
+		{models.SettingThumbnailFrameCount, "thumbnailFrameCount", req.ThumbnailFrameCount},
+		{models.SettingYtdlpRetries, "ytdlpRetries", req.YtdlpRetries},
+		{models.SettingThumbnailEnhancementFactor, "thumbnailEnhancementFactor", req.ThumbnailEnhancementFactor},
+		{models.SettingThumbnailEnhancementTargetDim, "thumbnailEnhancementTargetDim", req.ThumbnailEnhancementTargetDim},
+		{models.SettingThumbnailEnhancementRetentionDays, "thumbnailEnhancementRetentionDays", req.ThumbnailEnhancementRetentionDays},
+	} {
+		if f.val == nil {
+			continue
+		}
+		if max, ok := models.SettingMaxValue(f.key); ok && *f.val > max {
+			return fmt.Sprintf("%s must be at most %d", f.name, max)
+		}
+	}
+	return ""
+}
+
+// validateSettingEnums checks the fixed-value settings present in req and
+// returns the 400 message, or "".
+func validateSettingEnums(req UpdateSettingsRequest) string {
+	for _, f := range []struct {
+		key  string
+		name string
+		val  *string
+	}{
+		{models.SettingDefaultQuality, "defaultQuality", req.DefaultQuality},
+		{models.SettingDefaultDownloadType, "defaultDownloadType", req.DefaultDownloadType},
+		{models.SettingLibraryView, "libraryView", req.LibraryView},
+		{models.SettingLibraryMode, "libraryMode", req.LibraryMode},
+		{models.SettingImageConvertFormat, "imageConvertFormat", req.ImageConvertFormat},
+		{models.SettingPrivacyBlurStrength, "privacyBlurStrength", req.PrivacyBlurStrength},
+		{models.SettingJellyfinRefreshMode, "jellyfinRefreshMode", req.JellyfinRefreshMode},
+		{models.SettingThumbnailEnhancementTargetMode, "thumbnailEnhancementTargetMode", req.ThumbnailEnhancementTargetMode},
+	} {
+		if f.val == nil || models.ValidSettingEnum(f.key, *f.val) {
+			continue
+		}
+		allowed, _ := models.SettingEnumValues(f.key)
+		return fmt.Sprintf("%s must be one of: %s", f.name, strings.Join(allowed, ", "))
+	}
+	return ""
+}
+
+// validateSettingPairs checks every low/high pair (models.SettingPairs) that
+// req touches: the side not in the request is resolved from what's stored, so
+// a lone update can't invert the pair. It returns the writes for the pairs'
+// fields, or a 400 message.
+func validateSettingPairs(ctx context.Context, repo *repository.SettingsRepo, req UpdateSettingsRequest) (writes map[string]string, msg string, err error) {
+	sides := map[string]*int{
+		models.SettingResolutionThresholdLow:           req.ResolutionThresholdLow,
+		models.SettingResolutionThresholdHigh:          req.ResolutionThresholdHigh,
+		models.SettingThumbnailResolutionThresholdLow:  req.ThumbnailResolutionThresholdLow,
+		models.SettingThumbnailResolutionThresholdHigh: req.ThumbnailResolutionThresholdHigh,
+		models.SettingThumbnailFrameRangeLow:           req.ThumbnailFrameRangeLow,
+		models.SettingThumbnailFrameRangeHigh:          req.ThumbnailFrameRangeHigh,
+	}
+	writes = map[string]string{}
+	for _, pair := range models.SettingPairs {
+		low, high := sides[pair.LowKey], sides[pair.HighKey]
+		if low == nil && high == nil {
+			continue
+		}
+		effective := func(key string, def int, given *int) (int, error) {
+			if given != nil {
+				return *given, nil
+			}
+			raw, err := repo.Get(ctx, key)
+			if errors.Is(err, repository.ErrNotFound) {
+				return pair.EffectiveValue("", false, def), nil
+			}
+			if err != nil {
+				return 0, err
+			}
+			return pair.EffectiveValue(raw, true, def), nil
+		}
+		effLow, err := effective(pair.LowKey, pair.LowDefault, low)
+		if err != nil {
+			return nil, "", err
+		}
+		effHigh, err := effective(pair.HighKey, pair.HighDefault, high)
+		if err != nil {
+			return nil, "", err
+		}
+		if !models.PairValid(effLow, effHigh) {
+			return nil, pair.Message, nil
+		}
+		if low != nil {
+			writes[pair.LowKey] = strconv.Itoa(*low)
+		}
+		if high != nil {
+			writes[pair.HighKey] = strconv.Itoa(*high)
+		}
+	}
+	return writes, "", nil
 }
 
 // applySettingsSideEffects pushes the live-process settings from a just-written
