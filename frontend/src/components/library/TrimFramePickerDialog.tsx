@@ -61,25 +61,32 @@ export function TrimFramePickerDialog({
         ) : fetchFrames.data.frames.length === 0 ? (
           <p className="text-sm text-muted-foreground">No frames found in this range.</p>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {fetchFrames.data.frames.map((frame, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => handlePick(frame.timestampSeconds)}
-                className="group relative h-[70px] w-[110px] shrink-0 overflow-hidden rounded-md border transition hover:ring-2 hover:ring-primary"
-              >
-                <img
-                  src={`data:image/jpeg;base64,${frame.imageBase64}`}
-                  alt={`Frame at ${formatPreciseTime(frame.timestampSeconds)}`}
-                  className="h-full w-full object-cover"
-                />
-                <span className="absolute right-0.5 bottom-0.5 rounded bg-black/70 px-1 py-0.5 text-[10px] text-white">
-                  {formatPreciseTime(frame.timestampSeconds)}
-                </span>
-              </button>
-            ))}
-          </div>
+          <>
+          {fetchFrames.data.truncated && (
+            <p className="text-xs text-muted-foreground">
+              Showing the first {fetchFrames.data.frames.length} of {fetchFrames.data.totalFrames} frames
+            </p>
+          )}
+            <div className="flex flex-wrap gap-2">
+              {fetchFrames.data.frames.map((frame, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handlePick(frame.timestampSeconds)}
+                  className="group relative h-[70px] w-[110px] shrink-0 overflow-hidden rounded-md border transition hover:ring-2 hover:ring-primary"
+                >
+                  <img
+                    src={`data:image/jpeg;base64,${frame.imageBase64}`}
+                    alt={`Frame at ${formatPreciseTime(frame.timestampSeconds)}`}
+                    className="h-full w-full object-cover"
+                  />
+                  <span className="absolute right-0.5 bottom-0.5 rounded bg-black/70 px-1 py-0.5 text-[10px] text-white">
+                    {formatPreciseTime(frame.timestampSeconds)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </DialogContent>
     </Dialog>

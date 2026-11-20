@@ -120,8 +120,6 @@ None are scheduled. Sizes are guesses.
   sandbox, so dependency CVEs are unchecked. Try it from a normal network, or add it as a CI job.
 - **Backup upload UI size check (S).** The server accepts 128 MB on the backup import routes (the global body limit
   stays 50 MB). Check whether the upload dialog has its own client-side limit and raise it to match.
-- **Trim UI frame cap (S).** `ExtractFrameRange` stops at 300 frames (`maxFrameCount` in
-  `downloader/trim_frames.go`), so a very long range is cut off.
 - **CI step timeouts (S).** The `desktop` and `e2e` jobs have hung for hours on the "Install Linux dependencies"
   step (an `apt` stall, not a code problem), and only a manual re-run recovered. A `timeout-minutes` on those jobs
   (and a retry around `apt-get update`) would make a hang fail in minutes.

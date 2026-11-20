@@ -897,10 +897,13 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
 - **`POST /api/library/:id/trim/discard`** — same body/validation as accept, just deletes the
   preview file without touching the original. `204`.
 - **`GET /api/library/:id/trim/frames?start=5.0&end=8.0`** — read-only, nothing persisted. Decodes
-  every frame in `[start, end)` for frame-accurate seeking the browser's own scrubber can't
-  guarantee. `400` invalid range, `422` extraction failure.
+  every frame in `[start, end)` (window up to 15 s) for frame-accurate seeking the browser's own
+  scrubber can't guarantee. Each `imageBase64` is a downscaled preview JPEG (fit inside 240x150,
+  never upscaled, quality `-q:v 5`), not the full-resolution frame. At most 1000 frames are returned;
+  `totalFrames` is how many frames the window holds (as listed by ffprobe) and `truncated` is `true`
+  when fewer than that came back. `400` invalid range, `422` extraction failure.
   ```json
-  { "frames": [ { "timestampSeconds": 5.04, "imageBase64": "/9j/4AAQ..." } ] }
+  { "frames": [ { "timestampSeconds": 5.04, "imageBase64": "/9j/4AAQ..." } ], "truncated": false, "totalFrames": 72 }
   ```
 
 ### Thumbnails

@@ -12,6 +12,9 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-20
+- **"Pick exact frame" loads far faster and no longer silently drops the end of the window** — the frame grid drew 110x70 tiles but the server sent every frame at full video resolution (a 15 s, 1080p, 60 fps window was ~50 MB of JSON for just the first 300 frames). Frames are now downscaled in ffmpeg to fit 240x150 at a lower JPEG quality: the same 900-frame window is ~4 MB (24 fps: ~1.6 MB) and loads in a few seconds. The cap is raised from 300 to 1000 frames, and when a window still holds more, the response carries `truncated`/`totalFrames` and the dialog shows "Showing the first N of M frames". The frame matcher keeps its full-resolution frames.
+
 ## 2026-11-19
 - **A "Use the fetched title" button in the Title field of New Download and Bulk Download rows** — the Advanced Title field only showed the fetched title as a placeholder, so editing it meant retyping or copying it from elsewhere. Once the preview has a title, a small button at the field's right edge copies it in as editable text and focuses the field with the cursor at the end; it hides while the field already equals the title. The field is still never pre-filled, so an empty Title remains "no override".
 

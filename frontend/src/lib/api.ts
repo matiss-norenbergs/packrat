@@ -97,7 +97,7 @@ import type {
   CreateTagRequest,
   RedownloadOverwriteField,
   RedownloadPreview,
-  TrimFrame,
+  TrimFramesResponse,
   TrimPreviewRequest,
   TrimPreviewResult,
   UpdateArtistRequest,
@@ -711,8 +711,8 @@ export function discardLibraryItemTrim(id: number, previewPath: string): Promise
   })
 }
 
-export function fetchLibraryItemTrimFrames(id: number, start: number, end: number): Promise<{ frames: TrimFrame[] }> {
-  return request<{ frames: TrimFrame[] }>(`/library/${id}/trim/frames?start=${start}&end=${end}`)
+export function fetchLibraryItemTrimFrames(id: number, start: number, end: number): Promise<TrimFramesResponse> {
+  return request<TrimFramesResponse>(`/library/${id}/trim/frames?start=${start}&end=${end}`)
 }
 
 export function fetchLibraryItem(id: number): Promise<LibraryItem> {
