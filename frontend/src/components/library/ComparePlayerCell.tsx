@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react"
-import { Music } from "lucide-react"
+import { useCallback, useEffect, type RefObject } from "react"
+import { PlayerSkin } from "@/components/player/PlayerSkin"
 import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { usePersistedVolume } from "@/hooks/usePersistedVolume"
-import { cn, isAudioFilename } from "@/lib/utils"
+import { isAudioFilename } from "@/lib/utils"
 import { useRevealAll } from "./RevealAllContext"
 import type { LibraryItem } from "@/types/api"
 
@@ -27,27 +27,21 @@ interface ComparePlayerCellProps {
   onReadyChange: (ready: boolean) => void
 }
 
-// One cell in the compare-play grid — same native <video controls>/<audio
-// controls> rendering LibraryItemDetail uses (no custom player chrome
-// needed: the bottom bar just reaches into the DOM element directly, and
-// native controls reflect whatever it sets), just without the sibling
-// strip/metadata panel/minimize button, since those don't make sense
-// alongside five other items. Fills its grid cell completely (h-full
-// w-full, no aspect-ratio box, no gap/border spacing) so the parent grid's
-// own sizing is what determines how much room each item gets — the title
-// lives in an overlay instead of its own row, so none of that space is
-// spent on chrome.
+// One cell in the compare-play grid: the player skin (compact variant, one overlay row: play, seek, time,
+// volume) around the item's own <video>/<audio>, so each cell keeps independent controls. The cell uses
+// shortcuts="focus": its keys act only while the cell has focus (the page's global scope handles the rest), and
+// the cell shows a highlight ring while it contains focus, mouse click included, so it is visible which scope
+// Space will act on. No speed pill or fullscreen button here: the global bar provides those. Fills its grid cell
+// completely (h-full w-full, no aspect-ratio box) so the parent grid decides each item's size; the title is an
+// overlay inside the video, not its own row.
 export function ComparePlayerCell({ item, registerMedia, preload, onReadyChange }: ComparePlayerCellProps) {
   const { isRevealed, toggleItem } = useRevealAll()
   const revealed = isRevealed(item.id)
   const locked = item.blurred && !revealed
-  const audioRef = usePersistedVolume<HTMLAudioElement>()
-  const videoRef = usePersistedVolume<HTMLVideoElement>()
+  // The element mounts when a locked cell is revealed, so the persisted volume re-attaches then.
+  const audioRef = usePersistedVolume<HTMLAudioElement>(locked)
+  const videoRef = usePersistedVolume<HTMLVideoElement>(locked)
   const isVideo = !isAudioFilename(item.filename)
-  // Title shows whenever paused (nothing to hide it for) or on hover while
-  // playing — mirrors a typical video player's title-fades-in-on-interaction
-  // behavior, so it doesn't sit over the picture the whole time.
-  const [paused, setPaused] = useState(true)
 
   // Locked cells have no mounted media element to report canplaythrough —
   // count them as ready immediately so they don't block "wait for ready"
@@ -58,76 +52,76 @@ export function ComparePlayerCell({ item, registerMedia, preload, onReadyChange 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locked])
 
-  const setVideoRef = (el: HTMLVideoElement | null) => {
-    videoRef.current = el
-    registerMedia(el)
-  }
-  const setAudioRef = (el: HTMLAudioElement | null) => {
-    audioRef.current = el
-    registerMedia(el)
-  }
+  // Stable callbacks: a new ref function each render would unregister and re-register the element every time.
+  const setVideoRef = useCallback(
+    (el: HTMLVideoElement | null) => {
+      ;(videoRef as RefObject<HTMLVideoElement | null>).current = el
+      registerMedia(el)
+    },
+    [videoRef, registerMedia],
+  )
+  const setAudioRef = useCallback(
+    (el: HTMLAudioElement | null) => {
+      ;(audioRef as RefObject<HTMLAudioElement | null>).current = el
+      registerMedia(el)
+    },
+    [audioRef, registerMedia],
+  )
 
   const preloadAttr = preload ? "auto" : "metadata"
+  const artist = item.artistName ?? item.uploader ?? undefined
 
   return (
-    <div className="group relative h-full w-full overflow-hidden border border-white/10 bg-black">
-      <p
-        className={cn(
-          "pointer-events-none absolute top-0 left-0 z-10 max-w-full truncate bg-gradient-to-b from-black/80 to-transparent px-2 py-1 text-xs font-medium text-white transition-opacity",
-          paused ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-        )}
-      >
-        {locked ? "Private item" : item.title}
-      </p>
+    <div
+      data-slot="compare-cell"
+      className={`group/cell relative h-full w-full overflow-hidden border border-white/10 ${!locked && !isVideo ? "bg-background" : "bg-black"}`}
+    >
       {locked ? (
-        <button
-          type="button"
-          onClick={() => toggleItem(item.id)}
-          className="flex h-full w-full flex-col items-center justify-center gap-1 text-white"
-        >
-          <span className="text-xs font-medium">This item is private</span>
-          <span className="text-[11px] text-white/70">Click to reveal and play</span>
-        </button>
+        <>
+          <p className="pointer-events-none absolute top-0 left-0 z-10 max-w-full truncate bg-gradient-to-b from-black/80 to-transparent px-2 py-1 text-xs font-medium text-white">
+            Private item
+          </p>
+          <button type="button" onClick={() => toggleItem(item.id)} className="flex h-full w-full flex-col items-center justify-center gap-1 text-white">
+            <span className="text-xs font-medium">This item is private</span>
+            <span className="text-[11px] text-white/70">Click to reveal and play</span>
+          </button>
+        </>
       ) : isVideo ? (
-        <video
-          key={item.path}
-          ref={setVideoRef}
-          controls
-          preload={preloadAttr}
-          onPlay={() => setPaused(false)}
-          onPause={() => setPaused(true)}
-          onCanPlayThrough={() => onReadyChange(true)}
-          onWaiting={() => onReadyChange(false)}
-          className="h-full w-full object-contain"
-        >
-          <source src={mediaFileUrl(item.path)} />
-        </video>
-      ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3">
-          <div className="aspect-square h-full max-h-[60%] w-auto overflow-hidden rounded bg-neutral-800">
-            {item.thumbnail ? (
-              <img src={libraryMediumThumbnailUrl(item)!} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <Music className="h-8 w-8 text-white/30" />
-              </div>
-            )}
-          </div>
-          <audio
-            key={item.path}
-            ref={setAudioRef}
-            controls
+        <PlayerSkin key={item.path} mediaRef={videoRef} kind="video" variant="compact" shortcuts="focus" titleOverlay={item.title} className="h-full w-full">
+          <video
+            ref={setVideoRef}
             preload={preloadAttr}
-            onPlay={() => setPaused(false)}
-            onPause={() => setPaused(true)}
             onCanPlayThrough={() => onReadyChange(true)}
             onWaiting={() => onReadyChange(false)}
-            className="w-full"
+            className="h-full w-full object-contain"
           >
             <source src={mediaFileUrl(item.path)} />
+          </video>
+        </PlayerSkin>
+      ) : (
+        <PlayerSkin
+          key={item.path}
+          mediaRef={audioRef}
+          kind="audio"
+          variant="compact"
+          shortcuts="focus"
+          title={item.title}
+          artist={artist}
+          coverUrl={item.thumbnail ? libraryMediumThumbnailUrl(item) : null}
+          coverPx={56}
+          className="flex h-full w-full flex-col justify-center"
+        >
+          <audio ref={setAudioRef} preload={preloadAttr} onCanPlayThrough={() => onReadyChange(true)} onWaiting={() => onReadyChange(false)}>
+            <source src={mediaFileUrl(item.path)} />
           </audio>
-        </div>
+        </PlayerSkin>
       )}
+      {/* Focus highlight: :focus-within, so it shows after a mouse click too (not only keyboard focus). */}
+      <div
+        aria-hidden
+        data-slot="compare-cell-focus"
+        className="pointer-events-none absolute inset-0 z-40 ring-2 ring-inset ring-ring opacity-0 transition-opacity group-focus-within/cell:opacity-100 motion-reduce:transition-none"
+      />
     </div>
   )
 }
