@@ -181,3 +181,24 @@ func TestPatchAcceptsEveryUIValue(t *testing.T) {
 		})
 	}
 }
+
+func TestPatchFrameRangeBounds(t *testing.T) {
+	for _, tc := range []struct {
+		body map[string]any
+		ok   bool
+	}{
+		{map[string]any{"thumbnailFrameRangeLow": 0}, true},
+		{map[string]any{"thumbnailFrameRangeHigh": 100}, true},
+		{map[string]any{"thumbnailFrameRangeHigh": 101}, false},
+		{map[string]any{"thumbnailFrameRangeLow": -1}, false},
+	} {
+		e := newAtomicEnv(t)
+		w := e.do(http.MethodPatch, "/settings", tc.body)
+		if tc.ok && w.Code != http.StatusNoContent {
+			t.Errorf("%v: status %d, body %s", tc.body, w.Code, w.Body)
+		}
+		if !tc.ok && (w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "must be between 0 and 100")) {
+			t.Errorf("%v: status %d, body %s", tc.body, w.Code, w.Body)
+		}
+	}
+}

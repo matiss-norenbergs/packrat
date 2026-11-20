@@ -35,6 +35,7 @@ const (
 // Why a value was adjusted (fixed texts: never anything taken from the file).
 const (
 	ReasonAboveLimit   = "above the limit"
+	ReasonOutOfRange   = "outside the allowed range"
 	ReasonUnknownValue = "unknown value"
 	ReasonUnknownItems = "unknown entries"
 	ReasonPairInverted = "low is not below high"
@@ -105,6 +106,15 @@ func ApplySettingsBundle(ctx context.Context, settingsRepo *repository.SettingsR
 				values[key] = strconv.Itoa(max)
 				from, to := n, max
 				note(SettingAdjustment{Key: key, Action: AdjustClamped, Reason: ReasonAboveLimit, From: &from, To: &to})
+			}
+		}
+		// Ranges (lower and upper bound): clamp into the range.
+		if r, ok := models.SettingRange(key); ok {
+			if n, err := strconv.Atoi(value); err == nil && r.Clamp(n) != n {
+				to := r.Clamp(n)
+				values[key] = strconv.Itoa(to)
+				from := n
+				note(SettingAdjustment{Key: key, Action: AdjustClamped, Reason: ReasonOutOfRange, From: &from, To: &to})
 			}
 		}
 		// Fixed lists: skip an unknown value.

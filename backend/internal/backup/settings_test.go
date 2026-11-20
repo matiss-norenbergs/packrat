@@ -242,3 +242,92 @@ func TestApplySettingsBundle_NeverFailsOnBadValues(t *testing.T) {
 		t.Errorf("order not stable:\n%+v\n%+v", res.Adjustments, again.Adjustments)
 	}
 }
+
+func TestApplySettingsBundle_ClampsFrameRange(t *testing.T) {
+	ctx := context.Background()
+	repos := openTestRepos(t)
+
+	res, err := ApplySettingsBundle(ctx, repos.settings, map[string]string{
+		models.SettingThumbnailFrameRangeLow:  "-20",
+		models.SettingThumbnailFrameRangeHigh: "500",
+	})
+	if err != nil || res.Applied != 2 || len(res.Adjustments) != 2 {
+		t.Fatalf("err=%v res=%+v", err, res)
+	}
+	for key, want := range map[string][2]int{
+		models.SettingThumbnailFrameRangeLow:  {-20, 0},
+		models.SettingThumbnailFrameRangeHigh: {500, 100},
+	} {
+		if got, _ := stored(t, repos.settings, key); got != strconv.Itoa(want[1]) {
+			t.Errorf("%s stored %q, want %d", key, got, want[1])
+		}
+		a := findAdj(res.Adjustments, key)
+		if a == nil || a.Action != AdjustClamped || a.From == nil || a.To == nil || *a.From != want[0] || *a.To != want[1] {
+			t.Errorf("%s adjustment = %+v", key, a)
+		}
+	}
+
+	// In range (edges included): stored unchanged, nothing reported.
+	res, err = ApplySettingsBundle(ctx, repos.settings, map[string]string{
+		models.SettingThumbnailFrameRangeLow:  "0",
+		models.SettingThumbnailFrameRangeHigh: "100",
+	})
+	if err != nil || res.Applied != 2 || len(res.Adjustments) != 0 {
+		t.Fatalf("err=%v res=%+v", err, res)
+	}
+
+	// Not a number: left to the getters, as before.
+	res, err = ApplySettingsBundle(ctx, repos.settings, map[string]string{models.SettingThumbnailFrameRangeHigh: "lots"})
+	if err != nil || res.Applied != 1 || len(res.Adjustments) != 0 {
+		t.Fatalf("err=%v res=%+v", err, res)
+	}
+}
+
+// The pair is judged on the clamped values: 150/120 both become 100, which is not
+// low < high, so both sides are skipped (the stored pair stays). The two clamps are
+// still reported (they were applied to the file's values before the pair was
+// judged), followed by the two skips.
+func TestApplySettingsBundle_PairUsesClampedFrameRange(t *testing.T) {
+	ctx := context.Background()
+	repos := openTestRepos(t)
+	if err := repos.settings.Set(ctx, models.SettingThumbnailFrameRangeLow, "10"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repos.settings.Set(ctx, models.SettingThumbnailFrameRangeHigh, "90"); err != nil {
+		t.Fatal(err)
+	}
+	res, err := ApplySettingsBundle(ctx, repos.settings, map[string]string{
+		models.SettingThumbnailFrameRangeLow:  "150",
+		models.SettingThumbnailFrameRangeHigh: "120",
+	})
+	if err != nil || res.Applied != 0 || len(res.Adjustments) != 4 {
+		t.Fatalf("err=%v res=%+v", err, res)
+	}
+	var clamped, skipped int
+	for _, a := range res.Adjustments {
+		switch {
+		case a.Action == AdjustClamped && a.From != nil && a.To != nil && *a.To == 100:
+			clamped++
+		case a.Action == AdjustSkipped && a.Reason == ReasonPairInverted:
+			skipped++
+		}
+	}
+	if clamped != 2 || skipped != 2 {
+		t.Errorf("adjustments = %+v", res.Adjustments)
+	}
+	if lo, _ := stored(t, repos.settings, models.SettingThumbnailFrameRangeLow); lo != "10" {
+		t.Errorf("low = %q", lo)
+	}
+	if hi, _ := stored(t, repos.settings, models.SettingThumbnailFrameRangeHigh); hi != "90" {
+		t.Errorf("high = %q", hi)
+	}
+
+	// A lone out-of-range side is clamped, then judged against the stored other side.
+	res, err = ApplySettingsBundle(ctx, repos.settings, map[string]string{models.SettingThumbnailFrameRangeHigh: "500"})
+	if err != nil || res.Applied != 1 || len(res.Adjustments) != 1 {
+		t.Fatalf("err=%v res=%+v", err, res)
+	}
+	if hi, _ := stored(t, repos.settings, models.SettingThumbnailFrameRangeHigh); hi != "100" {
+		t.Errorf("high = %q", hi)
+	}
+}

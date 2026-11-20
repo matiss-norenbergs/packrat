@@ -202,3 +202,35 @@ func TestRestoreAppliesClampedLimitsLive(t *testing.T) {
 		})
 	}
 }
+
+// A frame-range clamp is listed in the System log event with numbers only.
+func TestRestoreFrameRangeClampIsLogged(t *testing.T) {
+	e := newAtomicEnv(t)
+	w := e.do(http.MethodPost, "/import/settings", sealSettings(t, "settings", map[string]string{
+		models.SettingThumbnailFrameRangeHigh: "500",
+	}))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d, body %s", w.Code, w.Body)
+	}
+	if got := e.get(models.SettingThumbnailFrameRangeHigh); got != "100" {
+		t.Errorf("stored %q", got)
+	}
+	for _, ev := range restoreEvents(t, e) {
+		if !strings.Contains(ev.Message, "adjusted") {
+			continue
+		}
+		var d adjustedDetails
+		if err := json.Unmarshal(ev.Details, &d); err != nil {
+			t.Fatal(err)
+		}
+		if d.Count != 1 || len(d.Adjustments) != 1 {
+			t.Fatalf("details = %+v", d)
+		}
+		a := d.Adjustments[0]
+		if a.Key != models.SettingThumbnailFrameRangeHigh || a.Action != backup.AdjustClamped || a.From == nil || *a.From != 500 || a.To == nil || *a.To != 100 {
+			t.Errorf("entry = %+v", a)
+		}
+		return
+	}
+	t.Fatal("no adjusted event")
+}

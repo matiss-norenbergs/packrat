@@ -438,7 +438,8 @@ failure rather than a generic error.
 
 `models/settings_rules.go` holds the rules that apply to a setting's *value* as plain data plus pure functions:
 upper limits for the numbers where a huge value does real harm (`SettingMaxValues`, limits next to
-`MaxConcurrentDownloadsLimit` in `models/limits.go`), the fixed value lists (`SettingEnums`), the low/high pairs
+`MaxConcurrentDownloadsLimit` in `models/limits.go`), two-sided ranges (`SettingRanges`: the thumbnail frame range
+percentages, 0-100, clamped on restore before the pair is judged), the fixed value lists (`SettingEnums`), the low/high pairs
 (`SettingPairs`, with the defaults the getters fall back to) and the known Dashboard widget IDs. **Both**
 `PATCH /api/settings` (`UpdateSettings`) and the settings import / full restore (`backup.ApplySettingsBundle`) must use
 them, so the two paths cannot drift: a new capped, enumerated or paired setting is added there once, never as a

@@ -116,3 +116,23 @@ func TestNormalizeDashboardWidgetIDs(t *testing.T) {
 		t.Errorf("valid=%v unknown=%v", valid, unknown)
 	}
 }
+
+func TestSettingRanges(t *testing.T) {
+	if len(SettingRanges) != 2 {
+		t.Fatalf("got %d ranges", len(SettingRanges))
+	}
+	for _, key := range []string{SettingThumbnailFrameRangeLow, SettingThumbnailFrameRangeHigh} {
+		r, ok := SettingRange(key)
+		if !ok || r.Min != 0 || r.Max != 100 {
+			t.Fatalf("%s range = %+v, %v", key, r, ok)
+		}
+		for _, tc := range []struct{ in, want int }{{-1, 0}, {-20, 0}, {0, 0}, {50, 50}, {100, 100}, {101, 100}, {500, 100}} {
+			if got := r.Clamp(tc.in); got != tc.want {
+				t.Errorf("%s Clamp(%d) = %d, want %d", key, tc.in, got, tc.want)
+			}
+		}
+	}
+	if _, ok := SettingRange(SettingYtdlpRetries); ok {
+		t.Error("ytdlp_retries has no two-sided range")
+	}
+}

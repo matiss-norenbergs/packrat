@@ -1481,7 +1481,8 @@ nothing in the request is saved:
   | `ytdlpRetries` | 100 | passed to yt-dlp as `--retries`; a failing download would retry practically forever |
   | `downloadTimeoutMinutes` | 5,256,000 (10 years) | larger overflows the timeout duration (cancels every download at once) |
   | `historyRetentionDays`, `downloadLogRetentionDays`, `thumbnailEnhancementRetentionDays` | 36,500 (100 years) | larger overflows the cutoff date arithmetic |
-  | `autoBackupIntervalHours` | 87,600 (10 years; the request also only accepts 0, 6, 12, 24, 72, 168) | larger overflows the interval (a backup on every tick) |
+  | `thumbnailFrameRangeLow`, `thumbnailFrameRangeHigh` | 0 to 100 (a percentage of the video's duration; message `... must be between 0 and 100`) | frames outside the video make extraction fail |
+| `autoBackupIntervalHours` | 87,600 (10 years; the request also only accepts 0, 6, 12, 24, 72, 168) | larger overflows the interval (a backup on every tick) |
 
 - **Fixed lists** — `"<field> must be one of: a, b, c"`:
 
@@ -1635,6 +1636,7 @@ there), but **never fails halfway**, so a violation is adjusted instead of answe
 | Violation | What the restore does |
 |---|---|
 | A number above its limit | **clamped** to the limit |
+| `thumbnail_frame_range_low` / `_high` outside 0 to 100 | **clamped** into the range (below 0 becomes 0, above 100 becomes 100) *before* the pair check below, so the pair is judged on the clamped values |
 | A value not in the setting's fixed list | **skipped**: the stored value stays |
 | A low/high pair that would be inverted (the stored value is used for a side the file doesn't carry) | the file's side(s) **skipped** |
 | Unknown Dashboard widget names | **dropped**; the known ones are applied |

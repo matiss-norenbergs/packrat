@@ -53,6 +53,40 @@ const (
 	MaxAutoBackupIntervalHours = 87_600
 )
 
+// MaxThumbnailFrameRangePercent is the top of the thumbnail frame range
+// settings, which are percentages of the video's duration (0-100). A value
+// outside that asks "Choose from Video" for frames past the end (or before the
+// start) of the video, and frame extraction fails.
+const MaxThumbnailFrameRangePercent = 100
+
+// ValueRange is an inclusive numeric range.
+type ValueRange struct{ Min, Max int }
+
+// SettingRanges maps a numeric setting key to its inclusive range, for the
+// settings that have a lower bound as well as an upper one. A restore clamps
+// into it; PATCH answers 400 outside it.
+var SettingRanges = map[string]ValueRange{
+	SettingThumbnailFrameRangeLow:  {0, MaxThumbnailFrameRangePercent},
+	SettingThumbnailFrameRangeHigh: {0, MaxThumbnailFrameRangePercent},
+}
+
+// SettingRange returns key's range, if it has one.
+func SettingRange(key string) (r ValueRange, ok bool) {
+	r, ok = SettingRanges[key]
+	return r, ok
+}
+
+// Clamp returns n limited to the range.
+func (r ValueRange) Clamp(n int) int {
+	if n < r.Min {
+		return r.Min
+	}
+	if n > r.Max {
+		return r.Max
+	}
+	return n
+}
+
 // SettingMaxValues maps a numeric setting key to its inclusive upper limit.
 // Only keys where a huge value does real harm are listed; see the consts above.
 // Not listed on purpose (no harm found): library_page_size (only slices the

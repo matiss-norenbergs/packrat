@@ -1288,6 +1288,10 @@ func UpdateSettings(repo *repository.SettingsRepo, mgr *queue.DownloadManager, y
 			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 			return
 		}
+		if msg := validateSettingRanges(req); msg != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
 		if msg := validateSettingEnums(req); msg != "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 			return
@@ -1545,6 +1549,27 @@ func validateSettingCaps(req UpdateSettingsRequest) string {
 		}
 		if max, ok := models.SettingMaxValue(f.key); ok && *f.val > max {
 			return fmt.Sprintf("%s must be at most %d", f.name, max)
+		}
+	}
+	return ""
+}
+
+// validateSettingRanges checks the two-sided ranges (models.SettingRanges) for
+// the fields present in req and returns the 400 message, or "".
+func validateSettingRanges(req UpdateSettingsRequest) string {
+	for _, f := range []struct {
+		key  string
+		name string
+		val  *int
+	}{
+		{models.SettingThumbnailFrameRangeLow, "thumbnailFrameRangeLow", req.ThumbnailFrameRangeLow},
+		{models.SettingThumbnailFrameRangeHigh, "thumbnailFrameRangeHigh", req.ThumbnailFrameRangeHigh},
+	} {
+		if f.val == nil {
+			continue
+		}
+		if r, ok := models.SettingRange(f.key); ok && (*f.val < r.Min || *f.val > r.Max) {
+			return fmt.Sprintf("%s must be between %d and %d", f.name, r.Min, r.Max)
 		}
 	}
 	return ""
