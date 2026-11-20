@@ -801,6 +801,10 @@ title/uploader/artist/description. `GET /api/library?q=...` queries it directly 
 `LIKE` scan. Pagination, sorting, and collection/year/tag filters all compose with the search query
 in the same `LibraryRepo.Query` method.
 
+The update trigger `library_au` is `AFTER UPDATE OF title, filename, uploader, description, folder, original_url`
+(migration 000056), so writes to other columns (the playback-position heartbeat, thumbnail paths, status) do not touch
+the index; a statement that changes an indexed column must name it in its `SET` clause.
+
 ## Privacy: private collections, tags and artists
 
 Artists have the same explicit flag (`artists.is_private`, migration 000049; `PATCH` with the field omitted means
