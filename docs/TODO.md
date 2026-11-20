@@ -116,16 +116,9 @@ None are scheduled. Sizes are guesses.
 
 **Loose ends**
 
-- **Make `govulncheck` required once its findings are dealt with (S).** The `govulncheck` job in `ci.yml` is
-  report-only (`continue-on-error`; findings go to the job summary and a warning annotation). Its first run
-  (on PR 172) reported 19 vulnerabilities affecting the code, from `github.com/quic-go/quic-go` v0.59.0 (1, fixed in
-  v0.59.1) and the Go standard library on Go 1.26.4 (18, in `net/http`, `crypto/tls`, `crypto/x509`, `net/textproto`,
-  `net/url` and `encoding/asn1`). Every standard-library one is fixed by moving to the latest Go patch release (the
-  highest fix listed is Go 1.26.11, for `net/http`; `crypto/x509` needs 1.26.10, the `crypto/tls` ones 1.26.5 to
-  1.26.9). It also listed 7 in imported packages and 3 in required modules that the code doesn't appear to call.
-  Suggested fix, as a separate task: bump the Go version in `backend/go.mod` to the latest patch release (CI follows it; the
-  Dockerfile's `golang:1-alpine` already floats), bump `quic-go`, and re-run the job. Then drop `continue-on-error` and add
-  the job to the required checks (branch protection is configured outside the repo).
+- **Add `govulncheck` to the required checks (S).** The `govulncheck` job in `ci.yml` now fails when the scan finds
+  vulnerabilities that affect the code (exit status 3); a scan that can't complete (e.g. `vuln.go.dev` unreachable)
+  only warns. Add it to branch protection (configured outside the repo).
 - **Trim frame picker timeout headroom on very heavy windows (S to M).** `ExtractFrameThumbnails` and
   `ExtractFrameRange` share a 30 s `frameRangeTimeout`. A synthetic 4K 120 fps, 15 s window took about 20 s here, of
   which about 15.5 s was ffprobe listing every frame's timestamp (`probeAllFrameTimestamps`, which decodes the
