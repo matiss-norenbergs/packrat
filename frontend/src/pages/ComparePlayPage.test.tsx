@@ -148,6 +148,112 @@ describe("ComparePlayPage keyboard scopes", () => {
   })
 })
 
+describe("ComparePlayPage sync mode (time / percent)", () => {
+  const SYNC_KEY = "packrat:compare-sync-mode"
+  const radio = (name: string) => bar().getByRole("radio", { name })
+  const scrub = (clientX: number) => {
+    const slider = bar().getByRole("slider", { name: "Seek" })
+    ;(slider.firstElementChild as HTMLElement).getBoundingClientRect = () => rect(200)
+    fireEvent.pointerDown(slider, { clientX, pointerId: 1 })
+    fireEvent.pointerUp(slider, { pointerId: 1 })
+  }
+
+  it("has a Time | Percent toggle that defaults to time and stores nothing until used", () => {
+    setup([60, 120])
+    expect(bar().getByRole("radiogroup", { name: "Seek sync mode" })).toBeTruthy()
+    expect(radio("Sync by time").getAttribute("aria-checked")).toBe("true")
+    expect(radio("Sync by percent").getAttribute("aria-checked")).toBe("false")
+    expect(localStorage.getItem(SYNC_KEY)).toBeNull()
+  })
+
+  it("falls back to time for an invalid stored value", () => {
+    localStorage.setItem(SYNC_KEY, "bogus")
+    setup([60])
+    expect(radio("Sync by time").getAttribute("aria-checked")).toBe("true")
+  })
+
+  it("persists the choice and restores it after a remount", () => {
+    setup([60, 120])
+    fireEvent.click(radio("Sync by percent"))
+    expect(localStorage.getItem(SYNC_KEY)).toBe("percent")
+    expect(radio("Sync by percent").getAttribute("aria-checked")).toBe("true")
+    cleanup()
+    setup([60, 120])
+    expect(radio("Sync by percent").getAttribute("aria-checked")).toBe("true")
+    fireEvent.click(radio("Sync by time"))
+    expect(localStorage.getItem(SYNC_KEY)).toBe("time")
+  })
+
+  it("time mode puts every cell at the same timestamp (clamped) and reads current / duration", () => {
+    const cells = setup([60, 120])
+    scrub(100) // 50% of the longest (120 s) = 60 s
+    expect(cells.map((c) => c.s.currentTime)).toEqual([60, 60])
+    expect(bar().getByRole("slider", { name: "Seek" }).getAttribute("aria-valuemax")).toBe("120")
+    expect(bar().getByText("1:00 / 2:00")).toBeTruthy()
+  })
+
+  it("percent mode puts every cell at the same fraction of its own length and reads a percentage", () => {
+    vi.useFakeTimers()
+    const cells = setup([60, 120, NaN])
+    fireEvent.click(radio("Sync by percent"))
+    scrub(100) // 50 %
+    expect(cells.map((c) => c.s.currentTime)).toEqual([30, 60, 0]) // the unknown-duration cell is skipped
+    expect(bar().getByText("50%")).toBeTruthy()
+    const slider = bar().getByRole("slider", { name: "Seek" })
+    expect(slider.getAttribute("aria-valuemax")).toBe("100")
+    expect(slider.getAttribute("aria-valuetext")).toBe("50%")
+    act(() => void vi.advanceTimersByTime(50)) // let the seek throttle's frame pass
+    scrub(200) // the far end: never past a cell's end
+    expect(cells.map((c) => c.s.currentTime)).toEqual([60, 120, 0])
+    expect(bar().getByText("100%")).toBeTruthy()
+    vi.useRealTimers()
+  })
+
+  it("percent mode shows the reference cell's own fraction, and 0 while its duration is unknown", () => {
+    const cells = setup([60, 120])
+    fireEvent.click(radio("Sync by percent"))
+    cells[0].s.currentTime = 15
+    cells[1].s.currentTime = 90
+    act(() => void cells[0].el.dispatchEvent(new Event("timeupdate")))
+    expect(bar().getByText("25%")).toBeTruthy()
+    act(() => void cells[1].el.play()) // the first playing cell becomes the reference
+    expect(bar().getByText("75%")).toBeTruthy()
+    cleanup()
+    const unknown = setup([NaN, 120])
+    expect(bar().getByText("0%")).toBeTruthy()
+    scrub(100)
+    expect(unknown.map((c) => c.s.currentTime)).toEqual([0, 60])
+  })
+
+  it("switching modes only changes the mapping: no seek, no pause", () => {
+    const cells = setup([60, 120])
+    cells[0].s.currentTime = 15
+    cells[1].s.currentTime = 90
+    act(() => void cells.forEach((c) => c.el.play()))
+    const seeks = vi.fn()
+    for (const c of cells) c.el.addEventListener("timeupdate", seeks) // fakeMedia fires it on every currentTime write
+    fireEvent.click(radio("Sync by percent"))
+    expect(bar().getByText("25%")).toBeTruthy()
+    fireEvent.click(radio("Sync by time"))
+    expect(bar().getByText("0:15 / 2:00")).toBeTruthy()
+    expect(seeks).not.toHaveBeenCalled()
+    expect(cells.map((c) => c.s.currentTime)).toEqual([15, 90])
+    for (const c of cells) {
+      expect(c.s.paused).toBe(false)
+      expect(c.el.pause).not.toHaveBeenCalled()
+    }
+  })
+
+  it("arrow keys stay relative to each cell's own time in percent mode", () => {
+    const cells = setup([60, 30])
+    fireEvent.click(radio("Sync by percent"))
+    cells[0].s.currentTime = 10
+    cells[1].s.currentTime = 28
+    fireEvent.keyDown(document.body, { key: "ArrowRight" })
+    expect(cells.map((c) => c.s.currentTime)).toEqual([15, 30])
+  })
+})
+
 describe("ComparePlayPage global bar", () => {
   it("global seek puts every cell at the same absolute time, clamped per item, skipping unknown durations", () => {
     const cells = setup([10, 20, 5, NaN])

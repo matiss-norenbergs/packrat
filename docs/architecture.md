@@ -1434,7 +1434,11 @@ document listener only reacts to moves over the frame itself. The control pieces
 are presentational components (`PlayerParts.tsx`, `SeekBar.tsx`) shared by `PlayerControls` and the compare page's global bar
 (`CompareGlobalBar`), which sits on the page background and so uses the `.player-themed` color scope (the `--player-*` variables
 mapped to theme tokens) instead of the light-on-dark `.player-skin` one. `useCompareGroup` drives all cell elements (any-playing,
-longest duration, same-time seek, relative seek, master volume/speed that later-mounted cells adopt); the pure parts are in `groupMedia.ts`
+longest duration, same-time seek, relative seek, master volume/speed that later-mounted cells adopt); its `mode` argument
+(`"time"` | `"percent"`, the page's `packrat:compare-sync-mode` localStorage preference) only changes how the one global seek slider
+maps onto the cells: `seekScale` is the slider's value/range in the mode's units (seconds over the longest duration, or 0–100 percent
+points of the reference cell's own fraction) and `seekAll` takes the same units, converting to a per-cell target (`globalSeekTarget`
+or `globalSeekPercentTarget`); a mode switch seeks nothing and drops a still-pending throttled scrub. The pure parts are in `groupMedia.ts`
 and the keyboard scope decision (`resolveGlobalKey`: global keys act only when no cell has focus and the focused control doesn't
 handle the key itself) in `playerKeys.ts`. The Trim dialog deliberately keeps native controls.
 

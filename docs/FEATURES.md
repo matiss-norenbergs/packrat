@@ -767,6 +767,16 @@ than overflow.
 - **Global seek bar** with `current / longest` time — the range is the longest clip. Scrubbing puts every cell at
   the same time, except that a shorter clip stops at its own end; cells whose length isn't known yet are skipped. The
   position shown follows the first playing cell (otherwise the first cell).
+- **Sync: Time | Percent** — a two-state toggle next to the seek bar that picks what the seek bar maps onto the cells
+  (remembered per browser, **Time** by default; a missing or invalid stored value also means Time). In **Time** mode
+  (as above) the bar is in seconds over the longest clip and the readout is `current / longest`. In **Percent** mode
+  the bar is 0–100 %: its position is the reference cell's own fraction (current time ÷ its own length; 0 while that
+  cell's length isn't known), scrubbing to *p* % puts every cell at *p* % of **its own** length (so 50 % is 30 s in a
+  60 s clip and 60 s in a 120 s one; nothing needs clamping), cells whose length isn't known are skipped, and the
+  readout is just the percentage (e.g. `42%`). Switching modes while playing only changes the mapping — nothing
+  seeks or pauses. The keyboard shortcuts below are unaffected (arrows always move each cell from its own time);
+  with the seek bar itself focused, its arrow keys step 5 (`Shift`: 10) seconds in Time mode and 5 (`Shift`: 10)
+  percentage points in Percent mode.
 - **Master volume** — a "set all" control: moving it sets every cell's volume (and unmutes it); it shows the last
   value you set. A private cell revealed later keeps its own remembered volume unless you moved the master slider.
 - **Speed** — the speed pill sets every cell (1× when the page opens); a cell revealed later adopts it.
