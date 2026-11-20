@@ -156,7 +156,10 @@ without salt is deliberate: the token is 256 random bits, not a password.
 `Secure=false` is deliberate, not an oversight — the app is commonly run over plain HTTP on a
 trusted LAN, and requiring HTTPS would break that default deployment. CSRF is handled separately
 via a double-submit cookie (`packrat_csrf`, readable by JS, echoed back as `X-CSRF-Token` on every
-mutating request) rather than relying on cookie security flags alone. Its value is an independent
+mutating request) rather than relying on cookie security flags alone. `POST /api/auth/logout` sits in the
+public group (so a stale cookie can always be cleared) and therefore does the double-submit check itself: a
+cookie-authenticated logout without the matching header gets `403` and keeps its session, while a bearer
+request or one with no valid session is not checked. Its value is an independent
 random string, never the session token: the cookie is script-readable, so sharing the secret would
 hand any XSS a working session credential (it is also accepted as a bearer token). Pre-fix sessions
 are healed on their next cookie-authenticated GET (`healLegacyCSRFCookie`). See

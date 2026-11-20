@@ -291,8 +291,18 @@ func ChangePassword(deps *AuthDeps) gin.HandlerFunc {
 
 // AuthLogout deletes the session server-side (a replayed old cookie value
 // stops working immediately, not just client-side) and clears the cookie.
+//
+// The route is public so a stale cookie can always be cleared, which means RequireCSRF does not
+// run; the check is made here instead. A request that is signed in through the cookie must pass
+// the double-submit (otherwise a cross-site form could sign the user out) and gets 403 with the
+// session left alive. A bearer client is exempt, as everywhere, and a request with no valid
+// session just gets its cookies cleared.
 func AuthLogout(usersRepo *repository.UsersRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if _, source, ok := resolveSession(c, usersRepo); ok && source == authSourceCookie && !csrfTokenMatches(c) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "invalid or missing CSRF token"})
+			return
+		}
 		for _, cand := range sessionCandidates(c) {
 			if err := usersRepo.DeleteSession(c.Request.Context(), cand.token); err != nil && !errors.Is(err, repository.ErrNotFound) {
 				writeServerError(c, err)
