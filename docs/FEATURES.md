@@ -371,8 +371,9 @@ same endpoint with a list of one.
   e.g. items imported without a source URL).
 - **Trim…** — cut a precise portion off the start and/or end of the file. Set Start/End by number
   entry, ±1s/±0.1s/±1-frame nudge buttons, "Use current" (grabs the player's current playback
-  time), or "Pick exact frame…" (a grid of every decoded frame in a short window, for
-  frame-accurate seeking the browser's own scrubber can't guarantee). "Generate preview" produces a
+  time), or "Pick exact frame…" (a grid of every decoded frame in a short window, shown as small
+  previews, for frame-accurate seeking the browser's own scrubber can't guarantee; up to 1000 frames
+  per window, and a quiet "Showing the first N of M frames" note says when a window had more). "Generate preview" produces a
   trimmed copy without touching the original — toggle Original/Preview to A-B compare, then
   "Accept" (with a confirmation; overwriting the original isn't reversible) or discard the preview.
   Not offered for ghost items.
