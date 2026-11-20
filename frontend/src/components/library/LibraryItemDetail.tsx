@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { Link } from "react-router-dom"
-import { ArrowLeft, Minimize2, Music } from "lucide-react"
+import { ArrowLeft, Minimize2 } from "lucide-react"
 import { syncMediaOnReady } from "@/lib/mediaSeek"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,7 @@ import { formatBytes, hashText, isAudioFilename } from "@/lib/utils"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
 import { LibraryItemStripTile } from "./LibraryItemStripTile"
 import { useRevealAll } from "./RevealAllContext"
+import { PlayerSkin } from "@/components/player/PlayerSkin"
 import { usePersistedVolume } from "@/hooks/usePersistedVolume"
 import type { LibraryItem } from "@/types/api"
 
@@ -175,28 +176,26 @@ export function LibraryItemDetail({
             className="h-full w-full object-contain"
           />
         ) : isAudioFilename(item.filename) ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-8">
-            <div className="aspect-square h-full max-h-72 w-auto overflow-hidden rounded-lg bg-neutral-800 shadow-lg">
-              {item.thumbnail ? (
-                <img src={libraryMediumThumbnailUrl(item)!} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Music className="h-16 w-16 text-white/30" />
-                </div>
-              )}
-            </div>
-            <div className="text-center">
-              <p className="text-base font-medium text-white">{item.title}</p>
-              <p className="text-sm text-white/70">{item.artistName ? maskArtist(item.artistId, item.artistName, !locked) : (item.uploader ?? "Unknown artist")}</p>
-            </div>
-            <audio key={item.path} ref={audioRef} controls className="w-full max-w-md">
+          <PlayerSkin
+            key={item.path}
+            mediaRef={audioRef}
+            kind="audio"
+            variant="full"
+            title={item.title}
+            artist={item.artistName ? maskArtist(item.artistId, item.artistName, !locked) : (item.uploader ?? "Unknown artist")}
+            coverUrl={item.thumbnail ? libraryMediumThumbnailUrl(item) : null}
+            className="h-full w-full"
+          >
+            <audio ref={audioRef}>
               <source src={mediaFileUrl(item.path)} />
             </audio>
-          </div>
+          </PlayerSkin>
         ) : (
-          <video key={item.path} ref={videoRef} controls className="h-full w-full object-contain">
-            <source src={mediaFileUrl(item.path)} />
-          </video>
+          <PlayerSkin key={item.path} mediaRef={videoRef} kind="video" variant="full" className="h-full w-full">
+            <video ref={videoRef} className="h-full w-full object-contain">
+              <source src={mediaFileUrl(item.path)} />
+            </video>
+          </PlayerSkin>
         )}
       </div>
 

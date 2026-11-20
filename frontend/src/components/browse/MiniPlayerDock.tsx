@@ -1,12 +1,13 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Maximize2, Music, X } from "lucide-react"
+import { Maximize2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { librarySmallThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { isAudioFilename } from "@/lib/utils"
 import { usePersistedVolume } from "@/hooks/usePersistedVolume"
 import { syncMediaOnReady } from "@/lib/mediaSeek"
+import { PlayerSkin } from "@/components/player/PlayerSkin"
 import { useMiniPlayer } from "./MiniPlayerContext"
 
 // The floating bottom-right player that keeps an item playing while the user
@@ -83,29 +84,24 @@ export function MiniPlayerDock() {
       </div>
 
       {isAudioFilename(item.filename) ? (
-        <div className="space-y-2 p-3">
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 shrink-0 overflow-hidden rounded bg-neutral-800">
-              {thumbUrl ? (
-                <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Music className="h-4 w-4 text-white/30" />
-                </div>
-              )}
-            </div>
-            <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-              {item.artistName ?? item.uploader ?? "Unknown artist"}
-            </p>
-          </div>
-          <audio key={item.path} ref={mediaRef} controls className="w-full">
+        <PlayerSkin
+          key={item.path}
+          mediaRef={mediaRef}
+          kind="audio"
+          variant="compact"
+          artist={item.artistName ?? item.uploader ?? "Unknown artist"}
+          coverUrl={thumbUrl}
+        >
+          <audio ref={mediaRef}>
             <source src={mediaFileUrl(item.path)} />
           </audio>
-        </div>
+        </PlayerSkin>
       ) : (
-        <video key={item.path} ref={mediaRef} controls className="aspect-video w-full bg-black object-contain">
-          <source src={mediaFileUrl(item.path)} />
-        </video>
+        <PlayerSkin key={item.path} mediaRef={mediaRef} kind="video" variant="compact" className="aspect-video w-full">
+          <video ref={mediaRef} className="h-full w-full bg-black object-contain">
+            <source src={mediaFileUrl(item.path)} />
+          </video>
+        </PlayerSkin>
       )}
     </div>
   )
