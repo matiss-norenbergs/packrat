@@ -306,6 +306,74 @@
     --chart-5: #008300;
 }
 
+/* Media player skin (components/player). Its controls are drawn on top of arbitrary video, so text and
+   icons need a fixed light-on-dark treatment that does NOT follow the light/dark theme — that is the one
+   deliberate exception to "theme tokens only", and why these are scoped variables instead of
+   --foreground/--background. Everything else (seek fill, focus ring, speed menu) uses theme tokens;
+   --player-accent is --primary, except Monochrome in light mode where --primary is black and would vanish
+   on the dark glass bar. Sizes/timings live in components/player/playerTheme.ts. */
+.player-skin {
+    --player-fg: oklch(0.985 0 0);
+    --player-scrim: oklch(0.16 0 0);
+    --player-accent: var(--primary);
+    --player-track-bg: color-mix(in oklab, var(--player-fg) 28%, transparent);
+    --player-hover-bg: color-mix(in oklab, var(--player-fg) 16%, transparent);
+}
+[data-accent="mono"]:not(.dark) .player-skin {
+    --player-accent: var(--player-fg);
+}
+.player-range {
+    appearance: none;
+    height: 1rem;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+}
+.player-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: linear-gradient(to right, var(--player-accent) var(--fill, 0%), var(--player-track-bg) var(--fill, 0%));
+}
+.player-range::-moz-range-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: linear-gradient(to right, var(--player-accent) var(--fill, 0%), var(--player-track-bg) var(--fill, 0%));
+}
+.player-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    margin-top: -4px;
+    border-radius: 9999px;
+    border: 0;
+    background: var(--player-fg);
+}
+.player-range::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 9999px;
+    border: 0;
+    background: var(--player-fg);
+}
+.player-range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px var(--ring);
+}
+.player-range:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 3px var(--ring);
+}
+.player-flash {
+    opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+    .player-flash {
+        animation: player-flash var(--player-flash-ms, 500ms) ease-out;
+    }
+}
+@keyframes player-flash {
+    0% { opacity: 0.9; transform: scale(0.8); }
+    100% { opacity: 0; transform: scale(1.35); }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
