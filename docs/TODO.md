@@ -84,14 +84,6 @@ None are scheduled. Sizes are guesses.
   Enhance or Sharpen can't be cancelled.
 - **N+1 queries in the subscriptions list and bulk frame match (S).** Only visible at large sizes.
 
-**Small hardening**
-
-- **Other thumbnail actions still write non-JPEG bytes into the `.jpg` sidecar (S).** AI enhancement now converts
-  its result to a JPEG, but Set thumbnail (an uploaded PNG/WebP) and Gallery apply (a gallery image saved as
-  `.png`/`.webp`) pass the bytes to `thumbwrite.Replace` unchanged, so the sidecar can be a PNG under a `.jpg`
-  name. Converting inside `thumbwrite.Replace` (using `imageproc.BytesToJPEG`) would cover every caller. Not
-  checked: Quick Grab, Frame-match accept and Redownload (their bytes come from ffmpeg/yt-dlp JPEG output).
-
 **Loose ends**
 
 - **Trim frame picker timeout headroom on very heavy windows (S to M).** `ExtractFrameThumbnails` and

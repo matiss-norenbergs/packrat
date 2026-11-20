@@ -6,6 +6,7 @@
 package thumbwrite
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,9 +16,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/imageproc"
+	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 )
 
@@ -42,12 +45,20 @@ var (
 	}
 )
 
+// ConvertToJPEG converts a non-JPEG image to a JPEG sidecar (a seam so tests can
+// inject a failure); production always uses imageproc.BytesToJPEG.
+var ConvertToJPEG = imageproc.BytesToJPEG
+
 // Params describes one replacement.
 type Params struct {
 	Repo       *repository.LibraryRepo
 	FFmpegPath string
 	ImagesRoot string
-	ID         int64
+	// MediaRoot is the media root; with it Replace can tell that ThumbAbs is the
+	// item's own media file (never converted). Empty skips that comparison; image
+	// items are always recognised from the row.
+	MediaRoot string
+	ID        int64
 	// ThumbAbs is the sidecar's absolute path.
 	ThumbAbs string
 	// ThumbRel is the sidecar's path relative to the media root, written to the
@@ -69,12 +80,15 @@ type Result struct {
 //
 // Order — everything that can fail happens before the sidecar is touched:
 //
-//	a. write Data to a temp file next to the sidecar (.packrat-thumb-*, same filesystem)
-//	b. probe the temp file — data that isn't an image stops here (ErrNotAnImage)
-//	c. generate the tiers from the temp file (new uuid file names, nothing overwritten)
-//	d. point the row at the sidecar path, new tiers and dimensions (one statement)
-//	e. rename the temp file over the sidecar (atomic); if that fails, restore the row
-//	f. only then delete the old derivative files (best effort)
+//  0. data the decoder can't read stops here (ErrNotAnImage); then, for a .jpg/.jpeg sidecar of a
+//     non-image item, a PNG/WebP/GIF/BMP is converted to a real JPEG (transparency flattened onto
+//     black; a JPEG is never re-encoded; a failed conversion is logged and the original bytes kept)
+//     a. write the data to a temp file next to the sidecar (.packrat-thumb-*, same filesystem)
+//     b. probe the temp file for the dimensions and size that get stored
+//     c. generate the tiers from the temp file (new uuid file names, nothing overwritten)
+//     d. point the row at the sidecar path, new tiers and dimensions (one statement)
+//     e. rename the temp file over the sidecar (atomic); if that fails, restore the row
+//     f. only then delete the old derivative files (best effort)
 //
 // On any error before (f) the sidecar, the old derivatives and the library row
 // are as they were, and the temp file and the new tier files are removed.
@@ -88,7 +102,21 @@ func Replace(ctx context.Context, p Params) (Result, error) {
 		thumbnail = existing.Thumbnail
 	}
 
-	tmpAbs, err := writeSiblingTemp(p.ThumbAbs, p.Data)
+	// The gate is applied to the original bytes, so conversion (ffmpeg reads more formats than the
+	// Go decoder, e.g. WebP) never makes a refused input acceptable.
+	if _, _, err := image.DecodeConfig(bytes.NewReader(p.Data)); err != nil {
+		return Result{}, fmt.Errorf("probing thumbnail: %w: %v", ErrNotAnImage, err)
+	}
+	data := p.Data
+	if shouldConvert(p, existing, data) {
+		if out, err := ConvertToJPEG(ctx, p.FFmpegPath, data); err != nil {
+			log.Printf("thumbwrite: item %d: converting the thumbnail to JPEG failed, keeping the original bytes: %v", p.ID, err)
+		} else {
+			data = out
+		}
+	}
+
+	tmpAbs, err := writeSiblingTemp(p.ThumbAbs, data)
 	if err != nil {
 		return Result{}, err
 	}
@@ -146,6 +174,26 @@ func Replace(ctx context.Context, p Params) (Result, error) {
 	}
 
 	return Result{Width: w, Height: h, Size: s}, nil
+}
+
+// shouldConvert reports whether data must become a JPEG: the destination is a
+// .jpg/.jpeg sidecar of an item that is not an image item (an image item's
+// "thumbnail" is its media file, which is never re-encoded), and data is a
+// raster image in another format.
+func shouldConvert(p Params, item *models.LibraryItem, data []byte) bool {
+	if ext := strings.ToLower(filepath.Ext(p.ThumbAbs)); ext != ".jpg" && ext != ".jpeg" {
+		return false
+	}
+	if item.IsImageItem() {
+		return false
+	}
+	if p.MediaRoot != "" && item.Path != "" {
+		media := filepath.Join(p.MediaRoot, filepath.FromSlash(item.Path))
+		if filepath.Clean(media) == filepath.Clean(p.ThumbAbs) {
+			return false
+		}
+	}
+	return imageproc.NeedsJPEGConversion(data)
 }
 
 // writeSiblingTemp writes data to a new ".packrat-thumb-<random><ext>" file in

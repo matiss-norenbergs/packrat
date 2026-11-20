@@ -8,13 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
-	"packrat/backend/internal/imageproc"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/sysevents"
@@ -752,11 +750,8 @@ func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item
 		return recordFailure(ctx, deps, entry, broadcast, fmt.Errorf("upscaling: %w", err))
 	}
 
-	// The upscaler returns a PNG by default; store a real JPEG in the .jpg sidecar. This runs before
-	// the backup and before anything is written, can never fail the run, and falls back to the
-	// upscaler's bytes.
-	upscaled = sidecarJPEG(ctx, deps, item, thumbAbs, upscaled)
-
+	// The upscaler returns a PNG by default; thumbwrite.Replace (writeThumbnailFile) converts it
+	// to the JPEG that goes into the .jpg sidecar.
 	// backupCreated is true only when THIS run wrote the backup, so a failed run removes exactly
 	// that one and never an older (true original) backup from an earlier enhancement.
 	backupCreated := false
@@ -856,36 +851,6 @@ func removeBackup(ctx context.Context, deps Deps, id int64) {
 	}
 }
 
-// convertToJPEG is the PNG/WebP-to-JPEG converter (a seam so tests can inject a failure);
-// production always uses imageproc.BytesToJPEG.
-var convertToJPEG = imageproc.BytesToJPEG
-
-// sidecarJPEG returns the bytes to write as the item's sidecar for an upscaler result: data
-// unchanged when it is already a JPEG (never re-encoded) or not a recognisable raster image, else
-// data converted to a full-resolution JPEG (ffmpeg, near-lossless, alpha flattened onto black).
-// A failed conversion is logged and the original bytes are returned, so a conversion problem never
-// blocks an enhancement (the old behaviour: a PNG stored under the .jpg name).
-//
-// Only a real sidecar is converted: never an image item (its "thumbnail" is the media file
-// itself) and never a destination that isn't a .jpg/.jpeg.
-func sidecarJPEG(ctx context.Context, deps Deps, item models.LibraryItem, thumbAbs string, data []byte) []byte {
-	if item.MediaType != nil && *item.MediaType == "image" {
-		return data
-	}
-	if ext := strings.ToLower(filepath.Ext(thumbAbs)); ext != ".jpg" && ext != ".jpeg" {
-		return data
-	}
-	if !imageproc.NeedsJPEGConversion(data) {
-		return data
-	}
-	out, err := convertToJPEG(ctx, deps.FFmpegPath, data)
-	if err != nil {
-		log.Printf("thumbnailenhance: item %d: converting the enhanced thumbnail to JPEG failed, keeping the upscaler's original bytes: %v", item.ID, err)
-		return data
-	}
-	return out
-}
-
 // writeThumbnailFile replaces an item's sidecar thumbnail with data through the
 // shared safe-replace (thumbwrite.Replace): the sidecar, the old derivatives and
 // the library row are untouched on error. Gin-context-free so it's callable from
@@ -897,6 +862,7 @@ func writeThumbnailFile(ctx context.Context, deps Deps, id int64, thumbAbs strin
 		Repo:       deps.LibraryRepo,
 		FFmpegPath: deps.FFmpegPath,
 		ImagesRoot: deps.ImagesRoot,
+		MediaRoot:  deps.MediaRoot,
 		ID:         id,
 		ThumbAbs:   thumbAbs,
 		Data:       data,

@@ -537,11 +537,11 @@ automatic retention sweep. `200 {"deleted": <n>}`.
 | POST | `/api/library/:id/thumbnail/quick-grab` | Grab one random video frame as thumbnail |
 | GET | `/api/library/:id/thumbnail/timestamps` | Pick N candidate-frame timestamps (read-only, no extraction) |
 | GET | `/api/library/:id/thumbnail/candidates` | Extract N candidate frames (read-only) |
-| POST | `/api/library/:id/thumbnail` | Set the thumbnail from a supplied image |
+| POST | `/api/library/:id/thumbnail` | Set the thumbnail from a supplied image (a non-JPEG image is stored in the `.jpg` sidecar as a real JPEG, transparency flattened onto black) |
 | DELETE | `/api/library/:id/thumbnail` | Remove the thumbnail |
 | POST | `/api/library/:id/thumbnail/gallery` | Save an image to the item's thumbnail gallery |
 | GET | `/api/library/:id/thumbnail/gallery` | List the item's saved gallery images |
-| POST | `/api/library/:id/thumbnail/gallery/:galleryId/apply` | Apply a saved gallery image as the active thumbnail |
+| POST | `/api/library/:id/thumbnail/gallery/:galleryId/apply` | Apply a saved gallery image as the active thumbnail (stored as a real JPEG sidecar; the gallery file keeps its format) |
 | POST | `/api/library/:id/thumbnail/gallery/bulk-favorite` | Favorite/unfavorite saved gallery images (all-or-nothing) |
 | POST | `/api/library/:id/thumbnail/gallery/bulk-delete` | Remove saved gallery images (all-or-nothing) |
 | POST | `/api/library/:id/thumbnail/match` | Start an ad-hoc frame-match job for this item |

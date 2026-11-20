@@ -132,6 +132,7 @@ done
 type fixture struct {
 	t          *testing.T
 	repo       *repository.LibraryRepo
+	db         *sql.DB
 	mediaRoot  string
 	imagesRoot string
 	ffmpeg     string
@@ -147,7 +148,7 @@ func newFixture(t *testing.T, failFFmpeg, withThumb bool) *fixture {
 	t.Helper()
 	conn := openTestDB(t)
 	root := t.TempDir()
-	f := &fixture{t: t, repo: repository.NewLibraryRepo(conn), mediaRoot: filepath.Join(root, "media"), imagesRoot: filepath.Join(root, "images"),
+	f := &fixture{t: t, db: conn, repo: repository.NewLibraryRepo(conn), mediaRoot: filepath.Join(root, "media"), imagesRoot: filepath.Join(root, "images"),
 		thumbRel: "show/Video.jpg"}
 	if err := os.MkdirAll(filepath.Join(f.mediaRoot, "show"), 0o755); err != nil {
 		t.Fatal(err)
