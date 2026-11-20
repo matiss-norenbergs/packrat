@@ -116,15 +116,13 @@ None are scheduled. Sizes are guesses.
 
 **Loose ends**
 
-- **Run `govulncheck` (S).** It has never run: the vulnerability database download was blocked in the audit
-  sandbox, so dependency CVEs are unchecked. Try it from a normal network, or add it as a CI job.
-- **Backup upload UI size check (S).** The server accepts 128 MB on the backup import routes (the global body limit
-  stays 50 MB). Check whether the upload dialog has its own client-side limit and raise it to match.
+- **Make `govulncheck` required once its findings are dealt with (S).** The `govulncheck` job in `ci.yml` is
+  report-only (`continue-on-error`, findings go to the job summary and a warning annotation). Its first real
+  run happens in CI: the sandbox this was written in couldn't reach `vuln.go.dev`, so there is no list of
+  findings yet. Read the job summary, fix or accept what it reports, then drop `continue-on-error` and add it
+  to the required checks (branch protection is configured outside the repo).
 - **Trim UI frame cap (S).** `ExtractFrameRange` stops at 300 frames (`maxFrameCount` in
   `downloader/trim_frames.go`), so a very long range is cut off.
-- **CI step timeouts (S).** The `desktop` and `e2e` jobs have hung for hours on the "Install Linux dependencies"
-  step (an `apt` stall, not a code problem), and only a manual re-run recovered. A `timeout-minutes` on those jobs
-  (and a retry around `apt-get update`) would make a hang fail in minutes.
 
 ## Dependencies
 

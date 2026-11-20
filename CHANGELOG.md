@@ -12,6 +12,9 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-20
+- **CI hardening: job and step timeouts, an `apt` retry, a report-only `govulncheck` job and a de-flaked queue test** — the `desktop` and `e2e` jobs have hung for hours on "Install Linux dependencies" (an `apt` stall). Linux dependencies now install through `.github/scripts/apt-install.sh`: up to 3 attempts, each hard-limited to 150 s with `Acquire::Retries=3`, failing the step if all fail. That step has `timeout-minutes: 10` (healthy runs take 25-55 s), and the `desktop` (ci.yml), `desktop / build` (desktop.yml, so release installer builds too) and `e2e` jobs have `timeout-minutes: 30` (healthy runs: 1-6 min). A new `govulncheck` job in ci.yml runs `govulncheck ./...` from `backend/`; it is report-only (never fails the PR check), so findings are written to the job summary and an annotation. `TestEnqueueWithBusyWorkerStaysFIFO` and `TestEnqueueDoesNotBlockWithoutWorkers` no longer assert a wall-clock bound on the enqueues (it failed once on a loaded runner); they still fail if `Enqueue` blocks, and still check the rows, the Queued count and the FIFO order.
+
 ## 2026-11-19
 - **A "Use the fetched title" button in the Title field of New Download and Bulk Download rows** — the Advanced Title field only showed the fetched title as a placeholder, so editing it meant retyping or copying it from elsewhere. Once the preview has a title, a small button at the field's right edge copies it in as editable text and focuses the field with the cursor at the end; it hides while the field already equals the title. The field is still never pre-filled, so an empty Title remains "no override".
 
