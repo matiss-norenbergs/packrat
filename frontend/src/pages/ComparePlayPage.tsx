@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
-import { ArrowLeft, Maximize, Minimize, Pause, Play } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { CompareGlobalBar } from "@/components/library/CompareGlobalBar"
 import { ComparePlayerCell } from "@/components/library/ComparePlayerCell"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
+import { useCompareGroup } from "@/components/library/useCompareGroup"
+import { describeKeyTarget, isTypingTarget, resolveGlobalKey } from "@/components/player/playerKeys"
 import { useLibraryItemsByIds } from "@/hooks/useLibrary"
 
 // Zoom-style gallery sizing — as square a grid as possible (columns first,
@@ -31,16 +33,18 @@ function readBoolSetting(key: string): boolean {
   return raw === null ? true : raw === "true"
 }
 
-// Plays up to 6 items at once, each with its own independent seek bar
-// (native controls, per ComparePlayerCell) — the bottom bar just reaches
-// into every currently-mounted element to trigger a batched play/pause/
-// volume change; each cell's own controls still work independently
-// afterward, since this never touches anything beyond those three
-// properties.
+// Plays up to 6 items at once. Each cell has its own skin (independent controls, ComparePlayerCell); the docked
+// global bar (CompareGlobalBar) drives all cells through useCompareGroup: play/pause, one seek bar, master volume
+// and speed. Keyboard: a focused cell handles the shortcuts for itself alone (its skin, shortcuts="focus"); with no
+// cell focused the same keys act on all cells (resolveGlobalKey, registered on the document below).
 export function ComparePlayPage() {
   const [searchParams] = useSearchParams()
-  const mediaRefs = useRef<Map<number, HTMLMediaElement>>(new Map())
-  const containerRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null) // portal target for the speed menu
+  const setContainer = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node
+    setContainerEl(node)
+  }, [])
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   const [preload, setPreload] = useState(() => readBoolSetting(PRELOAD_STORAGE_KEY))
@@ -97,34 +101,51 @@ export function ComparePlayPage() {
   const { items: fetchedItems, isLoading } = useLibraryItemsByIds(ids)
   const items = useMemo(() => fetchedItems.filter((i) => i.status !== "ghost"), [fetchedItems])
 
-  const registerMedia = (id: number) => (el: HTMLMediaElement | null) => {
-    if (el) mediaRefs.current.set(id, el)
-    else mediaRefs.current.delete(id)
-  }
+  const itemIds = useMemo(() => items.map((i) => i.id), [items])
+  const group = useCompareGroup(itemIds)
 
   const allReady = items.length > 0 && items.every((item) => readyIds.has(item.id))
   const readyCount = items.filter((item) => readyIds.has(item.id)).length
   const playBlocked = waitForReady && !allReady
+  const { anyPlaying } = group.summary
 
-  // Tracks this button's own last command, not each cell's actual playing
-  // state — a per-cell native control can still pause/play independently
-  // afterward (see the component doc comment above), same looseness the
-  // separate Play/Pause buttons this replaced already had.
-  const [isPlaying, setIsPlaying] = useState(false)
-
+  // The button label follows the cells' real state: "Pause all" while any cell is playing. Wait for ready blocks
+  // starting (never pausing), for the button and the shortcut alike.
   const togglePlayAll = () => {
-    if (isPlaying) {
-      for (const el of mediaRefs.current.values()) el.pause()
-      setIsPlaying(false)
-      return
-    }
-    if (playBlocked) return
-    for (const el of mediaRefs.current.values()) el.play()
-    setIsPlaying(true)
+    if (anyPlaying) return group.pauseAll()
+    if (playBlocked) return group.showOsd(`Buffering… (${readyCount}/${items.length} ready)`)
+    group.playAll()
   }
-  const setAllVolume = (volume: number) => {
-    for (const el of mediaRefs.current.values()) el.volume = volume
+
+  // Global keyboard scope: acts only when no cell has focus (resolveGlobalKey decides); the handler is
+  // registered once and reads the latest closures through a ref.
+  const keyRef = useRef<(e: KeyboardEvent) => void>(() => {})
+  const onKey = (e: KeyboardEvent) => {
+    const cmd = resolveGlobalKey({
+      key: e.key,
+      shiftKey: e.shiftKey,
+      ctrlKey: e.ctrlKey,
+      altKey: e.altKey,
+      metaKey: e.metaKey,
+      defaultPrevented: e.defaultPrevented,
+      typing: isTypingTarget(e.target),
+      inCell: e.target instanceof Element && !!e.target.closest("[data-slot=player]"),
+      target: describeKeyTarget(e.target),
+    })
+    if (!cmd) return
+    e.preventDefault()
+    if (cmd.type === "toggle") togglePlayAll()
+    else if (cmd.type === "fullscreen") toggleFullscreen()
+    else group.run(cmd)
   }
+  useEffect(() => {
+    keyRef.current = onKey
+  })
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => keyRef.current(e)
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [])
 
   if (isLoading) return null
 
@@ -132,7 +153,9 @@ export function ComparePlayPage() {
 
   return (
     <RevealAllProvider>
-      <div ref={containerRef} className="flex h-screen w-screen flex-col overflow-hidden bg-black">
+      {/* tabIndex -1: a click on the empty page or the global bar focuses the container, which takes focus out of
+          any cell so the global keyboard scope applies. */}
+      <div ref={setContainer} tabIndex={-1} className="flex h-screen w-screen flex-col overflow-hidden bg-black outline-none">
         <div className="flex shrink-0 items-center gap-2 bg-background px-2 py-1.5">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -160,7 +183,7 @@ export function ComparePlayPage() {
               <ComparePlayerCell
                 key={item.id}
                 item={item}
-                registerMedia={registerMedia(item.id)}
+                registerMedia={group.registerMedia(item.id)}
                 preload={preload}
                 onReadyChange={setItemReady(item.id)}
               />
@@ -168,78 +191,30 @@ export function ComparePlayPage() {
           </div>
         )}
 
-        {/* A bottom "player bar" — imitates a single global player, mirroring
-            where a native player's own controls would sit. */}
-        <div className="flex shrink-0 items-center gap-2 border-t bg-background px-3 py-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon-sm"
-                onClick={togglePlayAll}
-                disabled={!isPlaying && playBlocked}
-              >
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {!isPlaying && playBlocked
-                ? `Buffering… (${readyCount}/${items.length} ready)`
-                : isPlaying
-                  ? "Pause all"
-                  : "Play all"}
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Stacked two-row block so both toggles fit compactly, but the
-              block itself is still just one item in this single-row bar
-              (items-center keeps it vertically centered against the
-              buttons on either side). scale-90 shrinks the switch as a
-              whole (track+thumb together, so the thumb still fills the
-              track correctly) rather than fighting its own dimensions. */}
-          <div className="ml-3 flex flex-col justify-center gap-0.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <label className="flex items-center gap-1 text-[11px] leading-none text-muted-foreground">
-                  <Switch checked={preload} onCheckedChange={setPreload} className="scale-90" />
-                  Preload
-                </label>
-              </TooltipTrigger>
-              <TooltipContent>Buffer every file aggressively as soon as the page opens, not just once you hit play</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <label className="flex items-center gap-1 text-[11px] leading-none text-muted-foreground">
-                  <Switch checked={waitForReady} onCheckedChange={setWaitForReady} className="scale-90" />
-                  Wait for ready
-                </label>
-              </TooltipTrigger>
-              <TooltipContent>Disable "Play all" until every file has buffered enough to play without stalling</TooltipContent>
-            </Tooltip>
-          </div>
-
-          <label className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-            Volume
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              defaultValue={1}
-              onChange={(e) => setAllVolume(Number(e.target.value))}
-              className="w-32"
-            />
-          </label>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button type="button" variant="secondary" size="icon-sm" onClick={toggleFullscreen}>
-                {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{isFullscreen ? "Exit full screen" : "Full screen"}</TooltipContent>
-          </Tooltip>
-        </div>
+        <CompareGlobalBar
+          anyPlaying={anyPlaying}
+          playBlocked={playBlocked}
+          readyCount={readyCount}
+          total={items.length}
+          onTogglePlay={togglePlayAll}
+          currentTime={group.summary.currentTime}
+          duration={group.summary.duration}
+          onSeek={group.seekAll}
+          volume={group.volume}
+          muted={group.muted}
+          onVolume={group.setVolumeAll}
+          onToggleMute={group.toggleMuteAll}
+          rate={group.rate}
+          onRate={group.setRateAll}
+          menuContainer={containerEl}
+          preload={preload}
+          onPreload={setPreload}
+          waitForReady={waitForReady}
+          onWaitForReady={setWaitForReady}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          osd={group.osd}
+        />
       </div>
     </RevealAllProvider>
   )
