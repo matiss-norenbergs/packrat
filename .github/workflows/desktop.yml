@@ -45,6 +45,7 @@ jobs:
             target: x86_64-apple-darwin
             arch: x64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     env:
       VERSION: ${{ inputs.version }}
     steps:
@@ -60,9 +61,9 @@ jobs:
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          .github/scripts/apt-install.sh \
             libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev \
             libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
 
