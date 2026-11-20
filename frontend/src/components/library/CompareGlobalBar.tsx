@@ -50,7 +50,7 @@ export function CompareGlobalBar(p: CompareGlobalBarProps) {
           key={p.osd.id}
           role="status"
           data-slot="compare-osd"
-          className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-3 -translate-x-1/2 rounded-lg bg-(--player-scrim) px-3 py-1.5 text-sm font-medium text-(--player-fg) tabular-nums shadow-md ring-1 ring-border"
+          className="pointer-events-none absolute inset-y-0 left-1/2 z-10 my-auto h-fit -translate-x-1/2 rounded-lg bg-(--player-scrim) px-3 py-1.5 text-sm font-medium text-(--player-fg) tabular-nums shadow-md ring-1 ring-border"
         >
           {p.osd.text}
         </div>
