@@ -704,7 +704,7 @@ control skin instead of the browser's native bar (the compare player and the Tri
 the browser's own controls). It sits on the page's own `<video>`/`<audio>` element, so resume
 position, **Continue Watching** progress, autoplay and the private-item lock work exactly as before.
 
-- **Video** — a floating glass bar over the bottom of the picture: a seek bar (thickens on hover,
+- **Video** — a floating glass bar over the bottom of the picture (in fullscreen the blur is replaced by a more opaque solid scrim): a seek bar (thickens on hover,
   floating time bubble following the pointer, a lighter buffered track behind the played part in
   your accent color), then play/pause, volume (the mute button; the slider slides out on
   hover/focus), `1:23 / 45:10`, and on the right a speed pill (0.5×–2×) and fullscreen. The bar

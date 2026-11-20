@@ -16,6 +16,7 @@ import {
   playerCssVars,
 } from "./playerTheme"
 import { PLAYER_HOT_ZONE_FRACTION } from "./playerTheme"
+import { barPaint, parsePlayerFx } from "./playerFx"
 import { computeShowBar, isPointerOnBar } from "./playerVisibility"
 import { useMediaState } from "./useMediaState"
 
@@ -81,6 +82,7 @@ export function PlayerSkin({
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const counter = useRef(0)
   // TEMPORARY diagnostics: ?playerDebug=1 shows the values behind showBar (to be removed once the fullscreen bar report is settled).
+  const fx = useMemo(() => (typeof location === "undefined" ? parsePlayerFx("") : parsePlayerFx(location.search)), [])
   const debug = useMemo(() => typeof location !== "undefined" && new URLSearchParams(location.search).get("playerDebug") === "1", [])
 
   const bump = useCallback(() => {
@@ -275,6 +277,7 @@ export function PlayerSkin({
     ...(compact ? { "--player-bar-inset": `${PLAYER_COMPACT_INSET_PX}px` } : {}),
   }
 
+  const paint = barPaint({ overlay, fullscreen: isFullscreen, visible: showBar, fx })
   const bar = (
     <div
       ref={barRef}
@@ -282,14 +285,10 @@ export function PlayerSkin({
       data-visible={showBar}
       className={
         overlay
-          ? `absolute inset-x-(--player-bar-inset) bottom-(--player-bar-inset) z-20 rounded-(--player-bar-radius) p-(--player-bar-padding) transition-opacity duration-(--player-fade) motion-reduce:transition-none ${showBar ? "opacity-100" : "pointer-events-none opacity-0"}`
+          ? `absolute inset-x-(--player-bar-inset) bottom-(--player-bar-inset) z-20 rounded-(--player-bar-radius) p-(--player-bar-padding) ${paint.fade ? "transition-opacity duration-(--player-fade) motion-reduce:transition-none" : ""} ${showBar ? "opacity-100" : "pointer-events-none opacity-0"}`
           : "relative z-20 w-full rounded-(--player-bar-radius) p-(--player-bar-padding)"
       }
-      style={{
-        background: `color-mix(in oklab, var(--player-scrim) calc(var(${overlay ? "--player-bar-opacity" : "--player-bar-opacity-static"}) * 100%), transparent)`,
-        backdropFilter: "blur(var(--player-bar-blur))",
-        WebkitBackdropFilter: "blur(var(--player-bar-blur))",
-      }}
+      style={paint.style}
       onFocus={() => setKbFocus(!pointerFocusRef.current)}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setKbFocus(false)
@@ -350,7 +349,7 @@ export function PlayerSkin({
   )
 
   const debugReadout = debug && (
-    <PlayerDebug values={{ paused: state.paused, active, pointerOnBar, menuOpen, kbFocus, isFullscreen, showBar, waiting: state.waiting }} moves={moves} />
+    <PlayerDebug values={{ paused: state.paused, active, pointerOnBar, menuOpen, kbFocus, isFullscreen, showBar, waiting: state.waiting }} moves={moves} showBar={showBar} barRef={barRef} mediaRef={mediaRef} fx={fx} />
   )
 
   const frameProps = {
@@ -378,7 +377,7 @@ export function PlayerSkin({
     },
     onFocus: bump,
   }
-  const frameBase = "player-skin relative isolate select-none text-(--player-fg) outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+  const frameBase = `${fx.has("videolayer") ? "player-fx-videolayer " : ""}player-skin relative isolate select-none text-(--player-fg) outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`
 
   if (overlay) {
     return (
@@ -447,19 +446,67 @@ function Placeholder({ small = false }: { small?: boolean }) {
   )
 }
 
-// TEMPORARY diagnostics for the fullscreen-bar report (?playerDebug=1): live values behind showBar plus pointer-event counters.
-function PlayerDebug({ values, moves }: { values: Record<string, boolean>; moves: RefObject<{ frame: number; doc: number; last: number }> }) {
-  const [counts, setCounts] = useState({ frame: 0, doc: 0, ago: -1 })
+// TEMPORARY diagnostics for the fullscreen-bar report (?playerDebug=1): live values behind showBar, pointer-event
+// counters, the active ?playerFx flags, the video's pixel size, and a rolling log of the last 12 transitions of
+// showBar (the React state), the bar's DOM data-visible, and its computed opacity bucket / visibility, with
+// timestamps in ms from the first entry. If the bar flashes: showBar flipping true->false within ~200 ms is a
+// logic problem; showBar staying true while the bar isn't painted is a painting problem.
+const LOG_LIMIT = 12
+function PlayerDebug({
+  values,
+  moves,
+  showBar,
+  barRef,
+  mediaRef,
+  fx,
+}: {
+  values: Record<string, boolean>
+  moves: RefObject<{ frame: number; doc: number; last: number }>
+  showBar: boolean
+  barRef: RefObject<HTMLDivElement | null>
+  mediaRef: RefObject<HTMLMediaElement | null>
+  fx: ReadonlySet<string>
+}) {
+  const [counts, setCounts] = useState({ frame: 0, doc: 0, ago: -1, size: "" })
+  const [log, setLog] = useState<string[]>([])
+  const entries = useRef<Array<{ at: number; text: string }>>([])
+  const t0 = useRef(0)
+  const push = useCallback((text: string) => {
+    const now = performance.now()
+    if (!t0.current) t0.current = now
+    entries.current = [...entries.current, { at: Math.round(now - t0.current), text }].slice(-LOG_LIMIT)
+  }, [])
+
   useEffect(() => {
+    push(`showBar=${showBar}`)
+  }, [showBar, push])
+
+  useEffect(() => {
+    let last = ""
     const t = setInterval(() => {
+      const bar = barRef.current
+      if (bar) {
+        const cs = getComputedStyle(bar)
+        const op = Number(cs.opacity)
+        const bucket = op <= 0.01 ? "0" : op >= 0.99 ? "1" : "fading"
+        const cur = `dom=${bar.getAttribute("data-visible")} opacity=${bucket} visibility=${cs.visibility}`
+        if (cur !== last) {
+          last = cur
+          push(cur)
+        }
+      }
       const m = moves.current
-      setCounts({ frame: m.frame, doc: m.doc, ago: m.last ? Date.now() - m.last : -1 })
-    }, 200)
+      const v = mediaRef.current as HTMLVideoElement | null
+      setCounts({ frame: m.frame, doc: m.doc, ago: m.last ? Date.now() - m.last : -1, size: v && "videoWidth" in v ? `${v.videoWidth}x${v.videoHeight}` : "" })
+      setLog(entries.current.map((e) => `${String(e.at).padStart(6)}ms ${e.text}`))
+    }, 50)
     return () => clearInterval(t)
-  }, [moves])
+  }, [barRef, mediaRef, moves, push])
+
   return (
     <pre className="pointer-events-none absolute left-2 top-12 z-40 max-w-[90%] whitespace-pre-wrap rounded bg-black/80 p-2 font-mono text-[11px] leading-tight text-lime-300" data-slot="player-debug">
-      {JSON.stringify({ ...values, frameMoves: counts.frame, docMoves: counts.doc, lastMoveMsAgo: counts.ago }, null, 1)}
+      {JSON.stringify({ ...values, frameMoves: counts.frame, docMoves: counts.doc, lastMoveMsAgo: counts.ago, video: counts.size, fx: [...fx] }, null, 1)}
+      {"\n" + log.join("\n")}
     </pre>
   )
 }

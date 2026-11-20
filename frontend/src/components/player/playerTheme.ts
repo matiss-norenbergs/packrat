@@ -57,3 +57,10 @@ export function playerCssVars(): Record<string, string> {
 export const PLAYER_BAR_OPACITY_STATIC = 0.92 // scrim alpha when the bar sits on a page, not over a video (audio, mini player)
 export const PLAYER_COMPACT_INSET_PX = 6
 export const PLAYER_COVER_PX = 36 // compact audio cover
+
+// In fullscreen the glass bar drops its backdrop-filter and uses a more opaque solid scrim: a blur over a
+// playing video is unreliable there (Chromium can promote the video to a hardware overlay, and the bar then
+// flickers or isn't painted for some videos). Outside fullscreen the glass look is unchanged.
+export const PLAYER_BAR_OPACITY_FULLSCREEN = 0.78
+// `?playerFx=solid`: solid scrim and no backdrop-filter anywhere.
+export const PLAYER_BAR_OPACITY_SOLID = 0.85

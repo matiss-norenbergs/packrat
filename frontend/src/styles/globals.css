@@ -434,3 +434,9 @@
     width: 100%;
   }
 }
+/* TEMPORARY (?playerFx=videolayer): plain compositing for the host's <video>, to test whether Chromium's
+   hardware video overlay is what makes the control bar flicker in fullscreen. */
+.player-fx-videolayer video {
+    transform: translateZ(0);
+    will-change: transform;
+}
