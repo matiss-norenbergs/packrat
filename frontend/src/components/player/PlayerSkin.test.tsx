@@ -55,6 +55,13 @@ function setup(props: Parameters<typeof Harness>[0] = {}) {
   return { el, s, ...view }
 }
 
+const frame = () => screen.getByRole("group")
+// jsdom has no layout: give the frame and bar real boxes (1000x600 frame, bar along the bottom) for the geometry checks.
+const rect = (left: number, top: number, right: number, bottom: number) => ({ left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON() {} })
+function stubRects() {
+  frame().getBoundingClientRect = () => rect(0, 0, 1000, 600)
+  frame().querySelector("[data-slot=player-bar]")!.getBoundingClientRect = () => rect(12, 520, 988, 588)
+}
 const barVisible = () => screen.getByRole("group").querySelector("[data-slot=player-bar]")!.getAttribute("data-visible")
 
 beforeEach(() => {
@@ -187,16 +194,116 @@ describe("PlayerSkin controls visibility", () => {
     expect(barVisible()).toBe("true")
   })
 
-  it("stays visible while the pointer is over the bar", () => {
+  it("stays visible while the pointer is over the bar (by geometry) and hides once it leaves", () => {
+    vi.useFakeTimers()
+    const { el } = setup()
+    stubRects()
+    act(() => void el.play())
+    fireEvent.pointerMove(frame(), { clientX: 500, clientY: 550 }) // on the bar
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS * 2))
+    expect(barVisible()).toBe("true")
+    fireEvent.pointerMove(frame(), { clientX: 500, clientY: 200 }) // away from it
+    expect(barVisible()).toBe("true") // active again right after a move
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+    expect(barVisible()).toBe("false")
+  })
+
+  it("the bottom hot zone shows and holds the bar", () => {
+    vi.useFakeTimers()
+    const { el } = setup()
+    stubRects()
+    act(() => void el.play())
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+    expect(barVisible()).toBe("false")
+    fireEvent.pointerMove(frame(), { clientX: 3, clientY: 500 }) // left of the bar, inside the bottom 20%
+    expect(barVisible()).toBe("true")
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS * 2))
+    expect(barVisible()).toBe("true")
+  })
+
+  it("paused -> play -> idle -> a pointer move shows the bar; a click to pause keeps it while paused", () => {
+    vi.useFakeTimers()
+    const { el } = setup()
+    stubRects()
+    expect(barVisible()).toBe("true") // paused
+    act(() => void el.play())
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+    expect(barVisible()).toBe("false")
+    fireEvent.pointerMove(frame(), { clientX: 400, clientY: 200 })
+    expect(barVisible()).toBe("true")
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+    expect(barVisible()).toBe("false")
+    const surface = frame().querySelector("[data-slot=player-surface]")!
+    fireEvent.pointerDown(surface, { clientX: 400, clientY: 200 })
+    fireEvent.click(surface)
+    act(() => void vi.advanceTimersByTime(300))
+    expect(el.pause).toHaveBeenCalled()
+    expect(barVisible()).toBe("true")
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS * 3))
+    expect(barVisible()).toBe("true") // stays while paused
+  })
+
+  it("a key that toggles playback wakes the hidden bar", () => {
     vi.useFakeTimers()
     const { el } = setup()
     act(() => void el.play())
-    const bar = screen.getByRole("group").querySelector("[data-slot=player-bar]")!
-    fireEvent.pointerEnter(bar)
-    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS * 2))
-    expect(barVisible()).toBe("true")
-    fireEvent.pointerLeave(bar)
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
     expect(barVisible()).toBe("false")
+    frame().focus()
+    fireEvent.keyDown(document.activeElement!, { key: "k" })
+    expect(barVisible()).toBe("true")
+  })
+
+  describe("in fullscreen", () => {
+    const enterFullscreen = () => {
+      Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => frame() })
+      act(() => void document.dispatchEvent(new Event("fullscreenchange")))
+    }
+    const leaveFullscreen = () => {
+      Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => null })
+      act(() => void document.dispatchEvent(new Event("fullscreenchange")))
+    }
+    afterEach(leaveFullscreen)
+
+    it("a move anywhere on the document wakes the bar even if the frame gets no event", () => {
+      vi.useFakeTimers()
+      const { el } = setup()
+      stubRects()
+      enterFullscreen()
+      act(() => void el.play())
+      act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+      expect(barVisible()).toBe("false")
+      fireEvent.mouseMove(document.body, { clientX: 400, clientY: 200 })
+      expect(barVisible()).toBe("true")
+      act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+      expect(barVisible()).toBe("false")
+      fireEvent.pointerMove(document.body, { clientX: 450, clientY: 250 })
+      expect(barVisible()).toBe("true")
+    })
+
+    it("entering fullscreen clears a stale 'pointer on the bar' so the bar can hide", () => {
+      vi.useFakeTimers()
+      const { el } = setup()
+      stubRects()
+      act(() => void el.play())
+      fireEvent.pointerMove(frame(), { clientX: 500, clientY: 550 }) // on the bar before fullscreen
+      enterFullscreen() // layout changes under the pointer; no leave event arrives
+      act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+      expect(barVisible()).toBe("false")
+    })
+
+    it("stops listening on the document after leaving fullscreen", () => {
+      vi.useFakeTimers()
+      const { el } = setup()
+      stubRects()
+      enterFullscreen()
+      act(() => void el.play())
+      leaveFullscreen()
+      act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+      expect(barVisible()).toBe("false")
+      fireEvent.mouseMove(document.body, { clientX: 400, clientY: 200 })
+      expect(barVisible()).toBe("false")
+    })
   })
 
   it("stays visible while keyboard focus is inside the bar", () => {

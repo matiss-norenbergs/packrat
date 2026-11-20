@@ -1422,7 +1422,9 @@ is gone. Fullscreen is requested on the skin's frame, and the speed menu is port
 survive it (standard Fullscreen API only; no webkit-prefixed fallback). Text and icons drawn over arbitrary video use scoped,
 theme-independent `--player-*` variables in `globals.css` (the one exception to theme-only colors);
 the seek fill follows `--primary`. Every size, duration, blur and opacity is a named constant in
-`playerTheme.ts`; pure logic (time formatting, pointer-to-time, stepping, ARIA text) is in `playerMath.ts`.
+`playerTheme.ts`; pure logic (time formatting, pointer-to-time, stepping, ARIA text) is in `playerMath.ts`, and the
+bar-visibility rules in `playerVisibility.ts`: "pointer on the bar" is decided from geometry on every move (bar box or the
+bottom hot zone), never from `pointerenter`/`leave`, and while fullscreen the skin also listens on `document`.
 The compare player and the Trim dialog deliberately keep native controls.
 
 ## Floating action dock

@@ -709,7 +709,7 @@ position, **Continue Watching** progress, autoplay and the private-item lock wor
   your accent color), then play/pause, volume (the mute button; the slider slides out on
   hover/focus), `1:23 / 45:10`, and on the right a speed pill (0.5×–2×) and fullscreen. The bar
   fades in on pointer movement or focus and hides after about 2.5 s while playing; it stays while
-  paused, under the pointer, with a menu open or with keyboard focus inside it. While hidden, a
+  paused, while the pointer is over it or anywhere along the bottom fifth of the video (an invisible hot zone), with a menu open or with keyboard focus inside it; in fullscreen a move anywhere wakes it. While hidden, a
   thin progress line stays at the bottom edge. Click plays/pauses (with a brief pulse), double-click
   toggles fullscreen (the whole player, so the controls stay), and a spinner shows while buffering.
 - **Audio** — cover art (or a placeholder) with title and artist, the same bar below it.

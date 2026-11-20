@@ -15,6 +15,8 @@ import {
   PLAYER_VOLUME_STEP,
   playerCssVars,
 } from "./playerTheme"
+import { PLAYER_HOT_ZONE_FRACTION } from "./playerTheme"
+import { computeShowBar, isPointerOnBar } from "./playerVisibility"
 import { useMediaState } from "./useMediaState"
 
 // A control skin around a host-owned <video>/<audio>: the host renders the element (as `children`),
@@ -59,7 +61,7 @@ export function PlayerSkin({
   const allowFullscreen = overlay && !compact && (typeof document === "undefined" || document.fullscreenEnabled !== false)
 
   const [active, setActive] = useState(true) // recent pointer/keyboard activity
-  const [barHover, setBarHover] = useState(false)
+  const [pointerOnBar, setPointerOnBar] = useState(false) // from geometry on each move, not enter/leave events
   const [kbFocus, setKbFocus] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -69,13 +71,23 @@ export function PlayerSkin({
     frameRef.current = node
     setFrameEl(node)
   }, [])
+  const barRef = useRef<HTMLDivElement>(null)
   const hoveredRef = useRef(false)
+  const moves = useRef({ frame: 0, doc: 0, last: 0 }) // for the ?playerDebug=1 readout only
   const pointerFocusRef = useRef(false) // focus came from a mouse/touch press, not the keyboard
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const clickTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const osdTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const counter = useRef(0)
+  // TEMPORARY diagnostics: ?playerDebug=1 shows the values behind showBar (to be removed once the fullscreen bar report is settled).
+  const debug = useMemo(() => typeof location !== "undefined" && new URLSearchParams(location.search).get("playerDebug") === "1", [])
+  const [, setDebugTick] = useState(0)
+  useEffect(() => {
+    if (!debug) return
+    const t = setInterval(() => setDebugTick((n) => n + 1), 200)
+    return () => clearInterval(t)
+  }, [debug])
 
   const bump = useCallback(() => {
     setActive(true)
@@ -89,6 +101,17 @@ export function PlayerSkin({
     const timers = [hideTimer, clickTimer, osdTimer, flashTimer]
     return () => timers.forEach((t) => clearTimeout(t.current))
   }, [])
+
+  // Every pointer move (on the frame, and on the document while fullscreen) wakes the bar. "Pointer on the bar" is
+  // decided from geometry here, not from pointerenter/leave, which don't fire when the bar moves under a still pointer.
+  const onPointerActivity = useCallback(
+    (e: { clientX: number; clientY: number }) => {
+      hoveredRef.current = true
+      setPointerOnBar(isPointerOnBar(e.clientX, e.clientY, barRef.current?.getBoundingClientRect(), frameRef.current?.getBoundingClientRect(), PLAYER_HOT_ZONE_FRACTION))
+      bump()
+    },
+    [bump],
+  )
 
   const showOsd = useCallback((text: string) => {
     setOsd({ id: ++counter.current, text })
@@ -110,6 +133,7 @@ export function PlayerSkin({
       }
       clearTimeout(flashTimer.current)
       flashTimer.current = setTimeout(() => setFlash(null), PLAYER_FLASH_MS)
+      bump() // a click or key that toggles playback also wakes the bar (it then stays while paused)
     }
     const seek = (s: number) => {
       const m = el()
@@ -140,14 +164,35 @@ export function PlayerSkin({
       else void f.requestFullscreen?.()?.catch(() => {})
     }
     return { togglePlay, seek, setVolume, toggleMute, setRate, toggleFullscreen }
-  }, [mediaRef, overlay, showOsd])
+  }, [mediaRef, overlay, showOsd, bump])
 
   // Fullscreen is on the frame (video + controls), not the <video>, so the skin stays visible.
   useEffect(() => {
-    const onChange = () => setIsFullscreen(document.fullscreenElement === frameRef.current)
+    const onChange = () => {
+      setIsFullscreen(document.fullscreenElement === frameRef.current)
+      // The layout just changed under a (probably still) pointer, so any "pointer on the bar" belief is stale.
+      setPointerOnBar(false)
+      bump()
+    }
     document.addEventListener("fullscreenchange", onChange)
     return () => document.removeEventListener("fullscreenchange", onChange)
-  }, [])
+  }, [bump])
+
+  // While fullscreen, a move anywhere wakes the bar even if the frame itself doesn't receive the event.
+  useEffect(() => {
+    if (!isFullscreen) return
+    const onMove = (e: MouseEvent) => {
+      moves.current.doc++
+      moves.current.last = Date.now()
+      onPointerActivity(e)
+    }
+    document.addEventListener("pointermove", onMove)
+    document.addEventListener("mousemove", onMove)
+    return () => {
+      document.removeEventListener("pointermove", onMove)
+      document.removeEventListener("mousemove", onMove)
+    }
+  }, [isFullscreen, onPointerActivity])
 
   // Keyboard shortcuts: only while the player is focused or hovered, never while typing, never with Ctrl/Alt/Meta.
   useEffect(() => {
@@ -228,7 +273,7 @@ export function PlayerSkin({
     if (allowFullscreen) actions.toggleFullscreen()
   }
 
-  const showBar = !overlay || state.paused || active || barHover || menuOpen || kbFocus
+  const showBar = computeShowBar({ overlay, paused: state.paused, active, pointerOnBar, menuOpen, keyboardFocus: kbFocus })
   const hideCursor = isFullscreen && !showBar && !state.paused
   const progress = state.duration > 0 ? clamp(state.currentTime / state.duration, 0, 1) : 0
   const vars = {
@@ -238,6 +283,7 @@ export function PlayerSkin({
 
   const bar = (
     <div
+      ref={barRef}
       data-slot="player-bar"
       data-visible={showBar}
       className={
@@ -250,8 +296,6 @@ export function PlayerSkin({
         backdropFilter: "blur(var(--player-bar-blur))",
         WebkitBackdropFilter: "blur(var(--player-bar-blur))",
       }}
-      onPointerEnter={() => setBarHover(true)}
-      onPointerLeave={() => setBarHover(false)}
       onFocus={() => setKbFocus(!pointerFocusRef.current)}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setKbFocus(false)
@@ -311,6 +355,12 @@ export function PlayerSkin({
     </>
   )
 
+  const debugReadout = debug && (
+    <pre className="pointer-events-none absolute left-2 top-12 z-40 max-w-[90%] whitespace-pre-wrap rounded bg-black/80 p-2 font-mono text-[11px] leading-tight text-lime-300" data-slot="player-debug">
+      {JSON.stringify({ paused: state.paused, active, pointerOnBar, menuOpen, kbFocus, isFullscreen, showBar, waiting: state.waiting, frameMoves: moves.current.frame, docMoves: moves.current.doc, lastMoveMsAgo: moves.current.last ? Date.now() - moves.current.last : null }, null, 1)}
+    </pre>
+  )
+
   const frameProps = {
     ref: setFrame,
     tabIndex: 0,
@@ -320,13 +370,20 @@ export function PlayerSkin({
     "data-variant": variant,
     "data-kind": kind,
     style: vars as CSSProperties,
-    onPointerMove: bump,
-    onPointerDown: bump,
+    onPointerMove: (e: { clientX: number; clientY: number }) => {
+      moves.current.frame++
+      moves.current.last = Date.now()
+      onPointerActivity(e)
+    },
+    onPointerDown: onPointerActivity,
     // Capture on the frame (not the bar) so a press in the speed menu, which is portaled into the frame, counts too.
     onPointerDownCapture: () => (pointerFocusRef.current = true),
     onKeyDownCapture: () => (pointerFocusRef.current = false),
     onPointerEnter: () => (hoveredRef.current = true),
-    onPointerLeave: () => (hoveredRef.current = false),
+    onPointerLeave: () => {
+      hoveredRef.current = false
+      setPointerOnBar(false)
+    },
     onFocus: bump,
   }
   const frameBase = "player-skin relative isolate select-none text-(--player-fg) outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -337,6 +394,7 @@ export function PlayerSkin({
         {children}
         <div className="absolute inset-0 z-0" aria-hidden data-slot="player-surface" onClick={onSurfaceClick} onDoubleClick={onSurfaceDoubleClick} />
         {overlays}
+        {debugReadout}
         {!showBar && !state.error && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-(--player-hairline) bg-(--player-track-bg)" aria-hidden data-slot="player-hairline">
             <div className="h-full bg-(--player-accent)" style={{ width: `${progress * 100}%` }} />

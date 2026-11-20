@@ -2,6 +2,7 @@
 // "less blur" or "bigger handle" is a one-line change. PlayerSkin writes the CSS-valued ones
 // onto the frame as custom properties (see playerCssVars); the rest are read by the logic.
 
+export const PLAYER_HOT_ZONE_FRACTION = 0.2 // bottom share of the frame where a hovering pointer shows the bar and keeps it shown
 export const PLAYER_HIDE_DELAY_MS = 2500 // idle time before the bar hides while playing
 export const PLAYER_FADE_MS = 200 // bar fade in/out
 export const PLAYER_CLICK_DELAY_MS = 220 // wait for a possible double-click before toggling play
