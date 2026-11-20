@@ -86,8 +86,6 @@ None are scheduled. Sizes are guesses.
 
 **Small hardening**
 
-- **The FTS `library_au` trigger has no column list (S).** Every playback-position heartbeat rewrites the FTS row
-  (about 3 ms). Restrict it to the indexed columns.
 - **A1111 output writes PNG bytes into a `.jpg` sidecar (S).** Check whether consumers (Jellyfin, the frontend)
   sniff the content or trust the extension.
 - **`pruneEmptyParents` can race tier generation for the same directory (S).** A tiny window.
