@@ -143,16 +143,27 @@ func (r *historyRetrier) retry(ctx context.Context, id int64) (int64, *opError) 
 			// a ghost and no other download is filling it in.
 			if orig.GhostLibraryItemID != nil {
 				if item, err := r.libraryRepo.Get(ctx, *orig.GhostLibraryItemID); err == nil && item.Status == "ghost" {
-					if _, active, err := activeDownloadFor(ctx, r.downloadsRepo, item.ID); err == nil && active {
-						return 0, newOpError(http.StatusConflict, "a download is already in progress for this item")
-					}
 					req.GhostLibraryItemID = &item.ID
 				}
 			}
 		}
 	}
 
-	newID, err := enqueueDownload(ctx, r.mgr, r.collectionsRepo, r.settingsRepo, req)
+	enqueue := func() (int64, error) {
+		return enqueueDownload(ctx, r.mgr, r.collectionsRepo, r.settingsRepo, req)
+	}
+	var newID int64
+	if req.GhostLibraryItemID != nil {
+		// Reusing a ghost: check "no other download is filling it in" and
+		// enqueue atomically (two quick retries must not both queue).
+		var active bool
+		newID, active, err = enqueueIfNoActiveDownload(ctx, r.downloadsRepo, *req.GhostLibraryItemID, enqueue)
+		if active {
+			return 0, newOpError(http.StatusConflict, "a download is already in progress for this item")
+		}
+	} else {
+		newID, err = enqueue()
+	}
 	if err != nil {
 		status, msg := enqueueErrorStatus(err)
 		return 0, newOpError(status, msg)

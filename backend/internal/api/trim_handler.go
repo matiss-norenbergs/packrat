@@ -108,7 +108,7 @@ func PreviewLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot string, ytdl
 		}
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-		previewAbs, durationSeconds, fileSizeBytes, err := ytdlp.BuildTrimPreview(c.Request.Context(), ffprobePath, mediaAbs, mediaRoot, req.TrimStartSeconds, req.TrimEndSeconds)
+		previewAbs, durationSeconds, fileSizeBytes, err := ytdlp.BuildTrimPreview(c.Request.Context(), ffprobePath, mediaAbs, mediaRoot, id, req.TrimStartSeconds, req.TrimEndSeconds)
 		if err != nil {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "generating trim preview: " + err.Error()})
 			return
@@ -126,10 +126,11 @@ func PreviewLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot string, ytdl
 // any accept/discard file operation touches disk: it must resolve under
 // mediaRoot (pathsafe's usual traversal defense), sit directly inside
 // mediaRoot's shared TrimTmpDir (not some arbitrary collection folder), and
-// match the ".trim-preview-" naming convention BuildTrimPreview generates —
-// defense in depth against accepting/deleting an unrelated file even if the
-// path otherwise resolves safely under the root.
-func resolveTrimPreviewPath(mediaRoot, previewPath string) (string, error) {
+// match the ".trim-preview-" naming convention BuildTrimPreview generates, and
+// carry itemID in that name (the preview must have been cut from this very
+// item, not another item's) — defense in depth against accepting/deleting an
+// unrelated file even if the path otherwise resolves safely under the root.
+func resolveTrimPreviewPath(mediaRoot, previewPath string, itemID int64) (string, error) {
 	resolved, err := pathsafe.ResolveUnderRoot(mediaRoot, previewPath)
 	if err != nil {
 		return "", err
@@ -140,6 +141,9 @@ func resolveTrimPreviewPath(mediaRoot, previewPath string) (string, error) {
 	}
 	if !strings.Contains(filepath.Base(resolved), ".trim-preview-") {
 		return "", errors.New("preview path does not look like a trim preview file")
+	}
+	if owner, ok := downloader.TrimPreviewItemID(filepath.Base(resolved)); !ok || owner != itemID {
+		return "", errors.New("preview path belongs to a different item")
 	}
 	return resolved, nil
 }
@@ -184,7 +188,7 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 		}
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-		previewAbs, err := resolveTrimPreviewPath(mediaRoot, req.PreviewPath)
+		previewAbs, err := resolveTrimPreviewPath(mediaRoot, req.PreviewPath, id)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -196,11 +200,8 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 		}
 
 		probe := importer.Probe(c.Request.Context(), ffprobePath, mediaAbs)
-		durationSeconds := 0
-		if probe.DurationSeconds != nil {
-			durationSeconds = *probe.DurationSeconds
-		}
-		if err := repo.UpdateDurationAndSize(c.Request.Context(), id, durationSeconds, probe.SizeBytes); err != nil {
+		// A failed probe leaves DurationSeconds nil: store NULL ("unknown"), not 0.
+		if err := repo.UpdateDurationAndSize(c.Request.Context(), id, probe.DurationSeconds, probe.SizeBytes); err != nil {
 			writeServerError(c, err)
 			return
 		}
@@ -223,12 +224,13 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 // DiscardLibraryItemTrim deletes a generated preview file without touching
 // the original — used both by an explicit "Discard" and by the dialog
 // closing without an Accept. Doesn't need to look up the library item: the
-// preview path is validated purely against mediaRoot's shared TrimTmpDir
-// (resolveTrimPreviewPath), independent of which item it came from — the
-// :id in the route just keeps the URL shape consistent with preview/accept.
+// preview path is validated against mediaRoot's shared TrimTmpDir and the
+// item id embedded in the preview's name (resolveTrimPreviewPath), so one
+// item's dialog cannot delete another item's preview.
 func DiscardLibraryItemTrim(mediaRoot string, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if _, err := strconv.ParseInt(c.Param("id"), 10, 64); err != nil {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 			return
 		}
@@ -239,7 +241,7 @@ func DiscardLibraryItemTrim(mediaRoot string, ytdlp *downloader.YtDlpService) gi
 			return
 		}
 
-		resolved, err := resolveTrimPreviewPath(mediaRoot, req.PreviewPath)
+		resolved, err := resolveTrimPreviewPath(mediaRoot, req.PreviewPath, id)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return

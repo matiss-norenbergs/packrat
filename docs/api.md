@@ -774,7 +774,9 @@ the active-download `409` above.
 
 Re-queues a download from `originalUrl`, reusing the exact original type/quality/filename/
 audioFormat if the originating download row still exists, else falling back to app defaults.
-`400` no source URL. `409` the item already has a queued/running download. Response `201 {"id": <newDownloadId>}`.
+`400` no source URL. `409` the item already has a queued/running download (the check and the enqueue are atomic per item, so of
+two simultaneous requests exactly one gets `201` and the other `409`; the same holds for `from-url`, bulk
+redownload, which counts it under `skippedDownloading`, and a history retry that reuses a ghost). Response `201 {"id": <newDownloadId>}`.
 
 ### Redownload from a different URL
 
@@ -830,6 +832,8 @@ deleted (`DELETE /:id/file`) or found missing on disk (`scan-missing`).
   picked manually since there's no file/download row to infer it from — it only selects which
   placeholder icon shows until the item is downloaded. If `fetchThumbnail` and `originalUrl` are
   both set, a best-effort thumbnail fetch runs before responding (failure is logged, not fatal).
+  The row and its tag links are written in one transaction: if tagging fails the response is a `500`
+  (or `503` for a busy database) and no ghost is left behind, so a retry cannot create a duplicate.
   Response `201` with the full library item (`galleryCount` always `0` on a fresh item).
 - **`DELETE /api/library/:id/file?deleteThumbnail=true`** — removes just the media file (best-effort
   on disk) and flips the item to `status="ghost"`; all other metadata (tags, collection, artist,
@@ -886,15 +890,17 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   both fields omitted or item has no media file, `404` unknown item, `422` ffmpeg failure. Response
   `200`:
   ```json
-  { "previewPath": ".trim-tmp/.trim-preview-abc123.mp4", "durationSeconds": 113, "fileSizeBytes": 48213099 }
+  { "previewPath": ".packrat-tmp/vid.trim-preview-118-k3j2h.mp4", "durationSeconds": 113, "fileSizeBytes": 48213099 }
   ```
   `previewPath` is `MediaRoot`-relative, playable via the existing `/media-files/*path` route.
-- **`POST /api/library/:id/trim/accept`** — `{ "previewPath": ".trim-tmp/.trim-preview-abc123.mp4" }`.
+- **`POST /api/library/:id/trim/accept`** — `{ "previewPath": ".packrat-tmp/vid.trim-preview-118-k3j2h.mp4" }`.
   The server re-validates that the path resolves under `mediaRoot`, sits directly inside the shared
-  trim scratch dir, and matches the `.trim-preview-` naming convention (`400` otherwise — defense
-  against accepting an unrelated file). Overwrites the item's real media file with the preview,
-  re-probes duration/size, updates the DB. Response `200` with the full updated library item.
-- **`POST /api/library/:id/trim/discard`** — same body/validation as accept, just deletes the
+  trim scratch dir, matches the `.trim-preview-` naming convention, and carries *this item's* id in its name
+  (`<base>.trim-preview-<itemId>-<uid>.<ext>`; `400` otherwise — defense against accepting an unrelated
+  file or another item's preview). Overwrites the item's real media file with the preview,
+  re-probes duration/size, updates the DB (if ffprobe cannot read the result the stored duration becomes
+  `null`, i.e. "unknown", never `0`). Response `200` with the full updated library item.
+- **`POST /api/library/:id/trim/discard`** — same body/validation as accept (another item's preview is `400`), just deletes the
   preview file without touching the original. `204`.
 - **`GET /api/library/:id/trim/frames?start=5.0&end=8.0`** — read-only, nothing persisted. Decodes
   every frame in `[start, end)` (window up to 15 s) for frame-accurate seeking the browser's own
@@ -970,7 +976,8 @@ re-extracting/re-fetching. Cascade-deleted with the library item.
   ```
   Empty/omitted body saves a copy of the item's *current* thumbnail as-is; a non-empty
   `imageBase64` saves those exact bytes instead (e.g. a specific frame from "Choose from Video," or
-  a Frame Matching result). Optional `timestampSeconds` records the video position the frame came
+  a Frame Matching result). The saved file's extension follows the image's real format, sniffed from its
+  bytes (`.jpg`, `.png`, `.webp`; `.jpg` for the supplied-bytes path when the format isn't recognised). Optional `timestampSeconds` records the video position the frame came
   from (millisecond-precise float); omit/`null` when unknown. `400` item has neither a current
   thumbnail nor a supplied image. Response `201`:
   ```json
@@ -1564,6 +1571,16 @@ makes it private, but `false`/absent never makes a private artist public; `birth
 the artist has none, never overwriting one. An artist the restore creates gets the entry's flag and
 birthday. A birthday that is not a real `YYYY-MM-DD` date is skipped (logged) for that artist and
 never fails the restore. `preview` is unchanged (names and the new-artist count).
+
+Path-like fields in an uploaded bundle are cleaned on import (preview and restore alike), never rejected:
+each segment of a collection's `path` and of an item's `collectionPath` that is not already a single safe
+folder name goes through `fsutil.SanitizeFilename`, the cleaning the collection create/update endpoints apply
+to `rootPath` (`a/b` becomes `ab`, `..` becomes empty); segments that end up empty are dropped (so
+`["..", "Evil"]` is `["Evil"]`), and a path with nothing left means "no collection" (a collection entry is
+skipped, an item becomes uncategorized). Entries and references use the same function, so they still line
+up. A segment that is already a safe single folder name is kept as is (even with characters such as `:`), so
+existing collections match exactly as before. Each item's `folder` is cleaned like a download's `folder`
+(`fsutil.SanitizeRelativePath`).
 
 ### `POST /api/backup/preview/library` / `POST /api/backup/import/settings` / `POST /api/backup/import/library`
 

@@ -25,23 +25,41 @@ import (
 // the full-resolution original under MediaRoot (item.Thumbnail) if present,
 // falling back to the best available ImagesRoot derivative for items that
 // only have those (e.g. a ghost's fetched thumbnail has no MediaRoot copy,
-// see fetchGhostThumbnail). Also returns the source file's extension, since
-// the original is a JPEG but derivatives are WebP — the caller needs the
-// real extension to save a correctly-labeled copy, not a hardcoded one.
+// see fetchGhostThumbnail). Also returns the extension for the image's real
+// format, detected from the bytes: the sidecar is usually a JPEG but can be a
+// PNG (an upload or a fetched thumbnail), and derivatives are WebP — the
+// caller needs the real extension to save a correctly-labeled copy.
 func readCurrentThumbnail(mediaRoot, imagesRoot string, item *models.LibraryItem) (data []byte, ext string, err error) {
 	if item.Thumbnail != nil {
 		data, err = os.ReadFile(filepath.Join(mediaRoot, filepath.FromSlash(*item.Thumbnail)))
-		return data, ".jpg", err
+		return data, imageExtFor(data, ".jpg"), err
 	}
 	if item.ThumbnailMediumPath != nil {
 		data, err = os.ReadFile(filepath.Join(imagesRoot, filepath.FromSlash(*item.ThumbnailMediumPath)))
-		return data, filepath.Ext(*item.ThumbnailMediumPath), err
+		return data, imageExtFor(data, filepath.Ext(*item.ThumbnailMediumPath)), err
 	}
 	if item.ThumbnailSmallPath != nil {
 		data, err = os.ReadFile(filepath.Join(imagesRoot, filepath.FromSlash(*item.ThumbnailSmallPath)))
-		return data, filepath.Ext(*item.ThumbnailSmallPath), err
+		return data, imageExtFor(data, filepath.Ext(*item.ThumbnailSmallPath)), err
 	}
 	return nil, "", fmt.Errorf("item has no thumbnail")
+}
+
+// imageExtFor returns the file extension for the image format of data
+// (sniffed from its magic bytes), or fallback when it is not a format we
+// recognise.
+func imageExtFor(data []byte, fallback string) string {
+	switch http.DetectContentType(data) {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	case "image/gif":
+		return ".gif"
+	}
+	return fallback
 }
 
 // SaveLibraryThumbnailToGallery saves an image to a library item's
@@ -88,6 +106,7 @@ func SaveLibraryThumbnailToGallery(mediaRoot, imagesRoot string, libraryRepo *re
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid image data: " + err.Error()})
 				return
 			}
+			ext = imageExtFor(data, ext)
 		} else {
 			data, ext, err = readCurrentThumbnail(mediaRoot, imagesRoot, item)
 			if err != nil {

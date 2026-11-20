@@ -12,6 +12,7 @@ import (
 
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/models"
+	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/repository"
 )
 
@@ -270,6 +271,71 @@ func BuildLibraryBundle(
 	return bundle, nil
 }
 
+// cleanCollectionSegment returns the form of one collection path segment from
+// an uploaded bundle that a normal collection create would accept. A segment
+// that is already a single safe path element (non-empty, not "." or "..", no
+// separator, NUL or control character, contained under a root) is returned
+// unchanged, so collections that exist locally with an unusual but valid
+// name (for example one created by a folder scan) still match exactly.
+// Anything else goes through fsutil.SanitizeFilename, the same cleaning the
+// collection create/update handlers apply to rootPath ("a/b" becomes "ab",
+// ".." becomes ""). ok is false when nothing is left.
+func cleanCollectionSegment(seg string) (clean string, ok bool) {
+	if seg != "" && seg != "." && seg != ".." && !strings.ContainsAny(seg, "/\\\x00") && fsutil.SanitizeFilename(seg) != "" &&
+		strings.IndexFunc(seg, func(r rune) bool { return r < 0x20 }) < 0 {
+		if _, err := pathsafe.ResolveUnderRoot("/root", seg); err == nil {
+			return seg, true
+		}
+	}
+	clean = fsutil.SanitizeFilename(seg)
+	return clean, clean != ""
+}
+
+// cleanCollectionPath cleans every segment of a bundle collection path and
+// drops the ones that clean to nothing (an empty segment, "..", "..."), the
+// same way fsutil.SanitizeRelativePath drops them. A path that is left
+// empty means "no collection". It returns a new slice and never fails, so a
+// hostile bundle cannot abort a restore.
+func cleanCollectionPath(path []string) []string {
+	if len(path) == 0 {
+		return path
+	}
+	out := make([]string, 0, len(path))
+	for _, seg := range path {
+		if clean, ok := cleanCollectionSegment(seg); ok {
+			out = append(out, clean)
+		}
+	}
+	return out
+}
+
+// cleanBundlePaths returns a copy of bundle whose path-like fields are
+// cleaned: every collection's Path, every item's CollectionPath (the
+// reference to a collection by path, cleaned by the same function so they
+// still line up) and every item's Folder (a relative "/"-separated
+// download folder, cleaned like the enqueue path does). The caller's bundle
+// is not modified.
+func cleanBundlePaths(bundle LibraryBundle) LibraryBundle {
+	if len(bundle.Collections) > 0 {
+		cols := make([]CollectionEntry, len(bundle.Collections))
+		for i, c := range bundle.Collections {
+			c.Path = cleanCollectionPath(c.Path)
+			cols[i] = c
+		}
+		bundle.Collections = cols
+	}
+	if len(bundle.LibraryItems) > 0 {
+		items := make([]LibraryItemEntry, len(bundle.LibraryItems))
+		for i, it := range bundle.LibraryItems {
+			it.CollectionPath = cleanCollectionPath(it.CollectionPath)
+			it.Folder = fsutil.SanitizeRelativePath(it.Folder)
+			items[i] = it
+		}
+		bundle.LibraryItems = items
+	}
+	return bundle
+}
+
 // PreviewCollectionEntry is one collection in a preview's flattened list,
 // annotated with whether it already exists locally (matched by path) or
 // would be newly created by an import.
@@ -325,6 +391,7 @@ func PreviewLibraryBundle(
 	bundle LibraryBundle,
 ) (LibraryBundlePreview, error) {
 	var preview LibraryBundlePreview
+	bundle = cleanBundlePaths(bundle) // match what Apply will actually create
 
 	cols, err := collectionsRepo.List(ctx)
 	if err != nil {
@@ -478,6 +545,9 @@ func ApplyLibraryBundle(
 	ghostOnly bool,
 ) ([]ResolvedDownload, ApplyResult, error) {
 	var result ApplyResult
+	// Clean collection paths and folders first (never fails), so the entries
+	// and the items that reference them are cleaned identically.
+	bundle = cleanBundlePaths(bundle)
 
 	// Lock order: repo mutexes first, DB connection second. The pool has one
 	// connection, so opening the tx first and then waiting on a mutex that a

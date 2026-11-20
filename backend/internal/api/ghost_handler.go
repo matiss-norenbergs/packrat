@@ -60,22 +60,24 @@ func CreateGhostLibraryItem(libraryRepo *repository.LibraryRepo, imagesRoot stri
 			GenerateNFO:    req.GenerateNFO,
 			Status:         "ghost",
 		}
-		id, err := libraryRepo.Create(ctx, &item)
-		if err != nil {
-			writeServerError(c, err)
-			return
-		}
-
+		// Tags are resolved first (that takes the tags mutex, which must not be
+		// taken inside a transaction), then the row and its tag links are
+		// written in one transaction: a failure leaves no ghost behind, so a
+		// retry cannot create a second one. A tag created here and then
+		// orphaned by a later failure is harmless (it is just a name).
+		var tagIDs []int64
 		if len(req.Tags) > 0 {
-			tagIDs, err := tagsRepo.GetOrCreateByNames(ctx, req.Tags)
+			var err error
+			tagIDs, err = tagsRepo.GetOrCreateByNames(ctx, req.Tags)
 			if err != nil {
 				writeServerError(c, err)
 				return
 			}
-			if err := tagsRepo.SetForLibraryItem(ctx, id, tagIDs); err != nil {
-				writeServerError(c, err)
-				return
-			}
+		}
+		id, err := libraryRepo.CreateWithTags(ctx, &item, tagIDs)
+		if err != nil {
+			writeServerError(c, err)
+			return
 		}
 
 		if req.FetchThumbnail && req.OriginalURL != nil {

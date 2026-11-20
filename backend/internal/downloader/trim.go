@@ -412,6 +412,37 @@ func TrimTmpDir(mediaRoot string) string {
 	return filepath.Join(mediaRoot, trimTmpDirName)
 }
 
+// trimPreviewMarker is the infix every trim preview carries (strayfiles keys
+// on it too).
+const trimPreviewMarker = ".trim-preview-"
+
+// trimPreviewName is "<media base>.trim-preview-<item id>-<uid><ext>". The
+// item id binds the preview to the library item it was cut from: Accept and
+// Discard refuse a preview whose id is not the item in the URL
+// (TrimPreviewItemID), without keeping any server-side state.
+func trimPreviewName(base string, itemID int64, uid, ext string) string {
+	return fmt.Sprintf("%s%s%d-%s%s", base, trimPreviewMarker, itemID, uid, ext)
+}
+
+// TrimPreviewItemID reads the item id out of a trim preview file name built by
+// trimPreviewName. ok is false for anything else, including the older
+// "<base>.trim-preview-<uid><ext>" names (scratch files, never worth accepting).
+func TrimPreviewItemID(fileName string) (itemID int64, ok bool) {
+	i := strings.LastIndex(fileName, trimPreviewMarker)
+	if i < 0 {
+		return 0, false
+	}
+	idPart, rest, found := strings.Cut(fileName[i+len(trimPreviewMarker):], "-")
+	if !found || rest == "" {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(idPart, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, false
+	}
+	return id, true
+}
+
 // BuildTrimPreview writes a trimmed copy of mediaAbsPath — keeping
 // [trimStart, trimEnd] — to a new preview file under mediaRoot's shared
 // TrimTmpDir, never touching the original. Kept on the same volume as
@@ -424,7 +455,7 @@ func TrimTmpDir(mediaRoot string) string {
 // each boundary that isn't already a keyframe. Falls back to a single
 // whole-range re-encode when no valid keyframe split exists (e.g. the kept
 // range is shorter than one GOP).
-func (s *YtDlpService) BuildTrimPreview(ctx context.Context, ffprobePath, mediaAbsPath, mediaRoot string, trimStart, trimEnd *float64) (previewAbsPath string, durationSeconds int, fileSizeBytes int64, err error) {
+func (s *YtDlpService) BuildTrimPreview(ctx context.Context, ffprobePath, mediaAbsPath, mediaRoot string, itemID int64, trimStart, trimEnd *float64) (previewAbsPath string, durationSeconds int, fileSizeBytes int64, err error) {
 	ctx, cancel := context.WithTimeout(ctx, trimTimeout)
 	defer cancel()
 
@@ -464,7 +495,7 @@ func (s *YtDlpService) BuildTrimPreview(ctx context.Context, ffprobePath, mediaA
 	ext := filepath.Ext(mediaAbsPath)
 	base := strings.TrimSuffix(filepath.Base(mediaAbsPath), ext)
 	uid := strconv.FormatInt(time.Now().UnixNano(), 36)
-	previewAbsPath = filepath.Join(dir, fmt.Sprintf("%s.trim-preview-%s%s", base, uid, ext))
+	previewAbsPath = filepath.Join(dir, trimPreviewName(base, itemID, uid, ext))
 
 	info := probeVideoInfo(ctx, ffprobePath, mediaAbsPath)
 

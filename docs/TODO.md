@@ -69,18 +69,6 @@ None are scheduled. Sizes are guesses.
 
 - **Collection PATCH is a full replace (S).** Omitted `isPrivate`, `browseAsShow` and `artistId` are cleared
   instead of left alone. Decide whether PATCH should merge, then make it so (and update `api.md`).
-- **Ghost create keeps the row on a tagging failure (S).** It answers 500 but the ghost stays, so a retry makes a
-  second ghost. Create and tag in one transaction, or delete the row on failure.
-- **Duration stored as 0 after a trim when ffprobe fails (S).** It should be NULL so the UI shows "unknown".
-- **Double redownload race (S).** The active-download check and the enqueue are not atomic, so two quick
-  redownloads of one item can both queue.
-- **Unvalidated thumbnail bytes in `SetLibraryThumbnail` (S).** Any bytes are written as the sidecar. Decode with
-  `thumbwrite.Probe` first (JPEG/PNG), as the other thumbnail writers now do.
-- **Gallery extension (S).** `readCurrentThumbnail` labels every thumbnail `.jpg`, whatever the real format.
-- **Trim preview not bound to an item (S).** `trim_handler.go`: accept takes any valid `.trim-preview-*` path, not
-  just the one created for that item.
-- **Collection path segments from an uploaded bundle are not sanitized (S).** `..` or `a/b` in a name. Downloads
-  stay contained by `pathsafe`, but the segment should be cleaned on import.
 - **Restore bypasses settings validation (S to M).** Values are written verbatim (only `maxConcurrentDownloads` is
   clamped now). Run the same validation as `PATCH /api/settings`, clamping or skipping bad values instead of failing.
 
