@@ -44,7 +44,8 @@ backend/
     features/                the optional-feature toggles (Settings → Features) the API and sweeps consult
     sysevents/               the system log's recorder (nil-safe, flood-guarded) and retention pruning
     strayfiles/              finds files on disk no DB record references (Settings → Library → Find
-                             Stray Files); report-only until a delete is requested
+                             Stray Files); report-only until a delete is requested; paths are
+                             matched case-insensitively (conservative on case-insensitive mounts)
     ratelimit/               in-memory throttling of failed logins (delays only; see Login throttling)
     twofactor/               TOTP, secret-at-rest encryption, recovery codes, login challenges
     bgtasks/                 goroutine tracker for graceful shutdown (Go/Wait) and terminal-write contexts

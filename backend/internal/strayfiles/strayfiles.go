@@ -254,6 +254,14 @@ func queryStrings(ctx context.Context, db *sql.DB, q string) ([]string, error) {
 
 func normRel(p string) string { return path.Clean(filepath.ToSlash(p)) }
 
+// refKey is the form a path is compared in. It is lower-cased on purpose: on a case-insensitive
+// mount (a Windows or macOS host behind a bind mount) a file whose name differs from its database
+// path only in letter case is the same file, and reporting it as stray would be wrong (and
+// deleting it destructive). The trade-off is that on a case-sensitive filesystem a file that
+// differs from a referenced one only in case is not reported either. Scan decides everything,
+// and Delete re-runs Scan, so both use this rule.
+func refKey(p string) string { return strings.ToLower(normRel(p)) }
+
 func scanImages(ctx context.Context, cfg Config, now time.Time) ([]Entry, error) {
 	if cfg.ImagesRoot == "" {
 		return nil, nil
@@ -279,7 +287,7 @@ func scanImages(ctx context.Context, cfg Config, now time.Time) ([]Entry, error)
 			return nil, err
 		}
 		for _, p := range paths {
-			referenced[normRel(p)] = true
+			referenced[refKey(p)] = true
 		}
 	}
 
@@ -329,7 +337,7 @@ func scanImages(ctx context.Context, cfg Config, now time.Time) ([]Entry, error)
 					return
 				}
 				rel = filepath.ToSlash(rel)
-				if referenced[rel] || info.ModTime().After(cutoff) {
+				if referenced[refKey(rel)] || info.ModTime().After(cutoff) {
 					return
 				}
 				out = append(out, Entry{Root: RootImages, Path: rel, SizeBytes: info.Size(), ModifiedAt: info.ModTime(), Reason: ReasonUnreferenced})
@@ -395,7 +403,7 @@ func scanMedia(ctx context.Context, cfg Config, now time.Time) ([]Entry, error) 
 		return nil, err
 	}
 	for _, p := range paths {
-		p = normRel(p)
+		p = refKey(p)
 		refFiles[p] = true
 		refStems[stemKey(p)] = true
 	}
@@ -404,7 +412,7 @@ func scanMedia(ctx context.Context, cfg Config, now time.Time) ([]Entry, error) 
 		return nil, err
 	}
 	for _, p := range thumbs {
-		refFiles[normRel(p)] = true
+		refFiles[refKey(p)] = true
 	}
 
 	type file struct {
@@ -473,7 +481,7 @@ func scanMedia(ctx context.Context, cfg Config, now time.Time) ([]Entry, error) 
 			reason = tempReason(base)
 		case isSidecarExt(f.rel):
 			stem := strings.TrimSuffix(base, path.Ext(base))
-			if reservedStems[strings.ToLower(stem)] || refFiles[f.rel] || refStems[stemKey(f.rel)] || hasMedia[stemKey(f.rel)] {
+			if reservedStems[strings.ToLower(stem)] || refFiles[refKey(f.rel)] || refStems[refKey(stemKey(f.rel))] || hasMedia[stemKey(f.rel)] {
 				continue
 			}
 			if strings.EqualFold(path.Ext(base), ".nfo") {

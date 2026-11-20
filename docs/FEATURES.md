@@ -1286,6 +1286,10 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
     while any download is active, since a stalled download's `.part` is still open.
   - Delete re-checks every path against the current database and disk, so something that became
     referenced since the scan is skipped, not deleted.
+  - Matching a file to a database path ignores letter case, so on a case-insensitive mount (a Windows or macOS
+    host behind a bind mount) a file that differs from its record only in case is never reported. The
+    trade-off: on a case-sensitive filesystem a file that differs from a referenced one only in case is not
+    reported either.
 - **Backup** — turn on **Auto Backup** and pick an interval (6h/12h/24h/3 days/weekly) for
   automatic full backups (see Backup above), and how many to keep before old ones are pruned
   (default 14, or unlimited).
