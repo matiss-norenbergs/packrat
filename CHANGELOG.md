@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-20
+- **A `%` in a file name or folder is no longer expanded by yt-dlp** — the `-o` output template is now built by one helper (`downloader.OutputTemplate`) that doubles `%` in the destination folder and the file name (a title like `%(title)s`, `100%` or `50%%`), leaving only the real `%(ext)s` (and the empty-name `%(title)s` default) as placeholders. Used for downloads and for the thumbnail fetches. Image downloads never touched yt-dlp.
 - **A Jellyfin item id is escaped in the refresh URL** — an id containing `/`, `?`, `#`, a space or `%` is now sent as one path segment (and the fixed query parameters are built with `url.Values`) instead of changing the request path. Ordinary ids are unchanged.
 - **WebSocket connections cap inbound messages and no longer hang at shutdown** — a client sending a message over 4 KiB (the UI never sends any) is now disconnected instead of having it buffered, and when the hub stops each connection's reader returns instead of blocking on the unregister channel.
 - **Logout now needs the CSRF token for a cookie session** — `POST /api/auth/logout` is a public route, so it skipped the double-submit check and a cross-site request could sign the user out. A request signed in through the session cookie now gets `403` (session kept) unless `X-CSRF-Token` matches the CSRF cookie; bearer/desktop requests are exempt, and a request with no valid session (a stale cookie) still succeeds with `204` and clears both cookies. The web UI already sent the header on logout.

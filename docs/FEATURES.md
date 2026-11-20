@@ -201,7 +201,8 @@ The live download queue.
     token takes a modifier: digits zero-pad a number (`{season:02}` → `01`), and anything else joins
     the words of the value (`{artist:.}` → `Rick.Astley`). A `/` makes subfolders inside the
     collection's folder; each part is cleaned of characters the file system doesn't allow, and parts
-    that end up empty are dropped. Characters that can't be used are flagged under the field. A
+    that end up empty are dropped. A `%` in a name (a title like `100%` or `%(title)s`) is kept as a
+    literal character; it is never expanded by `yt-dlp`'s own template syntax. Characters that can't be used are flagged under the field. A
     collection can supply a default template (see Collections), which a template or filename typed
     here overrides; a plain **Filename** beats both. The Bulk Download rows have the same field.
     A download never overwrites another file: if the name is already taken in the folder (a ghost

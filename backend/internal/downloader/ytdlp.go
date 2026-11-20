@@ -178,7 +178,7 @@ func (s *YtDlpService) FetchThumbnail(ctx context.Context, url, destDir, baseFil
 	ctx, cancel := context.WithTimeout(ctx, metadataFetchTimeout)
 	defer cancel()
 
-	outputTemplate := filepath.Join(destDir, baseFilename+".%(ext)s")
+	outputTemplate := OutputTemplate(destDir, baseFilename)
 	args := []string{
 		"--skip-download", "--write-thumbnail", "--convert-thumbnails", "jpg",
 		"--no-playlist", "--no-warnings",
@@ -217,7 +217,7 @@ func (s *YtDlpService) FetchThumbnailRaw(ctx context.Context, url, destDir, base
 	ctx, cancel := context.WithTimeout(ctx, metadataFetchTimeout)
 	defer cancel()
 
-	outputTemplate := filepath.Join(destDir, baseFilename+".%(ext)s")
+	outputTemplate := OutputTemplate(destDir, baseFilename)
 	args := []string{
 		"--skip-download", "--write-thumbnail",
 		"--no-playlist", "--no-warnings",

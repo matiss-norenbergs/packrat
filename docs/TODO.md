@@ -87,7 +87,6 @@ None are scheduled. Sizes are guesses.
 **Small hardening**
 
 - **`pathsafe` does not resolve symlinks (S).** Exploiting it needs host access.
-- **`%` in output names (S).** A remote title with `%(...)s` is expanded by yt-dlp. Paths stay contained.
 - **`synchronous=FULL` under WAL (S).** `NORMAL` is the usual setting and is safe with WAL; a durability trade to decide.
 - **The FTS `library_au` trigger has no column list (S).** Every playback-position heartbeat rewrites the FTS row
   (about 3 ms). Restrict it to the indexed columns.

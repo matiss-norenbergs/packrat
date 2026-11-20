@@ -30,13 +30,27 @@ type DownloadJob struct {
 	ForceOverwrite bool
 }
 
+// escapeTemplateLiteral doubles every "%" so yt-dlp's output-template engine keeps the text as is.
+// Without it a remote title or a user filename containing "%(title)s" or "100%" would be expanded
+// (or rejected) by yt-dlp instead of being used literally in the file name.
+func escapeTemplateLiteral(s string) string {
+	return strings.ReplaceAll(s, "%", "%%")
+}
+
+// OutputTemplate builds the value of yt-dlp's -o flag: destDir and baseFilename are literal text
+// (their "%" is escaped), and the only placeholder is the trailing %(ext)s. An empty baseFilename
+// means yt-dlp's own %(title)s, the one other placeholder Packrat emits on purpose.
+func OutputTemplate(destDir, baseFilename string) string {
+	base := "%(title)s"
+	if baseFilename != "" {
+		base = escapeTemplateLiteral(baseFilename)
+	}
+	return filepath.Join(escapeTemplateLiteral(destDir), base+".%(ext)s")
+}
+
 // BuildArgs returns the full yt-dlp argument list for job.
 func (s *YtDlpService) BuildArgs(ctx context.Context, job DownloadJob) []string {
-	base := job.Filename
-	if base == "" {
-		base = "%(title)s"
-	}
-	outputTemplate := filepath.Join(job.DestDir, base+".%(ext)s")
+	outputTemplate := OutputTemplate(job.DestDir, job.Filename)
 
 	args := []string{
 		"--newline",
