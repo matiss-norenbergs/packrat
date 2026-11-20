@@ -1572,6 +1572,16 @@ the artist has none, never overwriting one. An artist the restore creates gets t
 birthday. A birthday that is not a real `YYYY-MM-DD` date is skipped (logged) for that artist and
 never fails the restore. `preview` is unchanged (names and the new-artist count).
 
+Path-like fields in an uploaded bundle are cleaned on import (preview and restore alike), never rejected:
+each segment of a collection's `path` and of an item's `collectionPath` that is not already a single safe
+folder name goes through `fsutil.SanitizeFilename`, the cleaning the collection create/update endpoints apply
+to `rootPath` (`a/b` becomes `ab`, `..` becomes empty); segments that end up empty are dropped (so
+`["..", "Evil"]` is `["Evil"]`), and a path with nothing left means "no collection" (a collection entry is
+skipped, an item becomes uncategorized). Entries and references use the same function, so they still line
+up. A segment that is already a safe single folder name is kept as is (even with characters such as `:`), so
+existing collections match exactly as before. Each item's `folder` is cleaned like a download's `folder`
+(`fsutil.SanitizeRelativePath`).
+
 ### `POST /api/backup/preview/library` / `POST /api/backup/import/settings` / `POST /api/backup/import/library`
 
 ```json
