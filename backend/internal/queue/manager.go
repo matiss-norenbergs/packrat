@@ -1050,7 +1050,12 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 	if target.Filename != "" {
 		base = strings.TrimSuffix(target.Filename, filepath.Ext(target.Filename))
 	}
+	// An item's existing file name is kept as it is (a reserved name such as CON that already
+	// exists must not be renamed by a redownload); only a name made fresh is cleaned for Windows.
 	newFilename := fsutil.SanitizeFilename(base + newExt)
+	if target.Filename != "" {
+		newFilename = fsutil.SanitizeExistingFilename(base + newExt)
+	}
 	newPath := filepath.Join(destDir, newFilename)
 	// Replacing the item's own current file is the point of a same-name
 	// redownload; anything else already sitting at newPath belongs to

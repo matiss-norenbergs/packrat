@@ -23,11 +23,65 @@ var unsafeFilenameChars = regexp.MustCompile(`[<>:"/\\|?*\x00-\x1f]`)
 // SanitizeFilename strips path separators and filesystem-hostile characters
 // from a user-provided literal filename, so it can never be used to write
 // outside the resolved destination directory or break the target
-// filesystem. Empty input (or input that sanitizes to empty) returns "".
+// filesystem. A Windows reserved device name (CON, PRN, AUX, NUL, COM1-9,
+// LPT1-9, with or without an extension) gets a "_" appended to its stem
+// (CON -> CON_, con.mp4 -> con_.mp4) on every platform, so a library written
+// to a Windows bind mount works and behavior never depends on the host.
+// Empty input (or input that sanitizes to empty) returns "".
+//
+// Use it for NEW or CHANGED names. A name that already exists (an item's
+// current file name, a stored collection or folder name) must be kept as it
+// is: see SanitizeExistingFilename.
 func SanitizeFilename(name string) string {
+	return avoidReservedName(SanitizeExistingFilename(name))
+}
+
+// SanitizeExistingFilename is SanitizeFilename without the Windows reserved
+// name rule. It is for names that already exist on disk or in the database
+// (a redownload keeping an item's file name, a backup restore matching stored
+// folders), which must not be renamed or stop matching because of a rule
+// added later.
+func SanitizeExistingFilename(name string) string {
 	name = strings.TrimSpace(name)
 	name = unsafeFilenameChars.ReplaceAllString(name, "")
 	name = strings.Trim(name, " .")
+	return name
+}
+
+// SanitizeRename cleans a submitted name for something that already has the name current. Sending
+// the current name back unchanged is not a rename, so it is returned as it is even when it is a
+// reserved name that SanitizeFilename would now alter; any other name is cleaned as new.
+func SanitizeRename(submitted, current string) string {
+	if current != "" && SanitizeExistingFilename(submitted) == current {
+		return current
+	}
+	return SanitizeFilename(submitted)
+}
+
+// windowsReserved holds the device names Windows refuses as a file name (any
+// extension included, case-insensitive). The superscript digits ¹ ² ³ that
+// Windows also treats as COM/LPT numbers are not handled.
+var windowsReserved = map[string]bool{"CON": true, "PRN": true, "AUX": true, "NUL": true}
+
+func isWindowsReservedStem(stem string) bool {
+	stem = strings.ToUpper(strings.TrimRight(stem, " "))
+	if windowsReserved[stem] {
+		return true
+	}
+	return len(stem) == 4 && (strings.HasPrefix(stem, "COM") || strings.HasPrefix(stem, "LPT")) && stem[3] >= '1' && stem[3] <= '9'
+}
+
+// avoidReservedName appends "_" to the stem of a reserved name. The stem is
+// everything before the FIRST dot, which is what Windows checks ("CON.tar.gz"
+// is reserved too).
+func avoidReservedName(name string) string {
+	stem, rest := name, ""
+	if i := strings.Index(name, "."); i >= 0 {
+		stem, rest = name[:i], name[i:]
+	}
+	if isWindowsReservedStem(stem) {
+		return stem + "_" + rest
+	}
 	return name
 }
 
@@ -38,10 +92,21 @@ func SanitizeFilename(name string) string {
 // along with the other unsafe characters. Segments that sanitize to "" (a
 // blank segment, or a traversal attempt like "..") are dropped.
 func SanitizeRelativePath(path string) string {
+	return sanitizeSegments(path, SanitizeFilename)
+}
+
+// SanitizeExistingRelativePath is SanitizeRelativePath for a path that
+// already exists (see SanitizeExistingFilename): same cleaning, reserved
+// names left alone.
+func SanitizeExistingRelativePath(path string) string {
+	return sanitizeSegments(path, SanitizeExistingFilename)
+}
+
+func sanitizeSegments(path string, clean func(string) string) string {
 	var segments []string
 	for _, seg := range strings.Split(path, "/") {
-		if clean := SanitizeFilename(seg); clean != "" {
-			segments = append(segments, clean)
+		if c := clean(seg); c != "" {
+			segments = append(segments, c)
 		}
 	}
 	return strings.Join(segments, "/")

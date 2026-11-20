@@ -203,7 +203,11 @@ reads it to compare its own version with the server's (see `docs/FEATURES.md` �
   `{"error":"too many attempts, try again later","retryAfterSeconds":<n>}`. The client IP is the
   connection address; `X-Forwarded-For` is only honored from `TRUSTED_PROXIES`.
 - **`POST /api/auth/logout`** — no body. Deletes the session row server-side (a replayed old cookie
-  stops working immediately) and clears both cookies. `204`, idempotent even with no session.
+  stops working immediately) and clears both cookies. `204`, idempotent even with no session or with
+  a stale cookie (so a dead cookie can always be cleared). The route is public, so `RequireCSRF` does
+  not run; the handler makes the same check itself: a request that is signed in through the **cookie**
+  must echo `X-CSRF-Token`, otherwise `403 {"error":"invalid or missing CSRF token"}` and the session
+  stays alive (a cross-site form can't sign you out). Bearer / `?token=` clients (desktop) are exempt.
 - **`PATCH /api/auth/password`** — `{ "currentPassword": "...", "newPassword": "8 chars to 72 bytes" }`. A new password over 72 bytes is `400 {"error":"Password must be at most 72 bytes."}` (checked before the current password). Logging in or confirming with an over-long password is the normal `401`.
   Requires the *current* password even though the route is already session-protected, so a
   hijacked/left-open session can't lock out the real owner. `401` if current password is wrong,

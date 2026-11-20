@@ -133,3 +133,15 @@ func TestCleanBundlePaths(t *testing.T) {
 		t.Error("the caller's bundle was modified")
 	}
 }
+
+// A collection that already has a Windows reserved name keeps matching a bundle that carries it:
+// restore cleans names with the "existing" rules, not the reserved-name rule new names get.
+func TestCleanCollectionPathKeepsReservedNames(t *testing.T) {
+	if got := cleanCollectionPath([]string{"CON", "aux.d"}); !reflect.DeepEqual(got, []string{"CON", "aux.d"}) {
+		t.Errorf("cleanCollectionPath changed existing names: %v", got)
+	}
+	b := cleanBundlePaths(LibraryBundle{LibraryItems: []LibraryItemEntry{{Folder: "CON/x", CollectionPath: []string{"NUL"}}}})
+	if b.LibraryItems[0].Folder != "CON/x" || !reflect.DeepEqual(b.LibraryItems[0].CollectionPath, []string{"NUL"}) {
+		t.Errorf("item paths changed: %+v", b.LibraryItems[0])
+	}
+}

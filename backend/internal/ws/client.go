@@ -11,6 +11,11 @@ import (
 const (
 	writeWait = 10 * time.Second
 	pongWait  = 60 * time.Second
+
+	// maxReadBytes caps an inbound message. Clients never send anything meaningful (readPump only
+	// detects disconnects; pongs are control frames of at most 125 bytes), so a few KiB is far
+	// more than needed and an oversized message closes the connection instead of being buffered.
+	maxReadBytes = 4096
 )
 
 // pingPeriod is how often a client is pinged (and its session re-checked); a var so tests can
@@ -32,10 +37,15 @@ type Client struct {
 
 func (c *Client) readPump() {
 	defer func() {
-		c.hub.unregister <- c
+		// Once the hub has stopped nobody reads unregister, so don't block on it.
+		select {
+		case c.hub.unregister <- c:
+		case <-c.hub.done:
+		}
 		c.conn.Close()
 	}()
 
+	c.conn.SetReadLimit(maxReadBytes)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))

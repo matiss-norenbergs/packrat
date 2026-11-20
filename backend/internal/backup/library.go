@@ -281,13 +281,13 @@ func BuildLibraryBundle(
 // collection create/update handlers apply to rootPath ("a/b" becomes "ab",
 // ".." becomes ""). ok is false when nothing is left.
 func cleanCollectionSegment(seg string) (clean string, ok bool) {
-	if seg != "" && seg != "." && seg != ".." && !strings.ContainsAny(seg, "/\\\x00") && fsutil.SanitizeFilename(seg) != "" &&
+	if seg != "" && seg != "." && seg != ".." && !strings.ContainsAny(seg, "/\\\x00") && fsutil.SanitizeExistingFilename(seg) != "" &&
 		strings.IndexFunc(seg, func(r rune) bool { return r < 0x20 }) < 0 {
 		if _, err := pathsafe.ResolveUnderRoot("/root", seg); err == nil {
 			return seg, true
 		}
 	}
-	clean = fsutil.SanitizeFilename(seg)
+	clean = fsutil.SanitizeExistingFilename(seg)
 	return clean, clean != ""
 }
 
@@ -328,7 +328,7 @@ func cleanBundlePaths(bundle LibraryBundle) LibraryBundle {
 		items := make([]LibraryItemEntry, len(bundle.LibraryItems))
 		for i, it := range bundle.LibraryItems {
 			it.CollectionPath = cleanCollectionPath(it.CollectionPath)
-			it.Folder = fsutil.SanitizeRelativePath(it.Folder)
+			it.Folder = fsutil.SanitizeExistingRelativePath(it.Folder)
 			items[i] = it
 		}
 		bundle.LibraryItems = items

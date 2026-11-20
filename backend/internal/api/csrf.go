@@ -47,6 +47,16 @@ func clearCSRFCookie(c *gin.Context) {
 	c.SetCookie(csrfCookieName, "", -1, "/", "", false, false)
 }
 
+// csrfTokenMatches reports whether the X-CSRF-Token header equals the packrat_csrf cookie.
+func csrfTokenMatches(c *gin.Context) bool {
+	cookieVal, err := c.Cookie(csrfCookieName)
+	header := c.GetHeader("X-CSRF-Token")
+	// Constant-time compare: the cookie value is a secret the double-submit pattern relies on
+	// an attacker not being able to read directly, so a plain != would leak it byte-by-byte
+	// through a timing side-channel over many requests.
+	return err == nil && header != "" && subtle.ConstantTimeCompare([]byte(header), []byte(cookieVal)) == 1
+}
+
 // RequireCSRF no-ops for GET/HEAD/OPTIONS (safe methods never mutate, so there's nothing to
 // forge) and otherwise requires the X-CSRF-Token header to match the packrat_csrf cookie. An
 // attacker's page can get a forged cross-site request sent with the session cookie attached, but
@@ -67,12 +77,7 @@ func RequireCSRF() gin.HandlerFunc {
 			return
 		}
 
-		cookieVal, err := c.Cookie(csrfCookieName)
-		header := c.GetHeader("X-CSRF-Token")
-		// Constant-time compare: the cookie value is a secret the double-submit pattern relies on
-		// an attacker not being able to read directly, so a plain != would leak it byte-by-byte
-		// through a timing side-channel over many requests.
-		if err != nil || header == "" || subtle.ConstantTimeCompare([]byte(header), []byte(cookieVal)) != 1 {
+		if !csrfTokenMatches(c) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "invalid or missing CSRF token"})
 			return
 		}

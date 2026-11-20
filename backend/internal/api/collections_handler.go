@@ -186,6 +186,7 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 		if req.FilenameTemplate == "" {
 			req.FilenameTemplate = "{title}"
 		}
+		rawRootPath := req.RootPath
 		req.RootPath = fsutil.SanitizeFilename(req.RootPath)
 		if req.RootPath == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid root path"})
@@ -201,6 +202,10 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			writeServerError(c, err)
 			return
 		}
+
+		// Re-submitting the stored root path is not a change: an existing name (for example a
+		// reserved one such as CON, made before the rule existed) is kept, not renamed.
+		req.RootPath = fsutil.SanitizeRename(rawRootPath, existing.RootPath)
 
 		// parent_id is creation-time only — renaming the segment must still be
 		// re-validated against the *existing* parent so it can't escape the

@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -168,4 +169,68 @@ func TestAuthStatusHealsLegacyCSRFCookie(t *testing.T) {
 	if len(w.Result().Cookies()) != 0 {
 		t.Fatalf("unauthenticated status set cookies: %v", w.Result().Cookies())
 	}
+}
+
+func TestLogoutRequiresCSRFForACookieSession(t *testing.T) {
+	logout := func(e *authTestEnv, q authReq) *httptest.ResponseRecorder {
+		q.method, q.path = "POST", "/api/auth/logout"
+		return authDo(e.r, q)
+	}
+	alive := func(e *authTestEnv, cookies []*http.Cookie) bool {
+		return authDo(e.r, authReq{method: "GET", path: "/api/thing", cookies: cookies}).Code == http.StatusNoContent
+	}
+
+	t.Run("cookie without token is refused and the session survives", func(t *testing.T) {
+		e := newAuthTestEnv(t)
+		cookies, _ := setupAndLogin(t, e.r)
+		if w := logout(e, authReq{cookies: cookies}); w.Code != http.StatusForbidden {
+			t.Fatalf("got %d, want 403", w.Code)
+		}
+		if !alive(e, cookies) {
+			t.Fatal("session must survive a refused logout")
+		}
+	})
+	t.Run("wrong token is refused", func(t *testing.T) {
+		e := newAuthTestEnv(t)
+		cookies, _ := setupAndLogin(t, e.r)
+		w := logout(e, authReq{cookies: cookies, headers: map[string]string{"X-CSRF-Token": "nope"}})
+		if w.Code != http.StatusForbidden || !alive(e, cookies) {
+			t.Fatalf("got %d (alive=%v), want 403 and a live session", w.Code, alive(e, cookies))
+		}
+	})
+	t.Run("right token logs out", func(t *testing.T) {
+		e := newAuthTestEnv(t)
+		cookies, _ := setupAndLogin(t, e.r)
+		if w := logout(e, authReq{cookies: cookies, headers: csrfHeaders(cookies)}); w.Code != http.StatusNoContent {
+			t.Fatalf("got %d, want 204", w.Code)
+		}
+		if alive(e, cookies) {
+			t.Fatal("session must be gone")
+		}
+	})
+	t.Run("bearer is exempt", func(t *testing.T) {
+		e := newAuthTestEnv(t)
+		_, token := setupAndLogin(t, e.r)
+		if w := logout(e, authReq{headers: map[string]string{"Authorization": "Bearer " + token}}); w.Code != http.StatusNoContent {
+			t.Fatalf("got %d, want 204", w.Code)
+		}
+	})
+	t.Run("no valid session still clears the cookies", func(t *testing.T) {
+		e := newAuthTestEnv(t)
+		setupAndLogin(t, e.r)
+		stale := []*http.Cookie{{Name: sessionCookieName, Value: "stale"}, {Name: csrfCookieName, Value: "x"}}
+		w := logout(e, authReq{cookies: stale})
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("got %d, want 204", w.Code)
+		}
+		cleared := map[string]bool{}
+		for _, c := range w.Result().Cookies() {
+			if c.MaxAge < 0 {
+				cleared[c.Name] = true
+			}
+		}
+		if !cleared[sessionCookieName] || !cleared[csrfCookieName] {
+			t.Fatalf("cookies not cleared: %v", w.Result().Cookies())
+		}
+	})
 }

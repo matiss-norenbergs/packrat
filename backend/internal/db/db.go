@@ -34,7 +34,9 @@ const (
 //
 // Every connection the pool opens gets the same setup from the DSN (the driver
 // runs each _pragma on each new connection, not just the first): WAL, a busy
-// timeout, and foreign keys on. busy_timeout comes first so the journal-mode
+// timeout, foreign keys on, and synchronous=FULL. FULL is SQLite's default, set
+// explicitly so a driver default can't change it silently: a power cut can't
+// lose a committed transaction (NORMAL is faster on slow storage but can). busy_timeout comes first so the journal-mode
 // change itself waits instead of failing; _txlock=immediate makes every
 // transaction started through database/sql take the write lock at BEGIN. A
 // deferred transaction that reads and then writes would otherwise fail
@@ -45,7 +47,7 @@ const (
 // Anything else that is per connection (other PRAGMAs, ATTACH, temp tables)
 // must run on one pinned *sql.Conn; see rebuild.go.
 func Open(path string) (*sql.DB, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(%d)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(on)&_txlock=immediate",
+	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(%d)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(on)&_pragma=synchronous(FULL)&_txlock=immediate",
 		path, BusyTimeout.Milliseconds())
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {

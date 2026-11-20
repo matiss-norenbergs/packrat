@@ -200,8 +200,12 @@ The live download queue.
     them). A token with no value is simply left empty (there is no "skip this part if empty"). After a colon a
     token takes a modifier: digits zero-pad a number (`{season:02}` → `01`), and anything else joins
     the words of the value (`{artist:.}` → `Rick.Astley`). A `/` makes subfolders inside the
-    collection's folder; each part is cleaned of characters the file system doesn't allow, and parts
-    that end up empty are dropped. Characters that can't be used are flagged under the field. A
+    collection's folder; each part is cleaned of characters the file system doesn't allow (and a Windows reserved
+    device name such as `CON`, `NUL`, `COM1` or `LPT1`, with or without an extension, gets a `_` added
+    to its name: `con.mp4` → `con_.mp4`, on every platform; names that already exist are never renamed
+    for this, and submitting a file, folder or collection name unchanged is not a rename), and parts
+    that end up empty are dropped. A `%` in a name (a title like `100%` or `%(title)s`) is kept as a
+    literal character; it is never expanded by `yt-dlp`'s own template syntax. Characters that can't be used are flagged under the field. A
     collection can supply a default template (see Collections), which a template or filename typed
     here overrides; a plain **Filename** beats both. The Bulk Download rows have the same field.
     A download never overwrites another file: if the name is already taken in the folder (a ghost
@@ -1282,6 +1286,10 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
     while any download is active, since a stalled download's `.part` is still open.
   - Delete re-checks every path against the current database and disk, so something that became
     referenced since the scan is skipped, not deleted.
+  - Matching a file to a database path ignores letter case, so on a case-insensitive mount (a Windows or macOS
+    host behind a bind mount) a file that differs from its record only in case is never reported. The
+    trade-off: on a case-sensitive filesystem a file that differs from a referenced one only in case is not
+    reported either.
 - **Backup** — turn on **Auto Backup** and pick an interval (6h/12h/24h/3 days/weekly) for
   automatic full backups (see Backup above), and how many to keep before old ones are pruned
   (default 14, or unlimited).

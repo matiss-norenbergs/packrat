@@ -86,19 +86,11 @@ None are scheduled. Sizes are guesses.
 
 **Small hardening**
 
-- **Logout has no CSRF check (S).** `SameSite=Lax` makes it a nuisance at most.
-- **WebSocket has no `SetReadLimit`, and at shutdown each `readPump` blocks on `unregister` (S).**
-- **`pathsafe` does not resolve symlinks (S).** Exploiting it needs host access.
-- **Jellyfin item id is not escaped in the URL path (S).** It is an admin-set value.
-- **`%` in output names (S).** A remote title with `%(...)s` is expanded by yt-dlp. Paths stay contained.
-- **`synchronous=FULL` under WAL (S).** `NORMAL` is the usual setting and is safe with WAL; a durability trade to decide.
 - **The FTS `library_au` trigger has no column list (S).** Every playback-position heartbeat rewrites the FTS row
   (about 3 ms). Restrict it to the indexed columns.
 - **A1111 output writes PNG bytes into a `.jpg` sidecar (S).** Check whether consumers (Jellyfin, the frontend)
   sniff the content or trust the extension.
 - **`pruneEmptyParents` can race tier generation for the same directory (S).** A tiny window.
-- **Case-sensitive stray-file matching and Windows reserved names (S).** `SanitizeFilename` doesn't reject `CON`,
-  `NUL`, `COM1`. Windows hosts only.
 
 **Loose ends**
 

@@ -44,7 +44,8 @@ backend/
     features/                the optional-feature toggles (Settings → Features) the API and sweeps consult
     sysevents/               the system log's recorder (nil-safe, flood-guarded) and retention pruning
     strayfiles/              finds files on disk no DB record references (Settings → Library → Find
-                             Stray Files); report-only until a delete is requested
+                             Stray Files); report-only until a delete is requested; paths are
+                             matched case-insensitively (conservative on case-insensitive mounts)
     ratelimit/               in-memory throttling of failed logins (delays only; see Login throttling)
     twofactor/               TOTP, secret-at-rest encryption, recovery codes, login challenges
     bgtasks/                 goroutine tracker for graceful shutdown (Go/Wait) and terminal-write contexts
@@ -156,7 +157,10 @@ without salt is deliberate: the token is 256 random bits, not a password.
 `Secure=false` is deliberate, not an oversight — the app is commonly run over plain HTTP on a
 trusted LAN, and requiring HTTPS would break that default deployment. CSRF is handled separately
 via a double-submit cookie (`packrat_csrf`, readable by JS, echoed back as `X-CSRF-Token` on every
-mutating request) rather than relying on cookie security flags alone. Its value is an independent
+mutating request) rather than relying on cookie security flags alone. `POST /api/auth/logout` sits in the
+public group (so a stale cookie can always be cleared) and therefore does the double-submit check itself: a
+cookie-authenticated logout without the matching header gets `403` and keeps its session, while a bearer
+request or one with no valid session is not checked. Its value is an independent
 random string, never the session token: the cookie is script-readable, so sharing the secret would
 hand any XSS a working session credential (it is also accepted as a bearer token). Pre-fix sessions
 are healed on their next cookie-authenticated GET (`healLegacyCSRFCookie`). See
@@ -207,6 +211,9 @@ it with `GetValidSession`, which hashes it, so revocation by hash still closes i
 any session delete; `Hub.RevalidateSessions` then re-checks every client's session (off the hub
 goroutine) and closes the ones that are gone. The same check runs on each client's ping tick, so a
 revocation made by another process (the `--disable-2fa` command) still takes effect within a minute.
+Clients never send anything meaningful, so `readPump` sets a 4 KiB read limit (an oversized message closes
+the connection instead of being buffered), and its `unregister` send selects on the hub's `done` channel so
+no pump blocks forever once the hub has stopped (`register` already did, and `Broadcast` never blocks).
 
 ### Two-factor auth (TOTP)
 
@@ -665,7 +672,14 @@ connections in WAL mode. Reads run concurrently with a write; **writes still hap
 
 - **DSN, applied to every connection the pool opens** (the driver runs each `_pragma` per connection;
   `TestEveryPooledConnectionGetsTheSetup` checks all eight): `busy_timeout(15000)` first (so the
-  journal-mode change itself waits), `journal_mode(WAL)`, `foreign_keys(on)`, and `_txlock=immediate`.
+  journal-mode change itself waits), `journal_mode(WAL)`, `foreign_keys(on)`, `synchronous(FULL)`, and `_txlock=immediate`.
+- **`synchronous=FULL`, kept on purpose and set explicitly.** It is SQLite's default, and the DSN now says it
+  so a driver default can't change it silently (the test reads `PRAGMA synchronous` = 2 on every pooled
+  connection). With FULL the WAL is fsynced at every commit, so a power cut or OS crash cannot lose a
+  committed transaction. `NORMAL` is the usual WAL setting and is faster on slow storage (a NAS, an SD card),
+  but a power cut can then lose the last few commits (the database stays consistent); Packrat targets those
+  machines and the data is small, so durability won over speed. Revisit it only with a measured write
+  bottleneck.
 - **`_txlock=immediate`: every `BeginTx` takes the write lock at BEGIN.** A deferred transaction that
   reads and then writes fails *instantly* with `SQLITE_BUSY` (busy_timeout does not apply to the
   read-to-write upgrade) if another connection committed in between. With immediate, two
@@ -1736,6 +1750,11 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
 
 Still intentionally out of scope, not forgotten:
 
+- **`pathsafe` does not resolve symlinks.** `ResolveUnderRoot` cleans the path lexically and checks it stays
+  under the root; it does not `EvalSymlinks`. Real setups symlink media folders (a NAS or another mount point
+  under the media root), and following links would break them or force every such target onto an allow-list.
+  Exploiting it needs the ability to create a symlink under the media root, which already means host access
+  (shell or the volume), so the check would not stop anyone who matters.
 - **No artist images in backups.** A library backup carries each artist's name, private flag and birthday
   but not the display picture, `selected_image_path` or the `artist_images` gallery: backups carry
   references, never file bytes (same reason no media files are shipped), so restored artists start
