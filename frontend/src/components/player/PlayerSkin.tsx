@@ -16,6 +16,8 @@ import {
   playerCssVars,
 } from "./playerTheme"
 import { PLAYER_HOT_ZONE_FRACTION } from "./playerTheme"
+import { PlayerDebug } from "./PlayerDebug"
+import { parsePlayerDebug } from "./playerDiagnostics"
 import { barPaint, parsePlayerFx } from "./playerFx"
 import { computeShowBar, isPointerOnBar } from "./playerVisibility"
 import { useMediaState } from "./useMediaState"
@@ -74,16 +76,16 @@ export function PlayerSkin({
   }, [])
   const barRef = useRef<HTMLDivElement>(null)
   const hoveredRef = useRef(false)
-  const moves = useRef({ frame: 0, doc: 0, last: 0 }) // for the ?playerDebug=1 readout only
+  const moves = useRef({ frame: 0, doc: 0, last: 0 }) // pointer counters for the ?playerDebug readout only (only written when it is on)
   const pointerFocusRef = useRef(false) // focus came from a mouse/touch press, not the keyboard
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const clickTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const osdTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const counter = useRef(0)
-  // TEMPORARY diagnostics: ?playerDebug=1 shows the values behind showBar (to be removed once the fullscreen bar report is settled).
+  // Diagnostics (see PlayerDebug.tsx / playerFx.ts): only ever active with ?playerDebug=1|log and ?playerFx=… in the URL.
   const fx = useMemo(() => (typeof location === "undefined" ? parsePlayerFx("") : parsePlayerFx(location.search)), [])
-  const debug = useMemo(() => typeof location !== "undefined" && new URLSearchParams(location.search).get("playerDebug") === "1", [])
+  const debugMode = useMemo(() => (typeof location === "undefined" ? "off" : parsePlayerDebug(location.search)), [])
 
   const bump = useCallback(() => {
     setActive(true)
@@ -178,8 +180,10 @@ export function PlayerSkin({
   useEffect(() => {
     if (!isFullscreen) return
     const onMove = (e: MouseEvent) => {
-      moves.current.doc++
-      moves.current.last = Date.now()
+      if (debugMode !== "off") {
+        moves.current.doc++
+        moves.current.last = Date.now()
+      }
       onPointerActivity(e)
     }
     document.addEventListener("pointermove", onMove)
@@ -188,7 +192,7 @@ export function PlayerSkin({
       document.removeEventListener("pointermove", onMove)
       document.removeEventListener("mousemove", onMove)
     }
-  }, [isFullscreen, onPointerActivity])
+  }, [isFullscreen, onPointerActivity, debugMode])
 
   // Keyboard shortcuts: only while the player is focused or hovered, never while typing, never with Ctrl/Alt/Meta.
   useEffect(() => {
@@ -348,8 +352,16 @@ export function PlayerSkin({
     </>
   )
 
-  const debugReadout = debug && (
-    <PlayerDebug values={{ paused: state.paused, active, pointerOnBar, menuOpen, kbFocus, isFullscreen, showBar, waiting: state.waiting }} moves={moves} showBar={showBar} barRef={barRef} mediaRef={mediaRef} fx={fx} />
+  const debugReadout = debugMode !== "off" && (
+    <PlayerDebug
+      mode={debugMode}
+      values={{ paused: state.paused, active, pointerOnBar, menuOpen, kbFocus, isFullscreen, showBar, waiting: state.waiting }}
+      showBar={showBar}
+      barRef={barRef}
+      mediaRef={mediaRef}
+      moves={moves}
+      fx={fx}
+    />
   )
 
   const frameProps = {
@@ -362,8 +374,10 @@ export function PlayerSkin({
     "data-kind": kind,
     style: vars as CSSProperties,
     onPointerMove: (e: { clientX: number; clientY: number }) => {
-      moves.current.frame++
-      moves.current.last = Date.now()
+      if (debugMode !== "off") {
+        moves.current.frame++
+        moves.current.last = Date.now()
+      }
       onPointerActivity(e)
     },
     onPointerDown: onPointerActivity,
@@ -443,70 +457,5 @@ function Placeholder({ small = false }: { small?: boolean }) {
     <div className="flex h-full w-full items-center justify-center text-(--player-fg)">
       <Music className={small ? "size-4 opacity-30" : "size-16 opacity-30"} aria-hidden />
     </div>
-  )
-}
-
-// TEMPORARY diagnostics for the fullscreen-bar report (?playerDebug=1): live values behind showBar, pointer-event
-// counters, the active ?playerFx flags, the video's pixel size, and a rolling log of the last 12 transitions of
-// showBar (the React state), the bar's DOM data-visible, and its computed opacity bucket / visibility, with
-// timestamps in ms from the first entry. If the bar flashes: showBar flipping true->false within ~200 ms is a
-// logic problem; showBar staying true while the bar isn't painted is a painting problem.
-const LOG_LIMIT = 12
-function PlayerDebug({
-  values,
-  moves,
-  showBar,
-  barRef,
-  mediaRef,
-  fx,
-}: {
-  values: Record<string, boolean>
-  moves: RefObject<{ frame: number; doc: number; last: number }>
-  showBar: boolean
-  barRef: RefObject<HTMLDivElement | null>
-  mediaRef: RefObject<HTMLMediaElement | null>
-  fx: ReadonlySet<string>
-}) {
-  const [counts, setCounts] = useState({ frame: 0, doc: 0, ago: -1, size: "" })
-  const [log, setLog] = useState<string[]>([])
-  const entries = useRef<Array<{ at: number; text: string }>>([])
-  const t0 = useRef(0)
-  const push = useCallback((text: string) => {
-    const now = performance.now()
-    if (!t0.current) t0.current = now
-    entries.current = [...entries.current, { at: Math.round(now - t0.current), text }].slice(-LOG_LIMIT)
-  }, [])
-
-  useEffect(() => {
-    push(`showBar=${showBar}`)
-  }, [showBar, push])
-
-  useEffect(() => {
-    let last = ""
-    const t = setInterval(() => {
-      const bar = barRef.current
-      if (bar) {
-        const cs = getComputedStyle(bar)
-        const op = Number(cs.opacity)
-        const bucket = op <= 0.01 ? "0" : op >= 0.99 ? "1" : "fading"
-        const cur = `dom=${bar.getAttribute("data-visible")} opacity=${bucket} visibility=${cs.visibility}`
-        if (cur !== last) {
-          last = cur
-          push(cur)
-        }
-      }
-      const m = moves.current
-      const v = mediaRef.current as HTMLVideoElement | null
-      setCounts({ frame: m.frame, doc: m.doc, ago: m.last ? Date.now() - m.last : -1, size: v && "videoWidth" in v ? `${v.videoWidth}x${v.videoHeight}` : "" })
-      setLog(entries.current.map((e) => `${String(e.at).padStart(6)}ms ${e.text}`))
-    }, 50)
-    return () => clearInterval(t)
-  }, [barRef, mediaRef, moves, push])
-
-  return (
-    <pre className="pointer-events-none absolute left-2 top-12 z-40 max-w-[90%] whitespace-pre-wrap rounded bg-black/80 p-2 font-mono text-[11px] leading-tight text-lime-300" data-slot="player-debug">
-      {JSON.stringify({ ...values, frameMoves: counts.frame, docMoves: counts.doc, lastMoveMsAgo: counts.ago, video: counts.size, fx: [...fx] }, null, 1)}
-      {"\n" + log.join("\n")}
-    </pre>
   )
 }

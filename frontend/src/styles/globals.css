@@ -434,8 +434,9 @@
     width: 100%;
   }
 }
-/* TEMPORARY (?playerFx=videolayer): plain compositing for the host's <video>, to test whether Chromium's
-   hardware video overlay is what makes the control bar flicker in fullscreen. */
+/* ?playerFx=videolayer (diagnostic switch, see components/player/playerFx.ts): plain compositing for the host's
+   <video>, which can stop Chromium using a hardware video overlay that makes the control bar flicker in
+   fullscreen. Does nothing unless the URL asks for it. */
 .player-fx-videolayer video {
     transform: translateZ(0);
     will-change: transform;

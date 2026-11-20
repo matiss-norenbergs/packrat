@@ -734,6 +734,15 @@ position, **Continue Watching** progress, autoplay and the private-item lock wor
 - **Remembered** — volume and mute are remembered per browser (shared with the compare player) and
   work without storage; playback speed resets to 1× for every item. Reduced-motion preference
   turns the fades and the pulse off.
+- **Diagnostics** — URL-only tools for when the bar misbehaves on one machine or video; they do nothing
+  without their parameter. In fullscreen the bar has no blur (a more opaque solid scrim instead), because a
+  blurred bar over a playing video flickered in fullscreen on some clips. `?playerDebug=1` shows an on-screen
+  box (state values and the last transitions of the bar's visibility); it is itself an element over the video
+  and can hide compositing problems, so `?playerDebug=log` writes the same to the browser console (`[player]`
+  lines) with no element at all. `?playerFx=` takes comma-separated switches: `blur` (glass blur in fullscreen)
+  and `layer` (own compositor layer) reproduce the flicker; `noanim` (no fade, `visibility` instead),
+  `videolayer` (plain compositing for the video) and `solid` (solid scrim, no blur anywhere) are mitigations
+  to try if the default still flickers.
 
 ## Compare list
 

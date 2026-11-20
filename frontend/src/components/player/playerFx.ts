@@ -1,10 +1,16 @@
 import type { CSSProperties } from "react"
 import { PLAYER_BAR_OPACITY, PLAYER_BAR_OPACITY_FULLSCREEN, PLAYER_BAR_OPACITY_SOLID, PLAYER_BAR_OPACITY_STATIC } from "./playerTheme"
 
-// TEMPORARY switches for A/B testing the fullscreen control bar on a machine where it flickers, read once
-// from the URL: ?playerFx=layer,noanim (comma-separated, unknown names ignored). Without any flag the bar is
-// glass outside fullscreen and a solid, more opaque scrim in fullscreen (see playerTheme.ts). Flags combine
+// Diagnostic switches for the fullscreen control bar, read once from the URL: ?playerFx=layer,noanim
+// (comma-separated, unknown names ignored). They are a permanent tool for a machine where the bar flickers or
+// goes unpainted over a playing video; without a flag nothing changes: the bar is glass outside fullscreen and,
+// in fullscreen, a solid, more opaque scrim with no backdrop-filter (see playerTheme.ts for why). Flags combine
 // with that default.
+//
+// What testing on the machine that flickered (a 1280x534 H.264 clip) showed:
+//   reproduce the flicker:        blur (the glass blur in fullscreen), layer (own compositor layer, made it worse)
+//   mitigations to try if the     noanim, videolayer, solid (each also worked on top of the default)
+//   default still flickers
 //
 //   blur        restore the glass blur in fullscreen too (the old behavior, for comparison)
 //   layer       promote the bar to its own compositor layer (translateZ(0), will-change: opacity, isolation)
@@ -12,6 +18,8 @@ import { PLAYER_BAR_OPACITY, PLAYER_BAR_OPACITY_FULLSCREEN, PLAYER_BAR_OPACITY_S
 //   videolayer  put the host's <video> into normal compositing (.player-fx-videolayer video in globals.css),
 //               which can stop Chromium using a hardware overlay for it
 //   solid       solid ~0.85 scrim and no backdrop-filter at all, in and out of fullscreen
+//
+// The on-screen debug box (?playerDebug=1) can itself hide these problems; use ?playerDebug=log (console only).
 export type PlayerFx = "blur" | "layer" | "noanim" | "videolayer" | "solid"
 const KNOWN: readonly PlayerFx[] = ["blur", "layer", "noanim", "videolayer", "solid"]
 

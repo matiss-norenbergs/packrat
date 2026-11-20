@@ -1421,7 +1421,7 @@ capture `error` listener because `<source>` errors don't bubble) and drives the 
 is gone. Fullscreen is requested on the skin's frame, and the speed menu is portaled into that frame, so both
 survive it (standard Fullscreen API only; no webkit-prefixed fallback). Text and icons drawn over arbitrary video use scoped,
 theme-independent `--player-*` variables in `globals.css` (the one exception to theme-only colors);
-the seek fill follows `--primary`. In fullscreen the bar drops its `backdrop-filter` for a more opaque scrim (a blur over a playing video there is unreliable). Every size, duration, blur and opacity is a named constant in
+the seek fill follows `--primary`. In fullscreen the bar has no `backdrop-filter` (a more opaque scrim instead): a blurred layer over a video Chromium plays through a hardware overlay flickered or went unpainted for some clips. Permanent URL-only diagnostics exist for future cases: `?playerDebug=1|log` (`PlayerDebug.tsx`, pure helpers in `playerDiagnostics.ts`; the box can itself mask the bug, the log mode adds no DOM) and the `?playerFx=` switches (`playerFx.ts`), which do nothing and cost nothing when absent. Every size, duration, blur and opacity is a named constant in
 `playerTheme.ts`; pure logic (time formatting, pointer-to-time, stepping, ARIA text) is in `playerMath.ts`, and the
 bar-visibility rules in `playerVisibility.ts`: "pointer on the bar" is decided from geometry on every move (bar box or the
 bottom hot zone), never from `pointerenter`/`leave`, and while fullscreen the skin also listens on `document`.

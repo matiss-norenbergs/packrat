@@ -58,9 +58,12 @@ export const PLAYER_BAR_OPACITY_STATIC = 0.92 // scrim alpha when the bar sits o
 export const PLAYER_COMPACT_INSET_PX = 6
 export const PLAYER_COVER_PX = 36 // compact audio cover
 
-// In fullscreen the glass bar drops its backdrop-filter and uses a more opaque solid scrim: a blur over a
-// playing video is unreliable there (Chromium can promote the video to a hardware overlay, and the bar then
-// flickers or isn't painted for some videos). Outside fullscreen the glass look is unchanged.
+// In fullscreen the glass bar drops its backdrop-filter and uses a more opaque solid scrim. Finding: on one
+// machine a blurred bar over a playing 1280x534 H.264 clip flickered or vanished in fullscreen (the DOM state
+// was correct, the bar just wasn't painted), even combined with the other mitigations (no fade, plain video
+// layer) and worse with its own compositor layer; the solid scrim was the tested fix. Presumably Chromium
+// promotes the video to a hardware overlay there and compositing a backdrop filter over it is unreliable.
+// Outside fullscreen the glass look is unchanged. See playerFx.ts for the switches that reproduce/mitigate it.
 export const PLAYER_BAR_OPACITY_FULLSCREEN = 0.78
-// `?playerFx=solid`: solid scrim and no backdrop-filter anywhere.
+// `?playerFx=solid`: solid scrim and no backdrop-filter anywhere (a diagnostic switch).
 export const PLAYER_BAR_OPACITY_SOLID = 0.85

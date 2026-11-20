@@ -468,3 +468,52 @@ describe("PlayerSkin states", () => {
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy()
   })
 })
+
+describe("PlayerSkin diagnostics (URL-only)", () => {
+  afterEach(() => window.history.replaceState({}, "", "/"))
+
+  it("renders no debug element, logs nothing and starts no interval without the parameter", () => {
+    vi.useFakeTimers()
+    const info = vi.spyOn(console, "info").mockImplementation(() => {})
+    const interval = vi.spyOn(globalThis, "setInterval")
+    setup()
+    act(() => void vi.advanceTimersByTime(1000))
+    expect(screen.getByRole("group").querySelector("[data-slot=player-debug]")).toBeNull()
+    expect(info).not.toHaveBeenCalled()
+    expect(interval).not.toHaveBeenCalled()
+  })
+
+  it("?playerDebug=1 shows the box with its masking warning", () => {
+    vi.useFakeTimers()
+    window.history.replaceState({}, "", "/?playerDebug=1")
+    setup()
+    act(() => void vi.advanceTimersByTime(600))
+    const box = screen.getByRole("group").querySelector("[data-slot=player-debug]")
+    expect(box?.textContent).toContain("can mask flicker")
+    expect(box?.textContent).toContain("showBar=true")
+  })
+
+  it("?playerDebug=log writes prefixed console lines and adds no DOM element", () => {
+    vi.useFakeTimers()
+    const info = vi.spyOn(console, "info").mockImplementation(() => {})
+    window.history.replaceState({}, "", "/?playerDebug=log")
+    setup()
+    act(() => void vi.advanceTimersByTime(600))
+    expect(screen.getByRole("group").querySelector("[data-slot=player-debug]")).toBeNull()
+    const lines = info.mock.calls.map((c) => String(c[0]))
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.every((l) => l.startsWith("[player] "))).toBe(true)
+    expect(lines.some((l) => l.includes("showBar=true"))).toBe(true)
+    expect(lines.some((l) => l.includes("dom=true"))).toBe(true)
+  })
+
+  it("an unrecognized value turns diagnostics off", () => {
+    vi.useFakeTimers()
+    const info = vi.spyOn(console, "info").mockImplementation(() => {})
+    window.history.replaceState({}, "", "/?playerDebug=yes")
+    setup()
+    act(() => void vi.advanceTimersByTime(600))
+    expect(screen.getByRole("group").querySelector("[data-slot=player-debug]")).toBeNull()
+    expect(info).not.toHaveBeenCalled()
+  })
+})
