@@ -88,10 +88,21 @@ export function VolumeControl({
   )
 }
 
-export function TimeDisplay({ currentTime, duration, className = "" }: { currentTime: number; duration: number; className?: string }) {
+export function TimeDisplay({
+  currentTime,
+  duration,
+  className = "",
+  text,
+}: {
+  currentTime: number
+  duration: number
+  className?: string
+  /** Replaces the "current / duration" pair (the compare bar's percent readout). */
+  text?: string
+}) {
   return (
     <span className={`shrink-0 px-1 text-xs font-medium text-(--player-fg) tabular-nums ${className}`} data-slot="player-time">
-      {formatTime(currentTime)} / {formatTime(duration)}
+      {text ?? `${formatTime(currentTime)} / ${formatTime(duration)}`}
     </span>
   )
 }

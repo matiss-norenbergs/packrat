@@ -10,12 +10,15 @@ export function SeekBar({
   buffered,
   onSeek,
   className = "",
+  formatValue,
 }: {
   currentTime: number
   duration: number
   buffered: TimeRanges | null
   onSeek: (seconds: number) => void
   className?: string
+  /** For a slider that isn't in seconds (the compare bar's percent mode, 0-100): text of a value for the bubble and the ARIA value text. */
+  formatValue?: (value: number) => string
 }) {
   const trackRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<number | null>(null) // fraction under the pointer
@@ -108,7 +111,11 @@ export function SeekBar({
       aria-valuemin={0}
       aria-valuemax={known ? Math.floor(duration) : 0}
       aria-valuenow={Math.floor(drag != null && known ? drag * duration : currentTime)}
-      aria-valuetext={seekValueText(drag != null && known ? drag * duration : currentTime, duration)}
+      aria-valuetext={
+        formatValue
+          ? formatValue(drag != null && known ? drag * duration : currentTime)
+          : seekValueText(drag != null && known ? drag * duration : currentTime, duration)
+      }
       aria-disabled={!known || undefined}
       data-slot="player-seek"
       className={`group/seek relative flex h-(--player-seek-hit) min-w-0 touch-none items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring ${known ? "cursor-pointer" : "cursor-default"} ${className}`}
@@ -149,7 +156,7 @@ export function SeekBar({
           className="pointer-events-none absolute bottom-full mb-1 -translate-x-1/2 rounded-md bg-(--player-scrim) px-1.5 py-0.5 text-xs font-medium text-(--player-fg) tabular-nums shadow-md"
           style={{ insetInlineStart: `${bubbleFraction * 100}%` }}
         >
-          {formatTime(bubbleFraction * duration)}
+          {formatValue ? formatValue(bubbleFraction * duration) : formatTime(bubbleFraction * duration)}
         </div>
       )}
     </div>

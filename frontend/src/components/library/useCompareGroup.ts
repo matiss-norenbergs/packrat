@@ -1,19 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { allMuted, globalSeekTarget, rafThrottle, relativeSeekDelta, snapshotOf, summarizeGroup, type GroupSummary } from "@/components/player/groupMedia"
+import {
+  allMuted,
+  globalSeekPercentTarget,
+  globalSeekTarget,
+  PERCENT_SCALE,
+  percentPosition,
+  rafThrottle,
+  relativeSeekDelta,
+  snapshotOf,
+  summarizeGroup,
+  type GroupSummary,
+  type SyncMode,
+} from "@/components/player/groupMedia"
 import { clamp, formatSpeed, seekBy, stepSpeed, stepVolume } from "@/components/player/playerMath"
 import { PLAYER_DEFAULT_SPEED, PLAYER_OSD_MS, PLAYER_SEEK_STEP_LARGE_S, PLAYER_SEEK_STEP_S, PLAYER_SPEEDS, PLAYER_VOLUME_STEP } from "@/components/player/playerTheme"
 import type { GlobalCommand } from "@/components/player/playerKeys"
 
 const SUMMARY_EVENTS = ["play", "pause", "ended", "timeupdate", "durationchange", "loadedmetadata", "seeked", "emptied"] as const
-const EMPTY: GroupSummary = { anyPlaying: false, duration: 0, currentTime: 0 }
-
+const EMPTY: GroupSummary = { anyPlaying: false, duration: 0, currentTime: 0, referenceDuration: 0 }
 // Mirrors a set of media elements as one group: "any playing", the longest duration and the reference position.
 function useGroupSummary(elements: readonly HTMLMediaElement[]): GroupSummary {
   const [summary, setSummary] = useState<GroupSummary>(EMPTY)
   useEffect(() => {
     const update = () => {
       const next = summarizeGroup(elements.map(snapshotOf))
-      setSummary((p) => (p.anyPlaying === next.anyPlaying && p.duration === next.duration && p.currentTime === next.currentTime ? p : next))
+      setSummary((p) =>
+        p.anyPlaying === next.anyPlaying &&
+        p.duration === next.duration &&
+        p.currentTime === next.currentTime &&
+        p.referenceDuration === next.referenceDuration
+          ? p
+          : next,
+      )
     }
     update()
     for (const el of elements) for (const ev of SUMMARY_EVENTS) el.addEventListener(ev, update)
@@ -32,8 +50,12 @@ function useGroupSummary(elements: readonly HTMLMediaElement[]): GroupSummary {
  * Master volume is a "set all" control: the slider shows the last value set (initially 1). A cell mounted later
  * keeps its own persisted volume unless the master slider was moved this session, then it adopts it. Speed is the
  * last value set (1× on page open) and is also adopted by a cell mounted later.
+ *
+ * `mode` maps the global seek bar onto the cells (it only changes the mapping, it never seeks or pauses anything):
+ * "time" = one absolute time for all (scale: the longest duration), "percent" = the same fraction of each cell's own
+ * length (scale: 0-100 points). The bar always works in `seekScale` units; `seekAll` takes the same units.
  */
-export function useCompareGroup(order: readonly number[]) {
+export function useCompareGroup(order: readonly number[], mode: SyncMode = "time") {
   const mediaRefs = useRef<Map<number, HTMLMediaElement>>(new Map())
   const [version, setVersion] = useState(0)
   const [rate, setRateState] = useState<number>(PLAYER_DEFAULT_SPEED)
@@ -92,16 +114,27 @@ export function useCompareGroup(order: readonly number[]) {
     for (const el of elementsRef.current) el.pause()
   }, [])
 
-  const applySeek = useCallback((t: number) => {
+  const modeRef = useRef(mode)
+  modeRef.current = mode
+  const applySeek = useCallback((v: number) => {
+    const percent = modeRef.current === "percent"
     for (const el of elementsRef.current) {
-      const target = globalSeekTarget(t, el.duration)
+      const target = percent ? globalSeekPercentTarget(v / PERCENT_SCALE, el.duration) : globalSeekTarget(v, el.duration)
       if (target !== null) el.currentTime = target
     }
   }, [])
   const seekThrottle = useMemo(() => rafThrottle(applySeek), [applySeek])
   useEffect(() => () => seekThrottle.cancel(), [seekThrottle])
-  /** Scrub: every cell to the same absolute time (clamped per item), throttled to animation frames. */
+  // A scrub still waiting for its frame was made in the other mode's units: drop it rather than apply it as the new mode.
+  useEffect(() => seekThrottle.cancel(), [mode, seekThrottle])
+  /** Scrub (units of `seekScale`): every cell to the same time (clamped per item) or to the same fraction of its own length, throttled to animation frames. */
   const seekAll = seekThrottle.call
+
+  /** What the global seek bar shows: time mode = the reference position over the longest duration; percent mode = the reference's fraction of its own length, 0-100. */
+  const seekScale = useMemo(() => {
+    if (mode === "time") return { value: summary.currentTime, max: summary.duration }
+    return { value: percentPosition(summary.currentTime, summary.referenceDuration) * PERCENT_SCALE, max: elements.length > 0 ? PERCENT_SCALE : 0 }
+  }, [mode, summary, elements.length])
 
   /** Every cell by its own delta from its own current time, so the offsets between cells are kept. */
   const seekAllBy = useCallback(
@@ -171,6 +204,7 @@ export function useCompareGroup(order: readonly number[]) {
   return {
     registerMedia,
     summary,
+    seekScale,
     rate,
     volume,
     muted,

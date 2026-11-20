@@ -7,6 +7,7 @@ import { CompareGlobalBar } from "@/components/library/CompareGlobalBar"
 import { ComparePlayerCell } from "@/components/library/ComparePlayerCell"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { useCompareGroup } from "@/components/library/useCompareGroup"
+import { DEFAULT_SYNC_MODE, parseSyncMode, type SyncMode } from "@/components/player/groupMedia"
 import { describeKeyTarget, isTypingTarget, resolveGlobalKey } from "@/components/player/playerKeys"
 import { useLibraryItemsByIds } from "@/hooks/useLibrary"
 
@@ -31,6 +32,24 @@ const WAIT_FOR_READY_STORAGE_KEY = "packrat:compare-wait-for-ready"
 function readBoolSetting(key: string): boolean {
   const raw = localStorage.getItem(key)
   return raw === null ? true : raw === "true"
+}
+
+// Sync mode of the global seek bar ("time" | "percent"): a client-only preference; missing, invalid or an
+// unavailable storage all fall back to "time".
+const SYNC_MODE_STORAGE_KEY = "packrat:compare-sync-mode"
+function readSyncMode(): SyncMode {
+  try {
+    return parseSyncMode(localStorage.getItem(SYNC_MODE_STORAGE_KEY))
+  } catch {
+    return DEFAULT_SYNC_MODE
+  }
+}
+function writeSyncMode(mode: SyncMode) {
+  try {
+    localStorage.setItem(SYNC_MODE_STORAGE_KEY, mode)
+  } catch {
+    // storage unavailable: the choice just doesn't persist
+  }
 }
 
 // Plays up to 6 items at once. Each cell has its own skin (independent controls, ComparePlayerCell); the docked
@@ -102,7 +121,12 @@ export function ComparePlayPage() {
   const items = useMemo(() => fetchedItems.filter((i) => i.status !== "ghost"), [fetchedItems])
 
   const itemIds = useMemo(() => items.map((i) => i.id), [items])
-  const group = useCompareGroup(itemIds)
+  const [syncMode, setSyncModeState] = useState<SyncMode>(readSyncMode)
+  const setSyncMode = (mode: SyncMode) => {
+    setSyncModeState(mode)
+    writeSyncMode(mode)
+  }
+  const group = useCompareGroup(itemIds, syncMode)
 
   const allReady = items.length > 0 && items.every((item) => readyIds.has(item.id))
   const readyCount = items.filter((item) => readyIds.has(item.id)).length
@@ -197,9 +221,11 @@ export function ComparePlayPage() {
           readyCount={readyCount}
           total={items.length}
           onTogglePlay={togglePlayAll}
-          currentTime={group.summary.currentTime}
-          duration={group.summary.duration}
+          currentTime={group.seekScale.value}
+          duration={group.seekScale.max}
           onSeek={group.seekAll}
+          syncMode={syncMode}
+          onSyncMode={setSyncMode}
           volume={group.volume}
           muted={group.muted}
           onVolume={group.setVolumeAll}

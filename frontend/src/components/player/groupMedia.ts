@@ -16,6 +16,19 @@ export interface GroupSummary {
   duration: number
   /** Position of the reference element: the first playing one, otherwise the first. */
   currentTime: number
+  /** The reference element's own duration (0 while unknown): the scale of its fraction in percent mode. */
+  referenceDuration: number
+}
+
+/** How the global seek bar maps onto the cells: one absolute time for all, or the same fraction of each cell's own length. */
+export type SyncMode = "time" | "percent"
+export const DEFAULT_SYNC_MODE: SyncMode = "time"
+/** Slider units of the global seek bar in percent mode: 0-100 (percent points), i.e. the 0-1 fraction times 100. */
+export const PERCENT_SCALE = 100
+
+/** A stored value to a mode; anything but "percent" (missing, garbled) is the default, "time". */
+export function parseSyncMode(raw: string | null | undefined): SyncMode {
+  return raw === "percent" ? "percent" : DEFAULT_SYNC_MODE
 }
 
 const known = (d: number) => Number.isFinite(d) && d > 0
@@ -41,6 +54,7 @@ export function summarizeGroup(snaps: readonly GroupSnapshot[]): GroupSummary {
     anyPlaying: snaps.some(isPlayingSnapshot),
     duration: snaps.reduce((max, s) => (known(s.duration) && s.duration > max ? s.duration : max), 0),
     currentTime: ref < 0 ? 0 : snaps[ref].currentTime,
+    referenceDuration: ref < 0 || !known(snaps[ref].duration) ? 0 : snaps[ref].duration,
   }
 }
 
@@ -51,6 +65,26 @@ export function summarizeGroup(snaps: readonly GroupSnapshot[]): GroupSummary {
 export function globalSeekTarget(t: number, duration: number): number | null {
   if (!known(duration)) return null
   return clamp(t, 0, duration)
+}
+
+/**
+ * Percent mode: where one element goes when the global seek bar is scrubbed to `fraction` (0-1, clamped) of
+ * every element's own length. `null` = skip it (duration unknown or not finite, or no usable fraction).
+ */
+export function globalSeekPercentTarget(fraction: number, duration: number): number | null {
+  if (!known(duration) || Number.isNaN(fraction)) return null
+  return clamp(fraction, 0, 1) * duration
+}
+
+/** Percent mode: the reference element's fraction (0-1) of its own length; 0 while its duration is unknown. */
+export function percentPosition(currentTime: number, duration: number): number {
+  if (!known(duration)) return 0
+  return clamp(currentTime / duration, 0, 1)
+}
+
+/** Percent readout of a 0-1 fraction ("42%"). */
+export function formatPercent(fraction: number): string {
+  return `${Math.round(clamp(Number.isFinite(fraction) ? fraction : 0, 0, 1) * 100)}%`
 }
 
 /** Seek step of the global relative seek: 5 s, 10 s with Shift. */
