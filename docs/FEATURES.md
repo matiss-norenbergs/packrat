@@ -415,6 +415,13 @@ same endpoint with a list of one.
     moment." and changes nothing. Picking something that isn't a readable image shows "the data is not a
     decodable image". Redownload fetches into a temporary folder, so nothing yt-dlp leaves behind ends
     up next to the video.
+  - **The sidecar is always a real JPEG** — whatever the source (an uploaded or gallery PNG, WebP, GIF or
+    BMP; a frame; an AI-enhanced result), the `.jpg` file written next to the video is converted to a
+    full-resolution JPEG first (transparency is flattened onto black); a JPEG is written byte for byte.
+    The gallery copy keeps its original format. Images the server can't read are still refused, and if
+    the conversion itself fails the original bytes are stored as before. Image items are never converted.
+    Thumbnails stored earlier are not migrated: a PNG under a `.jpg` name stays until the thumbnail is
+    replaced again.
   - **Redownload from URL** — re-fetches the thumbnail image from the source. Also works on ghost items
     (no file): it stores only the resized thumbnails, like adding a ghost does, with nothing written next
     to the media; any stale AI-enhancement backup is cleared.
@@ -1065,12 +1072,13 @@ model, scaling mode, minimum-dimension threshold below which a thumbnail is cons
   hashed title is plain text rather than a link. Rows whose item was deleted are never hashed. The
   Eligible Items and Compare dialogs and the search box are not blurred (yet): search still matches
   real titles.
-- **Stored as a real JPEG** — the upscaler returns a PNG; Packrat converts it to a full-resolution JPEG
-  (same dimensions, near-lossless quality, transparency flattened onto black) before it becomes the
-  thumbnail, so the sidecar is always a real `.jpg` file and a few times smaller than the PNG. A result
-  that already is a JPEG is stored as is. If the conversion itself fails, the upscaler's original image
-  is stored instead (as before) and the run still succeeds. Thumbnails enhanced earlier keep their old
-  content until they are enhanced again. The stored dimensions and file size describe the converted file.
+- **Stored as a real JPEG** — the upscaler returns a PNG; it is converted to a full-resolution JPEG like
+  every other thumbnail (see "The sidecar is always a real JPEG" under Thumbnails), so the sidecar is a
+  real `.jpg` file and a few times smaller than the PNG. A result that already is a JPEG is stored as is.
+  If the conversion itself fails, the upscaler's original image is stored instead and the run still
+  succeeds. Thumbnails enhanced earlier keep their old content until they are replaced again; Revert of
+  such an old PNG backup restores the same pixels as a JPEG. The stored dimensions and file size describe
+  the converted file.
 - **A failed run changes nothing** — the enhanced image is written to a temporary copy next to the
   thumbnail and checked (it must be a readable image, its small/medium versions must generate, the
   database must accept them) before it replaces the thumbnail. If any step fails, the history row says

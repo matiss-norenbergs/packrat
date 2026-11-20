@@ -673,6 +673,7 @@ func (tc thumbnailCommit) replaceThumbnail(ctx context.Context, id int64, mediaP
 		Repo:       tc.libraryRepo,
 		FFmpegPath: tc.ffmpegPath,
 		ImagesRoot: tc.imagesRoot,
+		MediaRoot:  tc.mediaRoot,
 		ID:         id,
 		ThumbAbs:   thumbAbs,
 		ThumbRel:   &thumbRel,

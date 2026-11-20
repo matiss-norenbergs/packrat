@@ -1054,7 +1054,13 @@ has succeeded:
 1. Write the bytes to a temp file in the **same directory** as the sidecar (same filesystem, so the
    final rename is atomic): `os.CreateTemp` → `.packrat-thumb-<random><ext>`, permissions copied from
    the existing sidecar (0644 if none).
-2. Probe the temp file (`image.DecodeConfig`, JPEG/PNG) — garbage stops here with `thumbwrite.ErrNotAnImage`.
+2. Data the Go decoder can't read (`image.DecodeConfig`, JPEG/PNG only — so WebP is refused too) stops here
+   with `thumbwrite.ErrNotAnImage`, judged on the **original** bytes before anything else. Then, for a
+   `.jpg`/`.jpeg` sidecar of a non-image item (never an image item, never a path equal to its media file —
+   `Params.MediaRoot` makes that comparison), PNG/WebP/GIF/BMP data (`imageproc.NeedsJPEGConversion`) is
+   converted with `imageproc.BytesToJPEG` (`thumbwrite.ConvertToJPEG` is the test seam); a JPEG is written
+   untouched and a failed conversion is logged and the original bytes kept. The temp file is written from
+   the result and probed: the stored dimensions and size describe the converted file.
 3. Generate the tiers **from the temp file** (new uuid file names; the old derivatives are not touched).
 4. `LibraryRepo.UpdateThumbnailAndTiers` — **one statement** — points the row at the sidecar path
    (`Params.ThumbRel`, set also when the item had no thumbnail; nil keeps the row's path), the new tiers
@@ -1094,14 +1100,13 @@ removes the whole directory on every path, then passes the bytes to `Replace`. y
 writes onto the sidecar, nothing it leaves behind (converted or intermediate files) ends up next to the
 media file, and its exact-name matching cannot collide with another file.
 
-**What enhancement writes.** The Stable Diffusion WebUI returns a PNG by default, so `enhanceOne` runs the
-result through `sidecarJPEG` first: `imageproc.NeedsJPEGConversion` (content sniffing, never headers)
-selects PNG/WebP/GIF/BMP, `imageproc.BytesToJPEG` converts it with ffmpeg through pipes (mjpeg `-q:v 2`,
-the app's usual JPEG quality; alpha flattened onto black; dimensions verified equal), and a JPEG result is
-written untouched. This happens before the backup and before `Replace`, so nothing is changed by it; any
-conversion error is logged and the upscaler's own bytes are written instead (never a failed run). Only a
-`.jpg`/`.jpeg` sidecar of a non-image item is converted. `thumbnailenhance.convertToJPEG` is the test seam.
-`thumbwrite.Replace` itself still stores whatever bytes it is given.
+**What enhancement writes.** The Stable Diffusion WebUI returns a PNG by default; `enhanceOne` hands it to
+`thumbwrite.Replace` as is, and `Replace` converts it (content sniffing, never headers; ffmpeg through pipes,
+mjpeg `-q:v 2`, the app's usual JPEG quality; alpha flattened onto black; dimensions verified equal). The same
+conversion covers every other caller (Set thumbnail, gallery apply, Quick Grab, frame-match accept,
+redownload) and Revert, so a revert of an old PNG-under-`.jpg` backup writes a JPEG with the same pixels,
+while the normal backup (the previous JPEG) is restored byte for byte. A conversion error is logged and the
+original bytes are written instead (never a failed run).
 
 `enhanceOne` backs the original up *before* writing (`backupOriginalIfAbsent` now reports whether it
 created the backup); if the write fails, a backup created by that run is removed again (an earlier

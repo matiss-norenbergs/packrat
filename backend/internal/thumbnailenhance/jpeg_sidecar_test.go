@@ -11,25 +11,25 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"packrat/backend/internal/imageproc"
+	"packrat/backend/internal/thumbwrite"
 )
 
 // useRealJPEGConversion points the conversion seam at the machine's real ffmpeg (the fixture's
-// own ffmpeg is a fake that only knows how to write .webp tiers). Skips without ffmpeg.
+// own ffmpeg is a fake that only knows how to write .webp tiers; thumbwrite.Replace converts through the seam). Skips without ffmpeg.
 func useRealJPEGConversion(t *testing.T) {
 	t.Helper()
 	real, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		t.Skip("ffmpeg not on PATH")
 	}
-	old := convertToJPEG
-	convertToJPEG = func(ctx context.Context, _ string, data []byte) ([]byte, error) {
+	old := thumbwrite.ConvertToJPEG
+	thumbwrite.ConvertToJPEG = func(ctx context.Context, _ string, data []byte) ([]byte, error) {
 		return imageproc.BytesToJPEG(ctx, real, data)
 	}
-	t.Cleanup(func() { convertToJPEG = old })
+	t.Cleanup(func() { thumbwrite.ConvertToJPEG = old })
 }
 
 func jpegBytes(t *testing.T, size int) []byte {
@@ -182,9 +182,9 @@ func TestEnhancedPNGWithAlphaConverts(t *testing.T) {
 }
 
 func TestConversionFailureFallsBackToTheUpscalersBytes(t *testing.T) {
-	old := convertToJPEG
-	convertToJPEG = func(context.Context, string, []byte) ([]byte, error) { return nil, errors.New("ffmpeg exploded") }
-	defer func() { convertToJPEG = old }()
+	old := thumbwrite.ConvertToJPEG
+	thumbwrite.ConvertToJPEG = func(context.Context, string, []byte) ([]byte, error) { return nil, errors.New("ffmpeg exploded") }
+	defer func() { thumbwrite.ConvertToJPEG = old }()
 
 	f := newJPEGFixture(t)
 	enhancedPNG := pngBytes(t, 8, color.RGBA{G: 200, A: 255})
@@ -204,12 +204,12 @@ func TestConversionFailureFallsBackToTheUpscalersBytes(t *testing.T) {
 }
 
 func TestAlreadyJPEGResultIsWrittenUnchanged(t *testing.T) {
-	old := convertToJPEG
-	convertToJPEG = func(context.Context, string, []byte) ([]byte, error) {
+	old := thumbwrite.ConvertToJPEG
+	thumbwrite.ConvertToJPEG = func(context.Context, string, []byte) ([]byte, error) {
 		t.Error("an already-JPEG result must not be re-encoded")
 		return nil, errors.New("unexpected")
 	}
-	defer func() { convertToJPEG = old }()
+	defer func() { thumbwrite.ConvertToJPEG = old }()
 
 	f := newJPEGFixture(t)
 	enhanced := jpegBytes(t, 9)
@@ -222,28 +222,29 @@ func TestAlreadyJPEGResultIsWrittenUnchanged(t *testing.T) {
 	}
 }
 
-func TestSidecarJPEGNeverConvertsImageItemsOrNonJPEGDestinations(t *testing.T) {
-	old := convertToJPEG
-	convertToJPEG = func(context.Context, string, []byte) ([]byte, error) {
-		t.Error("conversion must not run")
-		return nil, errors.New("unexpected")
-	}
-	defer func() { convertToJPEG = old }()
-
+// An item enhanced several times before sidecars were converted can have a PNG under the .jpg name
+// as its backup. Revert writes through thumbwrite.Replace, so it now restores a JPEG with the same
+// pixels (same dimensions) and must not fail.
+func TestRevertOfAPNGBackupRestoresAJPEG(t *testing.T) {
+	useRealJPEGConversion(t)
 	f := newJPEGFixture(t)
-	data := pngBytes(t, 4, color.RGBA{R: 1, A: 255})
-
-	imageItem := *f.item()
-	img := "image"
-	imageItem.MediaType = &img
-	if out := sidecarJPEG(context.Background(), f.deps, imageItem, f.thumbAbs, data); !bytes.Equal(out, data) {
-		t.Error("an image item's media file must never be converted")
+	if err := f.run(f.upscaler(jpegBytes(t, 9)), false); err != nil {
+		t.Fatal(err)
 	}
-	video := *f.item()
-	if out := sidecarJPEG(context.Background(), f.deps, video, strings.TrimSuffix(f.thumbAbs, ".jpg")+".png", data); !bytes.Equal(out, data) {
-		t.Error("a non-.jpg destination must never be converted")
+	rel, err := f.deps.OriginalsRepo.Get(context.Background(), f.itemID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if out := sidecarJPEG(context.Background(), f.deps, video, f.thumbAbs, []byte("junk")); string(out) != "junk" {
-		t.Error("junk must pass through untouched")
+	backupAbs := filepath.Join(f.deps.ImagesRoot, filepath.FromSlash(rel))
+	if err := os.WriteFile(backupAbs, pngBytes(t, 6, color.RGBA{R: 200, A: 255}), 0o644); err != nil {
+		t.Fatal(err)
 	}
+	if err := RevertOriginal(context.Background(), f.deps, f.itemID); err != nil {
+		t.Fatalf("revert of a PNG backup must not fail: %v", err)
+	}
+	got, _ := os.ReadFile(f.thumbAbs)
+	if !imageproc.IsJPEG(got) {
+		t.Fatal("reverted sidecar is not a JPEG")
+	}
+	rowAndFileDims(t, f, 6, 6)
 }
