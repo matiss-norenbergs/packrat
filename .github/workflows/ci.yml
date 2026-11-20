@@ -29,13 +29,14 @@ jobs:
       - run: go vet ./...
       - run: go test -race -timeout 20m ./...
 
-  # Dependency/stdlib vulnerability scan. Report-only for now: findings never fail the PR check
-  # (see docs/TODO.md: make it required once they are dealt with), so they are written to the job
-  # summary and an annotation instead, to keep a green tick from hiding them.
+  # Dependency/stdlib vulnerability scan. Fails the job when govulncheck reports vulnerabilities
+  # that affect the code (exit status 3); the report is also written to the job summary and an
+  # annotation. Any other failure (the scan could not complete, e.g. vuln.go.dev is unreachable)
+  # only warns, so an outage of the vulnerability database cannot block every PR.
+  # Adding the job to the required checks is branch protection, configured outside the repo.
   govulncheck:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     defaults:
       run:
         working-directory: backend
@@ -53,7 +54,7 @@ jobs:
           status=0
           "$(go env GOPATH)/bin/govulncheck" ./... 2>&1 | tee govulncheck.txt || status=${PIPESTATUS[0]}
           {
-            echo "## govulncheck (report-only)"
+            echo "## govulncheck"
             echo
             echo "Go $(go env GOVERSION), govulncheck ${GOVULNCHECK_VERSION}, exit code ${status}"
             echo
@@ -62,11 +63,13 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$status" -eq 3 ]; then
-            echo "::warning title=govulncheck::Vulnerabilities found. See the job summary (not a failure while report-only)."
+            echo "::error title=govulncheck::Vulnerabilities found. See the job summary."
+            exit 1
           elif [ "$status" -ne 0 ]; then
+            # Not a finding: the scan itself failed (database unreachable, build error, ...).
+            # Warn but pass, so an outage of vuln.go.dev cannot block every PR.
             echo "::warning title=govulncheck::govulncheck did not complete (exit code ${status}). See the job summary."
           fi
-          exit 0
 
   frontend:
     runs-on: ubuntu-latest

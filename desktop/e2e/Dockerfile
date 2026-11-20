@@ -4,7 +4,7 @@
 FROM ubuntu:22.04
 
 ARG NODE_MAJOR=22
-ARG GO_VERSION=1.26.4
+ARG GO_VERSION=1.26.11
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/usr/local/go/bin:/root/.cargo/bin:$PATH
