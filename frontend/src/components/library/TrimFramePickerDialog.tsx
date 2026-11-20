@@ -62,11 +62,11 @@ export function TrimFramePickerDialog({
           <p className="text-sm text-muted-foreground">No frames found in this range.</p>
         ) : (
           <>
-          {fetchFrames.data.truncated && (
-            <p className="text-xs text-muted-foreground">
-              Showing the first {fetchFrames.data.frames.length} of {fetchFrames.data.totalFrames} frames
-            </p>
-          )}
+            {fetchFrames.data.truncated && (
+              <p className="text-xs text-muted-foreground">
+                Showing the first {fetchFrames.data.frames.length} of {fetchFrames.data.totalFrames} frames
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               {fetchFrames.data.frames.map((frame, i) => (
                 <button

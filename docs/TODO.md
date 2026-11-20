@@ -123,6 +123,12 @@ None are scheduled. Sizes are guesses.
 - **CI step timeouts (S).** The `desktop` and `e2e` jobs have hung for hours on the "Install Linux dependencies"
   step (an `apt` stall, not a code problem), and only a manual re-run recovered. A `timeout-minutes` on those jobs
   (and a retry around `apt-get update`) would make a hang fail in minutes.
+- **Trim frame picker timeout headroom on very heavy windows (S to M).** `ExtractFrameThumbnails` and
+  `ExtractFrameRange` share a 30 s `frameRangeTimeout`. A synthetic 4K 120 fps, 15 s window took about 20 s here, of
+  which about 15.5 s was ffprobe listing every frame's timestamp (`probeAllFrameTimestamps`, which decodes the
+  frames). Slower hardware (a NAS or a Pi, which Packrat targets) could pass 30 s on very heavy windows. Ideas, none
+  decided: list timestamps with `-show_packets` instead of decoding, run ffprobe and ffmpeg concurrently, or scale
+  the timeout with the window's expected frame count. Unmeasured on slow hardware; not scheduled.
 
 ## Dependencies
 
