@@ -337,6 +337,14 @@ export interface TrimFrame {
   imageBase64: string
 }
 
+// Response of GET /library/:id/trim/frames. Frames are small downscaled
+// previews; `truncated` means the window held `totalFrames` but fewer came back.
+export interface TrimFramesResponse {
+  frames: TrimFrame[]
+  truncated: boolean
+  totalFrames: number
+}
+
 export interface LibraryItemMetadataPreview {
   title: string
   uploader: string

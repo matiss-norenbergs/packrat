@@ -55,17 +55,17 @@ func GetLibraryItemTrimFrames(repo *repository.LibraryRepo, mediaRoot string, yt
 		}
 
 		mediaAbs := filepath.Join(mediaRoot, filepath.FromSlash(item.Path))
-		frames, err := ytdlp.ExtractFrameRange(c.Request.Context(), ffprobePath, mediaAbs, start, end)
+		res, err := ytdlp.ExtractFrameThumbnails(c.Request.Context(), ffprobePath, mediaAbs, start, end)
 		if err != nil {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "extracting frames: " + err.Error()})
 			return
 		}
 
-		resp := make([]TrimFrameResponse, len(frames))
-		for i, f := range frames {
+		resp := make([]TrimFrameResponse, len(res.Frames))
+		for i, f := range res.Frames {
 			resp[i] = TrimFrameResponse{TimestampSeconds: f.TimestampSeconds, ImageBase64: f.ImageBase64}
 		}
-		c.JSON(http.StatusOK, gin.H{"frames": resp})
+		c.JSON(http.StatusOK, gin.H{"frames": resp, "truncated": res.Truncated, "totalFrames": res.TotalFrames})
 	}
 }
 
