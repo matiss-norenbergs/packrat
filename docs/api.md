@@ -975,7 +975,8 @@ re-extracting/re-fetching. Cascade-deleted with the library item.
   ```
   Empty/omitted body saves a copy of the item's *current* thumbnail as-is; a non-empty
   `imageBase64` saves those exact bytes instead (e.g. a specific frame from "Choose from Video," or
-  a Frame Matching result). Optional `timestampSeconds` records the video position the frame came
+  a Frame Matching result). The saved file's extension follows the image's real format, sniffed from its
+  bytes (`.jpg`, `.png`, `.webp`; `.jpg` for the supplied-bytes path when the format isn't recognised). Optional `timestampSeconds` records the video position the frame came
   from (millisecond-precise float); omit/`null` when unknown. `400` item has neither a current
   thumbnail nor a supplied image. Response `201`:
   ```json
