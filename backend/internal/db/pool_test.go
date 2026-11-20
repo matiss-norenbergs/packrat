@@ -25,7 +25,7 @@ func TestEveryPooledConnectionGetsTheSetup(t *testing.T) {
 		t.Fatalf("pool holds %d connections, want %d (the test would not prove anything)", got, MaxOpenConns)
 	}
 	for i, c := range conns {
-		var fk, busy int
+		var fk, busy, sync int
 		var mode string
 		ctx := context.Background()
 		if err := c.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&fk); err != nil {
@@ -36,6 +36,12 @@ func TestEveryPooledConnectionGetsTheSetup(t *testing.T) {
 		}
 		if err := c.QueryRowContext(ctx, "PRAGMA journal_mode").Scan(&mode); err != nil {
 			t.Fatal(err)
+		}
+		if err := c.QueryRowContext(ctx, "PRAGMA synchronous").Scan(&sync); err != nil {
+			t.Fatal(err)
+		}
+		if sync != 2 { // 2 = FULL
+			t.Errorf("connection %d: synchronous = %d, want 2 (FULL)", i, sync)
 		}
 		if fk != 1 {
 			t.Errorf("connection %d: foreign_keys = %d, want 1", i, fk)

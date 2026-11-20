@@ -671,7 +671,14 @@ connections in WAL mode. Reads run concurrently with a write; **writes still hap
 
 - **DSN, applied to every connection the pool opens** (the driver runs each `_pragma` per connection;
   `TestEveryPooledConnectionGetsTheSetup` checks all eight): `busy_timeout(15000)` first (so the
-  journal-mode change itself waits), `journal_mode(WAL)`, `foreign_keys(on)`, and `_txlock=immediate`.
+  journal-mode change itself waits), `journal_mode(WAL)`, `foreign_keys(on)`, `synchronous(FULL)`, and `_txlock=immediate`.
+- **`synchronous=FULL`, kept on purpose and set explicitly.** It is SQLite's default, and the DSN now says it
+  so a driver default can't change it silently (the test reads `PRAGMA synchronous` = 2 on every pooled
+  connection). With FULL the WAL is fsynced at every commit, so a power cut or OS crash cannot lose a
+  committed transaction. `NORMAL` is the usual WAL setting and is faster on slow storage (a NAS, an SD card),
+  but a power cut can then lose the last few commits (the database stays consistent); Packrat targets those
+  machines and the data is small, so durability won over speed. Revisit it only with a measured write
+  bottleneck.
 - **`_txlock=immediate`: every `BeginTx` takes the write lock at BEGIN.** A deferred transaction that
   reads and then writes fails *instantly* with `SQLITE_BUSY` (busy_timeout does not apply to the
   read-to-write upgrade) if another connection committed in between. With immediate, two
