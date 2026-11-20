@@ -82,12 +82,6 @@ export function PlayerSkin({
   const counter = useRef(0)
   // TEMPORARY diagnostics: ?playerDebug=1 shows the values behind showBar (to be removed once the fullscreen bar report is settled).
   const debug = useMemo(() => typeof location !== "undefined" && new URLSearchParams(location.search).get("playerDebug") === "1", [])
-  const [, setDebugTick] = useState(0)
-  useEffect(() => {
-    if (!debug) return
-    const t = setInterval(() => setDebugTick((n) => n + 1), 200)
-    return () => clearInterval(t)
-  }, [debug])
 
   const bump = useCallback(() => {
     setActive(true)
@@ -356,9 +350,7 @@ export function PlayerSkin({
   )
 
   const debugReadout = debug && (
-    <pre className="pointer-events-none absolute left-2 top-12 z-40 max-w-[90%] whitespace-pre-wrap rounded bg-black/80 p-2 font-mono text-[11px] leading-tight text-lime-300" data-slot="player-debug">
-      {JSON.stringify({ paused: state.paused, active, pointerOnBar, menuOpen, kbFocus, isFullscreen, showBar, waiting: state.waiting, frameMoves: moves.current.frame, docMoves: moves.current.doc, lastMoveMsAgo: moves.current.last ? Date.now() - moves.current.last : null }, null, 1)}
-    </pre>
+    <PlayerDebug values={{ paused: state.paused, active, pointerOnBar, menuOpen, kbFocus, isFullscreen, showBar, waiting: state.waiting }} moves={moves} />
   )
 
   const frameProps = {
@@ -452,5 +444,22 @@ function Placeholder({ small = false }: { small?: boolean }) {
     <div className="flex h-full w-full items-center justify-center text-(--player-fg)">
       <Music className={small ? "size-4 opacity-30" : "size-16 opacity-30"} aria-hidden />
     </div>
+  )
+}
+
+// TEMPORARY diagnostics for the fullscreen-bar report (?playerDebug=1): live values behind showBar plus pointer-event counters.
+function PlayerDebug({ values, moves }: { values: Record<string, boolean>; moves: RefObject<{ frame: number; doc: number; last: number }> }) {
+  const [counts, setCounts] = useState({ frame: 0, doc: 0, ago: -1 })
+  useEffect(() => {
+    const t = setInterval(() => {
+      const m = moves.current
+      setCounts({ frame: m.frame, doc: m.doc, ago: m.last ? Date.now() - m.last : -1 })
+    }, 200)
+    return () => clearInterval(t)
+  }, [moves])
+  return (
+    <pre className="pointer-events-none absolute left-2 top-12 z-40 max-w-[90%] whitespace-pre-wrap rounded bg-black/80 p-2 font-mono text-[11px] leading-tight text-lime-300" data-slot="player-debug">
+      {JSON.stringify({ ...values, frameMoves: counts.frame, docMoves: counts.doc, lastMoveMsAgo: counts.ago }, null, 1)}
+    </pre>
   )
 }
