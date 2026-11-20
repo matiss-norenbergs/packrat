@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { computeShowBar, inHotZone, isPointerOnBar, pointInRect } from "./playerVisibility"
+import { computeShowBar, inHotZone, isInFullscreen, isPointerOnBar, pointInRect } from "./playerVisibility"
 
 const frame = { left: 0, top: 0, right: 1000, bottom: 600 }
 const bar = { left: 12, top: 520, right: 988, bottom: 588 }
@@ -53,5 +53,20 @@ describe("computeShowBar", () => {
   })
   it("is always shown when not an overlay", () => {
     expect(computeShowBar({ ...base, overlay: false })).toBe(true)
+  })
+})
+
+describe("isInFullscreen", () => {
+  it("is true for the frame itself and for any fullscreen ancestor, false otherwise", () => {
+    const page = document.createElement("div")
+    const frame = document.createElement("div")
+    const other = document.createElement("div")
+    page.appendChild(frame)
+    expect(isInFullscreen(frame, frame)).toBe(true)
+    expect(isInFullscreen(page, frame)).toBe(true)
+    expect(isInFullscreen(other, frame)).toBe(false)
+    expect(isInFullscreen(frame, page)).toBe(false) // a fullscreen child does not contain its parent
+    expect(isInFullscreen(null, frame)).toBe(false)
+    expect(isInFullscreen(page, null)).toBe(false)
   })
 })

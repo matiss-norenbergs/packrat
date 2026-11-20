@@ -700,8 +700,8 @@ artist") and changes nothing, and the removal and the selection reset happen tog
 ## Media player
 
 The library item page (`/library/:id`, `/browse/:id`) and the Browse mini player share one custom
-control skin instead of the browser's native bar (the compare player and the Trim dialog still use
-the browser's own controls). It sits on the page's own `<video>`/`<audio>` element, so resume
+control skin instead of the browser's native bar (the [compare player](#compare-list) uses the same skin in
+each of its cells; the Trim dialog still uses the browser's own controls). It sits on the page's own `<video>`/`<audio>` element, so resume
 position, **Continue Watching** progress, autoplay and the private-item lock work exactly as before.
 
 - **Video** — a floating glass bar over the bottom of the picture (in fullscreen the blur is replaced by a more opaque solid scrim): a seek bar (thickens on hover,
@@ -751,11 +751,49 @@ position, **Continue Watching** progress, autoplay and the private-item lock wor
 A scratch list for lining files up to play back side by side. Add files from the Library page
 (select one or more items, or whole collections) via "Add to compare list" — the list persists
 server-side across sessions until you remove items or clear it. From the Compare list page, check
-up to 6 files and hit **Play selected** to open a synced playback grid: one cell per file, each
-with its own native seek bar, plus a bottom bar that can play/pause/set volume across every cell at
-once and toggle fullscreen. Two playback options (remembered per-browser): **Preload** buffers
-every file aggressively as soon as the page opens rather than waiting for Play, and **Wait for
-ready** disables "Play all" until every file has buffered enough to play without stalling.
+up to 6 files and hit **Play selected** to open a side-by-side playback grid (1×1, 2×1, 2×2 or 3×2 for 1–6 files).
+
+**Each cell** is a player with the [media player skin](#media-player) in its one-row form (play/pause, seek bar, time,
+volume) over the video, with the file's title in a top-left gradient that shows and hides with the bar; audio files
+get a cover, title and artist with the same bar. A cell's controls are independent (no speed pill or fullscreen
+button; the bar below provides those). Clicking a cell focuses it and shows a thin highlight ring around it, which is
+the cell the keyboard shortcuts then act on. In a narrow cell the time and then the volume drop out of the bar rather
+than overflow.
+
+**The global bar** below the grid controls all cells at once, left to right:
+
+- **Play all / Pause all** — follows what the cells are really doing: "Pause all" while any cell is playing (also
+  after you paused one by hand), otherwise "Play all".
+- **Global seek bar** with `current / longest` time — the range is the longest clip. Scrubbing puts every cell at
+  the same time, except that a shorter clip stops at its own end; cells whose length isn't known yet are skipped. The
+  position shown follows the first playing cell (otherwise the first cell).
+- **Master volume** — a "set all" control: moving it sets every cell's volume (and unmutes it); it shows the last
+  value you set. A private cell revealed later keeps its own remembered volume unless you moved the master slider.
+- **Speed** — the speed pill sets every cell (1× when the page opens); a cell revealed later adopts it.
+- **Preload** and **Wait for ready** (remembered per browser, both on by default) — **Preload** buffers every file
+  aggressively as soon as the page opens rather than waiting for Play; **Wait for ready** disables "Play all" (and
+  the Space/K shortcut) until every file has buffered enough to play without stalling, showing "Buffering… (n/m
+  ready)". Pausing is never blocked.
+- **Full screen** — the whole page goes fullscreen; the cells' bars then use the same solid, blur-free scrim as
+  the item player.
+
+Private (blurred) cells have no player until revealed and are skipped by every global control; they count as ready.
+
+**Keyboard** (never while typing, never with Ctrl/Alt/Meta). Which cell or control has focus decides the scope:
+
+| | A cell has focus (click it, or Tab) | Nothing/the page or global bar has focus |
+|---|---|---|
+| `Space` / `K` | play/pause that cell | play/pause all (respects Wait for ready) |
+| `←` / `→` | seek that cell 5 s (`Shift`, `J`/`L`: 10 s) | seek every cell 5 s (`Shift`: 10 s) from **its own** time, so offsets between cells are kept |
+| `↑` / `↓` | that cell's volume | master volume |
+| `M` | mute that cell | mute / unmute all |
+| `<` / `>` | that cell's speed | global speed |
+| `0`–`9` | that cell to 0–90 % | — |
+| `F` | — | page fullscreen |
+
+A focused button, switch, slider or menu item keeps handling its own Space/Enter/arrow keys. Clicking the empty
+page or the global bar takes focus out of any cell, so the global scope applies after a click anywhere that isn't a
+cell. The global shortcuts show a brief on-screen indicator above the global bar.
 
 The toolbar (Play selected → Clear list) stays visible even with an
 empty list — its buttons disable instead of disappearing. **Clear list** asks for confirmation

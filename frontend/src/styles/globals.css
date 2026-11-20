@@ -322,6 +322,16 @@
 [data-accent="mono"]:not(.dark) .player-skin {
     --player-accent: var(--player-fg);
 }
+/* The same control pieces on the themed page instead of over a video (the compare page's global bar): the
+   --player-* variables mapped to theme tokens, so light/dark and every accent follow the app (including
+   Monochrome, whose --primary already contrasts with the page). */
+.player-themed {
+    --player-fg: var(--foreground);
+    --player-scrim: var(--popover);
+    --player-accent: var(--primary);
+    --player-track-bg: color-mix(in oklab, var(--foreground) 22%, transparent);
+    --player-hover-bg: color-mix(in oklab, var(--foreground) 10%, transparent);
+}
 .player-range {
     display: block; /* an inline input sits on the baseline of an invisible line box and rides a few px high */
     margin-block: 0;

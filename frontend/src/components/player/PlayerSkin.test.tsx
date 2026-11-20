@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { type RefObject } from "react"
+import { type ComponentProps, type RefObject } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { usePersistedVolume } from "@/hooks/usePersistedVolume"
 import { PlayerSkin } from "./PlayerSkin"
@@ -33,12 +33,20 @@ function fakeMedia(el: HTMLMediaElement, init: { duration?: number } = {}) {
   return s as { paused: boolean; currentTime: number; duration: number; volume: number; muted: boolean; playbackRate: number }
 }
 
-function Harness({ kind = "video", variant = "full" }: { kind?: "video" | "audio"; variant?: "full" | "compact" }) {
+function Harness({
+  kind = "video",
+  variant = "full",
+  skin = {},
+}: {
+  kind?: "video" | "audio"
+  variant?: "full" | "compact"
+  skin?: Partial<ComponentProps<typeof PlayerSkin>>
+}) {
   const ref = usePersistedVolume<HTMLVideoElement>()
   return (
     <>
       <input aria-label="note" />
-      <PlayerSkin mediaRef={ref as RefObject<HTMLMediaElement | null>} kind={kind} variant={variant} title="Song" artist="Band">
+      <PlayerSkin mediaRef={ref as RefObject<HTMLMediaElement | null>} kind={kind} variant={variant} title="Song" artist="Band" {...skin}>
         <video ref={ref} data-testid="media" />
       </PlayerSkin>
     </>
@@ -515,5 +523,111 @@ describe("PlayerSkin diagnostics (URL-only)", () => {
     act(() => void vi.advanceTimersByTime(600))
     expect(screen.getByRole("group").querySelector("[data-slot=player-debug]")).toBeNull()
     expect(info).not.toHaveBeenCalled()
+  })
+})
+
+describe("PlayerSkin shortcuts scope", () => {
+  it('shortcuts="focus" ignores keys while merely hovered, and acts once the frame has focus', () => {
+    const { el } = setup({ skin: { shortcuts: "focus" } })
+    fireEvent.pointerEnter(frame())
+    fireEvent.keyDown(document.body, { key: " " })
+    expect(el.play).not.toHaveBeenCalled()
+    frame().focus()
+    fireEvent.keyDown(document.activeElement!, { key: " " })
+    expect(el.play).toHaveBeenCalledTimes(1)
+  })
+
+  it("the default scope still acts while hovered", () => {
+    const { el } = setup({ skin: { shortcuts: "hover-or-focus" } })
+    fireEvent.pointerEnter(frame())
+    fireEvent.keyDown(document.body, { key: " " })
+    expect(el.play).toHaveBeenCalledTimes(1)
+  })
+
+  it('shortcuts="focus" also acts when focus is on something inside the frame', () => {
+    const { s } = setup({ variant: "compact", skin: { shortcuts: "focus" } })
+    screen.getByRole("slider", { name: "Seek" }).focus()
+    fireEvent.keyDown(document.activeElement!, { key: "m" })
+    expect(s.muted).toBe(true)
+  })
+})
+
+describe("PlayerSkin title overlay", () => {
+  it("shows with the bar and hides together with it", () => {
+    vi.useFakeTimers()
+    const { el } = setup({ variant: "compact", skin: { titleOverlay: "Clip A" } })
+    const title = () => frame().querySelector("[data-slot=player-title]")!
+    expect(title().textContent).toBe("Clip A")
+    expect(title().getAttribute("data-visible")).toBe("true") // paused
+    act(() => void el.play())
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+    expect(barVisible()).toBe("false")
+    expect(title().getAttribute("data-visible")).toBe("false")
+    fireEvent.pointerMove(frame())
+    expect(title().getAttribute("data-visible")).toBe("true")
+  })
+
+  it("is absent without the prop and for audio", () => {
+    setup()
+    expect(frame().querySelector("[data-slot=player-title]")).toBeNull()
+    cleanup()
+    setup({ kind: "audio", skin: { titleOverlay: "x" } })
+    expect(frame().querySelector("[data-slot=player-title]")).toBeNull()
+  })
+})
+
+describe("PlayerSkin fullscreen containment", () => {
+  const setFullscreenElement = (node: Element | null) => {
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => node })
+    act(() => void document.dispatchEvent(new Event("fullscreenchange")))
+  }
+  afterEach(() => setFullscreenElement(null))
+  const barStyle = () => (frame().querySelector("[data-slot=player-bar]") as HTMLElement).style
+  const blurred = () => !!(barStyle().backdropFilter || barStyle().getPropertyValue("-webkit-backdrop-filter"))
+
+  it("a fullscreen ancestor (the compare page) counts: no blur, cursor hides, icon stays 'Fullscreen'", () => {
+    vi.useFakeTimers()
+    const { el } = setup()
+    expect(blurred()).toBe(true) // windowed: glass
+    const page = document.createElement("div")
+    document.body.appendChild(page)
+    page.appendChild(frame().parentElement!) // the frame now lives inside the fullscreen "page"
+    setFullscreenElement(page)
+    expect(blurred()).toBe(false)
+    act(() => void el.play())
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+    expect(frame().className).toContain("cursor-none")
+    expect(screen.getByRole("button", { name: "Fullscreen" })).toBeTruthy() // not "Exit fullscreen": the frame itself isn't fullscreen
+    page.remove()
+  })
+
+  it("the frame being the fullscreen element still shows 'Exit fullscreen' and the solid bar", () => {
+    setup()
+    setFullscreenElement(frame())
+    expect(blurred()).toBe(false)
+    expect(screen.getByRole("button", { name: "Exit fullscreen" })).toBeTruthy()
+  })
+
+  it("an unrelated fullscreen element does not count", () => {
+    setup()
+    const other = document.createElement("div")
+    document.body.appendChild(other)
+    setFullscreenElement(other)
+    expect(blurred()).toBe(true)
+    other.remove()
+  })
+
+  it("under a fullscreen ancestor only moves over this frame wake the bar", () => {
+    vi.useFakeTimers()
+    const { el } = setup()
+    stubRects()
+    setFullscreenElement(document.body)
+    act(() => void el.play())
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+    expect(barVisible()).toBe("false")
+    fireEvent.mouseMove(document.body, { clientX: 1500, clientY: 200 }) // outside the frame
+    expect(barVisible()).toBe("false")
+    fireEvent.mouseMove(document.body, { clientX: 400, clientY: 200 }) // over it
+    expect(barVisible()).toBe("true")
   })
 })
