@@ -1065,6 +1065,12 @@ model, scaling mode, minimum-dimension threshold below which a thumbnail is cons
   hashed title is plain text rather than a link. Rows whose item was deleted are never hashed. The
   Eligible Items and Compare dialogs and the search box are not blurred (yet): search still matches
   real titles.
+- **Stored as a real JPEG** — the upscaler returns a PNG; Packrat converts it to a full-resolution JPEG
+  (same dimensions, near-lossless quality, transparency flattened onto black) before it becomes the
+  thumbnail, so the sidecar is always a real `.jpg` file and a few times smaller than the PNG. A result
+  that already is a JPEG is stored as is. If the conversion itself fails, the upscaler's original image
+  is stored instead (as before) and the run still succeeds. Thumbnails enhanced earlier keep their old
+  content until they are enhanced again. The stored dimensions and file size describe the converted file.
 - **A failed run changes nothing** — the enhanced image is written to a temporary copy next to the
   thumbnail and checked (it must be a readable image, its small/medium versions must generate, the
   database must accept them) before it replaces the thumbnail. If any step fails, the history row says
