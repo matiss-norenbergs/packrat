@@ -52,7 +52,7 @@ jobs:
       - name: Install Linux dependencies
         timeout-minutes: 10
         run: |
-          .github/scripts/apt-install.sh \
+          "$GITHUB_WORKSPACE/.github/scripts/apt-install.sh" \
             libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev \
             libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev \
             xvfb x11-utils webkit2gtk-driver
