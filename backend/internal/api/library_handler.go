@@ -16,6 +16,7 @@ import (
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/fsutil"
 	"packrat/backend/internal/importer"
+	"packrat/backend/internal/itemlock"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/nfo"
 	"packrat/backend/internal/pathsafe"
@@ -676,6 +677,33 @@ func activeDownloadFor(ctx context.Context, downloadsRepo *repository.DownloadsR
 	return dl, ok, nil
 }
 
+// itemEnqueueGuard serializes "is a download already active for this item? ->
+// queue one" per library item. Without it two quick requests both saw "no
+// active download" and both queued. It is deliberately not the item lock
+// (itemlock held by the manager for file work): it is held only across the
+// check and the enqueue, never across I/O, and enqueueing returns once the
+// downloads row exists, so the second request then sees it as active.
+var itemEnqueueGuard = itemlock.New()
+
+// enqueueIfNoActiveDownload runs enqueue only when item id has no queued or
+// running download, atomically with respect to other callers for the same
+// item. active=true means it did not run (answer 409).
+func enqueueIfNoActiveDownload(ctx context.Context, downloadsRepo *repository.DownloadsRepo, id int64, enqueue func() (int64, error)) (newID int64, active bool, err error) {
+	itemEnqueueGuard.Lock(id)
+	defer itemEnqueueGuard.Unlock(id)
+	_, active, err = activeDownloadFor(ctx, downloadsRepo, id)
+	if err != nil || active {
+		return 0, active, err
+	}
+	newID, err = enqueue()
+	return newID, false, err
+}
+
+// answerActiveDownload writes the 409 every "item has an active download" path uses.
+func answerActiveDownload(c *gin.Context) {
+	c.JSON(http.StatusConflict, gin.H{"error": "a download is already in progress for this item"})
+}
+
 // rejectIfDownloadActive answers 409 (or 500 on a lookup failure) and returns
 // true when item id already has an active download, so a second one can't be
 // started on top of it.
@@ -686,7 +714,7 @@ func rejectIfDownloadActive(c *gin.Context, downloadsRepo *repository.DownloadsR
 		return true
 	}
 	if active {
-		c.JSON(http.StatusConflict, gin.H{"error": "a download is already in progress for this item"})
+		answerActiveDownload(c)
 		return true
 	}
 	return false
@@ -783,11 +811,13 @@ func RedownloadLibraryItem(libraryRepo *repository.LibraryRepo, downloadsRepo *r
 			return
 		}
 
-		if rejectIfDownloadActive(c, downloadsRepo, id) {
+		newID, active, err := enqueueIfNoActiveDownload(c.Request.Context(), downloadsRepo, id, func() (int64, error) {
+			return enqueueRedownload(c.Request.Context(), mgr, downloadsRepo, collectionsRepo, settingsRepo, item, *item.OriginalURL, []string{"resolution", "duration"})
+		})
+		if active {
+			answerActiveDownload(c)
 			return
 		}
-
-		newID, err := enqueueRedownload(c.Request.Context(), mgr, downloadsRepo, collectionsRepo, settingsRepo, item, *item.OriginalURL, []string{"resolution", "duration"})
 		if err != nil {
 			writeEnqueueError(c, err)
 			return
@@ -830,15 +860,15 @@ func BulkRedownloadLibraryItems(libraryRepo *repository.LibraryRepo, downloadsRe
 				continue
 			}
 
-			if _, active, err := activeDownloadFor(ctx, downloadsRepo, id); err != nil || active {
+			_, active, err := enqueueIfNoActiveDownload(ctx, downloadsRepo, id, func() (int64, error) {
+				return enqueueRedownload(ctx, mgr, downloadsRepo, collectionsRepo, settingsRepo, item, *item.OriginalURL, []string{"resolution", "duration"})
+			})
+			if active {
 				resp.Skipped++ // a download is already filling this item in
-				if err == nil {
-					resp.SkippedDownloading++
-				}
+				resp.SkippedDownloading++
 				continue
 			}
-
-			if _, err := enqueueRedownload(ctx, mgr, downloadsRepo, collectionsRepo, settingsRepo, item, *item.OriginalURL, []string{"resolution", "duration"}); err != nil {
+			if err != nil {
 				log.Printf("bulk redownload: item %d: %v", id, err)
 				resp.Skipped++
 				continue
@@ -895,11 +925,13 @@ func RedownloadLibraryItemFromURL(libraryRepo *repository.LibraryRepo, downloads
 			return
 		}
 
-		if rejectIfDownloadActive(c, downloadsRepo, id) {
+		newID, active, err := enqueueIfNoActiveDownload(c.Request.Context(), downloadsRepo, id, func() (int64, error) {
+			return enqueueRedownload(c.Request.Context(), mgr, downloadsRepo, collectionsRepo, settingsRepo, item, req.URL, req.OverwriteFields)
+		})
+		if active {
+			answerActiveDownload(c)
 			return
 		}
-
-		newID, err := enqueueRedownload(c.Request.Context(), mgr, downloadsRepo, collectionsRepo, settingsRepo, item, req.URL, req.OverwriteFields)
 		if err != nil {
 			writeEnqueueError(c, err)
 			return

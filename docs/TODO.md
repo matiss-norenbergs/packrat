@@ -70,8 +70,6 @@ None are scheduled. Sizes are guesses.
 - **Collection PATCH is a full replace (S).** Omitted `isPrivate`, `browseAsShow` and `artistId` are cleared
   instead of left alone. Decide whether PATCH should merge, then make it so (and update `api.md`).
 - **Duration stored as 0 after a trim when ffprobe fails (S).** It should be NULL so the UI shows "unknown".
-- **Double redownload race (S).** The active-download check and the enqueue are not atomic, so two quick
-  redownloads of one item can both queue.
 - **Unvalidated thumbnail bytes in `SetLibraryThumbnail` (S).** Any bytes are written as the sidecar. Decode with
   `thumbwrite.Probe` first (JPEG/PNG), as the other thumbnail writers now do.
 - **Gallery extension (S).** `readCurrentThumbnail` labels every thumbnail `.jpg`, whatever the real format.

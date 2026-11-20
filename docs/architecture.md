@@ -666,7 +666,9 @@ connections in WAL mode. Reads run concurrently with a write; **writes still hap
   the pool makes overlapping requests more likely, so every path whose check guards an invariant has a
   mechanism: a transaction (`deleteExceeding`, `MarkInterruptedIfActive`, `DeleteOlderThan`,
   `SelectImageForArtist`, `UsersRepo.ChangePassword`), one conditional statement (`FrameMatchQueueRepo.CreateIfAbsent`,
-  `LibraryRepo.ClearFileIfPath`, history `Delete ... RETURNING`), a mutex (`importMu` around the
+  `LibraryRepo.ClearFileIfPath`, history `Delete ... RETURNING`), a mutex (`itemEnqueueGuard`, a per-item keyed
+  lock held only across "no active download? -> enqueue" in the redownload, bulk redownload and ghost-reusing
+  history retry paths, so two quick requests for one item queue one download; `importMu` around the
   import's "path taken?" check and insert, because `library.path` has no UNIQUE constraint; `enhanceMu`
   around "last history row gone? free the backup"), a UNIQUE/FK constraint (tags, artists, users,
   `subscription_seen_entries`, `collections.parent_id ON DELETE RESTRICT`) or a repo mutex (collection

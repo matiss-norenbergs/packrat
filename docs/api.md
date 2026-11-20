@@ -774,7 +774,9 @@ the active-download `409` above.
 
 Re-queues a download from `originalUrl`, reusing the exact original type/quality/filename/
 audioFormat if the originating download row still exists, else falling back to app defaults.
-`400` no source URL. `409` the item already has a queued/running download. Response `201 {"id": <newDownloadId>}`.
+`400` no source URL. `409` the item already has a queued/running download (the check and the enqueue are atomic per item, so of
+two simultaneous requests exactly one gets `201` and the other `409`; the same holds for `from-url`, bulk
+redownload, which counts it under `skippedDownloading`, and a history retry that reuses a ghost). Response `201 {"id": <newDownloadId>}`.
 
 ### Redownload from a different URL
 
