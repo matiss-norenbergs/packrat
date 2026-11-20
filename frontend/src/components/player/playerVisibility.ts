@@ -42,3 +42,13 @@ export interface BarVisibilityInput {
 export function computeShowBar(i: BarVisibilityInput): boolean {
   return !i.overlay || i.paused || i.active || i.pointerOnBar || i.menuOpen || i.keyboardFocus
 }
+
+/**
+ * Whether a frame is inside the fullscreen subtree: a fullscreen element exists and contains the frame
+ * (it may be the frame itself, or an ancestor such as the compare page's container). This, not
+ * `fullscreenElement === frame`, decides the no-blur bar paint and cursor hiding, because the blur/overlay
+ * flicker comes from the video being fullscreen on screen, whichever element requested fullscreen.
+ */
+export function isInFullscreen(fullscreenElement: Element | null | undefined, frame: Element | null | undefined): boolean {
+  return !!fullscreenElement && !!frame && fullscreenElement.contains(frame)
+}

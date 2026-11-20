@@ -19,7 +19,8 @@ import { PLAYER_HOT_ZONE_FRACTION } from "./playerTheme"
 import { PlayerDebug } from "./PlayerDebug"
 import { parsePlayerDebug } from "./playerDiagnostics"
 import { barPaint, parsePlayerFx } from "./playerFx"
-import { computeShowBar, isPointerOnBar } from "./playerVisibility"
+import { computeShowBar, isInFullscreen, isPointerOnBar, pointInRect } from "./playerVisibility"
+import { isTypingTarget } from "./playerKeys"
 import { useMediaState } from "./useMediaState"
 
 // A control skin around a host-owned <video>/<audio>: the host renders the element (as `children`),
@@ -30,11 +31,6 @@ import { useMediaState } from "./useMediaState"
 // Volume/mute persistence is the host's usePersistedVolume (localStorage, shared with the compare
 // player); playback speed deliberately resets to 1× with every new element.
 
-const isTypingTarget = (t: EventTarget | null) => {
-  if (!(t instanceof HTMLElement)) return false
-  return t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) && !(t instanceof HTMLInputElement && t.type === "range")
-}
-
 export function PlayerSkin({
   mediaRef,
   kind,
@@ -42,6 +38,9 @@ export function PlayerSkin({
   title,
   artist,
   coverUrl,
+  coverPx = PLAYER_COVER_PX,
+  shortcuts = "hover-or-focus",
+  titleOverlay,
   className = "",
   children,
 }: {
@@ -52,6 +51,16 @@ export function PlayerSkin({
   title?: string
   artist?: string
   coverUrl?: string | null
+  /** Compact audio only: size of the cover square. */
+  coverPx?: number
+  /**
+   * When the document-level shortcuts act: "hover-or-focus" (default) = while the pointer hovers the player or it
+   * has focus; "focus" = only while the frame (or something in it) has focus, never because of the pointer
+   * (several players on one page, where hover would be ambiguous).
+   */
+  shortcuts?: "hover-or-focus" | "focus"
+  /** Video only: a title shown in a top-left gradient whenever the control bar is shown, hidden with it. */
+  titleOverlay?: string
   /** Sizing of the frame (the host decides how tall the player is). */
   className?: string
   children: ReactNode
@@ -61,13 +70,15 @@ export function PlayerSkin({
   const state = useMediaState(mediaRef)
   const overlay = kind === "video"
   const compact = variant === "compact"
+  const focusOnly = shortcuts === "focus"
   const allowFullscreen = overlay && !compact && (typeof document === "undefined" || document.fullscreenEnabled !== false)
 
   const [active, setActive] = useState(true) // recent pointer/keyboard activity
   const [pointerOnBar, setPointerOnBar] = useState(false) // from geometry on each move, not enter/leave events
   const [kbFocus, setKbFocus] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false) // this frame is the fullscreen element (the button's icon)
+  const [inFullscreen, setInFullscreen] = useState(false) // a fullscreen element exists and contains this frame (paint, cursor)
   const [flash, setFlash] = useState<{ id: number; playing: boolean } | null>(null)
   const [osd, setOsd] = useState<{ id: number; text: string } | null>(null)
   const setFrame = useCallback((node: HTMLDivElement | null) => {
@@ -168,18 +179,24 @@ export function PlayerSkin({
   useEffect(() => {
     const onChange = () => {
       setIsFullscreen(document.fullscreenElement === frameRef.current)
+      setInFullscreen(isInFullscreen(document.fullscreenElement, frameRef.current))
       // The layout just changed under a (probably still) pointer, so any "pointer on the bar" belief is stale.
       setPointerOnBar(false)
       bump()
     }
     document.addEventListener("fullscreenchange", onChange)
+    // A player mounted while something is already fullscreen (a private cell revealed on the compare page).
+    if (document.fullscreenElement) onChange()
     return () => document.removeEventListener("fullscreenchange", onChange)
   }, [bump])
 
-  // While fullscreen, a move anywhere wakes the bar even if the frame itself doesn't receive the event.
+  // While fullscreen, a move anywhere wakes the bar even if the frame itself doesn't receive the event. When the
+  // fullscreen element is an ancestor (the compare page), only moves over this frame count, or one move would
+  // wake every player on the page.
   useEffect(() => {
-    if (!isFullscreen) return
+    if (!inFullscreen) return
     const onMove = (e: MouseEvent) => {
+      if (!isFullscreen && !pointInRect(e.clientX, e.clientY, frameRef.current?.getBoundingClientRect())) return
       if (debugMode !== "off") {
         moves.current.doc++
         moves.current.last = Date.now()
@@ -192,9 +209,10 @@ export function PlayerSkin({
       document.removeEventListener("pointermove", onMove)
       document.removeEventListener("mousemove", onMove)
     }
-  }, [isFullscreen, onPointerActivity, debugMode])
+  }, [inFullscreen, isFullscreen, onPointerActivity, debugMode])
 
-  // Keyboard shortcuts: only while the player is focused or hovered, never while typing, never with Ctrl/Alt/Meta.
+  // Keyboard shortcuts: only while the player is focused (or hovered, unless shortcuts="focus"), never while typing,
+  // never with Ctrl/Alt/Meta.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const frame = frameRef.current
@@ -203,7 +221,7 @@ export function PlayerSkin({
       if (e.ctrlKey || e.altKey || e.metaKey) return
       if (isTypingTarget(e.target)) return
       const inside = frame.contains(document.activeElement)
-      if (!inside && !hoveredRef.current) return
+      if (!inside && (focusOnly || !hoveredRef.current)) return
       const target = e.target instanceof HTMLElement ? e.target : null
       // A focused button/menu item activates itself with Space/Enter; don't also toggle playback.
       if (target && frame.contains(target) && (e.key === " " || e.key === "Enter") && target.closest("button, [role=menuitem], [role=menuitemradio], [role=slider]")) return
@@ -260,7 +278,7 @@ export function PlayerSkin({
     }
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
-  }, [mediaRef, actions, allowFullscreen, bump, showOsd])
+  }, [mediaRef, actions, allowFullscreen, focusOnly, bump, showOsd])
 
   // Click toggles playback; a double-click goes fullscreen instead (the delayed single click is cancelled).
   const onSurfaceClick = () => {
@@ -274,14 +292,14 @@ export function PlayerSkin({
   }
 
   const showBar = computeShowBar({ overlay, paused: state.paused, active, pointerOnBar, menuOpen, keyboardFocus: kbFocus })
-  const hideCursor = isFullscreen && !showBar && !state.paused
+  const hideCursor = inFullscreen && !showBar && !state.paused
   const progress = state.duration > 0 ? clamp(state.currentTime / state.duration, 0, 1) : 0
   const vars = {
     ...playerCssVars(),
     ...(compact ? { "--player-bar-inset": `${PLAYER_COMPACT_INSET_PX}px` } : {}),
   }
 
-  const paint = barPaint({ overlay, fullscreen: isFullscreen, visible: showBar, fx })
+  const paint = barPaint({ overlay, fullscreen: inFullscreen, visible: showBar, fx })
   const bar = (
     <div
       ref={barRef}
@@ -355,7 +373,7 @@ export function PlayerSkin({
   const debugReadout = debugMode !== "off" && (
     <PlayerDebug
       mode={debugMode}
-      values={{ paused: state.paused, active, pointerOnBar, menuOpen, kbFocus, isFullscreen, showBar, waiting: state.waiting }}
+      values={{ paused: state.paused, active, pointerOnBar, menuOpen, kbFocus, isFullscreen, inFullscreen, showBar, waiting: state.waiting }}
       showBar={showBar}
       barRef={barRef}
       mediaRef={mediaRef}
@@ -400,6 +418,16 @@ export function PlayerSkin({
         <div className="absolute inset-0 z-0" aria-hidden data-slot="player-surface" onClick={onSurfaceClick} onDoubleClick={onSurfaceDoubleClick} />
         {overlays}
         {debugReadout}
+        {titleOverlay && (
+          <p
+            data-slot="player-title"
+            data-visible={showBar}
+            className={`pointer-events-none absolute left-0 top-0 z-10 max-w-full truncate px-3 pb-4 pt-2 text-xs font-medium text-(--player-fg) ${paint.fade ? "transition-opacity duration-(--player-fade) motion-reduce:transition-none" : ""} ${showBar ? "opacity-100" : "opacity-0"}`}
+            style={{ background: "linear-gradient(to bottom, color-mix(in oklab, var(--player-scrim) 80%, transparent), transparent)" }}
+          >
+            {titleOverlay}
+          </p>
+        )}
         {!showBar && !state.error && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-(--player-hairline) bg-(--player-track-bg)" aria-hidden data-slot="player-hairline">
             <div className="h-full bg-(--player-accent)" style={{ width: `${progress * 100}%` }} />
@@ -416,7 +444,7 @@ export function PlayerSkin({
         {coverUrl ? <img src={coverUrl} alt="" className="h-full w-full object-cover" /> : <Placeholder />}
       </div>
     ) : (
-      <div className="shrink-0 overflow-hidden rounded bg-neutral-800" style={{ width: PLAYER_COVER_PX, height: PLAYER_COVER_PX }}>
+      <div className="shrink-0 overflow-hidden rounded bg-neutral-800" style={{ width: coverPx, height: coverPx }}>
         {coverUrl ? <img src={coverUrl} alt="" className="h-full w-full object-cover" /> : <Placeholder small />}
       </div>
     )
