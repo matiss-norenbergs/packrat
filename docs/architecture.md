@@ -1425,7 +1425,18 @@ the seek fill follows `--primary`. In fullscreen the bar has no `backdrop-filter
 `playerTheme.ts`; pure logic (time formatting, pointer-to-time, stepping, ARIA text) is in `playerMath.ts`, and the
 bar-visibility rules in `playerVisibility.ts`: "pointer on the bar" is decided from geometry on every move (bar box or the
 bottom hot zone), never from `pointerenter`/`leave`, and while fullscreen the skin also listens on `document`.
-The compare player and the Trim dialog deliberately keep native controls.
+`PlayerSkin` has a `shortcuts` option: `"hover-or-focus"` (default) or `"focus"` (keys act only while the frame has focus, never
+because of hover; several players share one page). Fullscreen is tracked as two things: `isFullscreen` (this frame *is* the fullscreen
+element, for the button icon) and `inFullscreen` (a fullscreen element exists and *contains* the frame, `isInFullscreen` in
+`playerVisibility.ts`), which decides the blur-free bar paint, cursor hiding and the document pointer listener. The compare page
+requests fullscreen on its whole page, so a frame-only check would paint blurred bars there, the flicker case; under an ancestor, the
+document listener only reacts to moves over the frame itself. The control pieces (play button, volume, time, speed menu, seek bar)
+are presentational components (`PlayerParts.tsx`, `SeekBar.tsx`) shared by `PlayerControls` and the compare page's global bar
+(`CompareGlobalBar`), which sits on the page background and so uses the `.player-themed` color scope (the `--player-*` variables
+mapped to theme tokens) instead of the light-on-dark `.player-skin` one. `useCompareGroup` drives all cell elements (any-playing,
+longest duration, same-time seek, relative seek, master volume/speed that later-mounted cells adopt); the pure parts are in `groupMedia.ts`
+and the keyboard scope decision (`resolveGlobalKey`: global keys act only when no cell has focus and the focused control doesn't
+handle the key itself) in `playerKeys.ts`. The Trim dialog deliberately keeps native controls.
 
 ## Floating action dock
 
