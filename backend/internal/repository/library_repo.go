@@ -20,10 +20,13 @@ var ResolutionSteps = []int{480, 720, 1080, 1440, 2160, 4320}
 
 type LibraryRepo struct {
 	db dbtx
+	// rawDB is always the real connection pool (never a WithTx substitution),
+	// for the few methods that open their own transaction.
+	rawDB *sql.DB
 }
 
 func NewLibraryRepo(db *sql.DB) *LibraryRepo {
-	return &LibraryRepo{db: db}
+	return &LibraryRepo{db: db, rawDB: db}
 }
 
 // WithTx returns a copy of r whose queries run against tx instead of the
@@ -35,7 +38,37 @@ func (r *LibraryRepo) WithTx(tx *sql.Tx) *LibraryRepo {
 }
 
 func (r *LibraryRepo) Create(ctx context.Context, item *models.LibraryItem) (int64, error) {
-	res, err := r.db.ExecContext(ctx, `
+	return r.create(ctx, r.db, item)
+}
+
+// CreateWithTags inserts item and attaches tagIDs in one transaction, so a
+// failure while tagging leaves no row behind. tagIDs must already exist (the
+// caller resolves them with TagsRepo.GetOrCreateByNames first: that takes the
+// tags mutex, which must not be taken inside an open transaction).
+func (r *LibraryRepo) CreateWithTags(ctx context.Context, item *models.LibraryItem, tagIDs []int64) (int64, error) {
+	tx, err := r.rawDB.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("beginning library create transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	id, err := r.create(ctx, tx, item)
+	if err != nil {
+		return 0, err
+	}
+	for _, tagID := range tagIDs {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO library_tags (library_id, tag_id) VALUES (?, ?)`, id, tagID); err != nil {
+			return 0, fmt.Errorf("attaching tag %d: %w", tagID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("committing library create: %w", err)
+	}
+	return id, nil
+}
+
+func (r *LibraryRepo) create(ctx context.Context, db dbtx, item *models.LibraryItem) (int64, error) {
+	res, err := db.ExecContext(ctx, `
 		INSERT INTO library (download_id, title, filename, path, collection_id, folder, original_url,
 		                      video_id, uploader, duration, resolution, media_type, thumbnail, thumbnail_small_path, thumbnail_medium_path,
 		                      description, artist_id, release_year,

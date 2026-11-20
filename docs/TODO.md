@@ -69,8 +69,6 @@ None are scheduled. Sizes are guesses.
 
 - **Collection PATCH is a full replace (S).** Omitted `isPrivate`, `browseAsShow` and `artistId` are cleared
   instead of left alone. Decide whether PATCH should merge, then make it so (and update `api.md`).
-- **Ghost create keeps the row on a tagging failure (S).** It answers 500 but the ghost stays, so a retry makes a
-  second ghost. Create and tag in one transaction, or delete the row on failure.
 - **Duration stored as 0 after a trim when ffprobe fails (S).** It should be NULL so the UI shows "unknown".
 - **Double redownload race (S).** The active-download check and the enqueue are not atomic, so two quick
   redownloads of one item can both queue.

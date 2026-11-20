@@ -830,6 +830,8 @@ deleted (`DELETE /:id/file`) or found missing on disk (`scan-missing`).
   picked manually since there's no file/download row to infer it from — it only selects which
   placeholder icon shows until the item is downloaded. If `fetchThumbnail` and `originalUrl` are
   both set, a best-effort thumbnail fetch runs before responding (failure is logged, not fatal).
+  The row and its tag links are written in one transaction: if tagging fails the response is a `500`
+  (or `503` for a busy database) and no ghost is left behind, so a retry cannot create a duplicate.
   Response `201` with the full library item (`galleryCount` always `0` on a fresh item).
 - **`DELETE /api/library/:id/file?deleteThumbnail=true`** — removes just the media file (best-effort
   on disk) and flips the item to `status="ghost"`; all other metadata (tags, collection, artist,
