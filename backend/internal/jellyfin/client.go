@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -33,7 +34,10 @@ func (c *Client) RefreshFull(ctx context.Context, baseURL, apiKey string) error 
 // identified by its Jellyfin item ID — found in Jellyfin under Dashboard >
 // Libraries > the library > its URL, or via the Jellyfin API).
 func (c *Client) RefreshItem(ctx context.Context, baseURL, apiKey, itemID string) error {
-	path := fmt.Sprintf("/Items/%s/Refresh?Recursive=true&ImageRefreshMode=Default&MetadataRefreshMode=Default", itemID)
+	// The id is an admin-set value: escape it as one path segment so "/", "?", "#" or "%" in it
+	// can't change the route or start a query.
+	query := url.Values{"Recursive": {"true"}, "ImageRefreshMode": {"Default"}, "MetadataRefreshMode": {"Default"}}
+	path := "/Items/" + url.PathEscape(itemID) + "/Refresh?" + query.Encode()
 	return c.post(ctx, baseURL, apiKey, path)
 }
 

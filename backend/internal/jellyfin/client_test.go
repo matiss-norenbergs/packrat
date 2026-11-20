@@ -72,3 +72,35 @@ func TestRefreshFullDNSFailureMessage(t *testing.T) {
 		t.Fatalf("expected a DNS-specific error message, got: %v", err)
 	}
 }
+
+func TestRefreshItemEscapesTheIDInThePath(t *testing.T) {
+	cases := []struct{ id, wantPath string }{
+		{"abc-123", "/Items/abc-123/Refresh"},
+		{"a/b", "/Items/a%2Fb/Refresh"},
+		{"a?b=1", "/Items/a%3Fb=1/Refresh"},
+		{"a#b", "/Items/a%23b/Refresh"},
+		{"a b", "/Items/a%20b/Refresh"},
+		{"100%", "/Items/100%25/Refresh"},
+		{"../Library", "/Items/..%2FLibrary/Refresh"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			var gotPath, gotQuery string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotPath, gotQuery = r.URL.EscapedPath(), r.URL.RawQuery
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			defer srv.Close()
+			if err := NewClient().RefreshItem(context.Background(), srv.URL, "secret", tc.id); err != nil {
+				t.Fatalf("RefreshItem: %v", err)
+			}
+			if gotPath != tc.wantPath {
+				t.Errorf("path = %q, want %q", gotPath, tc.wantPath)
+			}
+			want := "ImageRefreshMode=Default&MetadataRefreshMode=Default&Recursive=true"
+			if gotQuery != want {
+				t.Errorf("query = %q, want %q (an id must not add or change query parameters)", gotQuery, want)
+			}
+		})
+	}
+}

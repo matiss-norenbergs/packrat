@@ -87,7 +87,6 @@ None are scheduled. Sizes are guesses.
 **Small hardening**
 
 - **`pathsafe` does not resolve symlinks (S).** Exploiting it needs host access.
-- **Jellyfin item id is not escaped in the URL path (S).** It is an admin-set value.
 - **`%` in output names (S).** A remote title with `%(...)s` is expanded by yt-dlp. Paths stay contained.
 - **`synchronous=FULL` under WAL (S).** `NORMAL` is the usual setting and is safe with WAL; a durability trade to decide.
 - **The FTS `library_au` trigger has no column list (S).** Every playback-position heartbeat rewrites the FTS row
