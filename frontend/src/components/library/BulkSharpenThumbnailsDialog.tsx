@@ -15,6 +15,7 @@ import { useSharpenThumbnailItems } from "@/hooks/useThumbnailEnhancement"
 import { buildCollectionTree, collectDescendantIds, findNodeById } from "@/lib/collectionTree"
 import { LibraryItemPreviewRow } from "./LibraryItemPreviewRow"
 import { useSelection } from "./SelectionContext"
+import { canEnhanceThumbnail } from "./thumbnailEnhanceable"
 import type { LibraryItem } from "@/types/api"
 
 // Mirrors BulkFrameMatchDialog's file-preview cap.
@@ -56,7 +57,7 @@ export function BulkSharpenThumbnailsDialog({ open, onOpenChange }: BulkSharpenT
   const affectedItems = useMemo(() => {
     const byId = new Map<number, LibraryItem>(selectedItems)
     for (const item of resolvedFromCollections?.items ?? []) byId.set(item.id, item)
-    return [...byId.values()].filter((item) => item.path && item.thumbnail)
+    return [...byId.values()].filter((item) => item.path && item.thumbnail && canEnhanceThumbnail(item))
   }, [selectedItems, resolvedFromCollections])
 
   const visibleItems = affectedItems.slice(0, MAX_VISIBLE_ITEMS)
@@ -88,7 +89,8 @@ export function BulkSharpenThumbnailsDialog({ open, onOpenChange }: BulkSharpenT
             Runs each thumbnail through your configured Stable Diffusion WebUI instance for a
             denoise/detail pass only — the output stays the same size, it's not upscaled. This runs
             one item at a time in the background; check the AI Enhancement page for progress. Items
-            in the selection with no current thumbnail are excluded below and left untouched.
+            in the selection with no current thumbnail, and image items (their thumbnail is the image file itself), are
+            excluded below and left untouched.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -98,7 +100,7 @@ export function BulkSharpenThumbnailsDialog({ open, onOpenChange }: BulkSharpenT
           ))}
           {hiddenCount > 0 && <p className="px-1 py-1 text-xs text-muted-foreground">+{hiddenCount} more</p>}
           {!isLoading && affectedItems.length === 0 && (
-            <p className="px-1 py-1 text-xs text-muted-foreground">No items with a current thumbnail in this selection.</p>
+            <p className="px-1 py-1 text-xs text-muted-foreground">No items with a thumbnail that can be sharpened in this selection.</p>
           )}
         </div>
 

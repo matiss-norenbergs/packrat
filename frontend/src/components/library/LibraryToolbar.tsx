@@ -116,6 +116,7 @@ export function LibraryToolbarActions({ t }: { t: LibraryToolbarState }) {
     setBulkFrameMatchMode,
     bulkSharpenOpen,
     setBulkSharpenOpen,
+    sharpenAvailable,
     editSequenceOpen,
     setEditSequenceOpen,
     addToCompareOpen,
@@ -185,7 +186,7 @@ export function LibraryToolbarActions({ t }: { t: LibraryToolbarState }) {
                     </DropdownMenuItem>
                   </>
                 )}
-                {settings?.thumbnailEnhancementEnabled && (
+                {settings?.thumbnailEnhancementEnabled && sharpenAvailable && (
                   <DropdownMenuItem onSelect={() => setBulkSharpenOpen(true)}>
                     <Sparkles /> Sharpen thumbnail(s)…
                   </DropdownMenuItem>

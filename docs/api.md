@@ -2241,6 +2241,14 @@ See [FEATURES.md](FEATURES.md#ai-enhancement) for what this does and how the thr
 | POST | `/api/thumbnail-enhancement/items/bulk-keep-enhanced` | Bulk-commit enhanced thumbnails, freeing backups |
 | POST | `/api/thumbnail-enhancement/items/bulk-keep-original` | Bulk-revert to pre-enhancement thumbnails |
 
+**Image items.** An image item's thumbnail is the image file itself, so AI enhancement never touches it.
+`POST .../items/bulk-run` and `POST .../items/bulk-sharpen` answer `400` (`an image item's thumbnail is the image
+file itself, so it is never enhanced or sharpened`) when `itemIds` is exactly one image item; otherwise they skip image
+items and answer `202 {"queued": n, "skipped": m}` (`skipped` omitted when 0, `queued` counts only the items
+handed to the background run). `POST .../run`, `GET .../eligible` and enhance-on-download never include image
+items (a legacy row with no media type is an image item when its file extension says so). Revert, delete-original
+and the bulk keep endpoints are unchanged and still work for an image item that already has a backup.
+
 ### `GET /api/thumbnail-enhancement/history?q=&status=&trigger=&mode=&page=1`
 
 Fixed page size 25:

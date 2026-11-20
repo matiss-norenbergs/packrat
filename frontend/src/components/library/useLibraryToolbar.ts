@@ -9,6 +9,7 @@ import { useFeatureEnabled } from "@/hooks/useFeature"
 import type { LibrarySortDir, LibrarySortKey } from "@/lib/libraryFilters"
 import type { FrameMatchMode } from "@/types/api"
 import { useSelection } from "./SelectionContext"
+import { bulkSharpenAvailable } from "./thumbnailEnhanceable"
 
 export const PAGINATION_DISABLED = "disabled"
 export const NONE = "none"
@@ -31,7 +32,8 @@ export function useLibraryToolbar() {
   const compareListEnabled = useFeatureEnabled("featureCompareListEnabled")
   const frameMatchingEnabled = useFeatureEnabled("featureFrameMatchingEnabled")
   const updateSettings = useUpdateSettings()
-  const { selectionActive, approxCount, clear } = useSelection()
+  const { selectionActive, approxCount, clear, selectedItems, selectedCollectionIds } = useSelection()
+  const sharpenAvailable = bulkSharpenAvailable(selectedItems.values(), selectedCollectionIds.size)
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [bulkTagsOpen, setBulkTagsOpen] = useState(false)
   const [bulkArtistOpen, setBulkArtistOpen] = useState(false)
@@ -189,6 +191,7 @@ export function useLibraryToolbar() {
     setBulkFrameMatchMode,
     bulkSharpenOpen,
     setBulkSharpenOpen,
+    sharpenAvailable,
     editSequenceOpen,
     setEditSequenceOpen,
     addToCompareOpen,

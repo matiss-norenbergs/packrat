@@ -1198,6 +1198,8 @@ export interface ThumbnailEnhancementHistoryListResponse {
 // enhance_progress WebSocket event.
 export interface RunThumbnailEnhancementResult {
   queued: number
+  /** Image items left out of a bulk enhance/sharpen (their thumbnail is the image file itself); absent when 0. */
+  skipped?: number
 }
 
 // Configured is false whenever the feature is disabled or has no URL saved

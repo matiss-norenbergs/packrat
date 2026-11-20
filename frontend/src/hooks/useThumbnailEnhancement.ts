@@ -128,7 +128,7 @@ export function useSharpenThumbnailItems() {
   return useMutation({
     mutationFn: sharpenThumbnailItems,
     onSuccess: (result) => {
-      toast.success(`Queued ${result.queued} item(s) for sharpening`)
+      toast.success(`Queued ${result.queued} item(s) for sharpening${result.skipped ? ` (${result.skipped} image item(s) skipped)` : ""}`)
     },
     onError: (err: Error) => toast.error(`Sharpening failed: ${err.message}`),
     onSettled: () => {

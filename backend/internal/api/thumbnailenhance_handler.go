@@ -315,6 +315,52 @@ func ListThumbnailEnhancementEligible(deps thumbnailenhance.Deps) gin.HandlerFun
 	}
 }
 
+// errImageItemEnhance is the 400 message for an enhance/sharpen request that
+// targets a single image item.
+const errImageItemEnhance = errImageItemThumbnail + ", so it is never enhanced or sharpened"
+
+// splitImageItems drops image items from ids (an image item's thumbnail is the
+// media file, which AI enhancement must never write) and returns the remaining
+// ids plus how many were dropped. Unknown ids stay: the enhancement code skips
+// them itself.
+func splitImageItems(ctx context.Context, deps thumbnailenhance.Deps, ids []int64) (keep []int64, skipped int, err error) {
+	items, err := deps.LibraryRepo.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, id := range ids {
+		if item, ok := items[id]; ok && item.IsImageItem() {
+			skipped++
+			continue
+		}
+		keep = append(keep, id)
+	}
+	return keep, skipped, nil
+}
+
+// queueEnhanceBatch answers an enhance/sharpen request: a single image item is
+// a 400, a bulk request skips its image items (reported as `skipped`) and runs
+// the rest in the background.
+func queueEnhanceBatch(c *gin.Context, deps thumbnailenhance.Deps, bg bgtasks.Runner, ids []int64, label string, run func(ctx context.Context, ids []int64) error) {
+	keep, skipped, err := splitImageItems(c.Request.Context(), deps, ids)
+	if err != nil {
+		writeServerError(c, err)
+		return
+	}
+	if len(ids) == 1 && skipped == 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errImageItemEnhance})
+		return
+	}
+	if len(keep) > 0 {
+		bg.Go(func(ctx context.Context) {
+			if err := run(ctx, keep); err != nil {
+				log.Printf("thumbnailenhance: bulk %s failed: %v", label, err)
+			}
+		})
+	}
+	c.JSON(http.StatusAccepted, RunThumbnailEnhancementResponse{Queued: len(keep), Skipped: skipped})
+}
+
 // EnhanceThumbnailItemsNow backs the eligible-items dialog's toolbar
 // "Enhance Selected" button — fire-and-forget, same pattern as
 // RunThumbnailEnhancementNow: spawns the batch detached from this request
@@ -329,12 +375,9 @@ func EnhanceThumbnailItemsNow(deps thumbnailenhance.Deps, bg bgtasks.Runner) gin
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		bg.Go(func(ctx context.Context) {
-			if err := thumbnailenhance.EnhanceItems(ctx, deps, req.ItemIds); err != nil {
-				log.Printf("thumbnailenhance: bulk enhance failed: %v", err)
-			}
+		queueEnhanceBatch(c, deps, bg, req.ItemIds, "enhance", func(ctx context.Context, ids []int64) error {
+			return thumbnailenhance.EnhanceItems(ctx, deps, ids)
 		})
-		c.JSON(http.StatusAccepted, RunThumbnailEnhancementResponse{Queued: len(req.ItemIds)})
 	}
 }
 
@@ -350,12 +393,9 @@ func SharpenThumbnailItemsNow(deps thumbnailenhance.Deps, bg bgtasks.Runner) gin
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		bg.Go(func(ctx context.Context) {
-			if err := thumbnailenhance.SharpenItems(ctx, deps, req.ItemIds); err != nil {
-				log.Printf("thumbnailenhance: bulk sharpen failed: %v", err)
-			}
+		queueEnhanceBatch(c, deps, bg, req.ItemIds, "sharpen", func(ctx context.Context, ids []int64) error {
+			return thumbnailenhance.SharpenItems(ctx, deps, ids)
 		})
-		c.JSON(http.StatusAccepted, RunThumbnailEnhancementResponse{Queued: len(req.ItemIds)})
 	}
 }
 
