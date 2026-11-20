@@ -133,9 +133,13 @@ func (r *LibraryRepo) GetByIDs(ctx context.Context, ids []int64) (map[int64]mode
 // minDim. Items already stored at minDim or above are left out, so the AI
 // enhancement scan opens only these files instead of every thumbnail. The file
 // stays the authority: the caller probes each candidate and checks it again.
+// Image items are never candidates: their thumbnail is the media file itself
+// (media_type NULL is kept in SQL, then a legacy row whose file extension says
+// image is dropped in Go, via LibraryItem.IsImageItem).
 func (r *LibraryRepo) ListThumbnailEnhancementCandidates(ctx context.Context, minDim int) ([]models.LibraryItem, error) {
 	query := librarySelectColumns + `
 		WHERE l.path != '' AND l.thumbnail IS NOT NULL
+		  AND (l.media_type IS NULL OR l.media_type != 'image')
 		  AND (l.thumbnail_width IS NULL OR l.thumbnail_height IS NULL
 		       OR MAX(l.thumbnail_width, l.thumbnail_height) < ?)` +
 		libraryOrderBy("downloadedAt", "desc") + `, l.id DESC`
@@ -149,6 +153,9 @@ func (r *LibraryRepo) ListThumbnailEnhancementCandidates(ctx context.Context, mi
 		item, err := scanLibraryItem(rows)
 		if err != nil {
 			return nil, err
+		}
+		if item.IsImageItem() {
+			continue
 		}
 		out = append(out, *item)
 	}

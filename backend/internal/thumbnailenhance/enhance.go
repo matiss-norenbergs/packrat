@@ -52,6 +52,31 @@ const (
 // deliberately retrying a specific item should always be able to.
 const failureCooldown = time.Hour
 
+// ErrThumbnailIsMedia is enhanceOne's refusal to touch an item whose sidecar
+// thumbnail is (or may be) its media file: an image item, or any item whose
+// thumbnail path equals its media path. Nothing is backed up, written or
+// recorded; callers skip the item.
+var ErrThumbnailIsMedia = errors.New("the item's thumbnail is its media file")
+
+// thumbnailIsMedia reports whether enhancing thumbAbs would write the item's
+// media file: an image item (whatever its thumbnail path says), or a sidecar
+// path equal to the media path (cleaned absolute paths), whatever the media
+// type says.
+func thumbnailIsMedia(deps Deps, item models.LibraryItem, thumbAbs string) bool {
+	if item.IsImageItem() {
+		return true
+	}
+	if item.Path == "" {
+		return false
+	}
+	media, err1 := filepath.Abs(filepath.Join(deps.MediaRoot, filepath.FromSlash(item.Path)))
+	thumb, err2 := filepath.Abs(thumbAbs)
+	if err1 != nil || err2 != nil {
+		return filepath.Clean(thumbAbs) == filepath.Clean(filepath.Join(deps.MediaRoot, filepath.FromSlash(item.Path)))
+	}
+	return media == thumb
+}
+
 // enhanceMu serializes every call to enhanceOne, regardless of which
 // trigger (scheduled sweep, manual "Enhance now"/per-item click, or
 // auto-on-download) initiated it. Without this, two triggers racing on the
@@ -236,6 +261,9 @@ func runSweep(ctx context.Context, deps Deps, cfg config, triggerType string) (i
 		}
 		if err := enhanceOne(ctx, deps, client, cfg, c.item, c.thumbAbs, c.width, c.height, c.size, triggerType, modeUpscale); err != nil {
 			log.Printf("thumbnailenhance: item %d (%s): %v", c.item.ID, c.item.Title, err)
+			if errors.Is(err, ErrThumbnailIsMedia) {
+				continue // refused, not processed: doesn't use up the sweep's budget
+			}
 		}
 		enhanced++
 	}
@@ -309,6 +337,10 @@ func checkEligible(ctx context.Context, deps Deps, cfg config, item models.Libra
 	// enhance — only WebP derivatives generated from a fetch that never
 	// touched disk under MediaRoot.
 	if item.Path == "" || item.Thumbnail == nil {
+		return eligibleCandidate{}, false
+	}
+	// An image item's thumbnail is the image file itself: never enhanced.
+	if item.IsImageItem() {
 		return eligibleCandidate{}, false
 	}
 
@@ -454,7 +486,7 @@ func SharpenItems(ctx context.Context, deps Deps, libraryItemIDs []int64) error 
 	client := NewClient(cfg.url, cfg.username, cfg.password)
 	for _, id := range libraryItemIDs {
 		item, err := deps.LibraryRepo.Get(ctx, id)
-		if err != nil || item.Path == "" || item.Thumbnail == nil {
+		if err != nil || item.Path == "" || item.Thumbnail == nil || item.IsImageItem() {
 			continue
 		}
 		thumbAbs := filepath.Join(deps.MediaRoot, filepath.FromSlash(*item.Thumbnail))
@@ -644,6 +676,15 @@ func ClearAllHistory(ctx context.Context, deps Deps) (int64, error) {
 // the item already enhanced and quietly no-ops instead of compounding the
 // upscale.
 func enhanceOne(ctx context.Context, deps Deps, client *Client, cfg config, item models.LibraryItem, thumbAbs string, origW, origH int, origSize int64, triggerType, mode string) error {
+	// Defense in depth, before the lock, the backup and any write: the media
+	// file of an image item (or any item whose sidecar path IS its media file)
+	// is never enhanced. Not a failure of the run, so no history row either.
+	// This guard belongs to enhance/sharpen only: revert and writeThumbnailFile
+	// stay usable so an old enhancement of an image item can still be undone.
+	if thumbnailIsMedia(deps, item, thumbAbs) {
+		return fmt.Errorf("item %d: %w", item.ID, ErrThumbnailIsMedia)
+	}
+
 	enhanceMu.Lock()
 	defer enhanceMu.Unlock()
 

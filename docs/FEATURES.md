@@ -1087,6 +1087,14 @@ model, scaling mode, minimum-dimension threshold below which a thumbnail is cons
   per-item ("Sharpen Thumbnail" in the actions menu) or in bulk ("Sharpen Thumbnail(s)…" from the
   Library toolbar) — shares the same history log and Compare/Revert/Keep-Enhanced/Keep-Original
   mechanics as upscale enhancements.
+- **Image items are never enhanced** — an image item's thumbnail *is* the image file itself, so enhancing
+  it would overwrite the user's image. They are left out of everything here: the scheduled sweep, "Enhance
+  Now" and its count, the Eligible Items list, auto-run on new downloads, per-item and bulk Sharpen. The
+  Sharpen entries are hidden for an image item (and the bulk entry when only image items are selected;
+  the bulk dialog leaves image items out), a bulk request skips them and reports how many, and a request
+  for one image item is refused (`400`). A legacy row with no media type counts as an image item when its
+  file extension says so. An earlier version could upscale a small image item in place; **Revert, Keep
+  Enhanced and Compare still work** for any item that already has such a backup or history row.
 - **Starting Stable Diffusion from Packrat** — with the bundled
   [`tools/sd-launcher`](../tools/sd-launcher/README.md) running on the SD machine, the sidebar's
   **Actions** menu can start and stop the instance (see Host actions below); the sidebar status dot

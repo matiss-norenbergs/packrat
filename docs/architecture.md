@@ -561,6 +561,11 @@ treat that path as a disposable sidecar: for `mediaType=image` items the thumbna
 quick-grab / frame-match endpoints answer `400`, setting a thumbnail (`POST .../thumbnail`, gallery apply,
 frame-match accept) only regenerates the `ImagesRoot` small/medium tiers (`setImageItemThumbnailTiers`),
 and `pathIsMedia` guards every sidecar write/delete. Deleting such an item's file clears `thumbnail` too.
+AI enhancement must never write it either: `ListThumbnailEnhancementCandidates`, `checkEligible`,
+`SharpenItems` and the bulk handlers exclude image items (`LibraryItem.IsImageItem`: the stored media type, or
+the file extension for a legacy row with none), and `enhanceOne` refuses an image item or a sidecar path equal to
+the media path (`ErrThumbnailIsMedia`, before any backup or write, no history row). The guard covers enhance and
+sharpen only; revert and `writeThumbnailFile` stay unguarded so an old enhancement of an image item can be undone.
 
 **Proxy routing.** yt-dlp reads the `ytdlp_proxy` setting via its own `--proxy` flag, but a plain
 `http.Client` fetch doesn't get that for free — `imagefetch.Fetch`/`imagefetch.Open` both take a

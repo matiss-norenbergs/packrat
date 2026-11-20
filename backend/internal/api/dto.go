@@ -1919,6 +1919,9 @@ type ThumbnailEnhancementHistoryListResponse struct {
 // separately over the enhance_progress WebSocket event).
 type RunThumbnailEnhancementResponse struct {
 	Queued int `json:"queued"`
+	// Skipped counts the requested image items left out of a bulk enhance/sharpen
+	// (their thumbnail is the image file itself, which is never enhanced). Omitted when 0.
+	Skipped int `json:"skipped,omitempty"`
 }
 
 // EnhanceItemsRequest backs the bulk "Enhance Selected" endpoint.
