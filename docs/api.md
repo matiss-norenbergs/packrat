@@ -1628,8 +1628,22 @@ existing collections match exactly as before. Each item's `folder` is cleaned li
 `kind` is the endpoint's own or `"full"` (`400` if neither), decrypts if needed (`400` on wrong
 password). `mode` (import only, ignored by preview) is `"download"` (default) or `"ghostOnly"`.
 Settings import overwrites every key present in the bundle (never deletes keys absent from it) and
-live-resizes the worker pool if `maxConcurrentDownloads` was included. A `maxConcurrentDownloads` above 16 is
-**clamped to 16** (logged) instead of refused, so a restore never fails halfway; the same applies to `import/full` and
+live-resizes the worker pool and transcode limit if they were included, using the values as stored (clamped), not the
+raw file. The import applies the same validation rules as `PATCH /api/settings` (limits and allowed values are listed
+there), but **never fails halfway**, so a violation is adjusted instead of answered with `400`:
+
+| Violation | What the restore does |
+|---|---|
+| A number above its limit | **clamped** to the limit |
+| A value not in the setting's fixed list | **skipped**: the stored value stays |
+| A low/high pair that would be inverted (the stored value is used for a side the file doesn't carry) | the file's side(s) **skipped** |
+| Unknown Dashboard widget names | **dropped**; the known ones are applied |
+
+Retired keys are still skipped silently, other values (garbage text, negatives, unrecognized keys) are written as
+before, and the write is still one all-or-nothing transaction; `applied` counts only the values actually written. The
+response is unchanged. Every adjustment is logged to the server console, and one `restore` System log event at
+`warning` level ("Settings restore adjusted N values") lists the total and the first 20 as `{key, action, from, to}`
+(numbers for a clamp only, never text from the file). The same applies to `import/full` and
 `POST /api/backup/history/:id/restore`:
 
 ```json

@@ -2,10 +2,12 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"packrat/backend/internal/backup"
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/ratelimit"
 	"packrat/backend/internal/sysevents"
@@ -87,6 +89,42 @@ func maskedError(err error) string {
 
 func recordRestoreDone(c *gin.Context, kind string, details map[string]any) {
 	recordEvent(c, sysevents.LevelInfo, sysevents.CategoryRestore, kind+" completed", details)
+}
+
+// maxAdjustmentsListed bounds the per-value list of the "restore adjusted" event; the total is
+// always in count.
+const maxAdjustmentsListed = 20
+
+// recordRestoreAdjusted records ONE warning for a settings import / full restore that clamped,
+// skipped or dropped values (none when nothing was adjusted). Details carry the total count and
+// the first maxAdjustmentsListed as {key, action, from, to}: keys and numbers only — never the
+// unknown text of an enum or widget value, which came from the file.
+func recordRestoreAdjusted(c *gin.Context, kind string, adjustments []backup.SettingAdjustment) {
+	if len(adjustments) == 0 {
+		return
+	}
+	listed := adjustments
+	if len(listed) > maxAdjustmentsListed {
+		listed = listed[:maxAdjustmentsListed]
+	}
+	items := make([]map[string]any, 0, len(listed))
+	for _, a := range listed {
+		item := map[string]any{"key": a.Key, "action": a.Action}
+		if a.From != nil {
+			item["from"] = *a.From
+		}
+		if a.To != nil {
+			item["to"] = *a.To
+		}
+		items = append(items, item)
+	}
+	noun := "values"
+	if len(adjustments) == 1 {
+		noun = "value"
+	}
+	recordEvent(c, sysevents.LevelWarning, sysevents.CategoryRestore,
+		fmt.Sprintf("Settings restore adjusted %d %s", len(adjustments), noun),
+		map[string]any{"source": kind, "count": len(adjustments), "adjustments": items})
 }
 
 // recordRestoreRefused is a restore the server turned away before changing anything (unreadable
