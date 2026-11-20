@@ -116,9 +116,6 @@ None are scheduled. Sizes are guesses.
 
 **Loose ends**
 
-- **Add `govulncheck` to the required checks (S).** The `govulncheck` job in `ci.yml` now fails when the scan finds
-  vulnerabilities that affect the code (exit status 3); a scan that can't complete (e.g. `vuln.go.dev` unreachable)
-  only warns. Add it to branch protection (configured outside the repo).
 - **Trim frame picker timeout headroom on very heavy windows (S to M).** `ExtractFrameThumbnails` and
   `ExtractFrameRange` share a 30 s `frameRangeTimeout`. A synthetic 4K 120 fps, 15 s window took about 20 s here, of
   which about 15.5 s was ffprobe listing every frame's timestamp (`probeAllFrameTimestamps`, which decodes the
