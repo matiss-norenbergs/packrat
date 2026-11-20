@@ -93,8 +93,8 @@ None are scheduled. Sizes are guesses.
 - **A1111 output writes PNG bytes into a `.jpg` sidecar (S).** Check whether consumers (Jellyfin, the frontend)
   sniff the content or trust the extension.
 - **`pruneEmptyParents` can race tier generation for the same directory (S).** A tiny window.
-- **Case-sensitive stray-file matching and Windows reserved names (S).** `SanitizeFilename` doesn't reject `CON`,
-  `NUL`, `COM1`. Windows hosts only.
+- **Case-sensitive stray-file matching (S).** On a case-insensitive mount a file differing from its database path only
+  in letter case would be reported as stray.
 
 **Loose ends**
 

@@ -124,7 +124,7 @@ func (u *libraryUpdater) update(ctx context.Context, id int64, req UpdateLibrary
 		if item.Path == "" {
 			return newOpError(http.StatusBadRequest, "item has no media file to rename")
 		}
-		newBase = fsutil.SanitizeFilename(*req.Filename)
+		newBase = fsutil.SanitizeRename(*req.Filename, strings.TrimSuffix(item.Filename, filepath.Ext(item.Filename)))
 		if newBase == "" {
 			return newOpError(http.StatusBadRequest, "invalid filename")
 		}

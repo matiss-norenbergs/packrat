@@ -200,7 +200,10 @@ The live download queue.
     them). A token with no value is simply left empty (there is no "skip this part if empty"). After a colon a
     token takes a modifier: digits zero-pad a number (`{season:02}` → `01`), and anything else joins
     the words of the value (`{artist:.}` → `Rick.Astley`). A `/` makes subfolders inside the
-    collection's folder; each part is cleaned of characters the file system doesn't allow, and parts
+    collection's folder; each part is cleaned of characters the file system doesn't allow (and a Windows reserved
+    device name such as `CON`, `NUL`, `COM1` or `LPT1`, with or without an extension, gets a `_` added
+    to its name: `con.mp4` → `con_.mp4`, on every platform; names that already exist are never renamed
+    for this, and submitting a file, folder or collection name unchanged is not a rename), and parts
     that end up empty are dropped. A `%` in a name (a title like `100%` or `%(title)s`) is kept as a
     literal character; it is never expanded by `yt-dlp`'s own template syntax. Characters that can't be used are flagged under the field. A
     collection can supply a default template (see Collections), which a template or filename typed

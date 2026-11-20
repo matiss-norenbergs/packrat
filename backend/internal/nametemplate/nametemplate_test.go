@@ -124,3 +124,14 @@ func TestResolve_PlainTokenBackwardCompatible(t *testing.T) {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
 }
+
+func TestResolve_ReservedWindowsNames(t *testing.T) {
+	got := Resolve("{artist}/{title}", Vars{Artist: "NUL", Title: "con"})
+	want := []string{"NUL_", "con_"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v, want %#v", got, want)
+	}
+	if got := Resolve("{title}", Vars{Title: "Icon"}); !reflect.DeepEqual(got, []string{"Icon"}) {
+		t.Fatalf("ordinary name changed: %#v", got)
+	}
+}
