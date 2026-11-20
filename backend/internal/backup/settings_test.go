@@ -331,3 +331,19 @@ func TestApplySettingsBundle_PairUsesClampedFrameRange(t *testing.T) {
 		t.Errorf("high = %q", hi)
 	}
 }
+
+func TestApplySettingsBundle_FrameCountBoundary(t *testing.T) {
+	ctx := context.Background()
+	repos := openTestRepos(t)
+	res, err := ApplySettingsBundle(ctx, repos.settings, map[string]string{models.SettingThumbnailFrameCount: "100"})
+	if err != nil || res.Applied != 1 || len(res.Adjustments) != 0 {
+		t.Fatalf("100: err=%v res=%+v", err, res)
+	}
+	res, err = ApplySettingsBundle(ctx, repos.settings, map[string]string{models.SettingThumbnailFrameCount: "101"})
+	if err != nil || len(res.Adjustments) != 1 || res.Adjustments[0].Action != AdjustClamped {
+		t.Fatalf("101: err=%v res=%+v", err, res)
+	}
+	if got, _ := stored(t, repos.settings, models.SettingThumbnailFrameCount); got != "100" {
+		t.Errorf("stored %q, want 100", got)
+	}
+}

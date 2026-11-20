@@ -927,7 +927,7 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   fails. `400` for an image item (its thumbnail is the image file itself). `409` the item is being updated.
 - **`GET /api/library/:id/thumbnail/timestamps`** — read-only; extracts nothing. Picks the
   timestamps for a "choose from video" batch: `count` frames spread across the pick range, one
-  random point per equal bucket. Optional query params `count` (1–50), `low` and `high` (percent of
+  random point per equal bucket. Optional query params `count` (1–100), `low` and `high` (percent of
   duration, decimals allowed, `0 <= low < high <= 100`) override the `thumbnailFrameCount` /
   `thumbnailFrameRangeLow` / `thumbnailFrameRangeHigh` settings for this call only; `exclude` is a
   comma-separated list of timestamps to steer away from. `400` on an out-of-range value. The
@@ -938,7 +938,7 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   ```
 - **`GET /api/library/:id/thumbnail/candidates`** — no body, read-only. Extracts N frames (N = the
   `thumbnailFrameCount` setting: 2/4/6/8/12/24), spread across the same configured pick range, as
-  base64 JPEGs. With `timestamps=` (comma-separated, at most 50) it extracts exactly those instead
+  base64 JPEGs. With `timestamps=` (comma-separated, at most 100) it extracts exactly those instead
   of picking new ones. A per-candidate failure is skipped, not fatal; `502` only if zero candidates
   could be extracted.
   ```json
@@ -1475,7 +1475,7 @@ nothing in the request is saved:
   |---|---|---|
   | `maxConcurrentDownloads` | 16 (also needs ≥ 1; message `... must be between 1 and 16`) | one worker + yt-dlp process per slot |
   | `maxConcurrentTranscodes` | 16 | one ffmpeg re-encode per slot |
-  | `thumbnailFrameCount` | 50 (the request also only accepts 2, 4, 6, 8, 12, 24) | the candidate-frame endpoint refuses more |
+  | `thumbnailFrameCount` | 100 (the request also only accepts 2, 4, 6, 8, 12, 24) | the candidate-frame endpoint refuses more |
   | `thumbnailEnhancementFactor` | 16 | multiplier sent to the external upscaler |
   | `thumbnailEnhancementTargetDim` | 16384 | target size (becomes a multiplier) sent to the upscaler |
   | `ytdlpRetries` | 100 | passed to yt-dlp as `--retries`; a failing download would retry practically forever |

@@ -425,7 +425,7 @@ same endpoint with a list of one.
     extracted one at a time, with a progress bar ("n / total (%)") beside the toolbar and each
     tile appearing as soon as its frame is ready; "Get N new frames" and revisiting an earlier
     frame set show the same progress.
-  - **Choose from Video (custom)…** — same picker, but first asks for the frame count (1–50, number
+  - **Choose from Video (custom)…** — same picker, but first asks for the frame count (1–100, number
     input) and pick range (same from/to slider as Settings) for this run only. Both start from the
     Settings values every time; nothing is remembered. "Get N new frames" in that session reuses the
     custom count and range. The slider here moves in 0.1% steps

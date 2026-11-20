@@ -9,7 +9,7 @@ import { useSettings } from "@/hooks/useSettings"
 import { formatDuration } from "@/lib/utils"
 
 export const MIN_CUSTOM_FRAME_COUNT = 1
-export const MAX_CUSTOM_FRAME_COUNT = 50
+export const MAX_CUSTOM_FRAME_COUNT = 100
 
 // low/high are percent of duration; the dialog also shows them as times
 // (through the video's duration) when it's known.

@@ -23,8 +23,8 @@ const (
 	MaxConcurrentTranscodesLimit = 16
 	// MaxThumbnailFrameCount is also the largest "count" the candidate-frame
 	// endpoint accepts, so a larger stored value would make every
-	// "Choose from Video" request fail. The UI offers up to 24.
-	MaxThumbnailFrameCount = 50
+	// "Choose from Video" request fail. The Settings UI offers up to 24.
+	MaxThumbnailFrameCount = 100
 	// MaxThumbnailEnhancementFactor is the upscale multiplier requested from
 	// the external Stable Diffusion WebUI; a huge one asks it for an enormous
 	// image. The UI presets are 2-4.

@@ -9,7 +9,7 @@ func TestSettingMaxValues(t *testing.T) {
 	cases := map[string]int{
 		SettingMaxConcurrentDownloads:            16,
 		SettingMaxConcurrentTranscodes:           16,
-		SettingThumbnailFrameCount:               50,
+		SettingThumbnailFrameCount:               100,
 		SettingThumbnailEnhancementFactor:        16,
 		SettingThumbnailEnhancementTargetDim:     16384,
 		SettingYtdlpRetries:                      100,
