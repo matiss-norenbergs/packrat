@@ -142,7 +142,7 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 			return
 		}
 
-		applied, err := backup.ApplySettingsBundle(c.Request.Context(), settingsRepo, bundle)
+		res, err := backup.ApplySettingsBundle(c.Request.Context(), settingsRepo, bundle)
 		if err != nil {
 			recordRestoreFailed(c, restoreSettingsImport, err)
 			writeServerError(c, err)
@@ -150,11 +150,13 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 		}
 
 		// The write has committed; push the live-process settings (worker pool,
-		// transcodes) into the running components.
-		applySettingsSideEffects(bundle, mgr, ytdlp)
+		// transcodes) into the running components — from what was actually
+		// stored (clamped), never the raw bundle.
+		applySettingsSideEffects(res.Written, mgr, ytdlp)
 		syncCookiesFileAfterRestore(c.Request.Context(), settingsRepo, ytdlp)
-		recordRestoreDone(c, restoreSettingsImport, map[string]any{"settingsApplied": applied})
-		c.JSON(http.StatusOK, BackupImportSettingsResponse{Applied: applied})
+		recordRestoreDone(c, restoreSettingsImport, map[string]any{"settingsApplied": res.Applied})
+		recordRestoreAdjusted(c, restoreSettingsImport, res.Adjustments)
+		c.JSON(http.StatusOK, BackupImportSettingsResponse{Applied: res.Applied})
 	}
 }
 
@@ -511,13 +513,14 @@ func RestoreFullBackup(
 			return
 		}
 
-		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
+		resp, adjusted, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
 		if err != nil {
 			recordRestoreFailed(c, restoreFullFromHistory, err)
 			writeServerError(c, err)
 			return
 		}
 		recordRestoreDone(c, restoreFullFromHistory, fullRestoreDetails(resp))
+		recordRestoreAdjusted(c, restoreFullFromHistory, adjusted)
 		c.JSON(http.StatusOK, resp)
 	}
 }
@@ -539,7 +542,7 @@ func applyFullBundle(
 	ytdlp *downloader.YtDlpService,
 	bundle backup.FullBundle,
 	ghostOnly bool,
-) (BackupRestoreFullResponse, error) {
+) (BackupRestoreFullResponse, []backup.SettingAdjustment, error) {
 	// Order matters. (1) The library step is the one that can fail for
 	// reasons outside our control, and it is its own transaction, so it goes
 	// first: if it fails nothing else happens and the existing settings
@@ -550,16 +553,18 @@ func applyFullBundle(
 	// window is small (one local transaction) and the error says so.
 	resolved, result, err := backup.ApplyLibraryBundle(ctx, db, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, bundle.Library, ghostOnly)
 	if err != nil {
-		return BackupRestoreFullResponse{}, err
+		return BackupRestoreFullResponse{}, nil, err
 	}
-	settingsApplied, err := backup.ApplySettingsBundle(ctx, settingsRepo, bundle.Settings)
+	settingsRes, err := backup.ApplySettingsBundle(ctx, settingsRepo, bundle.Settings)
 	if err != nil {
-		return BackupRestoreFullResponse{}, fmt.Errorf("library was restored but applying settings failed: %w", err)
+		return BackupRestoreFullResponse{}, nil, fmt.Errorf("library was restored but applying settings failed: %w", err)
 	}
-	applySettingsSideEffects(bundle.Settings, mgr, ytdlp)
+	// Live limits come from what was stored (clamped), not the raw bundle, so
+	// the running server and the database never disagree.
+	applySettingsSideEffects(settingsRes.Written, mgr, ytdlp)
 	syncCookiesFileAfterRestore(ctx, settingsRepo, ytdlp)
 	libResp := enqueueResolvedDownloads(ctx, mgr, collectionsRepo, settingsRepo, resolved, result)
-	return BackupRestoreFullResponse{SettingsApplied: settingsApplied, Library: libResp}, nil
+	return BackupRestoreFullResponse{SettingsApplied: settingsRes.Applied, Library: libResp}, settingsRes.Adjustments, nil
 }
 
 // ImportFullBackup applies an ad-hoc uploaded full backup file — same as
@@ -601,13 +606,14 @@ func ImportFullBackup(
 			return
 		}
 
-		resp, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
+		resp, adjusted, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
 		if err != nil {
 			recordRestoreFailed(c, restoreFullFromUpload, err)
 			writeServerError(c, err)
 			return
 		}
 		recordRestoreDone(c, restoreFullFromUpload, fullRestoreDetails(resp))
+		recordRestoreAdjusted(c, restoreFullFromUpload, adjusted)
 		c.JSON(http.StatusOK, resp)
 	}
 }

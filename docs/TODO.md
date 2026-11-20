@@ -69,8 +69,6 @@ None are scheduled. Sizes are guesses.
 
 - **Collection PATCH is a full replace (S).** Omitted `isPrivate`, `browseAsShow` and `artistId` are cleared
   instead of left alone. Decide whether PATCH should merge, then make it so (and update `api.md`).
-- **Restore bypasses settings validation (S to M).** Values are written verbatim (only `maxConcurrentDownloads` is
-  clamped now). Run the same validation as `PATCH /api/settings`, clamping or skipping bad values instead of failing.
 
 **Behavior to decide or finish**
 

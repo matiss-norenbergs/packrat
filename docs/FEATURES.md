@@ -425,7 +425,7 @@ same endpoint with a list of one.
     extracted one at a time, with a progress bar ("n / total (%)") beside the toolbar and each
     tile appearing as soon as its frame is ready; "Get N new frames" and revisiting an earlier
     frame set show the same progress.
-  - **Choose from Video (custom)…** — same picker, but first asks for the frame count (1–50, number
+  - **Choose from Video (custom)…** — same picker, but first asks for the frame count (1–100, number
     input) and pick range (same from/to slider as Settings) for this run only. Both start from the
     Settings values every time; nothing is remembered. "Get N new frames" in that session reuses the
     custom count and range. The slider here moves in 0.1% steps
@@ -842,6 +842,10 @@ a logging framework — console logging is unchanged and only the events below a
   [warning].
 - `restore` — Settings import, Library import and the full restore (from Backup history or an uploaded
   file): completed with counts [info], refused (unreadable file, wrong password) [warning], failed [error].
+  A settings import or full restore that had to adjust values also records **one** extra warning,
+  "Settings restore adjusted N values", whose details give the total and the first 20 as key, action
+  (clamped / skipped / dropped) and, for a clamp, the number before and after. It never contains the
+  unknown text from the file; nothing adjusted means no extra event.
 - `maintenance` — Scan for Missing Files (scanned / ghosted / unreadable; refused because the media folder
   looks unavailable, or stopped by the safety guard) [info/warning], stray files deleted (count) [info],
   image backfill that finished with failures and a failed scheduled thumbnail-enhancement sweep.
@@ -891,6 +895,13 @@ or just as a safety net.
 - A full restore applies the library first, then the settings (together, all or nothing), then queues the
   redownloads, so they use the restored settings. If the library part fails, your current settings are left
   untouched; restored worker and transcode limits take effect immediately.
+- **A restore adjusts values instead of writing bad ones.** Settings imports and full restores use the same
+  rules as saving Settings, but never fail halfway: a number above its limit is lowered to the limit
+  (e.g. a worker count of 5000 becomes 16), a value that is not in a setting's fixed list (quality,
+  library view, blur strength, ...) or a low/high pair that would be inverted is not applied (your current
+  value stays), and unknown Dashboard widget names are dropped. Each adjustment is written to the server
+  console and, as one warning for the whole restore, to the System log. The restored worker and transcode
+  limits on the running server are the adjusted ones.
 - A backup file can be up to **128 MB** to import (the Settings, Library Data and Full Backup cards and
   their previews; every other request is limited to 50 MB). That is roughly 130,000 library items; a
   larger file is refused with "The backup file is too large (the limit is 128 MB)." (413). Behind a
@@ -1141,7 +1152,7 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
 
 - **General** — max concurrent downloads (1 to 16; applies to the live worker pool immediately, no
   restart needed; the field shows the range and Save stays off above 16; a settings import or
-  backup restore that carries a larger value is clamped to 16 rather than refused), max concurrent transcodes (how many Trim previews ffmpeg may generate at once;
+  backup restore that carries a larger value is clamped to 16 rather than refused; other settings with a hard upper limit are clamped the same way, see Backup), max concurrent transcodes (how many Trim previews ffmpeg may generate at once;
   also applies immediately, and both limits survive a restart — the `MAX_CONCURRENT_DOWNLOADS` /
   `MAX_CONCURRENT_FFMPEG_TRANSCODES` environment variables only seed a fresh database) and a
   download timeout in minutes (kills and marks failed any download still

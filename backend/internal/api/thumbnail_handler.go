@@ -19,6 +19,7 @@ import (
 	"packrat/backend/internal/downloader"
 	"packrat/backend/internal/importer"
 	"packrat/backend/internal/itemlock"
+	"packrat/backend/internal/models"
 	"packrat/backend/internal/repository"
 	"packrat/backend/internal/thumbnailenhance"
 	"packrat/backend/internal/thumbwrite"
@@ -298,7 +299,7 @@ func QuickGrabLibraryThumbnail(mediaRoot, imagesRoot string, libraryRepo *reposi
 // maxThumbnailCandidateFrames caps both the "count" a caller may request from
 // GET .../thumbnail/timestamps and how many explicit timestamps one
 // GET .../thumbnail/candidates call will extract.
-const maxThumbnailCandidateFrames = 50
+const maxThumbnailCandidateFrames = models.MaxThumbnailFrameCount
 
 // intQueryParam reads an optional integer query param, returning fallback
 // when it's absent.

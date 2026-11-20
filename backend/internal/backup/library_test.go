@@ -485,12 +485,15 @@ func TestBuildApplySettingsBundle_RoundTrip(t *testing.T) {
 		t.Fatalf("Set: %v", err)
 	}
 
-	applied, err := ApplySettingsBundle(ctx, repos.settings, bundle)
+	res, err := ApplySettingsBundle(ctx, repos.settings, bundle)
 	if err != nil {
 		t.Fatalf("ApplySettingsBundle: %v", err)
 	}
-	if applied != len(bundle) {
-		t.Fatalf("expected %d applied, got %d", len(bundle), applied)
+	if res.Applied != len(bundle) {
+		t.Fatalf("expected %d applied, got %d", len(bundle), res.Applied)
+	}
+	if len(res.Adjustments) != 0 {
+		t.Fatalf("a clean bundle must not be adjusted, got %+v", res.Adjustments)
 	}
 
 	got, err := repos.settings.Get(ctx, "max_concurrent_downloads")
@@ -506,15 +509,15 @@ func TestApplySettingsBundle_SkipsRetiredKeys(t *testing.T) {
 	ctx := context.Background()
 	repos := openTestRepos(t)
 
-	applied, err := ApplySettingsBundle(ctx, repos.settings, map[string]string{
+	res, err := ApplySettingsBundle(ctx, repos.settings, map[string]string{
 		"library_sort":             "title:asc",
 		"max_concurrent_downloads": "4",
 	})
 	if err != nil {
 		t.Fatalf("ApplySettingsBundle: %v", err)
 	}
-	if applied != 1 {
-		t.Fatalf("expected only the live key to count, got %d", applied)
+	if res.Applied != 1 || len(res.Adjustments) != 0 {
+		t.Fatalf("expected only the live key to count and no adjustment, got %+v", res)
 	}
 	if _, err := repos.settings.Get(ctx, "library_sort"); !errors.Is(err, repository.ErrNotFound) {
 		t.Fatalf("expected library_sort not to be stored, got err=%v", err)

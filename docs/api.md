@@ -927,7 +927,7 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   fails. `400` for an image item (its thumbnail is the image file itself). `409` the item is being updated.
 - **`GET /api/library/:id/thumbnail/timestamps`** — read-only; extracts nothing. Picks the
   timestamps for a "choose from video" batch: `count` frames spread across the pick range, one
-  random point per equal bucket. Optional query params `count` (1–50), `low` and `high` (percent of
+  random point per equal bucket. Optional query params `count` (1–100), `low` and `high` (percent of
   duration, decimals allowed, `0 <= low < high <= 100`) override the `thumbnailFrameCount` /
   `thumbnailFrameRangeLow` / `thumbnailFrameRangeHigh` settings for this call only; `exclude` is a
   comma-separated list of timestamps to steer away from. `400` on an out-of-range value. The
@@ -938,7 +938,7 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   ```
 - **`GET /api/library/:id/thumbnail/candidates`** — no body, read-only. Extracts N frames (N = the
   `thumbnailFrameCount` setting: 2/4/6/8/12/24), spread across the same configured pick range, as
-  base64 JPEGs. With `timestamps=` (comma-separated, at most 50) it extracts exactly those instead
+  base64 JPEGs. With `timestamps=` (comma-separated, at most 100) it extracts exactly those instead
   of picking new ones. A per-candidate failure is skipped, not fatal; `502` only if zero candidates
   could be extracted.
   ```json
@@ -1465,6 +1465,43 @@ Same field set as the `GET` response. Notes:
   1 to 16 (`models.MaxConcurrentDownloadsLimit`); above 16 is `400 {"error":"maxConcurrentDownloads must be between 1 and 16"}` and nothing in the request is saved.
 - `downloadDirectory` (`MEDIA_ROOT`) is **not** patchable here — env-config only.
 
+**Validation rules** (shared with the settings import / restore, which applies the same rules by clamping or skipping
+instead of failing, see Backup; they live in `models/settings_rules.go`). A violation is `400 {"error": "..."}` and
+nothing in the request is saved:
+
+- **Upper limits** — `"<field> must be at most <limit>"`. Lower bounds are unchanged (`min=` on the request).
+
+  | Field | Limit | Why |
+  |---|---|---|
+  | `maxConcurrentDownloads` | 16 (also needs ≥ 1; message `... must be between 1 and 16`) | one worker + yt-dlp process per slot |
+  | `maxConcurrentTranscodes` | 16 | one ffmpeg re-encode per slot |
+  | `thumbnailFrameCount` | 100 (the request also only accepts 2, 4, 6, 8, 12, 24) | the candidate-frame endpoint refuses more |
+  | `thumbnailEnhancementFactor` | 16 | multiplier sent to the external upscaler |
+  | `thumbnailEnhancementTargetDim` | 16384 | target size (becomes a multiplier) sent to the upscaler |
+  | `ytdlpRetries` | 100 | passed to yt-dlp as `--retries`; a failing download would retry practically forever |
+  | `downloadTimeoutMinutes` | 5,256,000 (10 years) | larger overflows the timeout duration (cancels every download at once) |
+  | `historyRetentionDays`, `downloadLogRetentionDays`, `thumbnailEnhancementRetentionDays` | 36,500 (100 years) | larger overflows the cutoff date arithmetic |
+  | `thumbnailFrameRangeLow`, `thumbnailFrameRangeHigh` | 0 to 100 (a percentage of the video's duration; message `... must be between 0 and 100`) | frames outside the video make extraction fail |
+  | `autoBackupIntervalHours` | 87,600 (10 years; the request also only accepts 0, 6, 12, 24, 72, 168) | larger overflows the interval (a backup on every tick) |
+
+- **Fixed lists** — `"<field> must be one of: a, b, c"`:
+
+  | Field | Allowed |
+  |---|---|
+  | `defaultQuality` | `best`, `2160p`, `1440p`, `1080p`, `720p`, `480p`, `360p`, `worst` |
+  | `defaultDownloadType` | `video`, `audio`, `image` |
+  | `libraryView` | `grid`, `list`, `folders` |
+  | `libraryMode` | `manage`, `view`, `details` |
+  | `imageConvertFormat` | `original`, `jpg`, `png`, `webp` |
+  | `privacyBlurStrength` | `weak`, `default`, `strong` |
+  | `jellyfinRefreshMode` | `entire`, `specific`, `none` |
+  | `thumbnailEnhancementTargetMode` | `factor`, `resolution` |
+
+- **Low/high pairs** must satisfy low < high, taking the stored value for a side the request omits: the video resolution
+  thresholds, the thumbnail resolution thresholds and the thumbnail frame range (`400`, e.g.
+  `"resolution low threshold must be less than the high threshold"`).
+- `dashboardHiddenWidgets` with an unknown ID (above).
+
 `204 No Content` on success.
 
 ### Image derivative backfill
@@ -1592,8 +1629,23 @@ existing collections match exactly as before. Each item's `folder` is cleaned li
 `kind` is the endpoint's own or `"full"` (`400` if neither), decrypts if needed (`400` on wrong
 password). `mode` (import only, ignored by preview) is `"download"` (default) or `"ghostOnly"`.
 Settings import overwrites every key present in the bundle (never deletes keys absent from it) and
-live-resizes the worker pool if `maxConcurrentDownloads` was included. A `maxConcurrentDownloads` above 16 is
-**clamped to 16** (logged) instead of refused, so a restore never fails halfway; the same applies to `import/full` and
+live-resizes the worker pool and transcode limit if they were included, using the values as stored (clamped), not the
+raw file. The import applies the same validation rules as `PATCH /api/settings` (limits and allowed values are listed
+there), but **never fails halfway**, so a violation is adjusted instead of answered with `400`:
+
+| Violation | What the restore does |
+|---|---|
+| A number above its limit | **clamped** to the limit |
+| `thumbnail_frame_range_low` / `_high` outside 0 to 100 | **clamped** into the range (below 0 becomes 0, above 100 becomes 100) *before* the pair check below, so the pair is judged on the clamped values |
+| A value not in the setting's fixed list | **skipped**: the stored value stays |
+| A low/high pair that would be inverted (the stored value is used for a side the file doesn't carry) | the file's side(s) **skipped** |
+| Unknown Dashboard widget names | **dropped**; the known ones are applied |
+
+Retired keys are still skipped silently, other values (garbage text, negatives, unrecognized keys) are written as
+before, and the write is still one all-or-nothing transaction; `applied` counts only the values actually written. The
+response is unchanged. Every adjustment is logged to the server console, and one `restore` System log event at
+`warning` level ("Settings restore adjusted N values") lists the total and the first 20 as `{key, action, from, to}`
+(numbers for a clamp only, never text from the file). The same applies to `import/full` and
 `POST /api/backup/history/:id/restore`:
 
 ```json
