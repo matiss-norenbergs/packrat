@@ -897,7 +897,8 @@ Cuts a precise portion off the start and/or end of a video/audio file, previewed
   The server re-validates that the path resolves under `mediaRoot`, sits directly inside the shared
   trim scratch dir, and matches the `.trim-preview-` naming convention (`400` otherwise — defense
   against accepting an unrelated file). Overwrites the item's real media file with the preview,
-  re-probes duration/size, updates the DB. Response `200` with the full updated library item.
+  re-probes duration/size, updates the DB (if ffprobe cannot read the result the stored duration becomes
+  `null`, i.e. "unknown", never `0`). Response `200` with the full updated library item.
 - **`POST /api/library/:id/trim/discard`** — same body/validation as accept, just deletes the
   preview file without touching the original. `204`.
 - **`GET /api/library/:id/trim/frames?start=5.0&end=8.0`** — read-only, nothing persisted. Decodes

@@ -851,8 +851,8 @@ func (r *LibraryRepo) UpdatePlaybackPosition(ctx context.Context, id int64, posi
 // UpdateDurationAndSize is used after accepting a trim — the file on disk
 // changed size/length outside the normal download/import/metadata-edit
 // paths, so it's kept as its own narrow update rather than folded into
-// UpdateMetadata.
-func (r *LibraryRepo) UpdateDurationAndSize(ctx context.Context, id int64, durationSeconds int, fileSizeBytes int64) error {
+// UpdateMetadata. A nil durationSeconds stores NULL ("unknown"), never 0.
+func (r *LibraryRepo) UpdateDurationAndSize(ctx context.Context, id int64, durationSeconds *int, fileSizeBytes int64) error {
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE library SET duration = ?, file_size_bytes = ? WHERE id = ?`,
 		durationSeconds, fileSizeBytes, id,

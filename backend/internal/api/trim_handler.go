@@ -196,11 +196,8 @@ func AcceptLibraryItemTrim(repo *repository.LibraryRepo, mediaRoot, ffprobePath 
 		}
 
 		probe := importer.Probe(c.Request.Context(), ffprobePath, mediaAbs)
-		durationSeconds := 0
-		if probe.DurationSeconds != nil {
-			durationSeconds = *probe.DurationSeconds
-		}
-		if err := repo.UpdateDurationAndSize(c.Request.Context(), id, durationSeconds, probe.SizeBytes); err != nil {
+		// A failed probe leaves DurationSeconds nil: store NULL ("unknown"), not 0.
+		if err := repo.UpdateDurationAndSize(c.Request.Context(), id, probe.DurationSeconds, probe.SizeBytes); err != nil {
 			writeServerError(c, err)
 			return
 		}
