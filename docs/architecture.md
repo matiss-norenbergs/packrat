@@ -1763,6 +1763,11 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
 
 Still intentionally out of scope, not forgotten:
 
+- **`strayfiles.pruneEmptyParents` can race a thumbnail-tier generation.** In a tiny window it can remove an
+  empty directory that a concurrent tier generation for the same item is about to write into. Accepted: it only
+  runs during the explicit stray-file Delete and only on the images root, and the worst outcome is one failed
+  thumbnail operation, which the safe-write order (`thumbwrite`) leaves with nothing half-changed; retrying fixes
+  it. Not worth a lock shared between the two packages.
 - **`pathsafe` does not resolve symlinks.** `ResolveUnderRoot` cleans the path lexically and checks it stays
   under the root; it does not `EvalSymlinks`. Real setups symlink media folders (a NAS or another mount point
   under the media root), and following links would break them or force every such target onto an allow-list.
