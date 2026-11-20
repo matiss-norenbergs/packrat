@@ -1411,6 +1411,20 @@ exists because an update recreates the container and stdout with it. It is not a
   records the failure; a successful check while it is set records the recovery), so they survive a restart and
   repeated failures stay silent.
 
+## Media player skin
+
+`components/player/` is a control skin around a media element the *host* renders: `LibraryItemDetail`
+and `MiniPlayerDock` keep their `<video>`/`<audio>`, its ref (`usePersistedVolume`, the playback-position
+heartbeat, `syncMediaOnReady`), autoplay and `key` remounts, and wrap it in `<PlayerSkin mediaRef kind variant>`
+(`full` or `compact`; remount it together with the element). The skin only listens (`useMediaState`, a
+capture `error` listener because `<source>` errors don't bubble) and drives the element; native `controls`
+is gone. Fullscreen is requested on the skin's frame, and the speed menu is portaled into that frame, so both
+survive it (standard Fullscreen API only; no webkit-prefixed fallback). Text and icons drawn over arbitrary video use scoped,
+theme-independent `--player-*` variables in `globals.css` (the one exception to theme-only colors);
+the seek fill follows `--primary`. Every size, duration, blur and opacity is a named constant in
+`playerTheme.ts`; pure logic (time formatting, pointer-to-time, stepping, ARIA text) is in `playerMath.ts`.
+The compare player and the Trim dialog deliberately keep native controls.
+
 ## Floating action dock
 
 `components/FloatingActionDock.tsx` is a reusable slot for floating buttons. `<FloatingActionDock>`

@@ -697,6 +697,44 @@ its own artist — asking to delete another artist's image is refused ("image do
 artist") and changes nothing, and the removal and the selection reset happen together.
 - **Resizable side panel.** The right-hand panel's left edge is a drag handle (from the `md` breakpoint up): drag it, or Tab to it and use ←/→ (16px, Shift = 64px), Home (minimum), End (maximum) and Enter to reset. Width is limited to 280px minimum and 50% of the content row; with nothing remembered the panel opens at 500px; double-click the handle or press Enter to reset to that default, which also clears the remembered width. The width is remembered per page in the browser (not on the server); a window too narrow for it clamps the panel narrower for as long as it stays narrow, and growing back restores the remembered width. Phones keep the fixed 320px panel, no handle.
 
+## Media player
+
+The library item page (`/library/:id`, `/browse/:id`) and the Browse mini player share one custom
+control skin instead of the browser's native bar (the compare player and the Trim dialog still use
+the browser's own controls). It sits on the page's own `<video>`/`<audio>` element, so resume
+position, **Continue Watching** progress, autoplay and the private-item lock work exactly as before.
+
+- **Video** — a floating glass bar over the bottom of the picture: a seek bar (thickens on hover,
+  floating time bubble following the pointer, a lighter buffered track behind the played part in
+  your accent color), then play/pause, volume (the mute button; the slider slides out on
+  hover/focus), `1:23 / 45:10`, and on the right a speed pill (0.5×–2×) and fullscreen. The bar
+  fades in on pointer movement or focus and hides after about 2.5 s while playing; it stays while
+  paused, under the pointer, with a menu open or with keyboard focus inside it. While hidden, a
+  thin progress line stays at the bottom edge. Click plays/pauses (with a brief pulse), double-click
+  toggles fullscreen (the whole player, so the controls stay), and a spinner shows while buffering.
+- **Audio** — cover art (or a placeholder) with title and artist, the same bar below it.
+- **Mini player** — a compact bar: cover (audio), play/pause, seek bar, time and volume; no speed
+  pill or fullscreen.
+- **Can't be played** — when the browser can't decode a file (unsupported codec/container, damaged
+  or unreachable file) the player shows "This file can't be played in the browser" with the reason
+  when known, instead of a black box.
+- **Keyboard** (while the player is focused or hovered, never while typing):
+
+  | Key | Action |
+  |---|---|
+  | `Space` / `K` | Play / pause |
+  | `←` / `→` | Seek 5 s (`Shift`, or `J` / `L`: 10 s) |
+  | `↑` / `↓` | Volume |
+  | `M` | Mute |
+  | `F` | Fullscreen (item page video) |
+  | `<` / `>` | Slower / faster |
+  | `0`–`9` | Jump to 0–90 % |
+
+  The seek bar is also a slider for screen readers (arrow keys, Home/End, spoken position).
+- **Remembered** — volume and mute are remembered per browser (shared with the compare player) and
+  work without storage; playback speed resets to 1× for every item. Reduced-motion preference
+  turns the fades and the pulse off.
+
 ## Compare list
 
 > Optional — can be turned off in [Settings → Features](#settings); see the note there for what "off" means.
