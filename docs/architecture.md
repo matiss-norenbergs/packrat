@@ -1089,6 +1089,15 @@ removes the whole directory on every path, then passes the bytes to `Replace`. y
 writes onto the sidecar, nothing it leaves behind (converted or intermediate files) ends up next to the
 media file, and its exact-name matching cannot collide with another file.
 
+**What enhancement writes.** The Stable Diffusion WebUI returns a PNG by default, so `enhanceOne` runs the
+result through `sidecarJPEG` first: `imageproc.NeedsJPEGConversion` (content sniffing, never headers)
+selects PNG/WebP/GIF/BMP, `imageproc.BytesToJPEG` converts it with ffmpeg through pipes (mjpeg `-q:v 2`,
+the app's usual JPEG quality; alpha flattened onto black; dimensions verified equal), and a JPEG result is
+written untouched. This happens before the backup and before `Replace`, so nothing is changed by it; any
+conversion error is logged and the upscaler's own bytes are written instead (never a failed run). Only a
+`.jpg`/`.jpeg` sidecar of a non-image item is converted. `thumbnailenhance.convertToJPEG` is the test seam.
+`thumbwrite.Replace` itself still stores whatever bytes it is given.
+
 `enhanceOne` backs the original up *before* writing (`backupOriginalIfAbsent` now reports whether it
 created the backup); if the write fails, a backup created by that run is removed again (an earlier
 run's backup never is), so a failed run offers no "Revert". `thumbwrite.RenameFile` and

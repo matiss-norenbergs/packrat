@@ -86,8 +86,15 @@ None are scheduled. Sizes are guesses.
 
 **Small hardening**
 
-- **A1111 output writes PNG bytes into a `.jpg` sidecar (S).** Check whether consumers (Jellyfin, the frontend)
-  sniff the content or trust the extension.
+- **Other thumbnail actions still write non-JPEG bytes into the `.jpg` sidecar (S).** AI enhancement now converts
+  its result to a JPEG, but Set thumbnail (an uploaded PNG/WebP) and Gallery apply (a gallery image saved as
+  `.png`/`.webp`) pass the bytes to `thumbwrite.Replace` unchanged, so the sidecar can be a PNG under a `.jpg`
+  name. Converting inside `thumbwrite.Replace` (using `imageproc.BytesToJPEG`) would cover every caller. Not
+  checked: Quick Grab, Frame-match accept and Redownload (their bytes come from ffmpeg/yt-dlp JPEG output).
+- **AI enhancement does not refuse image items (S).** `checkEligible` and `SharpenItems` only require a path
+  and a thumbnail, and an image item's thumbnail is its media file, so a small image item can be picked up
+  and its file rewritten (the backend has no check; the UI may hide the action). Every other thumbnail action refuses them (`isImageItem`); the enhancement path
+  should too. Conversion to JPEG is skipped for image items, so this is unchanged by it.
 - **`pruneEmptyParents` can race tier generation for the same directory (S).** A tiny window.
 
 **Loose ends**
