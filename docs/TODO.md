@@ -69,8 +69,6 @@ None are scheduled. Sizes are guesses.
 
 - **Collection PATCH is a full replace (S).** Omitted `isPrivate`, `browseAsShow` and `artistId` are cleared
   instead of left alone. Decide whether PATCH should merge, then make it so (and update `api.md`).
-- **Unvalidated thumbnail bytes in `SetLibraryThumbnail` (S).** Any bytes are written as the sidecar. Decode with
-  `thumbwrite.Probe` first (JPEG/PNG), as the other thumbnail writers now do.
 - **Gallery extension (S).** `readCurrentThumbnail` labels every thumbnail `.jpg`, whatever the real format.
 - **Trim preview not bound to an item (S).** `trim_handler.go`: accept takes any valid `.trim-preview-*` path, not
   just the one created for that item.
