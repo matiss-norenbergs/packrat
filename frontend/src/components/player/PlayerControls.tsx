@@ -50,7 +50,7 @@ function Volume({ state, actions }: { state: MediaState; actions: PlayerActions 
       >
         <VolumeIcon volume={state.volume} muted={state.muted} />
       </button>
-      <div className="w-0 overflow-hidden transition-[width] duration-150 group-focus-within/vol:w-(--player-volume-slider) group-hover/vol:w-(--player-volume-slider) motion-reduce:transition-none">
+      <div className="flex w-0 items-center overflow-hidden transition-[width] duration-150 group-focus-within/vol:w-(--player-volume-slider) group-hover/vol:w-(--player-volume-slider) motion-reduce:transition-none">
         <input
           type="range"
           min={0}
