@@ -1,3 +1,9 @@
+// Package pathsafe keeps user-provided folder and file names under a root.
+//
+// The check is lexical: symlinks are deliberately NOT resolved. Real setups symlink media folders
+// (a NAS or other mount point under the media root), and escaping through a link needs the ability
+// to create one under the root, which already means host access. See "Deliberate scope cuts" in
+// docs/architecture.md.
 package pathsafe
 
 import (

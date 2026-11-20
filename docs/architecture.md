@@ -1749,6 +1749,11 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
 
 Still intentionally out of scope, not forgotten:
 
+- **`pathsafe` does not resolve symlinks.** `ResolveUnderRoot` cleans the path lexically and checks it stays
+  under the root; it does not `EvalSymlinks`. Real setups symlink media folders (a NAS or another mount point
+  under the media root), and following links would break them or force every such target onto an allow-list.
+  Exploiting it needs the ability to create a symlink under the media root, which already means host access
+  (shell or the volume), so the check would not stop anyone who matters.
 - **No artist images in backups.** A library backup carries each artist's name, private flag and birthday
   but not the display picture, `selected_image_path` or the `artist_images` gallery: backups carry
   references, never file bytes (same reason no media files are shipped), so restored artists start
