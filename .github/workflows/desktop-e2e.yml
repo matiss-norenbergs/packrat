@@ -28,7 +28,7 @@ permissions:
 jobs:
   e2e:
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
       # Bump to rebuild the cached tauri-driver binary.
       TAURI_DRIVER_VERSION: "2.1.0"
@@ -50,9 +50,9 @@ jobs:
           cache-dependency-path: backend/go.sum
 
       - name: Install Linux dependencies
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          "$GITHUB_WORKSPACE/.github/scripts/apt-install.sh" \
             libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev \
             libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev \
             xvfb x11-utils webkit2gtk-driver

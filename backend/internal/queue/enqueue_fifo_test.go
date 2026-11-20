@@ -82,7 +82,9 @@ func (e *ghostEnv) countStatus(want models.DownloadStatus) int {
 func TestEnqueueDoesNotBlockWithoutWorkers(t *testing.T) {
 	e := newGhostEnv(t)
 
-	start := time.Now()
+	// The only timing check is the "blocked" guard below: a hang is what this
+	// test is about, and a wall-clock bound on real work flakes on a loaded
+	// shared runner.
 	done := make(chan []int64, 1)
 	go func() { done <- e.enqueueN(0, 500) }()
 	var ids []int64
@@ -90,9 +92,6 @@ func TestEnqueueDoesNotBlockWithoutWorkers(t *testing.T) {
 	case ids = <-done:
 	case <-time.After(20 * time.Second):
 		t.Fatal("Enqueue blocked (queue capped?)")
-	}
-	if took := time.Since(start); took > 5*time.Second {
-		t.Fatalf("500 enqueues took %v", took)
 	}
 	if len(ids) != 500 {
 		t.Fatalf("got %d ids", len(ids))
@@ -105,7 +104,7 @@ func TestEnqueueDoesNotBlockWithoutWorkers(t *testing.T) {
 	}
 }
 
-// One worker held by a long download: 499 more enqueues return promptly, every
+// One worker held by a long download: 499 more enqueues return (not blocked), every
 // row exists as queued, the Queued count is 499, and once the worker is freed
 // the rest run in enqueue order.
 func TestEnqueueWithBusyWorkerStaysFIFO(t *testing.T) {
@@ -118,7 +117,10 @@ func TestEnqueueWithBusyWorkerStaysFIFO(t *testing.T) {
 		return e.download(first).Status != models.StatusQueued
 	})
 
-	start := time.Now()
+	// Not blocking is the property: the generous guard below catches a hang,
+	// and the row, Queued-count and order checks catch wrong results. There is
+	// deliberately no tight wall-clock bound on the enqueues themselves (it
+	// failed once on a loaded CI runner at 3.7s with nothing wrong).
 	done := make(chan []int64, 1)
 	go func() { done <- e.enqueueN(1, 499) }()
 	var rest []int64
@@ -126,9 +128,6 @@ func TestEnqueueWithBusyWorkerStaysFIFO(t *testing.T) {
 	case rest = <-done:
 	case <-time.After(20 * time.Second):
 		t.Fatal("Enqueue blocked behind the busy worker")
-	}
-	if took := time.Since(start); took > 3*time.Second {
-		t.Fatalf("499 enqueues took %v, want well under a second of real work", took)
 	}
 
 	if n := e.countStatus(models.StatusQueued); n != 499 {
