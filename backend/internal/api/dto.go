@@ -1610,6 +1610,28 @@ type RestoreBackupRequest struct {
 type BackupRestoreFullResponse struct {
 	SettingsApplied int                         `json:"settingsApplied"`
 	Library         BackupImportLibraryResponse `json:"library"`
+	// Adjusted lists the settings values the restore clamped, skipped or
+	// dropped instead of writing verbatim (always an array, [] when none).
+	Adjusted []SettingAdjustmentDTO `json:"adjusted"`
+}
+
+// SettingAdjustmentDTO is one adjusted settings value of a restore: the shape
+// of the response's `adjusted` list and of the System log event's details.
+// From/To are set for a clamp only; text from the file is never echoed.
+type SettingAdjustmentDTO struct {
+	Key    string `json:"key"`
+	Action string `json:"action"` // "clamped" | "skipped" | "dropped"
+	From   *int   `json:"from,omitempty"`
+	To     *int   `json:"to,omitempty"`
+}
+
+// toSettingAdjustmentDTOs converts a restore's adjustments (never nil).
+func toSettingAdjustmentDTOs(adjustments []backup.SettingAdjustment) []SettingAdjustmentDTO {
+	out := make([]SettingAdjustmentDTO, 0, len(adjustments))
+	for _, a := range adjustments {
+		out = append(out, SettingAdjustmentDTO{Key: a.Key, Action: a.Action, From: a.From, To: a.To})
+	}
+	return out
 }
 
 // FullImportPreviewResponse previews an ad-hoc uploaded full-kind backup
@@ -1625,6 +1647,9 @@ type FullImportPreviewResponse struct {
 
 type BackupImportSettingsResponse struct {
 	Applied int `json:"applied"`
+	// Adjusted lists the values the import clamped, skipped or dropped
+	// (always an array, [] when none).
+	Adjusted []SettingAdjustmentDTO `json:"adjusted"`
 }
 
 type BackupImportLibraryResponse struct {

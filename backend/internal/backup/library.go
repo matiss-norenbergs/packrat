@@ -404,7 +404,15 @@ func PreviewLibraryBundle(
 	libraryRepo *repository.LibraryRepo,
 	bundle LibraryBundle,
 ) (LibraryBundlePreview, error) {
-	var preview LibraryBundlePreview
+	// Every list starts non-nil so the JSON carries [] (never null) when empty.
+	preview := LibraryBundlePreview{
+		Collections:           []PreviewCollectionEntry{},
+		CollectionsNameKept:   []CollectionNameKept{},
+		UnresolvedCollections: []UnresolvedCollection{},
+		Tags:                  []string{},
+		Artists:               []string{},
+		Items:                 []PreviewLibraryItem{},
+	}
 	bundle = cleanBundlePaths(bundle) // match what Apply will actually create
 
 	cols, err := collectionsRepo.List(ctx)

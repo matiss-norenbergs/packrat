@@ -1674,14 +1674,21 @@ there), but **never fails halfway**, so a violation is adjusted instead of answe
 
 Retired keys are still skipped silently, other values (garbage text, negatives, unrecognized keys) are written as
 before, and the write is still one all-or-nothing transaction; `applied` counts only the values actually written. The
-response is unchanged. Every adjustment is logged to the server console, and one `restore` System log event at
+response lists every adjustment in `adjusted` (see below). Every adjustment is logged to the server console, and one `restore` System log event at
 `warning` level ("Settings restore adjusted N values") lists the total and the first 20 as `{key, action, from, to}`
 (numbers for a clamp only, never text from the file). The same applies to `import/full` and
 `POST /api/backup/history/:id/restore`:
 
 ```json
-{ "applied": 23 }
+{ "applied": 23, "adjusted": [ { "key": "max_concurrent_downloads", "action": "clamped", "from": 5000, "to": 16 } ] }
 ```
+
+`adjusted` (settings import, `import/full` and `POST /api/backup/history/:id/restore`, where it sits next to
+`settingsApplied`) is **always an array**, `[]` when nothing was adjusted; an older server omits it. Each entry is
+`{key, action, from, to}`, the same shape as the System log event's details: `action` is `"clamped"` (`from` and
+`to` are the file's number and the limit it became), `"skipped"` (the stored value stays) or `"dropped"` (unknown
+list entries removed); `from`/`to` are absent otherwise. Unlike the System log's first 20, the response lists all of
+them. The UI shows them in an info toast after the success toast.
 
 Library **preview** is read-only — diffs the bundle against the current library without writing
 anything, so the frontend can show new-vs-already-in-library counts before committing. It resolves
@@ -1698,10 +1705,24 @@ collections with the same code the import uses, so it says exactly what the impo
   "unresolvedCollections": [ { "path": ["Dup"], "reason": "the name \"Dup\" is already used by another collection in the same folder", "items": 2 } ],
   "tags": ["music"], "tagsNew": 0,
   "artists": ["Some Artist"], "artistsNew": 0,
-  "items": [ { "title": "Some Video", "originalUrl": "...", "isNew": true, "isGhost": false } ],
+  "items": [ { "title": "Some Video", "originalUrl": "...", "collectionPath": ["Shows", "Anime"], "artistName": "Some Artist", "tags": ["music"], "downloadType": "video", "quality": "1080p", "year": 2020, "alreadyInLibrary": false } ],
   "alreadyInLibrary": 4
 }
 ```
+
+Top level: `collections`, `collectionsNameKept`, `unresolvedCollections`, `tags`, `artists` and `items` are
+**always arrays** (`[]` when empty, never `null`); `collectionsNew`, `collectionsMatchedByName`, `tagsNew`,
+`artistsNew` and `alreadyInLibrary` are always present counts. `tags` and `artists` are the names in the bundle
+(artists also include those only referenced by an item or collection entry, de-duplicated); `*New` counts the
+ones that don't exist locally yet. `alreadyInLibrary` counts the items whose `originalUrl` already matches a
+library row.
+
+Per item (`items[]`): `title`, `originalUrl` and `alreadyInLibrary` (boolean, **always present**; true when
+a library row with that URL exists) are always there. `collectionPath`, `artistName`, `tags`, `downloadType`,
+`quality` and `year` are omitted when the bundle doesn't carry them. `isGhost` is present (as `true`) **only** when
+the entry has no URL, so it can only be recreated as a placeholder; it is omitted otherwise (a ghost entry that
+does have a URL is not flagged, it only becomes a ghost when `mode` is `ghostOnly`). There is no per-item `isNew`:
+use `alreadyInLibrary`.
 
 Per collection entry: `isNew` is true only when the import would **create** it (a chain that matches an
 existing folder, including a case variant, is `false`); `matchedByName` + `existingPath` (the matched
@@ -1782,7 +1803,8 @@ Import `200`:
 ```json
 {
   "settingsApplied": 23,
-  "library": { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 11, "ghostsCreated": 1 }
+  "library": { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 11, "ghostsCreated": 1 },
+  "adjusted": []
 }
 ```
 
@@ -1828,13 +1850,15 @@ password unattended) — use the plain Export cards above for a password-protect
     "settingsCount": 23,
     "collections": [ { "path": ["Shows", "Anime"], "name": "Anime" } ],
     "tags": ["music", "favorites"], "artists": ["Some Artist"],
-    "items": [ { "title": "Some Video", "originalUrl": "...", "collectionPath": ["Shows", "Anime"], "artistName": "Some Artist", "tags": ["music"], "isGhost": false } ]
+    "items": [ { "title": "Some Video", "originalUrl": "...", "collectionPath": ["Shows", "Anime"], "artistName": "Some Artist", "tags": ["music"] } ]
   }
   ```
+  The four lists are always arrays. `items[].isGhost` is present (`true`) only for an entry that is a
+  ghost or has no URL; `collectionPath`, `artistName` and `tags` are omitted when empty.
 - **`POST /api/backup/history/:id/restore`** — body `{ "mode": "download" }` (optional, same
   `download`/`ghostOnly` choice as a plain import). Same not-found cases. `200`:
   ```json
-  { "settingsApplied": 23, "library": { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 11, "ghostsCreated": 1 } }
+  { "settingsApplied": 23, "library": { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 11, "ghostsCreated": 1 }, "adjusted": [] }
   ```
   A restore (this one, `import/full` and `import/settings`) that switches `featureSubscriptionsEnabled` from
   off to on, and succeeds, also starts the due-subscription checks in the background, as `PATCH /api/settings`

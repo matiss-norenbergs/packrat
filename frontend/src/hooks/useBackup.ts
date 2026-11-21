@@ -14,6 +14,7 @@ import {
   restoreFullBackup,
   runManualBackup,
 } from "@/lib/api"
+import { notifySettingsAdjusted } from "@/lib/backupAdjustments"
 import { notifyCollectionRestore } from "@/lib/backupCollections"
 import { downloadJson } from "@/lib/utils"
 import type { LibraryImportMode } from "@/types/api"
@@ -60,6 +61,7 @@ export function useImportSettings() {
     mutationFn: ({ data, password }: { data: string; password: string }) => importSettingsBackup(data, password),
     onSuccess: (result) => {
       toast.success(`Imported ${result.applied} setting${result.applied === 1 ? "" : "s"}`)
+      notifySettingsAdjusted(result.adjusted)
       queryClient.invalidateQueries({ queryKey: settingsQueryKey })
     },
     onError: (err: Error) => {
@@ -177,6 +179,7 @@ export function useImportFullBackup() {
             : ""),
       )
       notifyCollectionRestore(result.library)
+      notifySettingsAdjusted(result.adjusted)
       queryClient.invalidateQueries({ queryKey: settingsQueryKey })
       queryClient.invalidateQueries({ queryKey: collectionsQueryKey })
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })
@@ -203,6 +206,7 @@ export function useRestoreFullBackup() {
             : ""),
       )
       notifyCollectionRestore(result.library)
+      notifySettingsAdjusted(result.adjusted)
       queryClient.invalidateQueries({ queryKey: settingsQueryKey })
       queryClient.invalidateQueries({ queryKey: collectionsQueryKey })
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })

@@ -1052,8 +1052,11 @@ or just as a safety net.
   (e.g. a worker count of 5000 becomes 16), a value that is not in a setting's fixed list (quality,
   library view, blur strength, ...) or a low/high pair that would be inverted is not applied (your current
   value stays), and unknown Dashboard widget names are dropped. Each adjustment is written to the server
-  console and, as one warning for the whole restore, to the System log. The restored worker and transcode
-  limits on the running server are the adjusted ones.
+  console and, as one warning for the whole restore, to the System log, and the import or restore result also
+  lists them: after the "Imported N settings" / "Restored N settings" toast an info toast says "3 values were
+  adjusted to their limits" with each one (`max_concurrent_downloads 5000 → 16`; a skipped or dropped value
+  says so). Nothing extra is shown when nothing was adjusted. The restored worker and transcode limits on the
+  running server are the adjusted ones.
 - A backup file can be up to **128 MB** to import (the Settings, Library Data and Full Backup cards and
   their previews; every other request is limited to 50 MB). That is roughly 130,000 library items; a
   larger file is refused with "The backup file is too large (the limit is 128 MB)." (413). Behind a

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os/exec"
 	"strconv"
 	"time"
@@ -37,6 +38,17 @@ type ffprobeOutput struct {
 
 const probeTimeout = 15 * time.Second
 
+// RoundDurationSeconds converts a probed length to the whole seconds stored on
+// a library item: the nearest second (9.52 -> 10, 9.49 -> 9), never 0 for a
+// positive length, because 0/NULL read as "unknown" and a 0.4 s clip is not.
+func RoundDurationSeconds(d float64) int {
+	n := int(math.Round(d))
+	if n < 1 && d > 0 {
+		return 1
+	}
+	return n
+}
+
 // Probe runs ffprobe against filePath to extract duration/resolution/size.
 // Best-effort: any failure (missing binary, corrupt file, timeout) just
 // returns a zero-value ProbeResult rather than an error.
@@ -58,7 +70,7 @@ func Probe(ctx context.Context, ffprobePath, filePath string) ProbeResult {
 
 	var result ProbeResult
 	if d, err := strconv.ParseFloat(parsed.Format.Duration, 64); err == nil && d > 0 {
-		seconds := int(d)
+		seconds := RoundDurationSeconds(d)
 		result.DurationSeconds = &seconds
 	}
 	for _, s := range parsed.Streams {
