@@ -147,7 +147,7 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 		}
 		id, err := repo.Create(c.Request.Context(), &col)
 		if err != nil {
-			if errors.Is(err, repository.ErrDuplicateName) {
+			if errors.Is(err, repository.ErrDuplicateName) || errors.Is(err, repository.ErrDuplicateRootPath) {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 				return
 			}
@@ -262,7 +262,7 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 				c.JSON(http.StatusNotFound, gin.H{"error": "collection not found"})
 				return
 			}
-			if errors.Is(err, repository.ErrDuplicateName) {
+			if errors.Is(err, repository.ErrDuplicateName) || errors.Is(err, repository.ErrDuplicateRootPath) {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 				return
 			}

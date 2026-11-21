@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -186,5 +187,53 @@ func TestUpdateCollectionNotFound(t *testing.T) {
 	f := newPatchFixture(t)
 	if got := f.patch(99999, `{"name":"X","rootPath":"X"}`); got != 404 {
 		t.Fatalf("status = %d", got)
+	}
+}
+
+func TestUpdateCollectionDuplicateFolder409(t *testing.T) {
+	f := newPatchFixture(t)
+	// "Other" exists as a sibling folder; case-different must also be refused.
+	for _, root := range []string{"Other", "other"} {
+		if code := f.patch(f.id, `{"name":"Show","rootPath":"`+root+`"}`); code != http.StatusConflict {
+			t.Fatalf("rootPath %q: got %d, want 409", root, code)
+		}
+	}
+	if got := f.get().RootPath; got != "Show" {
+		t.Fatalf("refused patch changed root path to %q", got)
+	}
+	// Duplicate name keeps its own 409.
+	if code := f.patch(f.id, `{"name":"Other","rootPath":"Show"}`); code != http.StatusConflict {
+		t.Fatalf("duplicate name: got %d, want 409", code)
+	}
+	// Unchanged folder is fine.
+	if code := f.patch(f.id, `{"name":"Show","rootPath":"Show","isPrivate":false}`); code != http.StatusNoContent {
+		t.Fatalf("unchanged folder: got %d, want 204", code)
+	}
+}
+
+func TestCreateCollectionDuplicateFolder409(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	conn := openMigratedTestDB(t)
+	repo := repository.NewCollectionsRepo(conn)
+	mgr := queue.NewDownloadManager(t.TempDir(), t.TempDir(), "", nil, nil, nil, repo, nil, nil, nil, nil, nil, nil, nil, queue.NewProgressStore(), nil)
+	r := gin.New()
+	r.POST("/api/collections", CreateCollection(repo, mgr))
+	post := func(body string) (int, string) {
+		req := httptest.NewRequest(http.MethodPost, "/api/collections", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code, w.Body.String()
+	}
+	if code, body := post(`{"name":"One","rootPath":"Concerts"}`); code != http.StatusCreated {
+		t.Fatalf("first create: %d %s", code, body)
+	}
+	code, body := post(`{"name":"Two","rootPath":"concerts"}`)
+	if code != http.StatusConflict || !strings.Contains(body, "another collection in this folder already uses that folder name") {
+		t.Fatalf("duplicate folder: %d %s", code, body)
+	}
+	code, body = post(`{"name":"One","rootPath":"Elsewhere"}`)
+	if code != http.StatusConflict || !strings.Contains(body, "collection name already in use") {
+		t.Fatalf("duplicate name: %d %s", code, body)
 	}
 }

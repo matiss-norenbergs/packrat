@@ -590,7 +590,9 @@ Named presets — a folder under your media root plus a default download type an
 selectable from the New Download dialog so you don't have to re-pick them every time.
 
 - Collections nest (sub-collections), shown as a tree; a collection's position in the tree is
-  fixed at creation and can't be moved later.
+  fixed at creation and can't be moved later. Two collections under the same parent (or two top-level
+  ones) can't use the same folder name, compared without regard to case; creating or renaming into
+  one is refused with a conflict error.
 - **Private** — marking a collection private blurs thumbnails for everything in it (and its
   sub-collections) throughout the app, shown with a lock icon in the tree and on the Library Folders
   view's folder tiles. A collection that only inherits privacy from a private ancestor shows the same

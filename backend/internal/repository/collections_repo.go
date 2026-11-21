@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"strings"
 	"sync"
 
 	"packrat/backend/internal/db"
@@ -15,6 +16,13 @@ import (
 // ErrDuplicateName is returned by Create/Update when another collection
 // already uses the requested name (collections.name is UNIQUE).
 var ErrDuplicateName = errors.New("collection name already in use")
+
+// ErrDuplicateRootPath is returned by Create/Update when another collection
+// under the same parent already uses the requested folder name (root_path),
+// compared without regard to case. Without it, two siblings could point at the
+// same directory and "which collection owns this folder" lookups would pick one
+// arbitrarily.
+var ErrDuplicateRootPath = errors.New("another collection in this folder already uses that folder name")
 
 // ErrHasChildren is returned by Delete when the collection still has child
 // collections nested under it — callers must move or delete those first.
@@ -94,6 +102,40 @@ func (r *CollectionsRepo) nameInUse(ctx context.Context, name string, parentID *
 	return true, nil
 }
 
+// rootPathInUse reports whether a sibling of parentID (nil meaning top level),
+// other than excludeID, already uses rootPath. The comparison is in Go with
+// strings.EqualFold rather than SQL: SQLite's NOCASE only folds ASCII, and
+// Windows/macOS (and Docker bind mounts from them) treat names that differ only
+// in case as the same directory.
+func (r *CollectionsRepo) rootPathInUse(ctx context.Context, rootPath string, parentID *int64, excludeID int64) (bool, error) {
+	var rows *sql.Rows
+	var err error
+	if parentID == nil {
+		rows, err = r.db.QueryContext(ctx,
+			`SELECT root_path FROM collections WHERE parent_id IS NULL AND id != ?`, excludeID)
+	} else {
+		rows, err = r.db.QueryContext(ctx,
+			`SELECT root_path FROM collections WHERE parent_id = ? AND id != ?`, *parentID, excludeID)
+	}
+	if err != nil {
+		return false, fmt.Errorf("checking collection folder uniqueness: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sibling string
+		if err := rows.Scan(&sibling); err != nil {
+			return false, fmt.Errorf("checking collection folder uniqueness: %w", err)
+		}
+		if strings.EqualFold(sibling, rootPath) {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("checking collection folder uniqueness: %w", err)
+	}
+	return false, nil
+}
+
 func (r *CollectionsRepo) Create(ctx context.Context, c *models.Collection) (int64, error) {
 	defer r.lock()()
 	return r.createLocked(ctx, c)
@@ -113,6 +155,13 @@ func (r *CollectionsRepo) createLocked(ctx context.Context, c *models.Collection
 	}
 	if inUse {
 		return 0, ErrDuplicateName
+	}
+	rootInUse, err := r.rootPathInUse(ctx, c.RootPath, c.ParentID, 0)
+	if err != nil {
+		return 0, err
+	}
+	if rootInUse {
+		return 0, ErrDuplicateRootPath
 	}
 
 	res, err := r.db.ExecContext(ctx, `
@@ -220,6 +269,20 @@ func (r *CollectionsRepo) Update(ctx context.Context, id int64, c *models.Collec
 	}
 	if inUse {
 		return ErrDuplicateName
+	}
+
+	// Only a real change of folder name is checked, so an unrelated edit of a
+	// collection that already shares a folder with a sibling (a pair made before
+	// this rule) keeps working. A case-only change is not a change, matching the
+	// handler's re-submit rule and the case-insensitive comparison.
+	if !strings.EqualFold(c.RootPath, existing.RootPath) {
+		rootInUse, err := r.rootPathInUse(ctx, c.RootPath, existing.ParentID, id)
+		if err != nil {
+			return err
+		}
+		if rootInUse {
+			return ErrDuplicateRootPath
+		}
 	}
 
 	res, err := r.db.ExecContext(ctx, `
@@ -356,13 +419,16 @@ func (r *CollectionsRepo) EnsureChain(ctx context.Context, segments []string) (*
 
 // FindChildByRootPath returns the collection among cols whose parent is
 // parentID and whose own root_path segment matches segment, or nil if none
-// exists. Used to walk a scanned file's on-disk folder chain against an
+// exists. An exact match wins; failing that a case-variant match is returned,
+// since such a folder is the same directory on case-insensitive filesystems and
+// creating a second sibling for it is refused (ErrDuplicateRootPath). Used to walk a scanned file's on-disk folder chain against an
 // already-fetched List() result, so only the segments that don't already
 // have a matching collection need to be created.
 func FindChildByRootPath(cols []models.Collection, parentID *int64, segment string) *models.Collection {
+	var fold *models.Collection
 	for i := range cols {
 		c := &cols[i]
-		if c.RootPath != segment {
+		if !strings.EqualFold(c.RootPath, segment) {
 			continue
 		}
 		if (c.ParentID == nil) != (parentID == nil) {
@@ -371,9 +437,14 @@ func FindChildByRootPath(cols []models.Collection, parentID *int64, segment stri
 		if c.ParentID != nil && parentID != nil && *c.ParentID != *parentID {
 			continue
 		}
-		return c
+		if c.RootPath == segment {
+			return c
+		}
+		if fold == nil {
+			fold = c
+		}
 	}
-	return nil
+	return fold
 }
 
 const collectionSelectColumns = `

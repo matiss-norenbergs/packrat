@@ -127,3 +127,119 @@ func TestCollectionsRepo_DeleteChildAppearsAfterCount(t *testing.T) {
 		t.Errorf("the parent must still exist: %v", err)
 	}
 }
+
+func mkCol(t *testing.T, repo *CollectionsRepo, name, root string, parent *int64) int64 {
+	t.Helper()
+	id, err := repo.Create(context.Background(), &models.Collection{
+		Name: name, RootPath: root, ParentID: parent, DefaultQuality: "best", DefaultDownloadType: "video",
+	})
+	if err != nil {
+		t.Fatalf("Create %q: %v", name, err)
+	}
+	return id
+}
+
+func TestCollectionsRepo_CreateRefusesSiblingFolder(t *testing.T) {
+	ctx := context.Background()
+	repo := NewCollectionsRepo(openTestDB(t).db)
+	a := mkCol(t, repo, "A", "Concerts", nil)
+	other := mkCol(t, repo, "B", "Other", nil)
+
+	for _, root := range []string{"Concerts", "concerts", "CONCERTS"} {
+		_, err := repo.Create(ctx, &models.Collection{Name: "N-" + root, RootPath: root, DefaultQuality: "best", DefaultDownloadType: "video"})
+		if !errors.Is(err, ErrDuplicateRootPath) {
+			t.Fatalf("top-level %q: expected ErrDuplicateRootPath, got %v", root, err)
+		}
+	}
+	// Different folder name: fine. Same folder name under a different parent: fine,
+	// and top-level siblings are not compared with children of other parents.
+	mkCol(t, repo, "C", "Fresh", nil)
+	mkCol(t, repo, "child", "Concerts", &other)
+	mkCol(t, repo, "child2", "Concerts", &a)
+	// Under a parent, siblings are checked against each other.
+	_, err := repo.Create(ctx, &models.Collection{Name: "dup", RootPath: "concerts", ParentID: &a, DefaultQuality: "best", DefaultDownloadType: "video"})
+	if !errors.Is(err, ErrDuplicateRootPath) {
+		t.Fatalf("child: expected ErrDuplicateRootPath, got %v", err)
+	}
+	// A name clash is still reported as a name clash.
+	_, err = repo.Create(ctx, &models.Collection{Name: "A", RootPath: "Concerts", DefaultQuality: "best", DefaultDownloadType: "video"})
+	if !errors.Is(err, ErrDuplicateName) {
+		t.Fatalf("expected ErrDuplicateName, got %v", err)
+	}
+}
+
+func TestCollectionsRepo_UpdateFolderRules(t *testing.T) {
+	ctx := context.Background()
+	conn := openTestDB(t).db
+	repo := NewCollectionsRepo(conn)
+	a := mkCol(t, repo, "A", "Alpha", nil)
+	b := mkCol(t, repo, "B", "Beta", nil)
+	upd := func(id int64, name, root string, private bool) error {
+		return repo.Update(ctx, id, &models.Collection{Name: name, RootPath: root, IsPrivate: private, DefaultQuality: "best", DefaultDownloadType: "video"})
+	}
+
+	if err := upd(b, "B", "alpha", false); !errors.Is(err, ErrDuplicateRootPath) {
+		t.Fatalf("expected ErrDuplicateRootPath, got %v", err)
+	}
+	if err := upd(b, "B", "Beta", true); err != nil { // re-submit own folder
+		t.Fatalf("re-submit: %v", err)
+	}
+	if err := upd(b, "B", "BETA", true); err != nil { // case-only change of itself
+		t.Fatalf("case-only: %v", err)
+	}
+	if err := upd(b, "B", "Gamma", true); err != nil {
+		t.Fatalf("different folder: %v", err)
+	}
+
+	// Pre-existing pair, inserted directly: unrelated edits keep working.
+	if _, err := conn.ExecContext(ctx, `UPDATE collections SET root_path = 'Alpha' WHERE id = ?`, b); err != nil {
+		t.Fatal(err)
+	}
+	if err := upd(b, "B renamed", "Alpha", true); err != nil {
+		t.Fatalf("unrelated edit of pre-existing pair: %v", err)
+	}
+	if err := upd(a, "A", "Alpha", true); err != nil {
+		t.Fatalf("unrelated edit of other half of pair: %v", err)
+	}
+	// ...but moving to a sibling's folder is still refused.
+	c := mkCol(t, repo, "C", "Cee", nil)
+	if err := upd(c, "C", "alpha", false); !errors.Is(err, ErrDuplicateRootPath) {
+		t.Fatalf("expected ErrDuplicateRootPath, got %v", err)
+	}
+}
+
+func TestCollectionsRepo_EnsureChainReusesCaseVariant(t *testing.T) {
+	ctx := context.Background()
+	repo := NewCollectionsRepo(openTestDB(t).db)
+	top := mkCol(t, repo, "Display Name", "Concerts", nil)
+	sub := mkCol(t, repo, "Live", "Live", &top)
+
+	for i := 0; i < 2; i++ { // exact chain, twice
+		got, err := repo.EnsureChain(ctx, []string{"Concerts", "Live"})
+		if err != nil || got == nil || *got != sub {
+			t.Fatalf("exact chain: id=%v err=%v", got, err)
+		}
+	}
+	got, err := repo.EnsureChain(ctx, []string{"concerts", "LIVE"})
+	if err != nil || got == nil || *got != sub {
+		t.Fatalf("case-variant chain: id=%v err=%v", got, err)
+	}
+	if list, _ := repo.List(ctx); len(list) != 2 {
+		t.Fatalf("expected no new collections, got %d", len(list))
+	}
+	// A genuinely new segment is still created under the matched parent.
+	got, err = repo.EnsureChain(ctx, []string{"CONCERTS", "New"})
+	if err != nil || got == nil || *got == sub {
+		t.Fatalf("new child: id=%v err=%v", got, err)
+	}
+}
+
+func TestFindChildByRootPath_PrefersExactMatch(t *testing.T) {
+	cols := []models.Collection{{ID: 1, RootPath: "concerts"}, {ID: 2, RootPath: "Concerts"}}
+	if c := FindChildByRootPath(cols, nil, "Concerts"); c == nil || c.ID != 2 {
+		t.Fatalf("expected exact match id 2, got %+v", c)
+	}
+	if c := FindChildByRootPath(cols, nil, "CONCERTS"); c == nil || c.ID != 1 {
+		t.Fatalf("expected first case-variant id 1, got %+v", c)
+	}
+}
