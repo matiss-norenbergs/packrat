@@ -86,6 +86,19 @@ None are scheduled. Sizes are guesses.
   decided: list timestamps with `-show_packets` instead of decoding, run ffprobe and ffmpeg concurrently, or scale
   the timeout with the window's expected frame count. Unmeasured on slow hardware; not scheduled.
 
+## CI flakes
+
+- **`internal/queue` `TestImageConversionDoesNotOverwriteExistingTarget`: "TempDir RemoveAll cleanup: directory not
+  empty" (S).** Seen once in CI, not reproduced. About 420 runs under `-race` (6 parallel processes, `-count=35
+  -cpu 1,2`, Linux container) all passed. Nothing in the production queue code starts a goroutine, and `runOne`,
+  `imagefetch.Fetch` and `imageproc.ConvertImage` are synchronous, so "work still running after `runOne`" is not
+  the cause. Open suspects: SQLite WAL files of `newGhostEnv`'s DB (opened with `synchronous(FULL)`) or an orphaned
+  fake-ffmpeg/yt-dlp child on the contended runner. Next step: on the next CI failure, log the leftover entries
+  of the directory that failed to delete.
+- **CI `desktop` job, "Install Linux dependencies" failed after about 5 minutes (twice).** Not a timeout mismatch:
+  `apt-install.sh` worst case is 3 x 150 s + 2 x 10 s pauses + kill grace (about 8.5 min), under the steps'
+  `timeout-minutes: 10`. A stop at about 5 minutes means apt itself failed. Needs the job logs to say why.
+
 ## Dependencies
 
 - **Node 22 to the next LTS (S).** Moved by hand across the Dockerfile and the three workflows (Dependabot
