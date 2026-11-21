@@ -47,8 +47,15 @@ export function BlurredThumbnail({
   const showBlur = blurred && !revealed
   const clickable = blurred && interactive
 
+  // `key={src}`: a changed src mounts a NEW <img>, which starts in its final
+  // (blurred) state. Reusing the element would animate the filter from the
+  // previous, possibly revealed, picture (`none`) to blur over 150 ms, flashing
+  // the new private image sharp (e.g. the Collections / Artists side panels
+  // swapping subjects). Reveal/hide clicks keep the same src, so they still
+  // animate.
   const img = (
     <img
+      key={src}
       src={src}
       alt={alt}
       draggable={false}
