@@ -642,6 +642,8 @@ selectable from the New Download dialog so you don't have to re-pick them every 
   folder. One more thing to know: the cover picker ("choose from the collection's own files") only
   looks in the current folder. Moving the existing files is up to you; the app does not do it, and
   an item's **Move** action puts the file under the chosen collection's current folder.
+  Library backups and Import's untracked files also find a collection by its folder name, so after
+  a rename the old folder name no longer matches this collection (see [Backup](#backup)).
 - **Jellyfin Library ID (optional)** — only shown when Jellyfin integration is enabled in Settings.
   Links this collection to a specific Jellyfin library so "Refresh after download → Specific
   library" (Settings → Jellyfin) knows which one to rescan when something lands here.
@@ -1007,10 +1009,15 @@ or just as a safety net.
   saved source URL. **No media files are included** — it's a recipe, not an archive. Each artist
   is exported with its name, private flag and birthday (not its images, which are files), so a
   restore keeps a private artist's items blurred. Importing
-  creates any missing collections/tags/artists (matched by name/path, never overwriting existing
-  ones — except that an existing artist is made private if the backup says so, and gets the
-  backup's birthday if it has none; a private artist is never made public and a birthday is never
-  overwritten); a **Preview** step shows what's new versus already-in-library before you commit. Choose
+  creates any missing collections/tags/artists. Tags and artists are matched by name; a matched tag takes the backup's private flag, while an
+  existing artist is only ever made private if the backup says so and gets the backup's birthday if
+  it has none (a private artist is never made public and a birthday is never overwritten). **Collections are matched by their folder-name chain** (`Shows/Anime`, the
+  "Folder name" of each level, ignoring case), not by display name, and a matched collection's
+  name, defaults, privacy, Jellyfin library, season and artist are **overwritten with the backup's
+  values**. So if a collection's folder name was renamed after the backup, the old name matches
+  nothing and the restore creates a second collection for it (or, when that collection's name
+  equals the old folder name, none, and its items end up uncategorized); see the
+  [Collections](#collections) note on renaming. A **Preview** step shows what's new versus already-in-library before you commit. Choose
   **"Import and download"** to queue a fresh download for every item with a saved URL (items
   without one are always created as [ghosts](#ghost-items)), or **"Import as ghost items"** to
   recreate everything as a placeholder instead of downloading anything. Tags on redownloaded items
