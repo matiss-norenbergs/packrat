@@ -243,3 +243,31 @@ func TestFindChildByRootPath_PrefersExactMatch(t *testing.T) {
 		t.Fatalf("expected first case-variant id 1, got %+v", c)
 	}
 }
+
+func TestFindUniqueChildByName(t *testing.T) {
+	p1, p2 := int64(1), int64(2)
+	cols := []models.Collection{
+		{ID: 1, Name: "Shows"},
+		{ID: 2, Name: "Other"},
+		{ID: 3, Name: "Anime", ParentID: &p1},
+		{ID: 4, Name: "Anime", ParentID: &p2},
+		{ID: 5, Name: "Dup"},
+		{ID: 6, Name: "Dup"},
+		{ID: 7, Name: "Case"},
+	}
+	if c := FindUniqueChildByName(cols, nil, "Shows"); c == nil || c.ID != 1 {
+		t.Fatalf("top-level Shows = %+v", c)
+	}
+	if c := FindUniqueChildByName(cols, &p1, "Anime"); c == nil || c.ID != 3 {
+		t.Fatalf("Anime under Shows = %+v, want 3 (same name under another parent is not a match)", c)
+	}
+	if c := FindUniqueChildByName(cols, nil, "Anime"); c != nil {
+		t.Fatalf("Anime at the top level = %+v, want nil", c)
+	}
+	if c := FindUniqueChildByName(cols, nil, "Dup"); c != nil {
+		t.Fatalf("an ambiguous name must match nothing, got %+v", c)
+	}
+	if c := FindUniqueChildByName(cols, nil, "case"); c != nil {
+		t.Fatalf("display names compare exactly, got %+v", c)
+	}
+}

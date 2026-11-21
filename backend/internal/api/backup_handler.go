@@ -270,10 +270,15 @@ func enqueueResolvedDownloads(
 	}
 
 	resp := BackupImportLibraryResponse{
-		CollectionsEnsured: result.CollectionsEnsured,
-		TagsCreated:        result.TagsCreated,
-		ArtistsCreated:     result.ArtistsCreated,
-		GhostsCreated:      result.GhostsCreated,
+		CollectionsEnsured:       result.CollectionsEnsured,
+		CollectionsCreated:       result.CollectionsCreated,
+		TagsCreated:              result.TagsCreated,
+		ArtistsCreated:           result.ArtistsCreated,
+		GhostsCreated:            result.GhostsCreated,
+		CollectionsMatchedByName: result.CollectionsMatchedByName,
+		MatchedByName:            result.MatchedByName,
+		CollectionsNameKept:      result.CollectionsNameKept,
+		UnresolvedCollections:    result.UnresolvedCollections,
 	}
 	for _, r := range resolved {
 		downloadType := r.DownloadType

@@ -1629,10 +1629,23 @@ type BackupImportSettingsResponse struct {
 
 type BackupImportLibraryResponse struct {
 	CollectionsEnsured int `json:"collectionsEnsured"`
+	// CollectionsCreated counts the collections the restore created (the only
+	// ones that take the backup's settings); matched ones are left untouched.
+	CollectionsCreated int `json:"collectionsCreated"`
 	TagsCreated        int `json:"tagsCreated"`
 	ArtistsCreated     int `json:"artistsCreated"`
 	DownloadsQueued    int `json:"downloadsQueued"`
 	GhostsCreated      int `json:"ghostsCreated"`
+	// CollectionsMatchedByName / MatchedByName: collections matched by display
+	// name because no collection had the bundle's folder name.
+	CollectionsMatchedByName int                      `json:"collectionsMatchedByName"`
+	MatchedByName            []backup.CollectionMatch `json:"matchedByName"`
+	// CollectionsNameKept: collections created under their folder name because
+	// the bundle's display name was taken by a sibling.
+	CollectionsNameKept []backup.CollectionNameKept `json:"collectionsNameKept"`
+	// UnresolvedCollections: chains that could be neither matched nor created;
+	// their items were imported uncategorized.
+	UnresolvedCollections []backup.UnresolvedCollection `json:"unresolvedCollections"`
 }
 
 type BackupHistoryResponse struct {

@@ -1,23 +1,24 @@
 package backup
 
-// Investigation tests: what a library bundle restore does after a collection's
-// FOLDER name (root_path) was renamed between the export and the restore.
+// What a library bundle restore does after a collection's FOLDER name
+// (root_path) was renamed between the export and the restore.
 //
 // A bundle refers to collections by the chain of folder names from the media
-// root (CollectionEntry.Path / LibraryItemEntry.CollectionPath) and a restore
-// matches them with CollectionsRepo.EnsureChain. Renaming a collection's
-// folder moves nothing on disk (docs/FEATURES.md, Collections), so the bundle
-// and the live library can disagree about the name of a folder. These tests pin
-// down what that does TODAY, through the real entry points: BuildLibraryBundle
-// -> (JSON, like the file the API writes) -> PreviewLibraryBundle /
-// ApplyLibraryBundle. They assert the real behavior; anything that is a problem
-// is marked `KNOWN LIMITATION` and is written up in docs/TODO.md. No production
-// code is changed by them.
+// root (CollectionEntry.Path / LibraryItemEntry.CollectionPath). Renaming a
+// collection's folder moves nothing on disk (docs/FEATURES.md, Collections), so
+// the bundle and the live library can disagree about the name of a folder. The
+// restore (chainResolver) therefore matches a level by folder name first, then
+// by the entry's display name, and only then creates a collection; an existing
+// collection is never modified, a created one takes the entry's settings. These
+// tests run the real entry points: BuildLibraryBundle -> (JSON, like the file the
+// API writes) -> PreviewLibraryBundle / ApplyLibraryBundle. They started as the
+// investigation that documented the old (duplicating / silent) behavior.
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -299,34 +300,89 @@ func TestBundleRestore_SameLibraryNothingRenamed(t *testing.T) {
 	assertPlacement(t, place, "Ep1", "completed@Shows/Anime", "ghost@Shows/Anime")
 }
 
+// derefStr renders a nullable value for comparison (nil is "<nil>").
+func derefStr[T any](p *T) string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprint(*p)
+}
+
+func previewOf(t *testing.T, repos testRepos, b LibraryBundle) LibraryBundlePreview {
+	t.Helper()
+	prev, err := PreviewLibraryBundle(context.Background(), repos.collections, repos.tags, repos.artists, repos.library, b)
+	if err != nil {
+		t.Fatalf("PreviewLibraryBundle: %v", err)
+	}
+	return prev
+}
+
+// resolvedTo finds the download for url suffix "/<key>" and returns its collection id (nil = none).
+func resolvedTo(t *testing.T, resolved []ResolvedDownload, key string) *int64 {
+	t.Helper()
+	for i := range resolved {
+		if strings.HasSuffix(resolved[i].URL, "/"+key) {
+			return resolved[i].CollectionID
+		}
+	}
+	t.Fatalf("no resolved download for %q in %+v", key, resolved)
+	return nil
+}
+
+func assertResolvedTo(t *testing.T, resolved []ResolvedDownload, key string, want int64) {
+	t.Helper()
+	got := resolvedTo(t, resolved, key)
+	if got == nil || *got != want {
+		t.Fatalf("download %q resolved to %v, want collection %d", key, got, want)
+	}
+}
+
+func assertNoUnresolved(t *testing.T, r ApplyResult) {
+	t.Helper()
+	if len(r.UnresolvedCollections) != 0 {
+		t.Fatalf("unexpected unresolved collections: %+v", r.UnresolvedCollections)
+	}
+}
+
+// assertMatched checks the single "matched by name" report: the bundle's chain
+// and the folder chain of the collection it matched.
+func assertMatched(t *testing.T, r ApplyResult, wantPath, wantExisting string) {
+	t.Helper()
+	if r.CollectionsMatchedByName != 1 || len(r.MatchedByName) != 1 {
+		t.Fatalf("matched by name = %d %+v, want exactly 1", r.CollectionsMatchedByName, r.MatchedByName)
+	}
+	m := r.MatchedByName[0]
+	if strings.Join(m.Path, "/") != wantPath || strings.Join(m.ExistingPath, "/") != wantExisting {
+		t.Fatalf("matched %v -> %v, want %s -> %s", m.Path, m.ExistingPath, wantPath, wantExisting)
+	}
+}
+
 // (c1) A top-level collection whose folder was renamed after the export, with
 // a display name that differs from the old folder ("Concerts" / concerts ->
-// live). The prediction held: the segment `concerts` matches nothing, a NEW
-// collection is created for it, and the restored items attach to the new one.
-//
-// What the prediction missed: the bundle entry's settings are not applied to
-// the new collection either. ApplyLibraryBundle tries to rename it to the
-// bundle's display name ("Concerts"), which clashes with the renamed
-// collection, and because that rename is one Update of ALL the entry's fields,
-// the whole update is skipped: quality, Jellyfin library and the PRIVATE flag
-// are lost too.
-//
-// KNOWN LIMITATION: after a folder rename a restore creates a second
-// collection named after the old folder ("concerts"), the renamed one is left
-// without the restored items, and a private collection's items come back
-// public (the new collection has isPrivate=false).
+// live). The segment `concerts` matches no folder, so the entry's display name
+// ("Concerts") finds the renamed collection: the restored items go to it,
+// nothing is created, and its privacy and quality stay as the user left them.
 func TestBundleRestore_TopLevelFolderRenamed_DisplayNameDiffers(t *testing.T) {
 	s := seedRenameScene(t)
 	bundle := s.export(t)
 	setFolder(t, s.repos, s.concerts, "live") // files stay in concerts/, per the docs
+	// Edits made after the backup must survive the restore.
+	updateCollection(t, s.repos, s.concerts, func(c *models.Collection) {
+		c.DefaultQuality = "480p"
+		c.IsPrivate = false
+	})
 
-	// The preview does flag it, as "a new collection" (the only warning there is).
-	prev, err := PreviewLibraryBundle(context.Background(), s.repos.collections, s.repos.tags, s.repos.artists, s.repos.library, bundle)
-	if err != nil {
-		t.Fatal(err)
+	// The preview says "will use existing collection", not "new collection".
+	prev := previewOf(t, s.repos, bundle)
+	if prev.CollectionsNew != 0 || prev.CollectionsMatchedByName != 1 || len(prev.UnresolvedCollections) != 0 {
+		t.Fatalf("preview new=%d matchedByName=%d unresolved=%v, want 0/1/none", prev.CollectionsNew, prev.CollectionsMatchedByName, prev.UnresolvedCollections)
 	}
-	if prev.CollectionsNew != 1 {
-		t.Fatalf("preview CollectionsNew = %d, want 1 (the old folder name looks new)", prev.CollectionsNew)
+	for _, c := range prev.Collections {
+		if strings.Join(c.Path, "/") == "concerts" {
+			if c.IsNew || !c.MatchedByName || strings.Join(c.ExistingPath, "/") != "live" {
+				t.Fatalf("preview entry for concerts = %+v, want matched by name -> live", c)
+			}
+		}
 	}
 
 	resolved, result := restoreBundle(t, s.repos, bundle, false)
@@ -335,87 +391,61 @@ func TestBundleRestore_TopLevelFolderRenamed_DisplayNameDiffers(t *testing.T) {
 		"Podcasts | name=Podcasts | quality=best",
 		"Shows | name=Shows | quality=best",
 		"Shows/Anime | name=Anime | quality=720p",
-		"concerts | name=concerts | quality=best", // NEW: named after the folder, defaults, NOT private
-		"live | name=Concerts | quality=1080p | private",
+		"live | name=Concerts | quality=480p", // the live collection, untouched (public, 480p)
 	})
-	// Same count as an in-place restore: the new collection is counted like a match.
-	if result.CollectionsEnsured != 4 {
-		t.Fatalf("CollectionsEnsured = %d, want 4", result.CollectionsEnsured)
+	if result.CollectionsEnsured != 4 || result.CollectionsCreated != 0 {
+		t.Fatalf("result = %+v, want 4 ensured and 0 created", result)
 	}
-	cols := collectionMap(t, s.repos)
-	var gig *ResolvedDownload
-	for i := range resolved {
-		if strings.HasSuffix(resolved[i].URL, "/gig") {
-			gig = &resolved[i]
-		}
-	}
-	if gig == nil || gig.CollectionID == nil {
-		t.Fatalf("the Gig download must resolve to a collection, got %+v", resolved)
-	}
-	if *gig.CollectionID == s.concerts {
-		t.Fatalf("the download went to the renamed collection; expected the new one")
-	}
-	if got := folderChain(cols, *gig.CollectionID); got != "concerts" {
-		t.Fatalf("Gig download collection = %q, want the new \"concerts\"", got)
-	}
-	if cols[*gig.CollectionID].IsPrivate {
-		t.Fatal("expected the new collection to be public (the entry's settings are skipped)")
-	}
+	assertMatched(t, result, "concerts", "live")
+	assertNoUnresolved(t, result)
+	assertResolvedTo(t, resolved, "gig", s.concerts)
 
-	// Ghost mode puts the placeholder in the new collection as well.
+	// Ghost mode puts the placeholder in the renamed collection as well.
 	restoreBundle(t, s.repos, bundle, true)
-	assertPlacement(t, itemPlacement(t, s.repos), "Gig", "completed@live", "ghost@concerts")
+	assertPlacement(t, itemPlacement(t, s.repos), "Gig", "completed@live", "ghost@live")
 }
 
 // (c2) Same rename, but the display name equals the old folder name
 // ("Podcasts" / Podcasts -> Pods), which is how a collection created by name
-// usually looks. EnsureChain creates the missing collection with Name = the
-// folder segment, and that name is already taken by the renamed sibling, so
-// the create is REFUSED (ErrDuplicateName). ApplyLibraryBundle swallows that
-// (ensureCollection returns nil), so nothing is created and the items fall to
-// "no collection".
-//
-// KNOWN LIMITATION: silent data loss of the placement. The restore reports
-// success; ghost items are created uncategorized, and a download-mode restore
-// resolves them to no collection (the download then lands in the media root
-// instead of the collection's folder).
+// usually looks. It used to be refused as a duplicate name and swallowed, so
+// the items fell to "no collection"; the display name now finds it.
 func TestBundleRestore_TopLevelFolderRenamed_DisplayNameEqualsOldFolder(t *testing.T) {
 	s := seedRenameScene(t)
 	bundle := s.export(t)
 	setFolder(t, s.repos, s.podcasts, "Pods")
 
+	prev := previewOf(t, s.repos, bundle)
+	if prev.CollectionsNew != 0 || prev.CollectionsMatchedByName != 1 {
+		t.Fatalf("preview new=%d matchedByName=%d, want 0/1", prev.CollectionsNew, prev.CollectionsMatchedByName)
+	}
+
 	resolved, result := restoreBundle(t, s.repos, bundle, false)
 
 	assertLines(t, collectionLines(t, s.repos), []string{
-		"Pods | name=Podcasts | quality=best", // the renamed one, untouched
+		"Pods | name=Podcasts | quality=best",
 		"Shows | name=Shows | quality=best",
 		"Shows/Anime | name=Anime | quality=720p",
 		"concerts | name=Concerts | quality=1080p | private",
 	})
-	if result.CollectionsEnsured != 3 {
-		t.Fatalf("CollectionsEnsured = %d, want 3 (Podcasts could not be ensured)", result.CollectionsEnsured)
+	if result.CollectionsEnsured != 4 || result.CollectionsCreated != 0 {
+		t.Fatalf("result = %+v, want 4 ensured and 0 created", result)
 	}
-	for _, r := range resolved {
-		if strings.HasSuffix(r.URL, "/pod1") && r.CollectionID != nil {
-			t.Fatalf("Pod1 download resolved to collection %d, want none", *r.CollectionID)
-		}
-	}
+	assertMatched(t, result, "Podcasts", "Pods")
+	assertNoUnresolved(t, result)
+	assertResolvedTo(t, resolved, "pod1", s.podcasts)
 	restoreBundle(t, s.repos, bundle, true)
-	assertPlacement(t, itemPlacement(t, s.repos), "Pod1", "completed@Pods", "ghost@(none)")
+	assertPlacement(t, itemPlacement(t, s.repos), "Pod1", "completed@Pods", "ghost@Pods")
 }
 
 // (d1) Renaming the PARENT's folder of a nested collection (Shows -> Series):
-// every descendant's chain changes. Shows/Anime no longer matches, the missing
-// "Shows" is created under the same rule as above and, since the renamed parent
-// is called "Shows" too, REFUSED, so the whole subtree falls to "no collection".
-//
-// KNOWN LIMITATION: same silent loss as (c2), for every descendant at once.
+// the parent is matched by its display name and the whole subtree resolves
+// under it (Anime by folder), so nothing is duplicated or left uncategorized.
 func TestBundleRestore_ParentFolderRenamed(t *testing.T) {
 	s := seedRenameScene(t)
 	bundle := s.export(t)
 	setFolder(t, s.repos, s.shows, "Series")
 
-	resolved, _ := restoreBundle(t, s.repos, bundle, false)
+	resolved, result := restoreBundle(t, s.repos, bundle, false)
 
 	assertLines(t, collectionLines(t, s.repos), []string{
 		"Podcasts | name=Podcasts | quality=best",
@@ -423,54 +453,41 @@ func TestBundleRestore_ParentFolderRenamed(t *testing.T) {
 		"Series/Anime | name=Anime | quality=720p",
 		"concerts | name=Concerts | quality=1080p | private",
 	})
-	for _, r := range resolved {
-		if strings.HasSuffix(r.URL, "/ep1") && r.CollectionID != nil {
-			t.Fatalf("Ep1 download resolved to collection %d, want none", *r.CollectionID)
-		}
-	}
+	assertMatched(t, result, "Shows", "Series") // only the parent needed the name; Anime matched by folder under it
+	assertNoUnresolved(t, result)
+	assertResolvedTo(t, resolved, "ep1", s.anime)
 	restoreBundle(t, s.repos, bundle, true)
-	assertPlacement(t, itemPlacement(t, s.repos), "Ep1", "completed@Series/Anime", "ghost@(none)")
+	assertPlacement(t, itemPlacement(t, s.repos), "Ep1", "completed@Series/Anime", "ghost@Series/Anime")
 }
 
 // (d1b) Same parent rename, but the parent's display name differs from its old
-// folder: now the missing "Shows" IS created (as a new top-level collection),
-// and a new "Anime" is created under it, so a whole duplicate subtree appears
-// next to the renamed one.
-//
-// KNOWN LIMITATION: a duplicate subtree (Shows/Anime next to Series/Anime). It
-// at least carries the bundle's settings, because the name clash that blocks
-// the entry's update in (c1)/(d2b) is per parent and the new parent is new.
+// folder: matched by name all the same, no duplicate subtree.
 func TestBundleRestore_ParentFolderRenamed_DisplayNameDiffers(t *testing.T) {
 	s := seedRenameScene(t)
 	updateCollection(t, s.repos, s.shows, func(c *models.Collection) { c.Name = "TV" })
 	bundle := s.export(t)
 	setFolder(t, s.repos, s.shows, "Series")
 
-	restoreBundle(t, s.repos, bundle, true)
+	_, result := restoreBundle(t, s.repos, bundle, true)
 
 	assertLines(t, collectionLines(t, s.repos), []string{
 		"Podcasts | name=Podcasts | quality=best",
 		"Series | name=TV | quality=best",
 		"Series/Anime | name=Anime | quality=720p",
-		"Shows | name=Shows | quality=best",       // new, from the old folder name
-		"Shows/Anime | name=Anime | quality=720p", // new child: its name is free under the NEW parent, so the entry applies
 		"concerts | name=Concerts | quality=1080p | private",
 	})
-	assertPlacement(t, itemPlacement(t, s.repos), "Ep1", "completed@Series/Anime", "ghost@Shows/Anime")
+	assertMatched(t, result, "Shows", "Series")
+	assertPlacement(t, itemPlacement(t, s.repos), "Ep1", "completed@Series/Anime", "ghost@Series/Anime")
 }
 
-// (d2) Renaming only the LEAF's folder (Anime -> Cartoons): Shows matches, the
-// segment Anime matches nothing under it. The create of "Anime" under Shows is
-// refused because the renamed child is named "Anime" already, so the items
-// lose their collection.
-//
-// KNOWN LIMITATION: same as (c2).
+// (d2) Renaming only the LEAF's folder (Anime -> Cartoons): Shows matches by
+// folder, the leaf by display name under it.
 func TestBundleRestore_LeafFolderRenamed(t *testing.T) {
 	s := seedRenameScene(t)
 	bundle := s.export(t)
 	setFolder(t, s.repos, s.anime, "Cartoons")
 
-	resolved, _ := restoreBundle(t, s.repos, bundle, false)
+	resolved, result := restoreBundle(t, s.repos, bundle, false)
 
 	assertLines(t, collectionLines(t, s.repos), []string{
 		"Podcasts | name=Podcasts | quality=best",
@@ -478,41 +495,60 @@ func TestBundleRestore_LeafFolderRenamed(t *testing.T) {
 		"Shows/Cartoons | name=Anime | quality=720p",
 		"concerts | name=Concerts | quality=1080p | private",
 	})
-	for _, r := range resolved {
-		if strings.HasSuffix(r.URL, "/ep1") && r.CollectionID != nil {
-			t.Fatalf("Ep1 download resolved to collection %d, want none", *r.CollectionID)
-		}
-	}
+	assertMatched(t, result, "Shows/Anime", "Shows/Cartoons")
+	assertNoUnresolved(t, result)
+	assertResolvedTo(t, resolved, "ep1", s.anime)
 	restoreBundle(t, s.repos, bundle, true)
-	assertPlacement(t, itemPlacement(t, s.repos), "Ep1", "completed@Shows/Cartoons", "ghost@(none)")
+	assertPlacement(t, itemPlacement(t, s.repos), "Ep1", "completed@Shows/Cartoons", "ghost@Shows/Cartoons")
 }
 
-// (d2b) Leaf folder renamed AND its display name differs: the new child is
-// created under the matching parent with the old folder name.
-//
-// KNOWN LIMITATION: a duplicate leaf next to the renamed one.
+// (d2b) Leaf folder renamed AND its display name differs from the old folder.
 func TestBundleRestore_LeafFolderRenamed_DisplayNameDiffers(t *testing.T) {
 	s := seedRenameScene(t)
 	updateCollection(t, s.repos, s.anime, func(c *models.Collection) { c.Name = "Animation" })
 	bundle := s.export(t)
 	setFolder(t, s.repos, s.anime, "Cartoons")
 
-	restoreBundle(t, s.repos, bundle, true)
+	_, result := restoreBundle(t, s.repos, bundle, true)
 
 	assertLines(t, collectionLines(t, s.repos), []string{
 		"Podcasts | name=Podcasts | quality=best",
 		"Shows | name=Shows | quality=best",
-		"Shows/Anime | name=Anime | quality=best", // NEW, defaults (entry skipped on the name clash)
 		"Shows/Cartoons | name=Animation | quality=720p",
 		"concerts | name=Concerts | quality=1080p | private",
 	})
-	assertPlacement(t, itemPlacement(t, s.repos), "Ep1", "completed@Shows/Cartoons", "ghost@Shows/Anime")
+	assertMatched(t, result, "Shows/Anime", "Shows/Cartoons")
+	assertPlacement(t, itemPlacement(t, s.repos), "Ep1", "completed@Shows/Cartoons", "ghost@Shows/Cartoons")
+}
+
+// (d3) Mixed: the parent AND the leaf were renamed. Each level is matched by
+// name under the one matched above it.
+func TestBundleRestore_ParentAndLeafFoldersRenamed(t *testing.T) {
+	s := seedRenameScene(t)
+	bundle := s.export(t)
+	setFolder(t, s.repos, s.shows, "Series")
+	setFolder(t, s.repos, s.anime, "Cartoons")
+
+	resolved, result := restoreBundle(t, s.repos, bundle, false)
+
+	assertLines(t, collectionLines(t, s.repos), []string{
+		"Podcasts | name=Podcasts | quality=best",
+		"Series | name=Shows | quality=best",
+		"Series/Cartoons | name=Anime | quality=720p",
+		"concerts | name=Concerts | quality=1080p | private",
+	})
+	if result.CollectionsMatchedByName != 2 || result.CollectionsCreated != 0 {
+		t.Fatalf("result = %+v, want 2 matched by name and 0 created", result)
+	}
+	assertNoUnresolved(t, result)
+	assertResolvedTo(t, resolved, "ep1", s.anime)
 }
 
 // (e) Case-variant folder names. FindChildByRootPath prefers an exact match and
 // falls back to a case-insensitive one, because creating the variant as a second
-// sibling is refused (ErrDuplicateRootPath). So a restore onto a library whose
-// folder differs from the bundle only in case REUSES the collection.
+// sibling is refused (ErrDuplicateRootPath). A restore onto a library whose
+// folder differs from the bundle only in case reuses the collection (matched by
+// folder, so not "by name") and leaves it as it is; the preview agrees.
 func TestBundleRestore_CaseVariantFolder(t *testing.T) {
 	// Bundle written where the folder is "Concerts"; the target library has "concerts".
 	src := openTestRepos(t)
@@ -531,21 +567,19 @@ func TestBundleRestore_CaseVariantFolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolved, _ := restoreBundle(t, dst, bundle, false)
 
-	assertLines(t, collectionLines(t, dst), []string{"concerts | name=Concerts | quality=1080p"}) // reused, folder spelling kept, entry settings applied
-	if len(resolved) != 1 || resolved[0].CollectionID == nil || *resolved[0].CollectionID != local {
-		t.Fatalf("download must resolve to the existing collection %d, got %+v", local, resolved)
+	prev := previewOf(t, dst, bundle)
+	if prev.CollectionsNew != 0 || prev.CollectionsMatchedByName != 0 || len(prev.UnresolvedCollections) != 0 {
+		t.Fatalf("preview new=%d byName=%d unresolved=%v, want 0/0/none", prev.CollectionsNew, prev.CollectionsMatchedByName, prev.UnresolvedCollections)
 	}
-	// KNOWN LIMITATION (cosmetic): the preview compares chains case-sensitively
-	// and the restore does not, so the preview says "1 new collection" for
-	// something the restore reuses.
-	prev, err := PreviewLibraryBundle(context.Background(), dst.collections, dst.tags, dst.artists, dst.library, bundle)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if prev.CollectionsNew != 1 {
-		t.Fatalf("preview CollectionsNew = %d, want 1 (case-sensitive comparison)", prev.CollectionsNew)
+
+	resolved, result := restoreBundle(t, dst, bundle, false)
+
+	// Reused, folder spelling kept, and NOT modified: the entry's 1080p is not applied.
+	assertLines(t, collectionLines(t, dst), []string{"concerts | name=Concerts | quality=best"})
+	assertResolvedTo(t, resolved, "gig", local)
+	if result.CollectionsMatchedByName != 0 || result.CollectionsCreated != 0 {
+		t.Fatalf("result = %+v, want a plain folder match", result)
 	}
 
 	// Nested: bundle "Shows/Anime" onto a library holding "shows/anime".
@@ -557,6 +591,9 @@ func TestBundleRestore_CaseVariantFolder(t *testing.T) {
 	nested := LibraryBundle{
 		Collections:  []CollectionEntry{{Path: []string{"Shows", "Anime"}, Name: "Anime", DefaultQuality: "best", DefaultDownloadType: "video"}},
 		LibraryItems: []LibraryItemEntry{{Title: "Ep", Filename: "ep.mp4", CollectionPath: []string{"Shows", "Anime"}}},
+	}
+	if prev := previewOf(t, dst2, nested); prev.CollectionsNew != 0 {
+		t.Fatalf("nested preview CollectionsNew = %d, want 0", prev.CollectionsNew)
 	}
 	restoreBundle(t, dst2, nested, true)
 	assertPlacement(t, itemPlacement(t, dst2), "Ep", "ghost@shows/anime")
@@ -589,45 +626,68 @@ func TestBundleRestore_LegacyCaseSiblingsExactMatchWins(t *testing.T) {
 	}
 }
 
-// (f) The collection's DISPLAY name renamed while the folder stays: the restore
-// matches by folder, so the existing collection is reused (no duplicate) — but
-// the entry then OVERWRITES it with the bundle's values: name, default
-// quality/type, privacy, Jellyfin library, season and artist all revert to what
-// the backup carried. The code says this is deliberate ("ensureCollection always
-// overwrites a matched collection's metadata from the bundle"), but
-// docs/FEATURES.md promised "never overwriting existing ones".
-//
-// KNOWN LIMITATION: a restore into a live library undoes later edits to
-// matched collections; notably a collection made private after the backup
-// becomes public again.
+// (f) The collection's DISPLAY name renamed while the folder stays: matched by
+// folder, and the live collection is NOT modified: name, default quality, privacy,
+// Jellyfin library, season and artist all stay as the user left them. A
+// collection made private after the backup stays private.
 func TestBundleRestore_DisplayNameRenamedFolderUnchanged(t *testing.T) {
 	s := seedRenameScene(t)
 	bundle := s.export(t)
+	ctx := context.Background()
+	artist, err := s.repos.artists.CreateWithPrivacy(ctx, "Someone", nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	season, jf := 3, "jf-later"
 	updateCollection(t, s.repos, s.anime, func(c *models.Collection) {
 		c.Name = "Animation"
 		c.DefaultQuality = "480p"
-		c.IsPrivate = true
+		c.DefaultDownloadType = "audio"
+		c.IsPrivate = true // made private AFTER the backup
+		c.JellyfinLibrary = &jf
+		c.SeasonNumber = &season
+		c.ArtistID = &artist.ID
 	})
+	updateCollection(t, s.repos, s.podcasts, func(c *models.Collection) { c.IsPrivate = true })
 	before := collectionMap(t, s.repos)
 
-	restoreBundle(t, s.repos, bundle, true)
+	prev := previewOf(t, s.repos, bundle)
+	if prev.CollectionsNew != 0 || prev.CollectionsMatchedByName != 0 {
+		t.Fatalf("preview new=%d byName=%d, want 0/0", prev.CollectionsNew, prev.CollectionsMatchedByName)
+	}
 
-	assertLines(t, collectionLines(t, s.repos), sceneLines) // name, quality and privacy are back to the backup's
+	_, result := restoreBundle(t, s.repos, bundle, true)
+
+	assertLines(t, collectionLines(t, s.repos), []string{
+		"Podcasts | name=Podcasts | quality=best | private",
+		"Shows | name=Shows | quality=best",
+		"Shows/Anime | name=Animation | quality=480p | private",
+		"concerts | name=Concerts | quality=1080p | private",
+	})
 	after := collectionMap(t, s.repos)
 	if len(after) != len(before) {
 		t.Fatalf("collections went from %d to %d", len(before), len(after))
 	}
-	if after[s.anime].Name != "Anime" || after[s.anime].IsPrivate {
-		t.Fatalf("expected the entry to overwrite the edits, got %+v", after[s.anime])
+	for id, b := range before {
+		a := after[id]
+		if a.Name != b.Name || a.RootPath != b.RootPath || a.IsPrivate != b.IsPrivate || a.DefaultQuality != b.DefaultQuality ||
+			a.DefaultDownloadType != b.DefaultDownloadType || derefStr(a.JellyfinLibrary) != derefStr(b.JellyfinLibrary) ||
+			derefStr(a.SeasonNumber) != derefStr(b.SeasonNumber) || derefStr(a.ArtistID) != derefStr(b.ArtistID) ||
+			!a.UpdatedAt.Equal(b.UpdatedAt) {
+			t.Fatalf("collection %d was modified: before %+v, after %+v", id, b, a)
+		}
 	}
+	if result.CollectionsCreated != 0 || result.CollectionsMatchedByName != 0 {
+		t.Fatalf("result = %+v, want plain folder matches", result)
+	}
+	assertNoUnresolved(t, result)
 	assertPlacement(t, itemPlacement(t, s.repos), "Ep1", "completed@Shows/Anime", "ghost@Shows/Anime")
 }
 
-// (f2) The display name renamed to something a sibling already uses: the
-// matched collection's update clashes, so the entry's other fields (privacy,
-// defaults) are skipped as well — a restore can then neither rename nor
-// re-apply the settings.
-func TestBundleRestore_DisplayNameClashSkipsWholeEntry(t *testing.T) {
+// (f2) The display name renamed to something a sibling already uses. The
+// collection is matched by folder and left completely as it is (it used to be
+// skipped whole by a clashing update; now nothing is written to it at all).
+func TestBundleRestore_ExistingCollectionUntouchedWhenBundleNameIsTaken(t *testing.T) {
 	s := seedRenameScene(t)
 	bundle := s.export(t)
 	updateCollection(t, s.repos, s.concerts, func(c *models.Collection) {
@@ -637,17 +697,279 @@ func TestBundleRestore_DisplayNameClashSkipsWholeEntry(t *testing.T) {
 	// Podcasts takes the name the Concerts entry carries.
 	updateCollection(t, s.repos, s.podcasts, func(c *models.Collection) { c.Name = "Concerts" })
 
-	restoreBundle(t, s.repos, bundle, true)
+	_, result := restoreBundle(t, s.repos, bundle, true)
 
 	cols := collectionMap(t, s.repos)
-	if cols[s.concerts].Name != "Live" || cols[s.concerts].IsPrivate {
-		t.Fatalf("Concerts must be left as is (the clashing update is skipped whole), got %+v", cols[s.concerts])
+	if cols[s.concerts].Name != "Live" || cols[s.concerts].IsPrivate || cols[s.podcasts].Name != "Concerts" {
+		t.Fatalf("existing collections must be left as they are, got %+v / %+v", cols[s.concerts], cols[s.podcasts])
 	}
+	assertNoUnresolved(t, result)
 	assertPlacement(t, itemPlacement(t, s.repos), "Gig", "completed@concerts", "ghost@concerts")
 }
 
-// Sanity for the error the c2/d tests rely on: creating a collection under a
-// taken name is what the repository refuses, which is what EnsureChain hits.
+// A collection the restore CREATES takes all of the entry's settings.
+func TestBundleRestore_CreatedCollectionGetsEntrySettings(t *testing.T) {
+	ctx := context.Background()
+	repos := openTestRepos(t)
+	if _, err := repos.artists.CreateWithPrivacy(ctx, "Someone", nil, false); err != nil {
+		t.Fatal(err)
+	}
+	jf, season := "jf-9", 2
+	bundle := LibraryBundle{
+		Artists: []ArtistEntry{{Name: "Someone"}},
+		Collections: []CollectionEntry{{
+			Path: []string{"Fresh"}, Name: "Fresh Name", DefaultQuality: "720p", DefaultDownloadType: "audio",
+			IsPrivate: true, JellyfinLibrary: &jf, SeasonNumber: &season, ArtistName: "Someone",
+		}},
+		LibraryItems: []LibraryItemEntry{{Title: "T", Filename: "t.mp3", CollectionPath: []string{"Fresh"}}},
+	}
+
+	prev := previewOf(t, repos, bundle)
+	if prev.CollectionsNew != 1 {
+		t.Fatalf("preview CollectionsNew = %d, want 1", prev.CollectionsNew)
+	}
+	_, result := restoreBundle(t, repos, bundle, true)
+
+	if result.CollectionsCreated != 1 || result.CollectionsMatchedByName != 0 {
+		t.Fatalf("result = %+v", result)
+	}
+	cols, _ := repos.collections.List(ctx)
+	if len(cols) != 1 {
+		t.Fatalf("collections = %+v", cols)
+	}
+	c := cols[0]
+	if c.Name != "Fresh Name" || c.RootPath != "Fresh" || c.DefaultQuality != "720p" || c.DefaultDownloadType != "audio" || !c.IsPrivate ||
+		c.JellyfinLibrary == nil || *c.JellyfinLibrary != jf || c.SeasonNumber == nil || *c.SeasonNumber != season || c.ArtistID == nil {
+		t.Fatalf("created collection did not take the entry's settings: %+v", c)
+	}
+}
+
+// A created collection whose display name is already used by a sibling that
+// this restore created (a hand-edited bundle can carry two entries with one
+// name; an existing collection with that name would have been matched instead)
+// keeps the folder name as its name, still takes every other setting, privacy
+// included, and the clash is reported.
+func TestBundleRestore_CreatedCollectionNameClashKeepsSettings(t *testing.T) {
+	repos := openTestRepos(t)
+	bundle := LibraryBundle{
+		Collections: []CollectionEntry{
+			{Path: []string{"a"}, Name: "Same", DefaultQuality: "best", DefaultDownloadType: "video"},
+			{Path: []string{"b"}, Name: "Same", DefaultQuality: "1080p", DefaultDownloadType: "video", IsPrivate: true},
+		},
+		LibraryItems: []LibraryItemEntry{{Title: "B1", Filename: "b1.mp4", CollectionPath: []string{"b"}}},
+	}
+
+	prev := previewOf(t, repos, bundle)
+	if prev.CollectionsNew != 2 || len(prev.CollectionsNameKept) != 1 || len(prev.UnresolvedCollections) != 0 {
+		t.Fatalf("preview = new %d, nameKept %+v, unresolved %+v", prev.CollectionsNew, prev.CollectionsNameKept, prev.UnresolvedCollections)
+	}
+	_, result := restoreBundle(t, repos, bundle, true)
+
+	assertLines(t, collectionLines(t, repos), []string{
+		"a | name=Same | quality=best",
+		"b | name=b | quality=1080p | private", // name kept as the folder, settings and privacy applied
+	})
+	if len(result.CollectionsNameKept) != 1 {
+		t.Fatalf("nameKept = %+v, want one report", result.CollectionsNameKept)
+	}
+	k := result.CollectionsNameKept[0]
+	if strings.Join(k.Path, "/") != "b" || k.WantedName != "Same" || k.KeptName != "b" {
+		t.Fatalf("nameKept = %+v", k)
+	}
+	assertNoUnresolved(t, result)
+	assertPlacement(t, itemPlacement(t, repos), "B1", "ghost@b")
+}
+
+// No folder match and no name match: a new collection, as before.
+func TestBundleRestore_NoFolderAndNoNameMatchCreates(t *testing.T) {
+	s := seedRenameScene(t)
+	bundle := LibraryBundle{
+		Collections:  []CollectionEntry{{Path: []string{"Brand"}, Name: "Brand New", DefaultQuality: "480p", DefaultDownloadType: "video", IsPrivate: true}},
+		LibraryItems: []LibraryItemEntry{{Title: "N", Filename: "n.mp4", CollectionPath: []string{"Brand"}}},
+	}
+	_, result := restoreBundle(t, s.repos, bundle, true)
+
+	assertLines(t, collectionLines(t, s.repos), append([]string{"Brand | name=Brand New | quality=480p | private"}, sceneLines...))
+	if result.CollectionsCreated != 1 || result.CollectionsMatchedByName != 0 {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+// Two levels where only the PARENT matches by name: the child does not exist
+// under it, so it is created there (not next to a stale parent) with its settings.
+func TestBundleRestore_OnlyParentMatchesByName(t *testing.T) {
+	s := seedRenameScene(t)
+	bundle := LibraryBundle{
+		Collections: []CollectionEntry{
+			{Path: []string{"Shows"}, Name: "Shows", DefaultQuality: "best", DefaultDownloadType: "video"},
+			{Path: []string{"Shows", "Docs"}, Name: "Documentaries", DefaultQuality: "1080p", DefaultDownloadType: "video", IsPrivate: true},
+		},
+		LibraryItems: []LibraryItemEntry{{Title: "D", Filename: "d.mp4", CollectionPath: []string{"Shows", "Docs"}}},
+	}
+	setFolder(t, s.repos, s.shows, "Series")
+
+	_, result := restoreBundle(t, s.repos, bundle, true)
+
+	assertLines(t, collectionLines(t, s.repos), []string{
+		"Podcasts | name=Podcasts | quality=best",
+		"Series | name=Shows | quality=best",
+		"Series/Anime | name=Anime | quality=720p",
+		"Series/Docs | name=Documentaries | quality=1080p | private",
+		"concerts | name=Concerts | quality=1080p | private",
+	})
+	assertMatched(t, result, "Shows", "Series")
+	if result.CollectionsCreated != 1 {
+		t.Fatalf("result = %+v, want 1 created", result)
+	}
+	assertPlacement(t, itemPlacement(t, s.repos), "D", "ghost@Series/Docs")
+}
+
+// A level whose bundle entry is missing has no name to match, so it falls back
+// to folder-only: here "Shows" was renamed, the bundle only has an entry for the
+// leaf, so "Shows" matches nothing and cannot be created (its folder name is the
+// display name of the renamed collection). That is reported, not silent.
+func TestBundleRestore_MissingEntryFallsBackToFolderOnly(t *testing.T) {
+	s := seedRenameScene(t)
+	bundle := LibraryBundle{
+		Collections:  []CollectionEntry{{Path: []string{"Shows", "Anime"}, Name: "Anime", DefaultQuality: "720p", DefaultDownloadType: "video"}},
+		LibraryItems: []LibraryItemEntry{{Title: "Ep1", Filename: "ep1.mp4", CollectionPath: []string{"Shows", "Anime"}}},
+	}
+	setFolder(t, s.repos, s.shows, "Series")
+
+	prev := previewOf(t, s.repos, bundle)
+	if len(prev.UnresolvedCollections) != 1 || prev.UnresolvedCollections[0].Items != 1 || prev.CollectionsMatchedByName != 0 {
+		t.Fatalf("preview unresolved = %+v byName=%d", prev.UnresolvedCollections, prev.CollectionsMatchedByName)
+	}
+
+	before := collectionLines(t, s.repos)
+	_, result := restoreBundle(t, s.repos, bundle, true)
+
+	assertLines(t, collectionLines(t, s.repos), before)
+	if len(result.UnresolvedCollections) != 1 {
+		t.Fatalf("unresolved = %+v, want exactly one (the root cause, not every descendant)", result.UnresolvedCollections)
+	}
+	u := result.UnresolvedCollections[0]
+	if strings.Join(u.Path, "/") != "Shows" || u.Reason == "" || u.Items != 1 {
+		t.Fatalf("unresolved = %+v, want Shows with a reason and 1 item", u)
+	}
+	if result.CollectionsMatchedByName != 0 {
+		t.Fatalf("a level without an entry must not be matched by name: %+v", result)
+	}
+	assertPlacement(t, itemPlacement(t, s.repos), "Ep1", "completed@Series/Anime", "ghost@(none)")
+}
+
+// A level with a folder match but no entry still works (folder-only): no entry
+// is needed to reuse an existing collection.
+func TestBundleRestore_ItemsOnlyBundleMatchesByFolder(t *testing.T) {
+	s := seedRenameScene(t)
+	bundle := LibraryBundle{LibraryItems: []LibraryItemEntry{{Title: "G2", Filename: "g2.mp4", CollectionPath: []string{"concerts"}}}}
+	restoreBundle(t, s.repos, bundle, true)
+	assertPlacement(t, itemPlacement(t, s.repos), "G2", "ghost@concerts")
+	if n := len(collectionMap(t, s.repos)); n != 4 {
+		t.Fatalf("collections = %d, want 4", n)
+	}
+}
+
+// A chain that cannot be matched or created: the restore does not fail, the
+// items come back uncategorized (ghost mode and download mode), and the result
+// lists the chain with a reason and the item count. Reproduced with two legacy
+// siblings that share one display name (made before the uniqueness rule): the
+// name is ambiguous, so it matches neither, and creating a third is refused.
+func TestBundleRestore_UnresolvedChainIsReportedItemsStayUncategorized(t *testing.T) {
+	repos := openTestRepos(t)
+	ctx := context.Background()
+	for _, folder := range []string{"x", "y"} {
+		if _, err := repos.db.ExecContext(ctx, `INSERT INTO collections (name, root_path, default_quality, default_download_type, filename_template) VALUES ('Dup', ?, 'best', 'video', '{title}')`, folder); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bundle := LibraryBundle{
+		Collections: []CollectionEntry{
+			{Path: []string{"Dup"}, Name: "Dup", DefaultQuality: "best", DefaultDownloadType: "video", IsPrivate: true},
+			{Path: []string{"Dup", "Sub"}, Name: "Sub", DefaultQuality: "best", DefaultDownloadType: "video"},
+		},
+		LibraryItems: []LibraryItemEntry{
+			{Title: "P1", OriginalURL: "https://example.com/p1", Filename: "p1.mp4", CollectionPath: []string{"Dup"}},
+			{Title: "P2", OriginalURL: "https://example.com/p2", Filename: "p2.mp4", CollectionPath: []string{"Dup", "Sub"}},
+			{Title: "Ok", OriginalURL: "https://example.com/ok", Filename: "ok.mp4"},
+		},
+	}
+
+	prev := previewOf(t, repos, bundle)
+	if len(prev.UnresolvedCollections) != 1 || prev.UnresolvedCollections[0].Items != 2 {
+		t.Fatalf("preview unresolved = %+v, want one chain with 2 items", prev.UnresolvedCollections)
+	}
+
+	before := len(collectionMap(t, repos))
+	resolved, result := restoreBundle(t, repos, bundle, false)
+
+	if len(collectionMap(t, repos)) != before {
+		t.Fatal("nothing may be created for an unresolved chain")
+	}
+	if len(result.UnresolvedCollections) != 1 {
+		t.Fatalf("unresolved = %+v", result.UnresolvedCollections)
+	}
+	u := result.UnresolvedCollections[0]
+	if strings.Join(u.Path, "/") != "Dup" || u.Items != 2 || !strings.Contains(u.Reason, "already used") {
+		t.Fatalf("unresolved = %+v, want Dup / 2 items / name already used", u)
+	}
+	if len(resolved) != 3 {
+		t.Fatalf("resolved %d downloads, want all 3 (items still import)", len(resolved))
+	}
+	for _, key := range []string{"p1", "p2", "ok"} {
+		if resolvedTo(t, resolved, key) != nil {
+			t.Fatalf("download %q must be uncategorized", key)
+		}
+	}
+	restoreBundle(t, repos, bundle, true)
+	place := itemPlacement(t, repos)
+	assertPlacement(t, place, "P1", "ghost@(none)")
+	assertPlacement(t, place, "P2", "ghost@(none)")
+}
+
+// A name that is ambiguous among existing siblings (legacy rows) is never
+// guessed: the entry is created instead, under its folder name when the display
+// name cannot be used.
+func TestBundleRestore_AmbiguousNameIsNotMatched(t *testing.T) {
+	repos := openTestRepos(t)
+	ctx := context.Background()
+	for _, folder := range []string{"x", "y"} {
+		if _, err := repos.db.ExecContext(ctx, `INSERT INTO collections (name, root_path, default_quality, default_download_type, filename_template) VALUES ('Dup', ?, 'best', 'video', '{title}')`, folder); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bundle := LibraryBundle{Collections: []CollectionEntry{{Path: []string{"old"}, Name: "Dup", DefaultQuality: "720p", DefaultDownloadType: "video", IsPrivate: true}}}
+
+	_, result := restoreBundle(t, repos, bundle, true)
+
+	if result.CollectionsMatchedByName != 0 || result.CollectionsCreated != 1 || len(result.CollectionsNameKept) != 1 {
+		t.Fatalf("result = %+v", result)
+	}
+	assertLines(t, collectionLines(t, repos), []string{
+		"old | name=old | quality=720p | private",
+		"x | name=Dup | quality=best",
+		"y | name=Dup | quality=best",
+	})
+}
+
+// An older bundle (no new fields anywhere) round-trips: the new result fields
+// are always present as empty lists, never null.
+func TestBundleRestore_ResultListsAreNeverNull(t *testing.T) {
+	repos := openTestRepos(t)
+	_, result := restoreBundle(t, repos, LibraryBundle{}, true)
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"matchedByName":[]`, `"collectionsNameKept":[]`, `"unresolvedCollections":[]`} {
+		if !strings.Contains(string(raw), field) {
+			t.Fatalf("result JSON %s lacks %s", raw, field)
+		}
+	}
+}
+
+// Sanity for the error the resolver relies on: creating a collection under a
+// taken name is what the repository refuses.
 func TestEnsureChain_RefusesAFolderWhoseNameIsTaken(t *testing.T) {
 	s := seedRenameScene(t)
 	setFolder(t, s.repos, s.podcasts, "Pods")

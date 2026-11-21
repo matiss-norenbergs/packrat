@@ -447,6 +447,35 @@ func FindChildByRootPath(cols []models.Collection, parentID *int64, segment stri
 	return fold
 }
 
+// FindUniqueChildByName returns the collection among cols whose parent is
+// parentID and whose display name is exactly name, but only when there is
+// exactly one. Names are unique per parent (nameInUse), so more than one match
+// can only come from rows that predate the rule; such an ambiguous name matches
+// nothing rather than guessing. Used by a library restore to recognise a
+// collection whose folder name was renamed after the backup was made. Unlike
+// EnsureChain, which never looks at display names, this is only a helper for
+// callers that opt in.
+func FindUniqueChildByName(cols []models.Collection, parentID *int64, name string) *models.Collection {
+	var found *models.Collection
+	for i := range cols {
+		c := &cols[i]
+		if c.Name != name {
+			continue
+		}
+		if (c.ParentID == nil) != (parentID == nil) {
+			continue
+		}
+		if c.ParentID != nil && parentID != nil && *c.ParentID != *parentID {
+			continue
+		}
+		if found != nil {
+			return nil
+		}
+		found = c
+	}
+	return found
+}
+
 const collectionSelectColumns = `
 	SELECT id, name, parent_id, root_path, default_quality, default_download_type, filename_template,
 	       jellyfin_library, is_private, season_number, year, sequence_min, sequence_max, artist_id, cover_image_path, cover_image_small_path, cover_image_medium_path, browse_as_show, created_at, updated_at
