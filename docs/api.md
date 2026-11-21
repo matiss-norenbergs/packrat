@@ -1175,7 +1175,8 @@ existed.
 `name` and `rootPath` are required; `defaultQuality`/`defaultDownloadType` default to
 `"best"`/`"video"` if empty. `rootPath` is validated to resolve under the media root (rejects
 traversal). `400` unknown parent or invalid root path, `409` duplicate name (parent-scoped
-uniqueness). Response `201 {"id": 7}`.
+uniqueness) or `{"error":"another collection in this folder already uses that folder name"}` when a
+sibling (same parent, or both top level) already has that `rootPath`, compared without regard to case. Response `201 {"id": 7}`.
 
 - `seasonNumber` — new downloads placed directly into this collection default their own Season #
   to this value (not inherited by sub-collections). `seasonNumber`, `sequenceMin` and `sequenceMax`
@@ -1211,7 +1212,10 @@ sends `sequenceMin` or `sequenceMax`, the resulting pair must satisfy `sequenceM
 (`400` otherwise — so sending only `sequenceMax` below the stored minimum is refused). A stored range
 that is already inverted doesn't block an edit that leaves the range alone. Re-submitting the stored
 `rootPath` is not a change. Changing `rootPath` only affects where new downloads go: no file or folder
-is moved or renamed and stored item paths are not rewritten. `404` unknown id, `409` duplicate name, `204` on success. The collection
+is moved or renamed and stored item paths are not rewritten. `404` unknown id, `409` duplicate name, or the same duplicate-folder `409` as create when the
+`rootPath` actually changes to one a sibling already uses (case-insensitive; not checked when the
+folder name is unchanged, so editing other fields of a collection that already shares a folder with a
+sibling keeps working), `204` on success. The collection
 dialog always sends the full object, which therefore behaves as a full replace.
 
 ### `DELETE /api/collections/:id`
