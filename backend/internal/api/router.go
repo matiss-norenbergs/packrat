@@ -312,11 +312,11 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.POST("/backup/export/library", ExportLibrary(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.DownloadsRepo))
 		// The routes that take an uploaded backup file have their own, larger body limit.
 		largeBackupBody := allowLargeBody(maxBackupImportBodyBytes)
-		api.POST("/backup/import/settings", largeBackupBody, ImportSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp))
+		api.POST("/backup/import/settings", largeBackupBody, ImportSettings(deps.SettingsRepo, deps.Manager, deps.YtDlp, onSubscriptionsEnabled))
 		api.POST("/backup/preview/library", largeBackupBody, PreviewLibraryImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
 		api.POST("/backup/import/library", largeBackupBody, ImportLibrary(deps.DB, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.SettingsRepo))
 		api.POST("/backup/preview/full", largeBackupBody, PreviewFullImport(deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo))
-		api.POST("/backup/import/full", largeBackupBody, ImportFullBackup(deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.YtDlp))
+		api.POST("/backup/import/full", largeBackupBody, ImportFullBackup(deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.YtDlp, onSubscriptionsEnabled))
 		api.GET("/backup/history", ListBackupHistory(deps.BackupHistoryRepo))
 		api.POST("/backup/run", RunManualBackup(backup.RunDeps{
 			BackupsRoot:       deps.BackupsRoot,
@@ -331,7 +331,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		api.GET("/backup/history/:id/download", DownloadBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.POST("/backup/history/bulk-delete", BulkDeleteBackupHistory(deps.BackupsRoot, deps.BackupHistoryRepo))
 		api.GET("/backup/history/:id/preview", PreviewBackupFile(deps.BackupsRoot, deps.BackupHistoryRepo))
-		api.POST("/backup/history/:id/restore", RestoreFullBackup(deps.BackupsRoot, deps.BackupHistoryRepo, deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.YtDlp))
+		api.POST("/backup/history/:id/restore", RestoreFullBackup(deps.BackupsRoot, deps.BackupHistoryRepo, deps.DB, deps.SettingsRepo, deps.CollectionsRepo, deps.TagsRepo, deps.ArtistsRepo, deps.LibraryRepo, deps.Manager, deps.YtDlp, onSubscriptionsEnabled))
 
 		api.POST("/subscriptions", subscriptionsOnly, CreateSubscription(subCheckDeps))
 		api.GET("/subscriptions", subscriptionsOnly, ListSubscriptions(subCheckDeps))
