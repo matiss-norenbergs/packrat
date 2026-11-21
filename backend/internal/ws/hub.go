@@ -42,6 +42,10 @@ type Hub struct {
 
 	checkMu sync.RWMutex
 	check   SessionChecker
+
+	// pingPeriod is how often each client is pinged. Fixed before the first connection (tests
+	// shorten it right after NewHub), so connection goroutines read it without synchronization.
+	pingPeriod time.Duration
 }
 
 func NewHub() *Hub {
@@ -53,6 +57,7 @@ func NewHub() *Hub {
 		done:       make(chan struct{}),
 		revalidate: make(chan struct{}, 1),
 		countReq:   make(chan chan int),
+		pingPeriod: defaultPingPeriod,
 	}
 }
 
