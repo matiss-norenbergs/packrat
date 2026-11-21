@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -258,10 +259,20 @@ func CreatePlaylistDownload(mgr *queue.DownloadManager, collectionsRepo *reposit
 			return
 		}
 
-		// "current" never needs a playlist listing — it's exactly today's
-		// single-video behavior (--no-playlist, applied by the untouched
-		// BuildArgs), submitted through the URL unchanged.
+		// "current" needs no playlist listing — it's today's single-video
+		// behavior (--no-playlist, applied by the untouched BuildArgs),
+		// submitted through the URL unchanged. Guard: a pure playlist URL has no
+		// video for --no-playlist to fall back to, so yt-dlp would download every
+		// entry inside one job and leave the extras as strays in the media
+		// folder. Refuse it. Fail open: if the check itself errors, queue as before.
 		if req.PlaylistMode == "current" {
+			single, err := ytdlp.FetchSingleVideoMetadata(c.Request.Context(), req.URL)
+			if err != nil {
+				log.Printf("playlist download: --no-playlist check failed for %s, queuing anyway: %v", req.URL, err)
+			} else if single.IsPlaylist() {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "This link is a playlist; choose Entire playlist, a range or First N"})
+				return
+			}
 			entries := []batchEntry{{req: CreateDownloadRequest{
 				URL: req.URL, CollectionID: req.CollectionID, DownloadType: req.DownloadType,
 				Quality: req.Quality, AudioFormat: req.AudioFormat,

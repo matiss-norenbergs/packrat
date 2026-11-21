@@ -65,6 +65,18 @@ func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *reposi
 			return
 		}
 
+		// A playlist URL may still resolve to one video under --no-playlist
+		// (watch?v=X&list=Y). Only then is "Only this video" valid. Fail open:
+		// if the extra fetch errors, keep the option available.
+		singleVideo := true
+		if meta.IsPlaylist() {
+			if single, err := ytdlp.FetchSingleVideoMetadata(c.Request.Context(), req.URL); err != nil {
+				log.Printf("preview: --no-playlist check failed for %s, assuming single video is available: %v", req.URL, err)
+			} else {
+				singleVideo = !single.IsPlaylist()
+			}
+		}
+
 		var dup *DuplicateInfo
 		if !meta.IsPlaylist() {
 			item, err := libraryRepo.FindDuplicate(c.Request.Context(), req.URL, meta.ID)
@@ -80,7 +92,7 @@ func PreviewDownloadMetadata(ytdlp *downloader.YtDlpService, libraryRepo *reposi
 			}
 		}
 
-		c.JSON(http.StatusOK, toPreviewDownloadResponse(meta, dup))
+		c.JSON(http.StatusOK, toPreviewDownloadResponse(meta, dup, singleVideo))
 	}
 }
 

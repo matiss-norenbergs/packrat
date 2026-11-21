@@ -393,14 +393,18 @@ privacy switch off. Clients show a blurred match's title hashed and hide its thu
 {
   "title": "Some Video", "uploader": "Some Channel", "uploadDate": "20240131", "duration": 214,
   "thumbnail": "https://...jpg", "resolution": "1920x1080",
-  "isPlaylist": false, "playlistTitle": "", "playlistCount": 0,
+  "isPlaylist": false, "playlistTitle": "", "playlistCount": 0, "singleVideoAvailable": true,
   "duplicate": null
 }
 ```
 
 `uploadDate` is yt-dlp's `YYYYMMDD` upload date (`""` if unknown) — it feeds the `{date}` token in the
 filename-template preview. For a playlist URL, `isPlaylist=true` and only `playlistTitle`/`playlistCount`
-are populated.
+are populated. `singleVideoAvailable` says whether `playlistMode: "current"` is valid for the URL: always
+`true` for a non-playlist URL; for a playlist URL it comes from a second metadata fetch with
+`--no-playlist` (made only then) — `true` when that resolves to one video (`watch?v=X&list=Y`), `false`
+for a pure playlist link. If that second fetch fails the field stays `true` (the preview never fails
+because of it).
 
 ### `GET /api/downloads/preview-image?url=...[&kind=image|thumbnail]`
 
@@ -434,7 +438,10 @@ resolves entries itself, never trusting a client-supplied entry list.
 ```
 
 `playlistMode` is one of:
-- `"current"` — no playlist fetch; queues exactly one download for the URL as given.
+- `"current"` — queues exactly one download for the URL as given. A `--no-playlist` metadata fetch
+  guards it first: if the URL is still a playlist (a pure playlist link, nothing to fall back to) the
+  answer is `400` `{"error": "This link is a playlist; choose Entire playlist, a range or First N"}` and
+  nothing is queued. The guard fails open — if that fetch errors or times out, the download is queued as before.
 - `"entire"` — every entry.
 - `"range"` — 1-based inclusive `playlistStart`..`playlistEnd`; `400` if out of bounds/missing.
 - `"first_n"` — first `playlistLimit` entries (clamped to playlist length); `400` if `<1`.

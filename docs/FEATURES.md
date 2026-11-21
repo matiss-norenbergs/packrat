@@ -183,7 +183,10 @@ The live download queue.
     refused with "image larger than the N MB limit".
   - **Playlists**: pasting a playlist URL offers a mode — download just the one video ("current"),
     the entire playlist, a numbered range, or the first N entries. The server re-resolves the
-    playlist itself at submit time rather than trusting a client-built entry list.
+    playlist itself at submit time rather than trusting a client-built entry list. A link that is
+    only a playlist (`playlist?list=…`, not `watch?v=…&list=…`) has no single video, so "Only this
+    video" is disabled there (tooltip: "This link is a playlist, not a single video.") and the API
+    refuses it; the dialog falls back to the entire playlist.
   - **Advanced** section: Title/Artist/Year/Season #/Sequence # overrides (applied once the
     download completes, taking priority over whatever yt-dlp reports), Tags, and a "Generate NFO"
     checkbox (writes a Kodi/Jellyfin-style `.nfo` sidecar alongside the file). Once the link

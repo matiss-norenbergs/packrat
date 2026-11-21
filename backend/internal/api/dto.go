@@ -229,6 +229,13 @@ type PreviewDownloadResponse struct {
 	PlaylistTitle string `json:"playlistTitle,omitempty"`
 	PlaylistCount int    `json:"playlistCount,omitempty"`
 
+	// SingleVideoAvailable says whether "Only this video" (playlistMode
+	// "current") is meaningful for the URL: always true for a non-playlist URL;
+	// for a playlist URL true only when yt-dlp --no-playlist resolves it to one
+	// video (watch?v=X&list=Y), false for a pure playlist link. Stays true when
+	// that check itself fails, so it never blocks on a flaky second fetch.
+	SingleVideoAvailable bool `json:"singleVideoAvailable"`
+
 	// Duplicate is set only for a non-playlist URL that already matches a
 	// library item by original URL or video ID; nil otherwise.
 	Duplicate *DuplicateInfo `json:"duplicate"`
@@ -247,12 +254,13 @@ type DuplicateInfo struct {
 // toPreviewDownloadResponse builds the preview response from yt-dlp's
 // metadata and (for a non-playlist URL) an already-performed duplicate
 // lookup (already shaped and privacy-flagged) — dup is nil when none was found or attempted.
-func toPreviewDownloadResponse(m *downloader.Metadata, dup *DuplicateInfo) PreviewDownloadResponse {
+func toPreviewDownloadResponse(m *downloader.Metadata, dup *DuplicateInfo, singleVideoAvailable bool) PreviewDownloadResponse {
 	if m.IsPlaylist() {
 		return PreviewDownloadResponse{
-			IsPlaylist:    true,
-			PlaylistTitle: m.Title,
-			PlaylistCount: len(m.Entries),
+			IsPlaylist:           true,
+			PlaylistTitle:        m.Title,
+			PlaylistCount:        len(m.Entries),
+			SingleVideoAvailable: singleVideoAvailable,
 		}
 	}
 
@@ -262,6 +270,8 @@ func toPreviewDownloadResponse(m *downloader.Metadata, dup *DuplicateInfo) Previ
 		UploadDate: m.UploadDate,
 		Duration:   int(m.Duration),
 		Thumbnail:  m.Thumbnail,
+
+		SingleVideoAvailable: true,
 	}
 	if m.Width > 0 && m.Height > 0 {
 		res := fmt.Sprintf("%dx%d", m.Width, m.Height)

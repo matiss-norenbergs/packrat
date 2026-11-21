@@ -770,6 +770,8 @@ export interface DownloadPreview {
   isPlaylist: boolean
   playlistTitle: string | null
   playlistCount: number
+  // false only for a pure playlist link, where "Only this video" has no video to fall back to
+  singleVideoAvailable: boolean
   duplicate: DuplicateInfo | null
 }
 
