@@ -88,16 +88,17 @@ func TestShuttingDownTheHubReleasesEveryReadPump(t *testing.T) {
 	defer cancel()
 	hub, srv := newPlainServer(t, ctx)
 
-	base := readPumps()
+	// readPumps counts goroutines process-wide, so first let earlier tests' pumps wind down.
+	// Registration also happens before the server starts the pump goroutines, so wait for the
+	// pumps themselves instead of asserting right after hub.count() reaches n.
+	waitFor(t, "earlier tests' readPumps to finish", func() bool { return readPumps() == 0 })
 	const n = 5
 	for i := 0; i < n; i++ {
 		dialRaw(t, srv)
 	}
 	waitFor(t, "registrations", func() bool { return hub.count() == n })
-	if got := readPumps() - base; got != n {
-		t.Fatalf("expected %d readPumps running, got %d", n, got)
-	}
+	waitFor(t, "every client's readPump to be running", func() bool { return readPumps() == n })
 
 	cancel()
-	waitFor(t, "every readPump to return after shutdown", func() bool { return readPumps() == base })
+	waitFor(t, "every readPump to return after shutdown", func() bool { return readPumps() == 0 })
 }

@@ -18,9 +18,10 @@ const (
 	maxReadBytes = 4096
 )
 
-// pingPeriod is how often a client is pinged (and its session re-checked); a var so tests can
-// shorten it.
-var pingPeriod = (pongWait * 9) / 10
+// defaultPingPeriod is how often a client is pinged (and its session re-checked). Each Hub copies
+// it into its own pingPeriod field, so tests shorten it per hub instead of mutating a global that
+// connection goroutines (which outlive the test) read.
+const defaultPingPeriod = (pongWait * 9) / 10
 
 // Client wraps one connected WebSocket peer. Packrat's clients are
 // broadcast-only consumers this pass — readPump exists solely to detect
@@ -60,7 +61,7 @@ func (c *Client) readPump() {
 }
 
 func (c *Client) writePump() {
-	ticker := time.NewTicker(pingPeriod)
+	ticker := time.NewTicker(c.hub.pingPeriod)
 	defer func() {
 		ticker.Stop()
 		c.conn.Close()

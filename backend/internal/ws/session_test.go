@@ -32,10 +32,13 @@ func (l *liveSessions) check(_ context.Context, tok string) bool {
 	return l.m[tok]
 }
 
-func newTestServer(t *testing.T, live *liveSessions) (*Hub, *httptest.Server) {
+func newTestServer(t *testing.T, live *liveSessions, tune ...func(*Hub)) (*Hub, *httptest.Server) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	hub := NewHub()
+	for _, f := range tune {
+		f(hub) // before Run and the first connection, so goroutines read the settings race-free
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	go hub.Run(ctx)
 	t.Cleanup(cancel)
@@ -136,12 +139,8 @@ func TestRevalidateWithNoChangeKeepsEveryone(t *testing.T) {
 }
 
 func TestPingTickClosesAClientWhoseSessionVanished(t *testing.T) {
-	old := pingPeriod
-	pingPeriod = 50 * time.Millisecond
-	t.Cleanup(func() { pingPeriod = old })
-
 	live := &liveSessions{m: map[string]bool{"a": true, "b": true}}
-	hub, srv := newTestServer(t, live)
+	hub, srv := newTestServer(t, live, func(h *Hub) { h.pingPeriod = 50 * time.Millisecond })
 	a := dial(t, srv, "a")
 	b := dial(t, srv, "b")
 	waitClients(t, hub, 2)
