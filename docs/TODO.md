@@ -67,7 +67,6 @@ None are scheduled. Sizes are guesses.
 
 **Behavior to decide or finish**
 
-- **Redownload after a collection folder rename strands the old file (S).** `completeRedownload` (`queue/manager.go`) writes into `ResolveEffectiveRoot` (the collection's *current* folder) and only deletes the old file when its name changed, so an unchanged name leaves the old media file (and its `.nfo`, if any) orphaned in the old folder, where a scan lists it as untracked. Decide: redownload in place (use the item's stored folder) or move/clean the old files.
 - **Two sibling collections can share a folder (S).** Only `name` is unique per parent (`nameInUse`); no check on `root_path`, so renaming a collection's folder to a sibling's folder is accepted. `FindChildByRootPath` then returns the first match (`List` is ordered by name), so scans and imports of untracked files in that folder always land in one of them.
 - **Backup bundles reference collections by folder-name chain (S, from reading the code, not run).** `backup/library.go` exports `CollectionPath` from `RootPath`s and restore uses `EnsureChain`; a bundle made before a folder rename would recreate a collection named after the old folder. The same holds for an untracked file left in the old folder: `ScanImport`/`CreateImport` create a new collection for it.
 - **Serial bulk thumbnail fetch (S).** One yt-dlp run per id inside the request, with no cap or dedupe.

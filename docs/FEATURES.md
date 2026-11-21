@@ -398,7 +398,8 @@ same endpoint with a list of one.
   log", the retention sweep), the item's own type decides instead — an audio item is refetched as audio
   in the format of its file (`.m4a` stays m4a, `.flac` flac; never silently mp3), an image item as an
   image, a video item as video — and only an item whose type can't be told falls back to the app's
-  default download type. For a ghost item this is relabeled **"Download now"** — the fill-in action that turns
+  default download type. The new file replaces the old one in the folder it already sits in (so it
+  survives a collection folder rename); a ghost item is filled into the collection's current folder. For a ghost item this is relabeled **"Download now"** — the fill-in action that turns
   a placeholder into a real item.
 - **Redownload → From Different URL…** — replaces the file with one fetched from a different link
   entirely (the original source went down, or a re-upload exists elsewhere), rather than the
@@ -631,12 +632,14 @@ selectable from the New Download dialog so you don't have to re-pick them every 
   subscription downloads and "Download now" on a ghost) go to the new folder; a download already
   running finishes in the old one. Sub-collections follow the parent: their folder is the parents'
   folder names joined, so their new downloads land under the new parent folder while their existing
-  items stay put. Two things to know: **Redownload** of an existing item writes the new file into the
-  collection's current folder (the item's stored path follows), and the old file is only removed when
-  its name changed, so an unchanged name leaves the old copy behind in the old folder; and the cover
-  picker ("choose from the collection's own files") only looks in the current folder. Moving the
-  existing files is up to you; the app does not do it, and an item's **Move** action puts the file
-  under the chosen collection's current folder.
+  items stay put. **Redownload** of an existing item replaces the file where it already is (the
+  folder of its stored path, including any subfolder from a filename template), so the file, its
+  thumbnail and NFO stay together and a same-name redownload overwrites the file in place; a ghost
+  item has no file yet, so "Download now" fills it into the collection's current folder. If the
+  item's folder no longer exists on disk, the redownload falls back to the collection's current
+  folder. One more thing to know: the cover picker ("choose from the collection's own files") only
+  looks in the current folder. Moving the existing files is up to you; the app does not do it, and
+  an item's **Move** action puts the file under the chosen collection's current folder.
 - **Jellyfin Library ID (optional)** — only shown when Jellyfin integration is enabled in Settings.
   Links this collection to a specific Jellyfin library so "Refresh after download → Specific
   library" (Settings → Jellyfin) knows which one to rescan when something lands here.

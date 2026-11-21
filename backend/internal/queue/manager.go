@@ -998,14 +998,52 @@ var redownloadOverwritableFields = map[string]bool{
 	"thumbnail": true, "resolution": true, "duration": true,
 }
 
+// redownloadDestDir is the directory a redownload writes the replacement file
+// into. An item that already has a file is redone where that file sits (the
+// directory of its stored path), so the file, its thumbnail and .nfo, and the
+// replacement stay together even after the collection's folder name was
+// renamed (which moves nothing on disk). Its stored path is checked against
+// the media root like any user-controlled path. A ghost item (no file yet) is
+// filled into the collection's current folder + the item's Folder. If the
+// stored directory is gone (files moved by hand), the current collection
+// folder is used instead and nothing re-creates the old directory.
+func (m *DownloadManager) redownloadDestDir(itemID int64, target *models.LibraryItem, effectiveRoot string) (string, error) {
+	if target.Path != "" {
+		dir, err := pathsafe.ResolveUnderRoot(m.mediaRoot, filepath.Dir(filepath.FromSlash(target.Path)))
+		if err != nil {
+			return "", err
+		}
+		st, statErr := os.Stat(dir)
+		switch {
+		case statErr == nil && st.IsDir():
+			return dir, nil
+		case statErr == nil || os.IsNotExist(statErr):
+			log.Printf("queue: redownload of library item %d: stored directory %s is missing; using the collection's current folder", itemID, dir)
+		default:
+			return "", statErr
+		}
+	}
+	// The current collection folder may not exist yet (nothing creates it
+	// before the first file lands), so make it; os.Rename below needs it.
+	dir, err := pathsafe.ResolveUnderRoot(effectiveRoot, target.Folder)
+	if err != nil {
+		return "", err
+	}
+	if err := fsutil.EnsureDir(dir); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
 // completeRedownload is runOne's completion path when d.TargetLibraryItemID
 // is set: it swaps the freshly-downloaded scratch file over the existing
 // library item's file and updates that item in place (via
 // LibraryRepo.ApplyRedownload), instead of the normal path's
 // buildLibraryItem/Create. result.FinalPath is wherever the scratch
 // download actually landed (inside TrimTmpDir, per runOne's job-building
-// branch); effectiveRoot is the already-resolved collection root the
-// item's real folder lives under.
+// branch); effectiveRoot is the collection's current resolved root, used only
+// when the item has no file yet (or its directory is gone); see
+// redownloadDestDir.
 //
 // The swap happens before MarkCompleted/history are recorded — a failure
 // (locked file, disk full) routes through finishError instead, so the
@@ -1035,7 +1073,7 @@ func (m *DownloadManager) completeRedownload(parentCtx, runCtx context.Context, 
 		return
 	}
 
-	destDir, err := pathsafe.ResolveUnderRoot(effectiveRoot, target.Folder)
+	destDir, err := m.redownloadDestDir(targetID, target, effectiveRoot)
 	if err != nil {
 		fail("resolving target folder: " + err.Error())
 		return
