@@ -67,56 +67,29 @@ None are scheduled. Sizes are guesses.
 
 **Behavior to decide or finish**
 
-- **A library restore after a collection's folder was renamed duplicates or drops the collection (M, verified by
-  tests).** A bundle names a collection by its chain of folder names (`backup/library.go`); a restore matches that chain
-  to the live collections with `EnsureChain` and creates a collection for any segment with no match. Renaming a
-  folder moves nothing on disk, so a bundle exported before the rename no longer matches. Tests:
-  `backup/library_rename_test.go` (bundle functions) and `api/collection_rename_import_test.go` (scan/import and the
-  endpoints); they assert today's behavior, so a fix has to change them.
-  - **What happens.** Restore into an empty library, or into the same library with nothing renamed, is fine: every
-    collection is created or reused, nothing is duplicated. After a rename it depends on the *display name*:
-    - **Display name differs from the old folder** (`Concerts` / `concerts`, renamed to `live`): a second collection
-      named after the old folder (`concerts`) is created and the restored items and downloads go to it. The renamed
-      collection gets nothing. The new one also gets **none of the entry's settings** (the rename to the bundle's name
-      clashes, and the whole update is skipped), so a private collection's items come back **public**, with default
-      quality and no Jellyfin library. A renamed parent makes a whole duplicate subtree (it keeps its settings, since
-      its names are free under the new parent); a renamed leaf makes a duplicate leaf under the same parent.
-    - **Display name equals the old folder** (`Podcasts` / `Podcasts`, renamed to `Pods`), which is how a collection made
-      by name usually looks: the create is refused (`ErrDuplicateName`) and the restore swallows it. Nothing is
-      created, the items are **uncategorized**, a download-mode restore queues them with no collection (they land in
-      the media root), the restore reports success. Same for a renamed parent (the whole subtree) or leaf.
-    - **Case variants** (`Concerts` vs `concerts`) are fine: the collection is reused (the sibling-folder rule's
-      case-insensitive fallback). An exact spelling wins over a case variant. Only the preview is off: it counts the
-      case variant as one new collection.
-    - **Display name renamed, folder unchanged:** matched by folder, no duplicate, but the entry **overwrites** the
-      live collection's name, default quality/type, privacy, Jellyfin library, season and artist with the backup's
-      values (done on purpose in the code; `FEATURES.md` wrongly said "never overwriting existing ones" until now). A
-      collection made private after the backup becomes public again. If the bundle's name is taken by a sibling the
-      whole entry, privacy included, is skipped.
-    - **Untracked-file scan/import:** a tracked item in an old folder is *not* untracked (the scan matches files to
-      rows by stored path, not by folder), so a rename never makes existing items show up. An *untracked* file in the
-      old folder is offered as "new collection `concerts`"; importing creates the duplicate (display name differs) or
-      fails with a 500 and stays in the list forever (name equals the old folder).
-  - **How likely.** Low. It needs a folder rename (the dialog says it moves nothing) **and** a restore into that same
-    library afterwards; a restore into a fresh install, the main use, is unaffected. Plausible case: re-importing an
-    older backup to recover something. For the scan path, the redownload bug that used to leave files in the old
-    folder is fixed, and downloads, Move and redownload all keep rows and files consistent, so only hand-copied or
-    other-tool files get there. The harm when it does happen is quiet (success message, wrong placement, lost privacy).
-  - **Candidate fixes.**
-    1. *Match by display name when the folder doesn't match* (restore only: before creating, look for a collection at
-       the same parent with the entry's `name`). No format change, also fixes old bundles; a name can be shared by
-       two unrelated folders only if the user made it so, and siblings can't share a name. Heuristic, so a stale
-       name can still mismatch.
-    2. *A stable id in the bundle* (new `collections.uid` column and migration, backfilled; exported on entries and
-       items, matched before the folder chain). Exact and survives any rename; costs a migration, old bundles still
-       need fix 1 or the old path, and an id carried to another install has to be handled.
-    3. *Never act silently* (independent of 1/2): apply the entry's settings even when only the name clashes, return
-       the number of collections the restore created or couldn't create (and show it in the preview/result), and
-       make the preview flag a chain that matches no folder but matches a name.
-    4. *Accept and document* (done in `FEATURES.md`); cheapest, but the privacy loss stays.
-  - **Recommendation.** 1 + 3 now (small, backend only, no format change); 2 only if bundles ever need to move
-    between installs that renamed things independently. Also decide whether a restore should overwrite a matched
-    collection's settings at all, or only fill a new one (the privacy regression argues for "only fill").
+- **The untracked-file scan/import still doesn't know a collection's old folder name (S to M, verified by tests).**
+  A library bundle restore now finds a renamed collection by display name and never modifies an existing one, but
+  the Import page's untracked-file scan (`CollectionsRepo.EnsureChain` through `api/import_handler.go`) still
+  matches by folder name only. Renaming a folder moves nothing on disk, so a tracked item in the old folder is not
+  untracked (the scan matches files to rows by stored path, never by folder) and nothing changes for it. An
+  *untracked* file in the old folder (copied in by hand, or left by another tool) is offered as "new collection
+  `concerts`", and importing it creates a duplicate collection named after the old folder with defaults (not
+  private even if the renamed one is) or, when the renamed collection's display name equals the old folder name
+  (`Podcasts` / `Podcasts`, renamed to `Pods`), fails with a `500` and stays in the scan list forever. Evidence:
+  `api/collection_rename_import_test.go` (`TestImportScan_UntrackedFileInOldFolderCreatesDuplicate`,
+  `TestImportScan_UntrackedFileInOldFolderNameClash`). Likelihood is low: the redownload bug that left files in the
+  old folder is fixed, and downloads, Move and redownload keep rows and files consistent. Fix idea: reuse the
+  restore's resolver idea, but a scan has no bundle entry and so no display name to match; the only signals are the
+  folder name, so the realistic fix is to refuse or warn ("a collection named `concerts` exists under a different
+  folder") instead of creating a duplicate or failing with a `500`.
+- **A stable collection id in library bundles (M, deferred).** Matching by folder, then display name, is a heuristic:
+  it can still miss when both were changed since the backup (the bundle then creates a new collection), and an
+  ambiguous display name (legacy rows that share one) matches nothing and is reported as unresolved. A
+  `collections.uid` column (migration, backfilled), exported on entries and items and matched before the chain,
+  would make it exact and survive any rename. Costs: a migration, old bundles still need the name fallback, an id
+  carried to another install that renamed things independently has to be handled, and a bundle with the new field
+  is only needed by new servers (old servers ignore unknown fields). Only worth it if bundles ever move between
+  installs that renamed things independently.
 - **Serial bulk thumbnail fetch (S).** One yt-dlp run per id inside the request, with no cap or dedupe.
 - **`ScanImport` runs one ffprobe per untracked file inside the request (M).** Move it to a background job with
   progress, like the other scans.

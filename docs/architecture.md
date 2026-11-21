@@ -1265,9 +1265,26 @@ points, not only the dedicated one. The library bundle never ships media bytes: 
 collections/artists/tags by name/path rather than local numeric ID (so it's portable across
 installs) and re-populates a library by **re-queuing downloads** from each item's saved
 `originalUrl` on import (or recreating it as a ghost placeholder, in `ghostOnly` mode), not by
-copying files. Import is additive-only — it matches existing collections/tags/artists by name and
-creates only what's missing, and a name collision on one entry is skipped rather than aborting the
-whole import.
+copying files. Import is additive-only — it matches existing tags/artists by name and creates only
+what's missing, and a conflict on one entry is reported rather than aborting the whole import.
+
+**Collections: one resolver, and a restore only fills.** `backup/collection_resolver.go`
+(`chainResolver`) is the single place that turns a bundle's folder chains into collections, and both
+`ApplyLibraryBundle` and `PreviewLibraryBundle` (a dry run of the same code, so the preview cannot
+disagree with the restore) use it. Each level of a chain is matched by folder name
+(`repository.FindChildByRootPath`: exact, then case variant), else by the one sibling whose display name
+equals the bundle entry's name (`repository.FindUniqueChildByName`, matched against the library as it was
+before the restore, so a collection created mid-restore is never "matched"), else created. Display-name
+matching is what survives a folder rename (a rename moves nothing on disk, so an older bundle carries the
+old folder); a level without a bundle entry has no name and matches by folder only. The design rule is
+**only fill, never overwrite**: the entry's settings are written once, in the same insert, to a collection
+the restore creates (a display-name clash falls back to the folder name instead of dropping the other
+settings), and an existing collection is never touched, which also means a backup can never make a private
+collection public again. A chain that can be neither matched nor created does not fail the restore: its items
+import uncategorized and it is returned in `ApplyResult.UnresolvedCollections` (plus
+`MatchedByName`/`CollectionsNameKept`) so the caller can show it. `CollectionsRepo.EnsureChain` (the
+untracked-file scan/import) is deliberately unchanged: folder match only. A stable collection id in the bundle
+was considered and deferred (it needs a migration and a bundle field; see `docs/TODO.md`).
 
 `backup.RunBackup`/`RunScheduledBackupIfDue` (`backup/auto.go`) is a second, disk-resident path
 layered on top of the same bundle builders — it always writes an **unencrypted** `full` bundle to

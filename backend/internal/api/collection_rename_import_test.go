@@ -1,8 +1,9 @@
 package api
 
-// Investigation tests: what the untracked-file scan/import and the library
-// bundle endpoints do after a collection's FOLDER name was renamed. They go
-// through the real router (bkEnv) and assert today's behavior; problems are
+// What the untracked-file scan/import and the library bundle endpoints do after
+// a collection's FOLDER name was renamed. They go through the real router
+// (bkEnv). The bundle endpoints match a renamed collection by display name; the
+// scan/import path still matches by folder only, and its remaining problems are
 // marked `KNOWN LIMITATION` and written up in docs/TODO.md. The same questions
 // for the bundle functions themselves are in internal/backup/library_rename_test.go.
 
@@ -215,9 +216,26 @@ func TestImportScan_UntrackedFileInOldFolderNameClash(t *testing.T) {
 	}
 }
 
+// libraryPreviewJSON is the part of the preview response these tests read.
+type libraryPreviewJSON struct {
+	CollectionsNew           int `json:"collectionsNew"`
+	CollectionsMatchedByName int `json:"collectionsMatchedByName"`
+	Collections              []struct {
+		Path          []string `json:"path"`
+		MatchedByName bool     `json:"matchedByName"`
+		ExistingPath  []string `json:"existingPath"`
+	} `json:"collections"`
+	UnresolvedCollections []struct {
+		Path   []string `json:"path"`
+		Reason string   `json:"reason"`
+		Items  int      `json:"items"`
+	} `json:"unresolvedCollections"`
+}
+
 // (c, over HTTP) The same folder rename through the real endpoints: export the
-// library, rename the folder, import the file. The handlers add nothing on top
-// of backup.ApplyLibraryBundle, so the result matches the backup package test.
+// library, rename the folder, preview and import the file. The restore finds the
+// renamed collection by its display name, leaves it untouched (it stays
+// private), and the response carries the new fields.
 func TestLibraryBundleEndpoints_FolderRenamed(t *testing.T) {
 	e := newRenameImportEnv(t)
 	concerts := e.collection("Concerts", "concerts", nil)
@@ -241,38 +259,85 @@ func TestLibraryBundleEndpoints_FolderRenamed(t *testing.T) {
 	file := w.Body.String()
 	e.setFolder(concerts, "live")
 
+	// Preview: "will use existing collection live", nothing new, nothing unresolved.
+	w = e.post("/backup/preview/library", bkJSON(t, map[string]any{"data": file}))
+	e.want(w, http.StatusOK)
+	prev := bkDecode[libraryPreviewJSON](t, w)
+	if prev.CollectionsNew != 0 || prev.CollectionsMatchedByName != 1 || prev.UnresolvedCollections == nil || len(prev.UnresolvedCollections) != 0 {
+		t.Fatalf("preview = %+v, want 0 new / 1 matched by name / an empty unresolved list", prev)
+	}
+	if len(prev.Collections) != 1 || !prev.Collections[0].MatchedByName || strings.Join(prev.Collections[0].ExistingPath, "/") != "live" {
+		t.Fatalf("preview collections = %+v", prev.Collections)
+	}
+
 	w = e.post("/backup/import/library", bkJSON(t, map[string]any{"data": file, "mode": "ghostOnly"}))
 	e.want(w, http.StatusOK)
+	res := bkDecode[BackupImportLibraryResponse](t, w)
+	if res.CollectionsMatchedByName != 1 || len(res.MatchedByName) != 1 || strings.Join(res.MatchedByName[0].ExistingPath, "/") != "live" ||
+		res.CollectionsCreated != 0 || res.UnresolvedCollections == nil || len(res.UnresolvedCollections) != 0 || res.CollectionsNameKept == nil {
+		t.Fatalf("response = %+v", res)
+	}
 
-	if want := []string{"concerts|concerts", "live|Concerts"}; !equalStrings(e.folderChains(), want) {
+	if want := []string{"live|Concerts"}; !equalStrings(e.folderChains(), want) {
 		t.Fatalf("collections = %v, want %v", e.folderChains(), want)
 	}
-	cols, err := e.cols.List(context.Background())
+	col, err := e.cols.Get(context.Background(), concerts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, col := range cols {
-		// KNOWN LIMITATION: the private flag is lost on the new collection.
-		if col.RootPath == "concerts" && col.IsPrivate {
-			t.Fatalf("expected the new collection to be public, got %+v", col)
-		}
-		if col.RootPath == "live" && !col.IsPrivate {
-			t.Fatalf("the renamed collection must stay private, got %+v", col)
-		}
+	if !col.IsPrivate {
+		t.Fatalf("the renamed collection must stay private, got %+v", col)
 	}
 	items, err := e.library.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	placed := map[string]string{}
 	for _, it := range items {
-		for _, col := range cols {
-			if it.CollectionID != nil && col.ID == *it.CollectionID {
-				placed[it.Status] = col.RootPath
-			}
+		if it.CollectionID == nil || *it.CollectionID != concerts {
+			t.Fatalf("item %q (%s) is not in the renamed collection: %+v", it.Title, it.Status, it.CollectionID)
 		}
 	}
-	if placed["completed"] != "live" || placed["ghost"] != "concerts" {
-		t.Fatalf("placement = %v, want completed in live and the ghost in the new concerts", placed)
+}
+
+// An unresolvable collection never fails the endpoint: it answers 200, the items
+// are imported uncategorized, and the response lists the chain with a reason.
+func TestLibraryBundleEndpoints_UnresolvedCollectionIsReported(t *testing.T) {
+	e := newRenameImportEnv(t)
+	dup := e.collection("Dup", "Dup", nil)
+	url := "https://example.com/p1"
+	if _, err := e.library.Create(context.Background(), &models.LibraryItem{
+		Title: "P1", Filename: "p1.mp4", Path: "Dup/p1.mp4", CollectionID: &dup, OriginalURL: &url, Status: "completed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	w := e.post("/backup/export/library", `{}`)
+	e.want(w, http.StatusOK)
+	file := w.Body.String()
+
+	// Afterwards the folder is renamed and a legacy sibling (made before names
+	// had to be unique) takes the same display name: "Dup" matches no folder,
+	// the name is ambiguous, and a third "Dup" cannot be created.
+	e.setFolder(dup, "z")
+	if _, err := e.conn.ExecContext(context.Background(), `INSERT INTO collections (name, root_path, default_quality, default_download_type, filename_template) VALUES ('Dup', 'y', 'best', 'video', '{title}')`); err != nil {
+		t.Fatal(err)
+	}
+	body := bkJSON(t, map[string]any{"data": file, "mode": "ghostOnly"})
+
+	w = e.post("/backup/preview/library", body)
+	e.want(w, http.StatusOK)
+	prev := bkDecode[libraryPreviewJSON](t, w)
+	if len(prev.UnresolvedCollections) != 1 || prev.UnresolvedCollections[0].Items != 1 {
+		t.Fatalf("preview unresolved = %+v", prev.UnresolvedCollections)
+	}
+
+	w = e.post("/backup/import/library", body)
+	e.want(w, http.StatusOK)
+	res := bkDecode[BackupImportLibraryResponse](t, w)
+	if len(res.UnresolvedCollections) != 1 || strings.Join(res.UnresolvedCollections[0].Path, "/") != "Dup" ||
+		res.UnresolvedCollections[0].Items != 1 || res.UnresolvedCollections[0].Reason == "" {
+		t.Fatalf("response = %+v", res)
+	}
+	if res.GhostsCreated != 1 {
+		t.Fatalf("the item must still be imported, response = %+v", res)
 	}
 }

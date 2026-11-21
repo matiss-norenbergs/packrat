@@ -144,10 +144,14 @@ func recordRestoreFailed(c *gin.Context, kind string, err error) {
 func libraryRestoreDetails(r BackupImportLibraryResponse) map[string]any {
 	return map[string]any{
 		"collectionsEnsured": r.CollectionsEnsured,
-		"tagsCreated":        r.TagsCreated,
-		"artistsCreated":     r.ArtistsCreated,
-		"ghostsCreated":      r.GhostsCreated,
-		"downloadsQueued":    r.DownloadsQueued,
+		"collectionsCreated": r.CollectionsCreated,
+		// Counts only: collection names come from the file and stay out of the log.
+		"collectionsMatchedByName": r.CollectionsMatchedByName,
+		"unresolvedCollections":    len(r.UnresolvedCollections),
+		"tagsCreated":              r.TagsCreated,
+		"artistsCreated":           r.ArtistsCreated,
+		"ghostsCreated":            r.GhostsCreated,
+		"downloadsQueued":          r.DownloadsQueued,
 	}
 }
 

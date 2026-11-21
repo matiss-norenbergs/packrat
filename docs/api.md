@@ -1684,20 +1684,44 @@ response is unchanged. Every adjustment is logged to the server console, and one
 ```
 
 Library **preview** is read-only — diffs the bundle against the current library without writing
-anything, so the frontend can show new-vs-already-in-library counts before committing:
+anything, so the frontend can show new-vs-already-in-library counts before committing. It resolves
+collections with the same code the import uses, so it says exactly what the import will do:
 
 ```json
 {
-  "collections": [ { "path": ["Shows", "Anime"], "name": "Anime", "isNew": false } ],
-  "collectionsNew": 1, "tags": ["music"], "tagsNew": 0,
+  "collections": [
+    { "path": ["Shows", "Anime"], "name": "Anime", "isNew": false },
+    { "path": ["concerts"], "name": "Concerts", "isNew": false, "matchedByName": true, "existingPath": ["live"] }
+  ],
+  "collectionsNew": 1, "collectionsMatchedByName": 1,
+  "collectionsNameKept": [ { "path": ["b"], "wantedName": "Same", "keptName": "b" } ],
+  "unresolvedCollections": [ { "path": ["Dup"], "reason": "the name \"Dup\" is already used by another collection in the same folder", "items": 2 } ],
+  "tags": ["music"], "tagsNew": 0,
   "artists": ["Some Artist"], "artistsNew": 0,
   "items": [ { "title": "Some Video", "originalUrl": "...", "isNew": true, "isGhost": false } ],
   "alreadyInLibrary": 4
 }
 ```
 
-Library **import** merges: matches collections by path and tags/artists by name, creates only
-what's missing, never deletes anything (a name collision on one entry is skipped, not fatal).
+Per collection entry: `isNew` is true only when the import would **create** it (a chain that matches an
+existing folder, including a case variant, is `false`); `matchedByName` + `existingPath` (the matched
+collection's folder chain) appear when no collection has the bundle's folder name but one collection's display
+name equals the entry's `name`; `unresolved` appears when it could be neither matched nor created.
+`collectionsMatchedByName`, `collectionsNameKept` and `unresolvedCollections` mirror the import response below
+(they are always present, as `0` / `[]` when empty; an older server omits them).
+
+Library **import** merges: matches tags/artists by name, creates only what's missing, never deletes
+anything. **Collections** are resolved level by level along each chain of folder names (root → leaf): a
+collection at that parent with that folder name (exact spelling first, then ignoring case); otherwise, if the
+bundle has an entry for that level, the one collection at that parent whose display `name` equals the entry's
+`name` (this finds a collection whose folder was renamed after the backup; two collections with the same name
+match nothing); otherwise a new collection is created. **Only a collection the import creates takes the entry's
+settings** (name, default quality/type, privacy, Jellyfin library, season, artist), all in one insert; an
+existing collection, matched either way, is never modified (a backup never makes a collection public again). If
+the entry's `name` is already used by a sibling, the new collection is named after its folder instead and
+everything else still applies (`collectionsNameKept`). A chain that can be neither matched nor created does not
+fail the import: its items are still imported, uncategorized, and the chain is listed in `unresolvedCollections`.
+The bundle format is unchanged (no new fields; older bundles import the same way).
 `mode: "ghostOnly"` recreates every item as a ghost placeholder (see Ghost items, above) instead
 of queuing anything; otherwise every item with a saved URL is queued for redownload (a bare item
 with no URL is always created as a ghost regardless of mode — there's nothing to download from). A
@@ -1706,8 +1730,23 @@ default. Tags on redownloaded items aren't automatically reapplied — retag onc
 finishes.
 
 ```json
-{ "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 12, "ghostsCreated": 1 }
+{
+  "collectionsEnsured": 3, "collectionsCreated": 1, "tagsCreated": 1, "artistsCreated": 1,
+  "downloadsQueued": 12, "ghostsCreated": 1,
+  "collectionsMatchedByName": 1,
+  "matchedByName": [ { "path": ["concerts"], "name": "Concerts", "existingPath": ["live"] } ],
+  "collectionsNameKept": [ { "path": ["b"], "wantedName": "Same", "keptName": "b" } ],
+  "unresolvedCollections": [ { "path": ["Dup"], "reason": "the name \"Dup\" is already used by another collection in the same folder", "items": 2 } ]
+}
 ```
+
+`collectionsEnsured` counts the distinct collection chains that resolved (matched or created);
+`collectionsCreated` those the import created. `matchedByName[].path` is the bundle's folder chain,
+`existingPath` the folder chain of the collection it matched. `unresolvedCollections[]` names the root cause
+(the chain that failed, not each descendant) with a short `reason` and `items`, the number of imported items
+that fell back to no collection. The three lists are always arrays (`[]` when empty). A restore with
+unresolved collections still answers `200`; check this list instead of treating the response as a clean success.
+The same fields are in the `library` object of the full-backup responses below.
 
 The request body of these three, `preview/full` and `import/full` may be up to **128 MB**
 (`maxBackupImportBodyBytes`; the global limit for every other endpoint stays 50 MB). Over it — by declared
@@ -1733,7 +1772,7 @@ Preview `200`:
 ```json
 {
   "settingsCount": 23,
-  "library": { "collections": [...], "collectionsNew": 1, "tags": [...], "tagsNew": 0, "artists": [...], "artistsNew": 0, "items": [...], "alreadyInLibrary": 4 }
+  "library": { "collections": [...], "collectionsNew": 1, "collectionsMatchedByName": 0, "collectionsNameKept": [], "unresolvedCollections": [], "tags": [...], "tagsNew": 0, "artists": [...], "artistsNew": 0, "items": [...], "alreadyInLibrary": 4 }
 }
 ```
 

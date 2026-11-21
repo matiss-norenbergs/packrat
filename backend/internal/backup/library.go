@@ -343,6 +343,14 @@ type PreviewCollectionEntry struct {
 	Path  []string `json:"path"`
 	Name  string   `json:"name"`
 	IsNew bool     `json:"isNew"`
+	// MatchedByName is true when no collection has the bundle's folder name
+	// but one collection's display name equals Name: the import will use that
+	// collection (ExistingPath is its folder chain) instead of creating one.
+	MatchedByName bool     `json:"matchedByName,omitempty"`
+	ExistingPath  []string `json:"existingPath,omitempty"`
+	// Unresolved is true when the collection can be neither matched nor
+	// created (see LibraryBundlePreview.UnresolvedCollections).
+	Unresolved bool `json:"unresolved,omitempty"`
 }
 
 // PreviewLibraryItem is one library item in a preview, carrying the same
@@ -368,14 +376,20 @@ type PreviewLibraryItem struct {
 // anything — for the Backup page's "Preview" step, so a user can see what's
 // inside an export before committing to importing it.
 type LibraryBundlePreview struct {
-	Collections      []PreviewCollectionEntry `json:"collections"`
-	CollectionsNew   int                      `json:"collectionsNew"`
-	Tags             []string                 `json:"tags"`
-	TagsNew          int                      `json:"tagsNew"`
-	Artists          []string                 `json:"artists"`
-	ArtistsNew       int                      `json:"artistsNew"`
-	Items            []PreviewLibraryItem     `json:"items"`
-	AlreadyInLibrary int                      `json:"alreadyInLibrary"`
+	Collections    []PreviewCollectionEntry `json:"collections"`
+	CollectionsNew int                      `json:"collectionsNew"`
+	// CollectionsMatchedByName counts the collections an import would match by
+	// display name; UnresolvedCollections lists the chains it could not place
+	// and CollectionsNameKept the ones it would create under their folder name.
+	CollectionsMatchedByName int                    `json:"collectionsMatchedByName"`
+	CollectionsNameKept      []CollectionNameKept   `json:"collectionsNameKept"`
+	UnresolvedCollections    []UnresolvedCollection `json:"unresolvedCollections"`
+	Tags                     []string               `json:"tags"`
+	TagsNew                  int                    `json:"tagsNew"`
+	Artists                  []string               `json:"artists"`
+	ArtistsNew               int                    `json:"artistsNew"`
+	Items                    []PreviewLibraryItem   `json:"items"`
+	AlreadyInLibrary         int                    `json:"alreadyInLibrary"`
 }
 
 // PreviewLibraryBundle computes LibraryBundlePreview via read-only List/
@@ -397,19 +411,35 @@ func PreviewLibraryBundle(
 	if err != nil {
 		return preview, err
 	}
-	paths := collectionPaths(cols)
-	existingCollectionPaths := make(map[string]bool, len(paths))
-	for _, p := range paths {
-		existingCollectionPaths[strings.Join(p, "/")] = true
-	}
+	// Same resolver as the import (in dry-run mode), so the preview cannot say
+	// anything the import will not do.
+	resolver := newChainResolver(ctx, nil, cols, bundle.Collections, nil)
 	preview.Collections = make([]PreviewCollectionEntry, len(bundle.Collections))
 	for i, c := range bundle.Collections {
-		isNew := !existingCollectionPaths[strings.Join(c.Path, "/")]
-		preview.Collections[i] = PreviewCollectionEntry{Path: c.Path, Name: c.Name, IsNew: isNew}
-		if isNew {
-			preview.CollectionsNew++
+		entry := PreviewCollectionEntry{Path: c.Path, Name: c.Name}
+		if len(c.Path) > 0 {
+			l := resolver.resolve(c.Path)
+			switch l.kind {
+			case levelCreated:
+				entry.IsNew = true
+				preview.CollectionsNew++
+			case levelName:
+				entry.MatchedByName = true
+				entry.ExistingPath = l.existingPath
+			case levelFailed:
+				entry.Unresolved = true
+			}
 		}
+		preview.Collections[i] = entry
 	}
+	// Items resolve after the entries, like the import, so chains that only
+	// items reference are accounted for (and counted against an unresolved one).
+	for _, item := range bundle.LibraryItems {
+		resolver.lookup(item.CollectionPath, true)
+	}
+	preview.CollectionsMatchedByName = len(resolver.matched)
+	preview.CollectionsNameKept = resolver.nameKeptReport()
+	preview.UnresolvedCollections = resolver.unresolvedReport()
 
 	tagRows, err := tagsRepo.List(ctx)
 	if err != nil {
@@ -513,20 +543,37 @@ type ResolvedDownload struct {
 }
 
 type ApplyResult struct {
+	// CollectionsEnsured counts the distinct collection chains the bundle
+	// referenced that resolved to a collection, whether matched or created.
 	CollectionsEnsured int `json:"collectionsEnsured"`
+	// CollectionsCreated counts the collections this restore created.
+	CollectionsCreated int `json:"collectionsCreated"`
 	TagsCreated        int `json:"tagsCreated"`
 	ArtistsCreated     int `json:"artistsCreated"`
 	// GhostsCreated counts entries with Status "ghost" — created directly as
 	// placeholder rows (see ApplyLibraryBundle), not included in the
 	// returned []ResolvedDownload since there's nothing to download for them.
 	GhostsCreated int `json:"ghostsCreated"`
+	// CollectionsMatchedByName counts the collections matched by display name
+	// because no collection had the bundle's folder name; MatchedByName lists
+	// them.
+	CollectionsMatchedByName int               `json:"collectionsMatchedByName"`
+	MatchedByName            []CollectionMatch `json:"matchedByName"`
+	// CollectionsNameKept lists the collections created under their folder name
+	// because the bundle's display name was taken by a sibling.
+	CollectionsNameKept []CollectionNameKept `json:"collectionsNameKept"`
+	// UnresolvedCollections lists the chains that could be neither matched nor
+	// created. Their items were still imported, uncategorized.
+	UnresolvedCollections []UnresolvedCollection `json:"unresolvedCollections"`
 }
 
 // ApplyLibraryBundle merges bundle into the local database — matching
-// collections by path and tags/artists by name, creating only what's
-// missing, never deleting anything. Every step is best-effort in the sense
-// that a conflict on one entry (e.g. a collection rename colliding with an
-// existing sibling) is skipped rather than aborting the whole import — but
+// collections by folder chain, then by display name (see chainResolver), and
+// tags/artists by name, creating only what's missing, never deleting anything.
+// Only a collection this restore creates takes its entry's settings; existing
+// ones are never modified. Every step is best-effort in the sense that a
+// conflict on one entry is reported (ApplyResult.UnresolvedCollections) rather
+// than aborting the whole import — but
 // the reconciliation as a whole runs inside one transaction, so a crash or
 // cancellation partway through rolls back cleanly instead of leaving the
 // bundle half-applied with no record of where it stopped.
@@ -585,8 +632,7 @@ func ApplyLibraryBundle(
 		}
 		// GetOrCreateByNames returns ids in the same (deduplicated) order as
 		// names, so ids[i] corresponds to bundle.Tags[i] — used below to sync
-		// each tag's IsPrivate flag, the same way ensureCollection always
-		// overwrites a matched collection's metadata from the bundle.
+		// each tag's IsPrivate flag.
 		ids, err := tagsRepo.GetOrCreateByNames(ctx, names)
 		if err != nil {
 			return nil, result, err
@@ -650,46 +696,26 @@ func ApplyLibraryBundle(
 		ensureArtist(entry.ArtistName, nil)
 	}
 
-	collectionIDs := make(map[string]int64) // key: path segments joined by "/"
-	ensureCollection := func(path []string, entry *CollectionEntry) *int64 {
-		if len(path) == 0 {
+	existingCols, err := collectionsRepo.List(ctx)
+	if err != nil {
+		return nil, result, err
+	}
+	resolver := newChainResolver(ctx, collectionsRepo, existingCols, bundle.Collections, artistIDs)
+	collectionIDs := make(map[string]int64) // key: chain; counts each resolved chain once
+	ensureCollection := func(path []string, forItem bool) *int64 {
+		key := chainKey(path)
+		idPtr := resolver.lookup(path, forItem)
+		if idPtr == nil {
 			return nil
 		}
-		key := strings.Join(path, "/")
-		if id, ok := collectionIDs[key]; ok {
-			return &id
+		if _, seen := collectionIDs[key]; !seen {
+			collectionIDs[key] = *idPtr
+			result.CollectionsEnsured++
 		}
-		idPtr, err := collectionsRepo.EnsureChain(ctx, path)
-		if err != nil || idPtr == nil {
-			return nil
-		}
-		id := *idPtr
-		collectionIDs[key] = id
-		result.CollectionsEnsured++
-
-		if entry != nil {
-			if existing, err := collectionsRepo.Get(ctx, id); err == nil {
-				updated := *existing
-				updated.Name = entry.Name
-				updated.DefaultQuality = entry.DefaultQuality
-				updated.DefaultDownloadType = entry.DefaultDownloadType
-				updated.IsPrivate = entry.IsPrivate
-				updated.JellyfinLibrary = entry.JellyfinLibrary
-				updated.SeasonNumber = entry.SeasonNumber
-				if entry.ArtistName != "" {
-					if artistID, ok := artistIDs[entry.ArtistName]; ok {
-						updated.ArtistID = &artistID
-					}
-				} else {
-					updated.ArtistID = nil
-				}
-				_ = collectionsRepo.Update(ctx, id, &updated) // best-effort — a name clash just skips the rename
-			}
-		}
-		return &id
+		return idPtr
 	}
 	for i := range bundle.Collections {
-		ensureCollection(bundle.Collections[i].Path, &bundle.Collections[i])
+		ensureCollection(bundle.Collections[i].Path, false)
 	}
 
 	// Tag assignment for freshly created ghosts happens after commit, below
@@ -719,7 +745,7 @@ func ApplyLibraryBundle(
 				Path:           "",
 				Status:         "ghost",
 				MediaType:      &mediaType,
-				CollectionID:   ensureCollection(item.CollectionPath, nil),
+				CollectionID:   ensureCollection(item.CollectionPath, true),
 				ReleaseYear:    item.Year,
 				SequenceNumber: item.SequenceNumber,
 				SeasonNumber:   item.SeasonNumber,
@@ -776,13 +802,27 @@ func ApplyLibraryBundle(
 				}
 			}
 		}
-		r.CollectionID = ensureCollection(item.CollectionPath, nil)
+		r.CollectionID = ensureCollection(item.CollectionPath, true)
 		if item.ArtistName != "" {
 			if id, ok := artistIDs[item.ArtistName]; ok {
 				r.ArtistID = &id
 			}
 		}
 		resolved = append(resolved, r)
+	}
+
+	result.CollectionsCreated = 0
+	for _, l := range resolver.levels {
+		if l.kind == levelCreated {
+			result.CollectionsCreated++
+		}
+	}
+	result.CollectionsMatchedByName = len(resolver.matched)
+	result.MatchedByName = resolver.matchedReport()
+	result.CollectionsNameKept = resolver.nameKeptReport()
+	result.UnresolvedCollections = resolver.unresolvedReport()
+	for _, u := range result.UnresolvedCollections {
+		log.Printf("backup import: collection %q was not restored: %s (%d items imported uncategorized)", strings.Join(u.Path, "/"), u.Reason, u.Items)
 	}
 
 	if err := tx.Commit(); err != nil {

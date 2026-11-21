@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge"
+import { CollectionRestoreNotices } from "./CollectionRestoreNotices"
 import type { LibraryImportMode, LibraryImportPreview, PreviewLibraryItem } from "@/types/api"
 
 interface PreviewItemListProps {
@@ -51,6 +52,15 @@ export function PreviewItemList({ preview, mode }: PreviewItemListProps) {
           {preview.alreadyInLibrary > 0 && `, ${preview.alreadyInLibrary} already in your library`}
         </span>
       </div>
+
+      <CollectionRestoreNotices
+        matchedByNameCount={preview.collectionsMatchedByName ?? 0}
+        matched={collections
+          .filter((c) => c.matchedByName && c.existingPath)
+          .map((c) => ({ path: c.path, name: c.name, existingPath: c.existingPath ?? [] }))}
+        unresolved={preview.unresolvedCollections}
+        nameKept={preview.collectionsNameKept}
+      />
 
       <div className="max-h-[50vh] space-y-2 overflow-y-auto">
         {items.length === 0 ? (
