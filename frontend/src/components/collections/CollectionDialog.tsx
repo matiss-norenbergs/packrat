@@ -194,6 +194,11 @@ export function CollectionDialog({
                   value={rootPath}
                   onChange={(e) => setRootPath(e.target.value)}
                 />
+                {isEdit && rootPath.trim() !== collection.rootPath && (
+                  <p className="text-xs text-muted-foreground">
+                    Existing files stay where they are; only new downloads use the new folder.
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-4">

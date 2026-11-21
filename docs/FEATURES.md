@@ -620,6 +620,20 @@ selectable from the New Download dialog so you don't have to re-pick them every 
   filename or template of its own; downloads queued by a subscription don't use it.
 - **Show as single item in Browse** — groups everything in the collection and its sub-collections
   behind one cover tile on the Browse page (a "show"/"album" tile) instead of listing each item.
+- **Renaming the folder name moves nothing on disk.** Changing a collection's "Folder name" only
+  changes where *new* files go: no file or folder is moved or renamed, and the old folder stays as it
+  is. Existing items keep the file path stored on them, so they stay in the collection and keep
+  playing, and their thumbnails, NFO files and metadata embedding keep using that path.
+  Downloads that start after the rename (including ones queued earlier that had not started yet,
+  subscription downloads and "Download now" on a ghost) go to the new folder; a download already
+  running finishes in the old one. Sub-collections follow the parent: their folder is the parents'
+  folder names joined, so their new downloads land under the new parent folder while their existing
+  items stay put. Two things to know: **Redownload** of an existing item writes the new file into the
+  collection's current folder (the item's stored path follows), and the old file is only removed when
+  its name changed, so an unchanged name leaves the old copy behind in the old folder; and the cover
+  picker ("choose from the collection's own files") only looks in the current folder. Moving the
+  existing files is up to you; the app does not do it, and an item's **Move** action puts the file
+  under the chosen collection's current folder.
 - **Jellyfin Library ID (optional)** — only shown when Jellyfin integration is enabled in Settings.
   Links this collection to a specific Jellyfin library so "Refresh after download → Specific
   library" (Settings → Jellyfin) knows which one to rescan when something lands here.
