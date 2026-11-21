@@ -517,6 +517,16 @@ client gave up, leaving the caller unable to tell what had been queued; at shutd
   `queued` included, as `interrupted`, and the FIFO starts empty. Making the queue survive a restart is a
   deliberate non-goal here.
 
+## "Only this video" needs a video: the `--no-playlist` probe
+
+`BuildArgs` always passes `--no-playlist`, which makes `watch?v=X&list=Y` download just X. A pure
+`playlist?list=Y` link has no video to fall back to, so yt-dlp would download every entry inside one job
+and only the last path would become a library item. Rather than special-casing sites by URL shape,
+`YtDlpService.FetchSingleVideoMetadata` runs the usual flat metadata fetch **with** `--no-playlist`: if the
+result is still a playlist, there is no single video. It runs only when needed — the preview makes it when the
+first fetch came back as a playlist (`singleVideoAvailable`), and `POST /downloads/playlist` makes it for mode
+`current` alone. Both fail open: an error or timeout in the probe never blocks a download or a preview.
+
 ## Data flow (single download, end to end)
 
 URL schemes are enforced in one place, `DownloadManager.Enqueue` (`queue.ErrInvalidURL`, mapped to
