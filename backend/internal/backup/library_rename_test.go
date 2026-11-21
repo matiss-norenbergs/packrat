@@ -978,3 +978,23 @@ func TestEnsureChain_RefusesAFolderWhoseNameIsTaken(t *testing.T) {
 		t.Fatalf("EnsureChain error = %v, want ErrDuplicateName", err)
 	}
 }
+
+// An empty bundle's preview marshals every list field as [] (never null), so
+// API clients can iterate without a nil check.
+func TestPreviewLibraryBundle_EmptyListsAreNotNull(t *testing.T) {
+	repos := openTestRepos(t)
+	raw, err := json.Marshal(previewOf(t, repos, LibraryBundle{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"collections", "collectionsNameKept", "unresolvedCollections", "tags", "artists", "items"} {
+		arr, ok := m[k].([]any)
+		if !ok || len(arr) != 0 {
+			t.Errorf("%s = %#v in %s, want []", k, m[k], raw)
+		}
+	}
+}

@@ -1698,10 +1698,24 @@ collections with the same code the import uses, so it says exactly what the impo
   "unresolvedCollections": [ { "path": ["Dup"], "reason": "the name \"Dup\" is already used by another collection in the same folder", "items": 2 } ],
   "tags": ["music"], "tagsNew": 0,
   "artists": ["Some Artist"], "artistsNew": 0,
-  "items": [ { "title": "Some Video", "originalUrl": "...", "isNew": true, "isGhost": false } ],
+  "items": [ { "title": "Some Video", "originalUrl": "...", "collectionPath": ["Shows", "Anime"], "artistName": "Some Artist", "tags": ["music"], "downloadType": "video", "quality": "1080p", "year": 2020, "alreadyInLibrary": false } ],
   "alreadyInLibrary": 4
 }
 ```
+
+Top level: `collections`, `collectionsNameKept`, `unresolvedCollections`, `tags`, `artists` and `items` are
+**always arrays** (`[]` when empty, never `null`); `collectionsNew`, `collectionsMatchedByName`, `tagsNew`,
+`artistsNew` and `alreadyInLibrary` are always present counts. `tags` and `artists` are the names in the bundle
+(artists also include those only referenced by an item or collection entry, de-duplicated); `*New` counts the
+ones that don't exist locally yet. `alreadyInLibrary` counts the items whose `originalUrl` already matches a
+library row.
+
+Per item (`items[]`): `title`, `originalUrl` and `alreadyInLibrary` (boolean, **always present**; true when
+a library row with that URL exists) are always there. `collectionPath`, `artistName`, `tags`, `downloadType`,
+`quality` and `year` are omitted when the bundle doesn't carry them. `isGhost` is present (as `true`) **only** when
+the entry has no URL, so it can only be recreated as a placeholder; it is omitted otherwise (a ghost entry that
+does have a URL is not flagged, it only becomes a ghost when `mode` is `ghostOnly`). There is no per-item `isNew`:
+use `alreadyInLibrary`.
 
 Per collection entry: `isNew` is true only when the import would **create** it (a chain that matches an
 existing folder, including a case variant, is `false`); `matchedByName` + `existingPath` (the matched
@@ -1828,9 +1842,11 @@ password unattended) — use the plain Export cards above for a password-protect
     "settingsCount": 23,
     "collections": [ { "path": ["Shows", "Anime"], "name": "Anime" } ],
     "tags": ["music", "favorites"], "artists": ["Some Artist"],
-    "items": [ { "title": "Some Video", "originalUrl": "...", "collectionPath": ["Shows", "Anime"], "artistName": "Some Artist", "tags": ["music"], "isGhost": false } ]
+    "items": [ { "title": "Some Video", "originalUrl": "...", "collectionPath": ["Shows", "Anime"], "artistName": "Some Artist", "tags": ["music"] } ]
   }
   ```
+  The four lists are always arrays. `items[].isGhost` is present (`true`) only for an entry that is a
+  ghost or has no URL; `collectionPath`, `artistName` and `tags` are omitted when empty.
 - **`POST /api/backup/history/:id/restore`** — body `{ "mode": "download" }` (optional, same
   `download`/`ghostOnly` choice as a plain import). Same not-found cases. `200`:
   ```json
