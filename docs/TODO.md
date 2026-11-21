@@ -65,8 +65,6 @@ From the full backend audit: every numbered finding is fixed. What follows is it
 (real but unlikely to matter, or needing a decision), plus a few loose ends found while fixing the rest.
 None are scheduled. Sizes are guesses.
 
-**Could show wrong data**
-
 **Behavior to decide or finish**
 
 - **Collection `rootPath` change moves nothing on disk (S).** `FEATURES.md` doesn't say whether that is intended.
