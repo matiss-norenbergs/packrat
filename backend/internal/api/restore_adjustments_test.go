@@ -65,7 +65,7 @@ func TestRestoreAdjustmentsAreLoggedOnce(t *testing.T) {
 			if w.Code != http.StatusOK {
 				t.Fatalf("status %d, body %s", w.Code, w.Body)
 			}
-			// The HTTP response is unchanged: applied counts the values written.
+			// applied counts the values written.
 			if !strings.Contains(w.Body.String(), `"applied":5`) && !strings.Contains(w.Body.String(), `"settingsApplied":5`) {
 				t.Errorf("body %s", w.Body)
 			}
@@ -233,4 +233,42 @@ func TestRestoreFrameRangeClampIsLogged(t *testing.T) {
 		return
 	}
 	t.Fatal("no adjusted event")
+}
+
+// The response lists what was adjusted, in the System log's {key, action, from,
+// to} shape, and an empty array (never null) when nothing was.
+func TestRestoreResponseCarriesAdjusted(t *testing.T) {
+	type adjResp struct {
+		Adjusted *[]SettingAdjustmentDTO `json:"adjusted"`
+	}
+	for _, tc := range restorePaths {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newAtomicEnv(t)
+			w := e.do(http.MethodPost, tc.path, sealSettings(t, tc.kind, map[string]string{
+				models.SettingMaxConcurrentDownloads: "5000",
+				models.SettingLibraryView:            "list",
+			}))
+			if w.Code != http.StatusOK {
+				t.Fatalf("status %d, body %s", w.Code, w.Body)
+			}
+			var got adjResp
+			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || got.Adjusted == nil {
+				t.Fatalf("no adjusted array in %s (%v)", w.Body, err)
+			}
+			if len(*got.Adjusted) != 1 {
+				t.Fatalf("adjusted = %+v, want one entry", *got.Adjusted)
+			}
+			a := (*got.Adjusted)[0]
+			if a.Key != models.SettingMaxConcurrentDownloads || a.Action != backup.AdjustClamped ||
+				a.From == nil || *a.From != 5000 || a.To == nil || *a.To != 16 {
+				t.Errorf("adjusted[0] = %+v, want max_concurrent_downloads clamped 5000 -> 16", a)
+			}
+
+			clean := newAtomicEnv(t)
+			w = clean.do(http.MethodPost, tc.path, sealSettings(t, tc.kind, map[string]string{models.SettingLibraryView: "list"}))
+			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"adjusted":[]`) {
+				t.Errorf("status %d, body %s, want \"adjusted\":[]", w.Code, w.Body)
+			}
+		})
+	}
 }

@@ -982,8 +982,20 @@ export interface BackupEnvelope {
   data: string
 }
 
+// A settings value a restore changed or left out instead of writing it as it was in the file:
+// "clamped" (a number lowered to its limit; `from`/`to` are set), "skipped" (the stored value
+// stays) or "dropped" (unknown entries of a list removed).
+export interface SettingAdjustment {
+  key: string
+  action: "clamped" | "skipped" | "dropped"
+  from?: number
+  to?: number
+}
+
 export interface BackupImportSettingsResult {
   applied: number
+  // Absent on an older server.
+  adjusted?: SettingAdjustment[]
 }
 
 // A bundle collection matched to an existing one by display name, because no collection had the
@@ -1033,6 +1045,7 @@ export type LibraryImportMode = "download" | "ghostOnly"
 export interface BackupRestoreFullResult {
   settingsApplied: number
   library: BackupImportLibraryResult
+  adjusted?: SettingAdjustment[]
 }
 
 export interface FullImportPreview {

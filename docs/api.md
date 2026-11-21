@@ -1674,14 +1674,21 @@ there), but **never fails halfway**, so a violation is adjusted instead of answe
 
 Retired keys are still skipped silently, other values (garbage text, negatives, unrecognized keys) are written as
 before, and the write is still one all-or-nothing transaction; `applied` counts only the values actually written. The
-response is unchanged. Every adjustment is logged to the server console, and one `restore` System log event at
+response lists every adjustment in `adjusted` (see below). Every adjustment is logged to the server console, and one `restore` System log event at
 `warning` level ("Settings restore adjusted N values") lists the total and the first 20 as `{key, action, from, to}`
 (numbers for a clamp only, never text from the file). The same applies to `import/full` and
 `POST /api/backup/history/:id/restore`:
 
 ```json
-{ "applied": 23 }
+{ "applied": 23, "adjusted": [ { "key": "max_concurrent_downloads", "action": "clamped", "from": 5000, "to": 16 } ] }
 ```
+
+`adjusted` (settings import, `import/full` and `POST /api/backup/history/:id/restore`, where it sits next to
+`settingsApplied`) is **always an array**, `[]` when nothing was adjusted; an older server omits it. Each entry is
+`{key, action, from, to}`, the same shape as the System log event's details: `action` is `"clamped"` (`from` and
+`to` are the file's number and the limit it became), `"skipped"` (the stored value stays) or `"dropped"` (unknown
+list entries removed); `from`/`to` are absent otherwise. Unlike the System log's first 20, the response lists all of
+them. The UI shows them in an info toast after the success toast.
 
 Library **preview** is read-only — diffs the bundle against the current library without writing
 anything, so the frontend can show new-vs-already-in-library counts before committing. It resolves
@@ -1796,7 +1803,8 @@ Import `200`:
 ```json
 {
   "settingsApplied": 23,
-  "library": { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 11, "ghostsCreated": 1 }
+  "library": { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 11, "ghostsCreated": 1 },
+  "adjusted": []
 }
 ```
 
@@ -1850,7 +1858,7 @@ password unattended) — use the plain Export cards above for a password-protect
 - **`POST /api/backup/history/:id/restore`** — body `{ "mode": "download" }` (optional, same
   `download`/`ghostOnly` choice as a plain import). Same not-found cases. `200`:
   ```json
-  { "settingsApplied": 23, "library": { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 11, "ghostsCreated": 1 } }
+  { "settingsApplied": 23, "library": { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 11, "ghostsCreated": 1 }, "adjusted": [] }
   ```
   A restore (this one, `import/full` and `import/settings`) that switches `featureSubscriptionsEnabled` from
   off to on, and succeeds, also starts the due-subscription checks in the background, as `PATCH /api/settings`

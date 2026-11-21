@@ -159,7 +159,7 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 		recordRestoreDone(c, restoreSettingsImport, map[string]any{"settingsApplied": res.Applied})
 		recordRestoreAdjusted(c, restoreSettingsImport, res.Adjustments)
 		catchUpSubscriptions(c.Request.Context(), settingsRepo, subsWasOn, onSubscriptionsEnabled)
-		c.JSON(http.StatusOK, BackupImportSettingsResponse{Applied: res.Applied})
+		c.JSON(http.StatusOK, BackupImportSettingsResponse{Applied: res.Applied, Adjusted: toSettingAdjustmentDTOs(res.Adjustments)})
 	}
 }
 
@@ -591,7 +591,7 @@ func applyFullBundle(
 	applySettingsSideEffects(settingsRes.Written, mgr, ytdlp)
 	syncCookiesFileAfterRestore(ctx, settingsRepo, ytdlp)
 	libResp := enqueueResolvedDownloads(ctx, mgr, collectionsRepo, settingsRepo, resolved, result)
-	return BackupRestoreFullResponse{SettingsApplied: settingsRes.Applied, Library: libResp}, settingsRes.Adjustments, nil
+	return BackupRestoreFullResponse{SettingsApplied: settingsRes.Applied, Library: libResp, Adjusted: toSettingAdjustmentDTOs(settingsRes.Adjustments)}, settingsRes.Adjustments, nil
 }
 
 // ImportFullBackup applies an ad-hoc uploaded full backup file — same as

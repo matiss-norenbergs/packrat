@@ -107,17 +107,7 @@ func recordRestoreAdjusted(c *gin.Context, kind string, adjustments []backup.Set
 	if len(listed) > maxAdjustmentsListed {
 		listed = listed[:maxAdjustmentsListed]
 	}
-	items := make([]map[string]any, 0, len(listed))
-	for _, a := range listed {
-		item := map[string]any{"key": a.Key, "action": a.Action}
-		if a.From != nil {
-			item["from"] = *a.From
-		}
-		if a.To != nil {
-			item["to"] = *a.To
-		}
-		items = append(items, item)
-	}
+	items := toSettingAdjustmentDTOs(listed)
 	noun := "values"
 	if len(adjustments) == 1 {
 		noun = "value"
