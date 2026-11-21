@@ -1203,7 +1203,8 @@ otherwise). Checks that depend on several fields run on the **merged** result: w
 sends `sequenceMin` or `sequenceMax`, the resulting pair must satisfy `sequenceMin <= sequenceMax`
 (`400` otherwise — so sending only `sequenceMax` below the stored minimum is refused). A stored range
 that is already inverted doesn't block an edit that leaves the range alone. Re-submitting the stored
-`rootPath` is not a change. `404` unknown id, `409` duplicate name, `204` on success. The collection
+`rootPath` is not a change. Changing `rootPath` only affects where new downloads go: no file or folder
+is moved or renamed and stored item paths are not rewritten. `404` unknown id, `409` duplicate name, `204` on success. The collection
 dialog always sends the full object, which therefore behaves as a full replace.
 
 ### `DELETE /api/collections/:id`
