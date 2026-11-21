@@ -148,10 +148,27 @@ const metadataFetchTimeout = 60 * time.Second
 // single-video fields (title/uploader/duration/thumbnail/resolution) are
 // unaffected. Check the result's IsPlaylist() to see which shape came back.
 func (s *YtDlpService) FetchMetadata(ctx context.Context, url string) (*Metadata, error) {
+	return s.fetchMetadata(ctx, url, false)
+}
+
+// FetchSingleVideoMetadata is FetchMetadata with --no-playlist: for a
+// watch?v=X&list=Y URL yt-dlp falls back to video X, so the result is a single
+// video; for a pure playlist URL there is no video to fall back to and the
+// result is still a playlist (IsPlaylist()). That is how callers tell whether
+// "Only this video" (BuildArgs always passes --no-playlist) is meaningful.
+func (s *YtDlpService) FetchSingleVideoMetadata(ctx context.Context, url string) (*Metadata, error) {
+	return s.fetchMetadata(ctx, url, true)
+}
+
+func (s *YtDlpService) fetchMetadata(ctx context.Context, url string, noPlaylist bool) (*Metadata, error) {
 	ctx, cancel := context.WithTimeout(ctx, metadataFetchTimeout)
 	defer cancel()
 
-	args := append([]string{"--dump-single-json", "--flat-playlist", "--skip-download", "--no-warnings"}, s.globalArgs(ctx)...)
+	args := []string{"--dump-single-json", "--flat-playlist", "--skip-download", "--no-warnings"}
+	if noPlaylist {
+		args = append(args, "--no-playlist")
+	}
+	args = append(args, s.globalArgs(ctx)...)
 	args = append(args, "--", url)
 	cmd := newTreeKillCmd(ctx, s.BinPath, args...)
 	out, err := cmd.Output()

@@ -89,7 +89,7 @@ export function NewDownloadDialog() {
   const [filenameTemplate, setFilenameTemplate] = useState("")
   const [tags, setTags] = useState<string[]>([])
 
-  const [playlistMode, setPlaylistMode] = useState<PlaylistMode>("entire")
+  const [pickedPlaylistMode, setPlaylistMode] = useState<PlaylistMode>("entire")
   const [playlistStart, setPlaylistStart] = useState("")
   const [playlistEnd, setPlaylistEnd] = useState("")
   const [playlistLimit, setPlaylistLimit] = useState("")
@@ -115,6 +115,13 @@ export function NewDownloadDialog() {
   // Playlists never show Advanced at all, so the two-column layout (and the
   // wider dialog that goes with it) never activates in that mode either —
   // nothing would fill a second column.
+  // "Only this video" needs a single video to fall back to; a pure playlist
+  // link has none (the server refuses it too). Derived rather than synced in an
+  // effect, so a URL change after picking it re-evaluates immediately.
+  const singleVideoAvailable = preview?.singleVideoAvailable !== false
+  const playlistMode: PlaylistMode =
+    pickedPlaylistMode === "current" && !singleVideoAvailable ? "entire" : pickedPlaylistMode
+
   const showTwoColumn = isWideScreen && !preview?.isPlaylist
 
   // Whether the pasted URL looks fetchable — computed from the raw (not
@@ -515,17 +522,31 @@ export function NewDownloadDialog() {
           {preview?.isPlaylist && (
             <div className="space-y-3 rounded-md border p-3">
               <div className="flex flex-wrap gap-1 rounded-md border p-0.5">
-                {PLAYLIST_MODE_OPTIONS.map((opt) => (
-                  <Button
-                    key={opt.value}
-                    type="button"
-                    variant={playlistMode === opt.value ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => setPlaylistMode(opt.value)}
-                  >
-                    {opt.label}
-                  </Button>
-                ))}
+                {PLAYLIST_MODE_OPTIONS.map((opt) => {
+                  const unavailable = opt.value === "current" && !singleVideoAvailable
+                  const button = (
+                    <Button
+                      key={opt.value}
+                      type="button"
+                      variant={playlistMode === opt.value ? "secondary" : "ghost"}
+                      size="sm"
+                      disabled={unavailable}
+                      onClick={() => setPlaylistMode(opt.value)}
+                    >
+                      {opt.label}
+                    </Button>
+                  )
+                  if (!unavailable) return button
+                  // A disabled button swallows pointer events, so the tooltip hangs off a wrapper.
+                  return (
+                    <Tooltip key={opt.value}>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>{button}</span>
+                      </TooltipTrigger>
+                      <TooltipContent>This link is a playlist, not a single video.</TooltipContent>
+                    </Tooltip>
+                  )
+                })}
               </div>
 
               {playlistMode === "range" && (

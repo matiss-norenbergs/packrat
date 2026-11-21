@@ -85,7 +85,7 @@ func TestDuplicateInfoMatchesLibraryItemBlurredFlag(t *testing.T) {
 
 func TestToPreviewDownloadResponseCarriesTheDuplicate(t *testing.T) {
 	dup := &DuplicateInfo{LibraryItemID: 4, Title: "x", Blurred: true}
-	resp := toPreviewDownloadResponse(&downloader.Metadata{Title: "t"}, dup)
+	resp := toPreviewDownloadResponse(&downloader.Metadata{Title: "t"}, dup, true)
 	b, _ := json.Marshal(resp)
 	var out struct {
 		Duplicate struct {
@@ -95,7 +95,7 @@ func TestToPreviewDownloadResponseCarriesTheDuplicate(t *testing.T) {
 	if err := json.Unmarshal(b, &out); err != nil || !out.Duplicate.Blurred {
 		t.Fatalf("blurred flag missing from %s (%v)", b, err)
 	}
-	if toPreviewDownloadResponse(&downloader.Metadata{Title: "t"}, nil).Duplicate != nil {
+	if toPreviewDownloadResponse(&downloader.Metadata{Title: "t"}, nil, true).Duplicate != nil {
 		t.Fatal("no duplicate, no field")
 	}
 }
