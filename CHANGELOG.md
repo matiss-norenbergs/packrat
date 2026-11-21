@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-21
+- **Subscription tags may contain commas** — a subscription's tags were stored comma-joined, so a tag like `rock, live` came back as two tags. They are now stored as a JSON array; the reader still accepts the old comma-joined rows (and falls back to splitting on a malformed value), and a row switches to the new form the next time the subscription is saved. No migration; the API shape is unchanged.
 - **`PATCH /api/collections/:id` is now a real merge** — only `name` and `rootPath` are required; any other field left out of the body keeps its stored value instead of being cleared (`isPrivate`, `browseAsShow` and `artistId` used to reset). An explicit `null` still clears `jellyfinLibraryId`, `seasonNumber`, `year`, `sequenceMin`, `sequenceMax` and `artistId`, and the sequence range is checked on the merged values (`sequenceMin` above `sequenceMax` is refused with `400`, which a partial body could otherwise cause). The collection dialog sends the full object and behaves as before. New `api.Optional[T]` type tells omitted / `null` / value apart.
 
 ## 2026-11-20

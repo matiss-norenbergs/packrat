@@ -2040,6 +2040,11 @@ Every other field required (a real `false`/`0` must be distinguishable from "omi
 must be 1–8760; anything else (`0`, negative, too large) is `400 {"error": "checkIntervalHours must be between 1 and 8760"}`
 and nothing is saved. `404` unknown id, `200` with the full updated subscription.
 
+`tags` is a list of strings; any characters (commas included) are allowed and come back unchanged. They
+are stored as a JSON array in the `subscriptions.tags` column; rows saved before that held a
+comma-joined string, which is still read and is rewritten in the new form the next time the
+subscription is saved (no migration). The API shape is unchanged.
+
 ### `POST /api/subscriptions/:id/check` — no body
 
 Same code path as the scheduled sweep, for one subscription, blocking until yt-dlp responds. `404`
