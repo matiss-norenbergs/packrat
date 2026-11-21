@@ -4,11 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"path"
 	"path/filepath"
 	"sort"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -160,6 +163,9 @@ func CreateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 	}
 }
 
+// UpdateCollection merges the request onto the stored row: name and rootPath are
+// required, every other field omitted from the body keeps its stored value (see
+// UpdateCollectionRequest). Checks that span several fields run on the merged result.
 func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -173,18 +179,13 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if err := req.checkNumberLimits(); err != nil {
+		if err := req.checkEnums(); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if req.DefaultQuality == "" {
-			req.DefaultQuality = "best"
-		}
-		if req.DefaultDownloadType == "" {
-			req.DefaultDownloadType = "video"
-		}
-		if req.FilenameTemplate == "" {
-			req.FilenameTemplate = "{title}"
+		if err := req.checkNumberLimits(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 		rawRootPath := req.RootPath
 		req.RootPath = fsutil.SanitizeFilename(req.RootPath)
@@ -207,6 +208,42 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 		// reserved one such as CON, made before the rule existed) is kept, not renamed.
 		req.RootPath = fsutil.SanitizeRename(rawRootPath, existing.RootPath)
 
+		// Overlay the request onto the stored row. An explicit empty string for the three
+		// text defaults still falls back to the default, as before.
+		col := *existing
+		col.Name = req.Name
+		col.RootPath = req.RootPath
+		if req.DefaultQuality != nil {
+			col.DefaultQuality = orDefault(*req.DefaultQuality, "best")
+		}
+		if req.DefaultDownloadType != nil {
+			col.DefaultDownloadType = orDefault(*req.DefaultDownloadType, "video")
+		}
+		if req.FilenameTemplate != nil {
+			col.FilenameTemplate = orDefault(*req.FilenameTemplate, "{title}")
+		}
+		if req.IsPrivate != nil {
+			col.IsPrivate = *req.IsPrivate
+		}
+		if req.BrowseAsShow != nil {
+			col.BrowseAsShow = *req.BrowseAsShow
+		}
+		col.JellyfinLibrary = req.JellyfinLibraryID.Apply(existing.JellyfinLibrary)
+		col.SeasonNumber = req.SeasonNumber.Apply(existing.SeasonNumber)
+		col.Year = req.Year.Apply(existing.Year)
+		col.SequenceMin = req.SequenceMin.Apply(existing.SequenceMin)
+		col.SequenceMax = req.SequenceMax.Apply(existing.SequenceMax)
+		col.ArtistID = req.ArtistID.Apply(existing.ArtistID)
+
+		// The range is checked on the merged values, so sending only one end can't invert
+		// it against the stored other end. Only when the request touches the range: an
+		// already-inverted stored range must not block unrelated edits.
+		if (req.SequenceMin.Set() || req.SequenceMax.Set()) &&
+			col.SequenceMin != nil && col.SequenceMax != nil && *col.SequenceMin > *col.SequenceMax {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "sequenceMin must not be greater than sequenceMax"})
+			return
+		}
+
 		// parent_id is creation-time only — renaming the segment must still be
 		// re-validated against the *existing* parent so it can't escape the
 		// media root.
@@ -220,21 +257,6 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 			return
 		}
 
-		col := models.Collection{
-			Name:                req.Name,
-			RootPath:            req.RootPath,
-			DefaultQuality:      req.DefaultQuality,
-			DefaultDownloadType: req.DefaultDownloadType,
-			FilenameTemplate:    req.FilenameTemplate,
-			IsPrivate:           req.IsPrivate,
-			JellyfinLibrary:     req.JellyfinLibraryID,
-			SeasonNumber:        req.SeasonNumber,
-			Year:                req.Year,
-			SequenceMin:         req.SequenceMin,
-			SequenceMax:         req.SequenceMax,
-			ArtistID:            req.ArtistID,
-			BrowseAsShow:        req.BrowseAsShow,
-		}
 		if err := repo.Update(c.Request.Context(), id, &col); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "collection not found"})
@@ -250,6 +272,31 @@ func UpdateCollection(repo *repository.CollectionsRepo, mgr *queue.DownloadManag
 
 		c.Status(http.StatusNoContent)
 	}
+}
+
+// checkEnums applies the same allowed values the create binding enforces, to the
+// fields a PATCH actually sent. An empty string is accepted (it means "use the
+// default"); the validator's oneof can't express that on a non-nil pointer.
+func (r UpdateCollectionRequest) checkEnums() error {
+	if q := r.DefaultQuality; q != nil && *q != "" && !slices.Contains(collectionQualities, *q) {
+		return fmt.Errorf("defaultQuality must be one of: %s", strings.Join(collectionQualities, ", "))
+	}
+	if t := r.DefaultDownloadType; t != nil && *t != "" && !slices.Contains(collectionDownloadTypes, *t) {
+		return fmt.Errorf("defaultDownloadType must be one of: %s", strings.Join(collectionDownloadTypes, ", "))
+	}
+	return nil
+}
+
+var (
+	collectionQualities     = []string{"best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"}
+	collectionDownloadTypes = []string{"video", "audio", "image"}
+)
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
 }
 
 func DeleteCollection(repo *repository.CollectionsRepo, imagesRoot string) gin.HandlerFunc {

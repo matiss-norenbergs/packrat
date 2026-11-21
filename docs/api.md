@@ -1188,8 +1188,23 @@ uniqueness). Response `201 {"id": 7}`.
 
 ### `PATCH /api/collections/:id`
 
-Same shape as create, minus `parentId` (fixed at creation time). `404` unknown id, `409` duplicate
-name, `204` on success.
+Same fields as create, minus `parentId` (fixed at creation time). **A real merge**: only `name` and
+`rootPath` are required (`400` without them); every other field left out of the body keeps its stored
+value. Per field:
+
+| Field | Omitted | `null` | Value |
+|---|---|---|---|
+| `jellyfinLibraryId`, `seasonNumber`, `year`, `sequenceMin`, `sequenceMax`, `artistId` | kept | cleared | set |
+| `isPrivate`, `browseAsShow` | kept | kept (same as omitted) | set (`false` clears) |
+| `defaultQuality`, `defaultDownloadType`, `filenameTemplate` | kept | kept (same as omitted) | set; an explicit `""` falls back to `"best"` / `"video"` / `"{title}"` |
+
+`defaultQuality` / `defaultDownloadType` are checked against the same allowed values as create (`400`
+otherwise). Checks that depend on several fields run on the **merged** result: when the request
+sends `sequenceMin` or `sequenceMax`, the resulting pair must satisfy `sequenceMin <= sequenceMax`
+(`400` otherwise — so sending only `sequenceMax` below the stored minimum is refused). A stored range
+that is already inverted doesn't block an edit that leaves the range alone. Re-submitting the stored
+`rootPath` is not a change. `404` unknown id, `409` duplicate name, `204` on success. The collection
+dialog always sends the full object, which therefore behaves as a full replace.
 
 ### `DELETE /api/collections/:id`
 

@@ -1207,6 +1207,15 @@ subscription id) and re-reads the subscription once it holds it; a concurrent ca
 `ErrCheckInProgress`. "Check now" maps that to `409`, the sweep logs one line and moves on. `sweepMu` (one
 sweep at a time) is unchanged. Neither lock is held across a DB transaction.
 
+## PATCH bodies merge: `Optional[T]`
+
+`PATCH /api/collections/:id` overlays the request onto the stored row instead of replacing it, so a
+field missing from the body is left alone. A plain pointer can't tell "key omitted" from `"key": null`,
+so nullable fields use `api.Optional[T]` (`internal/api/optional.go`): `UnmarshalJSON` runs only when
+the key is present, giving omitted / explicit null / value, and `Apply(current)` overlays it (omitted
+keeps, null clears, value sets). Non-nullable fields are plain pointers (nil = keep). Validation that
+spans fields (the sequence range) runs on the merged row. Other PATCH endpoints can adopt it the same way.
+
 ## Collection-level defaults for new downloads
 
 Optional collection fields exist to save repetitive manual entry when adding files to a collection.

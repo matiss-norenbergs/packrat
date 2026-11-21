@@ -67,9 +67,6 @@ None are scheduled. Sizes are guesses.
 
 **Could show wrong data**
 
-- **Collection PATCH is a full replace (S).** Omitted `isPrivate`, `browseAsShow` and `artistId` are cleared
-  instead of left alone. Decide whether PATCH should merge, then make it so (and update `api.md`).
-
 **Behavior to decide or finish**
 
 - **Collection `rootPath` change moves nothing on disk (S).** `FEATURES.md` doesn't say whether that is intended.
