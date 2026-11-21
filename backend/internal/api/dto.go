@@ -861,20 +861,24 @@ type CreateCollectionRequest struct {
 	BrowseAsShow        bool    `json:"browseAsShow"`
 }
 
+// UpdateCollectionRequest is a merge: name and rootPath are required, every
+// other field left out of the body keeps its stored value. The nullable
+// fields use Optional so an explicit null clears them; the rest are pointers
+// (nil = keep).
 type UpdateCollectionRequest struct {
-	Name                string  `json:"name" binding:"required"`
-	RootPath            string  `json:"rootPath" binding:"required"`
-	DefaultQuality      string  `json:"defaultQuality" binding:"omitempty,oneof=best 2160p 1440p 1080p 720p 480p 360p worst"`
-	DefaultDownloadType string  `json:"defaultDownloadType" binding:"omitempty,oneof=video audio image"`
-	FilenameTemplate    string  `json:"filenameTemplate"`
-	IsPrivate           bool    `json:"isPrivate"`
-	JellyfinLibraryID   *string `json:"jellyfinLibraryId"`
-	SeasonNumber        *int    `json:"seasonNumber"`
-	Year                *int    `json:"year"`
-	SequenceMin         *int    `json:"sequenceMin"`
-	SequenceMax         *int    `json:"sequenceMax"`
-	ArtistID            *int64  `json:"artistId"`
-	BrowseAsShow        bool    `json:"browseAsShow"`
+	Name                string           `json:"name" binding:"required"`
+	RootPath            string           `json:"rootPath" binding:"required"`
+	DefaultQuality      *string          `json:"defaultQuality"`
+	DefaultDownloadType *string          `json:"defaultDownloadType"`
+	FilenameTemplate    *string          `json:"filenameTemplate"`
+	IsPrivate           *bool            `json:"isPrivate"`
+	JellyfinLibraryID   Optional[string] `json:"jellyfinLibraryId"`
+	SeasonNumber        Optional[int]    `json:"seasonNumber"`
+	Year                Optional[int]    `json:"year"`
+	SequenceMin         Optional[int]    `json:"sequenceMin"`
+	SequenceMax         Optional[int]    `json:"sequenceMax"`
+	ArtistID            Optional[int64]  `json:"artistId"`
+	BrowseAsShow        *bool            `json:"browseAsShow"`
 }
 
 type SequenceGapResponse struct {

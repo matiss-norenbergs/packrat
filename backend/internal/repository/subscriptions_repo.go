@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -58,19 +59,43 @@ func scanSubscription(row rowScanner) (*models.Subscription, error) {
 }
 
 // decodeSubscriptionTags/encodeSubscriptionTags store a subscription's tag
-// template as a single comma-joined column rather than a library_tags-style
-// join table — these tags are never queried or filtered on, only copied
-// onto whatever ghost item or download a check creates, so the extra
-// machinery TagsRepo needs (usage counts, rename cascades) doesn't apply.
+// template in a single column rather than a library_tags-style join table —
+// these tags are never queried or filtered on, only copied onto whatever ghost
+// item or download a check creates, so the extra machinery TagsRepo needs
+// (usage counts, rename cascades) doesn't apply.
+//
+// The column holds a JSON array of strings (`["a","b,c"]`), so a tag may contain
+// any character, commas included. Rows written before that hold the old
+// comma-joined form; the reader accepts both (a value starting with `[` is JSON,
+// anything else is the legacy form) and a row is rewritten in the new form the
+// next time it is saved. An empty list is stored as an empty string.
 func decodeSubscriptionTags(raw string) []string {
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return []string{}
+	}
+	if strings.HasPrefix(raw, "[") {
+		var tags []string
+		if err := json.Unmarshal([]byte(raw), &tags); err == nil {
+			if tags == nil {
+				return []string{}
+			}
+			return tags
+		}
+		// Malformed: fall through to the legacy split rather than failing the read.
 	}
 	return strings.Split(raw, ",")
 }
 
 func encodeSubscriptionTags(tags []string) string {
-	return strings.Join(tags, ",")
+	if len(tags) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(tags)
+	if err != nil { // a []string always marshals
+		return strings.Join(tags, ",")
+	}
+	return string(b)
 }
 
 // Create inserts a new subscription and returns its id. Tags/CollectionID

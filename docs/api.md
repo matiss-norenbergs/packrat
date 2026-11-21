@@ -1188,8 +1188,23 @@ uniqueness). Response `201 {"id": 7}`.
 
 ### `PATCH /api/collections/:id`
 
-Same shape as create, minus `parentId` (fixed at creation time). `404` unknown id, `409` duplicate
-name, `204` on success.
+Same fields as create, minus `parentId` (fixed at creation time). **A real merge**: only `name` and
+`rootPath` are required (`400` without them); every other field left out of the body keeps its stored
+value. Per field:
+
+| Field | Omitted | `null` | Value |
+|---|---|---|---|
+| `jellyfinLibraryId`, `seasonNumber`, `year`, `sequenceMin`, `sequenceMax`, `artistId` | kept | cleared | set |
+| `isPrivate`, `browseAsShow` | kept | kept (same as omitted) | set (`false` clears) |
+| `defaultQuality`, `defaultDownloadType`, `filenameTemplate` | kept | kept (same as omitted) | set; an explicit `""` falls back to `"best"` / `"video"` / `"{title}"` |
+
+`defaultQuality` / `defaultDownloadType` are checked against the same allowed values as create (`400`
+otherwise). Checks that depend on several fields run on the **merged** result: when the request
+sends `sequenceMin` or `sequenceMax`, the resulting pair must satisfy `sequenceMin <= sequenceMax`
+(`400` otherwise — so sending only `sequenceMax` below the stored minimum is refused). A stored range
+that is already inverted doesn't block an edit that leaves the range alone. Re-submitting the stored
+`rootPath` is not a change. `404` unknown id, `409` duplicate name, `204` on success. The collection
+dialog always sends the full object, which therefore behaves as a full replace.
 
 ### `DELETE /api/collections/:id`
 
@@ -2024,6 +2039,11 @@ check — see `POST /api/subscriptions/:id/check`, which then reports `newItemsF
 Every other field required (a real `false`/`0` must be distinguishable from "omitted"). `checkIntervalHours`
 must be 1–8760; anything else (`0`, negative, too large) is `400 {"error": "checkIntervalHours must be between 1 and 8760"}`
 and nothing is saved. `404` unknown id, `200` with the full updated subscription.
+
+`tags` is a list of strings; any characters (commas included) are allowed and come back unchanged. They
+are stored as a JSON array in the `subscriptions.tags` column; rows saved before that held a
+comma-joined string, which is still read and is rewritten in the new form the next time the
+subscription is saved (no migration). The API shape is unchanged.
 
 ### `POST /api/subscriptions/:id/check` — no body
 

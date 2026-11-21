@@ -65,16 +65,10 @@ From the full backend audit: every numbered finding is fixed. What follows is it
 (real but unlikely to matter, or needing a decision), plus a few loose ends found while fixing the rest.
 None are scheduled. Sizes are guesses.
 
-**Could show wrong data**
-
-- **Collection PATCH is a full replace (S).** Omitted `isPrivate`, `browseAsShow` and `artistId` are cleared
-  instead of left alone. Decide whether PATCH should merge, then make it so (and update `api.md`).
-
 **Behavior to decide or finish**
 
 - **Collection `rootPath` change moves nothing on disk (S).** `FEATURES.md` doesn't say whether that is intended.
 - **A restore that re-enables subscriptions doesn't run the catch-up check (S)** that `UpdateSettings` runs.
-- **Subscription tags are comma-joined (S).** A tag containing `,` splits in two.
 - **"Current" playlist mode on a pure playlist URL (M).** It downloads every entry but only the last becomes an item.
 - **Serial bulk thumbnail fetch (S).** One yt-dlp run per id inside the request, with no cap or dedupe.
 - **`ScanImport` runs one ffprobe per untracked file inside the request (M).** Move it to a background job with

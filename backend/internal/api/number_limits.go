@@ -64,9 +64,9 @@ func (r CreateCollectionRequest) checkNumberLimits() error {
 
 func (r UpdateCollectionRequest) checkNumberLimits() error {
 	return firstNumberLimitError(
-		checkNumberLimit("seasonNumber", r.SeasonNumber),
-		checkNumberLimit("sequenceMin", r.SequenceMin),
-		checkNumberLimit("sequenceMax", r.SequenceMax),
+		checkNumberLimit("seasonNumber", r.SeasonNumber.Ptr()),
+		checkNumberLimit("sequenceMin", r.SequenceMin.Ptr()),
+		checkNumberLimit("sequenceMax", r.SequenceMax.Ptr()),
 	)
 }
 
