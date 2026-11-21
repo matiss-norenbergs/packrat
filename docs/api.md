@@ -1785,6 +1785,9 @@ password unattended) — use the plain Export cards above for a password-protect
   ```json
   { "settingsApplied": 23, "library": { "collectionsEnsured": 3, "tagsCreated": 1, "artistsCreated": 1, "downloadsQueued": 11, "ghostsCreated": 1 } }
   ```
+  A restore (this one, `import/full` and `import/settings`) that switches `featureSubscriptionsEnabled` from
+  off to on, and succeeds, also starts the due-subscription checks in the background, as `PATCH /api/settings`
+  does; the response is not delayed by them.
 - **`POST /api/backup/history/bulk-delete`** — body `{ "ids": [41, 40] }`. The rows are deleted in one
   transaction; after the commit the backup files are removed best effort (a failure is logged).
   Unknown ids are ignored. `200 {"deleted": <n>}`.

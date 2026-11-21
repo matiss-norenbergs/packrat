@@ -16,6 +16,7 @@ import (
 
 	"packrat/backend/internal/backup"
 	"packrat/backend/internal/downloader"
+	"packrat/backend/internal/features"
 	"packrat/backend/internal/models"
 	"packrat/backend/internal/pathsafe"
 	"packrat/backend/internal/queue"
@@ -105,7 +106,7 @@ func writeBackupOpenError(c *gin.Context, err error) {
 	}
 }
 
-func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdlp *downloader.YtDlpService) gin.HandlerFunc {
+func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadManager, ytdlp *downloader.YtDlpService, onSubscriptionsEnabled func()) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BackupImportRequest
 		if !bindBackupImport(c, &req) {
@@ -142,6 +143,7 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 			return
 		}
 
+		subsWasOn := features.Enabled(c.Request.Context(), settingsRepo, models.SettingFeatureSubscriptionsEnabled)
 		res, err := backup.ApplySettingsBundle(c.Request.Context(), settingsRepo, bundle)
 		if err != nil {
 			recordRestoreFailed(c, restoreSettingsImport, err)
@@ -156,6 +158,7 @@ func ImportSettings(settingsRepo *repository.SettingsRepo, mgr *queue.DownloadMa
 		syncCookiesFileAfterRestore(c.Request.Context(), settingsRepo, ytdlp)
 		recordRestoreDone(c, restoreSettingsImport, map[string]any{"settingsApplied": res.Applied})
 		recordRestoreAdjusted(c, restoreSettingsImport, res.Adjustments)
+		catchUpSubscriptions(c.Request.Context(), settingsRepo, subsWasOn, onSubscriptionsEnabled)
 		c.JSON(http.StatusOK, BackupImportSettingsResponse{Applied: res.Applied})
 	}
 }
@@ -472,6 +475,7 @@ func RestoreFullBackup(
 	libraryRepo *repository.LibraryRepo,
 	mgr *queue.DownloadManager,
 	ytdlp *downloader.YtDlpService,
+	onSubscriptionsEnabled func(),
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -513,6 +517,7 @@ func RestoreFullBackup(
 			return
 		}
 
+		subsWasOn := features.Enabled(c.Request.Context(), settingsRepo, models.SettingFeatureSubscriptionsEnabled)
 		resp, adjusted, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
 		if err != nil {
 			recordRestoreFailed(c, restoreFullFromHistory, err)
@@ -521,7 +526,24 @@ func RestoreFullBackup(
 		}
 		recordRestoreDone(c, restoreFullFromHistory, fullRestoreDetails(resp))
 		recordRestoreAdjusted(c, restoreFullFromHistory, adjusted)
+		catchUpSubscriptions(c.Request.Context(), settingsRepo, subsWasOn, onSubscriptionsEnabled)
 		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// catchUpSubscriptions runs the Subscriptions catch-up (onSubscriptionsEnabled,
+// the same callback UpdateSettings fires) after a restore that switched the
+// feature from off to on, so subscriptions that came due while it was off do
+// not wait for the hourly sweep. Call it only once the restore has fully
+// succeeded; it does nothing when the feature was already on or stays off.
+// The callback is fire-and-forget (the router hands it to the background
+// runner), so it cannot delay or fail the restore response.
+func catchUpSubscriptions(ctx context.Context, settingsRepo *repository.SettingsRepo, wasOn bool, onSubscriptionsEnabled func()) {
+	if onSubscriptionsEnabled == nil || wasOn {
+		return
+	}
+	if features.Enabled(ctx, settingsRepo, models.SettingFeatureSubscriptionsEnabled) {
+		onSubscriptionsEnabled()
 	}
 }
 
@@ -581,6 +603,7 @@ func ImportFullBackup(
 	libraryRepo *repository.LibraryRepo,
 	mgr *queue.DownloadManager,
 	ytdlp *downloader.YtDlpService,
+	onSubscriptionsEnabled func(),
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req BackupImportRequest
@@ -606,6 +629,7 @@ func ImportFullBackup(
 			return
 		}
 
+		subsWasOn := features.Enabled(c.Request.Context(), settingsRepo, models.SettingFeatureSubscriptionsEnabled)
 		resp, adjusted, err := applyFullBundle(c.Request.Context(), db, settingsRepo, collectionsRepo, tagsRepo, artistsRepo, libraryRepo, mgr, ytdlp, bundle, req.Mode == "ghostOnly")
 		if err != nil {
 			recordRestoreFailed(c, restoreFullFromUpload, err)
@@ -614,6 +638,7 @@ func ImportFullBackup(
 		}
 		recordRestoreDone(c, restoreFullFromUpload, fullRestoreDetails(resp))
 		recordRestoreAdjusted(c, restoreFullFromUpload, adjusted)
+		catchUpSubscriptions(c.Request.Context(), settingsRepo, subsWasOn, onSubscriptionsEnabled)
 		c.JSON(http.StatusOK, resp)
 	}
 }

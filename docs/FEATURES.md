@@ -1001,6 +1001,13 @@ or just as a safety net.
 - A full restore applies the library first, then the settings (together, all or nothing), then queues the
   redownloads, so they use the restored settings. If the library part fails, your current settings are left
   untouched; restored worker and transcode limits take effect immediately.
+- **A restore that turns Subscriptions on runs the due checks right away**, exactly like switching it on in
+  Settings: subscriptions that came due while the feature was off are checked in the background as soon as
+  the restore has finished (which can start downloads for them), instead of waiting for the hourly sweep.
+  This applies to the full restore (from Backup history or an uploaded file) and to a Settings import (a
+  settings file or a full file). It only happens when Subscriptions was off before and is on after; a failed
+  restore, a restore that leaves it off, or one that finds it already on does not trigger it. Library Data
+  imports never change settings, so they never do.
 - **A restore adjusts values instead of writing bad ones.** Settings imports and full restores use the same
   rules as saving Settings, but never fail halfway: a number above its limit is lowered to the limit
   (e.g. a worker count of 5000 becomes 16), a value that is not in a setting's fixed list (quality,

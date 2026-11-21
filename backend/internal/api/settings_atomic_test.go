@@ -35,6 +35,9 @@ type atomicEnv struct {
 	cookiesPath string
 	router      *gin.Engine
 	subsFired   int
+	subsSeen    []string // feature flag value as stored when each callback fired
+	backupsRoot string
+	history     *repository.BackupHistoryRepo
 	events      *repository.SystemEventsRepo
 }
 
@@ -62,6 +65,8 @@ func newAtomicEnv(t *testing.T) *atomicEnv {
 		library:     repository.NewLibraryRepo(conn),
 		downloads:   repository.NewDownloadsRepo(conn),
 		cookiesPath: filepath.Join(t.TempDir(), "ytdlp-cookies.txt"),
+		backupsRoot: t.TempDir(),
+		history:     repository.NewBackupHistoryRepo(conn),
 	}
 	e.ytdlp = downloader.NewYtDlpService("", "", "", e.settings, 1)
 	e.ytdlp.CookiesFilePath = e.cookiesPath
@@ -74,9 +79,10 @@ func newAtomicEnv(t *testing.T) *atomicEnv {
 	e.events = repository.NewSystemEventsRepo(conn)
 	e.router = gin.New()
 	e.router.Use(eventsMiddleware(sysevents.New(e.events, e.settings)))
-	e.router.PATCH("/settings", UpdateSettings(e.settings, e.mgr, e.ytdlp, nil, func() { e.subsFired++ }))
-	e.router.POST("/import/settings", ImportSettings(e.settings, e.mgr, e.ytdlp))
-	e.router.POST("/import/full", ImportFullBackup(conn, e.settings, e.collections, e.tags, e.artists, e.library, e.mgr, e.ytdlp))
+	e.router.PATCH("/settings", UpdateSettings(e.settings, e.mgr, e.ytdlp, nil, e.onSubsEnabled))
+	e.router.POST("/import/settings", ImportSettings(e.settings, e.mgr, e.ytdlp, e.onSubsEnabled))
+	e.router.POST("/import/full", ImportFullBackup(conn, e.settings, e.collections, e.tags, e.artists, e.library, e.mgr, e.ytdlp, e.onSubsEnabled))
+	e.router.POST("/history/:id/restore", RestoreFullBackup(e.backupsRoot, e.history, conn, e.settings, e.collections, e.tags, e.artists, e.library, e.mgr, e.ytdlp, e.onSubsEnabled))
 	return e
 }
 
@@ -313,4 +319,13 @@ func TestFullRestore_AppliesWorkerPoolFromRestoredSettings(t *testing.T) {
 	if got := e.mgr.WorkerCount(); got != 5 {
 		t.Errorf("worker pool = %d, want 5", got)
 	}
+}
+
+// onSubsEnabled is the Subscriptions catch-up callback the handlers under
+// test receive. It records the flag as stored at the moment it fires, so tests
+// can prove it runs only after the write committed.
+func (e *atomicEnv) onSubsEnabled() {
+	e.subsFired++
+	v, _ := e.settings.Get(context.Background(), models.SettingFeatureSubscriptionsEnabled)
+	e.subsSeen = append(e.subsSeen, v)
 }

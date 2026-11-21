@@ -68,7 +68,6 @@ None are scheduled. Sizes are guesses.
 **Behavior to decide or finish**
 
 - **Collection `rootPath` change moves nothing on disk (S).** `FEATURES.md` doesn't say whether that is intended.
-- **A restore that re-enables subscriptions doesn't run the catch-up check (S)** that `UpdateSettings` runs.
 - **"Current" playlist mode on a pure playlist URL (M).** It downloads every entry but only the last becomes an item.
 - **Serial bulk thumbnail fetch (S).** One yt-dlp run per id inside the request, with no cap or dedupe.
 - **`ScanImport` runs one ffprobe per untracked file inside the request (M).** Move it to a background job with
