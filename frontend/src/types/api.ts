@@ -986,12 +986,42 @@ export interface BackupImportSettingsResult {
   applied: number
 }
 
+// A bundle collection matched to an existing one by display name, because no collection had the
+// bundle's folder name (the folder was renamed after the backup). `path` is the bundle's folder
+// chain, `existingPath` the folder chain of the collection it matched.
+export interface CollectionMatch {
+  path: string[]
+  name: string
+  existingPath: string[]
+}
+
+// A collection a restore created under its folder name because the bundle's display name was taken.
+export interface CollectionNameKept {
+  path: string[]
+  wantedName: string
+  keptName: string
+}
+
+// A bundle collection that could be neither matched nor created; its `items` were imported
+// uncategorized.
+export interface UnresolvedCollection {
+  path: string[]
+  reason: string
+  items: number
+}
+
 export interface BackupImportLibraryResult {
   collectionsEnsured: number
   tagsCreated: number
   artistsCreated: number
   downloadsQueued: number
   ghostsCreated: number
+  // Added later than the fields above: optional so a result from an older server still type-checks.
+  collectionsCreated?: number
+  collectionsMatchedByName?: number
+  matchedByName?: CollectionMatch[] | null
+  collectionsNameKept?: CollectionNameKept[] | null
+  unresolvedCollections?: UnresolvedCollection[] | null
 }
 
 // LibraryImportMode picks what an import does with an item that has a saved
@@ -1014,6 +1044,10 @@ export interface PreviewCollectionEntry {
   path: string[]
   name: string
   isNew: boolean
+  // The import will use the existing collection at `existingPath` (matched by display name).
+  matchedByName?: boolean
+  existingPath?: string[]
+  unresolved?: boolean
 }
 
 export interface PreviewLibraryItem {
@@ -1032,6 +1066,9 @@ export interface PreviewLibraryItem {
 export interface LibraryImportPreview {
   collections: PreviewCollectionEntry[]
   collectionsNew: number
+  collectionsMatchedByName?: number
+  collectionsNameKept?: CollectionNameKept[] | null
+  unresolvedCollections?: UnresolvedCollection[] | null
   tags: string[]
   tagsNew: number
   artists: string[]

@@ -14,6 +14,7 @@ import {
   restoreFullBackup,
   runManualBackup,
 } from "@/lib/api"
+import { notifyCollectionRestore } from "@/lib/backupCollections"
 import { downloadJson } from "@/lib/utils"
 import type { LibraryImportMode } from "@/types/api"
 import { artistsQueryKey } from "./useArtists"
@@ -89,6 +90,7 @@ export function useImportLibrary() {
           `${result.tagsCreated} new tag${result.tagsCreated === 1 ? "" : "s"}, ` +
           `${result.artistsCreated} new artist${result.artistsCreated === 1 ? "" : "s"}`,
       )
+      notifyCollectionRestore(result)
       queryClient.invalidateQueries({ queryKey: collectionsQueryKey })
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })
       queryClient.invalidateQueries({ queryKey: artistsQueryKey })
@@ -174,6 +176,7 @@ export function useImportFullBackup() {
             ? `, restored ${result.library.ghostsCreated} ghost item${result.library.ghostsCreated === 1 ? "" : "s"}`
             : ""),
       )
+      notifyCollectionRestore(result.library)
       queryClient.invalidateQueries({ queryKey: settingsQueryKey })
       queryClient.invalidateQueries({ queryKey: collectionsQueryKey })
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })
@@ -199,6 +202,7 @@ export function useRestoreFullBackup() {
             ? `, restored ${result.library.ghostsCreated} ghost item${result.library.ghostsCreated === 1 ? "" : "s"}`
             : ""),
       )
+      notifyCollectionRestore(result.library)
       queryClient.invalidateQueries({ queryKey: settingsQueryKey })
       queryClient.invalidateQueries({ queryKey: collectionsQueryKey })
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })
