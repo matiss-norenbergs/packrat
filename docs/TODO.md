@@ -98,6 +98,10 @@ None are scheduled. Sizes are guesses.
 - **CI `desktop` job, "Install Linux dependencies" failed after about 5 minutes (twice).** Not a timeout mismatch:
   `apt-install.sh` worst case is 3 x 150 s + 2 x 10 s pauses + kill grace (about 8.5 min), under the steps'
   `timeout-minutes: 10`. A stop at about 5 minutes means apt itself failed. Needs the job logs to say why.
+- **`internal/api` `TestBulkAddSubscriptionEntriesQueuesHundredsInstantly` asserts wall-clock time (S).** Failed once
+  in a full `go test -race ./...` in a Docker container on a Windows host ("bulk add of 300 took 5.86s"), passed on
+  an isolated re-run (`internal/api` alone, 114 s). Found while verifying, outside the ws/queue scope, not fixed.
+  Same family as the other flakes: a timing bound on a contended machine.
 
 ## Dependencies
 
