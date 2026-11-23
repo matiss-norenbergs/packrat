@@ -1,5 +1,5 @@
 import { Maximize, Minimize } from "lucide-react"
-import { PLAYER_BTN, PlayButton, SpeedMenu, TimeDisplay, VolumeControl } from "./PlayerParts"
+import { PLAYER_BTN, PlayButton, SettingsMenu, TimeDisplay, VolumeControl } from "./PlayerParts"
 import { PLAYER_ICON_PX } from "./playerTheme"
 import { SeekBar } from "./SeekBar"
 import type { MediaState } from "./useMediaState"
@@ -13,14 +13,14 @@ export interface PlayerActions {
   toggleFullscreen: () => void
 }
 
-// The control bar of one element. `full` = two rows (seek bar above the buttons, speed pill and fullscreen on the
+// The control bar of one element. `full` = two rows (seek bar above the buttons, settings cog and fullscreen on the
 // right); `compact` = one row (play, seek, time, volume) for the mini player and the compare cells. The pieces
 // themselves live in PlayerParts.tsx and are shared with the compare page's global bar.
 export function PlayerControls({
   variant,
   state,
   actions,
-  showSpeed,
+  showSettings,
   showFullscreen,
   isFullscreen,
   onMenuOpenChange,
@@ -29,7 +29,7 @@ export function PlayerControls({
   variant: "full" | "compact"
   state: MediaState
   actions: PlayerActions
-  showSpeed: boolean
+  showSettings: boolean
   showFullscreen: boolean
   /** This frame itself is the fullscreen element (the fullscreen button's icon). */
   isFullscreen: boolean
@@ -68,7 +68,7 @@ export function PlayerControls({
         {volume}
         <TimeDisplay currentTime={state.currentTime} duration={state.duration} />
         <div className="ms-auto flex items-center gap-1">
-          {showSpeed && <SpeedMenu rate={state.rate} onRate={actions.setRate} onOpenChange={onMenuOpenChange} container={menuContainer} />}
+          {showSettings && <SettingsMenu rate={state.rate} onRate={actions.setRate} onOpenChange={onMenuOpenChange} container={menuContainer} />}
           {showFullscreen && (
             <button type="button" className={PLAYER_BTN} aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={actions.toggleFullscreen}>
               {isFullscreen ? (

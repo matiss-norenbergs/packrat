@@ -733,14 +733,32 @@ position, **Continue Watching** progress, autoplay and the private-item lock wor
 - **Video** — a floating glass bar over the bottom of the picture (in fullscreen the blur is replaced by a more opaque solid scrim): a seek bar (thickens on hover,
   floating time bubble following the pointer, a lighter buffered track behind the played part in
   your accent color), then play/pause, volume (the mute button; the slider slides out on
-  hover/focus), `1:23 / 45:10`, and on the right a speed pill (0.5×–2×) and fullscreen. The bar
+  hover/focus), `1:23 / 45:10`, and on the right a settings cog (its menu holds the playback speeds,
+  0.5×–2×; the current speed shows beside the cog, e.g. `1.5×`, only when it isn't 1×) and fullscreen. The bar
   fades in on pointer movement or focus and hides after about 2.5 s while playing; it stays while
   paused, while the pointer is over it or anywhere along the bottom fifth of the video (an invisible hot zone), with a menu open or with keyboard focus inside it; in fullscreen a move anywhere wakes it. While hidden, a
   thin progress line stays at the bottom edge. Click plays/pauses (with a brief pulse), double-click
   toggles fullscreen (the whole player, so the controls stay), and a spinner shows while buffering.
-- **Audio** — cover art (or a placeholder) with title and artist, the same bar below it.
-- **Mini player** — a compact bar: cover (audio), play/pause, seek bar, time and volume; no speed
-  pill or fullscreen.
+- **Video on a phone or tablet (touch mode)** — the item page's video switches layout with the last input used:
+  a touch or pen press switches it to touch mode, a mouse switches it back (a laptop with a touch screen works with
+  both; a phone or tablet starts in touch mode). In touch mode:
+  - **Tap** the video to show the controls, tap again to hide them. A tap never plays or pauses. While playing
+    they hide on their own after about 2.5 s; while paused they stay until tapped away.
+  - **Double tap** the left or right third of the video to skip back or forward 10 s ("−10 s" / "+10 s" on
+    screen). Keep tapping the same side to add 10 s per tap (+20, +30, …) while the previous skip is still on
+    screen. A double tap in the middle does nothing (no pause, no fullscreen).
+  - **Controls** — a dimmed picture with a big play/pause button in the middle, the title and the settings cog
+    (speed menu) at the top, and at the bottom a full-width seek bar (its handle always shown, easy to drag),
+    the time on the left and fullscreen on the right. There is no volume slider or mute button (use the phone's
+    volume keys); only while the video is muted or at volume 0 an **unmute** button appears next to fullscreen
+    (at volume 0 it also turns the volume up to 100 %). Buttons are at least 44 px.
+  - **Fullscreen** is the button only, never a gesture. On iPhone Safari, which can't put a page element into
+    fullscreen, the button opens the video in the phone's own player instead (its native controls replace the
+    skin there).
+  The mini player, the compare cells and audio keep their mouse-style controls on touch screens.
+- **Audio** — cover art (or a placeholder) with title and artist, the same bar below it (with the settings cog).
+- **Mini player** — a compact bar: cover (audio), play/pause, seek bar, time and volume; no settings
+  cog or fullscreen.
 - **Can't be played** — when the browser can't decode a file (unsupported codec/container, damaged
   or unreachable file) the player shows "This file can't be played in the browser" with the reason
   when known, instead of a black box.
@@ -781,7 +799,7 @@ up to 6 files and hit **Play selected** to open a side-by-side playback grid (1�
 
 **Each cell** is a player with the [media player skin](#media-player) in its one-row form (play/pause, seek bar, time,
 volume) over the video, with the file's title in a top-left gradient that shows and hides with the bar; audio files
-get a cover, title and artist with the same bar. A cell's controls are independent (no speed pill or fullscreen
+get a cover, title and artist with the same bar. A cell's controls are independent (no settings cog or fullscreen
 button; the bar below provides those). Clicking a cell focuses it and shows a thin highlight ring around it, which is
 the cell the keyboard shortcuts then act on. In a narrow cell the time and then the volume drop out of the bar rather
 than overflow.

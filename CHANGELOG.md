@@ -12,6 +12,9 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-23
+- **The video player works on phones and tablets, and its speed menu moved behind a settings cog** — on the item page a touch switches the video player to a touch layout (like mobile video apps): a tap shows or hides the controls instead of pausing, a double tap on the left/right third skips 10 s (repeated taps add up: +20, +30), a big play/pause button sits in the middle, the title and cog at the top, a full-width seek bar with time and fullscreen at the bottom, and an unmute button appears only while muted. A mouse switches it back, so touch-screen laptops work with both. On iPhone Safari the fullscreen button opens the phone's native player. On desktop the speed pill is replaced by a cog with the same speeds, showing the speed beside it only when it isn't 1×.
+
 ## 2026-11-21
 - **Switching the side panel's subject no longer flashes a private image sharp** — on Collections and Artists, selecting another private collection/artist after revealing one kept the same `<img>`, so its blur transition ran from "none" to blur over 150 ms (the new picture showed sharp, or the old one faded out). `BlurredThumbnail` now remounts its image when `src` changes, so a new picture starts blurred; click-to-reveal/hide still animate.
 - **A probed duration is rounded to the nearest second, not truncated** — `importer.Probe` cut the length with `int()`, so a trimmed 9.52 s file showed 9 s (a 20.0 s one 20). It now rounds (9.52 → 10, 9.49 → 9) and never returns 0 for a non-empty file. Every caller shares it: trim accept and preview, library import/scan, finished downloads (the ffprobe result), the metadata probe and the thumbnail frame spread. Stored durations are not migrated; old rows keep their value until their file is next probed.

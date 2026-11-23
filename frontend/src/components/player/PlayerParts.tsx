@@ -1,7 +1,8 @@
-import { Pause, Play, Volume1, Volume2, VolumeX } from "lucide-react"
+import { Pause, Play, Settings, Volume1, Volume2, VolumeX } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -107,6 +108,20 @@ export function TimeDisplay({
   )
 }
 
+// The speed choices of a menu, shared by SpeedMenu (the compare page's global bar) and SettingsMenu (the skin's
+// cog), so the list and its rendering can't drift apart.
+function SpeedItems({ rate, onRate }: { rate: number; onRate: (r: number) => void }) {
+  return (
+    <DropdownMenuRadioGroup value={String(rate)} onValueChange={(v) => onRate(Number(v))}>
+      {PLAYER_SPEEDS.map((s) => (
+        <DropdownMenuRadioItem key={s} value={String(s)}>
+          {formatSpeed(s)}
+        </DropdownMenuRadioItem>
+      ))}
+    </DropdownMenuRadioGroup>
+  )
+}
+
 export function SpeedMenu({
   rate,
   onRate,
@@ -127,13 +142,56 @@ export function SpeedMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top" container={container} className="w-28 min-w-0">
-        <DropdownMenuRadioGroup value={String(rate)} onValueChange={(v) => onRate(Number(v))}>
-          {PLAYER_SPEEDS.map((s) => (
-            <DropdownMenuRadioItem key={s} value={String(s)}>
-              {formatSpeed(s)}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
+        <SpeedItems rate={rate} onRate={onRate} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/**
+ * The skin's settings cog: a menu with the playback speeds (in the desktop bar where the speed pill was, top-right
+ * in touch mode). The current speed shows as a small label beside the cog only when it isn't 1×.
+ */
+export function SettingsMenu({
+  rate,
+  onRate,
+  onOpenChange,
+  container,
+  side = "top",
+  className = PLAYER_BTN,
+  iconPx = PLAYER_ICON_PX,
+}: {
+  rate: number
+  onRate: (r: number) => void
+  onOpenChange?: (open: boolean) => void
+  /** Portal target: the fullscreen element, so the menu stays visible in fullscreen. */
+  container: HTMLElement | null
+  side?: "top" | "bottom"
+  /** The trigger's button classes (touch mode passes its larger target). */
+  className?: string
+  iconPx?: number
+}) {
+  const label = rate !== 1 ? formatSpeed(rate) : null
+  return (
+    <DropdownMenu onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Settings, playback speed ${formatSpeed(rate)}`}
+          data-slot="player-settings"
+          className={`${className} ${label ? "w-auto gap-1 px-2" : ""}`}
+        >
+          {label && (
+            <span className="text-xs font-semibold tabular-nums" data-slot="player-speed-label">
+              {label}
+            </span>
+          )}
+          <Settings width={iconPx} height={iconPx} aria-hidden />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side={side} container={container} className="w-36 min-w-0">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Playback speed</DropdownMenuLabel>
+        <SpeedItems rate={rate} onRate={onRate} />
       </DropdownMenuContent>
     </DropdownMenu>
   )

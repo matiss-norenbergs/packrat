@@ -11,6 +11,7 @@ export function SeekBar({
   onSeek,
   className = "",
   formatValue,
+  alwaysShowHandle = false,
 }: {
   currentTime: number
   duration: number
@@ -19,6 +20,8 @@ export function SeekBar({
   className?: string
   /** For a slider that isn't in seconds (the compare bar's percent mode, 0-100): text of a value for the bubble and the ARIA value text. */
   formatValue?: (value: number) => string
+  /** Touch mode: there is no hover, so the handle is always drawn. */
+  alwaysShowHandle?: boolean
 }) {
   const trackRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<number | null>(null) // fraction under the pointer
@@ -146,7 +149,7 @@ export function SeekBar({
       </div>
       <div
         aria-hidden
-        className={`pointer-events-none absolute top-1/2 size-(--player-handle) -translate-x-1/2 -translate-y-1/2 rounded-full bg-(--player-fg) shadow-md ring-2 ring-(--player-accent) transition-transform duration-100 motion-reduce:transition-none ${drag != null ? "scale-100" : "scale-0 group-hover/seek:scale-100 group-focus-visible/seek:scale-100"}`}
+        className={`pointer-events-none absolute top-1/2 size-(--player-handle) -translate-x-1/2 -translate-y-1/2 rounded-full bg-(--player-fg) shadow-md ring-2 ring-(--player-accent) transition-transform duration-100 motion-reduce:transition-none ${drag != null || alwaysShowHandle ? "scale-100" : "scale-0 group-hover/seek:scale-100 group-focus-visible/seek:scale-100"}`}
         style={{ insetInlineStart: `${shownFraction * 100}%` }}
       />
       {bubbleFraction != null && known && (

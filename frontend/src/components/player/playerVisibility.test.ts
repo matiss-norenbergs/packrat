@@ -53,6 +53,12 @@ describe("computeShowBar", () => {
   })
   it("is always shown when not an overlay", () => {
     expect(computeShowBar({ ...base, overlay: false })).toBe(true)
+    expect(computeShowBar({ ...base, overlay: false, dismissed: true })).toBe(true)
+  })
+  it("a tap-dismissed bar hides even while paused or active, unless a menu is open", () => {
+    expect(computeShowBar({ ...base, paused: true, active: true, keyboardFocus: true, dismissed: true })).toBe(false)
+    expect(computeShowBar({ ...base, paused: true, dismissed: false })).toBe(true)
+    expect(computeShowBar({ ...base, menuOpen: true, dismissed: true })).toBe(true)
   })
 })
 
