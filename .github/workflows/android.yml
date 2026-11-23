@@ -29,8 +29,6 @@ jobs:
     env:
       # The NDK version tauri-cli 2.12 installs when none is present; bump together with the CLI.
       NDK_VERSION: "29.0.13846066"
-      # compileSdk in desktop/src-tauri/gen/android/app/build.gradle.kts.
-      ANDROID_PLATFORM: "android-37"
     steps:
       - uses: actions/checkout@v7
 
@@ -61,14 +59,76 @@ jobs:
           key: android
 
       # GitHub's Ubuntu runners ship the Android SDK (ANDROID_HOME) with cmdline-tools but not
-      # necessarily this NDK or platform, so both are installed explicitly.
+      # necessarily this NDK or platform. The listing is kept on purpose: when an install fails, it
+      # shows which package IDs the runner's sdkmanager actually offers.
+      - name: List the Android SDK packages on offer
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --version
+          "$sdkmanager" --list > "$RUNNER_TEMP/sdk-list.txt" 2>&1
+          grep -E '^[A-Za-z].*:$|^ *(platforms|ndk|build-tools);' "$RUNNER_TEMP/sdk-list.txt"
+
+      # The platform comes from compileSdk in the committed project, so the two can't drift apart.
       - name: Install the Android NDK and platform
         timeout-minutes: 10
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$sdkmanager" --licenses > /dev/null || true
-          "$sdkmanager" --install "ndk;$NDK_VERSION" "platforms;$ANDROID_PLATFORM" "platform-tools"
+          list="$RUNNER_TEMP/sdk-list.txt"
+          gradle="$GITHUB_WORKSPACE/desktop/src-tauri/gen/android/app/build.gradle.kts"
+
+          if [ ! -s "$list" ]; then
+            echo "::error::$list is missing; the listing step must run first"
+            exit 1
+          fi
+          if [ ! -f "$gradle" ]; then
+            echo "::error::$gradle is missing"
+            exit 1
+          fi
+          compile_sdk=$(sed -nE 's/^[[:space:]]*compileSdk[[:space:]]*=[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "$gradle")
+          if [ -z "$compile_sdk" ] || [ "$(printf '%s\n' "$compile_sdk" | wc -l)" -ne 1 ]; then
+            echo "::error::expected exactly one 'compileSdk = <number>' line in $gradle"
+            exit 1
+          fi
+          echo "compileSdk = $compile_sdk"
+
+          # The package for API N is usually platforms;android-N; newer repositories may name it
+          # platforms;android-N.0. Use whichever this sdkmanager offers.
+          offers() { grep -qE "^ *$(printf '%s' "$1" | sed 's/[.]/[.]/g') *\|" "$list"; }
+          platform=""
+          for candidate in "platforms;android-$compile_sdk" "platforms;android-$compile_sdk.0"; do
+            if offers "$candidate"; then
+              platform="$candidate"
+              break
+            fi
+          done
+          if [ -z "$platform" ]; then
+            echo "::error::the runner's sdkmanager offers no platform for compileSdk $compile_sdk; lower compileSdk/targetSdk in $gradle to one listed above"
+            exit 1
+          fi
+          ndk="ndk;$NDK_VERSION"
+          if ! offers "$ndk"; then
+            echo "::error::the runner's sdkmanager doesn't offer $ndk (see the listing above)"
+            exit 1
+          fi
+
+          # Gradle auto-installs build-tools later, which fails on unaccepted licenses, so check.
+          set +o pipefail
+          yes | "$sdkmanager" --licenses > "$RUNNER_TEMP/licenses.txt" 2>&1
+          status=${PIPESTATUS[1]}
+          set -o pipefail
+          tail -n 3 "$RUNNER_TEMP/licenses.txt"
+          if [ "$status" -ne 0 ] || ! grep -q "All SDK package licenses accepted" "$RUNNER_TEMP/licenses.txt"; then
+            echo "::error::accepting the SDK licenses failed (exit $status)"
+            cat "$RUNNER_TEMP/licenses.txt"
+            exit 1
+          fi
+          ls "$ANDROID_HOME/licenses"
+
+          set -x
+          "$sdkmanager" --install "$ndk" "$platform" "platform-tools"
           echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
 
       - name: Tool versions
