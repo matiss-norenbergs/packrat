@@ -12,6 +12,10 @@ single admin account (there's no multi-user support). See "Auth and CSRF" in
 
 Platform support and testing: Windows is the primary target (tested by hand against a checklist), Linux
 has end-to-end tests in CI, macOS is untested — see [`desktop/TESTING.md`](../desktop/TESTING.md).
+**Android** is an experimental spike (a debug APK from CI, no mobile layout yet): it behaves like the
+desktop app described here except that it has no tray, startup, downloads or app updates — Settings →
+Desktop holds only the server list, and the login screens have no update link — and it keeps logins
+in the app's private storage. See [`desktop/README.md`](../desktop/README.md#android-experimental).
 
 The same frontend also runs inside a desktop shell (Tauri) as a thin client for a Packrat server you
 already host — there's no bundled backend. On first launch it shows **Connect to a server**: enter

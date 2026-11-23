@@ -3,7 +3,8 @@
 What is checked automatically, what has to be checked by hand, and what isn't checked at all.
 Platform summary: **Windows** is the primary target and is tested **manually** (checklist below);
 **Linux** has automated end-to-end tests in CI (and is occasionally tried by hand); **macOS** builds
-in CI but is **untested**.
+in CI but is **untested**; **Android** is an experimental spike whose debug APK is built in CI
+(`android.yml`) and checked by hand ([section 4](#4-android-checklist-experimental)).
 
 ## 1. What CI covers (Linux only)
 
@@ -12,6 +13,7 @@ in CI but is **untested**.
 | `ci.yml` → `desktop` job (every PR) | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, the update-manifest generator's tests | Rust that doesn't compile or lint, logic regressions in `prefs`/`token`/`downloads`/`match_update` |
 | `ci.yml` → `frontend` job (every PR) | `tsc`, ESLint, Vitest | Frontend logic and component behavior with the Tauri APIs mocked |
 | [`desktop-e2e.yml`](../.github/workflows/desktop-e2e.yml) (PRs touching `desktop/`, `frontend/`, `backend/`, `database/`, or the workflow; manual dispatch) | The real shell — a debug build — against a real Packrat server, under Xvfb, driven with `tauri-driver` + WebKitWebDriver. Suite: [`e2e/`](e2e/) | Missing capability permissions, startup panics, shell ⇄ server problems (CORS, bearer-token login), regressions in the profile/Settings flows |
+| [`android.yml`](../.github/workflows/android.yml) (PRs touching `desktop/`, `frontend/` or the workflow; manual dispatch; experimental, not required) | `tauri android build --debug --apk --target aarch64`, the APK uploaded as an artifact | Rust that doesn't compile for Android (desktop-only code not gated), capability files naming compiled-out plugins, Gradle/Android project breakage. Nothing is run on a device or emulator |
 
 The end-to-end scenarios (`desktop/e2e/scenarios/`):
 
@@ -236,3 +238,30 @@ screenshots. No failures; the points below are the surprises.
   structured so the platform-specific parts live in `e2e/lib/platform.mjs`.
 - **Updates are not installed in CI**: the install path is only run against a mock whose payload
   fails the signature check; a real signed update is a manual test (W-71…W-75).
+
+## 4. Android checklist (experimental)
+
+For the spike's debug APK (desktop/README.md → *Android (experimental)*). Nothing Android runs in CI
+beyond the build itself, so this is the only test. Use a phone with the **Tailscale app connected**
+and a Packrat server on the tailnet (ideally both an `https://….ts.net` address and a plain `http://`
+one). Record `Pass`/`Fail`/`Not run`, the date, the phone/Android version and the CI run the APK came
+from, and write down **what visibly breaks** — layout problems are expected (there is no mobile layout
+yet) and are input for the next phase, not failures of the spike.
+
+| # | Check | Expected | Result |
+| --- | --- | --- | --- |
+| A-01 | Install the APK (`adb install -r` or open it on the phone) | Installs; "Packrat" with the Packrat icon in the launcher | |
+| A-02 | First launch | The "Connect to a server" screen, not hidden under the status bar or cutout | |
+| A-03 | Connect to the `https://….ts.net` address | Reaches the login screen | |
+| A-04 | Connect to a plain `http://` tailnet address (Settings → Desktop → Add server…) | Also reaches the login screen (cleartext allowed) | |
+| A-05 | Log in; with 2FA on, the code step too | Signed in; the keyboard doesn't cover the focused field | |
+| A-06 | Settings → Desktop | Only the server list; "Token storage: App storage (private to the app, not encrypted)"; no Startup/Downloads/Updates sections, no error toasts | |
+| A-07 | Browse page | Renders and scrolls by touch; thumbnails load | |
+| A-08 | Open a video and play it | Plays (MP4/H.264), with sound | |
+| A-09 | Touch player: tap, double tap left/right, cog, fullscreen | Tap shows/hides the controls; double tap skips ±10 s; the cog opens the speed menu; fullscreen fills the screen and exits again (note rotation behavior) | |
+| A-10 | Kill the app (swipe away from recents) and reopen | Still signed in on the same server | |
+| A-11 | Switch servers (sidebar switcher or Settings → Desktop) | Reloads against the other server, each with its own login | |
+| A-12 | Log out, then remove a server | Back to login / the connect screen; signing in again works | |
+| A-13 | Tailscale off, then back on | "Can't reach the server" (or the reconnect banner), recovers with Retry | |
+| A-14 | Note what visibly breaks | Sidebar, tables, dialogs, toolbars, the bottom-left dock, links that should open in the browser, notifications | |
+
