@@ -36,11 +36,20 @@ export interface BarVisibilityInput {
   pointerOnBar: boolean
   menuOpen: boolean
   keyboardFocus: boolean
+  /**
+   * Touch mode: the user tapped the video to hide the controls. Hides them even while paused (a tap toggles them
+   * either way); an open menu still keeps them. Cleared by the next activity (a tap, a key, a mouse move).
+   */
+  dismissed?: boolean
 }
 
-/** The bar is always shown when it is not an overlay, and while paused, active, hovered, in a menu or keyboard focused. */
+/**
+ * The bar is always shown when it is not an overlay or a menu is open; otherwise (unless dismissed by a tap) while
+ * paused, active, hovered or keyboard focused.
+ */
 export function computeShowBar(i: BarVisibilityInput): boolean {
-  return !i.overlay || i.paused || i.active || i.pointerOnBar || i.menuOpen || i.keyboardFocus
+  if (!i.overlay || i.menuOpen) return true
+  return !i.dismissed && (i.paused || i.active || i.pointerOnBar || i.keyboardFocus)
 }
 
 /**

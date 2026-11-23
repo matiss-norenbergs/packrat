@@ -9,6 +9,18 @@ export const PLAYER_CLICK_DELAY_MS = 220 // wait for a possible double-click bef
 export const PLAYER_FLASH_MS = 500 // centered play/pause pulse
 export const PLAYER_OSD_MS = 900 // seek/volume/speed indicator
 
+// Touch mode (the item page's video on a phone/tablet; see playerTouch.ts).
+export const PLAYER_DOUBLE_TAP_MS = 300 // a second tap within this window is a double tap (a single tap waits this long)
+export const PLAYER_SKIP_ACCUMULATE_MS = 700 // further taps on the same side within this window add another skip
+export const PLAYER_TOUCH_SKIP_S = 10 // seconds per double-tap skip
+export const PLAYER_TAP_SLOP_PX = 10 // a press that moved further than this is a drag/scroll, not a tap
+export const PLAYER_SKIP_INDICATOR_MS = 800 // how long the "+10 s" indicator stays after the last skip
+export const PLAYER_CENTER_BTN_PX = 64 // the big play/pause button in the middle
+export const PLAYER_TOUCH_TARGET_PX = 44 // minimum size of a touch button
+export const PLAYER_TOUCH_SEEK_HIT_PX = 44 // seek bar hit area height in touch mode (the visible track stays thin)
+export const PLAYER_TOUCH_SCRIM_OPACITY = 0.3 // dim over the whole picture while the touch controls are shown
+export const PLAYER_TOUCH_SCRIM_EDGE_OPACITY = 0.75 // extra darkening at the top and bottom edges (behind the rows)
+
 export const PLAYER_BAR_RADIUS_PX = 14
 export const PLAYER_BAR_INSET_PX = 12 // gap between the bar and the video's edges
 export const PLAYER_BAR_BLUR_PX = 14
@@ -51,6 +63,9 @@ export function playerCssVars(): Record<string, string> {
     "--player-volume-slider": `${PLAYER_VOLUME_SLIDER_PX}px`,
     "--player-flash-size": `${PLAYER_FLASH_SIZE_PX}px`,
     "--player-flash-ms": `${PLAYER_FLASH_MS}ms`,
+    "--player-center-btn": `${PLAYER_CENTER_BTN_PX}px`,
+    "--player-touch-target": `${PLAYER_TOUCH_TARGET_PX}px`,
+    "--player-touch-seek-hit": `${PLAYER_TOUCH_SEEK_HIT_PX}px`,
   }
 }
 

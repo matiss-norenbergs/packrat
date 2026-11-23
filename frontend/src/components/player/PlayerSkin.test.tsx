@@ -63,7 +63,7 @@ function setup(props: Parameters<typeof Harness>[0] = {}) {
   return { el, s, ...view }
 }
 
-const frame = () => screen.getByRole("group")
+const frame = () => screen.getByRole("group", { name: /player/ })
 // jsdom has no layout: give the frame and bar real boxes (1000x600 frame, bar along the bottom) for the geometry checks.
 const rect = (left: number, top: number, right: number, bottom: number) => ({ left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON() {} })
 function stubRects() {
@@ -376,7 +376,7 @@ describe("PlayerSkin volume and speed", () => {
       s.volume = 0.3
       el.dispatchEvent(new Event("volumechange"))
     }).not.toThrow()
-    expect(screen.getByRole("button", { name: /Playback speed/ })).toBeTruthy()
+    expect(screen.getByRole("button", { name: /Settings, playback speed/ })).toBeTruthy()
   })
 
   it("the mute button toggles mute and the slider sets volume", () => {
@@ -388,15 +388,28 @@ describe("PlayerSkin volume and speed", () => {
     expect(s.muted).toBe(false)
   })
 
-  it("the speed menu sets the rate", async () => {
+  it("the settings cog replaces the speed pill and its menu sets the rate; the label shows only when not 1×", async () => {
     const { s } = setup()
     const user = userEvent.setup()
-    const pill = screen.getByRole("button", { name: /Playback speed, 1×/ })
-    expect(pill.textContent).toBe("1×")
-    await user.click(pill)
+    const cog = screen.getByRole("button", { name: "Settings, playback speed 1×" })
+    expect(cog.textContent).toBe("") // just the icon at 1×
+    expect(frame().querySelector("[data-slot=player-speed-label]")).toBeNull()
+    await user.click(cog)
+    expect(await screen.findByText("Playback speed")).toBeTruthy()
     await user.click(await screen.findByRole("menuitemradio", { name: "1.5×" }))
     expect(s.playbackRate).toBe(1.5)
-    expect(screen.getByRole("button", { name: /Playback speed, 1.5×/ })).toBeTruthy()
+    const after = screen.getByRole("button", { name: "Settings, playback speed 1.5×" })
+    expect(after.querySelector("[data-slot=player-speed-label]")?.textContent).toBe("1.5×")
+    fireEvent.keyDown(frame(), { key: "<" }) // focus is back on the cog, inside the frame
+    expect(s.playbackRate).toBe(1.25)
+    fireEvent.keyDown(frame(), { key: "<" })
+    expect(s.playbackRate).toBe(1)
+    expect(frame().querySelector("[data-slot=player-speed-label]")).toBeNull()
+  })
+
+  it("audio keeps the cog in its bar", () => {
+    setup({ kind: "audio" })
+    expect(screen.getByRole("button", { name: /Settings, playback speed/ })).toBeTruthy()
   })
 })
 
@@ -469,9 +482,10 @@ describe("PlayerSkin states", () => {
     expect(barVisible()).toBe("true")
   })
 
-  it("compact has no speed pill or fullscreen", () => {
+  it("compact has no speed pill, settings cog or fullscreen", () => {
     setup({ variant: "compact" })
-    expect(screen.queryByRole("button", { name: /Playback speed/ })).toBeNull()
+    expect(screen.queryByRole("button", { name: /Playback speed/i })).toBeNull()
+    expect(screen.queryByRole("button", { name: /Settings/ })).toBeNull()
     expect(screen.queryByRole("button", { name: /fullscreen/i })).toBeNull()
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy()
   })
@@ -629,5 +643,251 @@ describe("PlayerSkin fullscreen containment", () => {
     expect(barVisible()).toBe("false")
     fireEvent.mouseMove(document.body, { clientX: 400, clientY: 200 }) // over it
     expect(barVisible()).toBe("true")
+  })
+})
+
+describe("PlayerSkin touch mode", () => {
+  const surface = () => frame().querySelector("[data-slot=player-surface]")! as HTMLElement
+  let pid = 10
+  // One finger tap at (x, y) on the 1000x600 frame: pointerdown + pointerup with pointerType "touch".
+  const tap = (x: number, y = 300) => {
+    const id = ++pid
+    fireEvent.pointerDown(surface(), { pointerType: "touch", pointerId: id, clientX: x, clientY: y })
+    fireEvent.pointerUp(surface(), { pointerType: "touch", pointerId: id, clientX: x, clientY: y })
+  }
+  const settle = () => act(() => void vi.advanceTimersByTime(1500)) // past every tap/skip window
+  // Touch mode, playing, controls hidden.
+  function touchSetup(props: Parameters<typeof Harness>[0] = {}) {
+    vi.useFakeTimers()
+    const r = setup(props)
+    stubRects()
+    tap(500)
+    settle()
+    act(() => void r.el.play())
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+    stubRects()
+    return r
+  }
+
+  it("switches to the touch layout: center play/pause, cog, time and fullscreen; no volume, mute or bar play button", () => {
+    touchSetup()
+    const bar = frame().querySelector("[data-slot=player-bar]")!
+    expect(bar.getAttribute("data-touch")).toBe("true")
+    expect(frame().querySelector("[data-slot=player-center-play]")).not.toBeNull()
+    expect(screen.getAllByRole("button", { name: "Pause" })).toHaveLength(1) // only the center one
+    expect(screen.getByRole("button", { name: /Settings, playback speed/ })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Fullscreen" })).toBeTruthy()
+    expect(screen.getByRole("slider", { name: "Seek" })).toBeTruthy()
+    expect(frame().querySelector("[data-slot=player-time]")).not.toBeNull()
+    expect(screen.queryByRole("slider", { name: "Volume" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Mute" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Unmute" })).toBeNull()
+  })
+
+  it("a tap shows the hidden controls and the next one hides them, never touching playback", () => {
+    const { el } = touchSetup()
+    expect(barVisible()).toBe("false")
+    tap(500)
+    expect(barVisible()).toBe("false") // not before the double-tap window passed
+    settle()
+    expect(barVisible()).toBe("true")
+    tap(500)
+    settle()
+    expect(barVisible()).toBe("false")
+    tap(200) // a side tap is a single tap too
+    settle()
+    expect(barVisible()).toBe("true")
+    act(() => void vi.advanceTimersByTime(PLAYER_HIDE_DELAY_MS + 10))
+    expect(barVisible()).toBe("false") // auto-hides while playing
+    expect(el.play).toHaveBeenCalledTimes(1) // only the setup's own play()
+    expect(el.pause).not.toHaveBeenCalled()
+  })
+
+  it("the click and focus that follow a tap don't toggle playback or show the controls early", () => {
+    const { el } = touchSetup()
+    tap(500)
+    fireEvent.click(surface())
+    fireEvent.doubleClick(surface())
+    act(() => frame().focus())
+    expect(barVisible()).toBe("false")
+    settle()
+    expect(el.pause).not.toHaveBeenCalled()
+    expect(barVisible()).toBe("true")
+  })
+
+  it("a tap hides the controls even while paused", () => {
+    const { el } = touchSetup()
+    act(() => void el.pause())
+    expect(barVisible()).toBe("true")
+    tap(500)
+    settle()
+    expect(barVisible()).toBe("false")
+  })
+
+  it("the center button toggles playback and keeps the controls up", () => {
+    const { el } = touchSetup()
+    tap(500)
+    settle()
+    const center = frame().querySelector("[data-slot=player-center-play]")! as HTMLElement
+    fireEvent.pointerDown(center, { pointerType: "touch", pointerId: 99 })
+    fireEvent.click(center)
+    expect(el.pause).toHaveBeenCalledTimes(1)
+    expect(barVisible()).toBe("true")
+    fireEvent.click(center)
+    expect(el.play).toHaveBeenCalledTimes(2)
+  })
+
+  it("a double tap on the right/left third seeks +/-10 s without toggling the controls", () => {
+    const { s } = touchSetup()
+    s.currentTime = 50
+    tap(900)
+    act(() => void vi.advanceTimersByTime(150))
+    tap(900)
+    expect(s.currentTime).toBe(60)
+    expect(frame().querySelector("[data-slot=player-skip]")?.textContent).toBe("+10 s")
+    settle()
+    expect(barVisible()).toBe("false")
+    tap(100)
+    act(() => void vi.advanceTimersByTime(150))
+    tap(100)
+    expect(s.currentTime).toBe(50)
+    expect(frame().querySelector("[data-slot=player-skip]")?.textContent).toBe("−10 s")
+    settle()
+    expect(barVisible()).toBe("false")
+    expect(frame().querySelector("[data-slot=player-skip]")).toBeNull()
+  })
+
+  it("repeated taps on the same side accumulate, and the skip is clamped", () => {
+    const { s } = touchSetup()
+    s.currentTime = 50
+    tap(900)
+    act(() => void vi.advanceTimersByTime(100))
+    tap(900)
+    act(() => void vi.advanceTimersByTime(400))
+    tap(900)
+    act(() => void vi.advanceTimersByTime(400))
+    tap(900)
+    expect(s.currentTime).toBe(80)
+    expect(frame().querySelector("[data-slot=player-skip]")?.textContent).toBe("+30 s")
+    settle()
+    s.currentTime = 95
+    tap(900)
+    act(() => void vi.advanceTimersByTime(100))
+    tap(900)
+    expect(s.currentTime).toBe(100)
+  })
+
+  it("a double tap in the middle does nothing", () => {
+    const { el, s } = touchSetup()
+    s.currentTime = 50
+    const requestFullscreen = vi.fn(() => Promise.resolve())
+    frame().requestFullscreen = requestFullscreen
+    tap(500)
+    act(() => void vi.advanceTimersByTime(100))
+    tap(500)
+    settle()
+    expect(s.currentTime).toBe(50)
+    expect(el.pause).not.toHaveBeenCalled()
+    expect(requestFullscreen).not.toHaveBeenCalled()
+    expect(barVisible()).toBe("false")
+  })
+
+  it("a drag on the video is not a tap", () => {
+    touchSetup()
+    fireEvent.pointerDown(surface(), { pointerType: "touch", pointerId: 70, clientX: 500, clientY: 300 })
+    fireEvent.pointerUp(surface(), { pointerType: "touch", pointerId: 70, clientX: 500, clientY: 200 })
+    settle()
+    expect(barVisible()).toBe("false")
+  })
+
+  it("shows an unmute button only while muted or at volume 0, and it unmutes", () => {
+    const { s, el } = touchSetup()
+    tap(500)
+    settle()
+    expect(screen.queryByRole("button", { name: "Unmute" })).toBeNull()
+    act(() => void (el.muted = true))
+    fireEvent.click(screen.getByRole("button", { name: "Unmute" }))
+    expect(s.muted).toBe(false)
+    expect(screen.queryByRole("button", { name: "Unmute" })).toBeNull()
+    act(() => void (el.volume = 0))
+    fireEvent.click(screen.getByRole("button", { name: "Unmute" }))
+    expect(s.volume).toBe(1)
+    expect(s.muted).toBe(false)
+    expect(screen.queryByRole("button", { name: "Unmute" })).toBeNull()
+  })
+
+  it("the cog menu sets the rate in touch mode and the label shows only when not 1×", async () => {
+    const { s } = touchSetup()
+    tap(500)
+    settle()
+    vi.useRealTimers()
+    const cog = screen.getByRole("button", { name: "Settings, playback speed 1×" })
+    expect(cog.querySelector("[data-slot=player-speed-label]")).toBeNull()
+    fireEvent.pointerDown(cog, { pointerType: "touch", pointerId: 80, button: 0 })
+    fireEvent.pointerUp(cog, { pointerType: "touch", pointerId: 80, button: 0 })
+    const item = await screen.findByRole("menuitemradio", { name: "2×" })
+    expect(frame().contains(item)).toBe(true) // portaled into the frame (reachable in fullscreen)
+    fireEvent.click(item)
+    expect(s.playbackRate).toBe(2)
+    const after = screen.getByRole("button", { name: "Settings, playback speed 2×" })
+    expect(after.querySelector("[data-slot=player-speed-label]")?.textContent).toBe("2×")
+    expect(frame().querySelector("[data-slot=player-bar]")!.getAttribute("data-touch")).toBe("true")
+  })
+
+  it("a paused video whose controls were tapped away shows them again when it plays and pauses", () => {
+    const { el } = touchSetup()
+    act(() => void el.pause())
+    tap(500)
+    settle()
+    expect(barVisible()).toBe("false")
+    act(() => void el.play())
+    act(() => void el.pause())
+    expect(barVisible()).toBe("true")
+  })
+
+  it("a mouse move switches back to the desktop bar, where a click toggles playback again", () => {
+    const { el } = touchSetup()
+    fireEvent.pointerMove(frame(), { pointerType: "mouse", clientX: 400, clientY: 200 })
+    expect(frame().querySelector("[data-slot=player-bar]")!.getAttribute("data-touch")).toBeNull()
+    expect(screen.getByRole("slider", { name: "Volume" })).toBeTruthy()
+    act(() => void vi.advanceTimersByTime(1100)) // past the touch ghost-click guard
+    fireEvent.click(surface())
+    act(() => void vi.advanceTimersByTime(300))
+    expect(el.pause).toHaveBeenCalledTimes(1)
+  })
+
+  it("compact and audio players have no touch mode", () => {
+    vi.useFakeTimers()
+    const { el } = setup({ variant: "compact" })
+    tap(500)
+    fireEvent.click(surface())
+    act(() => void vi.advanceTimersByTime(300))
+    expect(el.play).toHaveBeenCalledTimes(1) // tap = click = play, as before
+    expect(frame().querySelector("[data-slot=player-bar]")!.getAttribute("data-touch")).toBeNull()
+  })
+
+  describe("fullscreen", () => {
+    const proto = HTMLVideoElement.prototype as unknown as { webkitEnterFullscreen?: () => void }
+    afterEach(() => {
+      delete proto.webkitEnterFullscreen
+      Object.defineProperty(document, "fullscreenEnabled", { configurable: true, get: () => undefined })
+    })
+
+    it("falls back to the video's native fullscreen when the Fullscreen API is off (iPhone)", () => {
+      const enter = vi.fn()
+      proto.webkitEnterFullscreen = enter
+      Object.defineProperty(document, "fullscreenEnabled", { configurable: true, get: () => false })
+      touchSetup()
+      tap(500)
+      settle()
+      fireEvent.click(screen.getByRole("button", { name: "Fullscreen" }))
+      expect(enter).toHaveBeenCalledTimes(1)
+    })
+
+    it("has no fullscreen button when neither works", () => {
+      Object.defineProperty(document, "fullscreenEnabled", { configurable: true, get: () => false })
+      touchSetup()
+      expect(screen.queryByRole("button", { name: /fullscreen/i })).toBeNull()
+    })
   })
 })
