@@ -166,10 +166,42 @@ jobs:
           set -x
           npx tauri android build --debug --apk --target aarch64 --verbose
 
-      - name: List the APKs
+      # Records the APK's path and size, and checks it is the arm64 debug build: the app library
+      # for arm64-v8a only, in a debug build output.
+      - name: Check the APK
         run: |
-          set -x
-          find "$GITHUB_WORKSPACE/desktop/src-tauri/gen/android/app/build/outputs" -name '*.apk' -exec ls -l {} +
+          set -euo pipefail
+          outputs="$GITHUB_WORKSPACE/desktop/src-tauri/gen/android/app/build/outputs"
+          mapfile -t apks < <(find "$outputs" -name '*.apk')
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one APK under $outputs, found ${#apks[@]}"
+            exit 1
+          fi
+          apk="${apks[0]}"
+          case "$apk" in
+            */debug/*) ;;
+            *) echo "::error::$apk is not a debug build output"; exit 1 ;;
+          esac
+          libs=$({ unzip -Z1 "$apk" 'lib/*' || true; } | grep -v '/$' || true)
+          echo "$libs"
+          if ! grep -qx 'lib/arm64-v8a/libpackrat_desktop_lib.so' <<< "$libs"; then
+            echo "::error::lib/arm64-v8a/libpackrat_desktop_lib.so is missing from the APK"
+            exit 1
+          fi
+          if grep -v '^lib/arm64-v8a/' <<< "$libs" | grep -q .; then
+            echo "::error::the APK carries native libraries for other ABIs"
+            exit 1
+          fi
+          size=$(stat -c %s "$apk")
+          rel="${apk#"$GITHUB_WORKSPACE"/}"
+          echo "APK: $rel ($size bytes), arm64-v8a only, debug build"
+          {
+            echo "### Android debug APK"
+            echo "- Path: \`$rel\`"
+            echo "- Size: $size bytes ($(( size / 1024 / 1024 )) MiB)"
+            echo "- ABI: arm64-v8a only; debug build, signed with the SDK debug key"
+            echo "- Artifact: \`packrat-android-debug-apk\` (this run's Artifacts section, 7 days)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
         with:
