@@ -20,10 +20,8 @@ mod token;
 mod tray;
 
 #[cfg(desktop)]
-use tauri::Manager;
-use tauri::WebviewWindowBuilder;
-#[cfg(desktop)]
 use tauri::WindowEvent;
+use tauri::{Manager, WebviewWindowBuilder};
 #[cfg(all(desktop, not(windows)))]
 use tauri_plugin_autostart::MacosLauncher;
 #[cfg(desktop)]
@@ -169,10 +167,13 @@ fn setup_desktop(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
-/// Android: the one window — which always fills the screen on mobile; the size fields are ignored — is built from
+/// Android: tokens go to a file in the app's private data directory (see token.rs), and the one
+/// window — which always fills the screen on mobile; the size fields are ignored — is built from
 /// the same config entry, without the desktop download handler.
 #[cfg(mobile)]
 fn setup_mobile(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = app.path().app_data_dir()?;
+    app.manage(token::Vault::file(dir.join(token::TOKEN_FILE)));
     let config = main_window_config(app);
     WebviewWindowBuilder::from_config(app.handle(), &config)?.build()?;
     Ok(())
