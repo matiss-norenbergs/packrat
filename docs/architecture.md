@@ -1454,8 +1454,8 @@ and `MiniPlayerDock` keep their `<video>`/`<audio>`, its ref (`usePersistedVolum
 heartbeat, `syncMediaOnReady`), autoplay and `key` remounts, and wrap it in `<PlayerSkin mediaRef kind variant>`
 (`full` or `compact`; remount it together with the element). The skin only listens (`useMediaState`, a
 capture `error` listener because `<source>` errors don't bubble) and drives the element; native `controls`
-is gone. Fullscreen is requested on the skin's frame, and the speed menu is portaled into that frame, so both
-survive it (standard Fullscreen API only; no webkit-prefixed fallback). Text and icons drawn over arbitrary video use scoped,
+is gone. Fullscreen is requested on the skin's frame, and the settings (speed) menu is portaled into that frame, so both
+survive it (standard Fullscreen API; the only webkit fallback is the iPhone native-player one described under touch mode below). Text and icons drawn over arbitrary video use scoped,
 theme-independent `--player-*` variables in `globals.css` (the one exception to theme-only colors);
 the seek fill follows `--primary`. In fullscreen the bar has no `backdrop-filter` (a more opaque scrim instead): a blurred layer over a video Chromium plays through a hardware overlay flickered or went unpainted for some clips. Permanent URL-only diagnostics exist for future cases: `?playerDebug=1|log` (`PlayerDebug.tsx`, pure helpers in `playerDiagnostics.ts`; the box can itself mask the bug, the log mode adds no DOM) and the `?playerFx=` switches (`playerFx.ts`), which do nothing and cost nothing when absent. Every size, duration, blur and opacity is a named constant in
 `playerTheme.ts`; pure logic (time formatting, pointer-to-time, stepping, ARIA text) is in `playerMath.ts`, and the
@@ -1477,6 +1477,28 @@ points of the reference cell's own fraction) and `seekAll` takes the same units,
 or `globalSeekPercentTarget`); a mode switch seeks nothing and drops a still-pending throttled scrub. The pure parts are in `groupMedia.ts`
 and the keyboard scope decision (`resolveGlobalKey`: global keys act only when no cell has focus and the focused control doesn't
 handle the key itself) in `playerKeys.ts`. The Trim dialog deliberately keeps native controls.
+
+**Touch mode.** Only the full video variant (the item page) has one; compact and audio skins keep the mouse
+layout everywhere. The skin keeps the *last input kind* as state, decided per pointer event from `pointerType`
+(`touch`/`pen` vs `mouse`, `inputKindFromPointerType` in `playerTouch.ts`; first guess `(pointer: coarse)`), not
+per device, so a touch-screen laptop flips with whatever was used last. A press that starts on a control switches
+only when the gesture ends (the layouts render different controls, so switching mid-drag would remount the seek
+bar under the finger). In touch mode the bar is `PlayerTouchControls` (scrim, center play/pause, title and cog
+on top, seek/time/fullscreen at the bottom, an unmute button only while muted or at volume 0). Taps on the video
+surface are sequenced from `pointerdown`/`pointerup`, not `click`/`dblclick` (on touch those are delayed,
+synthesized, or swallowed by double-tap zoom), by the pure machine `feedTap`/`resolveTapTimeout` with injectable
+timestamps: a single tap toggles the controls only after the double-tap window (`PLAYER_DOUBLE_TAP_MS`) expired,
+so a double tap never flashes them; a double tap on the left/right third starts a skip streak that further taps
+on the same side extend within `PLAYER_SKIP_ACCUMULATE_MS`; the middle third does nothing. A press that moved
+more than `PLAYER_TAP_SLOP_PX` is a drag, not a tap. The surface has `touch-action: manipulation` so the browser
+neither zooms on a double tap nor delays taps; the compatibility mouse events, click and focus that follow a tap
+are ignored for about a second. "Hidden by a tap" is the `dismissed` input of `computeShowBar` (it overrides
+paused/active, not an open menu; any activity or a play/pause change clears it). Fullscreen is decided by
+`fullscreenMode`: the frame via the Fullscreen API, else the `<video>`'s `webkitEnterFullscreen` (iPhone Safari,
+where `document.fullscreenEnabled` is false; the native player replaces the skin there), else no button. The
+settings cog (`SettingsMenu` in `PlayerParts.tsx`) replaces the speed pill in the skin; `SpeedMenu` stays for the
+compare page's global bar and both render the same speed items. Tailwind v4 already scopes `hover:` to
+`@media (hover: hover)`, so hover styles don't stick after a tap.
 
 ## Floating action dock
 
