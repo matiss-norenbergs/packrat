@@ -5,6 +5,9 @@ import {
   getServerUrl,
   getToken,
   isDesktop,
+  isTauri,
+  isTauriDesktop,
+  isTauriMobile,
   needsServerUrl,
   normalizeServerUrl,
   changeProfileUrl,
@@ -15,8 +18,10 @@ import {
   serverUrl,
   setServerUrl,
   setToken,
+  tokenStorageLabel,
   websocketUrl,
 } from "@/lib/server"
+import { enterAndroidBrowser, enterTauri, leaveTauri } from "@/test/tauriShell"
 
 function enterDesktop() {
   Object.defineProperty(window, "__TAURI_INTERNALS__", { value: {}, configurable: true })
@@ -27,6 +32,44 @@ afterEach(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete (window as any).__TAURI_INTERNALS__
   vi.unstubAllGlobals()
+})
+
+describe("isTauriMobile / isTauriDesktop", () => {
+  afterEach(leaveTauri)
+
+  it("are both false on the web, also in a phone's browser", () => {
+    expect([isTauri(), isTauriDesktop(), isTauriMobile()]).toEqual([false, false, false])
+    enterAndroidBrowser()
+    expect([isTauri(), isTauriDesktop(), isTauriMobile()]).toEqual([false, false, false])
+  })
+
+  it("tell the desktop shell from the Android build", () => {
+    enterTauri()
+    expect([isTauri(), isTauriDesktop(), isTauriMobile()]).toEqual([true, true, false])
+    leaveTauri()
+    enterTauri("android")
+    expect([isTauri(), isTauriDesktop(), isTauriMobile()]).toEqual([true, false, true])
+    // The Android build still takes the desktop client path (server profiles, bearer token).
+    expect(isDesktop()).toBe(true)
+  })
+
+  it("only match Android as a word", () => {
+    enterTauri()
+    Object.defineProperty(window.navigator, "userAgent", {
+      value: "Mozilla/5.0 (X11; Linux) NotAndroidish",
+      configurable: true,
+    })
+    expect(isTauriMobile()).toBe(false)
+  })
+})
+
+describe("tokenStorageLabel", () => {
+  it("names the store the shell reports", () => {
+    expect(tokenStorageLabel("keychain", false)).toBe("OS keychain")
+    expect(tokenStorageLabel("keychain", true)).toBe("App storage (private to the app, not encrypted)")
+    expect(tokenStorageLabel("local", false)).toBe("Local file (keychain unavailable)")
+    expect(tokenStorageLabel("local", true)).toBe("Local file (keychain unavailable)")
+  })
 })
 
 describe("normalizeServerUrl", () => {

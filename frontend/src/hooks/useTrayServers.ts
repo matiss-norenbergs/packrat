@@ -1,14 +1,14 @@
 import { useEffect } from "react"
-import { getActiveProfile, getProfiles, isTauri, subscribeProfiles } from "@/lib/server"
+import { getActiveProfile, getProfiles, isTauriDesktop, subscribeProfiles } from "@/lib/server"
 import { openProfile } from "@/lib/serverSwitch"
 
 // Desktop shell only. The saved servers live in localStorage, which the shell can't read, so the
 // list is pushed to the tray menu (`tray_set_servers`) on mount and whenever it or the active
 // server changes. Picking a server in the tray comes back as a `tray-switch-server` event and
-// switches exactly like the sidebar switcher does. A no-op on the web.
+// switches exactly like the sidebar switcher does. A no-op on the web and on Android (no tray).
 export function useTrayServers() {
   useEffect(() => {
-    if (!isTauri()) return
+    if (!isTauriDesktop()) return
     let cancelled = false
     let unlisten: (() => void) | undefined
 

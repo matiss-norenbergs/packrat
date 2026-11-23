@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ServersSection } from "@/components/settings/ServersSection"
 import { activateProfile, addProfile, getActiveProfile, getProfiles, isAddingServer } from "@/lib/serverProfiles"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
+import { enterTauri, leaveTauri } from "@/test/tauriShell"
 
 const reloadApp = vi.fn()
 vi.mock("@/lib/server", async (importOriginal) => ({
@@ -39,6 +40,22 @@ async function editAddress(name: string, address: string) {
   await user.type(field, address)
   await user.click(screen.getByRole("button", { name: "Save" }))
 }
+
+describe("ServersSection token storage line", () => {
+  afterEach(leaveTauri)
+
+  it("is hidden on the web", () => {
+    renderWithProviders(<ServersSection />)
+    expect(screen.queryByText(/Token storage/)).toBeNull()
+  })
+
+  it("names the store in the shell (labels per platform: tokenStorageLabel in server.test.ts)", () => {
+    enterTauri()
+    renderWithProviders(<ServersSection />)
+    // Nothing was loaded from the shell in this test, so the token is in localStorage.
+    expect(screen.getByText("Token storage: Local file (keychain unavailable)")).toBeInTheDocument()
+  })
+})
 
 describe("ServersSection", () => {
   it("lists each server with its address, marks the current one", () => {

@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AppUpdateEntry } from "@/components/desktop/AppUpdateEntry"
+import { enterTauri, leaveTauri } from "@/test/tauriShell"
 
 let appState: { status: string; downloaded?: number; total?: number | null } = { status: "idle" }
 let matchState: { status: string; version?: string; currentVersion?: string; downgrade?: boolean } = { status: "idle" }
@@ -20,6 +21,25 @@ afterEach(() => {
   vi.unstubAllGlobals()
   appState = { status: "idle" }
   matchState = { status: "idle" }
+})
+
+describe("AppUpdateEntry visibility", () => {
+  it("renders nothing in the Android build, which has no updater", () => {
+    vi.unstubAllGlobals()
+    enterTauri("android")
+    try {
+      const { container } = render(<AppUpdateEntry allowMatch />)
+      expect(container).toBeEmptyDOMElement()
+    } finally {
+      leaveTauri()
+    }
+  })
+
+  it("renders nothing on the web", () => {
+    vi.unstubAllGlobals()
+    const { container } = render(<AppUpdateEntry />)
+    expect(container).toBeEmptyDOMElement()
+  })
 })
 
 describe("AppUpdateEntry dialog", () => {
