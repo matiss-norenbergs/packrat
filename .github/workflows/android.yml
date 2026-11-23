@@ -1,0 +1,133 @@
+name: Android
+
+# EXPERIMENTAL spike: builds a debug APK of the Tauri shell (desktop/) for Android, arm64 only, as a
+# workflow artifact to sideload on a phone. See desktop/README.md ("Android (experimental)").
+#
+# Not a required check and not part of releases: nothing here is published, no secrets are used, and
+# the APK is signed only with the Android SDK's debug keystore (Gradle does that for debug builds).
+# Every tool's version is printed and the build runs verbose, and on a failure the Gradle/Cargo
+# outputs are uploaded as the android-build-logs artifact, because this job can't be run locally.
+on:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "frontend/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # The NDK version tauri-cli 2.12 installs when none is present; bump together with the CLI.
+      NDK_VERSION: "29.0.13846066"
+      # compileSdk in desktop/src-tauri/gen/android/app/build.gradle.kts.
+      ANDROID_PLATFORM: "android-37"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            desktop/src-tauri/gen/android/**/*.gradle*
+            desktop/src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          key: android
+
+      # GitHub's Ubuntu runners ship the Android SDK (ANDROID_HOME) with cmdline-tools but not
+      # necessarily this NDK or platform, so both are installed explicitly.
+      - name: Install the Android NDK and platform
+        timeout-minutes: 10
+        run: |
+          set -euxo pipefail
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" --install "ndk;$NDK_VERSION" "platforms;$ANDROID_PLATFORM" "platform-tools"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Tool versions
+        run: |
+          set -x
+          node --version
+          npm --version
+          java -version
+          rustc --version --verbose
+          cargo --version
+          rustup target list --installed
+          echo "ANDROID_HOME=$ANDROID_HOME NDK_HOME=$NDK_HOME"
+          cat "$NDK_HOME/source.properties"
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
+
+      - run: npm ci
+        working-directory: frontend
+      - run: npm ci
+        working-directory: desktop
+
+      - name: Tauri CLI and Gradle versions
+        working-directory: desktop
+        run: |
+          set -x
+          npx tauri --version
+          "$GITHUB_WORKSPACE/desktop/src-tauri/gen/android/gradlew" --version
+
+      # Runs the frontend's production build (beforeBuildCommand), the Rust library for arm64 and
+      # Gradle's assembleDebug. Debug builds are signed with the SDK debug keystore automatically.
+      - name: Build the debug APK
+        working-directory: desktop
+        run: |
+          set -x
+          npx tauri android build --debug --apk --target aarch64 --verbose
+
+      - name: List the APKs
+        run: |
+          set -x
+          find "$GITHUB_WORKSPACE/desktop/src-tauri/gen/android/app/build/outputs" -name '*.apk' -exec ls -l {} +
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packrat-android-debug-apk
+          path: desktop/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-build-logs
+          path: |
+            desktop/src-tauri/gen/android/app/build/reports/
+            desktop/src-tauri/gen/android/app/build/outputs/logs/
+            desktop/src-tauri/gen/android/build/reports/
+            desktop/src-tauri/gen/android/app/tauri.build.gradle.kts
+            desktop/src-tauri/gen/android/tauri.settings.gradle
+            desktop/src-tauri/target/aarch64-linux-android/debug/build/*/output
+            desktop/src-tauri/target/aarch64-linux-android/debug/build/*/stderr
+          if-no-files-found: ignore
+          retention-days: 7
