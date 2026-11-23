@@ -298,10 +298,12 @@ content). That origin is in the server's default `CORS_ALLOWED_ORIGINS`; if you 
 workflow itself) and on demand. A frontend-only change doesn't trigger it — the build takes 10-20
 minutes — so to try one on the phone, start it by hand for your branch: *Actions → Android → Run
 workflow*, pick the branch, or `gh workflow run android.yml --ref <branch>`. Download the
-`packrat-android-debug-apk` artifact (kept 7 days) from the run; it is a zip with the `.apk` inside.
+`packrat-android-debug-apk` artifact (kept 7 days) from the run's **Artifacts** section; it is a zip
+(~40 MB) holding `app-universal-debug.apk` (~150 MB: a debug build keeps the Rust debug symbols). The
+run's summary lists the APK's path and size; the job checks it carries only the arm64-v8a library.
 A failed run uploads `android-build-logs` (Gradle reports, Cargo build-script output).
 
-**Install it.** Either `adb install -r <the .apk>` with USB debugging on, or copy the
+**Install it.** Either `adb install -r app-universal-debug.apk` with USB debugging on, or copy the
 `.apk` to the phone and open it (allow "Install unknown apps" for the file manager or browser). The
 APK is signed with a debug key: Android may warn, and an APK from a different machine's debug key
 can't update an installed one (uninstall first; that also deletes the saved servers and logins).
@@ -317,7 +319,7 @@ npm ci && (cd ../frontend && npm ci)
 npx tauri android build --debug --apk --target aarch64
 ```
 
-The APK lands under `src-tauri/gen/android/app/build/outputs/apk/`. `npx tauri android dev` runs it
+The APK is `src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`. `npx tauri android dev` runs it
 on a connected phone or emulator against the Vite dev server (the dev page's origin differs, so the
 server's `CORS_ALLOWED_ORIGINS` must list it).
 
