@@ -2,6 +2,7 @@ use serde::Serialize;
 use tauri::State;
 
 /// Keychain service name = the app identifier.
+#[cfg(desktop)]
 const SERVICE: &str = "io.github.matiss-norenbergs.packrat";
 /// The account of the single login the app kept before server profiles existed.
 const LEGACY_ACCOUNT: &str = "session-token";
@@ -31,14 +32,17 @@ pub trait SecretStore: Send + Sync {
 }
 
 /// The OS secret store: Windows Credential Manager, macOS Keychain, Linux Secret Service.
+#[cfg(desktop)]
 pub struct Keychain;
 
+#[cfg(desktop)]
 impl Keychain {
     fn entry(account: &str) -> Result<keyring::Entry, String> {
         keyring::Entry::new(SERVICE, account).map_err(|e| e.to_string())
     }
 }
 
+#[cfg(desktop)]
 impl SecretStore for Keychain {
     fn get(&self, account: &str) -> Result<Option<String>, String> {
         match Self::entry(account)?.get_password() {
@@ -67,10 +71,12 @@ pub struct Vault {
 }
 
 impl Vault {
+    #[cfg_attr(mobile, allow(dead_code))]
     pub fn new(store: Box<dyn SecretStore>) -> Self {
         Self { store }
     }
 
+    #[cfg(desktop)]
     pub fn keychain() -> Self {
         Self::new(Box::new(Keychain))
     }

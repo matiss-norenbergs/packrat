@@ -5,28 +5,44 @@ description = "Tauri shell for the Packrat frontend"
 edition = "2021"
 license = "MIT"
 
+# The app is a library (src/lib.rs) so the Android build can load it as a shared library through
+# its mobile entry point; src/main.rs is the desktop binary that calls it. The lib name differs
+# from the package/bin name ("packrat-desktop") so the two outputs don't collide (a Cargo
+# limitation on Windows).
+[lib]
+name = "packrat_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+# Shared by desktop and mobile (Android). Everything desktop-only is in the target tables below
+# and compiled out of mobile builds; the code gates on `cfg(desktop)` / `cfg(mobile)` (set by
+# tauri-build), which match these `target_os` conditions.
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["image-png"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Desktop only: the tray, one running instance, the updater, saved window size/position, and the
+# OS keychain (keyring has no Android backend; mobile keeps tokens in a file, see token.rs).
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 
 # The tray is only usable when something on the session bus shows indicators (see tray::is_available).
 [target.'cfg(target_os = "linux")'.dependencies]
 dbus = "0.9"
 
-# Linux/macOS use the autostart plugin; Windows writes its own quoted `Run` value (autostart.rs).
-[target.'cfg(not(windows))'.dependencies]
+# Linux/macOS use the autostart plugin (not mobile); Windows writes its own quoted `Run` value (autostart.rs).
+[target.'cfg(not(any(windows, target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
 
 [target.'cfg(windows)'.dependencies]
