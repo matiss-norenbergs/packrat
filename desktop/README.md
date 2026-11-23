@@ -61,8 +61,8 @@ platforms come from CI:
   the installers. A failed desktop leg leaves the Docker release intact — re-run the failed job.
 - **Dry run**: once `desktop.yml` is on `main`, *Actions → Desktop → Run workflow* builds the
   installers as downloadable workflow artifacts without releasing anything.
-- **PRs touching `desktop/` or `frontend/`** (`android.yml`, experimental, **not a required check**): a
-  debug Android APK, see [below](#android-experimental).
+- **PRs touching `desktop/`** (`android.yml`, experimental, **not a required check**): a debug Android
+  APK, see [below](#android-experimental).
 
 The installers are **unsigned**: Windows SmartScreen and macOS Gatekeeper will warn on first launch
 (macOS: right-click → Open). Signing/notarization and the auto-updater need certificates/keys and
@@ -294,8 +294,10 @@ set, so both http and https servers are allowed — an https origin would block 
 content). That origin is in the server's default `CORS_ALLOWED_ORIGINS`; if you set the variable, keep
 `http://tauri.localhost` in it.
 
-**Get the APK from CI.** `.github/workflows/android.yml` runs on PRs touching `desktop/` or
-`frontend/` and on demand (*Actions → Android → Run workflow*). Download the
+**Get the APK from CI.** `.github/workflows/android.yml` runs on PRs touching `desktop/` (or the
+workflow itself) and on demand. A frontend-only change doesn't trigger it — the build takes 10-20
+minutes — so to try one on the phone, start it by hand for your branch: *Actions → Android → Run
+workflow*, pick the branch, or `gh workflow run android.yml --ref <branch>`. Download the
 `packrat-android-debug-apk` artifact (kept 7 days) from the run; it is a zip with the `.apk` inside.
 A failed run uploads `android-build-logs` (Gradle reports, Cargo build-script output).
 

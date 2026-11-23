@@ -1,5 +1,8 @@
 name: Android
 
+# Frontend-only PRs don't trigger it (a 10-20 min build each); run it by hand for those
+# (Actions → Android → Run workflow, or `gh workflow run android.yml --ref <branch>`).
+#
 # EXPERIMENTAL spike: builds a debug APK of the Tauri shell (desktop/) for Android, arm64 only, as a
 # workflow artifact to sideload on a phone. See desktop/README.md ("Android (experimental)").
 #
@@ -11,7 +14,6 @@ on:
   pull_request:
     paths:
       - "desktop/**"
-      - "frontend/**"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
