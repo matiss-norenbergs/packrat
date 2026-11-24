@@ -45,6 +45,7 @@ import {
   type TapState,
 } from "./playerTouch"
 import { useMediaState } from "./useMediaState"
+import { useAndroidImmersive } from "./useAndroidImmersive"
 
 // A control skin around a host-owned <video>/<audio>: the host renders the element (as `children`),
 // keeps its ref, handlers, autoplay and resume logic, and passes the ref here. The skin only
@@ -238,6 +239,9 @@ export function PlayerSkin({
     }
     return { togglePlay, seek, setVolume, toggleMute, setRate, toggleFullscreen }
   }, [mediaRef, overlay, showOsd, bump, fsMode])
+
+  // Android app only: hide the system bars while this frame is fullscreen (see useAndroidImmersive).
+  useAndroidImmersive(frameRef)
 
   // Fullscreen is on the frame (video + controls), not the <video>, so the skin stays visible.
   useEffect(() => {
