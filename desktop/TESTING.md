@@ -241,27 +241,33 @@ screenshots. No failures; the points below are the surprises.
 
 ## 4. Android checklist (experimental)
 
-For the spike's debug APK (desktop/README.md → *Android (experimental)*). Nothing Android runs in CI
-beyond the build itself, so this is the only test. Use a phone with the **Tailscale app connected**
-and a Packrat server on the tailnet (ideally both an `https://….ts.net` address and a plain `http://`
-one). Record `Pass`/`Fail`/`Not run`, the date, the phone/Android version and the CI run the APK came
-from, and write down **what visibly breaks** — layout problems are expected (there is no mobile layout
-yet) and are input for the next phase, not failures of the spike.
+For the debug APK (desktop/README.md → *Android (experimental)*), a **Browse-only** app. Nothing Android
+runs in CI beyond the build itself, so this is the only test. Use a phone with the **Tailscale app
+connected** and a Packrat server on the tailnet (ideally both an `https://….ts.net` address and a plain
+`http://` one) with some videos, a show (a collection with "Browse as show") and an artist with a
+picture. Record `Pass`/`Fail`/`Not run`, the date, the phone/Android version and the CI run the APK came
+from, and write down what visibly breaks.
 
 | # | Check | Expected | Result |
 | --- | --- | --- | --- |
 | A-01 | Install the APK (`adb install -r` or open it on the phone) | Installs; "Packrat" with the Packrat icon in the launcher | |
 | A-02 | First launch | The "Connect to a server" screen, not hidden under the status bar or cutout | |
 | A-03 | Connect to the `https://….ts.net` address | Reaches the login screen | |
-| A-04 | Connect to a plain `http://` tailnet address (Settings → Desktop → Add server…) | Also reaches the login screen (cleartext allowed) | |
-| A-05 | Log in; with 2FA on, the code step too | Signed in; the keyboard doesn't cover the focused field | |
-| A-06 | Settings → Desktop | Only the server list; "Token storage: App storage (private to the app, not encrypted)"; no Startup/Downloads/Updates sections, no error toasts | |
-| A-07 | Browse page | Renders and scrolls by touch; thumbnails load | |
-| A-08 | Open a video and play it | Plays (MP4/H.264), with sound | |
-| A-09 | Touch player: tap, double tap left/right, cog, fullscreen | Tap shows/hides the controls; double tap skips ±10 s; the cog opens the speed menu; fullscreen fills the screen and exits again (note rotation behavior) | |
-| A-10 | Kill the app (swipe away from recents) and reopen | Still signed in on the same server | |
-| A-11 | Switch servers (sidebar switcher or Settings → Desktop) | Reloads against the other server, each with its own login | |
-| A-12 | Log out, then remove a server | Back to login / the connect screen; signing in again works | |
-| A-13 | Tailscale off, then back on | "Can't reach the server" (or the reconnect banner), recovers with Retry | |
-| A-14 | Note what visibly breaks | Sidebar, tables, dialogs, toolbars, the bottom-left dock, links that should open in the browser, notifications | |
-
+| A-04 | Header menu (☰) → Change server → Add server…, enter a plain `http://` tailnet address | Also reaches the login screen (cleartext allowed) | |
+| A-05 | Log in; with 2FA on, the code step too | Signed in, lands on **Browse home** (not the Dashboard); the keyboard doesn't cover the focused field | |
+| A-06 | Browse home, portrait | Hero, rows of videos and shows, the collection rows (e.g. artists) at the bottom; rows scroll by swiping and settle on a tile; no arrow buttons over the tiles; no sideways page scroll; thumbnails load | |
+| A-07 | Hero buttons (‹ ❚❚ ›) and a Continue Watching tile's × | Visible without hover and easy to tap; × removes the tile | |
+| A-08 | Turn the phone sideways on Browse home | Hero lower, a row visible under it, nothing cut off | |
+| A-09 | Open a show, then its artist (the round picture), then an item | Show page with seasons; artist page with all their content; item page | |
+| A-10 | Item page, portrait | 16:9 player at the top, title/artist/details below, scrolling; **no ⋮ menu** next to the title | |
+| A-11 | Item page, landscape | The player fills the screen between the system bars | |
+| A-12 | Touch player: tap, double tap left/right, cog | Tap shows/hides the controls; double tap skips ±10 s; the cog opens the speed menu | |
+| A-13 | Fullscreen button | The video fills the **whole** screen: status and navigation bars hidden (a swipe from the edge shows them for a moment). Note whether it fills edge to edge or leaves a gap, and rotation behavior | |
+| A-14 | Leave fullscreen: the button; then again with the Back gesture; then by switching to another app and back | The bars come back each time and the player is no longer fullscreen; Back only leaves fullscreen (stays on the item page) | |
+| A-15 | Minimize (⤡) on the item page | Back on Browse with the mini player bottom-right, not covering the header; the last row can be scrolled clear of it | |
+| A-16 | Back gesture through Browse home → show → item | Back returns item → show → Browse home, then leaves the app (only at Browse home) | |
+| A-17 | Header menu → Change server → pick the other server | Reloads on it, signed in with its own login | |
+| A-18 | Kill the app (swipe away from recents) and reopen | Still signed in on the same server | |
+| A-19 | Header menu → Sign out | Back at the login screen; signing in again works | |
+| A-20 | Tailscale off, then back on | "Can't reach the server" (or the reconnect banner), recovers with Retry | |
+| A-21 | Dark mode on the phone (or the account's theme) | Browse pages readable in dark | |

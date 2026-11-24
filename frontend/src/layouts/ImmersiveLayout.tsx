@@ -1,6 +1,8 @@
 import { Navigate, Outlet } from "react-router-dom"
 import { Toaster } from "@/components/ui/sonner"
 import { useAuthStatus } from "@/hooks/useAuth"
+import { isBrowseOnlyApp } from "@/lib/appMode"
+import { BrowseOnlyRedirect } from "@/components/BrowseOnlyRedirect"
 import { useSyncAppearance } from "@/hooks/useAppearance"
 import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
 
@@ -12,6 +14,10 @@ import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
 // playback has no single-item "minimize" concept).
 export function ImmersiveLayout() {
   const { data: status, isLoading } = useAuthStatus()
+
+  // The Android app shows only the Browse pages: every management route (including "/", the
+  // Dashboard) goes to Browse home, which then does its own sign-in check.
+  if (isBrowseOnlyApp()) return <BrowseOnlyRedirect />
 
   if (isLoading || !status) return null
   if (status.setupRequired || !status.authenticated) {

@@ -48,7 +48,7 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
 
   return (
     <div
-      className="group/hero relative flex h-[50vh] min-h-72 w-full items-end overflow-hidden md:h-[60vh]"
+      className="group/hero relative flex h-[50vh] min-h-72 w-full items-end overflow-hidden md:h-[60vh] [@media(max-height:500px)]:min-h-60"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -63,7 +63,7 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
 
       {canRotate && (
         <div className="absolute inset-x-2 top-2 z-10 space-y-2 md:inset-x-4">
-          <div className="flex gap-1 opacity-50 transition-opacity duration-300 group-hover/hero:opacity-100">
+          <div className="flex gap-1 opacity-50 transition-opacity duration-300 group-hover/hero:opacity-100 pointer-coarse:opacity-100">
             {items.map((it, i) => (
               <div key={it.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/30">
                 {i < index && <div className="h-full w-full bg-white" />}
@@ -81,7 +81,8 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
               </div>
             ))}
           </div>
-          <div className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/hero:opacity-100">
+          {/* Hover reveals these with a mouse; on touch (no hover) they are always shown. */}
+          <div className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/hero:opacity-100 pointer-coarse:gap-0 pointer-coarse:opacity-100">
             <HeroIconButton label="Previous" onClick={() => goTo(index - 1)}>
               <ChevronLeft className="h-3.5 w-3.5" />
             </HeroIconButton>
@@ -95,9 +96,11 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
         </div>
       )}
 
-      <div className="relative space-y-3 p-6 md:p-10">
+      <div className="relative space-y-3 p-6 md:p-10 [@media(max-height:500px)]:space-y-2 [@media(max-height:500px)]:p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recently Added</p>
-        <h1 className="max-w-xl text-2xl font-bold md:text-4xl">{item.title}</h1>
+        <h1 className="line-clamp-3 max-w-xl text-2xl font-bold md:text-4xl [@media(max-height:500px)]:line-clamp-2 [@media(max-height:500px)]:text-xl">
+          {item.title}
+        </h1>
         <p className="max-w-xl text-sm text-muted-foreground line-clamp-2 md:text-base">
           {item.artistName ?? item.uploader ?? item.collectionName ?? ""}
         </p>
@@ -118,9 +121,13 @@ function HeroIconButton({ label, onClick, children }: { label: string; onClick: 
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:bg-background/95"
+      // A 28px circle; with touch input the button itself grows to 44px around the same circle so it
+      // is easy to hit.
+      className="group/heroicon flex h-7 w-7 items-center justify-center pointer-coarse:h-11 pointer-coarse:w-11"
     >
-      {children}
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur-sm group-hover/heroicon:bg-background/95">
+        {children}
+      </span>
     </button>
   )
 }

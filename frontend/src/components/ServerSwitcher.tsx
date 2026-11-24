@@ -34,40 +34,50 @@ export function ServerSwitcherMenu({
   align?: "start" | "end"
   className?: string
 }) {
-  const profiles = getProfiles()
-  const activeId = getActiveProfile()?.id
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent side={side} align={align} className={className ?? "w-60"}>
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Servers</DropdownMenuLabel>
-        {profiles.map((profile) => (
-          <DropdownMenuItem
-            key={profile.id}
-            onSelect={() => (profile.id === activeId ? undefined : openProfile(profile.id))}
-            className="gap-2"
-          >
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm">{profile.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{profile.url}</span>
-            </span>
-            {profile.id === activeId && <Check className="h-4 w-4 shrink-0" aria-label="Current server" />}
-          </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={startAddingServer} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add server…
-        </DropdownMenuItem>
-        {onManage && (
-          <DropdownMenuItem onSelect={onManage} className="gap-2">
-            <Settings2 className="h-4 w-4" />
-            Manage servers
-          </DropdownMenuItem>
-        )}
+        <ServerSwitcherItems onManage={onManage} />
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+// The menu's entries, for a dropdown (or sub-menu) the caller owns — the Android app's Browse header
+// shows them under its own menu's "Change server".
+export function ServerSwitcherItems({ onManage }: { onManage?: () => void }) {
+  const profiles = getProfiles()
+  const activeId = getActiveProfile()?.id
+
+  return (
+    <>
+      <DropdownMenuLabel className="text-xs text-muted-foreground">Servers</DropdownMenuLabel>
+      {profiles.map((profile) => (
+        <DropdownMenuItem
+          key={profile.id}
+          onSelect={() => (profile.id === activeId ? undefined : openProfile(profile.id))}
+          className="gap-2"
+        >
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm">{profile.name}</span>
+            <span className="truncate text-xs text-muted-foreground">{profile.url}</span>
+          </span>
+          {profile.id === activeId && <Check className="h-4 w-4 shrink-0" aria-label="Current server" />}
+        </DropdownMenuItem>
+      ))}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onSelect={startAddingServer} className="gap-2">
+        <Plus className="h-4 w-4" />
+        Add server…
+      </DropdownMenuItem>
+      {onManage && (
+        <DropdownMenuItem onSelect={onManage} className="gap-2">
+          <Settings2 className="h-4 w-4" />
+          Manage servers
+        </DropdownMenuItem>
+      )}
+    </>
   )
 }
 

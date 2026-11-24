@@ -5,6 +5,8 @@ import { PackratLogo } from "@/components/PackratLogo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { isBrowseOnlyApp } from "@/lib/appMode"
+import { BrowseAppMenu } from "./BrowseAppMenu"
 
 // The Browse area's own minimal header — deliberately not Sidebar/MobileNav,
 // so Browse never shares chrome with the management area. Search is kept in
@@ -75,7 +77,7 @@ export function BrowseHeader() {
               <Input
                 ref={inputRef}
                 placeholder="Search your library…"
-                className="pl-8 pr-7"
+                className="pl-8 pr-7 pointer-coarse:h-11"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onBlur={() => {
@@ -89,7 +91,7 @@ export function BrowseHeader() {
                       type="button"
                       variant="ghost"
                       size="icon-xs"
-                      className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
+                      className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground pointer-coarse:size-9"
                       onClick={() => {
                         setSearchInput("")
                         // Clicking this button moves focus off the input onto
@@ -110,7 +112,7 @@ export function BrowseHeader() {
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button type="button" variant="ghost" size="icon" onClick={() => setExpanded(true)}>
+                <Button type="button" variant="ghost" size="icon" className="pointer-coarse:size-11" onClick={() => setExpanded(true)}>
                   <Search className="h-5 w-5" />
                 </Button>
               </TooltipTrigger>
@@ -119,16 +121,21 @@ export function BrowseHeader() {
           )}
         </div>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button asChild variant="ghost" size="icon" className="shrink-0">
-              <Link to="/">
-                <LayoutDashboard className="h-4 w-4" />
-              </Link>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Manage</TooltipContent>
-        </Tooltip>
+        {/* The Android app is Browse-only: no way into the management area, a small menu instead. */}
+        {isBrowseOnlyApp() ? (
+          <BrowseAppMenu />
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button asChild variant="ghost" size="icon" className="shrink-0 pointer-coarse:size-11">
+                <Link to="/">
+                  <LayoutDashboard className="h-4 w-4" />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Manage</TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </header>
   )

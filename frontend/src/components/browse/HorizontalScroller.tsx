@@ -200,7 +200,7 @@ export function HorizontalScroller({ children, className }: { children: ReactNod
               type="button"
               aria-label="Scroll left"
               onClick={() => handleArrow("left")}
-              className="absolute inset-y-0 left-0 z-20 flex w-6 items-center justify-center opacity-100 transition-opacity md:w-10 md:opacity-0 md:group-hover/scroller:opacity-100"
+              className="absolute inset-y-0 left-0 z-20 flex w-6 items-center justify-center opacity-100 transition-opacity pointer-coarse:hidden md:w-10 md:opacity-0 md:group-hover/scroller:opacity-100"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:bg-background/95">
                 <ChevronLeft className="h-5 w-5" />
@@ -210,7 +210,7 @@ export function HorizontalScroller({ children, className }: { children: ReactNod
               type="button"
               aria-label="Scroll right"
               onClick={() => handleArrow("right")}
-              className="absolute inset-y-0 right-0 z-20 flex w-6 items-center justify-center opacity-100 transition-opacity md:w-10 md:opacity-0 md:group-hover/scroller:opacity-100"
+              className="absolute inset-y-0 right-0 z-20 flex w-6 items-center justify-center opacity-100 transition-opacity pointer-coarse:hidden md:w-10 md:opacity-0 md:group-hover/scroller:opacity-100"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:bg-background/95">
                 <ChevronRight className="h-5 w-5" />
@@ -218,7 +218,16 @@ export function HorizontalScroller({ children, className }: { children: ReactNod
             </button>
           </>
         )}
-        <div ref={scrollRef} className={cn("scrollbar-none flex overflow-x-auto scroll-smooth", className)}>
+        {/* Touch: a swipe scrolls the row natively and settles on a tile edge (snap); the arrows are
+            hidden there (pointer-coarse), so nothing covers the edge tiles. Snap stays off for mouse
+            input so the arrows' half-tile "peek" stops (getStops) aren't overridden. */}
+        <div
+          ref={scrollRef}
+          className={cn(
+            "scrollbar-none flex overflow-x-auto overscroll-x-contain scroll-smooth pointer-coarse:snap-x pointer-coarse:snap-mandatory pointer-coarse:*:snap-start",
+            className,
+          )}
+        >
           {children}
         </div>
       </div>
@@ -231,8 +240,10 @@ export function HorizontalScroller({ children, className }: { children: ReactNod
               type="button"
               aria-label={`Go to section ${i + 1} of ${segmentCount}`}
               onClick={() => scrollToSegment(i)}
+              // On touch the dots are only an indicator (a swipe is the way to move; the dots are far
+              // too small to tap), so they don't take taps meant for the row.
               className={cn(
-                "h-1.5 rounded-full transition-all",
+                "h-1.5 rounded-full transition-all pointer-coarse:pointer-events-none",
                 i === currentSegment ? "w-6 bg-foreground" : "w-3 bg-muted-foreground/30 hover:bg-muted-foreground/50",
               )}
             />
