@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { isLibraryItemNotFound, useLibraryItem } from "@/hooks/useLibrary"
-import { useSettings } from "@/hooks/useSettings"
+import { useBrowsePrefs } from "@/hooks/useBrowsePrefs"
 import { LibraryItemDetail } from "@/components/library/LibraryItemDetail"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { useMiniPlayer } from "@/components/browse/MiniPlayerContext"
@@ -20,7 +20,7 @@ const PLAYER_BOX = "aspect-video landscape:aspect-auto landscape:h-dvh"
 export function BrowseItemPage() {
   const { id } = useParams<{ id: string }>()
   const { data, isLoading, error } = useLibraryItem(Number(id))
-  const { data: settings } = useSettings()
+  const { blurPrivate } = useBrowsePrefs()
   // A deleted item's refetch 404s while react-query still holds the last
   // good copy — don't keep rendering it.
   const item = isLibraryItemNotFound(error) ? undefined : data
@@ -99,7 +99,7 @@ export function BrowseItemPage() {
           playerHeightClass={PLAYER_BOX}
           resumeAt={resumeAt}
           resumePaused={resumePaused}
-          ignorePrivacy={settings?.browseIgnorePrivacy ?? false}
+          ignorePrivacy={!blurPrivate}
           showActions={!isBrowseOnlyApp()}
           // No mini player in the Android app: leaving the item stops playback as any page would.
           onMinimize={
