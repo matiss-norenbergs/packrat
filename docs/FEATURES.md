@@ -12,10 +12,12 @@ single admin account (there's no multi-user support). See "Auth and CSRF" in
 
 Platform support and testing: Windows is the primary target (tested by hand against a checklist), Linux
 has end-to-end tests in CI, macOS is untested — see [`desktop/TESTING.md`](../desktop/TESTING.md).
-**Android** is an experimental spike (a debug APK from CI, no mobile layout yet): it behaves like the
-desktop app described here except that it has no tray, startup, downloads or app updates — Settings →
-Desktop holds only the server list, and the login screens have no update link — and it keeps logins
-in the app's private storage. See [`desktop/README.md`](../desktop/README.md#android-experimental).
+**Android** is experimental (a debug APK from CI) and **Browse-only**: after the same connect and
+sign-in screens as the desktop app it shows only the Browse pages, with a small header menu for
+changing server and signing out — no Dashboard, Library, Settings or other management pages, and no
+tray, startup, downloads or app updates (the login screens have no update link). It keeps logins in
+the app's private storage. See **Android app (Browse-only)** under [Browse](#browse) and
+[`desktop/README.md`](../desktop/README.md#android-experimental).
 
 The same frontend also runs inside a desktop shell (Tauri) as a thin client for a Packrat server you
 already host — there's no bundled backend. On first launch it shows **Connect to a server**: enter
@@ -140,6 +142,54 @@ full-size file: the `<img>` carries a `srcset` of 720/1080/1280/1920 px candidat
 banner never goes blank. The next slide is fetched ahead in a hidden `<img>` with identical
 attributes, so rotation does not wait on the network or a cold resize. The Library grid/list/strip
 keep the pre-generated small/medium tiers.
+
+The other Browse pages: a **show page** (`/browse/collection/:id` — a cover banner, the artist, the
+episodes per season, similar content), an **artist page** (`/browse/artist/:id` — the artist's picture
+and everything assigned to them, a row per collection) and the **item page** (`/browse/:id` — the
+player with a short description under it: title, artist, collection and tags, date/size/year, the
+description and source link, and "More from this collection"). A **mini player** keeps a minimized
+item playing in the bottom-right corner while you browse.
+
+**Phones and tablets.** The same pages adapt to the screen; there is no separate mobile UI:
+
+- Rows scroll by swiping and settle on a tile edge. With a touch screen the rows have no arrow
+  buttons over the edge tiles, and the page dots under a row are only an indicator (with a mouse,
+  the hover arrows and clickable dots work as before).
+- The hero's previous/pause/next buttons and the Continue Watching tiles' remove (×) button appear on
+  hover with a mouse and are always shown with touch input; buttons in the header, the player's back
+  and minimize buttons, the hero's buttons and the mini player's buttons have a 44 px tap area on touch.
+- On short landscape screens (a phone turned sideways) the hero and show banners are lower, with a
+  smaller title, so a row is visible under them.
+- Search results are two tiles per row on phones.
+- The artist page's picture is smaller on phones (6rem, 8rem from 640 px, the full 12rem from 768 px)
+  so the name fits next to it.
+- **Item page:** in portrait (a phone held upright, a portrait tablet) the player is 16:9 at the top
+  and the description scrolls below it; in landscape (desktop windows, a phone turned sideways) the
+  player fills the screen as before, with the description below it. The touch player (tap for the
+  controls, double-tap to skip, settings cog, fullscreen) is described under [Media player](#media-player).
+- The **mini player** is narrower on phones (16rem instead of 20rem) and, while it is open, the page
+  gets extra room at the bottom so the last row can be scrolled out from under it.
+- Page heights use the dynamic viewport (`dvh`), so a phone browser's collapsing address bar doesn't
+  hide the bottom of the page or the player.
+
+### Android app (Browse-only)
+
+The Android app is the same frontend with only Browse in it. After connecting and signing in it opens
+Browse home; every other page — `/` (the Dashboard on the web), Library, Downloads, Settings and the
+rest, or any unknown address — redirects to Browse home instead (a replace, so Back doesn't return to
+it). The sign-in and connect screens work as in the desktop app.
+
+- **Header:** the logo and search as usual; instead of the **Manage** link there is a menu button
+  (☰) with the current server's name, **Change server** (the menu then lists the saved servers in
+  place, with a **Back** row — picking one reloads the app on it, signed in with that server's own
+  login — and **Add server…**; no "Manage servers", since Settings isn't in the app) and **Sign out**.
+- **Item page:** the actions menu (⋮) next to the title — editing details, deleting and the other
+  management actions — isn't shown. A ghost item's page only says that it has no downloaded file.
+- **Fullscreen video** hides the status and navigation bars (a swipe from the edge shows them for a
+  moment); they come back when fullscreen ends, when the app goes to the background and when you
+  leave the item page. Back while fullscreen leaves fullscreen.
+- **Back gesture:** goes back through the pages you opened in the app, and leaves the app only when
+  there's nothing to go back to (normally Browse home).
 
 ## Dashboard
 

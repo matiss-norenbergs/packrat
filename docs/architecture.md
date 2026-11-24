@@ -142,6 +142,61 @@ reachable, and the spike's network security config allows cleartext. `android.ym
 debug-signed arm64 APK in CI as a workflow artifact; it is not a required check and not part of
 releases.
 
+**Android app mode (Browse-only).** The Android app shows only the Browse area; one check,
+`isBrowseOnlyApp()` in `lib/appMode.ts` (= `isTauriMobile()`), gates everything app-specific, so the web
+UI and the desktop app run exactly the code they did before. The gate is the redirect, not the route
+table: every admin route stays registered, but `AppLayout` and `ImmersiveLayout` render
+`<BrowseOnlyRedirect />` (a replace to `/browse`) before anything else, and `RouteError` does the same
+for a 404, so `/` (the Dashboard), any admin page and unknown paths land on Browse home; `/login` and
+`BrowseLayout` are untouched and keep their own auth redirects. In the Browse area the same check swaps
+`BrowseHeader`'s Manage link for `BrowseAppMenu` (server switching through the shared
+`ServerSwitcherItems` — the desktop switcher's entries without "Manage servers" — and `useLogout`), hides
+`LibraryItemDetail`'s actions menu (`showActions`) on the item page and drops the "use Download now from
+the Library page" hint on a ghost item. Those were the only ways from Browse into admin/edit features.
+There is no bottom navigation or other app chrome.
+
+**Back gesture on Android.** `TauriActivity` sets wry's `handleBackNavigation` to false, and Tauri's
+`AppPlugin` owns back: with no JS `back-button` listener (we register none) it calls the WebView's
+`goBack()` while `canGoBack()`, else the activity's default (leaving the app). React Router's
+`pushState` entries are in the WebView's history, so back walks the router history; every redirect in
+the app (sign-in, the Browse-only gate, `/` → `/browse`) is a replace, so at Browse home there is
+normally nothing to go back to and back leaves the app. While a video is fullscreen, `MainActivity`
+registers its own callback (added last, so it runs first) that leaves fullscreen instead.
+
+**Fullscreen bridge (Android).** Android's WebView doesn't hide the system bars for HTML fullscreen —
+the host app must, and wry's `RustWebChromeClient.onShowCustomView` only calls `onCustomViewHidden()` —
+so the status and navigation bars stayed visible over a fullscreen video. `MainActivity.kt` adds one
+`@JavascriptInterface` object, `window.PackratAndroid`, in `onWebViewCreate` (wry calls it before the
+first page loads) with a single method, `setImmersive(enabled)`: on the UI thread it hides or shows the
+system bars with `WindowInsetsControllerCompat` (`BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`), drops or
+restores the content's system-bar/keyboard padding (the display cutout always stays inset) and
+adds/removes the back callback above. The page calls it from `useAndroidImmersive` (`components/player/`,
+used by `PlayerSkin`): `true` when the skin's own frame becomes the fullscreen element, `false` when it
+stops being it, when the page becomes hidden (and it leaves fullscreen) and when the player unmounts; the
+hook does nothing unless `isTauriMobile()` and the object with that method exists. The shell also
+restores the bars itself on `onStop` (app backgrounded) and on back, and then tells the page to leave
+fullscreen. Orientation is not touched. **Security:** the bridge exists only in the Android shell and
+exposes nothing but that one method, which only changes the system bars. The WebView only ever loads the
+bundled frontend: the `main` window in `tauri.conf.json` has no `url`, so it opens the app's own
+`frontendDist` at `http://tauri.localhost`; the CSP has `frame-src 'none'` (no iframes) and only the
+bundled scripts (`script-src 'self'`); `capabilities/mobile.json` grants nothing to remote origins; and
+http(s) links are opened in the system browser (`lib/desktop.ts`), not in the WebView. As a second
+guard, `setImmersive` ignores calls unless the WebView's current URL is on `tauri.localhost` (so it also
+does nothing under `tauri android dev`, which loads the Vite dev server).
+
+**Safe areas.** The app keeps the native insets: `MainActivity` pads the content view by the status bar,
+navigation bar, cutout and keyboard, so the frontend has no `env(safe-area-inset-*)` handling and
+`index.html` no `viewport-fit=cover` (the existing `env(safe-area-inset-bottom)` on the floating dock
+stays as it was). It was the smaller change, it leaves every other page's layout as it was, and only
+immersive fullscreen needs edge-to-edge, which the bridge handles natively.
+
+**Responsive Browse.** The Browse pages adapt with Tailwind classes only, no separate mobile components:
+touch-only behavior uses Tailwind 4's `pointer-coarse:` variant (`HorizontalScroller` snaps rows and hides
+its arrows, hover-only buttons are shown, tap areas grow to 44 px; snap stays off for a mouse so it can't
+fight the arrows' computed "peek" stops), `hover:` is already scoped to `(hover: hover)`, short landscape
+screens use a `[@media(max-height:500px)]` variant, and the item page's player box is `aspect-video` in
+portrait and `h-dvh` in landscape (`PLAYER_BOX` in `BrowseItemPage`).
+
 **Stale chunks after a deploy.** A tab opened before an update still references the old hashed chunk
 names; the server answers the missing file with the SPA fallback (200 `text/html`), the dynamic import
 rejects and the router surfaces it as a route error. The `RouteError` element on each top-level route recognises
