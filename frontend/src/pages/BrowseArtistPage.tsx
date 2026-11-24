@@ -7,7 +7,7 @@ import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { useArtists } from "@/hooks/useArtists"
-import { useSettings } from "@/hooks/useSettings"
+import { useBrowsePrefs } from "@/hooks/useBrowsePrefs"
 import { groupItemsByCollection } from "@/lib/browseShows"
 import { imageUrl } from "@/lib/api"
 
@@ -22,8 +22,7 @@ export function BrowseArtistPage() {
   // the query stuck loading forever.
   const itemsQuery = useLibraryQuery({ artistId, sortKey: "downloadedAt", sortDir: "desc" }, validArtistId)
   const { data: artists, isLoading: artistsLoading } = useArtists()
-  const { data: settings } = useSettings()
-  const ignorePrivacy = settings?.browseIgnorePrivacy ?? false
+  const ignorePrivacy = !useBrowsePrefs().blurPrivate
 
   if (artistsLoading || (validArtistId && itemsQuery.isLoading) || !artists) {
     return (

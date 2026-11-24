@@ -151,9 +151,30 @@ for a 404, so `/` (the Dashboard), any admin page and unknown paths land on Brow
 `BrowseLayout` are untouched and keep their own auth redirects. In the Browse area the same check swaps
 `BrowseHeader`'s Manage link for `BrowseAppMenu` (server switching through the shared
 `ServerSwitcherItems` — the desktop switcher's entries without "Manage servers" — and `useLogout`), hides
-`LibraryItemDetail`'s actions menu (`showActions`) on the item page and drops the "use Download now from
-the Library page" hint on a ghost item. Those were the only ways from Browse into admin/edit features.
-There is no bottom navigation or other app chrome.
+`LibraryItemDetail`'s actions menu (`showActions`) and its Minimize button (no `onMinimize`, so the
+app never uses the mini player; `MiniPlayerContext`/`MiniPlayerDock` stay for web and desktop) on the
+item page and drops the "use Download now from the Library page" hint on a ghost item. Those were the
+only ways from Browse into admin/edit features. There is no bottom navigation or other app chrome.
+
+**Per-device Browse preferences (Android app).** `BrowseAppMenu`'s "Settings" opens
+`BrowseSettingsDialog` (not a route, so the Browse-only gate is untouched). Its two switches override
+server settings on this device only: `useBrowsePrefs()` (`hooks/`) returns the effective `autoplay`
+(`libraryAutoplay`) and `blurPrivate` (`!browseIgnorePrivacy`) plus setters and resets, and every Browse
+read of those two settings goes through it (`BrowsePage`, `BrowseShowPage`, `BrowseArtistPage`,
+`BrowseItemPage`, `BrowseTile`, `BrowseShowTile`, and `LibraryItemDetail`'s autoplay). An override is a
+localStorage value (`packrat:browse-autoplay`, `packrat:browse-blur-private`, `"true"`/`"false"`), absent
+by default ("follow the server"), read through `useSyncExternalStore` (the `storage` event plus a
+same-tab event) so a change reaches every tile at once and is never stale on remount; storage errors fall
+back to an in-memory value. Overrides are **ignored unless `isBrowseOnlyApp()`**, so web and desktop read
+the server settings exactly as before, and nothing in the app writes `PATCH /api/settings`. The version
+line reuses `useDesktopAppVersion` (Tauri `getVersion()`) and `useAppVersion` (`/api/version`).
+
+**The Settings dialog and Back.** Radix dialogs add no history entry, so Android's Back (below) would
+leave the page under an open dialog. The dialog's open state is therefore the history entry itself:
+opening it navigates to the same URL with `location.state.browseSettings = true` (the page's own state,
+e.g. an item's `from`, is kept), so Back pops that entry and the dialog closes. The ✕ (or Escape) calls
+`navigate(-1)` to pop the same entry, leaving no extra entry behind; an entry the menu didn't push (the
+WebView restored it with the dialog open) is replaced with a copy without the flag instead.
 
 **Back gesture on Android.** `TauriActivity` sets wry's `handleBackNavigation` to false, and Tauri's
 `AppPlugin` owns back: with no JS `back-button` listener (we register none) it calls the WebView's
@@ -162,6 +183,16 @@ There is no bottom navigation or other app chrome.
 the app (sign-in, the Browse-only gate, `/` → `/browse`) is a replace, so at Browse home there is
 normally nothing to go back to and back leaves the app. While a video is fullscreen, `MainActivity`
 registers its own callback (added last, so it runs first) that leaves fullscreen instead.
+
+**Launcher icon (Android).** `gen/android/.../res/mipmap-anydpi-v26/ic_launcher.xml` (and `_round`) is an
+adaptive icon with three layers: the background is `drawable/ic_launcher_background.xml`, the favicon's
+purple gradient as a full-bleed square `<shape>` (the launcher masks it); the foreground is
+`drawable/ic_launcher_foreground.xml`, only the white Lucide `package` glyph of
+`frontend/public/favicon.svg` as a `<vector>`, scaled ×2.4 (stroke 4.8 dp) and centred so it is ~53 dp
+tall inside the 66 dp safe zone; the same vector is the `<monochrome>` layer for Android 13+ themed
+icons. The `mipmap-*/ic_launcher*.png` files are only the legacy icons below API 26, rendered from
+`favicon.svg`. `npx tauri icon` must not be run over this directory (it writes a whole-square PNG
+foreground that launchers magnify and crop); `tauri android build` doesn't touch these resources.
 
 **Fullscreen bridge (Android).** Android's WebView doesn't hide the system bars for HTML fullscreen —
 the host app must, and wry's `RustWebChromeClient.onShowCustomView` only calls `onCustomViewHidden()` —

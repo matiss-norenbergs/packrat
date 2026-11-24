@@ -9,7 +9,7 @@ import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
 import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { usePlaybackProgress } from "@/hooks/usePlaybackProgress"
-import { useSettings } from "@/hooks/useSettings"
+import { useBrowsePrefs } from "@/hooks/useBrowsePrefs"
 import { useArtistNameMask } from "@/hooks/useArtistNameMask"
 import { useTagNameMask } from "@/hooks/useTagNameMask"
 import { sortLibraryItems } from "@/lib/libraryFilters"
@@ -40,7 +40,7 @@ import type { LibraryItem } from "@/types/api"
 // Back (top-left, over the player) — only BrowseItemPage passes it, since
 // the mini-player is a Browse-only feature.
 // ignorePrivacy, if true, treats this item and its siblings as unblurred —
-// only BrowseItemPage passes it (from the browseIgnorePrivacy setting);
+// only BrowseItemPage passes it (the inverse of useBrowsePrefs().blurPrivate);
 // LibraryItemPage never does, so Library's blur behavior is unaffected.
 // showActions=false hides the actions/edit menu next to the title — only BrowseItemPage in the
 // Android app's Browse-only mode passes it (the menu leads to editing and management actions).
@@ -65,7 +65,8 @@ export function LibraryItemDetail({
   ignorePrivacy?: boolean
   showActions?: boolean
 }) {
-  const { data: settings } = useSettings()
+  // libraryAutoplay, or the Android app's per-device override (see useBrowsePrefs).
+  const { autoplay } = useBrowsePrefs()
   const maskTag = useTagNameMask()
   const maskArtist = useArtistNameMask()
   const { isRevealed, toggleItem, revealItems } = useRevealAll()
@@ -73,7 +74,7 @@ export function LibraryItemDetail({
   const effectiveBlurred = item.blurred && !ignorePrivacy
   const locked = effectiveBlurred && !revealed
 
-  const autoPlay = resumePaused != null ? !resumePaused : (settings?.libraryAutoplay ?? true)
+  const autoPlay = resumePaused != null ? !resumePaused : autoplay
   const audioRef = usePersistedVolume<HTMLAudioElement>()
   const videoRef = usePersistedVolume<HTMLVideoElement>()
   const isImage = item.mediaType === "image"
@@ -151,6 +152,7 @@ export function LibraryItemDetail({
                   type="button"
                   variant="ghost"
                   size="icon"
+                  aria-label="Minimize"
                   onClick={() => {
                     const el = (isAudioFilename(item.filename) ? audioRef : videoRef).current
                     onMinimize(el?.currentTime ?? 0, el?.paused ?? false)

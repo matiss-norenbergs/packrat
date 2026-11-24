@@ -7,7 +7,7 @@ import { BrowseTile } from "@/components/browse/BrowseTile"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { useLibraryQuery, useUpdateLibraryProgress } from "@/hooks/useLibrary"
 import { useCollections } from "@/hooks/useCollections"
-import { useSettings } from "@/hooks/useSettings"
+import { useBrowsePrefs } from "@/hooks/useBrowsePrefs"
 import {
   buildCollectionTree,
   collectDescendantIds,
@@ -36,8 +36,7 @@ export function BrowsePage() {
   const search = searchParams.get("q") ?? ""
 
   const { data: collections, isLoading: collectionsLoading } = useCollections()
-  const { data: settings } = useSettings()
-  const ignorePrivacy = settings?.browseIgnorePrivacy ?? false
+  const ignorePrivacy = !useBrowsePrefs().blurPrivate
   const searchResults = useLibraryQuery({ q: search, pageSize: 100, hideGhosts: true }, search.length > 0)
   const updateProgress = useUpdateLibraryProgress()
   // Resetting position to 0 both drops the item out of the Continue

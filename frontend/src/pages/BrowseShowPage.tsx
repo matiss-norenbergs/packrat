@@ -11,6 +11,7 @@ import { useLibraryQuery } from "@/hooks/useLibrary"
 import { useCollections } from "@/hooks/useCollections"
 import { useArtists } from "@/hooks/useArtists"
 import { useSettings } from "@/hooks/useSettings"
+import { useBrowsePrefs } from "@/hooks/useBrowsePrefs"
 import {
   buildCollectionTree,
   collectDescendantIds,
@@ -28,7 +29,7 @@ export function BrowseShowPage() {
   const { data: collections, isLoading: collectionsLoading } = useCollections()
   const { data: artists, isLoading: artistsLoading } = useArtists()
   const { data: settings } = useSettings()
-  const ignorePrivacy = settings?.browseIgnorePrivacy ?? false
+  const ignorePrivacy = !useBrowsePrefs().blurPrivate
 
   const tree = collections ? buildCollectionTree(collections) : []
   const collection = collections?.find((c) => c.id === collectionId)

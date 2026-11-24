@@ -3,6 +3,7 @@ import { ImageIcon } from "lucide-react"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { useRevealAll } from "@/components/library/RevealAllContext"
 import { useSettings } from "@/hooks/useSettings"
+import { useBrowsePrefs } from "@/hooks/useBrowsePrefs"
 import { cn, hashText } from "@/lib/utils"
 import type { ShowSummary } from "@/lib/browseShows"
 
@@ -36,11 +37,12 @@ function titleSizeClass(name: string): string {
 // pattern as BrowseTile, keyed by a disjoint id space (see revealKeyFor).
 export function BrowseShowTile({ show }: { show: ShowSummary }) {
   const { data: settings } = useSettings()
+  const { blurPrivate } = useBrowsePrefs()
   const { isRevealed, toggleItem } = useRevealAll()
   const revealKey = revealKeyFor(show.collectionId)
   const revealed = isRevealed(revealKey)
   const toggleReveal = () => toggleItem(revealKey)
-  const effectiveBlurred = !!settings?.privacyEnabled && show.isPrivate && !settings?.browseIgnorePrivacy
+  const effectiveBlurred = !!settings?.privacyEnabled && show.isPrivate && blurPrivate
   const unlocked = !effectiveBlurred || revealed
 
   return (

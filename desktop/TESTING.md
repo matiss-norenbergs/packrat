@@ -250,7 +250,8 @@ from, and write down what visibly breaks.
 
 | # | Check | Expected | Result |
 | --- | --- | --- | --- |
-| A-01 | Install the APK (`adb install -r` or open it on the phone) | Installs; "Packrat" with the Packrat icon in the launcher | |
+| A-01 | Install the APK (`adb install -r` or open it on the phone) | Installs; "Packrat" with the Packrat icon in the launcher: the white box glyph on the purple gradient, fully visible and not magnified or cropped by the launcher's mask (also check the app drawer and the recents screen) | |
+| A-01b | Turn on themed icons (Android 13+: Wallpaper & style → Themed icons) | The Packrat icon turns into the single-color box glyph like other themed icons, not a blank or generic icon | |
 | A-02 | First launch | The "Connect to a server" screen, not hidden under the status bar or cutout | |
 | A-03 | Connect to the `https://….ts.net` address | Reaches the login screen | |
 | A-04 | Header menu (☰) → Change server → Add server…, enter a plain `http://` tailnet address | Also reaches the login screen (cleartext allowed) | |
@@ -264,10 +265,15 @@ from, and write down what visibly breaks.
 | A-12 | Touch player: tap, double tap left/right, cog | Tap shows/hides the controls; double tap skips ±10 s; the cog opens the speed menu | |
 | A-13 | Fullscreen button | The video fills the **whole** screen: status and navigation bars hidden (a swipe from the edge shows them for a moment). Note whether it fills edge to edge or leaves a gap, and rotation behavior | |
 | A-14 | Leave fullscreen: the button; then again with the Back gesture; then by switching to another app and back | The bars come back each time and the player is no longer fullscreen; Back only leaves fullscreen (stays on the item page) | |
-| A-15 | Minimize (⤡) on the item page | Back on Browse with the mini player bottom-right, not covering the header; the last row can be scrolled clear of it | |
+| A-15 | Item page player controls, then Back while a video plays | **No Minimize (⤡) button**; Back returns to the previous page and playback stops (no mini player) | |
 | A-16 | Back gesture through Browse home → show → item | Back returns item → show → Browse home, then leaves the app (only at Browse home) | |
 | A-17 | Header menu → Change server → pick the other server | Reloads on it, signed in with its own login | |
 | A-18 | Kill the app (swipe away from recents) and reopen | Still signed in on the same server | |
 | A-19 | Header menu → Sign out | Back at the login screen; signing in again works | |
 | A-20 | Tailscale off, then back on | "Can't reach the server" (or the reconnect banner), recovers with Retry | |
 | A-21 | Dark mode on the phone (or the account's theme) | Browse pages readable in dark | |
+| A-22 | Header menu → Settings | Fullscreen Settings dialog, nothing under the status bar; ✕ easy to tap; App version shows the app's and the server's versions | |
+| A-23 | In Settings, flip **Blur private items**, then close and look at a private item's tile | Hint changes to "Set on this device" with "Use server setting"; tiles un-blur/re-blur at once, without a reload; the web UI's Settings → Privacy is unchanged | |
+| A-24 | Flip **Autoplay** off, open an item; then "Use server setting" | The video doesn't start on its own; after the reset it follows the server's Autoplay again | |
+| A-25 | Open Settings, then the **Back gesture**; open it again and close with ✕, then Back | Back closes the dialog and stays on the page; after ✕, one Back goes to the previous page (no extra step) | |
+| A-26 | Kill and reopen the app | The device choices from A-23/A-24 are kept | |

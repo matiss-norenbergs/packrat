@@ -5,7 +5,7 @@ import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useRevealAll } from "@/components/library/RevealAllContext"
-import { useSettings } from "@/hooks/useSettings"
+import { useBrowsePrefs } from "@/hooks/useBrowsePrefs"
 import { librarySmallThumbnailUrl } from "@/lib/api"
 import { cn, hashText } from "@/lib/utils"
 import type { LibraryItem } from "@/types/api"
@@ -29,11 +29,11 @@ export function BrowseTile({
   onRemove?: () => void
   className?: string
 }) {
-  const { data: settings } = useSettings()
+  const { blurPrivate } = useBrowsePrefs()
   const { isRevealed, toggleItem } = useRevealAll()
   const revealed = isRevealed(item.id)
   const toggleReveal = () => toggleItem(item.id)
-  const effectiveBlurred = item.blurred && !settings?.browseIgnorePrivacy
+  const effectiveBlurred = item.blurred && blurPrivate
   const unlocked = !effectiveBlurred || revealed
   const showProgress = progressFraction != null && unlocked
   const thumbUrl = librarySmallThumbnailUrl(item)

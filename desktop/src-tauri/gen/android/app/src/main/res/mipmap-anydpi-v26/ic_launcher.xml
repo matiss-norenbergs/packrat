@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Android 8+ adaptive icon. Background: the purple gradient, full-bleed; foreground: the white box
+     glyph inside the safe zone; monochrome: the same glyph for Android 13+ themed icons. Below API 26
+     the mipmap-*/ic_launcher*.png legacy icons are used. Don't run `npx tauri icon` over this
+     directory: it writes a PNG foreground (the whole rounded square) that the launcher magnifies
+     and crops. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-  <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
-  <background android:drawable="@color/ic_launcher_background"/>
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
 </adaptive-icon>
