@@ -148,7 +148,7 @@ episodes per season, similar content), an **artist page** (`/browse/artist/:id` 
 and everything assigned to them, a row per collection) and the **item page** (`/browse/:id` — the
 player with a short description under it: title, artist, collection and tags, date/size/year, the
 description and source link, and "More from this collection"). A **mini player** keeps a minimized
-item playing in the bottom-right corner while you browse.
+item playing in the bottom-right corner while you browse (not in the Android app, see below).
 
 **Phones and tablets.** The same pages adapt to the screen; there is no separate mobile UI:
 
@@ -182,9 +182,26 @@ it). The sign-in and connect screens work as in the desktop app.
 - **Header:** the logo and search as usual; instead of the **Manage** link there is a menu button
   (☰) with the current server's name, **Change server** (the menu then lists the saved servers in
   place, with a **Back** row — picking one reloads the app on it, signed in with that server's own
-  login — and **Add server…**; no "Manage servers", since Settings isn't in the app) and **Sign out**.
+  login — and **Add server…**; no "Manage servers", since Settings isn't in the app), **Settings**
+  (below) and **Sign out**.
 - **Item page:** the actions menu (⋮) next to the title — editing details, deleting and the other
-  management actions — isn't shown. A ghost item's page only says that it has no downloaded file.
+  management actions — isn't shown, and neither is **Minimize**: there is no mini player in the app.
+  Leaving an item (Back, or opening another page) stops its playback. A ghost item's page only says
+  that it has no downloaded file.
+- **Settings** (from the header menu) opens a fullscreen dialog with this device's
+  preferences:
+  - **Autoplay** — start a video as soon as its page opens.
+  - **Blur private items** — blur private items' thumbnails and covers until tapped (the same blur as
+    on the web).
+  - **App version** — the app's version and the server's (or "Unavailable" when one can't be read).
+
+  The two switches start out **following the server**: Autoplay mirrors Settings → Library →
+  Autoplay, and Blur private items is on unless Settings → Privacy → "Show private items unblurred in Browse" is on.
+  Under each switch a hint says "Following the server setting" or "Set on this device". Flipping a
+  switch stores a choice **on this device only** (the server's settings are never changed, and other
+  devices and the web UI are unaffected); "Use server setting" drops that choice and follows the
+  server again. The change applies at once (tiles re-blur or un-blur without a reload). Back (or the
+  ✕) closes the dialog and stays on the page.
 - **Fullscreen video** hides the status and navigation bars (a swipe from the edge shows them for a
   moment); they come back when fullscreen ends, when the app goes to the background and when you
   leave the item page. Back while fullscreen leaves fullscreen.
