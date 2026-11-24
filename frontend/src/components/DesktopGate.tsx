@@ -9,7 +9,7 @@ import { useAuthStatus } from "@/hooks/useAuth"
 import { useDownloadToasts } from "@/hooks/useDownloadToasts"
 import { AppUpdateEntry } from "@/components/desktop/AppUpdateEntry"
 import { ServerSwitcherMenu } from "@/components/ServerSwitcher"
-import { getActiveProfileName, getServerUrl, isDesktop, isTauri } from "@/lib/server"
+import { getActiveProfileName, getServerUrl, isDesktop, isTauriDesktop } from "@/lib/server"
 
 // Desktop only: if the very first auth check fails (server down, wrong network), the layouts would
 // otherwise render nothing at all. Show what's wrong and let the user retry or pick another server.
@@ -22,7 +22,8 @@ export function DesktopGate({ children }: { children: ReactNode }) {
       <>
         <ConnectionBanner />
         {data?.authenticated && <SecurityNotice />}
-        {isTauri() && data?.authenticated && <VersionMismatchNotice />}
+        {/* Points at the app updater, which the Android build doesn't have. */}
+        {isTauriDesktop() && data?.authenticated && <VersionMismatchNotice />}
         {children}
       </>
     )

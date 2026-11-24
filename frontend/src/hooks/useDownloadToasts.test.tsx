@@ -16,6 +16,7 @@ const { toast } = vi.hoisted(() => ({ toast: { loading: vi.fn(), success: vi.fn(
 vi.mock("sonner", () => ({ toast }))
 
 import { useDownloadToasts } from "@/hooks/useDownloadToasts"
+import { enterTauri, leaveTauri } from "@/test/tauriShell"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -31,6 +32,18 @@ describe("useDownloadToasts", () => {
     renderHook(() => useDownloadToasts())
     await new Promise((r) => setTimeout(r, 10))
     expect(handlers["download-started"]).toBeUndefined()
+  })
+
+  it("does nothing in the Android build, which has no download handler", async () => {
+    enterTauri("android")
+    try {
+      renderHook(() => useDownloadToasts())
+      await new Promise((r) => setTimeout(r, 10))
+      expect(handlers["download-started"]).toBeUndefined()
+      expect(handlers["download-finished"]).toBeUndefined()
+    } finally {
+      leaveTauri()
+    }
   })
 
   describe("in the shell", () => {

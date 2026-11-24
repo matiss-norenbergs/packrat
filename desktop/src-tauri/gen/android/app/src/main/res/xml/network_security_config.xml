@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SPIKE: plain http:// is allowed to every host, so a Packrat server reached over the Tailscale
+  tailnet by IP or MagicDNS name without HTTPS works. HTTPS (a https://<machine>.<tailnet>.ts.net
+  address) is the recommended setup. To be tightened before anything is released, e.g. to
+  cleartext only for the tailnet (*.ts.net and 100.64.0.0/10 addresses) or none at all.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { toast } from "sonner"
-import { isTauri } from "@/lib/server"
+import { isTauriDesktop } from "@/lib/server"
 
 interface Started {
   filename: string
@@ -23,7 +23,7 @@ interface Finished {
 // download UI and never loads any of this.
 export function useDownloadToasts() {
   useEffect(() => {
-    if (!isTauri()) return
+    if (!isTauriDesktop()) return
     let cancelled = false
     const unlisten: Array<() => void> = []
     // Toast ids of downloads still running, oldest first. A finished event normally names the same

@@ -125,6 +125,23 @@ It is a pure client — no sidecar, no bundled backend — and only the plugin-b
 imported lazily so the web bundle never loads them. `desktop/` is excluded from the Docker build
 context (`.dockerignore`).
 
+**Android (experimental spike).** The same shell also builds for Android (see `desktop/README.md`).
+`src-tauri` is a library crate (`lib.rs`, `run()` with `#[cfg_attr(mobile, tauri::mobile_entry_point)]`)
+that Android loads as a shared library, plus a thin desktop binary (`main.rs`) that calls `run()`.
+Desktop-only code — tray, single instance, autostart, updater and match-update, window state,
+downloads, shell prefs, the `keyring` keychain — is behind `cfg(desktop)` (tauri-build's aliases for
+the `target_os` conditions its `Cargo.toml` target tables use), so desktop behavior is unchanged and
+mobile gets only the shared plugins and the `token_*` commands; capabilities are split per platform.
+`keyring` has no Android backend, so on mobile the same `SecretStore` trait is implemented by a JSON
+file in the app's private data directory, written atomically with 0600 permissions — sandboxed per
+app but not encrypted, accepted for the spike; an Android Keystore-backed store is the planned
+replacement. The frontend distinguishes the two shells with `isTauriMobile()`/`isTauriDesktop()` (an
+Android user agent inside Tauri) and gates the desktop-only features on the latter. The page origin
+on Android stays `http://tauri.localhost` (no `useHttpsScheme`) so both http and https servers are
+reachable, and the spike's network security config allows cleartext. `android.yml` builds a
+debug-signed arm64 APK in CI as a workflow artifact; it is not a required check and not part of
+releases.
+
 **Stale chunks after a deploy.** A tab opened before an update still references the old hashed chunk
 names; the server answers the missing file with the SPA fallback (200 `text/html`), the dynamic import
 rejects and the router surfaces it as a route error. The `RouteError` element on each top-level route recognises

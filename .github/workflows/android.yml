@@ -1,0 +1,227 @@
+name: Android
+
+# Frontend-only PRs don't trigger it (a 10-20 min build each); run it by hand for those
+# (Actions → Android → Run workflow, or `gh workflow run android.yml --ref <branch>`).
+#
+# EXPERIMENTAL spike: builds a debug APK of the Tauri shell (desktop/) for Android, arm64 only, as a
+# workflow artifact to sideload on a phone. See desktop/README.md ("Android (experimental)").
+#
+# Not a required check and not part of releases: nothing here is published, no secrets are used, and
+# the APK is signed only with the Android SDK's debug keystore (Gradle does that for debug builds).
+# Every tool's version is printed and the build runs verbose, and on a failure the Gradle/Cargo
+# outputs are uploaded as the android-build-logs artifact, because this job can't be run locally.
+on:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # The NDK version tauri-cli 2.12 installs when none is present; bump together with the CLI.
+      NDK_VERSION: "29.0.13846066"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            desktop/src-tauri/gen/android/**/*.gradle*
+            desktop/src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          key: android
+
+      # GitHub's Ubuntu runners ship the Android SDK (ANDROID_HOME) with cmdline-tools but not
+      # necessarily this NDK or platform. The listing is kept on purpose: when an install fails, it
+      # shows which package IDs the runner's sdkmanager actually offers.
+      - name: List the Android SDK packages on offer
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --version
+          "$sdkmanager" --list > "$RUNNER_TEMP/sdk-list.txt" 2>&1
+          grep -E '^[A-Za-z].*:$|^ *(platforms|ndk|build-tools);' "$RUNNER_TEMP/sdk-list.txt"
+
+      # The platform comes from compileSdk in the committed project, so the two can't drift apart.
+      - name: Install the Android NDK and platform
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          list="$RUNNER_TEMP/sdk-list.txt"
+          gradle="$GITHUB_WORKSPACE/desktop/src-tauri/gen/android/app/build.gradle.kts"
+
+          if [ ! -s "$list" ]; then
+            echo "::error::$list is missing; the listing step must run first"
+            exit 1
+          fi
+          if [ ! -f "$gradle" ]; then
+            echo "::error::$gradle is missing"
+            exit 1
+          fi
+          compile_sdk=$(sed -nE 's/^[[:space:]]*compileSdk[[:space:]]*=[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "$gradle")
+          if [ -z "$compile_sdk" ] || [ "$(printf '%s\n' "$compile_sdk" | wc -l)" -ne 1 ]; then
+            echo "::error::expected exactly one 'compileSdk = <number>' line in $gradle"
+            exit 1
+          fi
+          echo "compileSdk = $compile_sdk"
+
+          # The package for API N is usually platforms;android-N; newer repositories may name it
+          # platforms;android-N.0. Use whichever this sdkmanager offers.
+          offers() { grep -qE "^ *$(printf '%s' "$1" | sed 's/[.]/[.]/g') *\|" "$list"; }
+          platform=""
+          for candidate in "platforms;android-$compile_sdk" "platforms;android-$compile_sdk.0"; do
+            if offers "$candidate"; then
+              platform="$candidate"
+              break
+            fi
+          done
+          if [ -z "$platform" ]; then
+            echo "::error::the runner's sdkmanager offers no platform for compileSdk $compile_sdk; lower compileSdk/targetSdk in $gradle to one listed above"
+            exit 1
+          fi
+          ndk="ndk;$NDK_VERSION"
+          if ! offers "$ndk"; then
+            echo "::error::the runner's sdkmanager doesn't offer $ndk (see the listing above)"
+            exit 1
+          fi
+
+          # Gradle auto-installs build-tools later, which fails on unaccepted licenses, so check.
+          set +o pipefail
+          yes | "$sdkmanager" --licenses > "$RUNNER_TEMP/licenses.txt" 2>&1
+          status=${PIPESTATUS[1]}
+          set -o pipefail
+          tail -n 3 "$RUNNER_TEMP/licenses.txt"
+          if [ "$status" -ne 0 ] || ! grep -q "All SDK package licenses accepted" "$RUNNER_TEMP/licenses.txt"; then
+            echo "::error::accepting the SDK licenses failed (exit $status)"
+            cat "$RUNNER_TEMP/licenses.txt"
+            exit 1
+          fi
+          ls "$ANDROID_HOME/licenses"
+
+          set -x
+          "$sdkmanager" --install "$ndk" "$platform" "platform-tools"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Tool versions
+        run: |
+          set -x
+          node --version
+          npm --version
+          java -version
+          rustc --version --verbose
+          cargo --version
+          rustup target list --installed
+          echo "ANDROID_HOME=$ANDROID_HOME NDK_HOME=$NDK_HOME"
+          cat "$NDK_HOME/source.properties"
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
+
+      - run: npm ci
+        working-directory: frontend
+      - run: npm ci
+        working-directory: desktop
+
+      - name: Tauri CLI and Gradle versions
+        working-directory: desktop
+        run: |
+          set -x
+          npx tauri --version
+          "$GITHUB_WORKSPACE/desktop/src-tauri/gen/android/gradlew" --version
+
+      # Runs the frontend's production build (beforeBuildCommand), the Rust library for arm64 and
+      # Gradle's assembleDebug. Debug builds are signed with the SDK debug keystore automatically.
+      - name: Build the debug APK
+        working-directory: desktop
+        run: |
+          set -x
+          npx tauri android build --debug --apk --target aarch64 --verbose
+
+      # Records the APK's path and size, and checks it is the arm64 debug build: the app library
+      # for arm64-v8a only, in a debug build output.
+      - name: Check the APK
+        run: |
+          set -euo pipefail
+          outputs="$GITHUB_WORKSPACE/desktop/src-tauri/gen/android/app/build/outputs"
+          mapfile -t apks < <(find "$outputs" -name '*.apk')
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one APK under $outputs, found ${#apks[@]}"
+            exit 1
+          fi
+          apk="${apks[0]}"
+          case "$apk" in
+            */debug/*) ;;
+            *) echo "::error::$apk is not a debug build output"; exit 1 ;;
+          esac
+          libs=$({ unzip -Z1 "$apk" 'lib/*' || true; } | grep -v '/$' || true)
+          echo "$libs"
+          if ! grep -qx 'lib/arm64-v8a/libpackrat_desktop_lib.so' <<< "$libs"; then
+            echo "::error::lib/arm64-v8a/libpackrat_desktop_lib.so is missing from the APK"
+            exit 1
+          fi
+          if grep -v '^lib/arm64-v8a/' <<< "$libs" | grep -q .; then
+            echo "::error::the APK carries native libraries for other ABIs"
+            exit 1
+          fi
+          size=$(stat -c %s "$apk")
+          rel="${apk#"$GITHUB_WORKSPACE"/}"
+          echo "APK: $rel ($size bytes), arm64-v8a only, debug build"
+          {
+            echo "### Android debug APK"
+            echo "- Path: \`$rel\`"
+            echo "- Size: $size bytes ($(( size / 1024 / 1024 )) MiB)"
+            echo "- ABI: arm64-v8a only; debug build, signed with the SDK debug key"
+            echo "- Artifact: \`packrat-android-debug-apk\` (this run's Artifacts section, 7 days)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packrat-android-debug-apk
+          path: desktop/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-build-logs
+          path: |
+            desktop/src-tauri/gen/android/app/build/reports/
+            desktop/src-tauri/gen/android/app/build/outputs/logs/
+            desktop/src-tauri/gen/android/build/reports/
+            desktop/src-tauri/gen/android/app/tauri.build.gradle.kts
+            desktop/src-tauri/gen/android/tauri.settings.gradle
+            desktop/src-tauri/target/aarch64-linux-android/debug/build/*/output
+            desktop/src-tauri/target/aarch64-linux-android/debug/build/*/stderr
+          if-no-files-found: ignore
+          retention-days: 7

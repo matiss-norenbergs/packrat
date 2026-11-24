@@ -32,12 +32,14 @@ import {
   getProfiles,
   getTokenStorage,
   isTauri,
+  isTauriMobile,
   normalizeServerUrl,
   probeServer,
   reloadApp,
   removeProfile,
   renameProfile,
   type ServerProfile,
+  tokenStorageLabel,
 } from "@/lib/server"
 import { formatTimeAgo } from "@/lib/timeAgo"
 
@@ -134,7 +136,7 @@ export function ServersSection() {
         />
         {isTauri() && (
           <p className="text-xs text-muted-foreground">
-            Token storage: {getTokenStorage() === "keychain" ? "OS keychain" : "Local file (keychain unavailable)"}
+            Token storage: {tokenStorageLabel(getTokenStorage(), isTauriMobile())}
           </p>
         )}
       </CardContent>

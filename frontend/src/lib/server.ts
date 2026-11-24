@@ -42,6 +42,22 @@ export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 }
 
+// True in the Tauri shell on a phone (the experimental Android build, see desktop/README.md). It is
+// the same app — server profiles, bearer token, the token commands — but the Rust side compiles out
+// everything desktop-only (tray, autostart, updater, downloads, shell preferences), so those
+// features are gated on isTauriDesktop(). Detected from the user agent, which Android's WebView
+// always marks "Android" and no desktop webview (WebView2, WKWebView, WebKitGTK) does; synchronous,
+// so it can gate a first render. Always false on the web.
+export function isTauriMobile(): boolean {
+  return isTauri() && typeof navigator !== "undefined" && /\bAndroid\b/i.test(navigator.userAgent)
+}
+
+// True only in the desktop Tauri shell: the tray, autostart, the updater, downloads and the other
+// shell preferences exist there and nowhere else.
+export function isTauriDesktop(): boolean {
+  return isTauri() && !isTauriMobile()
+}
+
 // True inside the Tauri shell. VITE_DESKTOP=true forces it for a plain browser, so the desktop
 // code path can be exercised against a dev server without building the shell.
 export function isDesktop(): boolean {
@@ -171,6 +187,13 @@ export const tokenReady: Promise<void> = isTauri()
 
 export function getTokenStorage(): TokenStorage {
   return tokenStorage
+}
+
+// What Settings → Servers says about where logins are kept. On Android the shell's store is a file
+// in the app's private storage, not a keychain (see desktop/src-tauri/src/token.rs).
+export function tokenStorageLabel(storage: TokenStorage, mobile: boolean): string {
+  if (storage !== "keychain") return "Local file (keychain unavailable)"
+  return mobile ? "App storage (private to the app, not encrypted)" : "OS keychain"
 }
 
 // Tauri only; awaited in main.tsx before rendering. Moves a pre-keychain localStorage token into the

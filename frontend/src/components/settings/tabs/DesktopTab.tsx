@@ -1,7 +1,7 @@
 import { AppWindow, RefreshCw } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import { isTauri } from "@/lib/server"
+import { isTauriDesktop } from "@/lib/server"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAppVersion } from "@/hooks/useSettings"
 import { DownloadsSection } from "@/components/settings/DownloadsSection"
@@ -13,12 +13,13 @@ import { useStartup, type StartupMode } from "@/hooks/useStartup"
 import { SettingRow } from "@/components/settings/SettingRow"
 
 // Only reachable in the desktop app (see the isDesktop() checks where the tab is registered). The
-// server list also works under VITE_DESKTOP in a plain browser; everything else needs the shell.
+// server list also works under VITE_DESKTOP in a plain browser and in the Android build; everything
+// else needs the desktop shell.
 export function DesktopTab() {
   return (
     <div className="max-w-3xl space-y-6 pb-6">
       <ServersSection />
-      {isTauri() && <ShellSettings />}
+      {isTauriDesktop() && <ShellSettings />}
     </div>
   )
 }

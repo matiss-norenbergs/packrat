@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Permissions for the main window on Android (experimental). Like the desktop set, only the bundled frontend is loaded, so no remote origins are granted anything. The desktop-only plugins (updater, window state, autostart, single instance, tray) are not compiled into the mobile app, so they are not listed; neither is reveal-in-folder (no downloads on mobile) or process restart (only used by the updater).",
+  "windows": ["main"],
+  "platforms": ["android"],
+  "permissions": ["core:default", "notification:default", "opener:default"]
+}

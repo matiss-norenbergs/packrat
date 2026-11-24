@@ -14,6 +14,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { useTrayServers } from "@/hooks/useTrayServers"
 import { activateProfile, addProfile, deactivateProfile } from "@/lib/serverProfiles"
+import { enterTauri, leaveTauri } from "@/test/tauriShell"
 
 const reload = vi.fn()
 const originalLocation = window.location
@@ -38,6 +39,20 @@ afterEach(() => {
 const lastPush = () => invoke.mock.calls.filter((c) => c[0] === "tray_set_servers").at(-1)?.[1]
 
 describe("useTrayServers", () => {
+  it("does nothing in the Android build, which has no tray", async () => {
+    leaveTauri()
+    enterTauri("android")
+    try {
+      activateProfile(addProfile("http://a:1", "A").id)
+      renderHook(() => useTrayServers())
+      await new Promise((r) => setTimeout(r, 10))
+      expect(invoke).not.toHaveBeenCalled()
+      expect(handler).toBeNull()
+    } finally {
+      leaveTauri()
+    }
+  })
+
   it("pushes the servers and the active one on mount", async () => {
     const a = addProfile("http://a:1", "A")
     addProfile("http://b:1", "B")
