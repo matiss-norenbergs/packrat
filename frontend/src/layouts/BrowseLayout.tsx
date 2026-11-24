@@ -5,7 +5,7 @@ import { useAuthStatus } from "@/hooks/useAuth"
 import { useSyncAppearance } from "@/hooks/useAppearance"
 import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
 import { BrowseHeader } from "@/components/browse/BrowseHeader"
-import { MiniPlayerProvider } from "@/components/browse/MiniPlayerContext"
+import { MiniPlayerProvider, useMiniPlayer } from "@/components/browse/MiniPlayerContext"
 import { MiniPlayerDock } from "@/components/browse/MiniPlayerDock"
 
 // A deliberately separate layout from AppLayout — no Sidebar/MobileNav, so
@@ -49,14 +49,25 @@ function AuthedBrowseLayout() {
 
   return (
     <MiniPlayerProvider>
-      <div className="min-h-screen w-full bg-background text-foreground">
+      {/* dvh: a phone's collapsing browser bars make 100vh taller than what is visible. */}
+      <div className="min-h-dvh w-full bg-background text-foreground">
         {!isSingleItemView && <BrowseHeader />}
-        <main>
-          <Outlet />
-        </main>
+        <BrowseMain />
         <Toaster />
         <MiniPlayerDock />
       </div>
     </MiniPlayerProvider>
+  )
+}
+
+// While the mini player is open it floats over the bottom-right corner; the extra bottom padding
+// (its height plus its offset, a little more on sm+ where it is wider) lets the page's last row be
+// scrolled out from under it instead of staying covered.
+function BrowseMain() {
+  const { miniPlayer } = useMiniPlayer()
+  return (
+    <main className={miniPlayer ? "pb-56 sm:pb-64" : undefined}>
+      <Outlet />
+    </main>
   )
 }

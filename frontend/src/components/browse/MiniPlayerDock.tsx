@@ -49,7 +49,9 @@ export function MiniPlayerDock() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-80 overflow-hidden rounded-lg border bg-background shadow-2xl">
+    // 16rem on phones (20rem covered nearly the whole width at 390px), 20rem from sm up.
+    // BrowseLayout pads the page bottom while this is open so the last row can scroll clear of it.
+    <div className="fixed bottom-4 right-4 z-50 w-64 overflow-hidden rounded-lg border bg-background shadow-2xl sm:w-80">
       <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-2 py-1.5">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -66,7 +68,7 @@ export function MiniPlayerDock() {
         <div className="flex shrink-0 items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-xs" onClick={expand}>
+              <Button type="button" variant="ghost" size="icon-xs" className="pointer-coarse:size-11" onClick={expand}>
                 <Maximize2 className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
@@ -74,7 +76,7 @@ export function MiniPlayerDock() {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-xs" onClick={close}>
+              <Button type="button" variant="ghost" size="icon-xs" className="pointer-coarse:size-11" onClick={close}>
                 <X className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>

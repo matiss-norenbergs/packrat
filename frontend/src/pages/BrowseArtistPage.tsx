@@ -60,17 +60,17 @@ export function BrowseArtistPage() {
     <RevealAllProvider>
       <div className="space-y-8 px-4 py-8 md:px-8">
         <div className="flex items-center gap-4">
-          <div className="h-48 w-48 shrink-0 overflow-hidden rounded-full bg-muted">
+          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full bg-muted sm:h-32 sm:w-32 md:h-48 md:w-48">
             {artist.selectedImagePath ? (
               <img src={imageUrl(artist.selectedImagePath)} alt="" className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
-                <ImageIcon className="h-14 w-14 text-muted-foreground/40" />
+                <ImageIcon className="h-10 w-10 text-muted-foreground/40 md:h-14 md:w-14" />
               </div>
             )}
           </div>
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold md:text-4xl">{artist.name}</h1>
+          <div className="min-w-0 space-y-1">
+            <h1 className="break-words text-2xl font-bold md:text-4xl">{artist.name}</h1>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {artistItems.length} {artistItems.length === 1 ? "item" : "items"}
             </p>

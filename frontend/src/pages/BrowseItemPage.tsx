@@ -8,6 +8,11 @@ import { LibraryItemDetail } from "@/components/library/LibraryItemDetail"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { useMiniPlayer } from "@/components/browse/MiniPlayerContext"
 
+// The player's box: in portrait (a phone held upright, a portrait tablet) a 16:9 player at the top
+// with the description scrolling below it; in landscape (desktop windows, a phone turned sideways)
+// it fills the viewport as before — dvh rather than vh so a phone's browser bars don't cut it off.
+const PLAYER_BOX = "aspect-video landscape:aspect-auto landscape:h-dvh"
+
 // Mirrors LibraryItemPage.tsx exactly, but stays under BrowseLayout's
 // chrome instead of AppLayout's — see LibraryItemDetail for the shared
 // player/metadata/sibling-strip content itself.
@@ -43,7 +48,7 @@ export function BrowseItemPage() {
   if (isLoading) {
     return (
       <div className="p-4 md:p-6">
-        <div className="-m-4 h-screen md:-m-6">
+        <div className={`-m-4 md:-m-6 ${PLAYER_BOX}`}>
           <Skeleton className="h-full w-full rounded-none" />
         </div>
         <div className="space-y-2 pt-6">
@@ -88,7 +93,7 @@ export function BrowseItemPage() {
           item={item}
           backTo={backTo}
           basePath="/browse"
-          playerHeightClass="h-screen"
+          playerHeightClass={PLAYER_BOX}
           resumeAt={resumeAt}
           resumePaused={resumePaused}
           ignorePrivacy={settings?.browseIgnorePrivacy ?? false}

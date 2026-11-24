@@ -132,7 +132,7 @@ export function LibraryItemDetail({
         <div className="absolute left-2 top-2 z-10 flex gap-2 md:left-4 md:top-4">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button asChild variant="ghost" size="icon" className="bg-black/50 text-white hover:bg-black/70">
+              <Button asChild variant="ghost" size="icon" className="bg-black/50 text-white hover:bg-black/70 pointer-coarse:size-11">
                 <Link to={backTo}>
                   <ArrowLeft className="h-5 w-5" />
                 </Link>
@@ -151,7 +151,7 @@ export function LibraryItemDetail({
                     const el = (isAudioFilename(item.filename) ? audioRef : videoRef).current
                     onMinimize(el?.currentTime ?? 0, el?.paused ?? false)
                   }}
-                  className="bg-black/50 text-white hover:bg-black/70"
+                  className="bg-black/50 text-white hover:bg-black/70 pointer-coarse:size-11"
                 >
                   <Minimize2 className="h-5 w-5" />
                 </Button>

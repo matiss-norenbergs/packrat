@@ -75,7 +75,7 @@ export function BrowseHeader() {
               <Input
                 ref={inputRef}
                 placeholder="Search your library…"
-                className="pl-8 pr-7"
+                className="pl-8 pr-7 pointer-coarse:h-11"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onBlur={() => {
@@ -89,7 +89,7 @@ export function BrowseHeader() {
                       type="button"
                       variant="ghost"
                       size="icon-xs"
-                      className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
+                      className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground pointer-coarse:size-9"
                       onClick={() => {
                         setSearchInput("")
                         // Clicking this button moves focus off the input onto
@@ -110,7 +110,7 @@ export function BrowseHeader() {
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button type="button" variant="ghost" size="icon" onClick={() => setExpanded(true)}>
+                <Button type="button" variant="ghost" size="icon" className="pointer-coarse:size-11" onClick={() => setExpanded(true)}>
                   <Search className="h-5 w-5" />
                 </Button>
               </TooltipTrigger>
@@ -121,7 +121,7 @@ export function BrowseHeader() {
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button asChild variant="ghost" size="icon" className="shrink-0">
+            <Button asChild variant="ghost" size="icon" className="shrink-0 pointer-coarse:size-11">
               <Link to="/">
                 <LayoutDashboard className="h-4 w-4" />
               </Link>

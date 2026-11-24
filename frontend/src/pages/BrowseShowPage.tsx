@@ -93,7 +93,7 @@ export function BrowseShowPage() {
   return (
     <RevealAllProvider>
       <div className="space-y-8 pb-8">
-        <div className="relative flex h-[40vh] min-h-56 w-full items-end overflow-hidden">
+        <div className="relative flex h-[40vh] min-h-56 w-full items-end overflow-hidden [@media(max-height:500px)]:min-h-48">
           {summary.coverUrlLarge && !effectiveBlurred ? (
             <img src={summary.coverUrlLarge} alt="" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
@@ -102,12 +102,12 @@ export function BrowseShowPage() {
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
-          <div className="relative space-y-2 p-6 md:p-10">
+          <div className="relative min-w-0 space-y-2 p-6 md:p-10 [@media(max-height:500px)]:p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {summary.itemCount} {summary.itemCount === 1 ? "item" : "items"}
               {stats.yearRange && ` · ${stats.yearRange}`}
             </p>
-            <h1 className="max-w-xl text-2xl font-bold md:text-4xl">{summary.name}</h1>
+            <h1 className="max-w-xl break-words text-2xl font-bold md:text-4xl">{summary.name}</h1>
             {stats.topTags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {stats.topTags.map((tag) => (

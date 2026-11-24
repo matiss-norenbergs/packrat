@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useRevealAll } from "@/components/library/RevealAllContext"
 import { useSettings } from "@/hooks/useSettings"
 import { librarySmallThumbnailUrl } from "@/lib/api"
-import { hashText } from "@/lib/utils"
+import { cn, hashText } from "@/lib/utils"
 import type { LibraryItem } from "@/types/api"
 
 // A poster tile for the Browse page's rows — stripped of every management
@@ -22,10 +22,12 @@ export function BrowseTile({
   item,
   progressFraction,
   onRemove,
+  className,
 }: {
   item: LibraryItem
   progressFraction?: number
   onRemove?: () => void
+  className?: string
 }) {
   const { data: settings } = useSettings()
   const { isRevealed, toggleItem } = useRevealAll()
@@ -37,7 +39,7 @@ export function BrowseTile({
   const thumbUrl = librarySmallThumbnailUrl(item)
 
   return (
-    <div className="group w-44 shrink-0 space-y-1.5">
+    <div className={cn("group w-44 shrink-0 space-y-1.5", className)}>
       <div className="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
         {thumbUrl ? (
           <BlurredThumbnail
@@ -64,7 +66,9 @@ export function BrowseTile({
                   e.stopPropagation()
                   onRemove()
                 }}
-                className="absolute right-1 top-1 z-10 bg-black/60 text-white opacity-0 hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100"
+                // Shown on hover with a mouse; always shown on touch, where an invisible
+                // ::after extends the 24px button to a 44px tap area.
+                className="absolute right-1 top-1 z-10 bg-black/60 text-white opacity-0 hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 pointer-coarse:after:absolute pointer-coarse:after:-inset-2.5 pointer-coarse:after:content-['']"
               >
                 <X />
               </Button>

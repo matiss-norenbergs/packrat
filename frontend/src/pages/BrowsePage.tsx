@@ -94,9 +94,11 @@ export function BrowsePage() {
           {searchResults.isLoading ? (
             <BrowseRowSkeleton />
           ) : searchResults.data && searchResults.data.items.length > 0 ? (
-            <div className="flex flex-wrap gap-3">
+            // Phones: two tiles per row filling the width (two fixed 11rem tiles don't fit next to
+            // each other at 390px, leaving one per row); wider screens keep the wrapping row.
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
               {searchResults.data.items.map((item) => (
-                <BrowseTile key={item.id} item={item} />
+                <BrowseTile key={item.id} item={item} className="max-sm:w-auto" />
               ))}
             </div>
           ) : (
