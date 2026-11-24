@@ -42,6 +42,8 @@ import type { LibraryItem } from "@/types/api"
 // ignorePrivacy, if true, treats this item and its siblings as unblurred —
 // only BrowseItemPage passes it (from the browseIgnorePrivacy setting);
 // LibraryItemPage never does, so Library's blur behavior is unaffected.
+// showActions=false hides the actions/edit menu next to the title — only BrowseItemPage in the
+// Android app's Browse-only mode passes it (the menu leads to editing and management actions).
 export function LibraryItemDetail({
   item,
   backTo,
@@ -51,6 +53,7 @@ export function LibraryItemDetail({
   resumePaused,
   onMinimize,
   ignorePrivacy = false,
+  showActions = true,
 }: {
   item: LibraryItem
   backTo: string
@@ -60,6 +63,7 @@ export function LibraryItemDetail({
   resumePaused?: boolean
   onMinimize?: (currentTime: number, paused: boolean) => void
   ignorePrivacy?: boolean
+  showActions?: boolean
 }) {
   const { data: settings } = useSettings()
   const maskTag = useTagNameMask()
@@ -209,7 +213,7 @@ export function LibraryItemDetail({
               </h1>
               <p className="text-sm text-muted-foreground">{item.artistName ? maskArtist(item.artistId, item.artistName, !locked) : (item.uploader ?? "Uncategorized")}</p>
             </div>
-            <LibraryItemActionsMenu item={item} />
+            {showActions && <LibraryItemActionsMenu item={item} />}
           </div>
 
           <div className="flex flex-wrap gap-1">

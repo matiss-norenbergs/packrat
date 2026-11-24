@@ -7,12 +7,18 @@ import { MobileNav } from "@/components/sidebar/MobileNav"
 import { Sidebar } from "@/components/sidebar/Sidebar"
 import { Toaster } from "@/components/ui/sonner"
 import { useAuthStatus } from "@/hooks/useAuth"
+import { isBrowseOnlyApp } from "@/lib/appMode"
+import { BrowseOnlyRedirect } from "@/components/BrowseOnlyRedirect"
 import { useSyncAppearance } from "@/hooks/useAppearance"
 import { useTableLayouts } from "@/hooks/useTableLayout"
 import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
 
 export function AppLayout() {
   const { data: status, isLoading } = useAuthStatus()
+
+  // The Android app shows only the Browse pages: every management route (including "/", the
+  // Dashboard) goes to Browse home, which then does its own sign-in check.
+  if (isBrowseOnlyApp()) return <BrowseOnlyRedirect />
 
   if (isLoading || !status) return null
   if (status.setupRequired || !status.authenticated) {

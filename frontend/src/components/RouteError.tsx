@@ -1,14 +1,22 @@
 import { useEffect, useState } from "react"
-import { useRouteError } from "react-router-dom"
+import { isRouteErrorResponse, useRouteError } from "react-router-dom"
 import { RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { isChunkLoadError, reloadForStaleChunk } from "@/lib/chunkReload"
+import { isBrowseOnlyApp } from "@/lib/appMode"
+import { BrowseOnlyRedirect } from "@/components/BrowseOnlyRedirect"
 
 // Root route error element. A failed page chunk (stale tab after a deploy)
 // reloads the app once automatically; anything else, or a second failure,
 // shows the message with a manual Reload button.
 export function RouteError() {
   const error = useRouteError()
+  // The Android app's Browse-only mode: an unknown path goes to Browse home, like the admin routes.
+  if (isBrowseOnlyApp() && isRouteErrorResponse(error) && error.status === 404) return <BrowseOnlyRedirect />
+  return <RouteErrorMessage error={error} />
+}
+
+function RouteErrorMessage({ error }: { error: unknown }) {
   const chunkError = isChunkLoadError(error)
   const [reloading, setReloading] = useState(false)
 

@@ -7,6 +7,7 @@ import { useSettings } from "@/hooks/useSettings"
 import { LibraryItemDetail } from "@/components/library/LibraryItemDetail"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { useMiniPlayer } from "@/components/browse/MiniPlayerContext"
+import { isBrowseOnlyApp } from "@/lib/appMode"
 
 // The player's box: in portrait (a phone held upright, a portrait tablet) a 16:9 player at the top
 // with the description scrolling below it; in landscape (desktop windows, a phone turned sideways)
@@ -77,7 +78,9 @@ export function BrowseItemPage() {
     return (
       <div className="flex flex-col items-center gap-3 py-16 text-center">
         <p className="text-sm text-muted-foreground">
-          This item has no downloaded file — use "Download now" from its actions menu on the Library page.
+          {isBrowseOnlyApp()
+            ? "This item has no downloaded file."
+            : 'This item has no downloaded file — use "Download now" from its actions menu on the Library page.'}
         </p>
         <Button asChild variant="outline">
           <Link to={backTo}>Back to Browse</Link>
@@ -97,6 +100,7 @@ export function BrowseItemPage() {
           resumeAt={resumeAt}
           resumePaused={resumePaused}
           ignorePrivacy={settings?.browseIgnorePrivacy ?? false}
+          showActions={!isBrowseOnlyApp()}
           onMinimize={(currentTime, paused) => {
             minimize(item, currentTime, paused)
             navigate(backTo)
