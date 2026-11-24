@@ -93,3 +93,22 @@ describe("BrowseItemPage actions menu", () => {
     expect(screen.getByRole("button", { name: "item actions" })).toBeInTheDocument()
   })
 })
+
+describe("BrowseItemPage Minimize button", () => {
+  it("is not offered in the Android app", async () => {
+    enterTauri("android")
+    renderItemPage()
+    expect(await screen.findByRole("heading", { name: "Item 1" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Minimize" })).toBeNull()
+  })
+
+  it.each([
+    ["web", () => {}],
+    ["desktop app", () => enterTauri("desktop")],
+  ])("is shown on the %s", async (_name, enter) => {
+    enter()
+    renderItemPage()
+    expect(await screen.findByRole("heading", { name: "Item 1" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Minimize" })).toBeInTheDocument()
+  })
+})

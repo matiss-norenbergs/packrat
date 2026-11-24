@@ -101,10 +101,15 @@ export function BrowseItemPage() {
           resumePaused={resumePaused}
           ignorePrivacy={settings?.browseIgnorePrivacy ?? false}
           showActions={!isBrowseOnlyApp()}
-          onMinimize={(currentTime, paused) => {
-            minimize(item, currentTime, paused)
-            navigate(backTo)
-          }}
+          // No mini player in the Android app: leaving the item stops playback as any page would.
+          onMinimize={
+            isBrowseOnlyApp()
+              ? undefined
+              : (currentTime, paused) => {
+                  minimize(item, currentTime, paused)
+                  navigate(backTo)
+                }
+          }
         />
       </div>
     </RevealAllProvider>

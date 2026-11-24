@@ -151,6 +151,7 @@ export function LibraryItemDetail({
                   type="button"
                   variant="ghost"
                   size="icon"
+                  aria-label="Minimize"
                   onClick={() => {
                     const el = (isAudioFilename(item.filename) ? audioRef : videoRef).current
                     onMinimize(el?.currentTime ?? 0, el?.paused ?? false)
