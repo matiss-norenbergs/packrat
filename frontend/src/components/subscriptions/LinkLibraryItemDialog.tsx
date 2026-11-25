@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { QueryErrorNotice } from "@/components/QueryErrorNotice"
 import { LibraryItemPreviewRow } from "@/components/library/LibraryItemPreviewRow"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { useLinkSubscriptionEntry } from "@/hooks/useSubscriptions"
@@ -45,10 +46,14 @@ export function LinkLibraryItemDialog({ subscriptionId, entry, onOpenChange }: L
   }, [searchInput])
 
   const trimmedSearch = search.trim()
-  const { data, isLoading } = useLibraryQuery({ q: trimmedSearch, pageSize: 20 }, entry != null && trimmedSearch !== "")
+  const { data, isLoading, isError, refetch } = useLibraryQuery({ q: trimmedSearch, pageSize: 20 }, entry != null && trimmedSearch !== "")
+
+  // Only a selection that is in the currently listed results can be linked: a new search, or a
+  // refetch that drops the item, silently invalidates it.
+  const selectedListed = selectedId != null && (data?.items.some((i) => i.id === selectedId) ?? false)
 
   const handleLink = () => {
-    if (!entry || selectedId == null) return
+    if (!entry || selectedId == null || !selectedListed) return
     link.mutate(
       { subscriptionId, sourceId: entry.sourceId, libraryItemId: selectedId },
       { onSuccess: () => onOpenChange(false) },
@@ -69,13 +74,18 @@ export function LinkLibraryItemDialog({ subscriptionId, entry, onOpenChange }: L
         <Input
           placeholder="Search library…"
           value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
+          onChange={(e) => {
+            setSearchInput(e.target.value)
+            setSelectedId(null)
+          }}
           autoFocus
         />
 
         <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
           {isLoading ? (
             <p className="px-1 py-2 text-sm text-muted-foreground">Searching…</p>
+          ) : isError ? (
+            <QueryErrorNotice message="Search failed." onRetry={() => void refetch()} />
           ) : trimmedSearch === "" ? (
             <p className="px-1 py-2 text-sm text-muted-foreground">Type to search the library.</p>
           ) : !data || data.items.length === 0 ? (
@@ -99,7 +109,7 @@ export function LinkLibraryItemDialog({ subscriptionId, entry, onOpenChange }: L
         </div>
 
         <DialogFooter>
-          <Button onClick={handleLink} disabled={selectedId == null || link.isPending}>
+          <Button onClick={handleLink} disabled={!selectedListed || link.isPending}>
             {link.isPending ? "Linking…" : "Link"}
           </Button>
         </DialogFooter>

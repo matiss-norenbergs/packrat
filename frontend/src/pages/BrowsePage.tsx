@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router-dom"
 import { Skeleton } from "@/components/ui/skeleton"
+import { QueryErrorNotice } from "@/components/QueryErrorNotice"
 import { BrowseHero } from "@/components/browse/BrowseHero"
 import { BrowseCollectionRow } from "@/components/browse/BrowseCollectionRow"
 import { BrowseRow } from "@/components/browse/BrowseRow"
@@ -36,7 +37,7 @@ export function BrowsePage() {
   const [searchParams] = useSearchParams()
   const search = searchParams.get("q") ?? ""
 
-  const { data: collections, isLoading: collectionsLoading } = useCollections()
+  const { data: collections, isLoading: collectionsLoading, isError: collectionsError, refetch: refetchCollections } = useCollections()
   const ignorePrivacy = !useBrowsePrefs().blurPrivate
   const searchResults = useLibraryQuery({ q: search, pageSize: 100, hideGhosts: true }, search.length > 0)
   const updateProgress = useUpdateLibraryProgress()
@@ -88,6 +89,8 @@ export function BrowsePage() {
           <h1 className="text-lg font-semibold">Results for "{search}"</h1>
           {searchResults.isLoading ? (
             <BrowseRowSkeleton />
+          ) : searchResults.isError ? (
+            <QueryErrorNotice message="Search failed." onRetry={() => void searchResults.refetch()} />
           ) : searchResults.data && searchResults.data.items.length > 0 ? (
             // Phones: two tiles per row filling the width (two fixed 11rem tiles don't fit next to
             // each other at 390px, leaving one per row); wider screens keep the wrapping row.
@@ -101,6 +104,15 @@ export function BrowsePage() {
           )}
         </div>
       </RevealAllProvider>
+    )
+  }
+
+  // Collections drive the whole layout; without them there is nothing to show but the error.
+  if (collectionsError && !collections) {
+    return (
+      <div className="p-4 md:p-8">
+        <QueryErrorNotice message="Couldn't load the library." onRetry={() => void refetchCollections()} />
+      </div>
     )
   }
 
@@ -165,6 +177,9 @@ export function BrowsePage() {
       <div className="space-y-8 pb-8">
         {heroItems.length > 0 && <BrowseHero items={heroItems} />}
         <div className="space-y-6 px-4 md:px-8">
+          {continueWatchingQuery.isError && (
+            <QueryErrorNotice message="Couldn't load Continue Watching." onRetry={() => void continueWatchingQuery.refetch()} />
+          )}
           <BrowseRow
             title="Continue Watching"
             items={continueWatching}
@@ -178,8 +193,10 @@ export function BrowsePage() {
           {fallbackRoots.map((root) => (
             <BrowseCollectionRow key={`collection-${root.id}`} title={root.name} collectionIds={collectDescendantIds(root)} />
           ))}
-          {recentlyAdded.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nothing downloaded yet.</p>
+          {recentlyAddedQuery.isError ? (
+            <QueryErrorNotice message="Couldn't load recently added items." onRetry={() => void recentlyAddedQuery.refetch()} />
+          ) : (
+            recentlyAdded.length === 0 && <p className="text-sm text-muted-foreground">Nothing downloaded yet.</p>
           )}
         </div>
       </div>
