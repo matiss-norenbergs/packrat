@@ -76,10 +76,26 @@ function CardTitle({ item, revealed }: { item: LibraryItem; revealed: boolean })
   )
 }
 
+// A refetch under another query (a new search or filter) hands every card a fresh object for an item that did not change;
+// the fields are primitives except `tags`, so comparing those is far cheaper than re-rendering the card.
+function sameItem(a: LibraryItem, b: LibraryItem): boolean {
+  if (a === b) return true
+  const keys = Object.keys(a) as (keyof LibraryItem)[]
+  if (keys.length !== Object.keys(b).length) return false
+  for (const k of keys) {
+    if (a[k] === b[k]) continue
+    if (k === "tags" && a.tags.length === b.tags.length && a.tags.every((t, i) => t === b.tags[i])) continue
+    return false
+  }
+  return true
+}
+
 // Memoized, with the item as its only prop: a card subscribes to just its own selected / revealed flags, and takes the
 // item-independent settings from LibraryCardsProvider, so ticking one card, revealing one item or starting a selection
 // re-renders that card (or no card) only. Needs a LibraryCardsProvider (it also hosts the "⋮" dialogs) and a LibraryCardGrid.
-export const LibraryCard = memo(function LibraryCard({ item }: { item: LibraryItem }) {
+export const LibraryCard = memo(LibraryCardImpl, (prev, next) => sameItem(prev.item, next.item))
+
+function LibraryCardImpl({ item }: { item: LibraryItem }) {
   const { detailsMode, maskTag, maskArtist } = useLibraryCardEnv()
   const revealed = useIsRevealed(item.id)
   const navigateFromHere = useNavigateFromHere()
@@ -91,8 +107,10 @@ export const LibraryCard = memo(function LibraryCard({ item }: { item: LibraryIt
   const thumbUrl = libraryMediumThumbnailUrl(item)
 
   return (
+    // content-visibility: the browser skips style, layout and paint work for cards scrolled out of view, which is what
+    // keeps a 3,000-card grid cheap to show and to restyle (a selection toggles `data-selecting` on all of them).
     <Card
-      className={"gap-0 overflow-hidden py-0 group-data-[selecting]/lib-grid:cursor-pointer"}
+      className="gap-0 overflow-hidden py-0 [contain-intrinsic-size:auto_280px] [content-visibility:auto] group-data-[selecting]/lib-grid:cursor-pointer"
       onClick={() => {
         if (isSelectionActive()) toggleSelected(item)
       }}
@@ -233,7 +251,7 @@ export const LibraryCard = memo(function LibraryCard({ item }: { item: LibraryIt
       </CardContent>
     </Card>
   )
-})
+}
 
 /**
  * The grid the cards sit in. It carries `data-selecting` while anything is selected, which the cards' CSS variants key on

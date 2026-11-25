@@ -170,6 +170,14 @@ describe("card render counts", () => {
     expect(thumbRenders.size).toBe(0)
   })
 
+  it("a refetch handing over equal copies of the items re-renders no card", async () => {
+    renderGrid(four)
+    await settle()
+    thumbRenders.clear()
+    act(() => setItems(four.map((i) => ({ ...i, tags: [...i.tags] }))))
+    expect(thumbRenders.size).toBe(0)
+  })
+
   it("a changed item re-renders just its card", async () => {
     renderGrid(four)
     await settle()
