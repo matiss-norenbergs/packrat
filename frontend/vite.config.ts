@@ -37,17 +37,21 @@ export default defineConfig(({ mode }) => {
           // Without explicit groups the page split leaves ~100 tiny shared
           // chunks (one per lucide icon / radix primitive). Keep it to a few:
           // charts (Dashboard only), react core, one vendor bucket, and the shared ui/hooks/lib code.
+          // Rolldown groups capture a matched module's dependencies recursively by default, so the
+          // on-demand charts group must opt out and react core must outrank it; otherwise it absorbs
+          // React/clsx, every startup chunk imports it and index.html modulepreloads it.
           codeSplitting: {
             groups: [
               {
                 name: "vendor-charts",
                 test: /node_modules[\/](recharts|d3-[^\/]+|victory-vendor|internmap|decimal\.js-light|es-toolkit|immer|reselect|@reduxjs|redux|react-redux|use-sync-external-store|tiny-invariant)[\/]/,
                 priority: 30,
+                includeDependenciesRecursively: false,
               },
               {
                 name: "vendor-react",
                 test: /node_modules[\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run|cookie|set-cookie-parser)[\/]/,
-                priority: 20,
+                priority: 40,
               },
               { name: "vendor", test: /node_modules[\/]/, priority: 10 },
               {
