@@ -2473,7 +2473,7 @@ via `If-Modified-Since`, but never assumes a stale byte range is fresh, since si
 get overwritten in place at the same path.
 
 **Response headers (both file routes).** Every response — `200`, `206`, `304`, `HEAD`, `401` and `404` — carries
-`X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'`.
+`X-Content-Type-Options: nosniff` and a `Content-Security-Policy` (`default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'`, prefixed with `sandbox; ` for files that are not on the inline allowlist).
 A file whose final extension (case-insensitive) is on the inline allowlist gets an explicit `Content-Type`
 and no `Content-Disposition`; every other file (`.svg`, `.html`, `.xml`, `.nfo`, `.json`, unknown or no
 extension) gets `Content-Type: application/octet-stream` and `Content-Disposition: attachment` (no filename),

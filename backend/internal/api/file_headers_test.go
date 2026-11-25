@@ -12,7 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const wantFilesCSP = "sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'"
+const (
+	wantInlineCSP  = "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'"
+	wantSandboxCSP = "sandbox; " + wantInlineCSP
+)
 
 func (e *bkEnv) fileReq(method, path string, hdr map[string]string) *httptest.ResponseRecorder {
 	e.t.Helper()
@@ -39,12 +42,12 @@ func writeServedFile(t *testing.T, root, name, body string) {
 	}
 }
 
-func assertHardened(t *testing.T, label string, w *httptest.ResponseRecorder) {
+func assertHardened(t *testing.T, label, wantCSP string, w *httptest.ResponseRecorder) {
 	t.Helper()
 	if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Errorf("%s: X-Content-Type-Options = %q", label, got)
 	}
-	if got := w.Header().Get("Content-Security-Policy"); got != wantFilesCSP {
+	if got := w.Header().Get("Content-Security-Policy"); got != wantCSP {
 		t.Errorf("%s: CSP = %q", label, got)
 	}
 }
@@ -82,7 +85,11 @@ func TestServedFiles_HeadersPerType(t *testing.T) {
 					t.Errorf("%s: status %d", label, w.Code)
 					continue
 				}
-				assertHardened(t, label, w)
+				wantCSP := wantSandboxCSP
+				if isInline {
+					wantCSP = wantInlineCSP // no `sandbox`: it breaks a media file opened directly in a tab
+				}
+				assertHardened(t, label, wantCSP, w)
 				if got := w.Header().Get("Content-Type"); got != want {
 					t.Errorf("%s: Content-Type = %q, want %q", label, got, want)
 				}
@@ -119,7 +126,7 @@ func TestServedFiles_RangeConditionalAndMissing(t *testing.T) {
 		if w.Code != http.StatusPartialContent || w.Body.String() != "2345" {
 			t.Fatalf("%s range: status %d body %q", prefix, w.Code, w.Body.String())
 		}
-		assertHardened(t, prefix+" 206", w)
+		assertHardened(t, prefix+" 206", wantInlineCSP, w)
 		if w.Header().Get("Content-Type") != "video/mp4" || w.Header().Get("Content-Range") != "bytes 2-5/10" ||
 			w.Header().Get("Accept-Ranges") != "bytes" || w.Header().Get("Content-Encoding") != "" {
 			t.Errorf("%s 206 headers: %v", prefix, w.Header())
@@ -134,7 +141,7 @@ func TestServedFiles_RangeConditionalAndMissing(t *testing.T) {
 		if w.Code != http.StatusNotModified {
 			t.Fatalf("%s 304: status %d", prefix, w.Code)
 		}
-		assertHardened(t, prefix+" 304", w)
+		assertHardened(t, prefix+" 304", wantInlineCSP, w)
 		if w.Header().Get("Cache-Control") != "no-cache" {
 			t.Errorf("%s 304: Cache-Control = %q", prefix, w.Header().Get("Cache-Control"))
 		}
@@ -144,7 +151,11 @@ func TestServedFiles_RangeConditionalAndMissing(t *testing.T) {
 			if w.Code != http.StatusNotFound {
 				t.Errorf("%s: status %d, want 404", p, w.Code)
 			}
-			assertHardened(t, p, w)
+			wantCSP := wantSandboxCSP
+			if strings.HasSuffix(p, ".mp4") {
+				wantCSP = wantInlineCSP
+			}
+			assertHardened(t, p, wantCSP, w)
 		}
 	}
 }
@@ -158,7 +169,7 @@ func TestServedFiles_UnauthenticatedStillHardened(t *testing.T) {
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status %d, want 401", w.Code)
 	}
-	assertHardened(t, "401", w)
+	assertHardened(t, "401", wantSandboxCSP, w)
 	if strings.Contains(w.Body.String(), "<script>") {
 		t.Error("served the file without a session")
 	}

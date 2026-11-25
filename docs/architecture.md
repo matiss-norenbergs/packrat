@@ -1972,10 +1972,14 @@ the admin's session, and a hostile site could lure the admin into opening such a
 `ServedFileHeaders` (`internal/api/file_headers.go`, the outermost middleware of both groups so `401`/`404`
 get it too) therefore sets, before the file is served:
 
-- `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'`
-  on every response. `sandbox` (no `allow-scripts`) stops script in a file opened as a page; a CSP on a
-  subresource response does not change how `<img>`/`<video>`/`<track>` use it, and the desktop/Android apps
-  (other origins) load media the same way.
+- `X-Content-Type-Options: nosniff` and a `Content-Security-Policy` on every response:
+  `default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'` for allowlisted
+  extensions, and the same with a leading `sandbox;` (no `allow-scripts`) for everything else, so a hostile file
+  that is somehow rendered still runs without script in an opaque origin. `sandbox` is left off inline media on
+  purpose: a video/audio file opened directly in a tab is a browser-made document that loads the file again
+  from an opaque origin (no session cookie; blocked by the CSP in Chromium), so the player never loaded
+  (found by testing the real image). A CSP on a subresource response does not change how
+  `<img>`/`<video>`/`<track>` use it, and the desktop/Android apps (other origins) load media the same way.
 - For an extension on the allowlist: an explicit `Content-Type` (`http.ServeContent` keeps a type that is
   already set) and no `Content-Disposition`. For everything else: `application/octet-stream` and
   `Content-Disposition: attachment`. Only the final extension counts, case-insensitively, so

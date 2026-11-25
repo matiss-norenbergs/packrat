@@ -7,14 +7,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// filesCSP is sent on every /media-files and /local-images response. `sandbox`
-// (with no allow-scripts / allow-same-origin) makes a file that is opened as a
-// page run in an opaque origin without script, so even a hostile document that
-// slipped past the extension allowlist cannot reach the admin API with the
-// session cookie. A CSP on a *subresource* response does not affect how the
-// embedding page uses it, so <img>, <video>, <audio> and <track> loads work as
-// before (the desktop/Android apps load them cross-origin).
-const filesCSP = "sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'"
+// filesCSP is sent on every /media-files and /local-images response. Files on
+// the inline allowlist get inlineFilesCSP: no script, no frames, no network
+// from the file itself. Everything else is an attachment and also gets
+// `sandbox` (no allow-scripts / allow-same-origin), so even if a browser
+// rendered it, it would run in an opaque origin without script and could not
+// reach the admin API with the session cookie.
+//
+// `sandbox` is deliberately NOT sent with inline media: a video or audio file
+// opened directly in a tab is a browser-made document whose <video>/<audio>
+// loads the file again from an opaque origin (no session cookie, CSP-blocked
+// in Chromium), so the player would never load. A CSP on a *subresource*
+// response does not affect how the embedding page uses it, so <img>, <video>,
+// <audio> and <track> loads work as before (the desktop/Android apps load them
+// cross-origin).
+const (
+	inlineFilesCSP  = "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'"
+	sandboxFilesCSP = "sandbox; " + inlineFilesCSP
+)
 
 // inlineFileTypes is the allowlist of file extensions that may be shown inline,
 // each with the Content-Type we send for it. It is deliberately explicit and
@@ -42,7 +52,7 @@ var inlineFileTypes = map[string]string{
 	".oga": "audio/ogg", ".opus": "audio/ogg", ".wav": "audio/wav", ".aac": "audio/aac",
 	".weba": "audio/webm", ".mka": "audio/x-matroska",
 
-	// subtitle sidecars (text; inert under nosniff + the sandbox CSP)
+	// subtitle sidecars (text; inert under nosniff + the CSP)
 	".vtt": "text/vtt; charset=utf-8", ".srt": "text/plain; charset=utf-8", ".ass": "text/plain; charset=utf-8",
 }
 
@@ -52,18 +62,19 @@ func fileExt(p string) string {
 }
 
 // ServedFileHeaders hardens the file routes (/media-files, /local-images):
-// every response (200, 206, 304, HEAD, 404, 401) gets nosniff and the sandbox
-// CSP; files whose extension is not in inlineFileTypes are forced to download
+// every response (200, 206, 304, HEAD, 404, 401) gets nosniff and a CSP
+// (sandboxed for non-inline files); files whose extension is not in inlineFileTypes are forced to download
 // as application/octet-stream. Content-Type is set before the handler runs;
 // http.ServeContent keeps a Content-Type that is already set. Nothing else
 // about the response (Range, ETag, Last-Modified, Cache-Control) is touched.
 func ServedFileHeaders(c *gin.Context) {
 	h := c.Writer.Header()
 	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Content-Security-Policy", filesCSP)
 	if ct, ok := inlineFileTypes[fileExt(c.Request.URL.Path)]; ok {
+		h.Set("Content-Security-Policy", inlineFilesCSP)
 		h.Set("Content-Type", ct)
 	} else {
+		h.Set("Content-Security-Policy", sandboxFilesCSP)
 		h.Set("Content-Type", "application/octet-stream")
 		h.Set("Content-Disposition", "attachment")
 	}
