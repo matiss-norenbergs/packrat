@@ -102,9 +102,26 @@ per request.
 (not `React.lazy`/Suspense: a Suspense fallback made first content ~300 ms slower because of React's
 reveal throttle, and route `lazy` also keeps the old page on screen until the next is ready). The
 layouts, sidebar and auth gate stay in the entry chunk. `vite.config.ts` groups node_modules into
-`vendor-react`, `vendor` and `vendor-charts` (recharts, Dashboard only), plus `app-shared` for
-`components/ui`, `hooks`, `lib` and `types`; without the groups rolldown emits ~100 tiny shared
-chunks. A delegated `pointerover`/`focusin` listener preloads the chunk of any in-app link.
+named chunks (without groups rolldown emits ~100 tiny shared chunks, one per lucide icon / radix
+primitive): `vendor-react` (React, react-dom, react-router), `vendor` (everything else the startup
+path needs: TanStack Query, radix, lucide, sonner, tailwind-merge…) and `app-shared` (`components/ui`,
+`hooks`, `lib`, `types`, except `calendar.tsx`/`resizable.tsx`, which travel with their consumers),
+plus on-demand groups: `vendor-charts` (recharts, d3 and its helpers; Dashboard only), `vendor-dnd`
+(@dnd-kit) and `vendor-panels` (react-resizable-panels) for the Edit Sequence dialog,
+`vendor-calendar` (react-day-picker, date-fns) for the Artist dialog, Artists page and the
+Dashboard growth chart, `vendor-qr` (qrcode.react) for 2FA setup and `vendor-tauri` (the
+`@tauri-apps/*` plugins). **Rolldown groups capture a matched module's dependencies
+recursively by default**, so an on-demand group must set `includeDependenciesRecursively: false`
+and `vendor-react` must outrank it; otherwise the group swallows React core and `clsx`, every startup
+chunk imports it, and `index.html` modulepreloads it (this is what once made `/login` download
+recharts). These libraries load with the page/dialog chunk that imports them (`LibraryPage` pulls
+`vendor-dnd`/`vendor-panels` because the dialog is part of it; opening the dialog needs no further
+request). `MiniPlayerDock` (and with it the player skin) is its own chunk, fetched when Browse
+shows an item page or a mini player is open, so the entry chunk stays small. **`frontend/scripts/check-bundle.mjs`
+(`npm run check:bundle`, run by CI after `npm run build`) fails if `index.html` or anything it
+statically imports is one of the on-demand chunks** (matched by name prefix, so hashes don't matter)
+and prints the startup size; add a new page-only library to its denylist and to the groups together.
+A delegated `pointerover`/`focusin` listener preloads the chunk of any in-app link.
 The auth status query is prefetched at module load so it runs in parallel with the initial chunk.
 
 **Desktop client mode.** `frontend/src/lib/server.ts` decides where the app talks to. On the web
@@ -127,7 +144,8 @@ The Tauri shell is `desktop/` (see its README): `src-tauri/` points `frontendDis
 `frontend/dist` and `devUrl` at the Vite dev server, so there is one frontend codebase, not a fork.
 It is a pure client — no sidecar, no bundled backend — and only the plugin-backed behavior
 (notifications, opening links in the system browser) is guarded by `isTauri()`, with the plugins
-imported lazily so the web bundle never loads them. `desktop/` is excluded from the Docker build
+imported dynamically and grouped into the separate `vendor-tauri` chunk, which is never preloaded, so
+a web visit never requests it. `desktop/` is excluded from the Docker build
 context (`.dockerignore`).
 
 **Android (experimental spike).** The same shell also builds for Android (see `desktop/README.md`).
