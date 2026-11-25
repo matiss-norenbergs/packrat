@@ -33,7 +33,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { useSettings } from "@/hooks/useSettings"
 import { useTags } from "@/hooks/useTags"
 import { cn, duplicateTitle, formatDuration } from "@/lib/utils"
-import { previewImageUrl } from "@/lib/api"
+import { previewImageUrl, remoteThumbnailSrc } from "@/lib/api"
 import { resolveFilenameTemplatePreview } from "@/lib/nametemplate"
 import { resolveInheritedArtistId, sortCollectionsByPath } from "@/lib/collectionTree"
 import { invalidSegmentChars, invalidTemplateChars } from "@/lib/filenameValidation"
@@ -492,9 +492,9 @@ export function NewDownloadDialog() {
                 </div>
               ) : preview ? (
                 <div className="flex items-center gap-3">
-                  {preview.thumbnail ? (
+                  {remoteThumbnailSrc(preview.thumbnail) ? (
                     <img
-                      src={previewImageUrl(preview.thumbnail, "thumbnail")}
+                      src={remoteThumbnailSrc(preview.thumbnail)!}
                       alt=""
                       className="h-12 w-20 shrink-0 rounded object-cover bg-muted"
                     />

@@ -10,6 +10,7 @@ import { useCancelDownload } from "@/hooks/useDownloads"
 import { downloadRevealKey } from "@/lib/revealKeys"
 import { formatDownloadStatus, formatEta, formatSpeed, hashText } from "@/lib/utils"
 import type { Download } from "@/types/api"
+import { remoteThumbnailSrc } from "@/lib/api"
 
 export const CANCELLABLE_STATUSES = new Set(["queued", "fetching_metadata", "downloading", "processing"])
 
@@ -44,6 +45,7 @@ export function DownloadQueueItem({
   const toggleReveal = () => toggleItem(revealKey)
   const cancellable = CANCELLABLE_STATUSES.has(download.status)
   const displayName = download.title ?? download.url
+  const thumbnailSrc = remoteThumbnailSrc(download.thumbnail)
 
   return (
     <div
@@ -56,9 +58,9 @@ export function DownloadQueueItem({
       <Checkbox checked={selected} onCheckedChange={onSelectedChange} aria-label={`Select ${displayName}`} />
 
       <div className="h-14 w-24 flex-shrink-0 overflow-hidden rounded bg-muted">
-        {download.thumbnail ? (
+        {thumbnailSrc ? (
           <BlurredThumbnail
-            src={download.thumbnail}
+            src={thumbnailSrc}
             className="h-full w-full object-cover"
             blurred={download.blurred}
             revealed={revealed}

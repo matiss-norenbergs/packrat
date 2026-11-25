@@ -25,6 +25,9 @@ an address (`192.168.1.20:50505`, or a full `https://…` URL; a bare host defau
 The app checks `GET /api/health` before saving it, then shows the usual setup/login screen. If the
 server can't be reached at startup, a "Can't reach the server" screen offers **Retry** and **Change
 server**. If the server revokes the session while the app is open, it drops back to the login screen.
+The web UI does the same: a session that was revoked from another device, expired, or ended by a
+password change returns to the login screen on the next failed request (or, on an idle page, within
+about 30 s of the live connection dropping), and no library data stays on screen.
 
 **Several servers.** The app keeps a list of saved servers ("profiles": a name, an address and when it
 was last used) and talks to one at a time; each profile has its own login, so switching back to a

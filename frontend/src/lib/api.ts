@@ -507,6 +507,27 @@ export function previewImageUrl(externalUrl: string, kind: "image" | "thumbnail"
   return serverUrl(kind === "thumbnail" ? `${base}&kind=thumbnail` : base)
 }
 
+// The <img src> for a thumbnail value that came from yt-dlp metadata (a queue/history row, a URL
+// preview, the compare-metadata fetch): the remote page controls it, so it never goes to the browser
+// as-is. An absolute http(s) URL is fetched by the backend instead (previewImageUrl, kind=thumbnail:
+// honors the yt-dlp proxy, refuses private addresses); a server-local path (`/media-files/…`,
+// `/local-images/…`) keeps working through serverUrl(); anything else (empty, `javascript:`, `data:`,
+// protocol-relative `//host/…`, other schemes) is null, and callers render their placeholder.
+export function remoteThumbnailSrc(value: string | null | undefined): string | null {
+  const v = value?.trim()
+  if (!v) return null
+  if (/^https?:\/\//i.test(v)) {
+    try {
+      new URL(v)
+    } catch {
+      return null
+    }
+    return previewImageUrl(v, "thumbnail")
+  }
+  if (v.startsWith("/") && !v.startsWith("//") && !v.includes("\\")) return serverUrl(v)
+  return null
+}
+
 // Resolves a relative path under the backend's images root (artist/collection
 // pictures Packrat itself copied in) into a URL — mirrors mediaFileUrl().
 export function imageUrl(relativePath: string): string {

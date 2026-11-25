@@ -31,6 +31,7 @@ import { formatDuration } from "@/lib/utils"
 import { ArtistSelect, NO_ARTIST } from "./ArtistSelect"
 import { SequenceNumberField } from "./SequenceNumberField"
 import { TagInput } from "./TagInput"
+import { remoteThumbnailSrc } from "@/lib/api"
 
 const NO_COLLECTION = "none"
 
@@ -176,8 +177,8 @@ export function AddGhostLibraryItemDialog({ open, onOpenChange }: AddGhostLibrar
                 </p>
               ) : preview && !preview.isPlaylist ? (
                 <div className="flex items-center gap-3">
-                  {preview.thumbnail ? (
-                    <img src={preview.thumbnail} alt="" className="h-12 w-20 shrink-0 rounded bg-muted object-cover" />
+                  {remoteThumbnailSrc(preview.thumbnail) ? (
+                    <img src={remoteThumbnailSrc(preview.thumbnail)!} alt="" className="h-12 w-20 shrink-0 rounded bg-muted object-cover" />
                   ) : (
                     <div className="h-12 w-20 shrink-0 rounded bg-muted" />
                   )}

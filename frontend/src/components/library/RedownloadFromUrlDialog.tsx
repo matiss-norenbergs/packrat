@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { ResolutionValue } from "@/components/ResolutionValue"
 import { useRedownloadLibraryItemFromUrl, useRedownloadPreview } from "@/hooks/useLibrary"
-import { libraryMediumThumbnailUrl } from "@/lib/api"
+import { libraryMediumThumbnailUrl, remoteThumbnailSrc } from "@/lib/api"
 import { cn, duplicateTitle, formatDuration } from "@/lib/utils"
 import type { LibraryItem, RedownloadOverwriteField } from "@/types/api"
 
@@ -135,13 +135,15 @@ export function RedownloadFromUrlDialog({ item, open, onOpenChange }: Redownload
             <div className="space-y-3 sm:pr-6">
               <h3 className="text-sm font-medium text-muted-foreground">From New URL</h3>
               <div className="aspect-video w-full overflow-hidden rounded-md bg-muted">
-                <BlurredThumbnail
-                  src={preview.thumbnail}
-                  className="h-full w-full object-cover"
-                  blurred={item.blurred}
-                  revealed={revealed}
-                  onToggleReveal={() => setRevealed((r) => !r)}
-                />
+                {remoteThumbnailSrc(preview.thumbnail) ? (
+                  <BlurredThumbnail
+                    src={remoteThumbnailSrc(preview.thumbnail)!}
+                    className="h-full w-full object-cover"
+                    blurred={item.blurred}
+                    revealed={revealed}
+                    onToggleReveal={() => setRevealed((r) => !r)}
+                  />
+                ) : null}
               </div>
               {fields.map((f) => (
                 <FieldRow

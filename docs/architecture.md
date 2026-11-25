@@ -117,6 +117,11 @@ the `/ws` URL — goes through `serverUrl()`/`websocketUrl()`, which add the pre
 these helpers are the single place URLs are built. `App.tsx` shows `ConnectPage` until a server is
 saved, and the route module skips its auth prefetch until then; `DesktopGate` covers an unreachable
 server; a 401 from any non-`/auth/` route clears the token and fires `UNAUTHORIZED_EVENT`.
+`request()` captures the profile id and token it was *sent with* (`captureAuth()`); on a 401 (and in
+`fetchAuthStatus`'s dead-token clear) `clearTokenIf()` only clears and signals while that profile is
+still active and still holds that token. A request that belonged to a profile since switched away
+from — a poll or socket reconnect in the gap `switchProfile` leaves before the reload — must not
+delete the *new* profile's saved login.
 
 The Tauri shell is `desktop/` (see its README): `src-tauri/` points `frontendDist` at
 `frontend/dist` and `devUrl` at the Vite dev server, so there is one frontend codebase, not a fork.
@@ -247,6 +252,21 @@ session-gated: `RequireAuth` covers every `/api/*` route except `/api/health`, `
 device that logged in (client, IP, truncated User-Agent), a throttled `last_seen_at`, and a separate
 random `public_id` — the only handle the sessions list/revoke API exposes, so the token never leaves
 the server after login.
+
+**A dead session returns to login (web and desktop).** `request()` treats a 401 from any non-`/auth/`
+route as "the session is gone" (revoked from another device, "Sign out other sessions", a password
+change or `--disable-2fa`, expiry) on the web too and fires `UNAUTHORIZED_EVENT`; the web has no token
+to clear. `App.tsx` handles it like a logout (`markLoggedOut`: auth status `authenticated:false`,
+every other cached query removed, so revealed private items don't stay on screen) and skips the work
+when the status already says logged out, so a burst of 401s acts once. `/auth/*` 401s (wrong
+password/code) never fire it; the public `/api/health` and `/api/version` never answer 401. An idle
+page has no request to notice a revoked session, so a real WebSocket drop (`useDownloadsSocket`
+`close`, not the quiet replacement on wake) calls `recheckAuthAfterSocketDrop()` (`lib/authRecheck.ts`):
+re-read `/auth/status` at most once per 30 s, never while the tab is hidden, only while the page
+believes it is signed in; "not authenticated" → `markLoggedOut`. Network failures are ignored there
+(the connection monitor owns those). `urlToBase64` (plain `fetch` for image bytes) shares the same
+401 handling (`handleUnauthorized`). Known gap: a 401 for a request sent *before* a quick
+logout→login can still land after it and log the new session out; reload recovers.
 
 **Token hashing rule:** the `sessions.token` column holds `hex(SHA-256(token))` (migration 000055,
 which deleted all existing sessions: unhashable in SQLite, so everyone signed in once after that
@@ -784,6 +804,14 @@ independent of any actual download or preview happening.
   URL (`kind=image`, the default; `PreviewPolicy`) — because fetching from a LAN host is a legitimate
   thing for an admin to ask for and those requests are chosen by the admin, not the page. The endpoint
   can't tell the two apart on its own, so the caller says which it is.
+  **Every** remote thumbnail goes through this endpoint, not just the New Download dialog's: the
+  Downloads queue, History, the bulk-download rows, the subscription and ghost-item dialogs, the
+  redownload and compare dialogs all build their `<img src>` with `remoteThumbnailSrc()` (`lib/api.ts`):
+  an absolute http(s) URL → `previewImageUrl(url, "thumbnail")`; a server-local `/…` path →
+  `serverUrl()`; anything else (empty, `javascript:`, `data:`, `//host`) → no image. A browser never
+  fetches a metadata-supplied URL itself, so a page's `og:image` can't reveal the admin's IP past the
+  proxy or poke a LAN device. Responses carry `Cache-Control: private, max-age=3600` so re-renders of
+  those lists don't re-fetch each image through the backend.
   Other thumbnail fetches (`ghostthumb` callers, subscriptions, import) call yt-dlp as a subprocess and
   are out of scope here.
 - *Connect-time check.* The transport's `net.Dialer.Control` hook sees the resolved IP being dialed and

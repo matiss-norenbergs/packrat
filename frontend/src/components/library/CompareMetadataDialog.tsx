@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { ResolutionValue } from "@/components/ResolutionValue"
 import { useLibraryItemMetadataPreview } from "@/hooks/useLibrary"
-import { libraryMediumThumbnailUrl } from "@/lib/api"
+import { libraryMediumThumbnailUrl, remoteThumbnailSrc } from "@/lib/api"
 import { cn, formatDuration } from "@/lib/utils"
 import type { LibraryItem } from "@/types/api"
 
@@ -62,13 +62,15 @@ export function CompareMetadataDialog({ item, open, onOpenChange }: CompareMetad
             ) : data ? (
               <>
                 <div className="aspect-video w-full overflow-hidden rounded-md bg-muted">
-                  <BlurredThumbnail
-                    src={data.thumbnail}
-                    className="h-full w-full object-cover"
-                    blurred={item.blurred}
-                    revealed={revealed}
-                    onToggleReveal={() => setRevealed((r) => !r)}
-                  />
+                  {remoteThumbnailSrc(data.thumbnail) ? (
+                    <BlurredThumbnail
+                      src={remoteThumbnailSrc(data.thumbnail)!}
+                      className="h-full w-full object-cover"
+                      blurred={item.blurred}
+                      revealed={revealed}
+                      onToggleReveal={() => setRevealed((r) => !r)}
+                    />
+                  ) : null}
                 </div>
                 {fields.map((f) => (
                   <FieldRow

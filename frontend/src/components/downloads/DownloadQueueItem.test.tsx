@@ -156,3 +156,22 @@ describe("DownloadQueueItem reveal", () => {
     expect(isBlurredImg(3)).toBe(false)
   })
 })
+
+describe("DownloadQueueItem thumbnail source", () => {
+  const imgSrc = () => document.querySelector("img")?.getAttribute("src") ?? null
+
+  it("sends a remote thumbnail through the preview proxy", () => {
+    renderRows([makeDownload({ blurred: false, thumbnail: "https://cdn.example.com/t.jpg?a=1&b=2" })])
+    expect(imgSrc()).toBe(
+      `/api/downloads/preview-image?url=${encodeURIComponent("https://cdn.example.com/t.jpg?a=1&b=2")}&kind=thumbnail`,
+    )
+  })
+
+  it("keeps a local path and renders nothing for a bad scheme", () => {
+    renderRows([makeDownload({ blurred: false, thumbnail: "/thumb/1.jpg" })])
+    expect(imgSrc()).toBe("/thumb/1.jpg")
+    cleanup()
+    renderRows([makeDownload({ blurred: false, thumbnail: "javascript:alert(1)" })])
+    expect(imgSrc()).toBeNull()
+  })
+})

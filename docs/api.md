@@ -421,7 +421,9 @@ CGNAT and other non-public addresses (also via redirects) are refused. `400` for
 25 MB (`{"error": "fetching image: image larger than the 25 MB limit"}` when the `Content-Length`
 says so; a body that outgrows the limit mid-stream is cut off), or — `kind=thumbnail` only — the
 address is refused (`{"error": "thumbnail URL refused: it points at a private or non-public address"}`,
-URL-free). `200` with the image bytes streamed through (`Content-Type`/size passed along) on success.
+URL-free). `200` with the image bytes streamed through (`Content-Type`/size passed along) on success,
+with `Cache-Control: private, max-age=3600` (the rest of `/api` answers `no-cache`) so Downloads/History
+re-renders don't re-fetch every thumbnail; the frontend sends every yt-dlp-reported thumbnail here.
 
 ### `POST /api/downloads/playlist`
 
