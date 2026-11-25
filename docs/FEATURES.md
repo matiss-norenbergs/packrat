@@ -171,6 +171,10 @@ item playing in the bottom-right corner while you browse (not in the Android app
   gets extra room at the bottom so the last row can be scrolled out from under it.
 - Page heights use the dynamic viewport (`dvh`), so a phone browser's collapsing address bar doesn't
   hide the bottom of the page or the player.
+- **Errors:** a request that fails shows a short message with a **Retry** button (44 px high on touch)
+  instead of skeletons forever or an empty-state text: the whole page when the collections can't be
+  loaded, and separately Recently Added, Continue Watching, a collection's row and the search results.
+  "Nothing downloaded yet." and "No matches." only appear after a request that succeeded.
 
 ### Android app (Browse-only)
 
@@ -665,6 +669,8 @@ without re-extracting or re-fetching anything.
 Named presets — a folder under your media root plus a default download type and quality —
 selectable from the New Download dialog so you don't have to re-pick them every time.
 
+- The page shows 25 top-level collections at a time; if the list shrinks under the current page (you
+  deleted the only collection on the last page) it moves to the previous page.
 - Collections nest (sub-collections), shown as a tree; a collection's position in the tree is
   fixed at creation and can't be moved later. Two collections under the same parent (or two top-level
   ones) can't use the same folder name, compared without regard to case; creating or renaming into
@@ -1276,7 +1282,9 @@ back manually.
   library item…** (single-row only — search-and-pick a library item to manually associate with this
   entry, for when the video was actually downloaded through a different source than this
   subscription tracks, so it was never found automatically), and **Unlink** (clears that
-  association). Mark seen and Unlink are one all-or-nothing request; Add as ghost / Queue download handle
+  association). The dialog only lets you link an item that is in the current results: typing a new
+  search clears the selection, and a failed search shows an error with Retry instead of "No
+  matches.". Mark seen and Unlink are one all-or-nothing request; Add as ghost / Queue download handle
   each entry on its own, so the toast can read "Added 2 items" plus "1 item failed: <reason>". The Status column shows "New" (unseen), "In library" / "In library (ghost)" (linked
   to a library item, automatically or manually — same badge either way), or nothing for a seen entry
   with no link. Re-adding an entry that's already linked prompts for confirmation first rather than
