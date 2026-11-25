@@ -796,6 +796,10 @@ artist") and changes nothing, and the removal and the selection reset happen tog
 
 ## Media player
 
+Opening a file URL (`/media-files/...`, `/local-images/...`) directly in the browser only shows media, images and
+subtitle files inline; anything else (an `.svg`, `.html` or `.nfo` sitting in the library folder, an unknown
+extension) downloads instead. The app itself never navigates to such URLs, so nothing in the UI changes.
+
 The library item page (`/library/:id`, `/browse/:id`) and the Browse mini player share one custom
 control skin instead of the browser's native bar (the [compare player](#compare-list) uses the same skin in
 each of its cells; the Trim dialog still uses the browser's own controls). It sits on the page's own `<video>`/`<audio>` element, so resume

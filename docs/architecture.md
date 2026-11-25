@@ -1961,6 +1961,69 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
   may carry credentials, so it is never logged and its parse error omits it. The untrusted direct path
   (`Policy.BlockPrivate`, connect-time address guard) keeps its own dedicated transport, untouched.
 
+## Served files
+
+`/media-files` (from `MEDIA_ROOT`) and `/local-images` (from `IMAGES_ROOT`) serve whatever is on disk, and
+what is on disk is not only what Packrat made: imported files, and yt-dlp output for a URL the admin pasted.
+Both sit behind `RequireAuth`, but the session cookie is `SameSite=Lax`, which browsers still send on a
+top-level `GET`. So an `.svg` or HTML file opened as a page would run script on the Packrat origin with
+the admin's session, and a hostile site could lure the admin into opening such a URL and call the admin API.
+
+`ServedFileHeaders` (`internal/api/file_headers.go`, the outermost middleware of both groups so `401`/`404`
+get it too) therefore sets, before the file is served:
+
+- `X-Content-Type-Options: nosniff` and a `Content-Security-Policy` on every response:
+  `default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'` for allowlisted
+  extensions, and the same with a leading `sandbox;` (no `allow-scripts`) for everything else, so a hostile file
+  that is somehow rendered still runs without script in an opaque origin. `sandbox` is left off inline media on
+  purpose: a video/audio file opened directly in a tab is a browser-made document that loads the file again
+  from an opaque origin (no session cookie; blocked by the CSP in Chromium), so the player never loaded
+  (found by testing the real image). A CSP on a subresource response does not change how
+  `<img>`/`<video>`/`<track>` use it, and the desktop/Android apps (other origins) load media the same way.
+- For an extension on the allowlist: an explicit `Content-Type` (`http.ServeContent` keeps a type that is
+  already set) and no `Content-Disposition`. For everything else: `application/octet-stream` and
+  `Content-Disposition: attachment`. Only the final extension counts, case-insensitively, so
+  `x.mp4.svg` is an attachment.
+
+**The allowlist** (`inlineFileTypes`) is built from what the app writes, imports and plays: images
+(`jpg jpeg png webp gif bmp avif tif tiff` — `imagefetch`'s accepted types, `imageproc`, `thumbwrite`),
+video (`mp4 m4v mkv webm mov avi flv ts 3gp ogv mpg mpeg` — the importer's list plus the containers yt-dlp
+merges/remuxes to), audio (`mp3 m4a flac ogg oga opus wav aac weba mka` — yt-dlp `--audio-format` outputs
+and the importer's list) and subtitle sidecars (`vtt srt ass`, served as text; nothing in Packrat reads
+them today, they are kept inline so a sidecar next to a video stays viewable). Deliberately **not** inline:
+`svg`, `html`/`htm`/`xhtml`, `xml`, `nfo`, `json`, `txt`, `heic`, anything unknown.
+
+**Why it does not use `mime.TypeByExtension`.** The runtime image is `python:3.12-alpine` without `mailcap`,
+so there is no `/etc/mime.types`: Go falls back to a small built-in table and sniffs the first bytes, so
+types would differ between a dev machine and the container. The explicit table makes the response the same
+everywhere. (Side effect to verify in a browser: `.mkv` is now `video/x-matroska`; without `mime.types`, Go's sniffer
+labels a Matroska file `video/webm`.)
+
+**Baseline headers.** `BaselineHeaders` (first global middleware) adds `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: DENY` and `Referrer-Policy: same-origin` to every response. Because of `nosniff`,
+`serveSPA` sets the `Content-Type` of what Vite emits (`js`, `mjs`, `css`, `html`, `svg`, `woff2`, ...) from
+its own table instead of relying on `/etc/mime.types`; a test serves a real `frontend/dist` and a synthetic copy.
+There is deliberately **no app-wide CSP** yet (see `TODO.md` → App-wide Content-Security-Policy).
+
+**Can a hostile site leave a dangerous file in `MEDIA_ROOT` through yt-dlp?** Tested with yt-dlp 2026.11.23, the
+exact arguments from `downloader.BuildArgs` (video `bestvideo*+bestaudio/best`, and `-x --audio-format mp3`), against a local
+server (SVG with a script / HTML with a script):
+
+| Served as | Result |
+|---|---|
+| `a.svg` + `image/svg+xml`, `a.html` + `text/html`; extension-less with no / `application/octet-stream` / `text/plain` / `image/png` / `application/javascript` | Fails: `Unsupported URL`, no file |
+| Extension-less, `video/mp4` over HTML or SVG | **Leaves a file** named `.mp4` (`.mp3` for `audio/mpeg`) holding the hostile bytes; ffmpeg's post-step fails (exit 1) |
+| `x.mp4`, `video/mp4`, HTML or SVG bytes | **Leaves** `x.mp4` with the hostile bytes |
+| `x.svg`, `video/mp4`, SVG bytes | **Leaves `x.svg`** with the SVG script; exit 1 |
+| `x.html`, `video/mp4`, HTML bytes | Fails: yt-dlp skips the "unusual extension" `html`; no file |
+
+So yes: a hostile server that claims a media `Content-Type` can make yt-dlp leave a file, and with an `.svg`
+URL extension that file is an `.svg` with script. Packrat tolerates a non-zero exit when the printed final path
+exists (`queue/manager.go`, exit-code leniency), so such a file would be treated as a finished download and
+sit in `MEDIA_ROOT`. The `.mp4`/`.mp3` variants are inert (served as media under `nosniff`); the `.svg` one is
+exactly what the header fix neutralises (it downloads, and would be sandboxed anyway). The result depends on
+yt-dlp's version (its extension safety list is its own), so the headers are the real defence, not this table.
+
 ## Deliberate scope cuts
 
 Still intentionally out of scope, not forgotten:

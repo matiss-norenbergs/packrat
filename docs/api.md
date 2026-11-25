@@ -2472,6 +2472,16 @@ Static file server rooted at `MEDIA_ROOT`. Directories are not listed (`404`); o
 via `If-Modified-Since`, but never assumes a stale byte range is fresh, since sidecar thumbnails
 get overwritten in place at the same path.
 
+**Response headers (both file routes).** Every response — `200`, `206`, `304`, `HEAD`, `401` and `404` — carries
+`X-Content-Type-Options: nosniff` and a `Content-Security-Policy` (`default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'`, prefixed with `sandbox; ` for files that are not on the inline allowlist).
+A file whose final extension (case-insensitive) is on the inline allowlist gets an explicit `Content-Type`
+and no `Content-Disposition`; every other file (`.svg`, `.html`, `.xml`, `.nfo`, `.json`, unknown or no
+extension) gets `Content-Type: application/octet-stream` and `Content-Disposition: attachment` (no filename),
+so opening its URL downloads it instead of rendering it. `<img>`, `<video>`, `<audio>`, `<track>` and `fetch`
+are unaffected. The allowlist and reasoning: [`architecture.md` → Served files](architecture.md#served-files).
+Range/`206`, `ETag`/`Last-Modified`/`304` and `Cache-Control` behave as before. Every other route
+(API and SPA) carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: same-origin`.
+
 ## Local images
 
 | Method | Path |
@@ -2482,7 +2492,7 @@ Static file server rooted at `IMAGES_ROOT` (generated thumbnails, artist images,
 AI-enhancement originals; registered only when that folder is configured).
 Same rules as `/media-files`: requires a valid session cookie but no CSRF header (GET-only), directories
 are not listed (`404`), responses carry `Cache-Control: no-cache` because a replaced cover or selected
-image can reuse its filename.
+image can reuse its filename. The response headers described under Media files apply here too.
 
 ## Resized images
 

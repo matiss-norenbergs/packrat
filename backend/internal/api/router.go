@@ -111,7 +111,8 @@ func SetupRouter(deps Deps) *gin.Engine {
 	if err := setTrustedProxies(r, deps.TrustedProxies); err != nil {
 		log.Fatalf("invalid trusted proxies: %v", err)
 	}
-	r.Use(gin.LoggerWithConfig(gin.LoggerConfig{Formatter: redactingLogFormatter}), recovery())
+	// BaselineHeaders first so even a recovered panic's 500 and CORS preflights carry them.
+	r.Use(BaselineHeaders, gin.LoggerWithConfig(gin.LoggerConfig{Formatter: redactingLogFormatter}), recovery())
 	r.Use(CORS(deps.CORSAllowedOrigins))
 	// Known Items entries whose source has no native video ID key by their
 	// full URL instead (see subscriptions.sourceID) — that URL travels as
@@ -396,7 +397,9 @@ func SetupRouter(deps Deps) *gin.Engine {
 		// overwritten in place at the same path (choose-from-video,
 		// redownload, quick-grab), so a browser that trusted the response
 		// heuristically fresh would keep showing the old image after reload.
-		r.Group("/media-files", RequireAuth(deps.UsersRepo), noCacheHeaders).StaticFS("/", noDirListingFS{http.Dir(deps.MediaRoot)})
+		// ServedFileHeaders (outermost, so 401s get it too) adds nosniff, a
+		// sandbox CSP and forces non-media extensions to download.
+		r.Group("/media-files", ServedFileHeaders, RequireAuth(deps.UsersRepo), noCacheHeaders).StaticFS("/", noDirListingFS{http.Dir(deps.MediaRoot)})
 	}
 
 	if deps.ImagesRoot != "" {
@@ -405,7 +408,7 @@ func SetupRouter(deps Deps) *gin.Engine {
 		// land at a reused filename (e.g. collections/<id>/cover.jpg is
 		// always overwritten in place), so a browser that cached the old
 		// bytes as heuristically fresh would keep showing them after reload.
-		r.Group("/local-images", RequireAuth(deps.UsersRepo), noCacheHeaders).StaticFS("/", noDirListingFS{http.Dir(deps.ImagesRoot)})
+		r.Group("/local-images", ServedFileHeaders, RequireAuth(deps.UsersRepo), noCacheHeaders).StaticFS("/", noDirListingFS{http.Dir(deps.ImagesRoot)})
 	}
 
 	if deps.WSHandler != nil {

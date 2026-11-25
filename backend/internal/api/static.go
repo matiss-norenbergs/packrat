@@ -46,12 +46,18 @@ func serveSPA(dir string) gin.HandlerFunc {
 			case filepath.Base(fullPath) == "index.html":
 				c.Header("Cache-Control", "no-cache")
 			}
+			// Explicit type for what Vite emits: with nosniff a wrong type
+			// would break the page, and Alpine has no /etc/mime.types.
+			if ct, ok := spaContentTypes[strings.ToLower(filepath.Ext(fullPath))]; ok {
+				c.Header("Content-Type", ct)
+			}
 			c.File(fullPath)
 			return
 		}
 		// SPA fallback: always revalidate so a new deploy's asset hashes are
 		// picked up immediately.
 		c.Header("Cache-Control", "no-cache")
+		c.Header("Content-Type", spaContentTypes[".html"])
 		c.File(filepath.Join(dir, "index.html"))
 	}
 }
