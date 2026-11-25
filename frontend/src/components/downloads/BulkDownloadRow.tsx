@@ -27,6 +27,7 @@ import { resolveInheritedArtistId } from "@/lib/collectionTree"
 import { invalidSegmentChars, invalidTemplateChars } from "@/lib/filenameValidation"
 import type { AudioFormat, DownloadType, VideoQuality } from "@/types/api"
 import type { BulkRow } from "./BulkDownloadDialog"
+import { remoteThumbnailSrc } from "@/lib/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
 const AUDIO_FORMATS: AudioFormat[] = ["mp3", "flac", "m4a", "aac", "wav"]
@@ -263,8 +264,8 @@ export function BulkDownloadRow({
             </div>
           ) : preview ? (
             <div className="flex items-center gap-3">
-              {preview.thumbnail ? (
-                <img src={preview.thumbnail} alt="" className="h-10 w-16 shrink-0 rounded object-cover bg-muted" />
+              {remoteThumbnailSrc(preview.thumbnail) ? (
+                <img src={remoteThumbnailSrc(preview.thumbnail)!} alt="" className="h-10 w-16 shrink-0 rounded object-cover bg-muted" />
               ) : (
                 <div className="h-10 w-16 shrink-0 rounded bg-muted" />
               )}

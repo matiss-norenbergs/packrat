@@ -44,6 +44,8 @@ vi.mock("@/lib/ws", () => ({
     return s
   },
 }))
+const recheckAuth = vi.fn()
+vi.mock("@/lib/authRecheck", () => ({ recheckAuthAfterSocketDrop: (...a: unknown[]) => recheckAuth(...a) }))
 vi.mock("@/lib/notify", () => ({ notifyDesktop: vi.fn(), notifyDesktopAsync: vi.fn(), notifyEvent: vi.fn(), notifyEventAsync: vi.fn() }))
 const reportNetworkFailure = vi.fn()
 vi.mock("@/lib/connection", () => ({
@@ -81,6 +83,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   sockets.length = 0
   reportNetworkFailure.mockClear()
+  recheckAuth.mockClear()
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   invalidate = vi.spyOn(client, "invalidateQueries")
   setHidden(false)
@@ -123,6 +126,7 @@ describe("useDownloadsSocket wake after a long absence", () => {
     expect(pollWhileSocketDown(10_000, isSocketOpen())).toBe(10_000)
     vi.advanceTimersByTime(60_000) // the old socket's close event must not schedule a reconnect
     expect(reportNetworkFailure).not.toHaveBeenCalled()
+    expect(recheckAuth).not.toHaveBeenCalled() // the quiet replacement is no sign of a dead session
     expect(sockets).toHaveLength(2)
     sockets[1].open()
     expect(isSocketOpen()).toBe(true)
@@ -137,6 +141,7 @@ describe("useDownloadsSocket wake after a long absence", () => {
     sockets[0].open()
     sockets[0].close() // a real drop: reports failure once and schedules a reconnect
     expect(reportNetworkFailure).toHaveBeenCalledTimes(1)
+    expect(recheckAuth).toHaveBeenCalledTimes(1) // a real drop asks whether the session is still alive
     window.dispatchEvent(new Event("online"))
     expect(sockets).toHaveLength(2)
     vi.advanceTimersByTime(30_000)

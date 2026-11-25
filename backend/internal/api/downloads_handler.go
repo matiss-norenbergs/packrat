@@ -146,9 +146,15 @@ func PreviewImage(settingsRepo *repository.SettingsRepo) gin.HandlerFunc {
 		defer body.Close()
 		defer cancel()
 
-		c.DataFromReader(http.StatusOK, size, contentType, body, nil)
+		// The API group answers no-cache; these images are keyed by URL and the lists that show them
+		// (Downloads, History) re-render often, so let the browser keep each for a while instead of
+		// re-fetching the remote image through the backend every time.
+		c.DataFromReader(http.StatusOK, size, contentType, body, map[string]string{"Cache-Control": previewImageCacheControl})
 	}
 }
+
+// previewImageCacheControl: private (the URL carries a desktop token), an hour.
+const previewImageCacheControl = "private, max-age=3600"
 
 // enqueueDownload applies collection/app-wide defaults, validates the
 // destination path, and queues the download. Shared by CreateDownload and

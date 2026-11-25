@@ -49,6 +49,10 @@ func TestPreviewImageKind(t *testing.T) {
 	if hits.Load() != 2 {
 		t.Fatalf("hits = %d, want 2", hits.Load())
 	}
+	if cc := get("").Header().Get("Cache-Control"); cc != "private, max-age=3600" {
+		t.Errorf("Cache-Control = %q, want a browser-cacheable private header", cc)
+	}
+	hits.Add(-1) // that probe was an extra hit
 
 	w := get("&kind=thumbnail")
 	if w.Code != http.StatusUnprocessableEntity {

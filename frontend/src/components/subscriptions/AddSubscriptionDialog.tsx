@@ -27,6 +27,7 @@ import { useCreateSubscription } from "@/hooks/useSubscriptions"
 import { useTags } from "@/hooks/useTags"
 import { sortCollectionsByPath } from "@/lib/collectionTree"
 import { TagInput } from "@/components/library/TagInput"
+import { remoteThumbnailSrc } from "@/lib/api"
 
 const NO_COLLECTION = "none"
 const INTERVAL_OPTIONS = [
@@ -162,8 +163,8 @@ export function AddSubscriptionDialog({ open, onOpenChange }: AddSubscriptionDia
                 </div>
               ) : preview ? (
                 <div className="flex items-center gap-3">
-                  {preview.thumbnail ? (
-                    <img src={preview.thumbnail} alt="" className="h-12 w-20 shrink-0 rounded bg-muted object-cover" />
+                  {remoteThumbnailSrc(preview.thumbnail) ? (
+                    <img src={remoteThumbnailSrc(preview.thumbnail)!} alt="" className="h-12 w-20 shrink-0 rounded bg-muted object-cover" />
                   ) : (
                     <div className="h-12 w-20 shrink-0 rounded bg-muted" />
                   )}

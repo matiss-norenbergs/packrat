@@ -276,6 +276,31 @@ export function clearToken() {
   if (id) void clearProfileToken(id)
 }
 
+// The identity a request was sent with: which profile was active and which token it carried.
+// A 401 only means something about THAT login, so callers hand this back to isStillCurrentAuth()/
+// clearTokenIf() instead of clearing whatever is active by the time the answer arrives (a profile
+// switch can land in between: the new profile's saved login must survive an old request's 401).
+export interface SentAuth {
+  profileId: string | null
+  token: string | null
+}
+
+export function captureAuth(): SentAuth {
+  return { profileId: getActiveProfileId(), token: getToken() }
+}
+
+// True while the profile and token a request was sent with are still the active ones.
+export function isStillCurrentAuth(sent: SentAuth): boolean {
+  return getActiveProfileId() === sent.profileId && getToken() === sent.token
+}
+
+// clearToken(), but only if `sent` is still the active login. Returns whether it was.
+export function clearTokenIf(sent: SentAuth): boolean {
+  if (!isStillCurrentAuth(sent)) return false
+  clearToken()
+  return true
+}
+
 // One profile's login, whether or not it is the active one.
 async function readProfileToken(id: string): Promise<string | null> {
   const local = read(localTokenKey(id))

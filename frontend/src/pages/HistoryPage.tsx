@@ -18,6 +18,7 @@ import { useIdSelection } from "@/hooks/useIdSelection"
 import { useBulkDeleteHistoryItems, useBulkRetryHistoryItems, useHistory } from "@/hooks/useHistory"
 import { formatDownloadStatus } from "@/lib/utils"
 import type { HistoryItem } from "@/types/api"
+import { remoteThumbnailSrc } from "@/lib/api"
 
 const PAGE_SIZE = 50
 
@@ -45,8 +46,8 @@ const columns: ColumnDef<HistoryItem>[] = [
     resizable: false,
     cell: (item) => (
       <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-muted">
-        {item.thumbnail ? (
-          <img src={item.thumbnail} alt="" className="h-full w-full object-cover" />
+        {remoteThumbnailSrc(item.thumbnail) ? (
+          <img src={remoteThumbnailSrc(item.thumbnail)!} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <ImageIcon className="h-4 w-4 text-muted-foreground/40" />

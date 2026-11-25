@@ -116,7 +116,7 @@ import type {
 } from "@/types/api"
 
 import { reportNetworkFailure, reportReachable } from "@/lib/connection"
-import { apiBase, clearToken, isDesktop, getToken, serverUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
+import { apiBase, captureAuth, type SentAuth, clearToken, clearTokenIf, isDesktop, serverUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
 
 // Reads a cookie's raw value by name — used to echo the CSRF cookie back as
 // a header (see request() below). Cross-origin JS can never read this
@@ -186,9 +186,20 @@ async function fetchServer(input: string, init: RequestInit): Promise<Response> 
   }
 }
 
+// A 401 from a route other than /auth/* (those answer 401 for a wrong password or code, which isn't
+// an expired session) means the session is gone: revoked, expired, password changed elsewhere. On
+// the desktop the saved token is dropped too, but only if it is still the login the request was
+// sent with (see clearTokenIf); a request that belonged to a profile that is no longer active says
+// nothing about the current one. Either way the app falls back to the login screen (App.tsx).
+function handleUnauthorized(sent: SentAuth) {
+  if (isDesktop() && !clearTokenIf(sent)) return
+  window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const desktop = isDesktop()
-  const token = desktop ? getToken() : null
+  const sent = captureAuth()
+  const token = desktop ? sent.token : null
   const send = (csrf: string) =>
     fetchServer(
       `${apiBase()}/api${path}`,
@@ -220,11 +231,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     res = await send(getCookie("packrat_csrf"))
   }
   if (!res.ok) {
-    // /auth/* answers 401 for a wrong password, which isn't an expired session.
-    if (desktop && res.status === 401 && !path.startsWith("/auth/")) {
-      clearToken()
-      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
-    }
+    if (res.status === 401 && !path.startsWith("/auth/")) handleUnauthorized(sent)
     const body = await res.json().catch(() => ({}))
     if (res.status === 429) {
       const header = Number(res.headers?.get?.("Retry-After"))
@@ -247,10 +254,12 @@ function storeSessionToken(res: { token?: string } | undefined) {
 }
 
 export async function fetchAuthStatus(): Promise<AuthStatus> {
+  const sent = captureAuth()
   const status = await request<AuthStatus>("/auth/status")
   // /auth/status answers 200 {authenticated:false} (not 401) for a dead token, so the 401 handling
-  // in request() never fires for it — drop the stale desktop token here.
-  if (isDesktop() && !status.authenticated) clearToken()
+  // in request() never fires for it — drop the stale desktop token here (only the one this check
+  // was sent with: a profile switch meanwhile keeps the new profile's login).
+  if (isDesktop() && !status.authenticated) clearTokenIf(sent)
   return status
 }
 
@@ -498,6 +507,27 @@ export function previewImageUrl(externalUrl: string, kind: "image" | "thumbnail"
   return serverUrl(kind === "thumbnail" ? `${base}&kind=thumbnail` : base)
 }
 
+// The <img src> for a thumbnail value that came from yt-dlp metadata (a queue/history row, a URL
+// preview, the compare-metadata fetch): the remote page controls it, so it never goes to the browser
+// as-is. An absolute http(s) URL is fetched by the backend instead (previewImageUrl, kind=thumbnail:
+// honors the yt-dlp proxy, refuses private addresses); a server-local path (`/media-files/…`,
+// `/local-images/…`) keeps working through serverUrl(); anything else (empty, `javascript:`, `data:`,
+// protocol-relative `//host/…`, other schemes) is null, and callers render their placeholder.
+export function remoteThumbnailSrc(value: string | null | undefined): string | null {
+  const v = value?.trim()
+  if (!v) return null
+  if (/^https?:\/\//i.test(v)) {
+    try {
+      new URL(v)
+    } catch {
+      return null
+    }
+    return previewImageUrl(v, "thumbnail")
+  }
+  if (v.startsWith("/") && !v.startsWith("//") && !v.includes("\\")) return serverUrl(v)
+  return null
+}
+
 // Resolves a relative path under the backend's images root (artist/collection
 // pictures Packrat itself copied in) into a URL — mirrors mediaFileUrl().
 export function imageUrl(relativePath: string): string {
@@ -542,9 +572,22 @@ export function resizedImageSrcSet({
 // imageUrl() path or a data: URI alike — and returns it as bare base64, for
 // call sites that only have a rendered image's URL but need the bytes to
 // hand to an endpoint like saveThumbnailToGallery.
+//
+// Throws (with the HTTP status) when the server answers an error or something that is not an image —
+// a JSON/HTML error body must never be sent on as image bytes. A 401 goes through the same
+// unauthorized handling as request().
 export async function urlToBase64(url: string): Promise<string> {
+  const sent = captureAuth()
   const res = await fetch(url)
+  if (!res.ok) {
+    if (res.status === 401) handleUnauthorized(sent)
+    throw new ApiError(`Couldn't read the image (HTTP ${res.status})`, res.status)
+  }
   const blob = await res.blob()
+  const type = res.headers?.get?.("Content-Type") ?? blob.type
+  if (!type.toLowerCase().startsWith("image/")) {
+    throw new ApiError(`Couldn't read the image (HTTP ${res.status}, not an image${type ? `: ${type}` : ""})`, res.status)
+  }
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {

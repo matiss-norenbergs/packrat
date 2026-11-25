@@ -64,7 +64,7 @@ describe("HistoryPage table", () => {
     serve([
       entry(1, "Alpha", { thumbnail: "https://img.test/a.jpg" }),
       entry(2, null, { status: "failed", errorMessage: "network down", url: "https://example.com/untitled" }),
-      entry(3, "Gamma", { status: "duplicate", errorMessage: "already have it" }),
+      entry(3, "Gamma", { status: "duplicate", errorMessage: "already have it", thumbnail: "javascript:alert(1)" }),
     ])
     renderPage()
     await screen.findByText("Alpha")
@@ -78,7 +78,12 @@ describe("HistoryPage table", () => {
     const alpha = within(row("Alpha"))
     expect(alpha.getByText("Completed")).toBeInTheDocument()
     expect(alpha.getByText(new Date(CREATED).toLocaleString())).toHaveClass("text-muted-foreground")
-    expect(row("Alpha").querySelector("img")).toHaveAttribute("src", "https://img.test/a.jpg")
+    expect(row("Alpha").querySelector("img")).toHaveAttribute(
+      "src",
+      `/api/downloads/preview-image?url=${encodeURIComponent("https://img.test/a.jpg")}&kind=thumbnail`,
+    )
+
+    expect(row("Gamma").querySelector("img")).toBeNull() // a bad scheme renders the placeholder, never an <img>
 
     // A missing title falls back to the url; a failed/duplicate entry shows its error line under the title.
     const failed = within(row("https://example.com/untitled"))
