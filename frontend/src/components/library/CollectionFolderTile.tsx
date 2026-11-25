@@ -7,7 +7,7 @@ import { PrivateLock } from "@/components/collections/PrivateLock"
 import type { CollectionTreeNode } from "@/lib/collectionTree"
 import type { Collection } from "@/types/api"
 import { cn } from "@/lib/utils"
-import { useSelection } from "./SelectionContext"
+import { useIsCollectionSelected, useSelectionActions, useSelectionActive } from "./SelectionContext"
 
 export function CollectionFolderTile({
   node,
@@ -18,8 +18,9 @@ export function CollectionFolderTile({
   collections: Collection[] | undefined
   onClick: () => void
 }) {
-  const { selectionActive, isCollectionSelected, toggleCollection } = useSelection()
-  const selected = isCollectionSelected(node.id)
+  const selectionActive = useSelectionActive()
+  const { toggleCollection } = useSelectionActions()
+  const selected = useIsCollectionSelected(node.id)
   // Controlled instead of Radix's default click/focus trigger — Popover has
   // no built-in hover mode, so open/close is driven manually here. Both the
   // trigger and the content itself need the enter/leave handlers, or moving

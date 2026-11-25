@@ -30,7 +30,7 @@ beforeEach(() => {
     if (url.includes("/library?")) return respond({ items: [], total: 0 })
     if (url.endsWith("/settings")) return respond({ libraryView: "grid", libraryMode: "manage" })
     if (url.endsWith("/library/facets")) return respond({ years: [] })
-    if (url.endsWith("/collections") || url.endsWith("/tags")) return respond([])
+    if (url.endsWith("/collections") || url.endsWith("/tags") || url.endsWith("/artists")) return respond([])
     return respond({})
   })
   vi.stubGlobal("fetch", fetchMock)

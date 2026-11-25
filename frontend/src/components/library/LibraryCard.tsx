@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from "react-router-dom"
+import { memo, type ComponentProps, type ReactNode } from "react"
 import { Ghost, Play } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,14 +10,14 @@ import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { ResolutionValue } from "@/components/ResolutionValue"
 import { ThumbnailDimensionsValue } from "@/components/ThumbnailDimensionsValue"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
-import { useSettings } from "@/hooks/useSettings"
-import { useArtistNameMask } from "@/hooks/useArtistNameMask"
-import { useTagNameMask } from "@/hooks/useTagNameMask"
+import { useNavigateFromHere } from "@/hooks/useNavigateFromHere"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { DownloadProgressBar } from "./DownloadProgressBar"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
-import { useRevealAll } from "./RevealAllContext"
-import { useSelection } from "./SelectionContext"
+import { sameItem } from "./sameItem"
+import { useLibraryCardEnv } from "./LibraryCardsProvider"
+import { useIsRevealed, useRevealActions } from "./RevealAllContext"
+import { useIsItemSelected, useSelectionActions, useSelectionActive } from "./SelectionContext"
 import type { LibraryItem } from "@/types/api"
 
 // Caps how many tag badges a card shows before collapsing the rest into a
@@ -25,42 +25,85 @@ import type { LibraryItem } from "@/types/api"
 // and avoids the row wrapping onto a second line.
 const MAX_VISIBLE_TAGS = 2
 
-export function LibraryCard({ item }: { item: LibraryItem }) {
-  const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
-  const { data: settings } = useSettings()
-  const maskTag = useTagNameMask()
-  const maskArtist = useArtistNameMask()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const revealed = isRevealed(item.id)
-  const toggleRevealItem = () => toggleReveal(item.id)
-  const mode = (settings?.libraryMode as "manage" | "details") || "manage"
+// During a selection a card changes in a few ways (click selects, checkbox always visible, no ⋮ menu or play button).
+// Those are CSS variants of the grid's `data-selecting` attribute (LibraryCardGrid), and the click handlers read the state
+// when they run, so starting or clearing a selection re-renders no card. Only the parts whose structure differs for a
+// blurred item (thumbnail hover, click-to-reveal title) subscribe, and only on blurred cards.
+// (The variants are written out in full below: Tailwind only generates classes it finds verbatim in the source.)
+
+function CardThumbnail({ item, thumbUrl, revealed }: { item: LibraryItem; thumbUrl: string; revealed: boolean }) {
+  const { toggleItem } = useRevealActions()
+  const props = {
+    src: thumbUrl,
+    className: "absolute inset-0 h-full w-full object-cover",
+    blurred: item.blurred,
+    revealed,
+    muted: item.status === "ghost",
+  }
+  return item.blurred ? (
+    <BlurredCardThumbnail {...props} onToggleReveal={() => toggleItem(item.id)} />
+  ) : (
+    <BlurredThumbnail {...props} onToggleReveal={() => {}} />
+  )
+}
+
+function BlurredCardThumbnail(props: Omit<ComponentProps<typeof BlurredThumbnail>, "interactive">) {
+  const selectionActive = useSelectionActive()
+  return <BlurredThumbnail {...props} onToggleReveal={selectionActive ? () => {} : props.onToggleReveal} interactive={!selectionActive} />
+}
+
+function CardTitle({ item, revealed }: { item: LibraryItem; revealed: boolean }) {
+  const { toggleItem } = useRevealActions()
+  const selectionActive = useSelectionActive()
+  const number = item.sequenceNumber != null && `${item.sequenceNumber}. `
+  if (selectionActive || !item.blurred) {
+    return (
+      <p className="line-clamp-2 text-sm font-medium">
+        {number}
+        {item.blurred && !revealed ? hashText(item.title) : item.title}
+      </p>
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <p className="line-clamp-2 cursor-pointer text-sm font-medium" onClick={() => toggleItem(item.id)}>
+          {number}
+          {!revealed ? hashText(item.title) : item.title}
+        </p>
+      </TooltipTrigger>
+      <TooltipContent>{revealed ? "Click to hide" : "Click to reveal"}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+// Memoized, with the item as its only prop: a card subscribes to just its own selected / revealed flags, and takes the
+// item-independent settings from LibraryCardsProvider, so ticking one card, revealing one item or starting a selection
+// re-renders that card (or no card) only. Needs a LibraryCardsProvider (it also hosts the "⋮" dialogs) and a LibraryCardGrid.
+export const LibraryCard = memo(LibraryCardImpl, (prev, next) => sameItem(prev.item, next.item))
+
+function LibraryCardImpl({ item }: { item: LibraryItem }) {
+  const { detailsMode, maskTag, maskArtist } = useLibraryCardEnv()
+  const revealed = useIsRevealed(item.id)
+  const navigateFromHere = useNavigateFromHere()
   const visibleTags = item.tags.slice(0, MAX_VISIBLE_TAGS)
   const hiddenTags = item.tags.slice(MAX_VISIBLE_TAGS)
 
-  const { selectionActive, isItemSelected, toggleItem: toggleSelected } = useSelection()
-  const selected = isItemSelected(item.id)
+  const { toggleItem: toggleSelected, isSelectionActive } = useSelectionActions()
+  const selected = useIsItemSelected(item.id)
   const thumbUrl = libraryMediumThumbnailUrl(item)
 
   return (
+    // content-visibility: the browser skips style, layout and paint work for cards scrolled out of view, which is what
+    // keeps a 3,000-card grid cheap to show and to restyle (a selection toggles `data-selecting` on all of them).
     <Card
-      className={cn("gap-0 overflow-hidden py-0", selectionActive && "cursor-pointer")}
-      onClick={selectionActive ? () => toggleSelected(item) : undefined}
+      className="gap-0 overflow-hidden py-0 [contain-intrinsic-size:auto_280px] [content-visibility:auto] group-data-[selecting]/lib-grid:cursor-pointer"
+      onClick={() => {
+        if (isSelectionActive()) toggleSelected(item)
+      }}
     >
       <div className="group relative aspect-video w-full bg-muted">
-        {thumbUrl ? (
-          <BlurredThumbnail
-            src={thumbUrl}
-            className="absolute inset-0 h-full w-full object-cover"
-            blurred={item.blurred}
-            revealed={revealed}
-            onToggleReveal={selectionActive ? () => {} : toggleRevealItem}
-            interactive={!selectionActive}
-            muted={item.status === "ghost"}
-          />
-        ) : (
-          <MediaTypePlaceholder mediaType={item.mediaType} />
-        )}
+        {thumbUrl ? <CardThumbnail item={item} thumbUrl={thumbUrl} revealed={revealed} /> : <MediaTypePlaceholder mediaType={item.mediaType} />}
         {item.status === "ghost" && (
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-background/80 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">
             Ghost item
@@ -78,17 +121,17 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
             // ring gives a duotone edge that reads against both light and
             // dark frames, unlike a single-color border.
             "absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)] transition-opacity",
-            selectionActive || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-data-[selecting]/lib-grid:opacity-100",
           )}
           aria-label="Select"
         />
-        {!selectionActive && (
-          <div className="absolute top-1 right-1 rounded-md bg-background/80 backdrop-blur-sm">
-            <LibraryItemActionsMenu item={item} />
-          </div>
-        )}
-        {!selectionActive && item.status !== "ghost" && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        {/* Hidden (not unmounted) during a selection, so starting and clearing one does not mount a menu per card;
+            display: none also takes it out of the tab order. */}
+        <div className={"absolute top-1 right-1 rounded-md bg-background/80 backdrop-blur-sm group-data-[selecting]/lib-grid:hidden"}>
+          <LibraryItemActionsMenu item={item} />
+        </div>
+        {item.status !== "ghost" && (
+          <div className={"pointer-events-none absolute inset-0 flex items-center justify-center group-data-[selecting]/lib-grid:hidden"}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -97,7 +140,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
                   className="pointer-events-none h-12 w-12 rounded-full bg-background/80 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background/90 group-hover:pointer-events-auto group-hover:opacity-100"
                   onClick={(e) => {
                     e.stopPropagation()
-                    navigate(`/library/${item.id}`, { state: { from: `${location.pathname}${location.search}` } })
+                    navigateFromHere(`/library/${item.id}`)
                   }}
                 >
                   <Play className="h-6 w-6" />
@@ -109,22 +152,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
         )}
       </div>
       <CardContent className="space-y-2 p-3">
-        {!selectionActive && item.blurred ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <p className="line-clamp-2 cursor-pointer text-sm font-medium" onClick={toggleRevealItem}>
-                {item.sequenceNumber != null && `${item.sequenceNumber}. `}
-                {!revealed ? hashText(item.title) : item.title}
-              </p>
-            </TooltipTrigger>
-            <TooltipContent>{revealed ? "Click to hide" : "Click to reveal"}</TooltipContent>
-          </Tooltip>
-        ) : (
-          <p className="line-clamp-2 text-sm font-medium">
-            {item.sequenceNumber != null && `${item.sequenceNumber}. `}
-            {item.blurred && !revealed ? hashText(item.title) : item.title}
-          </p>
-        )}
+        <CardTitle item={item} revealed={revealed} />
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="truncate">{item.artistName ? maskArtist(item.artistId, item.artistName, revealed || !item.blurred) : (item.uploader ?? "Uncategorized")}</span>
           {item.duration != null && <span>{formatDuration(item.duration)}</span>}
@@ -149,7 +177,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
           </div>
         )}
 
-        {mode === "details" && (
+        {detailsMode && (
           <div className="space-y-1 border-t pt-2 text-xs text-muted-foreground">
             <div className="flex justify-between gap-2">
               <span>Collection</span>
@@ -209,5 +237,19 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * The grid the cards sit in. It carries `data-selecting` while anything is selected, which the cards' CSS variants key on
+ * (see LibraryCard), so a selection starting or clearing re-renders only this element, never a card: `children` is
+ * passed through untouched.
+ */
+export function LibraryCardGrid({ children }: { children: ReactNode }) {
+  const selecting = useSelectionActive()
+  return (
+    <div className="group/lib-grid grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" data-selecting={selecting ? "" : undefined}>
+      {children}
+    </div>
   )
 }

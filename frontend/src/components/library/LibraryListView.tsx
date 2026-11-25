@@ -1,5 +1,5 @@
-import type { ReactNode } from "react"
-import { Link, useLocation, useSearchParams } from "react-router-dom"
+import type { MouseEvent, ReactNode } from "react"
+import { useSearchParams } from "react-router-dom"
 import { DataTable } from "@/components/data-table"
 import type { ColumnDef } from "@/components/data-table"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
+import { useNavigateFromHere } from "@/hooks/useNavigateFromHere"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { usePageState } from "@/hooks/usePageState"
 import { useSettings } from "@/hooks/useSettings"
@@ -19,11 +20,12 @@ import { formatBytes, formatDuration, hashText } from "@/lib/utils"
 import type { LibraryItem } from "@/types/api"
 import { DownloadProgressBar } from "./DownloadProgressBar"
 import { toContextMenuItems, useLibraryItemActions } from "./libraryItemActions"
-import { useRevealAll } from "./RevealAllContext"
+import { useIsRevealed, useRevealActions, useRevealAll } from "./RevealAllContext"
 import { useSelection } from "./SelectionContext"
 import { LibraryFiltersButton, LibrarySettingsPopover, LibraryToolbarActions } from "./LibraryToolbar"
 import { useLibraryToolbar } from "./useLibraryToolbar"
 import { useLibraryListSelection } from "./useLibraryListSelection"
+import { useStableItems } from "./sameItem"
 
 // Caps how many tag badges a row shows before collapsing the rest into a
 // "+N" badge — mirrors LibraryCard's MAX_VISIBLE_TAGS, keeping every row the
@@ -43,7 +45,8 @@ function formatSeasonEpisode(item: LibraryItem): string {
 // The cells that depend on page state (reveal, the current URL) are components that read their context themselves, so
 // COLUMNS is a module-level constant and a reveal re-renders only these cells.
 export function ThumbCell({ item }: { item: LibraryItem }) {
-  const { isRevealed, toggleItem } = useRevealAll()
+  const revealed = useIsRevealed(item.id)
+  const { toggleItem } = useRevealActions()
   const thumbUrl = librarySmallThumbnailUrl(item)
   return (
     // A blurred thumbnail is revealed by clicking the image, which is neither a button nor a link, so the wrapper opts
@@ -54,7 +57,7 @@ export function ThumbCell({ item }: { item: LibraryItem }) {
           src={thumbUrl}
           className="absolute inset-0 h-full w-full object-cover"
           blurred={item.blurred}
-          revealed={isRevealed(item.id)}
+          revealed={revealed}
           onToggleReveal={() => toggleItem(item.id)}
           muted={item.status === "ghost"}
         />
@@ -67,27 +70,35 @@ export function ThumbCell({ item }: { item: LibraryItem }) {
 }
 
 function TitleCell({ item }: { item: LibraryItem }) {
-  const { isRevealed } = useRevealAll()
-  const location = useLocation()
+  const revealed = useIsRevealed(item.id)
+  const navigateFromHere = useNavigateFromHere()
+  const to = `/library/${item.id}`
+  // The `from` state is read when the link is followed, not while rendering: useLocation() / useNavigate() would
+  // re-render every title cell on each filter or sort change.
+  const follow = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+    e.preventDefault()
+    navigateFromHere(to)
+  }
   return (
-    <Link to={`/library/${item.id}`} state={{ from: `${location.pathname}${location.search}` }} className="block truncate font-medium hover:underline">
+    <a href={to} onClick={follow} className="block truncate font-medium hover:underline">
       {item.sequenceNumber != null && `${item.sequenceNumber}. `}
-      {item.blurred && !isRevealed(item.id) ? hashText(item.title) : item.title}
-    </Link>
+      {item.blurred && !revealed ? hashText(item.title) : item.title}
+    </a>
   )
 }
 
 function ArtistCell({ item }: { item: LibraryItem }) {
-  const { isRevealed } = useRevealAll()
+  const revealed = useIsRevealed(item.id)
   const maskArtist = useArtistNameMask()
   if (!item.artistName) return <>{item.uploader ?? "—"}</>
-  return <>{maskArtist(item.artistId, item.artistName, isRevealed(item.id) || !item.blurred)}</>
+  return <>{maskArtist(item.artistId, item.artistName, revealed || !item.blurred)}</>
 }
 
 function TagsCell({ item }: { item: LibraryItem }) {
-  const { isRevealed } = useRevealAll()
+  const itemRevealed = useIsRevealed(item.id)
   const maskTag = useTagNameMask()
-  const revealed = isRevealed(item.id) || !item.blurred
+  const revealed = itemRevealed || !item.blurred
   if (item.tags.length === 0) return null
   const visibleTags = item.tags.slice(0, MAX_VISIBLE_TAGS)
   const hiddenTags = item.tags.slice(MAX_VISIBLE_TAGS)
@@ -199,7 +210,7 @@ export function LibraryListView() {
     pageSize: paginationEnabled ? pageSize : undefined,
   }, sortReady)
 
-  const items = data?.items ?? NO_ITEMS
+  const items = useStableItems(data?.items ?? NO_ITEMS)
   const total = data?.total ?? 0
   const selection = useLibraryListSelection(items)
   // Row actions live in the right-click menu: the same actions as the "⋮" menus of the grid, one host for the table's dialogs.

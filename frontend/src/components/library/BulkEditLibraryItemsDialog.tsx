@@ -25,6 +25,11 @@ interface BulkEditLibraryItemsDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
+// Every file gets its own fully editable row (a field grid of inputs), so a selection beyond this is refused rather
+// than rendered: thousands of rows is tens of thousands of inputs and freezes the tab. Showing only the first N would
+// silently leave the rest uneditable, so the dialog asks to narrow the selection instead.
+export const MAX_BULK_EDIT_FILES = 100
+
 interface Row {
   item: LibraryItem
   fields: LibraryItemEditFields
@@ -61,6 +66,7 @@ export function BulkEditLibraryItemsDialog({ open, onOpenChange }: BulkEditLibra
   }, [selectedItems, resolvedFromCollections])
 
   const isLoading = collectionIdsToResolve.length > 0 && resolving
+  const tooMany = !isLoading && affectedItems.length > MAX_BULK_EDIT_FILES
 
   // Rows hold independent, per-item editable state, so they can only be
   // (re)built once per dialog-open — not on every affectedItems reference
@@ -75,7 +81,8 @@ export function BulkEditLibraryItemsDialog({ open, onOpenChange }: BulkEditLibra
     }
     if (isLoading || initializedRef.current) return
     initializedRef.current = true
-    setRows(affectedItems.map((item) => ({ item, fields: libraryItemToEditFields(item) })))
+    // Over the limit no rows are built at all (and none can linger from an earlier open).
+    setRows(affectedItems.length > MAX_BULK_EDIT_FILES ? [] : affectedItems.map((item) => ({ item, fields: libraryItemToEditFields(item) })))
   }, [open, isLoading, affectedItems])
 
   const updateRowFields = (index: number, patch: Partial<LibraryItemEditFields>) => {
@@ -117,7 +124,9 @@ export function BulkEditLibraryItemsDialog({ open, onOpenChange }: BulkEditLibra
           uses) rather than topping out at a fixed size. */}
       <DialogContent className="sm:max-w-4xl lg:max-w-[85vw]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Edit {isLoading ? "…" : rows.length} selected {rows.length === 1 ? "file" : "files"}</DialogTitle>
+          <DialogTitle>
+            Edit {isLoading ? "…" : tooMany ? affectedItems.length : rows.length} selected {(tooMany ? affectedItems.length : rows.length) === 1 ? "file" : "files"}
+          </DialogTitle>
           <DialogDescription>
             Every field below starts at that file's current value — only fields you actually change
             are saved, per file.
@@ -127,6 +136,10 @@ export function BulkEditLibraryItemsDialog({ open, onOpenChange }: BulkEditLibra
         <div className="max-h-[60vh] space-y-3 overflow-y-auto">
           {isLoading ? (
             <p className="px-1 py-1 text-sm text-muted-foreground">Resolving files…</p>
+          ) : tooMany ? (
+            <p className="px-1 py-1 text-sm text-muted-foreground">
+              You selected {affectedItems.length} files. Narrow the selection to {MAX_BULK_EDIT_FILES} or fewer to edit them individually.
+            </p>
           ) : rows.length === 0 ? (
             <p className="px-1 py-1 text-sm text-muted-foreground">No files in this selection.</p>
           ) : (
@@ -145,7 +158,7 @@ export function BulkEditLibraryItemsDialog({ open, onOpenChange }: BulkEditLibra
         </div>
 
         <DialogFooter>
-          <Button onClick={handleSave} disabled={isSaving || isLoading || rows.length === 0}>
+          <Button onClick={handleSave} disabled={isSaving || isLoading || tooMany || rows.length === 0}>
             {isSaving ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>

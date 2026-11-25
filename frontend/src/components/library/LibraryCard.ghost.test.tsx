@@ -7,6 +7,7 @@ import { ThumbCell } from "./LibraryListView"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import type { LibraryItem } from "@/types/api"
 import { LibraryCard } from "./LibraryCard"
+import { LibraryCardsProvider } from "./LibraryCardsProvider"
 import { RevealAllProvider } from "./RevealAllContext"
 import { SelectionProvider } from "./SelectionContext"
 
@@ -56,7 +57,9 @@ function renderCard(i: LibraryItem, client = newClient()) {
       <TooltipProvider>
         <RevealAllProvider>
           <SelectionProvider>
-            <LibraryCard item={i} />
+            <LibraryCardsProvider items={[i]}>
+              <LibraryCard item={i} />
+            </LibraryCardsProvider>
           </SelectionProvider>
         </RevealAllProvider>
       </TooltipProvider>
@@ -101,7 +104,8 @@ describe("download progress bar", () => {
     renderCard(item({ id: 2, status: "ghost", activeDownloadId: null }))
     await new Promise((r) => setTimeout(r, 20))
     expect(screen.queryByRole("progressbar")).toBeNull()
-    expect(fetchMock).not.toHaveBeenCalled()
+    // The cards' shared actions host fetches its own data (compare list, ...); what matters is that no card asks for downloads.
+    expect((fetchMock.mock.calls as unknown[][]).filter(([url]) => String(url).includes("download"))).toHaveLength(0)
   })
 
   it("shows on the list thumbnail cell only for an active download", async () => {

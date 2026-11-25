@@ -10,7 +10,8 @@ import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { buildCollectionTree, findNodeById } from "@/lib/collectionTree"
 import type { Collection } from "@/types/api"
 import { CollectionFolderTile } from "./CollectionFolderTile"
-import { LibraryCard } from "./LibraryCard"
+import { LibraryCard, LibraryCardGrid } from "./LibraryCard"
+import { LibraryCardsProvider } from "./LibraryCardsProvider"
 import { LibraryPagination } from "./LibraryPagination"
 import { LibraryScrollView } from "./LibraryScrollView"
 
@@ -110,69 +111,74 @@ export function LibraryFolderView() {
     setSearchParams(next) // pushes a history entry so Back navigates up a level
   }
 
-  // Inside a folder the loading row shows a skeleton for the names; at the root there is nothing more than Root.
-  const loadingHeader = <FolderBreadcrumb trail={[]} loading={currentId != null} onNavigate={goTo} />
+  const view = (() => {
+    // Inside a folder the loading row shows a skeleton for the names; at the root there is nothing more than Root.
+    const loadingHeader = <FolderBreadcrumb trail={[]} loading={currentId != null} onNavigate={goTo} />
 
-  if (collectionsLoading || itemsLoading || settingsLoading || !sortReady) {
+    if (collectionsLoading || itemsLoading || settingsLoading || !sortReady) {
+      return (
+        <LibraryScrollView
+          resetKey={resetKey}
+          header={loadingHeader}
+          footer={
+            !settingsLoading && paginationEnabled && <LibraryPagination page={page} pageSize={pageSize} total={0} onPageChange={setPage} loading />
+          }
+        >
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <Skeleton className="aspect-video w-full" />
+            <Skeleton className="aspect-video w-full" />
+            <Skeleton className="aspect-video w-full" />
+          </div>
+        </LibraryScrollView>
+      )
+    }
+    if (isError) {
+      return (
+        <LibraryScrollView
+          resetKey={resetKey}
+          header={
+            <FolderBreadcrumb
+              trail={collections && currentId != null ? breadcrumbFor(collections, currentId) : []}
+              loading={!collections && currentId != null}
+              onNavigate={goTo}
+            />
+          }
+        >
+          <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p>
+        </LibraryScrollView>
+      )
+    }
+    if (!collections || !data) return null
+
+    const tree = buildCollectionTree(collections)
+    const currentNode = currentId != null ? findNodeById(tree, currentId) : null
+    const childNodes = currentNode ? currentNode.children : tree
+    const breadcrumb = currentId != null ? breadcrumbFor(collections, currentId) : []
+
+    const isEmpty = childNodes.length === 0 && data.total === 0
+
     return (
       <LibraryScrollView
         resetKey={resetKey}
-        header={loadingHeader}
-        footer={
-          !settingsLoading && paginationEnabled && <LibraryPagination page={page} pageSize={pageSize} total={0} onPageChange={setPage} loading />
-        }
+        header={<FolderBreadcrumb trail={breadcrumb} loading={false} onNavigate={goTo} />}
+        footer={!isEmpty && paginationEnabled && <LibraryPagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} />}
       >
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          <Skeleton className="aspect-video w-full" />
-          <Skeleton className="aspect-video w-full" />
-          <Skeleton className="aspect-video w-full" />
-        </div>
+        {isEmpty ? (
+          <p className="text-sm text-muted-foreground">This collection is empty.</p>
+        ) : (
+          <LibraryCardGrid>
+            {childNodes.map((node) => (
+              <CollectionFolderTile key={node.id} node={node} collections={collections} onClick={() => goTo(node.id)} />
+            ))}
+            {data.items.map((item) => (
+              <LibraryCard key={item.id} item={item} />
+            ))}
+          </LibraryCardGrid>
+        )}
       </LibraryScrollView>
     )
-  }
-  if (isError) {
-    return (
-      <LibraryScrollView
-        resetKey={resetKey}
-        header={
-          <FolderBreadcrumb
-            trail={collections && currentId != null ? breadcrumbFor(collections, currentId) : []}
-            loading={!collections && currentId != null}
-            onNavigate={goTo}
-          />
-        }
-      >
-        <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p>
-      </LibraryScrollView>
-    )
-  }
-  if (!collections || !data) return null
+  })()
 
-  const tree = buildCollectionTree(collections)
-  const currentNode = currentId != null ? findNodeById(tree, currentId) : null
-  const childNodes = currentNode ? currentNode.children : tree
-  const breadcrumb = currentId != null ? breadcrumbFor(collections, currentId) : []
-
-  const isEmpty = childNodes.length === 0 && data.total === 0
-
-  return (
-    <LibraryScrollView
-      resetKey={resetKey}
-      header={<FolderBreadcrumb trail={breadcrumb} loading={false} onNavigate={goTo} />}
-      footer={!isEmpty && paginationEnabled && <LibraryPagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} />}
-    >
-      {isEmpty ? (
-        <p className="text-sm text-muted-foreground">This collection is empty.</p>
-      ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {childNodes.map((node) => (
-            <CollectionFolderTile key={node.id} node={node} collections={collections} onClick={() => goTo(node.id)} />
-          ))}
-          {data.items.map((item) => (
-            <LibraryCard key={item.id} item={item} />
-          ))}
-        </div>
-      )}
-    </LibraryScrollView>
-  )
+  // One provider for every state (loading, error, loaded), so the scroll region keeps its DOM across them.
+  return <LibraryCardsProvider items={data?.items}>{view}</LibraryCardsProvider>
 }
