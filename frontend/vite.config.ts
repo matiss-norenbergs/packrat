@@ -35,13 +35,27 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: {
         output: {
           // Without explicit groups the page split leaves ~100 tiny shared
-          // chunks (one per lucide icon / radix primitive). Keep it to a few:
-          // charts (Dashboard only), react core, one vendor bucket, and the shared ui/hooks/lib code.
-          // Rolldown groups capture a matched module's dependencies recursively by default, so the
-          // on-demand charts group must opt out and react core must outrank it; otherwise it absorbs
-          // React/clsx, every startup chunk imports it and index.html modulepreloads it.
+          // chunks (one per lucide icon / radix primitive). Keep it to a few
+          // named ones. Rolldown groups capture a matched module's *dependencies*
+          // recursively by default, so a group that is meant to load on demand
+          // must opt out (`includeDependenciesRecursively: false`) or it swallows
+          // React core / clsx and every startup chunk then imports it (and
+          // index.html modulepreloads it). `scripts/check-bundle.mjs` guards this.
+          //  - vendor-react: startup, so it outranks every on-demand group.
+          //  - vendor-charts: recharts and its helpers, Dashboard only.
+          //  - vendor-dnd / vendor-panels / vendor-calendar / vendor-qr: libraries one
+          //    screen uses (Edit Sequence, Artist dialog + date formatting, 2FA setup).
+          //  - vendor-tauri: the desktop plugins, only ever dynamically imported.
+          //  - vendor: the rest, i.e. what the startup path needs.
+          //  - app-shared: components/ui, hooks, lib, types (minus calendar/resizable,
+          //    which travel with their consumers).
           codeSplitting: {
             groups: [
+              {
+                name: "vendor-react",
+                test: /node_modules[\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run|cookie|set-cookie-parser)[\/]/,
+                priority: 40,
+              },
               {
                 name: "vendor-charts",
                 test: /node_modules[\/](recharts|d3-[^\/]+|victory-vendor|internmap|decimal\.js-light|es-toolkit|immer|reselect|@reduxjs|redux|react-redux|use-sync-external-store|tiny-invariant)[\/]/,
@@ -49,14 +63,39 @@ export default defineConfig(({ mode }) => {
                 includeDependenciesRecursively: false,
               },
               {
-                name: "vendor-react",
-                test: /node_modules[\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run|cookie|set-cookie-parser)[\/]/,
-                priority: 40,
+                name: "vendor-dnd",
+                test: /node_modules[\/]@dnd-kit[\/]/,
+                priority: 25,
+                includeDependenciesRecursively: false,
+              },
+              {
+                name: "vendor-panels",
+                test: /node_modules[\/]react-resizable-panels[\/]/,
+                priority: 25,
+                includeDependenciesRecursively: false,
+              },
+              {
+                name: "vendor-calendar",
+                test: /node_modules[\/](react-day-picker|date-fns|@date-fns)[\/]/,
+                priority: 25,
+                includeDependenciesRecursively: false,
+              },
+              {
+                name: "vendor-qr",
+                test: /node_modules[\/]qrcode\.react[\/]/,
+                priority: 25,
+                includeDependenciesRecursively: false,
+              },
+              {
+                name: "vendor-tauri",
+                test: /node_modules[\/]@tauri-apps[\/]/,
+                priority: 25,
+                includeDependenciesRecursively: false,
               },
               { name: "vendor", test: /node_modules[\/]/, priority: 10 },
               {
                 name: "app-shared",
-                test: /src[\/](components[\/]ui|hooks|lib|types)[\/]/,
+                test: /src[\/](components[\/]ui[\/](?!calendar\.tsx|resizable\.tsx)|hooks[\/]|lib[\/]|types[\/])/,
                 priority: 5,
               },
             ],
