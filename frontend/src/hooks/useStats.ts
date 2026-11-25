@@ -8,7 +8,7 @@ export const resolutionBreakdownQueryKey = ["stats", "resolution-breakdown"] as 
 export function useStats() {
   return useQuery({
     queryKey: statsQueryKey,
-    queryFn: fetchStats,
+    queryFn: ({ signal }) => fetchStats(signal),
     refetchInterval: 10_000, // Dashboard has no WS feed of its own — same safety-net poll as useDownloads
   })
 }
@@ -18,7 +18,7 @@ export function useStats() {
 export function useLibraryGrowth() {
   return useQuery({
     queryKey: libraryGrowthQueryKey,
-    queryFn: fetchLibraryGrowth,
+    queryFn: ({ signal }) => fetchLibraryGrowth(signal),
   })
 }
 
@@ -27,6 +27,6 @@ export function useLibraryGrowth() {
 export function useResolutionBreakdown() {
   return useQuery({
     queryKey: resolutionBreakdownQueryKey,
-    queryFn: fetchResolutionBreakdown,
+    queryFn: ({ signal }) => fetchResolutionBreakdown(signal),
   })
 }

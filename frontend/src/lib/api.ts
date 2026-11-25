@@ -168,12 +168,19 @@ export function rateLimitMessage(seconds: number | undefined): string {
 // backend/internal/api/router.go).
 // fetch() that tells the connection monitor whether the server answered at all (desktop only):
 // a TypeError is a network failure (server down/unreachable), any HTTP response means it is up.
+export function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === "AbortError"
+}
+
 async function fetchServer(input: string, init: RequestInit): Promise<Response> {
   try {
     const res = await fetch(input, init)
     reportReachable()
     return res
   } catch (err) {
+    // A request cancelled through its AbortSignal (a superseded or unmounted query) says nothing
+    // about the server: never report it as a network failure.
+    if (isAbortError(err)) throw err
     if (err instanceof TypeError) void reportNetworkFailure()
     throw err
   }
@@ -382,8 +389,8 @@ export function changePassword(payload: ChangePasswordRequest): Promise<void> {
   return request<void>("/auth/password", { method: "PATCH", body: JSON.stringify(payload) })
 }
 
-export function fetchDownloads(): Promise<Download[]> {
-  return request<Download[]>("/downloads")
+export function fetchDownloads(signal?: AbortSignal): Promise<Download[]> {
+  return request<Download[]>("/downloads", { signal })
 }
 
 export function createDownload(payload: CreateDownloadRequest): Promise<{ id: number }> {
@@ -448,7 +455,7 @@ export function bulkDeleteDownloads(ids: number[]): Promise<BulkDeleteResponse> 
   return postJSON<BulkDeleteResponse>("/downloads/bulk-delete", { ids })
 }
 
-export function fetchLibraryQuery(params: LibraryQueryParams): Promise<LibraryListResponse> {
+export function fetchLibraryQuery(params: LibraryQueryParams, signal?: AbortSignal): Promise<LibraryListResponse> {
   const search = new URLSearchParams()
   if (params.q) search.set("q", params.q)
   if (params.collectionIds && params.collectionIds.length > 0) search.set("collectionIds", params.collectionIds.join(","))
@@ -464,11 +471,11 @@ export function fetchLibraryQuery(params: LibraryQueryParams): Promise<LibraryLi
   if (params.page != null) search.set("page", String(params.page))
   if (params.pageSize != null) search.set("pageSize", String(params.pageSize))
   const qs = search.toString()
-  return request<LibraryListResponse>(`/library${qs ? `?${qs}` : ""}`)
+  return request<LibraryListResponse>(`/library${qs ? `?${qs}` : ""}`, { signal })
 }
 
-export function fetchLibraryFacets(): Promise<LibraryFacets> {
-  return request<LibraryFacets>("/library/facets")
+export function fetchLibraryFacets(signal?: AbortSignal): Promise<LibraryFacets> {
+  return request<LibraryFacets>("/library/facets", { signal })
 }
 
 export function mediaFileUrl(relativePath: string): string {
@@ -715,8 +722,8 @@ export function fetchLibraryItemTrimFrames(id: number, start: number, end: numbe
   return request<TrimFramesResponse>(`/library/${id}/trim/frames?start=${start}&end=${end}`)
 }
 
-export function fetchLibraryItem(id: number): Promise<LibraryItem> {
-  return request<LibraryItem>(`/library/${id}`)
+export function fetchLibraryItem(id: number, signal?: AbortSignal): Promise<LibraryItem> {
+  return request<LibraryItem>(`/library/${id}`, { signal })
 }
 
 export function redownloadLibraryItem(id: number): Promise<{ id: number }> {
@@ -857,8 +864,8 @@ export function deleteLibraryItemNFO(id: number): Promise<void> {
   return request<void>(`/library/${id}/nfo`, { method: "DELETE" })
 }
 
-export function fetchCollections(): Promise<Collection[]> {
-  return request<Collection[]>("/collections")
+export function fetchCollections(signal?: AbortSignal): Promise<Collection[]> {
+  return request<Collection[]>("/collections", { signal })
 }
 
 export function createCollection(payload: CreateCollectionRequest): Promise<{ id: number }> {
@@ -990,16 +997,16 @@ export function clearDownloadLog(): Promise<{ deleted: number }> {
   return request<{ deleted: number }>("/downloads/clear-log", { method: "POST" })
 }
 
-export function fetchStats(): Promise<Stats> {
-  return request<Stats>("/stats")
+export function fetchStats(signal?: AbortSignal): Promise<Stats> {
+  return request<Stats>("/stats", { signal })
 }
 
-export function fetchLibraryGrowth(): Promise<LibraryGrowthPoint[]> {
-  return request<LibraryGrowthPoint[]>("/stats/library-growth")
+export function fetchLibraryGrowth(signal?: AbortSignal): Promise<LibraryGrowthPoint[]> {
+  return request<LibraryGrowthPoint[]>("/stats/library-growth", { signal })
 }
 
-export function fetchResolutionBreakdown(): Promise<ResolutionBreakdownPoint[]> {
-  return request<ResolutionBreakdownPoint[]>("/stats/resolution-breakdown")
+export function fetchResolutionBreakdown(signal?: AbortSignal): Promise<ResolutionBreakdownPoint[]> {
+  return request<ResolutionBreakdownPoint[]>("/stats/resolution-breakdown", { signal })
 }
 
 export function exportSettingsBackup(password: string): Promise<BackupEnvelope> {

@@ -114,6 +114,7 @@ describe("useDownloadsSocket lifecycle", () => {
     s.open()
     spy.mockClear()
     s.onEvent({ type: "queue_update", payload: { active: 1, queued: 0 } })
+    vi.advanceTimersByTime(2000) // the refresh is coalesced into a short window
     expect(spy).toHaveBeenCalled()
 
     s.close()

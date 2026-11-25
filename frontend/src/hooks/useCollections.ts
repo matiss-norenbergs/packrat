@@ -14,12 +14,14 @@ import type { BulkDeleteRequest, CreateCollectionRequest, SetCollectionCoverRequ
 import { downloadsQueryKey } from "./useDownloads"
 import { libraryQueryKey } from "./useLibrary"
 
-export const collectionsQueryKey = ["collections"] as const
+import { collectionsQueryKey } from "@/lib/queryKeys"
+
+export { collectionsQueryKey }
 
 export function useCollections() {
   return useQuery({
     queryKey: collectionsQueryKey,
-    queryFn: fetchCollections,
+    queryFn: ({ signal }) => fetchCollections(signal),
   })
 }
 

@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BrowseHero } from "@/components/browse/BrowseHero"
+import { BrowseCollectionRow } from "@/components/browse/BrowseCollectionRow"
 import { BrowseRow } from "@/components/browse/BrowseRow"
 import { BrowseShowRow } from "@/components/browse/BrowseShowRow"
 import { BrowseTile } from "@/components/browse/BrowseTile"
@@ -75,15 +76,10 @@ export function BrowsePage() {
 
   // Fallback roots (no flagged show anywhere in their subtree) need their
   // actual items fetched, scoped to just those subtrees — never the whole
-  // library. Empty subtrees (totalItemCount already rolled up server-side)
-  // are skipped before they ever cost a descendant-id resolution or a spot
-  // in the fetch, so a collection with nothing in it never shows up here.
+  // library, and each row capped (see BrowseCollectionRow). Empty subtrees
+  // (totalItemCount already rolled up server-side) are skipped, so a
+  // collection with nothing in it never shows up here.
   const fallbackRoots = tree.filter((root) => !subtreeHasFlagged(root) && root.totalItemCount > 0)
-  const fallbackDescendantIds = fallbackRoots.flatMap((root) => collectDescendantIds(root))
-  const fallbackItemsQuery = useLibraryQuery(
-    { collectionIds: fallbackDescendantIds, sortKey: "downloadedAt", sortDir: "desc", hideGhosts: true },
-    !search && fallbackDescendantIds.length > 0,
-  )
 
   if (search) {
     return (
@@ -164,20 +160,6 @@ export function BrowsePage() {
     showRows.unshift({ key: "shows", title: "Collections", shows: soloShows })
   }
 
-  // Fallback, unchanged from before: a top-level collection with no flagged
-  // collection anywhere in its subtree keeps today's behavior — one row of
-  // flat individual item tiles, sourced from the single scoped fetch above
-  // (already sorted by downloadedAt desc) and split back out per root.
-  const fallbackCollectionRows = fallbackRoots
-    .map((root) => {
-      const descendantIds = new Set(collectDescendantIds(root))
-      const rowItems = (fallbackItemsQuery.data?.items ?? []).filter(
-        (i) => i.collectionId != null && descendantIds.has(i.collectionId),
-      )
-      return { key: `collection-${root.id}`, title: root.name, items: rowItems }
-    })
-    .filter((row) => row.items.length > 0)
-
   return (
     <RevealAllProvider>
       <div className="space-y-8 pb-8">
@@ -193,8 +175,8 @@ export function BrowsePage() {
           {showRows.map((row) => (
             <BrowseShowRow key={row.key} title={row.title} shows={row.shows} />
           ))}
-          {fallbackCollectionRows.map((row) => (
-            <BrowseRow key={row.key} title={row.title} items={row.items} />
+          {fallbackRoots.map((root) => (
+            <BrowseCollectionRow key={`collection-${root.id}`} title={root.name} collectionIds={collectDescendantIds(root)} />
           ))}
           {recentlyAdded.length === 0 && (
             <p className="text-sm text-muted-foreground">Nothing downloaded yet.</p>

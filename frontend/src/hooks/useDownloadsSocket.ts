@@ -3,9 +3,10 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { fetchLibraryItem } from "@/lib/api"
 import { reportNetworkFailure, reportReachable } from "@/lib/connection"
 import { notifyDesktop, notifyDesktopAsync, notifyEvent, notifyEventAsync } from "@/lib/notify"
+import { getInvalidationScheduler, invalidateLibraryContent } from "@/lib/queryInvalidation"
+import { setSocketOpen } from "@/lib/socketState"
 import { connectDownloadsSocket } from "@/lib/ws"
-import { downloadsQueryKey } from "./useDownloads"
-import { libraryQueryKey } from "./useLibrary"
+import { downloadProgressQueryKey, downloadsQueryKey, type DownloadProgressMap } from "./useDownloads"
 import {
   thumbnailEnhancementActiveItemQueryKey,
   thumbnailEnhancementEligibleQueryKey,
@@ -67,6 +68,18 @@ export function useDownloadsSocket() {
     let socket: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let stopped = false
+    // Bursts of events (a playlist finishing, a scan) coalesce into one refetch per key group, and
+    // nothing refetches while the tab is hidden; see lib/queryInvalidation. Cache patches
+    // (setQueryData) and notifications stay immediate.
+    const scheduler = getInvalidationScheduler(queryClient)
+    const refreshDownloads = () => scheduler.schedule([downloadsQueryKey])
+    const refreshLibrary = () => invalidateLibraryContent(queryClient, { coalesce: true })
+    const dropProgress = (downloadId: number) =>
+      queryClient.setQueryData<DownloadProgressMap>(downloadProgressQueryKey, (prev) => {
+        if (!prev || !(downloadId in prev)) return prev
+        const { [downloadId]: _removed, ...rest } = prev
+        return rest
+      })
 
     const handleEvent = (event: WSEvent) => {
       switch (event.type) {
@@ -87,11 +100,17 @@ export function useDownloadsSocket() {
                 : d,
             ),
           )
+          // The Library cards' progress strips read this map instead of the whole downloads table.
+          queryClient.setQueryData<DownloadProgressMap>(downloadProgressQueryKey, (prev) => ({
+            ...prev,
+            [p.downloadId]: { status: p.status as Download["status"], percent: p.percent },
+          }))
           break
         }
         case "completed": {
-          queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
-          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+          dropProgress(event.payload.downloadId)
+          refreshDownloads()
+          refreshLibrary()
           const { title, libraryId } = event.payload
           // The toast shows the real title unconditionally (only ever seen
           // by whoever's already on this tab); the desktop notification
@@ -104,10 +123,11 @@ export function useDownloadsSocket() {
           break
         }
         case "failed": {
-          queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
-          // A failed/cancelled download changes its ghost's activeDownloadId (and a cancel removes the ghost).
-          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
           const p = event.payload
+          dropProgress(p.downloadId)
+          refreshDownloads()
+          // A failed/cancelled download changes its ghost's activeDownloadId (and a cancel removes the ghost).
+          refreshLibrary()
           if (p.status === "cancelled") {
             notifyEvent("info", "Download cancelled", undefined, true)
           } else {
@@ -116,11 +136,11 @@ export function useDownloadsSocket() {
           break
         }
         case "library_changed": {
-          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+          refreshLibrary()
           break
         }
         case "queue_update": {
-          queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+          refreshDownloads()
           break
         }
         case "enhance_progress": {
@@ -134,7 +154,7 @@ export function useDownloadsSocket() {
           break
         }
         case "frame_match_progress": {
-          queryClient.invalidateQueries({ queryKey: frameMatchQueueQueryKey })
+          scheduler.schedule([frameMatchQueueQueryKey])
           if (event.payload.state === "done") {
             const { libraryItemId, itemTitle } = event.payload
             notifyDesktopAsync("Frame match found", () =>
@@ -144,8 +164,8 @@ export function useDownloadsSocket() {
           break
         }
         case "subscription_new_items": {
-          queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
-          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+          scheduler.schedule([subscriptionsQueryKey])
+          refreshLibrary()
           const { subscriptionTitle, newCount } = event.payload
           notifyDesktop(
             "New subscription items",
@@ -171,13 +191,18 @@ export function useDownloadsSocket() {
       current.addEventListener("open", () => {
         if (stopped) return
         attemptRef.current = 0
+        setSocketOpen(true)
         reportReachable()
-        queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
-        queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+        // REST is the source of truth after a (re)connect: refetch, coalesced like any other burst.
+        // Progress starts over from the next event; anything finished while we were away is gone.
+        queryClient.setQueryData<DownloadProgressMap>(downloadProgressQueryKey, {})
+        refreshDownloads()
+        refreshLibrary()
       })
 
       current.addEventListener("close", () => {
         if (stopped) return
+        setSocketOpen(false)
         // Desktop only (no-op on the web): a dropped socket on an idle page is often the first sign
         // the server went away — no request is in flight to notice it.
         void reportNetworkFailure()
@@ -194,6 +219,7 @@ export function useDownloadsSocket() {
 
     return () => {
       stopped = true
+      setSocketOpen(false)
       if (reconnectTimer) clearTimeout(reconnectTimer)
       // Closing a socket that is still CONNECTING makes the browser log "WebSocket is closed before
       // the connection is established" (StrictMode's mount/unmount/mount in dev, or a quick route

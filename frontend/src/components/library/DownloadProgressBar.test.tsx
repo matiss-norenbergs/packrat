@@ -2,9 +2,9 @@ import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { downloadsQueryKey, selectDownloadProgress, useDownloadProgress } from "@/hooks/useDownloads"
+import { downloadProgressQueryKey, downloadsQueryKey, selectDownloadProgress, useDownloadProgress, type DownloadProgressMap } from "@/hooks/useDownloads"
 import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
-import type { Download } from "@/types/api"
+import type { DownloadStatus } from "@/types/api"
 import type { WSEvent } from "@/types/ws"
 import { DownloadProgressBar } from "./DownloadProgressBar"
 
@@ -23,11 +23,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const dl = (id: number, status: Download["status"], percent: number) => ({ id, status, percent }) as unknown as Download
+const dl = (id: number, status: DownloadStatus, percent: number) => ({ id, status, percent })
+const toMap = (rows: ReturnType<typeof dl>[]): DownloadProgressMap =>
+  Object.fromEntries(rows.map((r) => [r.id, { status: r.status, percent: r.percent }]))
 
-function setup(downloads: Download[]) {
+function setup(downloads: ReturnType<typeof dl>[]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  client.setQueryData(downloadsQueryKey, downloads)
+  client.setQueryData(downloadProgressQueryKey, toMap(downloads))
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
   return { client, wrapper }
 }
@@ -71,7 +73,7 @@ describe("DownloadProgressBar", () => {
     expect(screen.getByRole("progressbar")).toHaveClass("h-0.5")
   })
 
-  it("moves when a WS progress event is patched into the cache", async () => {
+  it("moves when a WS progress event is patched into the cache (without the downloads table)", async () => {
     const { wrapper } = setup([dl(1, "downloading", 10)])
     renderHook(() => useDownloadsSocket(), { wrapper })
     render(<DownloadProgressBar downloadId={1} size="card" />, { wrapper })
@@ -85,8 +87,8 @@ describe("DownloadProgressBar", () => {
 
 describe("useDownloadProgress", () => {
   it("selects only the matching download's status and percent", () => {
-    expect(selectDownloadProgress([dl(1, "downloading", 5), dl(2, "processing", 9)], 2)).toEqual({ status: "processing", percent: 9 })
-    expect(selectDownloadProgress([dl(1, "downloading", 5)], 3)).toBeNull()
+    expect(selectDownloadProgress(toMap([dl(1, "downloading", 5), dl(2, "processing", 9)]), 2)).toEqual({ status: "processing", percent: 9 })
+    expect(selectDownloadProgress(toMap([dl(1, "downloading", 5)]), 3)).toBeNull()
   })
 
   it("keeps its result identity when another download's progress changes", async () => {
@@ -95,13 +97,29 @@ describe("useDownloadProgress", () => {
     const first = result.current.data
     expect(first).toEqual({ status: "downloading", percent: 5 })
     act(() => {
-      client.setQueryData(downloadsQueryKey, [dl(1, "downloading", 5), dl(2, "downloading", 80)])
+      client.setQueryData(downloadProgressQueryKey, toMap([dl(1, "downloading", 5), dl(2, "downloading", 80)]))
     })
     await new Promise((r) => setTimeout(r, 10))
     expect(result.current.data).toBe(first)
     act(() => {
-      client.setQueryData(downloadsQueryKey, [dl(1, "downloading", 6), dl(2, "downloading", 80)])
+      client.setQueryData(downloadProgressQueryKey, toMap([dl(1, "downloading", 6), dl(2, "downloading", 80)]))
     })
     await waitFor(() => expect(result.current.data).toEqual({ status: "downloading", percent: 6 }))
+  })
+})
+
+describe("progress source", () => {
+  it("does not need the downloads table and never fetches it", async () => {
+    const { client, wrapper } = setup([])
+    expect(client.getQueryData(downloadsQueryKey)).toBeUndefined()
+    renderHook(() => useDownloadsSocket(), { wrapper })
+    render(<DownloadProgressBar downloadId={1} size="card" />, { wrapper })
+    expect(screen.queryByRole("progressbar")).toBeNull()
+    act(() =>
+      emit({ type: "progress", payload: { downloadId: 1, status: "downloading", percent: 20, speedBytesPerSec: 0, etaSeconds: 0, downloadedBytes: 0, totalBytes: 0 } } as WSEvent),
+    )
+    await waitFor(() => expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "20"))
+    act(() => emit({ type: "completed", payload: { downloadId: 1, libraryId: 1, title: "t" } } as WSEvent))
+    await waitFor(() => expect(screen.queryByRole("progressbar")).toBeNull())
   })
 })
