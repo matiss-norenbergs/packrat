@@ -116,7 +116,7 @@ import type {
 } from "@/types/api"
 
 import { reportNetworkFailure, reportReachable } from "@/lib/connection"
-import { apiBase, clearToken, isDesktop, getToken, serverUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
+import { apiBase, captureAuth, clearToken, clearTokenIf, isDesktop, serverUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
 
 // Reads a cookie's raw value by name — used to echo the CSRF cookie back as
 // a header (see request() below). Cross-origin JS can never read this
@@ -188,7 +188,8 @@ async function fetchServer(input: string, init: RequestInit): Promise<Response> 
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const desktop = isDesktop()
-  const token = desktop ? getToken() : null
+  const sent = captureAuth()
+  const token = desktop ? sent.token : null
   const send = (csrf: string) =>
     fetchServer(
       `${apiBase()}/api${path}`,
@@ -220,10 +221,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     res = await send(getCookie("packrat_csrf"))
   }
   if (!res.ok) {
-    // /auth/* answers 401 for a wrong password, which isn't an expired session.
-    if (desktop && res.status === 401 && !path.startsWith("/auth/")) {
-      clearToken()
-      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+    // /auth/* answers 401 for a wrong password, which isn't an expired session. Anywhere else a 401
+    // means the session is gone (revoked, expired, password changed elsewhere): on the desktop the
+    // saved token is dropped too (only if it is still the login this request was sent with, see
+    // clearTokenIf), and on both the app falls back to the login screen (App.tsx). A request that
+    // belonged to a profile that is no longer active says nothing about the current one.
+    if (res.status === 401 && !path.startsWith("/auth/")) {
+      if (!desktop) {
+        window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+      } else if (clearTokenIf(sent)) {
+        window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+      }
     }
     const body = await res.json().catch(() => ({}))
     if (res.status === 429) {
@@ -247,10 +255,12 @@ function storeSessionToken(res: { token?: string } | undefined) {
 }
 
 export async function fetchAuthStatus(): Promise<AuthStatus> {
+  const sent = captureAuth()
   const status = await request<AuthStatus>("/auth/status")
   // /auth/status answers 200 {authenticated:false} (not 401) for a dead token, so the 401 handling
-  // in request() never fires for it — drop the stale desktop token here.
-  if (isDesktop() && !status.authenticated) clearToken()
+  // in request() never fires for it — drop the stale desktop token here (only the one this check
+  // was sent with: a profile switch meanwhile keeps the new profile's login).
+  if (isDesktop() && !status.authenticated) clearTokenIf(sent)
   return status
 }
 

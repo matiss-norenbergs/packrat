@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react"
 import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { fetchLibraryItem } from "@/lib/api"
+import { recheckAuthAfterSocketDrop } from "@/lib/authRecheck"
 import { reportNetworkFailure, reportReachable } from "@/lib/connection"
 import { notifyDesktop, notifyDesktopAsync, notifyEvent, notifyEventAsync } from "@/lib/notify"
 import { getInvalidationScheduler, invalidateLibraryContent } from "@/lib/queryInvalidation"
@@ -232,6 +233,8 @@ export function useDownloadsSocket() {
         // Desktop only (no-op on the web): a dropped socket on an idle page is often the first sign
         // the server went away — no request is in flight to notice it.
         void reportNetworkFailure()
+        // A revoked session also ends here, with nothing else on an idle page to notice it.
+        void recheckAuthAfterSocketDrop(queryClient)
         const delay = Math.min(
           RECONNECT_BASE_DELAY_MS * 2 ** attemptRef.current,
           RECONNECT_MAX_DELAY_MS,
