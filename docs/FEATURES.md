@@ -414,6 +414,11 @@ Delete file (removes just the media file for every selected item, keeping the en
 placeholders — see Ghost items below), or Delete selected (remove the items entirely, optionally
 deleting their files).
 
+**Edit fields** gives every selected file its own editable row, so it is limited to **100 files**: with more
+(a selection of whole folders counts the files inside them) the dialog builds no rows, says "You selected N
+files. Narrow the selection to 100 or fewer to edit them individually." and Save stays disabled. Use Set
+artist, Set year, Assign tags or Generate NFO for larger batches.
+
 How a bulk action reports a partial failure depends on what it does. The edit actions (Edit fields, Set
 artist, Set year, Generate NFO, Edit sequence) send **one request**, but every file is still saved on its
 own (renames and metadata remuxes cannot be rolled back): the result toast counts "Updated N" and "N
