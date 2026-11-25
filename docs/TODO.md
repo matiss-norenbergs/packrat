@@ -34,6 +34,33 @@ Effort is a rough guess: **S** = under an hour of agent work, **M** = a few hour
   at one-second resolution with a strict `>`, so failures in the same second as the last
   acknowledgement aren't counted. Harmless in real use.
 
+## Large libraries
+
+- **Virtualized grid and DataTable (L).** Pagination defaults to off, so the Library grid, Folders view and list
+  view render every item: about 2 s at 3,000 items and about 10 s at 10,000, with select/clear about 0.4 s,
+  even after the grid render-cost work (see [`architecture.md` → Why no virtualization
+  (yet)](architecture.md#list-tables-datatable)). With pagination on, 10,000 items show in well under a second, so this only matters for
+  very large libraries kept on one page. Plan, in order, one PR each:
+  1. **`ResponsiveGrid` (`components/responsive-grid/`), no virtualization.** A reusable grid that takes `items`,
+     `getKey` and `renderItem` (it knows nothing about cards), keeps today's 2/3/4 column breakpoints, fills its
+     parent and owns the scroll region (the existing header/footer slots of `LibraryScrollView` stay around it), with
+     `resetKey` for scroll-to-top. The Library grid and the Folders view adopt it; behavior and look unchanged.
+     `LibraryCard` and `LibraryCardsProvider` keep their names and stay Library-side.
+  2. **Virtualization behind a prop.** `virtualize` (off by default, a prop of the page's choice, never a user
+     setting) plus a threshold constant (about 200 items: below it the grid renders plain DOM like today). On for the
+     Library. Needs measured row heights (cards are not all one height), the column count from the container width,
+     and a measurement at 10,000 items before and after.
+  3. **Reuse for the thumbnail gallery**, and any other grid that needs it, with `virtualize` off unless measured.
+  4. **An opt-in `virtualize` on DataTable**, switched on for the Library list only. Spacer rows keep the sticky
+     header and the config-based column widths; drag selection hit-tests rows with `closest('tr[data-row-id]')`, so it
+     must keep working while rows mount and unmount.
+  - Costs to accept: browser find-in-page no longer finds offscreen items (the Library's own search covers it, and
+    `content-visibility: auto` keeps them findable today); tab order and screen readers see only the mounted items
+    (needs `aria-rowcount`-style attributes); the scrollbar jumps if the height estimate is off; jsdom has no layout,
+    so tests of a virtualized list need a layout mock or helper.
+  - Rough size: the grid component is a few hundred lines of code and about as many of tests; DataTable's opt-in is
+    similar but riskier because 25 pages use DataTable.
+
 ## Desktop app
 
 - **Code signing (M, costs money).** Windows builds are unsigned. Windows Smart App Control can block a
