@@ -25,6 +25,7 @@ import { useBulkDeleteCollections } from "@/hooks/useCollections"
 import { buildCollectionTree, collectDescendantIds, filterCollectionTree } from "@/lib/collectionTree"
 import { DOCK_FOOTER_LABEL, DOCK_FOOTER_ROW } from "@/lib/dockClearance"
 import { getPageNumbers } from "@/lib/pagination"
+import { readStorage, writeStorage } from "@/lib/safeStorage"
 import { cn } from "@/lib/utils"
 
 const PAGE_SIZE = 25
@@ -32,7 +33,7 @@ const PAGE_SIZE = 25
 const ALL_EXPANDED_STORAGE_KEY = "packrat:collections-all-expanded"
 
 function readAllExpandedSetting(): boolean {
-  return localStorage.getItem(ALL_EXPANDED_STORAGE_KEY) === "true"
+  return readStorage(ALL_EXPANDED_STORAGE_KEY) === "true"
 }
 
 export function CollectionsPage() {
@@ -55,7 +56,7 @@ export function CollectionsPage() {
   const [allExpanded, setAllExpanded] = useState(readAllExpandedSetting)
 
   useEffect(() => {
-    localStorage.setItem(ALL_EXPANDED_STORAGE_KEY, String(allExpanded))
+    writeStorage(ALL_EXPANDED_STORAGE_KEY, String(allExpanded))
   }, [allExpanded])
 
   // Debounce the value actually used for filtering so fast typing doesn't
@@ -89,6 +90,7 @@ export function CollectionsPage() {
   useEffect(() => {
     setPage(1)
   }, [search])
+
 
   // Restoring allExpanded=true from localStorage happens before `data` has
   // loaded (allIds is empty on first render), and any later mutation

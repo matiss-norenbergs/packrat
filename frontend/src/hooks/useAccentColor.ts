@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react"
+import { readStorage, writeStorage } from "@/lib/safeStorage"
 import type { AccentPreference } from "@/types/api"
 
 // Applies the accent color to <html> and caches it in localStorage. The cache is only there so the
@@ -15,7 +16,7 @@ function isAccentColor(value: string | null): value is AccentColor {
 }
 
 function readStoredAccent(): AccentColor {
-  const stored = localStorage.getItem(STORAGE_KEY)
+  const stored = readStorage(STORAGE_KEY)
   return isAccentColor(stored) ? stored : "default"
 }
 
@@ -38,11 +39,7 @@ const listeners = new Set<() => void>()
 // Applies the accent, refreshes the cache and tells every mounted useAccentColor.
 export function setAccentLocally(next: AccentColor) {
   current = next
-  try {
-    localStorage.setItem(STORAGE_KEY, next)
-  } catch {
-    // storage unavailable — the accent still applies for this page load
-  }
+  writeStorage(STORAGE_KEY, next)
   applyAccent(next)
   listeners.forEach((l) => l())
 }

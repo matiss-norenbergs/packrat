@@ -1,5 +1,6 @@
 import { toast } from "sonner"
 import { isTauri } from "@/lib/server"
+import { readStorage, writeStorage } from "@/lib/safeStorage"
 
 // Whether desktop notifications are turned on — a personal per-browser
 // preference (Notification permission itself is granted per-browser/per-
@@ -8,11 +9,11 @@ import { isTauri } from "@/lib/server"
 const STORAGE_KEY = "packrat-desktop-notifications"
 
 export function isDesktopNotificationsEnabled(): boolean {
-  return localStorage.getItem(STORAGE_KEY) === "true"
+  return readStorage(STORAGE_KEY) === "true"
 }
 
 export function setDesktopNotificationsEnabled(next: boolean): void {
-  localStorage.setItem(STORAGE_KEY, String(next))
+  writeStorage(STORAGE_KEY, String(next))
 }
 
 // Requests permission only if it hasn't been decided yet — re-prompting
@@ -48,7 +49,11 @@ function notify(title: string, body?: string) {
     return
   }
   if (!("Notification" in window) || Notification.permission !== "granted") return
-  new Notification(title, { body, icon: "/favicon.svg" })
+  try {
+    new Notification(title, { body, icon: "/favicon.svg" })
+  } catch {
+    // Some browsers (Android Chrome) throw on the constructor; a notification is best-effort.
+  }
 }
 
 // Whether the underlying setting/away-from-tab gate that governs a desktop

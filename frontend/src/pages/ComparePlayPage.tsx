@@ -10,6 +10,7 @@ import { useCompareGroup } from "@/components/library/useCompareGroup"
 import { DEFAULT_SYNC_MODE, parseSyncMode, type SyncMode } from "@/components/player/groupMedia"
 import { describeKeyTarget, isTypingTarget, resolveGlobalKey } from "@/components/player/playerKeys"
 import { useLibraryItemsByIds } from "@/hooks/useLibrary"
+import { readStorage, writeStorage } from "@/lib/safeStorage"
 
 // Zoom-style gallery sizing — as square a grid as possible (columns first,
 // so a lone leftover item lands on its own row rather than stretching
@@ -30,7 +31,7 @@ const WAIT_FOR_READY_STORAGE_KEY = "packrat:compare-wait-for-ready"
 // comparing playback, so starting before every candidate can actually play
 // through smoothly works against the reason you're here.
 function readBoolSetting(key: string): boolean {
-  const raw = localStorage.getItem(key)
+  const raw = readStorage(key)
   return raw === null ? true : raw === "true"
 }
 
@@ -39,17 +40,13 @@ function readBoolSetting(key: string): boolean {
 const SYNC_MODE_STORAGE_KEY = "packrat:compare-sync-mode"
 function readSyncMode(): SyncMode {
   try {
-    return parseSyncMode(localStorage.getItem(SYNC_MODE_STORAGE_KEY))
+    return parseSyncMode(readStorage(SYNC_MODE_STORAGE_KEY))
   } catch {
     return DEFAULT_SYNC_MODE
   }
 }
 function writeSyncMode(mode: SyncMode) {
-  try {
-    localStorage.setItem(SYNC_MODE_STORAGE_KEY, mode)
-  } catch {
-    // storage unavailable: the choice just doesn't persist
-  }
+  writeStorage(SYNC_MODE_STORAGE_KEY, mode)
 }
 
 // Plays up to 6 items at once. Each cell has its own skin (independent controls, ComparePlayerCell); the docked
@@ -68,8 +65,8 @@ export function ComparePlayPage() {
 
   const [preload, setPreload] = useState(() => readBoolSetting(PRELOAD_STORAGE_KEY))
   const [waitForReady, setWaitForReady] = useState(() => readBoolSetting(WAIT_FOR_READY_STORAGE_KEY))
-  useEffect(() => localStorage.setItem(PRELOAD_STORAGE_KEY, String(preload)), [preload])
-  useEffect(() => localStorage.setItem(WAIT_FOR_READY_STORAGE_KEY, String(waitForReady)), [waitForReady])
+  useEffect(() => writeStorage(PRELOAD_STORAGE_KEY, String(preload)), [preload])
+  useEffect(() => writeStorage(WAIT_FOR_READY_STORAGE_KEY, String(waitForReady)), [waitForReady])
 
   // Which item ids have buffered enough to play through without stalling
   // (or are locked/private, which count as trivially ready — see
