@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { lazy, Suspense, useEffect } from "react"
 import { matchPath, Navigate, Outlet, useLocation } from "react-router-dom"
 import { Toaster } from "@/components/ui/sonner"
 import { useAuthStatus } from "@/hooks/useAuth"
@@ -6,7 +6,12 @@ import { useSyncAppearance } from "@/hooks/useAppearance"
 import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
 import { BrowseHeader } from "@/components/browse/BrowseHeader"
 import { MiniPlayerProvider, useMiniPlayer } from "@/components/browse/MiniPlayerContext"
-import { MiniPlayerDock } from "@/components/browse/MiniPlayerDock"
+
+// The dock pulls in the whole player skin, which only matters once an item has been minimized, so
+// it is its own chunk instead of part of the entry chunk every page loads. Not a route reveal, so
+// a lazy component with no visible fallback is fine here.
+const loadMiniPlayerDock = () => import("@/components/browse/MiniPlayerDock")
+const MiniPlayerDock = lazy(() => loadMiniPlayerDock().then((m) => ({ default: m.MiniPlayerDock })))
 
 // A deliberately separate layout from AppLayout — no Sidebar/MobileNav, so
 // the Browse experience never shares chrome with the management area (see
@@ -47,6 +52,12 @@ function AuthedBrowseLayout() {
   // context somewhere shared, both worse than one conditional here.
   const isSingleItemView = matchPath("/browse/:id", location.pathname) != null
 
+  // Minimizing is only possible from the item page, which has the player skin loaded already:
+  // fetch the (tiny) dock chunk there, so the mini player appears the moment it is minimized.
+  useEffect(() => {
+    if (isSingleItemView) void loadMiniPlayerDock().catch(() => {})
+  }, [isSingleItemView])
+
   return (
     <MiniPlayerProvider>
       {/* dvh: a phone's collapsing browser bars make 100vh taller than what is visible. */}
@@ -54,9 +65,19 @@ function AuthedBrowseLayout() {
         {!isSingleItemView && <BrowseHeader />}
         <BrowseMain />
         <Toaster />
-        <MiniPlayerDock />
+        <MiniPlayerHost />
       </div>
     </MiniPlayerProvider>
+  )
+}
+
+function MiniPlayerHost() {
+  const { miniPlayer } = useMiniPlayer()
+  if (!miniPlayer) return null
+  return (
+    <Suspense fallback={null}>
+      <MiniPlayerDock />
+    </Suspense>
   )
 }
 
