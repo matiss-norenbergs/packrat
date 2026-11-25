@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react"
+import { useSeedOnOpen } from "@/hooks/useSeedOnOpen"
+import { useState, type ReactNode } from "react"
 import { Eye, EyeOff, ImageIcon, Plus, X } from "lucide-react"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { Button } from "@/components/ui/button"
@@ -88,25 +89,22 @@ export function CollectionDialog({
   // not through Dialog's own onOpenChange, so resetting only in a handler
   // passed to Dialog would leave stale edits from a previous open behind on
   // next open — see TagDialog/ArtistDialog for the same fix.
-  useEffect(() => {
-    if (open) {
-      setName(collection?.name ?? "")
-      setRootPath(collection?.rootPath ?? "")
-      setDefaultQuality((collection?.defaultQuality as VideoQuality) ?? "best")
-      setDefaultDownloadType(collection?.defaultDownloadType ?? "video")
-      setIsPrivate(collection?.isPrivate ?? false)
-      setJellyfinLibraryId(collection?.jellyfinLibraryId ?? "")
-      setSeasonNumber(collection?.seasonNumber != null ? String(collection.seasonNumber) : "")
-      setYear(collection?.year != null ? String(collection.year) : "")
-      setSequenceMin(collection?.sequenceMin != null ? String(collection.sequenceMin) : "")
-      setSequenceMax(collection?.sequenceMax != null ? String(collection.sequenceMax) : "")
-      setArtistId(collection?.artistId != null ? String(collection.artistId) : NO_ARTIST)
-      setFilenameTemplate(collection?.filenameTemplate ?? "")
-      setBrowseAsShow(collection?.browseAsShow ?? false)
-      setCoverRevealed(false)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, collection])
+  useSeedOnOpen(open, collection?.id, () => {
+    setName(collection?.name ?? "")
+    setRootPath(collection?.rootPath ?? "")
+    setDefaultQuality((collection?.defaultQuality as VideoQuality) ?? "best")
+    setDefaultDownloadType(collection?.defaultDownloadType ?? "video")
+    setIsPrivate(collection?.isPrivate ?? false)
+    setJellyfinLibraryId(collection?.jellyfinLibraryId ?? "")
+    setSeasonNumber(collection?.seasonNumber != null ? String(collection.seasonNumber) : "")
+    setYear(collection?.year != null ? String(collection.year) : "")
+    setSequenceMin(collection?.sequenceMin != null ? String(collection.sequenceMin) : "")
+    setSequenceMax(collection?.sequenceMax != null ? String(collection.sequenceMax) : "")
+    setArtistId(collection?.artistId != null ? String(collection.artistId) : NO_ARTIST)
+    setFilenameTemplate(collection?.filenameTemplate ?? "")
+    setBrowseAsShow(collection?.browseAsShow ?? false)
+    setCoverRevealed(false)
+  })
 
   const handleSubmit = () => {
     if (!name.trim() || !rootPath.trim()) return

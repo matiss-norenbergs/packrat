@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react"
+import { useSeedOnOpen } from "@/hooks/useSeedOnOpen"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -30,12 +31,10 @@ export function TagDialog({ open, onOpenChange, tag }: TagDialogProps) {
   // `open` directly from a toolbar button (not through Dialog's own
   // onOpenChange), so resetting only there would leave stale values from
   // the previous open behind on next open.
-  useEffect(() => {
-    if (open) {
-      setName(tag?.name ?? "")
-      setIsPrivate(tag?.isPrivate ?? false)
-    }
-  }, [open, tag])
+  useSeedOnOpen(open, tag?.id, () => {
+    setName(tag?.name ?? "")
+    setIsPrivate(tag?.isPrivate ?? false)
+  })
 
   const handleSubmit = () => {
     const trimmed = name.trim()

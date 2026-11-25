@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react"
+import { useSeedOnOpen } from "@/hooks/useSeedOnOpen"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -57,15 +58,14 @@ export function EditSubscriptionDialog({ subscription, open, onOpenChange }: Edi
   const { data: allTags } = useTags()
   const updateSubscription = useUpdateSubscription()
 
-  useEffect(() => {
-    if (!open) return
+  useSeedOnOpen(open, subscription.id, () => {
     setCollectionId(subscription.collectionId != null ? String(subscription.collectionId) : NO_COLLECTION)
     setTags(subscription.tags ?? [])
     setAutoDownload(subscription.autoDownload)
     setGenerateNfo(subscription.generateNfo)
     setCheckIntervalHours(String(clampIntervalHours(subscription.checkIntervalHours)))
     setEnabled(subscription.enabled)
-  }, [open, subscription])
+  })
 
   const handleSubmit = () => {
     updateSubscription.mutate(

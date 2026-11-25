@@ -1,5 +1,6 @@
+import { useSeedOnOpen } from "@/hooks/useSeedOnOpen"
 import { RefreshCw, ScanLine, Wand2 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import {
@@ -102,8 +103,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
   // on open — only on internally-triggered closes (Escape, overlay, the X
   // button). A plain useEffect is what actually catches every open; without
   // it, fields kept whatever was last typed from a previous open-without-save.
-  useEffect(() => {
-    if (!open) return
+  useSeedOnOpen(open, item.id, () => {
     setTitle(item.title)
     setFilename(baseNameWithoutExt(item.filename))
     setUploader(item.uploader ?? "")
@@ -117,8 +117,7 @@ export function EditLibraryItemDialog({ item, open, onOpenChange }: EditLibraryI
     setGenerateNfo(item.generateNfo)
     setResolution(item.resolution ?? "")
     setDuration(item.duration)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, item])
+  })
 
   const handleDetectSeason = () => {
     const result = parseSeasonEpisode(filename)
