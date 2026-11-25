@@ -116,7 +116,7 @@ import type {
 } from "@/types/api"
 
 import { reportNetworkFailure, reportReachable } from "@/lib/connection"
-import { apiBase, captureAuth, clearToken, clearTokenIf, isDesktop, serverUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
+import { apiBase, captureAuth, type SentAuth, clearToken, clearTokenIf, isDesktop, serverUrl, setToken, UNAUTHORIZED_EVENT } from "@/lib/server"
 
 // Reads a cookie's raw value by name — used to echo the CSRF cookie back as
 // a header (see request() below). Cross-origin JS can never read this
@@ -186,6 +186,16 @@ async function fetchServer(input: string, init: RequestInit): Promise<Response> 
   }
 }
 
+// A 401 from a route other than /auth/* (those answer 401 for a wrong password or code, which isn't
+// an expired session) means the session is gone: revoked, expired, password changed elsewhere. On
+// the desktop the saved token is dropped too, but only if it is still the login the request was
+// sent with (see clearTokenIf); a request that belonged to a profile that is no longer active says
+// nothing about the current one. Either way the app falls back to the login screen (App.tsx).
+function handleUnauthorized(sent: SentAuth) {
+  if (isDesktop() && !clearTokenIf(sent)) return
+  window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const desktop = isDesktop()
   const sent = captureAuth()
@@ -221,18 +231,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     res = await send(getCookie("packrat_csrf"))
   }
   if (!res.ok) {
-    // /auth/* answers 401 for a wrong password, which isn't an expired session. Anywhere else a 401
-    // means the session is gone (revoked, expired, password changed elsewhere): on the desktop the
-    // saved token is dropped too (only if it is still the login this request was sent with, see
-    // clearTokenIf), and on both the app falls back to the login screen (App.tsx). A request that
-    // belonged to a profile that is no longer active says nothing about the current one.
-    if (res.status === 401 && !path.startsWith("/auth/")) {
-      if (!desktop) {
-        window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
-      } else if (clearTokenIf(sent)) {
-        window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
-      }
-    }
+    if (res.status === 401 && !path.startsWith("/auth/")) handleUnauthorized(sent)
     const body = await res.json().catch(() => ({}))
     if (res.status === 429) {
       const header = Number(res.headers?.get?.("Retry-After"))
@@ -552,9 +551,22 @@ export function resizedImageSrcSet({
 // imageUrl() path or a data: URI alike — and returns it as bare base64, for
 // call sites that only have a rendered image's URL but need the bytes to
 // hand to an endpoint like saveThumbnailToGallery.
+//
+// Throws (with the HTTP status) when the server answers an error or something that is not an image —
+// a JSON/HTML error body must never be sent on as image bytes. A 401 goes through the same
+// unauthorized handling as request().
 export async function urlToBase64(url: string): Promise<string> {
+  const sent = captureAuth()
   const res = await fetch(url)
+  if (!res.ok) {
+    if (res.status === 401) handleUnauthorized(sent)
+    throw new ApiError(`Couldn't read the image (HTTP ${res.status})`, res.status)
+  }
   const blob = await res.blob()
+  const type = res.headers?.get?.("Content-Type") ?? blob.type
+  if (!type.toLowerCase().startsWith("image/")) {
+    throw new ApiError(`Couldn't read the image (HTTP ${res.status}, not an image${type ? `: ${type}` : ""})`, res.status)
+  }
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
