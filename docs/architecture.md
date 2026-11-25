@@ -1936,7 +1936,11 @@ row type and the id type (number or string).
   `max(widths[key] ?? width ?? type default, minWidth ?? 48)`, capped at 2000 (`effectiveColumnWidth`).
 - **tableIds** (stable, kebab-case): `artists`, `subscriptions`, `history`, `logs`, `tags`, `ai-enhancement`, `frame-matching`,
   `backup-history`, `import`, `library` (the list view; shares its layout with the Library sort). Dialog tables (Eligible items, Known items, Stray files) and Settings tab tables (Sessions, Servers) have none.
-- **Why no virtualization**: pages are paginated at 50 rows, so virtualization would add complexity for no gain.
+- **Why no virtualization (yet)**: the paginated tables (50 rows a page) gain nothing from it. That reasoning does **not** cover
+  the Library: with pagination off, which is the default, its grid, Folders view and list view render every item. After the grid
+  render-cost work that is about 2 s at 3,000 items and about 10 s at 10,000 (with pagination on, 10,000 items show in well under
+  a second). The plan is a reusable `ResponsiveGrid` with an opt-in `virtualize` prop for the grid and Folders views, then an opt-in
+  `virtualize` on DataTable for the Library list only; see [`TODO.md` → Virtualized grid and DataTable](TODO.md#large-libraries).
 - **Why Collections doesn't use it**: it renders a tree (expand/collapse, nesting, drag to re-parent), which a flat
   row model doesn't fit; its cells could use the same primitives but the table itself stays bespoke.
 
