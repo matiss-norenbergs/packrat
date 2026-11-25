@@ -662,6 +662,19 @@ does not protect a query from it, so where a query sits in the key tree decides 
   (`["download-progress"]`, written by the `progress` event, cleared on `completed`/`failed`/
   reconnect) instead of `GET /api/downloads`, which returns every download ever made and is
   deliberately unbounded. A card shows its strip after the first progress event (about a second).
+- **A socket is not trusted across a long absence.** The browser cannot see the server's ping frames
+  and the client sends nothing, so a socket that dies without a close event (laptop sleep, a locked
+  phone, a flaky Tailscale/mobile link, a NAT dropping an idle connection) still looks open, its events
+  never arrive and, with the poll off, the pages go stale until the browser notices minutes later.
+  The poll therefore cannot be assumed unnecessary. When the tab becomes visible after being hidden
+  for `WAKE_AFTER_HIDDEN_MS` (30 s, `hooks/useDownloadsSocket.ts`), or the browser fires `online`,
+  the hook refetches downloads, library and collections through the same coalescing scheduler and
+  replaces the socket at once (no backoff). The old socket is marked retired, so its `close` neither
+  calls `reportNetworkFailure` nor schedules a second reconnect, and `setSocketOpen` is false until
+  the new one opens (the poll covers that gap); the `open` handler's refetch and progress reset then
+  apply as for any reconnect. One action per wake (5 s cooldown), nothing while hidden (`online`
+  while hidden waits for the tab to return). Only standard `document`/`window` events are used, so
+  the desktop and Android WebViews behave the same.
 - **Browse fallback rows are capped.** Each top-level collection without a browse-as-show
   collection loads its own query: newest first, `page=1&pageSize=100` (the search-results size,
   above the 24-tile Recently Added row), so a large collection no longer loads its whole subtree.

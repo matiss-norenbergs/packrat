@@ -20,6 +20,14 @@ import type { EnhanceProgressPayload, WSEvent } from "@/types/ws"
 
 const RECONNECT_BASE_DELAY_MS = 1000
 const RECONNECT_MAX_DELAY_MS = 15000
+// A tab that was hidden at least this long may have slept through a dead connection (laptop sleep, a
+// locked phone, a NAT dropping an idle socket): the browser never sees such a socket die, and the
+// safety-net poll is off while the socket is "open". On wake the data is refetched and the socket
+// replaced. Tune here.
+export const WAKE_AFTER_HIDDEN_MS = 30_000
+// One wake action per wake: visibilitychange and online usually arrive together, and a tab that flaps
+// visible/hidden must not churn sockets.
+const WAKE_COOLDOWN_MS = 5_000
 
 // handleEnhanceProgress patches the eligible-items dialog's cached list live
 // (so open dialogs update without a refetch), seeds the "currently active
@@ -181,15 +189,33 @@ export function useDownloadsSocket() {
       }
     }
 
+    // Closing a socket that is still CONNECTING makes the browser log "WebSocket is closed before
+    // the connection is established" (StrictMode's mount/unmount/mount in dev, a quick route change,
+    // a wake replacement), so let it finish opening first and close it then.
+    const closeSocket = (s: WebSocket | null) => {
+      if (s?.readyState === WebSocket.CONNECTING) {
+        s.addEventListener("open", () => s.close(), { once: true })
+      } else {
+        s?.close()
+      }
+    }
+    // Marks the current socket as replaced on purpose: its events and its close are ignored, so
+    // closing it neither reports a network failure nor schedules a second reconnect.
+    let retireCurrent = () => {}
+
     const connect = () => {
       if (stopped) return
+      let retired = false
+      retireCurrent = () => {
+        retired = true
+      }
       const current = connectDownloadsSocket((event) => {
-        if (!stopped) handleEvent(event)
+        if (!stopped && !retired) handleEvent(event)
       })
       socket = current
 
       current.addEventListener("open", () => {
-        if (stopped) return
+        if (stopped || retired) return
         attemptRef.current = 0
         setSocketOpen(true)
         reportReachable()
@@ -201,7 +227,7 @@ export function useDownloadsSocket() {
       })
 
       current.addEventListener("close", () => {
-        if (stopped) return
+        if (stopped || retired) return
         setSocketOpen(false)
         // Desktop only (no-op on the web): a dropped socket on an idle page is often the first sign
         // the server went away — no request is in flight to notice it.
@@ -215,22 +241,56 @@ export function useDownloadsSocket() {
       })
     }
 
+    // Don't trust a socket across a long absence: after the tab was hidden for WAKE_AFTER_HIDDEN_MS
+    // (or the browser says we are back online) refetch what the socket normally keeps fresh and
+    // replace the socket right away (no backoff, no failure report). The open handler then refetches
+    // and resets progress as for any reconnect; setSocketOpen stays false until it does, so the
+    // safety-net poll covers the gap.
+    let hiddenSince: number | null = document.hidden ? Date.now() : null
+    let lastWake = -Infinity
+    let wakeWhenVisible = false
+    const wake = () => {
+      const now = Date.now()
+      if (stopped || document.hidden || now - lastWake < WAKE_COOLDOWN_MS) return
+      lastWake = now
+      wakeWhenVisible = false
+      refreshDownloads()
+      refreshLibrary()
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      reconnectTimer = null
+      retireCurrent()
+      const old = socket
+      setSocketOpen(false)
+      attemptRef.current = 0
+      closeSocket(old)
+      connect()
+    }
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenSince ??= Date.now()
+        return
+      }
+      const away = hiddenSince == null ? 0 : Date.now() - hiddenSince
+      hiddenSince = null
+      if (away >= WAKE_AFTER_HIDDEN_MS || wakeWhenVisible) wake()
+    }
+    const onOnline = () => {
+      if (document.hidden) wakeWhenVisible = true // never act while hidden: do it on return
+      else wake()
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+    window.addEventListener("online", onOnline)
+
     connect()
 
     return () => {
       stopped = true
       setSocketOpen(false)
+      document.removeEventListener("visibilitychange", onVisibility)
+      window.removeEventListener("online", onOnline)
       if (reconnectTimer) clearTimeout(reconnectTimer)
-      // Closing a socket that is still CONNECTING makes the browser log "WebSocket is closed before
-      // the connection is established" (StrictMode's mount/unmount/mount in dev, or a quick route
-      // change), so let it finish opening first and close it then. `stopped` keeps it from
-      // reconnecting or touching the cache meanwhile.
-      const closing = socket
-      if (closing?.readyState === WebSocket.CONNECTING) {
-        closing.addEventListener("open", () => closing.close(), { once: true })
-      } else {
-        closing?.close()
-      }
+      // `stopped` keeps the socket from reconnecting or touching the cache meanwhile.
+      closeSocket(socket)
     }
   }, [queryClient])
 }
