@@ -9,6 +9,8 @@ interface SelectionActions {
   selectItems: (items: LibraryItem[]) => void
   deselectItems: (ids: number[]) => void
   clear: () => void
+  // Reads the current state (not reactive): for event handlers that must not subscribe the component.
+  isSelectionActive: () => boolean
 }
 
 interface SelectionContextValue extends SelectionActions {
@@ -93,6 +95,7 @@ function createSelectionStore(readOnly = false): SelectionStore {
       collectionCounts.set(id, totalItemCount)
       set({ ...state, collections, collectionCounts })
     },
+    isSelectionActive: () => state.items.size > 0 || state.collections.size > 0,
     clear: () => {
       if (state.items.size === 0 && state.collections.size === 0 && state.collectionCounts.size === 0) return
       set({ items: new Map(), collections: new Set(), collectionCounts: new Map() })

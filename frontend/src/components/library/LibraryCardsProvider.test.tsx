@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch } from "@/test/mockApi"
 import type { LibraryItem } from "@/types/api"
-import { LibraryCard } from "./LibraryCard"
+import { LibraryCard, LibraryCardGrid } from "./LibraryCard"
 import { LibraryCardsProvider } from "./LibraryCardsProvider"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
 import { useLibraryItemActions } from "./libraryItemActions"
@@ -56,9 +56,11 @@ function Harness({ initial }: { initial: LibraryItem[] }) {
   navigate = useNavigate()
   return (
     <LibraryCardsProvider items={items}>
-      {items.map((i) => (
-        <LibraryCard key={i.id} item={i} />
-      ))}
+      <LibraryCardGrid>
+        {items.map((i) => (
+          <LibraryCard key={i.id} item={i} />
+        ))}
+      </LibraryCardGrid>
     </LibraryCardsProvider>
   )
 }
@@ -88,6 +90,8 @@ function renderGrid(items: LibraryItem[]) {
   )
 }
 
+// Lets the settings / tags / artists queries answer, which re-renders the cards once (the masks and the card mode change).
+const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 60))))
 const triggers = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('[aria-haspopup="menu"]')]
 
 describe("the grid's shared actions host", () => {
@@ -113,17 +117,26 @@ describe("the grid's shared actions host", () => {
     expect(within(container).queryByText("Item 2")).toBeNull()
   })
 
-  it("hides the menu during a selection instead of unmounting it", async () => {
+  it("hides the menu during a selection through CSS, without unmounting or re-rendering anything", async () => {
     const { container } = renderGrid(make(3))
+    await settle()
     const trigger = triggers(container)[0]
-    expect(trigger.closest(".hidden")).toBeNull()
+    const grid = container.querySelector('[class~="group/lib-grid"]')!
+    expect(grid.hasAttribute("data-selecting")).toBe(false)
+    // The wrapper's variant hides it (display: none, so it also leaves the tab order) once the grid says "selecting".
+    expect(trigger.parentElement!.className).toContain("group-data-[selecting]/lib-grid:hidden")
+    thumbRenders.clear()
     await userEvent.click(screen.getAllByRole("checkbox", { name: "Select" })[0])
+    expect(grid.hasAttribute("data-selecting")).toBe(true)
+    expect(triggers(container)[0]).toBe(trigger)
     expect(trigger.isConnected).toBe(true)
-    expect(triggers(container)[0]).toBe(trigger)
-    expect(trigger.closest(".hidden")).not.toBeNull()
+    // starting the selection re-rendered only the ticked card
+    expect([...thumbRenders.keys()]).toEqual([1])
+    thumbRenders.clear()
     await userEvent.click(screen.getAllByRole("checkbox", { name: "Select" })[0])
+    expect(grid.hasAttribute("data-selecting")).toBe(false)
     expect(triggers(container)[0]).toBe(trigger)
-    expect(trigger.closest(".hidden")).toBeNull()
+    expect([...thumbRenders.keys()]).toEqual([1])
   })
 })
 
@@ -132,14 +145,16 @@ describe("card render counts", () => {
 
   it("ticking one more checkbox re-renders only that card", async () => {
     renderGrid(make(6))
-    await userEvent.click(screen.getAllByRole("checkbox", { name: "Select" })[0]) // starts the selection: every card flips to selection mode
+    await settle()
+    await userEvent.click(screen.getAllByRole("checkbox", { name: "Select" })[0])
     thumbRenders.clear()
     await userEvent.click(screen.getAllByRole("checkbox", { name: "Select" })[2])
     expect(rendered()).toEqual([3])
   })
 
-  it("revealing one item re-renders only that card", () => {
+  it("revealing one item re-renders only that card", async () => {
     renderGrid(make(6))
+    await settle()
     thumbRenders.clear()
     act(() => reveal.toggleItem(4))
     expect(rendered()).toEqual([4])
@@ -147,6 +162,7 @@ describe("card render counts", () => {
 
   it("a URL / filter change re-renders no unchanged card", async () => {
     renderGrid(make(6))
+    await settle()
     thumbRenders.clear()
     await act(async () => {
       await navigate("/lib?q=x")
@@ -154,8 +170,9 @@ describe("card render counts", () => {
     expect(thumbRenders.size).toBe(0)
   })
 
-  it("a changed item re-renders just its card", () => {
+  it("a changed item re-renders just its card", async () => {
     renderGrid(four)
+    await settle()
     thumbRenders.clear()
     act(() => setItems(four.map((i) => (i.id === 3 ? { ...i, title: "New" } : i))))
     expect(rendered()).toEqual([3])

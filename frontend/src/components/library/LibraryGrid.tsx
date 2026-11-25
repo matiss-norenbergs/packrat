@@ -5,7 +5,7 @@ import { usePageState } from "@/hooks/usePageState"
 import { useSettings } from "@/hooks/useSettings"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { Skeleton } from "@/components/ui/skeleton"
-import { LibraryCard } from "./LibraryCard"
+import { LibraryCard, LibraryCardGrid } from "./LibraryCard"
 import { LibraryCardsProvider } from "./LibraryCardsProvider"
 import { LibraryPagination } from "./LibraryPagination"
 import { LibraryScrollView } from "./LibraryScrollView"
@@ -66,11 +66,11 @@ export function LibraryGrid() {
     )
   } else {
     content = (
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      <LibraryCardGrid>
         {data.items.map((item) => (
           <LibraryCard key={item.id} item={item} />
         ))}
-      </div>
+      </LibraryCardGrid>
     )
   }
 
