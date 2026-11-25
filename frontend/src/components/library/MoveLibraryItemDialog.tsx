@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { useSeedOnOpen } from "@/hooks/useSeedOnOpen"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -43,12 +44,10 @@ export function MoveLibraryItemDialog({ item, open, onOpenChange }: MoveLibraryI
   // on open — only on internally-triggered closes (Escape, overlay, the X
   // button). A plain useEffect is what actually catches every open; without
   // it, fields kept whatever was last picked from a previous open-without-save.
-  useEffect(() => {
-    if (!open) return
+  useSeedOnOpen(open, item.id, () => {
     setCollectionId(item.collectionId != null ? String(item.collectionId) : NO_COLLECTION)
     setFolder(item.folder)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, item])
+  })
 
   const handleSubmit = () => {
     moveLibraryItem.mutate(

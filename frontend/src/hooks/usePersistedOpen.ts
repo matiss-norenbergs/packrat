@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { readStorage, writeStorage } from "@/lib/safeStorage"
 
 // Persists a simple open/collapsed boolean (a right-side panel, an
 // expand-all toggle, etc.) to localStorage under `key`, so it survives page
@@ -8,12 +9,12 @@ export function usePersistedOpen(
   defaultValue: boolean,
 ): [boolean, React.Dispatch<React.SetStateAction<boolean>>] {
   const [value, setValue] = useState(() => {
-    const raw = localStorage.getItem(key)
+    const raw = readStorage(key)
     return raw === null ? defaultValue : raw === "true"
   })
 
   useEffect(() => {
-    localStorage.setItem(key, String(value))
+    writeStorage(key, String(value))
   }, [key, value])
 
   return [value, setValue]

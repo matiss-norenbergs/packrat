@@ -12,6 +12,14 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-26
+- **Edit dialogs no longer lose what you typed when the list refreshes** — the library item, subscription, collection, tag and artist (and Move) dialogs re-seeded their fields whenever a background refetch gave the row a new object, e.g. a download finishing while you edited a description. They now fill in only when they open or when another item is opened in them.
+- **Browse shows errors instead of skeletons or "empty" texts** — a failed collections, Recently Added, Continue Watching, collection-row or search request shows a message with a Retry button (44 px on touch, as in the Android app), not endless skeletons, "Nothing downloaded yet." or "No matches.".
+- **Subscription "Link to library item" only links what you see** — a new search clears the selection, and a failed search shows an error with Retry.
+- **Blocked or full browser storage no longer breaks the app** — with "Block sites from saving data" the SPA used to render blank (the accent color read storage at load), and a full storage threw from the Collections panel toggle, Compare and notifications. All of these go through a never-throwing helper now.
+- **A failing socket event handler is logged instead of vanishing** — `lib/ws` only ignores malformed JSON; an error in a handler is reported in the console (event type only) and the next events still process.
+- **The Collections page moves to the previous page when the last page empties** (delete the only collection on page 2 of 25-per-page).
+
 ## 2026-11-25
 - **The Library grid opens and selects in a fraction of the time on big libraries** — every card used to mount its own copy of the whole item-actions host (about 100 hook calls and ~25 closed dialogs each), so 3,000 cards took ~38 s to show, and starting or clearing a selection unmounted or remounted every ⋮ menu. The grid and Folders view now mount one actions host (like the list view), the ⋮ menu is hidden instead of unmounted during a selection, and the selection and "reveal" state are per-item subscriptions: ticking a card or revealing an item re-renders just that card, and a filter or sort change re-renders no unchanged card or list cell. Behavior is unchanged except for the next entry.
 - **Bulk Edit is limited to 100 files** — its per-file rows (a field grid each) froze the tab on a selection of thousands. Over the limit the dialog says to narrow the selection and Save is disabled; at or below it nothing changes.

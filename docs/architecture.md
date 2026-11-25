@@ -687,6 +687,27 @@ does not protect a query from it, so where a query sits in the key tree decides 
   collection loads its own query: newest first, `page=1&pageSize=100` (the search-results size,
   above the 24-tile Recently Added row), so a large collection no longer loads its whole subtree.
 
+### Form dialogs, browser storage and socket handlers
+
+- **A form dialog re-seeds on open or target change only.** `useSeedOnOpen(open, targetId, seed)`
+  (`hooks/useSeedOnOpen.ts`) runs `seed` when the dialog goes closed → open and when the id of what is
+  being edited changes, never because a refetch handed the same row a new object (a socket event
+  shifting the library list or changing a subscription's `unseenEntryCount` would otherwise wipe what
+  the user typed). The actions host keeps passing the live row; the dialog just must not depend on its
+  identity in an effect. Used by the library item (edit, move), subscription, collection, tag and artist
+  dialogs. Bulk Edit / Edit Sequence already build their rows once per open (a ref guard).
+- **Browser storage never throws.** Chromium throws `SecurityError` on `window.localStorage` when site
+  data is blocked and `QuotaExceededError` on `setItem` when it is full, so every read/write goes
+  through `lib/safeStorage.ts` (`readStorage`/`writeStorage`/`removeStorage`, in-memory fallback for a
+  value whose write failed) or a local try/catch that does the same (`serverProfiles`, `useBrowsePrefs`,
+  `usePersistedWidth`/`Volume`, `useVersionMismatchNotice`, `chunkReload`). Never touch `localStorage`
+  unguarded, least of all at module load (`useAccentColor`) or inside a socket handler (`notify`).
+- **A throwing socket handler is logged, never swallowed.** `lib/ws.ts` puts only `JSON.parse` in the
+  malformed-frame try/catch (ignored quietly); `onMessage` runs outside it and its errors go to
+  `console.error` with the event type only (never the payload), so one bad handler neither vanishes nor
+  stops later events. In `useDownloadsSocket` the cache invalidation of a case comes before its
+  notification, so a throwing notification cannot stop it.
+
 ## Data flow (single download, end to end)
 
 URL schemes are enforced in one place, `DownloadManager.Enqueue` (`queue.ErrInvalidURL`, mapped to

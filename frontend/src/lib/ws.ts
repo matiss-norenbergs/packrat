@@ -5,11 +5,18 @@ export function connectDownloadsSocket(onMessage: (event: WSEvent) => void): Web
   const socket = new WebSocket(websocketUrl())
 
   socket.addEventListener("message", (ev) => {
+    let parsed: WSEvent
     try {
-      const parsed = JSON.parse(ev.data) as WSEvent
-      onMessage(parsed)
+      parsed = JSON.parse(ev.data) as WSEvent
     } catch {
-      // ignore malformed frames
+      return // ignore malformed frames
+    }
+    // A throwing handler must not vanish silently (nor stop later events): log the event type only,
+    // never the payload.
+    try {
+      onMessage(parsed)
+    } catch (err) {
+      console.error(`WebSocket handler failed for "${String(parsed?.type)}" event`, err)
     }
   })
 

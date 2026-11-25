@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react"
+import { useSeedOnOpen } from "@/hooks/useSeedOnOpen"
+import { useRef, useState } from "react"
 import { format, parseISO } from "date-fns"
 import { CalendarIcon, ImageIcon, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -64,15 +65,12 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
   // button (not through Dialog's own onOpenChange), so resetting only in a
   // handler passed to Dialog would leave stale values from the previous
   // open behind on next open — see TagDialog for the same fix.
-  useEffect(() => {
-    if (open) {
-      setName(artist?.name ?? "")
-      setBirthday(artist?.birthday ?? "")
-      setIsPrivate(artist?.isPrivate ?? false)
-      setShowCandidates(false)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, artist])
+  useSeedOnOpen(open, artist?.id, () => {
+    setName(artist?.name ?? "")
+    setBirthday(artist?.birthday ?? "")
+    setIsPrivate(artist?.isPrivate ?? false)
+    setShowCandidates(false)
+  })
 
   const handleSubmit = () => {
     const trimmed = name.trim()

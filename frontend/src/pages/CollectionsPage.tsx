@@ -25,6 +25,7 @@ import { useBulkDeleteCollections } from "@/hooks/useCollections"
 import { buildCollectionTree, collectDescendantIds, filterCollectionTree } from "@/lib/collectionTree"
 import { DOCK_FOOTER_LABEL, DOCK_FOOTER_ROW } from "@/lib/dockClearance"
 import { getPageNumbers } from "@/lib/pagination"
+import { readStorage, writeStorage } from "@/lib/safeStorage"
 import { cn } from "@/lib/utils"
 
 const PAGE_SIZE = 25
@@ -32,7 +33,7 @@ const PAGE_SIZE = 25
 const ALL_EXPANDED_STORAGE_KEY = "packrat:collections-all-expanded"
 
 function readAllExpandedSetting(): boolean {
-  return localStorage.getItem(ALL_EXPANDED_STORAGE_KEY) === "true"
+  return readStorage(ALL_EXPANDED_STORAGE_KEY) === "true"
 }
 
 export function CollectionsPage() {
@@ -55,7 +56,7 @@ export function CollectionsPage() {
   const [allExpanded, setAllExpanded] = useState(readAllExpandedSetting)
 
   useEffect(() => {
-    localStorage.setItem(ALL_EXPANDED_STORAGE_KEY, String(allExpanded))
+    writeStorage(ALL_EXPANDED_STORAGE_KEY, String(allExpanded))
   }, [allExpanded])
 
   // Debounce the value actually used for filtering so fast typing doesn't
@@ -79,7 +80,10 @@ export function CollectionsPage() {
   // parent/child split across pages.
   const total = visibleTree.length
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const pageTree = visibleTree.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  // The result set can shrink under the current page (deleting the last page's only root): use the
+  // clamped number right away so the tree, footer and highlighted page agree, and sync the state below.
+  const currentPage = Math.min(page, totalPages)
+  const pageTree = visibleTree.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
   // Every node across every root subtree currently visible (all levels, all
   // pages) — distinct from `total`, which only counts root/top-level trees.
   const totalAllLevels = visibleTree.flatMap(collectDescendantIds).length
@@ -89,6 +93,9 @@ export function CollectionsPage() {
   useEffect(() => {
     setPage(1)
   }, [search])
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
 
   // Restoring allExpanded=true from localStorage happens before `data` has
   // loaded (allIds is empty on first render), and any later mutation
@@ -279,10 +286,10 @@ export function CollectionsPage() {
                 {total} top-level {total === 1 ? "collection" : "collections"} ({totalAllLevels} total)
               </span>
               <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage((p) => p - 1)}>
                   Previous
                 </Button>
-                {getPageNumbers(page, totalPages).map((p, i) =>
+                {getPageNumbers(currentPage, totalPages).map((p, i) =>
                   p === "ellipsis" ? (
                     <span key={`ellipsis-${i}`} className="px-1.5 text-sm text-muted-foreground">
                       …
@@ -290,7 +297,7 @@ export function CollectionsPage() {
                   ) : (
                     <Button
                       key={p}
-                      variant={p === page ? "default" : "outline"}
+                      variant={p === currentPage ? "default" : "outline"}
                       size="sm"
                       className="w-8 px-0"
                       onClick={() => setPage(p)}
@@ -299,7 +306,7 @@ export function CollectionsPage() {
                     </Button>
                   ),
                 )}
-                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage((p) => p + 1)}>
                   Next
                 </Button>
               </div>
