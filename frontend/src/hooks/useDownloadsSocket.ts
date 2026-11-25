@@ -3,9 +3,10 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { fetchLibraryItem } from "@/lib/api"
 import { reportNetworkFailure, reportReachable } from "@/lib/connection"
 import { notifyDesktop, notifyDesktopAsync, notifyEvent, notifyEventAsync } from "@/lib/notify"
+import { getInvalidationScheduler, invalidateLibraryContent } from "@/lib/queryInvalidation"
+import { setSocketOpen } from "@/lib/socketState"
 import { connectDownloadsSocket } from "@/lib/ws"
-import { downloadsQueryKey } from "./useDownloads"
-import { libraryQueryKey } from "./useLibrary"
+import { downloadProgressQueryKey, downloadsQueryKey, type DownloadProgressMap } from "./useDownloads"
 import {
   thumbnailEnhancementActiveItemQueryKey,
   thumbnailEnhancementEligibleQueryKey,
@@ -19,6 +20,14 @@ import type { EnhanceProgressPayload, WSEvent } from "@/types/ws"
 
 const RECONNECT_BASE_DELAY_MS = 1000
 const RECONNECT_MAX_DELAY_MS = 15000
+// A tab that was hidden at least this long may have slept through a dead connection (laptop sleep, a
+// locked phone, a NAT dropping an idle socket): the browser never sees such a socket die, and the
+// safety-net poll is off while the socket is "open". On wake the data is refetched and the socket
+// replaced. Tune here.
+export const WAKE_AFTER_HIDDEN_MS = 30_000
+// One wake action per wake: visibilitychange and online usually arrive together, and a tab that flaps
+// visible/hidden must not churn sockets.
+const WAKE_COOLDOWN_MS = 5_000
 
 // handleEnhanceProgress patches the eligible-items dialog's cached list live
 // (so open dialogs update without a refetch), seeds the "currently active
@@ -67,6 +76,18 @@ export function useDownloadsSocket() {
     let socket: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let stopped = false
+    // Bursts of events (a playlist finishing, a scan) coalesce into one refetch per key group, and
+    // nothing refetches while the tab is hidden; see lib/queryInvalidation. Cache patches
+    // (setQueryData) and notifications stay immediate.
+    const scheduler = getInvalidationScheduler(queryClient)
+    const refreshDownloads = () => scheduler.schedule([downloadsQueryKey])
+    const refreshLibrary = () => invalidateLibraryContent(queryClient, { coalesce: true })
+    const dropProgress = (downloadId: number) =>
+      queryClient.setQueryData<DownloadProgressMap>(downloadProgressQueryKey, (prev) => {
+        if (!prev || !(downloadId in prev)) return prev
+        const { [downloadId]: _removed, ...rest } = prev
+        return rest
+      })
 
     const handleEvent = (event: WSEvent) => {
       switch (event.type) {
@@ -87,11 +108,17 @@ export function useDownloadsSocket() {
                 : d,
             ),
           )
+          // The Library cards' progress strips read this map instead of the whole downloads table.
+          queryClient.setQueryData<DownloadProgressMap>(downloadProgressQueryKey, (prev) => ({
+            ...prev,
+            [p.downloadId]: { status: p.status as Download["status"], percent: p.percent },
+          }))
           break
         }
         case "completed": {
-          queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
-          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+          dropProgress(event.payload.downloadId)
+          refreshDownloads()
+          refreshLibrary()
           const { title, libraryId } = event.payload
           // The toast shows the real title unconditionally (only ever seen
           // by whoever's already on this tab); the desktop notification
@@ -104,10 +131,11 @@ export function useDownloadsSocket() {
           break
         }
         case "failed": {
-          queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
-          // A failed/cancelled download changes its ghost's activeDownloadId (and a cancel removes the ghost).
-          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
           const p = event.payload
+          dropProgress(p.downloadId)
+          refreshDownloads()
+          // A failed/cancelled download changes its ghost's activeDownloadId (and a cancel removes the ghost).
+          refreshLibrary()
           if (p.status === "cancelled") {
             notifyEvent("info", "Download cancelled", undefined, true)
           } else {
@@ -116,11 +144,11 @@ export function useDownloadsSocket() {
           break
         }
         case "library_changed": {
-          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+          refreshLibrary()
           break
         }
         case "queue_update": {
-          queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
+          refreshDownloads()
           break
         }
         case "enhance_progress": {
@@ -134,7 +162,7 @@ export function useDownloadsSocket() {
           break
         }
         case "frame_match_progress": {
-          queryClient.invalidateQueries({ queryKey: frameMatchQueueQueryKey })
+          scheduler.schedule([frameMatchQueueQueryKey])
           if (event.payload.state === "done") {
             const { libraryItemId, itemTitle } = event.payload
             notifyDesktopAsync("Frame match found", () =>
@@ -144,8 +172,8 @@ export function useDownloadsSocket() {
           break
         }
         case "subscription_new_items": {
-          queryClient.invalidateQueries({ queryKey: subscriptionsQueryKey })
-          queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+          scheduler.schedule([subscriptionsQueryKey])
+          refreshLibrary()
           const { subscriptionTitle, newCount } = event.payload
           notifyDesktop(
             "New subscription items",
@@ -161,23 +189,46 @@ export function useDownloadsSocket() {
       }
     }
 
+    // Closing a socket that is still CONNECTING makes the browser log "WebSocket is closed before
+    // the connection is established" (StrictMode's mount/unmount/mount in dev, a quick route change,
+    // a wake replacement), so let it finish opening first and close it then.
+    const closeSocket = (s: WebSocket | null) => {
+      if (s?.readyState === WebSocket.CONNECTING) {
+        s.addEventListener("open", () => s.close(), { once: true })
+      } else {
+        s?.close()
+      }
+    }
+    // Marks the current socket as replaced on purpose: its events and its close are ignored, so
+    // closing it neither reports a network failure nor schedules a second reconnect.
+    let retireCurrent = () => {}
+
     const connect = () => {
       if (stopped) return
+      let retired = false
+      retireCurrent = () => {
+        retired = true
+      }
       const current = connectDownloadsSocket((event) => {
-        if (!stopped) handleEvent(event)
+        if (!stopped && !retired) handleEvent(event)
       })
       socket = current
 
       current.addEventListener("open", () => {
-        if (stopped) return
+        if (stopped || retired) return
         attemptRef.current = 0
+        setSocketOpen(true)
         reportReachable()
-        queryClient.invalidateQueries({ queryKey: downloadsQueryKey })
-        queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+        // REST is the source of truth after a (re)connect: refetch, coalesced like any other burst.
+        // Progress starts over from the next event; anything finished while we were away is gone.
+        queryClient.setQueryData<DownloadProgressMap>(downloadProgressQueryKey, {})
+        refreshDownloads()
+        refreshLibrary()
       })
 
       current.addEventListener("close", () => {
-        if (stopped) return
+        if (stopped || retired) return
+        setSocketOpen(false)
         // Desktop only (no-op on the web): a dropped socket on an idle page is often the first sign
         // the server went away — no request is in flight to notice it.
         void reportNetworkFailure()
@@ -190,21 +241,56 @@ export function useDownloadsSocket() {
       })
     }
 
+    // Don't trust a socket across a long absence: after the tab was hidden for WAKE_AFTER_HIDDEN_MS
+    // (or the browser says we are back online) refetch what the socket normally keeps fresh and
+    // replace the socket right away (no backoff, no failure report). The open handler then refetches
+    // and resets progress as for any reconnect; setSocketOpen stays false until it does, so the
+    // safety-net poll covers the gap.
+    let hiddenSince: number | null = document.hidden ? Date.now() : null
+    let lastWake = -Infinity
+    let wakeWhenVisible = false
+    const wake = () => {
+      const now = Date.now()
+      if (stopped || document.hidden || now - lastWake < WAKE_COOLDOWN_MS) return
+      lastWake = now
+      wakeWhenVisible = false
+      refreshDownloads()
+      refreshLibrary()
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      reconnectTimer = null
+      retireCurrent()
+      const old = socket
+      setSocketOpen(false)
+      attemptRef.current = 0
+      closeSocket(old)
+      connect()
+    }
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenSince ??= Date.now()
+        return
+      }
+      const away = hiddenSince == null ? 0 : Date.now() - hiddenSince
+      hiddenSince = null
+      if (away >= WAKE_AFTER_HIDDEN_MS || wakeWhenVisible) wake()
+    }
+    const onOnline = () => {
+      if (document.hidden) wakeWhenVisible = true // never act while hidden: do it on return
+      else wake()
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+    window.addEventListener("online", onOnline)
+
     connect()
 
     return () => {
       stopped = true
+      setSocketOpen(false)
+      document.removeEventListener("visibilitychange", onVisibility)
+      window.removeEventListener("online", onOnline)
       if (reconnectTimer) clearTimeout(reconnectTimer)
-      // Closing a socket that is still CONNECTING makes the browser log "WebSocket is closed before
-      // the connection is established" (StrictMode's mount/unmount/mount in dev, or a quick route
-      // change), so let it finish opening first and close it then. `stopped` keeps it from
-      // reconnecting or touching the cache meanwhile.
-      const closing = socket
-      if (closing?.readyState === WebSocket.CONNECTING) {
-        closing.addEventListener("open", () => closing.close(), { once: true })
-      } else {
-        closing?.close()
-      }
+      // `stopped` keeps the socket from reconnecting or touching the cache meanwhile.
+      closeSocket(socket)
     }
   }, [queryClient])
 }

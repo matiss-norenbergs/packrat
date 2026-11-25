@@ -630,6 +630,55 @@ result is still a playlist, there is no single video. It runs only when needed �
 first fetch came back as a playlist (`singleVideoAvailable`), and `POST /downloads/playlist` makes it for mode
 `current` alone. Both fail open: an error or timeout in the probe never blocks a download or a preview.
 
+## Frontend data layer: query keys, socket refresh, polling
+
+TanStack Query holds all server state. `invalidateQueries` matches by key **prefix** and `staleTime`
+does not protect a query from it, so where a query sits in the key tree decides what refetches it.
+
+- **Previews live under their own roots.** `POST /downloads/preview` and
+  `GET /library/:id/metadata-preview` run yt-dlp, so their keys are `["download-preview", url]` and
+  `["library-metadata-preview", id]` (builders exported next to the hooks), not under `["downloads"]`
+  or `["library"]`, which every socket event invalidates. A preview refetches only when its URL/id
+  changes or the dialog reopens. Other queries under those prefixes are plain DB reads (list, facets,
+  one item, NFO file read, queue, history).
+- **Socket-driven refresh is coalesced** (`lib/queryInvalidation.ts`, used by `useDownloadsSocket`):
+  `completed`/`failed`/`library_changed`/`queue_update`/`subscription_new_items`/`frame_match_progress`
+  and the refetch on (re)connect go through one scheduler per `QueryClient`. A burst inside a 1.5 s
+  trailing window becomes one `invalidateQueries` per key group, so the last event always lands and a
+  terminal event still shows within the window. Invalidations use `refetchType: "active"`: only
+  queries on screen refetch, the rest are marked stale and refetch when next used. While the tab is
+  hidden nothing refetches; the pending keys are flushed once when it becomes visible. Direct cache
+  patches (`progress`, AI-enhancement progress) and notifications are not delayed.
+- **Library content changes refresh collections too.** `invalidateLibraryContent` invalidates
+  `["library"]` and `["collections"]` together (folder tile counts and Browse rows derive from them).
+  The socket events use the coalesced path; the user's own mutations (delete, move, edit, ghost
+  create, scan, bulk delete) use the same helper with an immediate flush.
+- **Cancelled fetches abort on the wire.** `request()` passes `init.signal` to `fetch`; the library,
+  facets, item, collections, downloads and stats fetchers take TanStack's `signal`. An `AbortError`
+  is rethrown without `reportNetworkFailure`.
+- **Polling only while the socket is down.** The 10 s `["downloads"]` safety-net poll runs only
+  while `lib/socketState` says the socket is not open (it resumes the moment it drops; the
+  reconnect itself refetches). Library cards' progress strips read a socket-fed map
+  (`["download-progress"]`, written by the `progress` event, cleared on `completed`/`failed`/
+  reconnect) instead of `GET /api/downloads`, which returns every download ever made and is
+  deliberately unbounded. A card shows its strip after the first progress event (about a second).
+- **A socket is not trusted across a long absence.** The browser cannot see the server's ping frames
+  and the client sends nothing, so a socket that dies without a close event (laptop sleep, a locked
+  phone, a flaky Tailscale/mobile link, a NAT dropping an idle connection) still looks open, its events
+  never arrive and, with the poll off, the pages go stale until the browser notices minutes later.
+  The poll therefore cannot be assumed unnecessary. When the tab becomes visible after being hidden
+  for `WAKE_AFTER_HIDDEN_MS` (30 s, `hooks/useDownloadsSocket.ts`), or the browser fires `online`,
+  the hook refetches downloads, library and collections through the same coalescing scheduler and
+  replaces the socket at once (no backoff). The old socket is marked retired, so its `close` neither
+  calls `reportNetworkFailure` nor schedules a second reconnect, and `setSocketOpen` is false until
+  the new one opens (the poll covers that gap); the `open` handler's refetch and progress reset then
+  apply as for any reconnect. One action per wake (5 s cooldown), nothing while hidden (`online`
+  while hidden waits for the tab to return). Only standard `document`/`window` events are used, so
+  the desktop and Android WebViews behave the same.
+- **Browse fallback rows are capped.** Each top-level collection without a browse-as-show
+  collection loads its own query: newest first, `page=1&pageSize=100` (the search-results size,
+  above the 24-tile Recently Added row), so a large collection no longer loads its whole subtree.
+
 ## Data flow (single download, end to end)
 
 URL schemes are enforced in one place, `DownloadManager.Enqueue` (`queue.ErrInvalidURL`, mapped to
@@ -649,7 +698,7 @@ URL schemes are enforced in one place, `DownloadManager.Enqueue` (`queue.ErrInva
 5. On success, a `library` row is created (with any `tags`/override fields from the request
    applied), an `.nfo` sidecar is written if enabled, a Jellyfin refresh is triggered if configured,
    and the frontend's Library page picks the new row up via the WS `completed` event triggering a
-   refetch.
+   (coalesced) refetch — see [Frontend data layer](#frontend-data-layer-query-keys-socket-refresh-polling).
 6. A `history` row is written for every terminal outcome (completed/failed/cancelled/interrupted),
    independent of the live queue — deleting a download's queue row never removes its history entry.
 

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { downloadsQueryKey } from "@/hooks/useDownloads"
+import { downloadProgressQueryKey } from "@/hooks/useDownloads"
 import { ThumbCell } from "./LibraryListView"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import type { LibraryItem } from "@/types/api"
@@ -42,7 +42,11 @@ function withClient(client: QueryClient, ui: React.ReactNode) {
 
 function newClient(downloads?: unknown[]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  if (downloads) client.setQueryData(downloadsQueryKey, downloads)
+  if (downloads) {
+    // Library cards read the socket-fed progress map, not the downloads table.
+    const rows = downloads as { id: number; status: string; percent: number }[]
+    client.setQueryData(downloadProgressQueryKey, Object.fromEntries(rows.map((d) => [d.id, { status: d.status, percent: d.percent }])))
+  }
   return client
 }
 

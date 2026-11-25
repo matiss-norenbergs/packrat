@@ -58,7 +58,13 @@ import { withSkippedNote } from "@/lib/bulkSkipped"
 import { downloadsQueryKey } from "./useDownloads"
 import { tagsQueryKey } from "./useTags"
 
-export const libraryQueryKey = ["library"] as const
+import { libraryQueryKey } from "@/lib/queryKeys"
+import { invalidateLibraryContent } from "@/lib/queryInvalidation"
+
+export { libraryQueryKey }
+// The metadata preview re-runs yt-dlp against the item's source URL, so it must not sit under
+// ["library"]: every library_changed/completed socket event invalidates that prefix.
+export const libraryMetadataPreviewQueryKey = (id: number) => ["library-metadata-preview", id] as const
 const libraryItemQueryKey = (id: number) => [...libraryQueryKey, "item", id] as const
 
 // Retry transient failures, but not a 404 — a deleted/unknown item is a
@@ -100,7 +106,7 @@ export function useLibraryItem(id: number) {
   const queryClient = useQueryClient()
   return useQuery({
     queryKey: libraryItemQueryKey(id),
-    queryFn: () => fetchLibraryItem(id),
+    queryFn: ({ signal }) => fetchLibraryItem(id, signal),
     enabled: Number.isFinite(id),
     retry: retryUnlessNotFound,
     placeholderData: () => findCachedLibraryItem(queryClient, id),
@@ -122,7 +128,7 @@ export function useLibraryItemsByIds(ids: number[]) {
   return useQueries({
     queries: ids.map((id) => ({
       queryKey: libraryItemQueryKey(id),
-      queryFn: () => fetchLibraryItem(id),
+      queryFn: ({ signal }) => fetchLibraryItem(id, signal),
       retry: retryUnlessNotFound,
     })),
     combine: combineLibraryItems,
@@ -137,7 +143,7 @@ export function useLibraryItemsByIds(ids: number[]) {
 export function useLibraryQuery(params: LibraryQueryParams, enabled = true) {
   return useQuery({
     queryKey: [...libraryQueryKey, "query", params],
-    queryFn: () => fetchLibraryQuery(params),
+    queryFn: ({ signal }) => fetchLibraryQuery(params, signal),
     enabled,
   })
 }
@@ -148,7 +154,7 @@ export function useLibraryQuery(params: LibraryQueryParams, enabled = true) {
 export function useLibraryFacets() {
   return useQuery({
     queryKey: [...libraryQueryKey, "facets"],
-    queryFn: fetchLibraryFacets,
+    queryFn: ({ signal }) => fetchLibraryFacets(signal),
   })
 }
 
@@ -158,7 +164,7 @@ export function useDeleteLibraryItem() {
     mutationFn: ({ id, deleteFiles }: { id: number; deleteFiles: boolean }) => deleteLibraryItem(id, deleteFiles),
     onSuccess: () => {
       toast.success("Removed from library")
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      invalidateLibraryContent(queryClient)
       // Deleting the last item carrying a tag drops that tag's usageCount to
       // 0 — the reveal-all button (and the tag picker) need the fresh count.
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })
@@ -173,7 +179,7 @@ export function useCreateGhostLibraryItem() {
     mutationFn: (payload: CreateGhostLibraryItemRequest) => createGhostLibraryItem(payload),
     onSuccess: () => {
       toast.success("Item added")
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      invalidateLibraryContent(queryClient)
     },
     onError: (err: Error) => toast.error(`Failed to add item: ${err.message}`),
   })
@@ -185,7 +191,7 @@ export function useDeleteLibraryItemFile() {
     mutationFn: ({ id, deleteThumbnail }: { id: number; deleteThumbnail: boolean }) => deleteLibraryItemFile(id, deleteThumbnail),
     onSuccess: () => {
       toast.success("File deleted")
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      invalidateLibraryContent(queryClient)
     },
     onError: (err: Error) => toast.error(`Failed to delete file: ${err.message}`),
   })
@@ -217,7 +223,7 @@ export function useScanMissingLibraryFiles(options?: { onNeedsConfirm?: (info: {
           ? `Found ${result.missing.length} missing file(s), marked as ghosts`
           : `No missing files found (${result.scanned} checked)`) + unreadableNote,
       )
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      invalidateLibraryContent(queryClient)
     },
     onError: (err: Error) => {
       const info = scanMissingConfirmInfo(err)
@@ -241,7 +247,7 @@ export function useUpdateLibraryItem() {
     },
     onSuccess: () => {
       toast.success("Saved")
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      invalidateLibraryContent(queryClient)
       // The edit dialog's tags field can add/remove tags on this item,
       // changing usageCount — the reveal-all button (and the tag picker)
       // need the fresh count, not just this one item's own blurred flag.
@@ -302,7 +308,7 @@ export function useBulkDeleteLibraryItems() {
     mutationFn: (payload: BulkDeleteLibraryItemsRequest) => bulkDeleteLibraryItems(payload),
     onSuccess: (result) => {
       toast.success(`Deleted ${result.deleted} ${result.deleted === 1 ? "file" : "files"}`)
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      invalidateLibraryContent(queryClient)
       queryClient.invalidateQueries({ queryKey: tagsQueryKey })
     },
     onError: (err: Error) => toast.error(`Failed to delete: ${err.message}`),
@@ -315,7 +321,7 @@ export function useBulkDeleteLibraryItemFiles() {
     mutationFn: (payload: BulkDeleteLibraryItemFilesRequest) => bulkDeleteLibraryItemFiles(payload),
     onSuccess: (result) => {
       toast.success(withSkippedNote(`Deleted ${result.deleted} ${result.deleted === 1 ? "file" : "files"}`, result.skippedDownloading))
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      invalidateLibraryContent(queryClient)
     },
     onError: (err: Error) => toast.error(`Failed to delete: ${err.message}`),
   })
@@ -351,7 +357,7 @@ export function useMoveLibraryItem() {
     mutationFn: ({ id, payload }: { id: number; payload: MoveLibraryItemRequest }) => moveLibraryItem(id, payload),
     onSuccess: () => {
       toast.success("Moved")
-      queryClient.invalidateQueries({ queryKey: libraryQueryKey })
+      invalidateLibraryContent(queryClient)
     },
     onError: (err: Error) => toast.error(`Failed to move: ${err.message}`),
   })
@@ -483,7 +489,7 @@ export function useQuickGrabLibraryThumbnail() {
 
 export function useLibraryItemMetadataPreview(id: number, enabled: boolean) {
   return useQuery({
-    queryKey: ["library", id, "metadata-preview"],
+    queryKey: libraryMetadataPreviewQueryKey(id),
     queryFn: () => fetchLibraryItemMetadataPreview(id),
     enabled,
     staleTime: 0,
