@@ -20,6 +20,16 @@ Effort is a rough guess: **S** = under an hour of agent work, **M** = a few hour
   - Compatibility: the first server release must accept both token forms (older desktop apps only know
     the query session token); a follow-up release removes the old form.
   - Worth doing mainly if the server is ever reachable beyond a private network (Tailscale/LAN).
+- **App-wide Content-Security-Policy (M).** The SPA (web) sends no CSP today. The desktop's
+  `tauri.conf.json` already runs `script-src 'self'; style-src 'self' 'unsafe-inline'; ...` for the same
+  frontend and `index.html` has no inline script, so a web CSP is feasible. Plan: reuse the desktop policy,
+  ship it first as `Content-Security-Policy-Report-Only`, load every page in a real browser and check the
+  console, then enforce.
+  - Watch: Safari's WebSocket handling under `connect-src 'self'`, remote thumbnails needing
+    `img-src http: https:` (until audit finding S2-02 is fixed), injected styles, and the Vite dev server.
+  - Deferred because there is no known injection point today, so it is defense in depth, and a policy
+    that is too tight breaks things silently. The served-file routes already have their own CSP, see
+    [`architecture.md` → Served files](architecture.md#served-files).
 - **Failed-attempts notice edge (S).** The "failed attempts since last login" notice compares timestamps
   at one-second resolution with a strict `>`, so failures in the same second as the last
   acknowledgement aren't counted. Harmless in real use.
