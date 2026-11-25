@@ -16,6 +16,11 @@ import type { CreateBatchDownloadRequest, CreateDownloadRequest, CreatePlaylistD
 
 export const downloadsQueryKey = ["downloads"] as const
 
+// Previews run yt-dlp on the server (POST /downloads/preview), so they live under their own root:
+// invalidating ["downloads"] (every queue_update/completed/failed socket event does) matches by
+// prefix and would re-run yt-dlp for every open preview. Nothing but the URL changing may refetch one.
+export const downloadPreviewQueryKey = (url: string) => ["download-preview", url] as const
+
 const DOWNLOADS_REFETCH_MS = 10_000 // safety-net poll; WS pushes deltas in between
 
 export function useDownloads() {
@@ -54,7 +59,7 @@ export function useDownloadProgress(downloadId: number) {
 
 export function useDownloadPreview(url: string, enabled: boolean) {
   return useQuery({
-    queryKey: ["downloads", "preview", url] as const,
+    queryKey: downloadPreviewQueryKey(url),
     queryFn: () => previewDownload(url),
     enabled: enabled && url.length > 0,
     retry: false, // a bad/unsupported URL is expected, not transient

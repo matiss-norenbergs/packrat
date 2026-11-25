@@ -59,6 +59,9 @@ import { downloadsQueryKey } from "./useDownloads"
 import { tagsQueryKey } from "./useTags"
 
 export const libraryQueryKey = ["library"] as const
+// The metadata preview re-runs yt-dlp against the item's source URL, so it must not sit under
+// ["library"]: every library_changed/completed socket event invalidates that prefix.
+export const libraryMetadataPreviewQueryKey = (id: number) => ["library-metadata-preview", id] as const
 const libraryItemQueryKey = (id: number) => [...libraryQueryKey, "item", id] as const
 
 // Retry transient failures, but not a 404 — a deleted/unknown item is a
@@ -483,7 +486,7 @@ export function useQuickGrabLibraryThumbnail() {
 
 export function useLibraryItemMetadataPreview(id: number, enabled: boolean) {
   return useQuery({
-    queryKey: ["library", id, "metadata-preview"],
+    queryKey: libraryMetadataPreviewQueryKey(id),
     queryFn: () => fetchLibraryItemMetadataPreview(id),
     enabled,
     staleTime: 0,
