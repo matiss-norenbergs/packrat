@@ -32,7 +32,7 @@ beforeEach(() => {
     if (url.endsWith("/auth/table-layouts")) return respond({ layouts: {} })
     if (url.includes("/library?")) return respond({ items: [], total: libraryTotal })
     if (url.endsWith("/settings")) return respond(settings)
-    if (url.endsWith("/collections") || url.endsWith("/tags")) return respond([])
+    if (url.endsWith("/collections") || url.endsWith("/tags") || url.endsWith("/artists")) return respond([])
     return respond({})
   })
   vi.stubGlobal("fetch", fetchMock)

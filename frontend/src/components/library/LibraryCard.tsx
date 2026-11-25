@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from "react-router-dom"
+import { memo } from "react"
 import { Ghost, Play } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,14 +10,13 @@ import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { ResolutionValue } from "@/components/ResolutionValue"
 import { ThumbnailDimensionsValue } from "@/components/ThumbnailDimensionsValue"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
-import { useSettings } from "@/hooks/useSettings"
-import { useArtistNameMask } from "@/hooks/useArtistNameMask"
-import { useTagNameMask } from "@/hooks/useTagNameMask"
+import { useNavigateFromHere } from "@/hooks/useNavigateFromHere"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { DownloadProgressBar } from "./DownloadProgressBar"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
-import { useRevealAll } from "./RevealAllContext"
-import { useSelection } from "./SelectionContext"
+import { useLibraryCardEnv } from "./LibraryCardsProvider"
+import { useIsRevealed, useRevealActions } from "./RevealAllContext"
+import { useIsItemSelected, useSelectionActions, useSelectionActive } from "./SelectionContext"
 import type { LibraryItem } from "@/types/api"
 
 // Caps how many tag badges a card shows before collapsing the rest into a
@@ -25,21 +24,21 @@ import type { LibraryItem } from "@/types/api"
 // and avoids the row wrapping onto a second line.
 const MAX_VISIBLE_TAGS = 2
 
-export function LibraryCard({ item }: { item: LibraryItem }) {
-  const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
-  const { data: settings } = useSettings()
-  const maskTag = useTagNameMask()
-  const maskArtist = useArtistNameMask()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const revealed = isRevealed(item.id)
+// Memoized, with the item as its only prop: a card subscribes to just its own selected / revealed flags (and to the
+// selection being active at all), and takes the item-independent settings from LibraryCardsProvider, so ticking one
+// card or revealing one item re-renders that card only. Needs a LibraryCardsProvider (it also hosts the "⋮" dialogs).
+export const LibraryCard = memo(function LibraryCard({ item }: { item: LibraryItem }) {
+  const { detailsMode, maskTag, maskArtist } = useLibraryCardEnv()
+  const revealed = useIsRevealed(item.id)
+  const { toggleItem: toggleReveal } = useRevealActions()
+  const navigateFromHere = useNavigateFromHere()
   const toggleRevealItem = () => toggleReveal(item.id)
-  const mode = (settings?.libraryMode as "manage" | "details") || "manage"
   const visibleTags = item.tags.slice(0, MAX_VISIBLE_TAGS)
   const hiddenTags = item.tags.slice(MAX_VISIBLE_TAGS)
 
-  const { selectionActive, isItemSelected, toggleItem: toggleSelected } = useSelection()
-  const selected = isItemSelected(item.id)
+  const selectionActive = useSelectionActive()
+  const { toggleItem: toggleSelected } = useSelectionActions()
+  const selected = useIsItemSelected(item.id)
   const thumbUrl = libraryMediumThumbnailUrl(item)
 
   return (
@@ -82,11 +81,11 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
           )}
           aria-label="Select"
         />
-        {!selectionActive && (
-          <div className="absolute top-1 right-1 rounded-md bg-background/80 backdrop-blur-sm">
-            <LibraryItemActionsMenu item={item} />
-          </div>
-        )}
+        {/* Hidden (not unmounted) during a selection, so starting and clearing one does not mount a menu per card;
+            display: none also takes it out of the tab order. */}
+        <div className={cn("absolute top-1 right-1 rounded-md bg-background/80 backdrop-blur-sm", selectionActive && "hidden")}>
+          <LibraryItemActionsMenu item={item} />
+        </div>
         {!selectionActive && item.status !== "ghost" && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <Tooltip>
@@ -97,7 +96,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
                   className="pointer-events-none h-12 w-12 rounded-full bg-background/80 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background/90 group-hover:pointer-events-auto group-hover:opacity-100"
                   onClick={(e) => {
                     e.stopPropagation()
-                    navigate(`/library/${item.id}`, { state: { from: `${location.pathname}${location.search}` } })
+                    navigateFromHere(`/library/${item.id}`)
                   }}
                 >
                   <Play className="h-6 w-6" />
@@ -149,7 +148,7 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
           </div>
         )}
 
-        {mode === "details" && (
+        {detailsMode && (
           <div className="space-y-1 border-t pt-2 text-xs text-muted-foreground">
             <div className="flex justify-between gap-2">
               <span>Collection</span>
@@ -210,4 +209,4 @@ export function LibraryCard({ item }: { item: LibraryItem }) {
       </CardContent>
     </Card>
   )
-}
+})
