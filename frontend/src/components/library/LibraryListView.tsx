@@ -25,6 +25,7 @@ import { useSelection } from "./SelectionContext"
 import { LibraryFiltersButton, LibrarySettingsPopover, LibraryToolbarActions } from "./LibraryToolbar"
 import { useLibraryToolbar } from "./useLibraryToolbar"
 import { useLibraryListSelection } from "./useLibraryListSelection"
+import { useStableItems } from "./sameItem"
 
 // Caps how many tag badges a row shows before collapsing the rest into a
 // "+N" badge — mirrors LibraryCard's MAX_VISIBLE_TAGS, keeping every row the
@@ -209,7 +210,7 @@ export function LibraryListView() {
     pageSize: paginationEnabled ? pageSize : undefined,
   }, sortReady)
 
-  const items = data?.items ?? NO_ITEMS
+  const items = useStableItems(data?.items ?? NO_ITEMS)
   const total = data?.total ?? 0
   const selection = useLibraryListSelection(items)
   // Row actions live in the right-click menu: the same actions as the "⋮" menus of the grid, one host for the table's dialogs.

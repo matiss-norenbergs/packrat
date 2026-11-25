@@ -14,6 +14,7 @@ import { useNavigateFromHere } from "@/hooks/useNavigateFromHere"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { DownloadProgressBar } from "./DownloadProgressBar"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
+import { sameItem } from "./sameItem"
 import { useLibraryCardEnv } from "./LibraryCardsProvider"
 import { useIsRevealed, useRevealActions } from "./RevealAllContext"
 import { useIsItemSelected, useSelectionActions, useSelectionActive } from "./SelectionContext"
@@ -74,20 +75,6 @@ function CardTitle({ item, revealed }: { item: LibraryItem; revealed: boolean })
       <TooltipContent>{revealed ? "Click to hide" : "Click to reveal"}</TooltipContent>
     </Tooltip>
   )
-}
-
-// A refetch under another query (a new search or filter) hands every card a fresh object for an item that did not change;
-// the fields are primitives except `tags`, so comparing those is far cheaper than re-rendering the card.
-function sameItem(a: LibraryItem, b: LibraryItem): boolean {
-  if (a === b) return true
-  const keys = Object.keys(a) as (keyof LibraryItem)[]
-  if (keys.length !== Object.keys(b).length) return false
-  for (const k of keys) {
-    if (a[k] === b[k]) continue
-    if (k === "tags" && a.tags.length === b.tags.length && a.tags.every((t, i) => t === b.tags[i])) continue
-    return false
-  }
-  return true
 }
 
 // Memoized, with the item as its only prop: a card subscribes to just its own selected / revealed flags, and takes the
