@@ -88,6 +88,8 @@ jobs:
       - run: npx tsc -b
       - run: npm run test
       - run: npm run build
+      # Fails if an on-demand chunk (charts, page-only libraries, Tauri plugins) lands on the startup path.
+      - run: npm run check:bundle
 
   # The Tauri desktop shell (desktop/). Linux only here: it checks the Rust compiles and its tests
   # pass; the installers for every OS are built by desktop.yml at release time.
