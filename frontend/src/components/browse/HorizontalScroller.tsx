@@ -1,3 +1,4 @@
+import { scrollBehavior } from "@/lib/motion"
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -167,7 +168,7 @@ export function HorizontalScroller({ children, className }: { children: ReactNod
     const el = scrollRef.current
     if (!el) return
     const stops = getStops(el)
-    el.scrollTo({ left: stops[Math.max(0, Math.min(index, stops.length - 1))], behavior: "smooth" })
+    el.scrollTo({ left: stops[Math.max(0, Math.min(index, stops.length - 1))], behavior: scrollBehavior() })
   }
 
   const handleArrow = (dir: "left" | "right") => {
@@ -177,11 +178,11 @@ export function HorizontalScroller({ children, className }: { children: ReactNod
     const maxScroll = el.scrollWidth - el.clientWidth
     const current = nearestStopIndex(el.scrollLeft, stops)
     if (dir === "right") {
-      if (el.scrollLeft >= maxScroll - 1) el.scrollTo({ left: 0, behavior: "smooth" })
-      else el.scrollTo({ left: stops[Math.min(current + 1, stops.length - 1)], behavior: "smooth" })
+      if (el.scrollLeft >= maxScroll - 1) el.scrollTo({ left: 0, behavior: scrollBehavior() })
+      else el.scrollTo({ left: stops[Math.min(current + 1, stops.length - 1)], behavior: scrollBehavior() })
     } else {
-      if (el.scrollLeft <= 1) el.scrollTo({ left: maxScroll, behavior: "smooth" })
-      else el.scrollTo({ left: stops[Math.max(current - 1, 0)], behavior: "smooth" })
+      if (el.scrollLeft <= 1) el.scrollTo({ left: maxScroll, behavior: scrollBehavior() })
+      else el.scrollTo({ left: stops[Math.max(current - 1, 0)], behavior: scrollBehavior() })
     }
   }
 
@@ -224,7 +225,7 @@ export function HorizontalScroller({ children, className }: { children: ReactNod
         <div
           ref={scrollRef}
           className={cn(
-            "scrollbar-none flex overflow-x-auto overscroll-x-contain scroll-smooth pointer-coarse:snap-x pointer-coarse:snap-mandatory pointer-coarse:*:snap-start",
+            "scrollbar-none flex overflow-x-auto overscroll-x-contain scroll-smooth motion-reduce:scroll-auto pointer-coarse:snap-x pointer-coarse:snap-mandatory pointer-coarse:*:snap-start",
             className,
           )}
         >

@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react"
+import { useReducedMotion } from "@/hooks/useReducedMotion"
 import { Button } from "@/components/ui/button"
 import { type ResizeWidth, mediaFileUrl, resizedImageSrcSet } from "@/lib/api"
 import type { LibraryItem } from "@/types/api"
@@ -24,8 +25,12 @@ const HERO_WIDTHS: readonly ResizeWidth[] = [720, 1080, 1280, 1920]
 export function BrowseHero({ items }: { items: LibraryItem[] }) {
   const [index, setIndex] = useState(0)
   const [hovered, setHovered] = useState(false)
-  const [manuallyPaused, setManuallyPaused] = useState(false)
-  const paused = hovered || manuallyPaused
+  const [focused, setFocused] = useState(false)
+  // null = the user has not chosen: reduced motion starts the carousel paused (Play still starts it).
+  const [manualOverride, setManualOverride] = useState<boolean | null>(null)
+  const reducedMotion = useReducedMotion()
+  const manuallyPaused = manualOverride ?? reducedMotion
+  const paused = hovered || focused || manuallyPaused
 
   // Defensive clamp if the list shrinks (e.g. a background refetch) while
   // rotated further along than the new length allows.
@@ -51,6 +56,15 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
       className="group/hero relative flex h-[50vh] min-h-72 w-full items-end overflow-hidden md:h-[60vh] [@media(max-height:500px)]:min-h-60"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      // Keyboard / screen-reader users: rotation holds while focus is anywhere in the hero, so the target and title
+      // under their focus are not swapped. A blur caused only by the window or tab losing focus keeps the pause.
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        const next = e.relatedTarget
+        if (next instanceof Node && e.currentTarget.contains(next)) return
+        if (!next && e.currentTarget.contains(document.activeElement)) return
+        setFocused(false)
+      }}
     >
       {item.thumbnail ? (
         <HeroImage key={item.id} path={item.thumbnail} />
@@ -86,7 +100,7 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
             <HeroIconButton label="Previous" onClick={() => goTo(index - 1)}>
               <ChevronLeft className="h-3.5 w-3.5" />
             </HeroIconButton>
-            <HeroIconButton label={manuallyPaused ? "Play" : "Pause"} onClick={() => setManuallyPaused((p) => !p)}>
+            <HeroIconButton label={manuallyPaused ? "Play" : "Pause"} onClick={() => setManualOverride(!manuallyPaused)}>
               {manuallyPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
             </HeroIconButton>
             <HeroIconButton label="Next" onClick={() => goTo(index + 1)}>
