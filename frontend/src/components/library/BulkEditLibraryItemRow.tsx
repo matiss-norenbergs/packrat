@@ -35,15 +35,15 @@ export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange, sequ
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="space-y-1 lg:col-span-2">
           <Label>Title</Label>
-          <Input value={fields.title} onChange={(e) => onChange({ title: e.target.value })} />
+          <Input aria-label="Title" value={fields.title} onChange={(e) => onChange({ title: e.target.value })} />
         </div>
         <div className="space-y-1 lg:col-span-2">
           <Label>Filename (without extension)</Label>
-          <Input value={fields.filename} onChange={(e) => onChange({ filename: e.target.value })} />
+          <Input aria-label="Filename (without extension)" value={fields.filename} onChange={(e) => onChange({ filename: e.target.value })} />
         </div>
         <div className="space-y-1">
           <Label>Uploader</Label>
-          <Input value={fields.uploader} onChange={(e) => onChange({ uploader: e.target.value })} />
+          <Input aria-label="Uploader" value={fields.uploader} onChange={(e) => onChange({ uploader: e.target.value })} />
         </div>
 
         <div className="space-y-1 lg:col-span-2">
@@ -52,7 +52,7 @@ export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange, sequ
         </div>
         <div className="space-y-1">
           <Label>Year</Label>
-          <Input
+          <Input aria-label="Year"
             type="number"
             placeholder="2024"
             value={fields.year}
@@ -61,7 +61,7 @@ export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange, sequ
         </div>
         <div className="space-y-1">
           <Label>Season #</Label>
-          <Input
+          <Input aria-label="Season #"
             type="number"
             min="1"
             placeholder="1"
@@ -91,7 +91,7 @@ export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange, sequ
         </div>
         <div className="space-y-1">
           <Label>Original URL</Label>
-          <Input
+          <Input aria-label="Original URL"
             placeholder="https://..."
             value={fields.originalUrl}
             onChange={(e) => onChange({ originalUrl: e.target.value })}
@@ -101,7 +101,7 @@ export function BulkEditLibraryItemRow({ item, rowNumber, fields, onChange, sequ
 
       <div className="space-y-1">
         <Label>Description</Label>
-        <Textarea
+        <Textarea aria-label="Description"
           rows={2}
           className="max-h-24 overflow-y-auto"
           value={fields.description}

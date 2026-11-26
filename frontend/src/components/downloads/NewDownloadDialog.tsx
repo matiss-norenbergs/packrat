@@ -611,7 +611,7 @@ export function NewDownloadDialog() {
           <div className="space-y-2">
             <Label>Collection</Label>
             <Select value={collectionId} onValueChange={handleCollectionChange}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger aria-label="Collection" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -630,7 +630,7 @@ export function NewDownloadDialog() {
             <div className="flex-1 space-y-2">
               <Label>Type</Label>
               <Select value={downloadType} onValueChange={(v) => setDownloadType(v as DownloadType)}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Type" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -645,7 +645,7 @@ export function NewDownloadDialog() {
               <div className="flex-1 space-y-2">
                 <Label>Quality</Label>
                 <Select value={quality} onValueChange={(v) => setQuality(v as VideoQuality)}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger aria-label="Quality" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -661,7 +661,7 @@ export function NewDownloadDialog() {
               <div className="flex-1 space-y-2">
                 <Label>Format</Label>
                 <Select value={audioFormat} onValueChange={(v) => setAudioFormat(v as AudioFormat)}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger aria-label="Format" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

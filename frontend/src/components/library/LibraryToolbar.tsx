@@ -281,7 +281,7 @@ export function LibraryFiltersButton({ t, className }: { t: LibraryToolbarState;
             <Label>Sort by</Label>
             <div className="flex gap-2">
               <Select value={draftSortKey} onValueChange={(v) => setDraftSortKey(v as LibrarySortKey)}>
-                <SelectTrigger className="flex-1">
+                <SelectTrigger className="flex-1" aria-label="Sort by">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -307,7 +307,7 @@ export function LibraryFiltersButton({ t, className }: { t: LibraryToolbarState;
             <div className="space-y-2">
               <Label>Collection</Label>
               <Select value={draftCollectionId} onValueChange={setDraftCollectionId}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Collection" className="w-full">
                   <SelectValue placeholder="Collection" />
                 </SelectTrigger>
                 <SelectContent>
@@ -326,7 +326,7 @@ export function LibraryFiltersButton({ t, className }: { t: LibraryToolbarState;
           <div className="space-y-2">
             <Label>Year</Label>
             <Select value={draftYear} onValueChange={setDraftYear}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger aria-label="Year" className="w-full">
                 <SelectValue placeholder="Year" />
               </SelectTrigger>
               <SelectContent>

@@ -112,7 +112,7 @@ export function BulkSetYearDialog({ open, onOpenChange }: BulkSetYearDialogProps
 
         <div className="space-y-2">
           <Label>Year</Label>
-          <Input type="number" placeholder="2024" value={year} onChange={(e) => setYear(e.target.value)} />
+          <Input aria-label="Year" type="number" placeholder="2024" value={year} onChange={(e) => setYear(e.target.value)} />
         </div>
 
         <DialogFooter>

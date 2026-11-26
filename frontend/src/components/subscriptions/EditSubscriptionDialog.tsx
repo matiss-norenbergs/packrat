@@ -108,7 +108,7 @@ export function EditSubscriptionDialog({ subscription, open, onOpenChange }: Edi
             <div className="space-y-2">
               <Label>Collection</Label>
               <Select value={collectionId} onValueChange={setCollectionId}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Collection" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -125,7 +125,7 @@ export function EditSubscriptionDialog({ subscription, open, onOpenChange }: Edi
             <div className="space-y-2">
               <Label>Check frequency</Label>
               <Select value={checkIntervalHours} onValueChange={setCheckIntervalHours}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Check frequency" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

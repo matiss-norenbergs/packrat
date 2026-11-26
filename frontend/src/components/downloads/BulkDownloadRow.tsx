@@ -127,7 +127,7 @@ export function BulkDownloadRow({
                     })
                   }}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger aria-label="Collection" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -147,7 +147,7 @@ export function BulkDownloadRow({
                   value={row.downloadType}
                   onValueChange={(v) => onChange({ downloadType: v as DownloadType })}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger aria-label="Type" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -161,7 +161,7 @@ export function BulkDownloadRow({
                 <div className="w-full space-y-1 sm:max-[1099px]:flex-1 min-[1100px]:w-24 min-[1100px]:shrink-0">
                   <Label>Quality</Label>
                   <Select value={row.quality} onValueChange={(v) => onChange({ quality: v as VideoQuality })}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger aria-label="Quality" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -177,7 +177,7 @@ export function BulkDownloadRow({
                 <div className="w-full space-y-1 sm:max-[1099px]:flex-1 min-[1100px]:w-24 min-[1100px]:shrink-0">
                   <Label>Format</Label>
                   <Select value={row.audioFormat} onValueChange={(v) => onChange({ audioFormat: v as AudioFormat })}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger aria-label="Format" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -196,7 +196,7 @@ export function BulkDownloadRow({
           <div className="flex gap-2">
             <div className="flex-1 space-y-1">
               <Label>Filename</Label>
-              <Input
+              <Input aria-label="Filename"
                 placeholder="optional"
                 value={row.filename}
                 onChange={(e) => onChange({ filename: e.target.value })}
@@ -292,7 +292,7 @@ export function BulkDownloadRow({
             </div>
             <div className="space-y-1">
               <Label>Year</Label>
-              <Input
+              <Input aria-label="Year"
                 type="number"
                 placeholder="2024"
                 value={row.year}
@@ -302,7 +302,7 @@ export function BulkDownloadRow({
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label>Season #</Label>
-                <Input
+                <Input aria-label="Season #"
                   type="number"
                   min="1"
                   placeholder="1"
@@ -312,7 +312,7 @@ export function BulkDownloadRow({
               </div>
               <div className="space-y-1">
                 <Label>Sequence #</Label>
-                <Input
+                <Input aria-label="Sequence #"
                   type="number"
                   min="1"
                   placeholder="1"
