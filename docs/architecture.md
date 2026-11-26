@@ -1839,6 +1839,25 @@ transition is switched off only while dragging.
   (`tabindex=-1`, no tab stop). While another dialog is open (a chain such as custom range → picker) the origin is kept for the
   last one. A dialog not opened from a menu is untouched. Because it lives in the shared ui components, the library host, the
   list view, Collections, Artists, Tags, Subscriptions and History all use it without changes.
+- **Touch rules** (mouse and desktop rendering never change; every touch rule is a `pointer-coarse:` variant or a pointer-type check):
+  - *Hover-only information needs a tap path.* `InfoPopover` and every other hover popover (`LastCheckErrorBadge`, the
+    Frame matching / Thumbnail enhancement error and status badges, Backup's export info, the Collections tree and folder-tile
+    popovers) use `lib/useHoverPopover`: it opens on hover only for `pointerType === "mouse"` (not the compatibility
+    `mouseenter`, which on touch can commit right before the `click` and make the click toggle it shut again), while a tap, Enter/Space and
+    Escape are Radix's normal trigger behavior. The trigger and the content both take `hoverProps`, as before.
+  - *44 px.* An interactive control is at least 44x44 under `pointer-coarse:` (`size-11` / `min-h-11`; the small icons that must not
+    grow use `lib/touchTarget.ts`'s `TOUCH_HIT_AREA`, an invisible `::after` that adds a 44 px tap area without moving the layout,
+    as the Browse tile's Remove button does). Applied in Browse (hero Play and Previous/Pause/Next, header home link, search
+    and clear, mini player, app menu, settings rows), the item page's ⋮ (`LibraryItemActionsMenu`'s `triggerClassName`; the
+    card's ⋮ sits in a thumbnail corner and stays 28 px) and the info icons. A Browse tile has one tab stop for navigation:
+    its title is plain caption text and the poster link is the single link (plus Remove / reveal when present).
+  - *`dvh`, not `vh`.* Screen-filling layouts (`AppLayout`, `ImmersiveLayout`, `Sidebar`, `ComparePlayPage`, the item page
+    skeleton/player, Login, Connect, `DesktopGate`, `RouteError`) use `h-dvh` / `min-h-dvh` / `100dvh`: on a mobile browser `vh` is
+    the *large* viewport, so the bottom of the page sat behind the URL bar. `dvh` equals `vh` where the browser chrome does not
+    collapse (desktop, the Tauri webviews, the Android WebView). Dialog body caps (`max-h-[60vh]`) and Browse banners
+    (`h-[50vh]`) deliberately stay `vh`. `lib/viewportUnits.test.ts` fails on `h-screen`, `min-h-screen` and `100vh`.
+  - *Focus return resets.* `armFocusReturn()` drops an armed origin when a dialog opens with no fresh menu selection and no other dialog
+    open (a stale origin from a dialog that never fired its close event); a chain keeps it.
 - **Mobile navigation** (`MobileNav`) is the new `components/ui/sheet.tsx` (Radix Dialog): modal dialog with a hidden title, focus
   trap, Escape, focus in on open and back to the toggle (a `SheetTrigger`, so it reports `aria-expanded`). Same width, side,
   backdrop, links and button names as the old overlay; navigation still closes it.

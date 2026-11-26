@@ -218,6 +218,10 @@ it). The sign-in and connect screens work as in the desktop app.
 - **Back gesture:** goes back through the pages you opened in the app, and leaves the app only when
   there's nothing to go back to (normally Browse home).
 
+## Touch and small screens
+
+Help (ⓘ) and warning icons show their text on **hover with a mouse** and on **tap with touch** (tap again, tap elsewhere or Escape closes it; Enter/Space work from the keyboard). With touch input the controls listed in "Responsive Browse" (hero Play, home link, search clear, the item page's ⋮, help icons) are at least 44 px to hit; the pages fill the visible height of a mobile browser, so bottom bars stay in view.
+
 ## Dashboard
 
 The landing page. Two cards summarize current state at a glance, followed by charts:
