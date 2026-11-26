@@ -175,7 +175,7 @@ export function ComparePlayPage() {
     <RevealAllProvider>
       {/* tabIndex -1: a click on the empty page or the global bar focuses the container, which takes focus out of
           any cell so the global keyboard scope applies. */}
-      <div ref={setContainer} tabIndex={-1} className="flex h-screen w-screen flex-col overflow-hidden bg-black outline-none">
+      <div ref={setContainer} tabIndex={-1} className="flex h-dvh w-screen flex-col overflow-hidden bg-black outline-none">
         <div className="flex shrink-0 items-center gap-2 bg-background px-2 py-1.5">
           <TooltipIconButton label="Back to compare list" asChild variant="ghost" size="icon-sm">
             <Link to="/compare-list">

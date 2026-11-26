@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { ChevronDown, ChevronRight, FolderPlus, Info, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +21,9 @@ import { useArtists } from "@/hooks/useArtists"
 import { PrivateLock } from "@/components/collections/PrivateLock"
 import type { Collection } from "@/types/api"
 import type { CollectionTreeNode } from "@/lib/collectionTree"
+import { useHoverPopover } from "@/lib/useHoverPopover"
+import { TOUCH_HIT_AREA } from "@/lib/touchTarget"
+import { cn } from "@/lib/utils"
 
 interface SelectionProps {
   isSelected: (id: number) => boolean
@@ -95,7 +97,7 @@ function CollectionNode({
   // trigger and the content itself need the enter/leave handlers, or moving
   // the mouse off the small icon and onto the content would immediately
   // close it.
-  const [infoOpen, setInfoOpen] = useState(false)
+  const info = useHoverPopover()
 
   return (
     <div>
@@ -124,14 +126,13 @@ function CollectionNode({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate font-medium">{node.name}</span>
-            <Popover open={infoOpen} onOpenChange={setInfoOpen}>
+            <Popover open={info.open} onOpenChange={info.onOpenChange}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
                   aria-label="Collection details"
-                  className="inline-flex items-center text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  onMouseEnter={() => setInfoOpen(true)}
-                  onMouseLeave={() => setInfoOpen(false)}
+                  className={cn(TOUCH_HIT_AREA, "inline-flex items-center text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50")}
+                  {...info.hoverProps}
                 >
                   <Info className="h-3.5 w-3.5" />
                 </button>
@@ -139,8 +140,7 @@ function CollectionNode({
               <PopoverContent aria-label="Collection details"
                 className="w-72"
                 align="start"
-                onMouseEnter={() => setInfoOpen(true)}
-                onMouseLeave={() => setInfoOpen(false)}
+                {...info.hoverProps}
               >
                 <dl className="space-y-1.5 text-sm">
                   <div className="flex gap-2">

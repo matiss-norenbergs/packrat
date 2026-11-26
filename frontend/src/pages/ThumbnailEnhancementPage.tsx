@@ -44,22 +44,23 @@ import { useSettings } from "@/hooks/useSettings"
 import { enhancementStatusColor, type EnhancementStatusColor } from "@/lib/enhancementStatus"
 import { cn, formatBytes, hashText } from "@/lib/utils"
 import type { ThumbnailEnhancementHistoryEntry, ThumbnailEnhancementStatus } from "@/types/api"
+import { useHoverPopover } from "@/lib/useHoverPopover"
+import { TOUCH_HIT_AREA } from "@/lib/touchTarget"
 
 function dimensions(width: number | null, height: number | null): string {
   return width != null && height != null ? `${width}×${height}` : "—"
 }
 
 function ErrorBadge({ error }: { error: string }) {
-  const [open, setOpen] = useState(false)
+  const { open, onOpenChange, hoverProps } = useHoverPopover()
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="text-destructive"
+          className={cn("text-destructive", TOUCH_HIT_AREA)}
           aria-label="Enhancement failed"
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
+          {...hoverProps}
         >
           <AlertTriangle className="h-3.5 w-3.5" />
         </button>
@@ -67,8 +68,7 @@ function ErrorBadge({ error }: { error: string }) {
       <PopoverContent
         aria-label="Enhancement failed"
         className="text-xs text-muted-foreground"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        {...hoverProps}
       >
         {error}
       </PopoverContent>
@@ -81,15 +81,14 @@ function ErrorBadge({ error }: { error: string }) {
 // that specific run did, but no longer describe the item's current
 // thumbnail.
 function RevertedBadge({ revertedAt }: { revertedAt: string }) {
-  const [open, setOpen] = useState(false)
+  const { open, onOpenChange, hoverProps } = useHoverPopover()
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <Badge
           variant="secondary"
           className="cursor-default"
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
+          {...hoverProps}
         >
           Reverted
         </Badge>
@@ -97,8 +96,7 @@ function RevertedBadge({ revertedAt }: { revertedAt: string }) {
       <PopoverContent
         aria-label="Reverted"
         className="text-xs text-muted-foreground"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        {...hoverProps}
       >
         Reverted to the original thumbnail on {new Date(revertedAt).toLocaleString()} — this row's
         before/after is preserved for the record, but no longer reflects the item's current
@@ -160,18 +158,17 @@ function statusBadgeProps(status: ThumbnailEnhancementStatus | undefined, isLoad
 // enabled/disabled setting itself, which only says "the user wants this
 // on," not "it's currently working."
 function InstanceStatusBadge({ enabled }: { enabled: boolean }) {
-  const [open, setOpen] = useState(false)
+  const { open, onOpenChange, hoverProps } = useHoverPopover()
   const { data: status, isLoading } = useThumbnailEnhancementStatus(enabled)
   const { variant, label, className } = statusBadgeProps(status, isLoading)
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <Badge
           variant={variant}
           className={cn("cursor-default", className)}
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
+          {...hoverProps}
         >
           {label}
         </Badge>
@@ -179,8 +176,7 @@ function InstanceStatusBadge({ enabled }: { enabled: boolean }) {
       <PopoverContent
         aria-label={label}
         className="text-xs text-muted-foreground"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        {...hoverProps}
       >
         {!status?.configured
           ? "No Stable Diffusion WebUI URL is saved in Settings → AI Enhancement yet."

@@ -58,7 +58,7 @@ export function ConnectPage() {
   }
 
   return (
-    <div className="flex h-screen w-full flex-col items-center justify-center gap-3 bg-background">
+    <div className="flex h-dvh w-full flex-col items-center justify-center gap-3 bg-background">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="mb-2 flex items-center gap-2">

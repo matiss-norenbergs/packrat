@@ -60,7 +60,7 @@ function AuthedBrowseLayout() {
 
   return (
     <MiniPlayerProvider>
-      {/* dvh: a phone's collapsing browser bars make 100vh taller than what is visible. */}
+      {/* dvh: a phone's collapsing browser bars make the large viewport (vh) taller than what is visible. */}
       <div className="min-h-dvh w-full bg-background text-foreground">
         {!isSingleItemView && <BrowseHeader />}
         <BrowseMain />

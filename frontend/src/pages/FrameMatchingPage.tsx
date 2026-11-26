@@ -22,6 +22,9 @@ import { useAcceptFrameMatchQueueItem, useDiscardFrameMatchQueueItem, useFrameMa
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { imageUrl } from "@/lib/api"
 import type { FrameMatchQueueItem } from "@/types/api"
+import { useHoverPopover } from "@/lib/useHoverPopover"
+import { TOUCH_HIT_AREA } from "@/lib/touchTarget"
+import { cn } from "@/lib/utils"
 
 const PAGE_SIZE = 25
 
@@ -39,24 +42,22 @@ function stateBadgeVariant(state: FrameMatchQueueItem["state"]): "success" | "se
 }
 
 function ErrorBadge({ error }: { error: string }) {
-  const [open, setOpen] = useState(false)
+  const { open, onOpenChange, hoverProps } = useHoverPopover()
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="text-destructive"
+          className={cn("text-destructive", TOUCH_HIT_AREA)}
           aria-label="Match failed"
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
+          {...hoverProps}
         >
           <AlertTriangle className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
       <PopoverContent aria-label="Match failed"
         className="text-xs text-muted-foreground"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        {...hoverProps}
       >
         {error}
       </PopoverContent>

@@ -37,7 +37,7 @@ function RouteErrorMessage({ error }: { error: unknown }) {
       : "Something went wrong."
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center gap-4 bg-background p-6 text-center text-foreground">
+    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-4 bg-background p-6 text-center text-foreground">
       <h1 className="text-xl font-semibold">{chunkError ? "Couldn't load this page" : "Something went wrong"}</h1>
       <p className="max-w-md text-sm text-muted-foreground">{message}</p>
       <Button onClick={() => window.location.reload()}>

@@ -46,7 +46,7 @@ export function BrowseHeader() {
 
   return (
     <header className="sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-4 py-3 backdrop-blur-sm md:gap-4 md:px-8">
-      <Link to="/browse" className="flex shrink-0 items-center gap-2">
+      <Link to="/browse" className="flex shrink-0 items-center gap-2 pointer-coarse:min-h-11">
         <PackratLogo className="h-5 w-5 shrink-0" />
         {/* Collapses away (mobile only — md: forces it back open) while
             search is expanded, so the input gets the width instead of
@@ -90,7 +90,7 @@ export function BrowseHeader() {
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground pointer-coarse:size-9"
+                  className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground pointer-coarse:size-11"
                   onClick={() => {
                     setSearchInput("")
                     // Clicking this button moves focus off the input onto

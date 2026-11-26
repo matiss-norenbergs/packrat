@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { LibraryItem } from "@/types/api"
+import { cn } from "@/lib/utils"
 import { useLibraryItemActions, type LibraryItemAction } from "./libraryItemActions"
 import { useSharedItemActions } from "./LibraryItemActionsProvider"
 
@@ -44,11 +45,11 @@ function MenuItems({ item, actionsFor }: { item: LibraryItem; actionsFor: Action
   return <ActionItems actions={actionsFor(item)} />
 }
 
-function ActionsDropdown({ item, actionsFor }: { item: LibraryItem; actionsFor: ActionsFor }) {
+function ActionsDropdown({ item, actionsFor, triggerClassName }: { item: LibraryItem; actionsFor: ActionsFor; triggerClassName?: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Actions">
+        <Button variant="ghost" size="icon" className={cn("h-7 w-7", triggerClassName)} aria-label="Actions">
           <MoreVertical className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -60,11 +61,11 @@ function ActionsDropdown({ item, actionsFor }: { item: LibraryItem; actionsFor: 
 }
 
 // No shared host around (the item page): the menu owns its actions and dialogs, bound to its item.
-function OwnHostMenu({ item }: { item: LibraryItem }) {
+function OwnHostMenu({ item, triggerClassName }: { item: LibraryItem; triggerClassName?: string }) {
   const { actionsFor, host } = useLibraryItemActions(item)
   return (
     <>
-      <ActionsDropdown item={item} actionsFor={actionsFor} />
+      <ActionsDropdown item={item} actionsFor={actionsFor} triggerClassName={triggerClassName} />
       {host}
     </>
   )
@@ -73,7 +74,8 @@ function OwnHostMenu({ item }: { item: LibraryItem }) {
 // The "⋮" menu of a card, a folder-view row and the item page. The actions and their dialogs are defined once in
 // libraryItemActions.tsx (the list view's right-click menu uses the same ones). Inside a grid / folder view
 // (LibraryItemActionsProvider) it renders only the dropdown and the shared host owns the dialogs; elsewhere it mounts its own.
-export const LibraryItemActionsMenu = memo(function LibraryItemActionsMenu({ item }: { item: LibraryItem }) {
+// `triggerClassName` lets a roomy host (the item page) enlarge the trigger on touch; a card keeps its 28px corner button.
+export const LibraryItemActionsMenu = memo(function LibraryItemActionsMenu({ item, triggerClassName }: { item: LibraryItem; triggerClassName?: string }) {
   const shared = useSharedItemActions()
-  return shared ? <ActionsDropdown item={item} actionsFor={shared.actionsFor} /> : <OwnHostMenu item={item} />
+  return shared ? <ActionsDropdown item={item} actionsFor={shared.actionsFor} triggerClassName={triggerClassName} /> : <OwnHostMenu item={item} triggerClassName={triggerClassName} />
 })

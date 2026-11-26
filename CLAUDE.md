@@ -87,6 +87,9 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - Column alignment (global rule): date / status-tag / switch / icon columns centered, numeric
   (counts, sizes, durations, dimensions) right-aligned, everything else left. Bare SVG icons are
   `display:block` under Tailwind preflight — `text-center` won't center them; use `mx-auto`.
+- **Touch:** interactive controls are at least 44x44 under `pointer-coarse:` (`size-11`, `min-h-11`, or `TOUCH_HIT_AREA` for a small icon)
+  without changing mouse rendering; layouts use `dvh` (`h-dvh`), never `vh`/`h-screen`; hover-only information needs a tap path
+  (`useHoverPopover` opens on a *mouse* hover only; a tap toggles it). Details: `docs/architecture.md` → "Touch rules".
 - **Accessible names:** an icon-only button or link uses `TooltipIconButton` (`components/ui/tooltip-icon-button.tsx`; one `label` is both
   the tooltip and the `aria-label`: a tooltip alone is never read on touch or by TalkBack). A label never contains an unmasked private name:
   use the same masking as the visible text (`hashText`, `useTagNameMask`, `useArtistNameMask` with the same reveal state) or a generic label.

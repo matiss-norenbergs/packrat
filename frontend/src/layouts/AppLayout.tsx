@@ -44,7 +44,7 @@ function AuthedAppLayout() {
     <RevealAllProvider clearOnNavigate>
       <LibrarySortProvider>
         <FloatingActionDock>
-          <div className="flex h-screen w-full flex-col bg-background text-foreground md:flex-row">
+          <div className="flex h-dvh w-full flex-col bg-background text-foreground md:flex-row">
             <MobileNav />
             <Sidebar />
             <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">

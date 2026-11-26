@@ -211,7 +211,7 @@ export function LibraryItemDetail({
               </h1>
               <p className="text-sm text-muted-foreground">{item.artistName ? maskArtist(item.artistId, item.artistName, !locked) : (item.uploader ?? "Uncategorized")}</p>
             </div>
-            {showActions && <LibraryItemActionsMenu item={item} />}
+            {showActions && <LibraryItemActionsMenu item={item} triggerClassName="pointer-coarse:size-11" />}
           </div>
 
           <div className="flex flex-wrap gap-1">

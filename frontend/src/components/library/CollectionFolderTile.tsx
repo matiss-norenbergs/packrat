@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { AlertTriangle, Folder } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -8,6 +7,8 @@ import type { CollectionTreeNode } from "@/lib/collectionTree"
 import type { Collection } from "@/types/api"
 import { cn } from "@/lib/utils"
 import { useIsCollectionSelected, useSelectionActions, useSelectionActive } from "./SelectionContext"
+import { useHoverPopover } from "@/lib/useHoverPopover"
+import { TOUCH_HIT_AREA } from "@/lib/touchTarget"
 
 export function CollectionFolderTile({
   node,
@@ -26,7 +27,7 @@ export function CollectionFolderTile({
   // trigger and the content itself need the enter/leave handlers, or moving
   // the mouse off the small icon and onto the content (e.g. to read a long
   // missing-numbers list) would immediately close it.
-  const [gapPopoverOpen, setGapPopoverOpen] = useState(false)
+  const gapPopover = useHoverPopover()
 
   // While a selection is in progress, the tile body toggles the collection
   // instead of navigating in — mirrors LibraryCard's click-anywhere-to-select
@@ -73,15 +74,14 @@ export function CollectionFolderTile({
               {node.ghostItemCount > 0 && ` (${node.ghostItemCount} ghost)`}
             </p>
             {node.sequenceGaps && (
-              <Popover open={gapPopoverOpen} onOpenChange={setGapPopoverOpen}>
+              <Popover open={gapPopover.open} onOpenChange={gapPopover.onOpenChange}>
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="text-amber-600 dark:text-amber-500"
+                    className={cn("text-amber-600 dark:text-amber-500", TOUCH_HIT_AREA)}
                     aria-label="Missing sequence numbers"
                     onClick={(e) => e.stopPropagation()}
-                    onMouseEnter={() => setGapPopoverOpen(true)}
-                    onMouseLeave={() => setGapPopoverOpen(false)}
+                    {...gapPopover.hoverProps}
                   >
                     <AlertTriangle className="h-3.5 w-3.5" />
                   </button>
@@ -89,8 +89,7 @@ export function CollectionFolderTile({
                 <PopoverContent aria-label="Missing sequence numbers"
                   className="text-xs text-muted-foreground"
                   onClick={(e) => e.stopPropagation()}
-                  onMouseEnter={() => setGapPopoverOpen(true)}
-                  onMouseLeave={() => setGapPopoverOpen(false)}
+                  {...gapPopover.hoverProps}
                 >
                   Missing seq: {node.sequenceGaps.missing.slice(0, 10).join(", ")}
                   {node.sequenceGaps.count > 10 ? ` (+${node.sequenceGaps.count - 10} more)` : ""}

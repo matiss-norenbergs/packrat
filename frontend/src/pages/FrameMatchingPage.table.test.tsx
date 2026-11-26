@@ -147,7 +147,7 @@ describe("FrameMatchingPage table", () => {
     fireEvent.mouseDown(badge)
     fireEvent.mouseUp(window)
     expect(isSelected("Beta")).toBe(false)
-    fireEvent.mouseEnter(badge)
+    fireEvent.pointerEnter(badge, { pointerType: "mouse" })
     const message = await screen.findByText("ffmpeg exploded")
     fireEvent.mouseDown(message)
     fireEvent.mouseUp(window)
