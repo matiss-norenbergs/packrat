@@ -20,7 +20,9 @@ interface Origin {
 const ORIGIN_TTL_MS = 1500
 // A table's scroll container, or a view that marks itself as the place focus falls back to.
 const REGION = "[data-focus-region], [data-slot=table-container]"
-const OPEN_DIALOG = "[data-slot=dialog-content][data-state=open], [data-slot=alert-dialog-content][data-state=open]"
+// Every dialog element in the DOM, whatever its state: a dialog that just closed stays mounted until its exit animation ends,
+// and the shared host switches a chain (custom range -> picker) in one commit, so the first is still here when the second opens.
+const ANY_DIALOG = "[data-slot=dialog-content], [data-slot=alert-dialog-content]"
 
 let pending: Origin | null = null
 let armed: Origin | null = null
@@ -69,14 +71,14 @@ if (typeof document !== "undefined") {
 }
 
 /**
- * A dialog opened (its own content is already in the DOM, open): take the origin of the menu item that was just selected.
- * Without one, an armed origin is kept only for a chain (another dialog is still open: confirm -> picker); otherwise it is
- * stale (an earlier dialog went away without Radix's close event) and is dropped, so a dialog opened from a plain button
- * returns focus to that button by default instead of to the old origin.
+ * A dialog opened (its own content is already in the DOM): take the origin of the menu item that was just selected.
+ * Without one, an armed origin is kept only for a chain (another dialog element is still in the DOM, open *or closing*:
+ * confirm -> picker); a dialog alone means the origin is stale (an earlier dialog went away without Radix's close event) and
+ * it is dropped, so a dialog opened from a plain button returns focus to that button by default instead of to the old origin.
  */
 export function armFocusReturn() {
   if (pending && Date.now() - pending.at < ORIGIN_TTL_MS) armed = pending
-  else if (document.querySelectorAll(OPEN_DIALOG).length <= 1) armed = null
+  else if (document.querySelectorAll(ANY_DIALOG).length <= 1) armed = null
   pending = null
 }
 
@@ -91,7 +93,7 @@ function tryFocus(el: HTMLElement | null): boolean {
 /** The `onCloseAutoFocus` of a dialog: put focus back on the armed origin instead of letting it fall to <body>. */
 export function restoreFocusAfterDialog(e: Event) {
   if (!armed) return
-  if (document.querySelector(OPEN_DIALOG)) return // another dialog took over (a chain): keep the origin for the last one
+  if (document.querySelector(ANY_DIALOG)) return // another dialog is still here, open or closing (a chain): keep the origin for the last one
   const origin = armed
   armed = null
   const ok = tryFocus(origin.el) || tryFocus(origin.region) || tryFocus(document.querySelector<HTMLElement>("main"))

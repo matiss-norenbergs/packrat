@@ -1836,7 +1836,7 @@ transition is switched off only while dragging.
   was opened from the keyboard); the dialog that opens next arms it, and on close focus goes back there. If it is gone or cannot
   take focus (deleted item, the card ⋮ hidden during a selection) it falls to the enclosing `[data-focus-region]` /
   `[data-slot=table-container]`, then `<main>`, never `<body>`; a region is made script-focusable on demand
-  (`tabindex=-1`, no tab stop). While another dialog is open (a chain such as custom range → picker) the origin is kept for the
+  (`tabindex=-1`, no tab stop). While another dialog element is still in the DOM, open or closing (a chain such as custom range → picker; the first stays mounted for its exit animation) the origin is kept for the
   last one. A dialog not opened from a menu is untouched. Because it lives in the shared ui components, the library host, the
   list view, Collections, Artists, Tags, Subscriptions and History all use it without changes.
 - **Touch rules** (mouse and desktop rendering never change; every touch rule is a `pointer-coarse:` variant or a pointer-type check):
@@ -1857,7 +1857,8 @@ transition is switched off only while dragging.
     collapse (desktop, the Tauri webviews, the Android WebView). Dialog body caps (`max-h-[60vh]`) and Browse banners
     (`h-[50vh]`) deliberately stay `vh`. `lib/viewportUnits.test.ts` fails on `h-screen`, `min-h-screen` and `100vh`.
   - *Focus return resets.* `armFocusReturn()` drops an armed origin when a dialog opens with no fresh menu selection and no other dialog
-    open (a stale origin from a dialog that never fired its close event); a chain keeps it.
+    element in the DOM in any state (a stale origin from a dialog that never fired its close event); a chain, including a first
+    dialog that is closed but still animating out, keeps it.
 - **Mobile navigation** (`MobileNav`) is the new `components/ui/sheet.tsx` (Radix Dialog): modal dialog with a hidden title, focus
   trap, Escape, focus in on open and back to the toggle (a `SheetTrigger`, so it reports `aria-expanded`). Same width, side,
   backdrop, links and button names as the old overlay; navigation still closes it.

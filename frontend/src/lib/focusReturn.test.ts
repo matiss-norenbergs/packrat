@@ -14,9 +14,9 @@ afterEach(() => {
   document.body.innerHTML = ""
 })
 
-function openDialog() {
+function openDialog(slot = "dialog-content") {
   const d = document.createElement("div")
-  d.setAttribute("data-slot", "dialog-content")
+  d.setAttribute("data-slot", slot)
   d.setAttribute("data-state", "open")
   document.body.appendChild(d)
   return d
@@ -75,5 +75,73 @@ describe("focus return origin", () => {
     restoreFocusAfterDialog(closeEvent())
     expect(origin).toHaveFocus()
     void toolbar
+  })
+
+  // The shared host switches `dialog` state in one commit: the first dialog is `closed` but stays mounted for its exit
+  // animation while the second opens; its close event (and its removal) come after the animation.
+  it("a chain where the first dialog is closed-but-still-mounted when the second arms keeps the origin", () => {
+    const first = menuOpenedDialog()
+    first.setAttribute("data-state", "closed")
+    const second = openDialog()
+    armFocusReturn()
+    first.remove() // exit animation over: its close event
+    const a = closeEvent()
+    restoreFocusAfterDialog(a)
+    expect(a.defaultPrevented).toBe(false) // the second is open: not yet
+    expect(origin).not.toHaveFocus()
+    second.remove()
+    const b = closeEvent()
+    restoreFocusAfterDialog(b)
+    expect(origin).toHaveFocus()
+    expect(b.defaultPrevented).toBe(true)
+  })
+
+  it("a closing second dialog keeps the origin when the first's close event arrives late", () => {
+    const first = menuOpenedDialog()
+    first.setAttribute("data-state", "closed")
+    const second = openDialog()
+    armFocusReturn()
+    second.setAttribute("data-state", "closed") // user closed the second; both are animating out
+    const early = closeEvent()
+    restoreFocusAfterDialog(early) // the first's event while the second is still present
+    expect(early.defaultPrevented).toBe(false)
+    first.remove()
+    second.remove()
+    const last = closeEvent()
+    restoreFocusAfterDialog(last)
+    expect(origin).toHaveFocus()
+    expect(last.defaultPrevented).toBe(true)
+  })
+
+  it("the first's close event before the second mounted restores once and does not lose focus afterwards", () => {
+    menuOpenedDialog().remove()
+    restoreFocusAfterDialog(closeEvent())
+    expect(origin).toHaveFocus()
+    const second = openDialog()
+    armFocusReturn() // nothing pending, alone: stale/none
+    second.remove()
+    const e = closeEvent()
+    restoreFocusAfterDialog(e)
+    expect(e.defaultPrevented).toBe(false) // Radix's default hands focus back to the origin, where it already is
+    expect(origin).toHaveFocus()
+  })
+
+  it("an alert dialog and a dialog mix in one chain", () => {
+    const first = menuOpenedDialog()
+    first.setAttribute("data-slot", "alert-dialog-content")
+    first.setAttribute("data-state", "closed")
+    const second = openDialog("dialog-content")
+    armFocusReturn()
+    const third = openDialog("alert-dialog-content")
+    armFocusReturn()
+    first.remove()
+    second.remove()
+    restoreFocusAfterDialog(closeEvent())
+    expect(origin).not.toHaveFocus()
+    third.remove()
+    const e = closeEvent()
+    restoreFocusAfterDialog(e)
+    expect(origin).toHaveFocus()
+    expect(e.defaultPrevented).toBe(true)
   })
 })
