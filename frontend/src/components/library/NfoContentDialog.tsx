@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useLibraryItemNFO } from "@/hooks/useLibrary"
 import { ApiError } from "@/lib/api"
@@ -21,6 +21,7 @@ export function NfoContentDialog({ item, open, onOpenChange }: NfoContentDialogP
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>NFO Contents</DialogTitle>
+          <DialogDescription className="sr-only">The text of this item's .nfo sidecar file.</DialogDescription>
         </DialogHeader>
 
         {isLoading ? (

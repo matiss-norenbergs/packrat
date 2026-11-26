@@ -40,7 +40,7 @@ export function DashboardSettingsPopover({ hiddenWidgets, saving, disabled, onSa
           <Settings className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 space-y-4">
+      <PopoverContent aria-label="Dashboard settings" align="end" className="w-72 space-y-4">
         <div className="space-y-3">
           <Label className="text-xs text-muted-foreground">Visible cards</Label>
           {DASHBOARD_WIDGETS.map((widget) => (

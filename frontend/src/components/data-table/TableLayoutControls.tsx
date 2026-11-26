@@ -77,7 +77,7 @@ export function LayoutPopover({
         </TooltipTrigger>
         <TooltipContent>Table layout</TooltipContent>
       </Tooltip>
-      <PopoverContent align="end" className="w-56 space-y-2">
+      <PopoverContent aria-label="Table layout" align="end" className="w-56 space-y-2">
         <p className="text-xs text-muted-foreground">Changes apply to this page until you save them.</p>
         <div className="flex flex-col gap-1.5">
           <Button size="sm" disabled={!dirty} onClick={run(onSave)}>

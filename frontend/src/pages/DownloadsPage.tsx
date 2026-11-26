@@ -218,6 +218,7 @@ export function DownloadsPage() {
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search downloads…"
+            aria-label="Search downloads"
             className="pl-8 pr-7"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
@@ -227,6 +228,7 @@ export function DownloadsPage() {
               type="button"
               variant="ghost"
               size="icon-xs"
+              aria-label="Clear search"
               className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setSearchInput("")

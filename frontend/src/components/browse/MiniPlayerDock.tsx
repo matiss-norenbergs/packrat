@@ -1,8 +1,8 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { Maximize2, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { librarySmallThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { isAudioFilename } from "@/lib/utils"
 import { usePersistedVolume } from "@/hooks/usePersistedVolume"
@@ -66,22 +66,12 @@ export function MiniPlayerDock() {
           <TooltipContent>{item.title}</TooltipContent>
         </Tooltip>
         <div className="flex shrink-0 items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-xs" className="pointer-coarse:size-11" onClick={expand}>
-                <Maximize2 className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Expand</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-xs" className="pointer-coarse:size-11" onClick={close}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Close</TooltipContent>
-          </Tooltip>
+          <TooltipIconButton label="Expand" type="button" variant="ghost" size="icon-xs" className="pointer-coarse:size-11" onClick={expand}>
+            <Maximize2 className="h-3.5 w-3.5" />
+          </TooltipIconButton>
+          <TooltipIconButton label="Close" type="button" variant="ghost" size="icon-xs" className="pointer-coarse:size-11" onClick={close}>
+            <X className="h-3.5 w-3.5" />
+          </TooltipIconButton>
         </div>
       </div>
 

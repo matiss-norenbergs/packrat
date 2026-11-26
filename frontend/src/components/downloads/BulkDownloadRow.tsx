@@ -1,6 +1,5 @@
 import { useState } from "react"
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Eye, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { useCollections } from "@/hooks/useCollections"
 import { useDownloadPreview } from "@/hooks/useDownloads"
 import { useSettings } from "@/hooks/useSettings"
@@ -71,30 +70,15 @@ export function BulkDownloadRow({
     <div className={cn("space-y-3 rounded-md border p-3", rowNumber % 2 === 0 && "bg-muted/40")}>
       <div className="flex items-center gap-2">
         <div className="flex shrink-0 flex-col gap-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" disabled={isFirst} onClick={onMoveUp}>
-                <ArrowUp className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Move up</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" disabled={isLast} onClick={onMoveDown}>
-                <ArrowDown className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Move down</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" disabled={!canRemove} onClick={onRemove}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Remove row</TooltipContent>
-          </Tooltip>
+          <TooltipIconButton label="Move up" variant="ghost" size="icon-sm" disabled={isFirst} onClick={onMoveUp}>
+            <ArrowUp className="h-3.5 w-3.5" />
+          </TooltipIconButton>
+          <TooltipIconButton label="Move down" variant="ghost" size="icon-sm" disabled={isLast} onClick={onMoveDown}>
+            <ArrowDown className="h-3.5 w-3.5" />
+          </TooltipIconButton>
+          <TooltipIconButton label="Remove row" variant="ghost" size="icon-sm" disabled={!canRemove} onClick={onRemove}>
+            <X className="h-3.5 w-3.5" />
+          </TooltipIconButton>
         </div>
 
         <span className="w-6 shrink-0 text-center text-xs text-muted-foreground">#{rowNumber}</span>
@@ -110,20 +94,16 @@ export function BulkDownloadRow({
                   onChange={(e) => onChange({ url: e.target.value })}
                 />
                 {previewAllowed && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        disabled={!row.url.trim()}
-                        onClick={() => setPreviewRequested(true)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Fetch preview</TooltipContent>
-                  </Tooltip>
+                  <TooltipIconButton
+                    label="Fetch preview"
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    disabled={!row.url.trim()}
+                    onClick={() => setPreviewRequested(true)}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </TooltipIconButton>
                 )}
               </div>
             </div>

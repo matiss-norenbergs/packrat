@@ -267,6 +267,7 @@ export function CollectionDialog({
                           <TooltipTrigger asChild>
                             <button
                               type="button"
+                              aria-label="Remove cover"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 deleteCover.mutate()

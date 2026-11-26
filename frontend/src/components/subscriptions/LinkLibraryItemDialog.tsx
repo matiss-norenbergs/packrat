@@ -73,6 +73,7 @@ export function LinkLibraryItemDialog({ subscriptionId, entry, onOpenChange }: L
 
         <Input
           placeholder="Search library…"
+          aria-label="Search library"
           value={searchInput}
           onChange={(e) => {
             setSearchInput(e.target.value)

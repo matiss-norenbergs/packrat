@@ -55,7 +55,7 @@ export function CollectionFolderTile({
           "absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)] transition-opacity",
           selectionActive || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
         )}
-        aria-label="Select collection"
+        aria-label={`Select ${node.name}`}
       />
       <CardContent className="flex items-center gap-3 p-4">
         <Folder className="h-8 w-8 shrink-0 text-muted-foreground" />
@@ -86,7 +86,7 @@ export function CollectionFolderTile({
                     <AlertTriangle className="h-3.5 w-3.5" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent
+                <PopoverContent aria-label="Missing sequence numbers"
                   className="text-xs text-muted-foreground"
                   onClick={(e) => e.stopPropagation()}
                   onMouseEnter={() => setGapPopoverOpen(true)}

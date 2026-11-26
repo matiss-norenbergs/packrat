@@ -104,13 +104,15 @@ function CollectionNode({
         onMouseDown={(e) => onRowMouseDown(e, node.id)}
         className="flex flex-wrap items-center gap-2 rounded-md border p-3 cursor-default select-none transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
       >
-        <Checkbox checked={selected} onCheckedChange={() => onToggle(node.id)} />
+        <Checkbox checked={selected} onCheckedChange={() => onToggle(node.id)} aria-label={`Select ${node.name}`} />
 
         {hasChildren ? (
           <Button
             variant="ghost"
             size="icon"
             className="h-6 w-6 shrink-0"
+            aria-label={`Sub-collections of ${node.name}`}
+            aria-expanded={expanded}
             onClick={() => onToggleExpanded(node.id)}
           >
             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -134,7 +136,7 @@ function CollectionNode({
                   <Info className="h-3.5 w-3.5" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent
+              <PopoverContent aria-label="Collection details"
                 className="w-72"
                 align="start"
                 onMouseEnter={() => setInfoOpen(true)}
@@ -184,7 +186,7 @@ function CollectionNode({
               parentId={node.id}
               trigger={
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon">
+                  <Button variant="ghost" size="icon" aria-label={`Add sub-collection to ${node.name}`}>
                     <FolderPlus className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -197,7 +199,7 @@ function CollectionNode({
               collection={node}
               trigger={
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon">
+                  <Button variant="ghost" size="icon" aria-label={`Edit ${node.name}`}>
                     <Pencil className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -209,7 +211,7 @@ function CollectionNode({
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon">
+                  <Button variant="ghost" size="icon" aria-label={`Delete ${node.name}`}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>

@@ -144,6 +144,7 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
                   <TooltipTrigger asChild>
                     <button
                       type="button"
+                      aria-label="Remove selected image"
                       onClick={() => clearSelectedImage.mutate()}
                       disabled={clearSelectedImage.isPending}
                       className="absolute top-1.5 right-1.5 rounded-full bg-black/70 p-1 text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-50"
@@ -181,7 +182,7 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
                     {birthday ? format(parseISO(birthday), "PPP") : "Pick a date"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent aria-label="Birthday" className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
                     captionLayout="dropdown"
@@ -231,6 +232,8 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
                         <TooltipTrigger asChild>
                           <button
                             type="button"
+                            aria-label={selected ? "Currently selected display image" : "Use as display image"}
+                            aria-pressed={selected}
                             onClick={() => selectImage.mutate(img.id)}
                             className="h-full w-full outline-hidden transition hover:opacity-80"
                           >
@@ -243,6 +246,7 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
                         <TooltipTrigger asChild>
                           <button
                             type="button"
+                            aria-label="Delete image"
                             onClick={() => deleteImage.mutate(img.id)}
                             className="absolute top-1 right-1 rounded-full bg-black/70 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
                           >

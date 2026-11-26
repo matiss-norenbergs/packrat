@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import {
   BUILDER_FIELDS,
   FIELD_LABELS,
@@ -119,20 +119,16 @@ export function FilenameTemplateBuilderDialog({ value, onApply, previewVars }: F
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
-            onClick={() => handleOpenChange(true)}
-          >
-            <Wand2 className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Build a filename template visually</TooltipContent>
-      </Tooltip>
+      <TooltipIconButton
+        label="Build a filename template visually"
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
+        onClick={() => handleOpenChange(true)}
+      >
+        <Wand2 className="h-3.5 w-3.5" />
+      </TooltipIconButton>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Filename Template Builder</DialogTitle>
@@ -152,32 +148,24 @@ export function FilenameTemplateBuilderDialog({ value, onApply, previewVars }: F
             {elements.map((el, index) => (
               <div key={el.id} className="flex items-center gap-2 rounded-md border p-2">
                 <div className="flex shrink-0 flex-col gap-0.5">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        disabled={index === 0}
-                        onClick={() => moveElement(index, -1)}
-                      >
-                        <ArrowUp className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Move up</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        disabled={index === elements.length - 1}
-                        onClick={() => moveElement(index, 1)}
-                      >
-                        <ArrowDown className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Move down</TooltipContent>
-                  </Tooltip>
+                  <TooltipIconButton
+                    label="Move up"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={index === 0}
+                    onClick={() => moveElement(index, -1)}
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </TooltipIconButton>
+                  <TooltipIconButton
+                    label="Move down"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={index === elements.length - 1}
+                    onClick={() => moveElement(index, 1)}
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </TooltipIconButton>
                 </div>
 
                 {el.kind === "token" ? (
@@ -246,14 +234,9 @@ export function FilenameTemplateBuilderDialog({ value, onApply, previewVars }: F
                   />
                 )}
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon-sm" onClick={() => removeElement(el.id)}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Remove</TooltipContent>
-                </Tooltip>
+                <TooltipIconButton label="Remove" variant="ghost" size="icon-sm" onClick={() => removeElement(el.id)}>
+                  <X className="h-3.5 w-3.5" />
+                </TooltipIconButton>
               </div>
             ))}
           </div>

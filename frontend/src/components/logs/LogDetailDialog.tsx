@@ -2,7 +2,7 @@ import { Copy } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { formatDownloadStatus } from "@/lib/utils"
 import type { LogEntry } from "@/types/api"
 
@@ -23,7 +23,7 @@ function LogSection({ label, text }: { label: string; text: string }) {
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <Button variant="ghost" size="icon" className="h-6 w-6" title={`Copy ${label}`} onClick={() => copyToClipboard(text)}>
+        <Button variant="ghost" size="icon" className="h-6 w-6" title={`Copy ${label}`} aria-label={`Copy ${label}`} onClick={() => copyToClipboard(text)}>
           <Copy className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -49,6 +49,7 @@ export function LogDetailDialog({ entry, open, onOpenChange }: LogDetailDialogPr
             <DialogTitle className="truncate">{entry.title ?? entry.url}</DialogTitle>
             <Badge variant={STATUS_VARIANT[entry.status] ?? "outline"}>{formatDownloadStatus(entry.status)}</Badge>
           </div>
+          <DialogDescription className="sr-only">Details and output of this download.</DialogDescription>
         </DialogHeader>
 
         <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">

@@ -178,7 +178,7 @@ function SettingsBackupCard() {
 
         <div className="space-y-3 border-t pt-4">
           <h3 className="text-sm font-medium">Import</h3>
-          <Input ref={fileInputRef} type="file" accept="application/json" onChange={handleFileChange} />
+          <Input ref={fileInputRef} type="file" accept="application/json" aria-label="Settings backup file" onChange={handleFileChange} />
           {needsPassword && (
             <div className="space-y-2">
               <Label htmlFor="settings-import-password">Password</Label>
@@ -292,13 +292,14 @@ function LibraryBackupCard() {
                   variant="ghost"
                   size="icon"
                   className="h-5 w-5 text-muted-foreground"
+                  aria-label="About library export"
                   onMouseEnter={() => setExportInfoOpen(true)}
                   onMouseLeave={() => setExportInfoOpen(false)}
                 >
                   <Info className="h-3.5 w-3.5" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent
+              <PopoverContent aria-label="About library export"
                 className="text-xs text-muted-foreground"
                 onMouseEnter={() => setExportInfoOpen(true)}
                 onMouseLeave={() => setExportInfoOpen(false)}
@@ -328,7 +329,7 @@ function LibraryBackupCard() {
 
         <div className="space-y-3 border-t pt-4">
           <h3 className="text-sm font-medium">Import</h3>
-          <Input ref={fileInputRef} type="file" accept="application/json" onChange={handleFileChange} />
+          <Input ref={fileInputRef} type="file" accept="application/json" aria-label="Library backup file" onChange={handleFileChange} />
           {needsPassword && (
             <div className="space-y-2">
               <Label htmlFor="library-import-password">Password</Label>
@@ -476,7 +477,7 @@ function FullBackupCard() {
             action. Get one by selecting a backup in Backup History and using Download (on this
             install or another).
           </p>
-          <Input ref={fileInputRef} type="file" accept="application/json" onChange={handleFileChange} />
+          <Input ref={fileInputRef} type="file" accept="application/json" aria-label="Full backup file" onChange={handleFileChange} />
           {needsPassword && (
             <div className="space-y-2">
               <Label htmlFor="full-import-password">Password</Label>
