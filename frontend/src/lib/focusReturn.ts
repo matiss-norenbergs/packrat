@@ -68,9 +68,15 @@ if (typeof document !== "undefined") {
   )
 }
 
-/** A dialog opened: take the origin of the menu item that was just selected, if any (otherwise keep an armed chain). */
+/**
+ * A dialog opened (its own content is already in the DOM, open): take the origin of the menu item that was just selected.
+ * Without one, an armed origin is kept only for a chain (another dialog is still open: confirm -> picker); otherwise it is
+ * stale (an earlier dialog went away without Radix's close event) and is dropped, so a dialog opened from a plain button
+ * returns focus to that button by default instead of to the old origin.
+ */
 export function armFocusReturn() {
   if (pending && Date.now() - pending.at < ORIGIN_TTL_MS) armed = pending
+  else if (document.querySelectorAll(OPEN_DIALOG).length <= 1) armed = null
   pending = null
 }
 
