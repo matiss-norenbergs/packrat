@@ -101,7 +101,7 @@ export function LoginPage() {
 
   if (challenge) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
+      <div className="flex h-dvh w-full items-center justify-center bg-background">
         <Toaster />
         <Card className="w-full max-w-sm">
           <CardHeader>
@@ -169,7 +169,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen w-full flex-col items-center justify-center gap-3 bg-background">
+    <div className="flex h-dvh w-full flex-col items-center justify-center gap-3 bg-background">
       <Toaster />
       <Card className="w-full max-w-sm">
         <CardHeader>

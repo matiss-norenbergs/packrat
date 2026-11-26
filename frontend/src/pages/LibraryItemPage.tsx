@@ -28,7 +28,7 @@ export function LibraryItemPage() {
   if (isLoading) {
     return (
       <div>
-        <div className="-m-4 h-[calc(100vh-3.5rem)] md:-m-6 md:h-screen">
+        <div className="-m-4 h-[calc(100dvh-3.5rem)] md:-m-6 md:h-dvh">
           <Skeleton className="h-full w-full rounded-none" />
         </div>
         <div className="space-y-2 pt-6">
@@ -75,7 +75,7 @@ export function LibraryItemPage() {
         item={item}
         backTo={backTo}
         basePath="/library"
-        playerHeightClass="h-[calc(100vh-3.5rem)] md:h-screen"
+        playerHeightClass="h-[calc(100dvh-3.5rem)] md:h-dvh"
       />
     </RevealAllProvider>
   )

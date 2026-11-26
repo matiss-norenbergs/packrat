@@ -32,7 +32,7 @@ function AuthedImmersiveLayout() {
   useSyncAppearance() // authenticated-only, like the socket: applies the account's theme/accent on this page too
 
   return (
-    <div className="min-h-screen w-full bg-background text-foreground">
+    <div className="min-h-dvh w-full bg-background text-foreground">
       <Outlet />
       <Toaster />
     </div>

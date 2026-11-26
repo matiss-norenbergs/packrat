@@ -264,7 +264,7 @@ function VersionLine() {
 
 export function Sidebar() {
   return (
-    <aside className="hidden h-screen w-56 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+    <aside className="hidden h-dvh w-56 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <SidebarContent />
     </aside>
   )
