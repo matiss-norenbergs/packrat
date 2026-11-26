@@ -28,7 +28,7 @@ export function LibraryScrollView({ header, footer, children, resetKey }: Librar
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       {header}
-      <div ref={regionRef} data-testid="library-scroll" className="-my-1 -ml-1 -mr-2 min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1 pl-1 pr-2 [scrollbar-gutter:stable]">
+      <div ref={regionRef} data-testid="library-scroll" data-focus-region className="-my-1 -ml-1 -mr-2 min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1 pl-1 pr-2 [scrollbar-gutter:stable]">
         {children}
       </div>
       {footer}

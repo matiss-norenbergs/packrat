@@ -25,7 +25,7 @@ import { PlayerDebug } from "./PlayerDebug"
 import { parsePlayerDebug } from "./playerDiagnostics"
 import { barPaint, parsePlayerFx } from "./playerFx"
 import { computeShowBar, isInFullscreen, isPointerOnBar, pointInRect } from "./playerVisibility"
-import { isTypingTarget } from "./playerKeys"
+import { focusedControlOwnsKeys, isTypingTarget } from "./playerKeys"
 import { PlayerTouchControls } from "./PlayerTouchControls"
 import {
   INITIAL_TAP_STATE,
@@ -293,6 +293,8 @@ export function PlayerSkin({
       if (isTypingTarget(e.target)) return
       const inside = frame.contains(document.activeElement)
       if (!inside && (focusOnly || !hoveredRef.current)) return
+      // Hovered but focus is on a control elsewhere (Minimize, a link, a slider...): that control owns its keys.
+      if (!inside && focusedControlOwnsKeys(e.target)) return
       const target = e.target instanceof HTMLElement ? e.target : null
       // A focused button/menu item activates itself with Space/Enter; don't also toggle playback.
       if (target && frame.contains(target) && (e.key === " " || e.key === "Enter") && target.closest("button, [role=menuitem], [role=menuitemradio], [role=slider]")) return

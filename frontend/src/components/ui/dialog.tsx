@@ -2,6 +2,7 @@ import * as React from "react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { armFocusReturn, restoreFocusAfterDialog } from "@/lib/focusReturn"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
@@ -50,6 +51,8 @@ function DialogContent({
   children,
   showCloseButton = true,
   onPointerDownOutside,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -74,6 +77,15 @@ function DialogContent({
         // in-progress form state. Callers can still override this per
         // instance by passing their own onPointerDownOutside.
         onPointerDownOutside={onPointerDownOutside ?? ((e) => e.preventDefault())}
+        // Focus returns to the control that opened the menu this dialog came from (lib/focusReturn).
+        onOpenAutoFocus={(e) => {
+          armFocusReturn()
+          onOpenAutoFocus?.(e)
+        }}
+        onCloseAutoFocus={(e) => {
+          onCloseAutoFocus?.(e)
+          if (!e.defaultPrevented) restoreFocusAfterDialog(e)
+        }}
         {...props}
       >
         {children}

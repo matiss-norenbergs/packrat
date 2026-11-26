@@ -273,7 +273,7 @@ export function CollectionDialog({
                                 deleteCover.mutate()
                               }}
                               disabled={deleteCover.isPending}
-                              className="absolute top-1.5 right-1.5 rounded-full bg-black/70 p-1 text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-50"
+                              className="absolute top-1.5 right-1.5 rounded-full bg-black/70 p-1 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
                             >
                               <X className="h-4 w-4" />
                             </button>

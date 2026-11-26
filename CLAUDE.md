@@ -90,6 +90,9 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - **Accessible names:** an icon-only button or link uses `TooltipIconButton` (`components/ui/tooltip-icon-button.tsx`; one `label` is both
   the tooltip and the `aria-label`: a tooltip alone is never read on touch or by TalkBack). A label never contains an unmasked private name:
   use the same masking as the visible text (`hashText`, `useTagNameMask`, `useArtistNameMask` with the same reveal state) or a generic label.
+- **Hover-only controls must also appear on focus:** anything that is `opacity-0` until hover gets `focus-visible:opacity-100` (or
+  `group-focus-within/…:opacity-100` for a group of controls), and a `pointer-events-none` wrapper needs `focus-visible:pointer-events-auto`
+  on the control. A dialog opened from a menu item returns focus by itself (`lib/focusReturn`); never fall back to `<body>`.
 - Colors: never hardcode status colors — use `--success` / `--warning` / `--destructive` tokens
   (`Badge` variants `success|warning|destructive`). Never `text-white` on `bg-primary`; use
   `text-primary-foreground` (the Monochrome accent flips it per theme).

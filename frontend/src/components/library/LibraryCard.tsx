@@ -125,7 +125,7 @@ function LibraryCardImpl({ item }: { item: LibraryItem }) {
             // ring gives a duotone edge that reads against both light and
             // dark frames, unlike a single-color border.
             "absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)] transition-opacity",
-            selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-data-[selecting]/lib-grid:opacity-100",
+            selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-data-[selecting]/lib-grid:opacity-100",
           )}
           // Same masking as the visible title: a blurred, unrevealed item is announced by its hash, never its real title.
           aria-label={`Select ${item.blurred && !revealed ? hashText(item.title) : item.title}`}
@@ -141,7 +141,7 @@ function LibraryCardImpl({ item }: { item: LibraryItem }) {
               label="Play"
               variant="ghost"
               size="icon"
-              className="pointer-events-none h-12 w-12 rounded-full bg-background/80 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background/90 group-hover:pointer-events-auto group-hover:opacity-100"
+              className="pointer-events-none h-12 w-12 rounded-full bg-background/80 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background/90 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
               onClick={(e) => {
                 e.stopPropagation()
                 navigateFromHere(`/library/${item.id}`)

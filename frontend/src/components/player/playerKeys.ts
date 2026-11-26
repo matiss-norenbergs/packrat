@@ -6,6 +6,17 @@ export const isTypingTarget = (t: EventTarget | null) => {
   return t.isContentEditable || (["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) && !(t instanceof HTMLInputElement && t.type === "range"))
 }
 
+const OWNS_KEYS_SELECTOR =
+  "button, a[href], input, select, textarea, summary, [contenteditable]:not([contenteditable=false]), " +
+  "[role=button], [role=link], [role=slider], [role=switch], [role=checkbox], [role=radio], [role=tab], [role=combobox], " +
+  "[role=textbox], [role=spinbutton], [role=listbox], [role=option], [role=menu], [role=menuitem], [role=menuitemradio], [role=menuitemcheckbox]"
+
+/**
+ * True when keyboard focus sits on a control that uses Space / Enter / arrows itself (button, link, field, slider,
+ * menu...). A player that is only *hovered* (focus elsewhere) must leave such a key alone.
+ */
+export const focusedControlOwnsKeys = (t: EventTarget | null) => t instanceof HTMLElement && t.closest(OWNS_KEYS_SELECTOR) !== null
+
 /** What the page needs to know about the element a key press landed on. */
 export interface KeyTarget {
   tag: string
