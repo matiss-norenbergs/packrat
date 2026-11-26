@@ -158,6 +158,9 @@ item playing in the bottom-right corner while you browse (not in the Android app
 - Rows scroll by swiping and settle on a tile edge. With a touch screen the rows have no arrow
   buttons over the edge tiles, and the page dots under a row are only an indicator (with a mouse,
   the hover arrows and clickable dots work as before).
+- The hero pauses its rotation while the mouse is over it, while keyboard focus is anywhere inside it, and after
+  you press Pause; with the OS "reduce motion" setting it starts paused (Play, Previous and Next still work) and
+  the rows scroll without animation. Its buttons also appear when they have keyboard focus.
 - The hero's previous/pause/next buttons and the Continue Watching tiles' remove (×) button appear on
   hover with a mouse and are always shown with touch input; buttons in the header, the player's back
   and minimize buttons, the hero's buttons and the mini player's buttons have a 44 px tap area on touch.
@@ -855,7 +858,7 @@ position, **Continue Watching** progress, autoplay and the private-item lock wor
 - **Can't be played** — when the browser can't decode a file (unsupported codec/container, damaged
   or unreachable file) the player shows "This file can't be played in the browser" with the reason
   when known, instead of a black box.
-- **Keyboard** (while the player is focused or hovered, never while typing):
+- **Keyboard** (while the player is focused or hovered, never while typing; a hovered player leaves the keys to a button, link, slider or menu that has focus elsewhere on the page):
 
   | Key | Action |
   |---|---|
@@ -889,6 +892,9 @@ A scratch list for lining files up to play back side by side. Add files from the
 (select one or more items, or whole collections) via "Add to compare list" — the list persists
 server-side across sessions until you remove items or clear it. From the Compare list page, check
 up to 6 files and hit **Play selected** to open a side-by-side playback grid (1×1, 2×1, 2×2 or 3×2 for 1–6 files).
+
+A blurred, unrevealed item's tile in the Compare list hashes its title **and its artist name** like every other
+tile; revealing the item shows both.
 
 **Each cell** is a player with the [media player skin](#media-player) in its one-row form (play/pause, seek bar, time,
 volume) over the video, with the file's title in a top-left gradient that shows and hides with the bar; audio files

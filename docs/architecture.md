@@ -1815,6 +1815,35 @@ transition is switched off only while dragging.
   blur filter would smear an outline drawn on it, so the keyboard focus ring is an outline on the image's parent
   (`[data-reveal-focus]` in `globals.css`, set only for `:focus-visible`). Hashed titles use the same props
   (`revealToggleProps`). `data-no-row-select` guards on table cells stay as they were.
+- **Hover vs focus in the player** (`PlayerSkin`): the document key handler also acts while the pointer merely hovers the
+  frame, but only when focus is on `body` or a non-interactive element. A focused button, link, field, slider or menu
+  outside the frame (`focusedControlOwnsKeys` in `playerKeys.ts`, a superset of `targetHandlesKey`) keeps its keys and the
+  handler neither acts nor `preventDefault`s. Inside the frame, and `shortcuts="focus"` scopes, nothing changed.
+- **Hover-only controls also show on focus.** Every `opacity-0 … group-hover:opacity-100` control carries
+  `focus-visible:opacity-100` (a button) or `group-focus-within/…:opacity-100` on its row (the hero's Previous/Pause/Next, like
+  `BrowseTile`'s menu); a `pointer-events-none` wrapper (LibraryCard's Play) adds `focus-visible:pointer-events-auto`. CSS classes only:
+  the memoized card gets no hook or prop, and the mouse/touch look is pixel-identical. Same-class sites fixed: the thumbnail
+  gallery / picker / compare / frame-match overlays, artist and collection dialog remove buttons, the collection folder
+  checkbox, the scroller arrows and the sequence gap inserter. Not touched: `CollectionDialog`'s decorative `pointer-events-none`
+  overlay (not focusable) and `BrowseTile` (already right).
+- **Reduced motion** (`lib/motion.ts`, `hooks/useReducedMotion.ts`): the Browse hero starts paused (the user's Play / Pause
+  choice overrides the preference afterwards, and the hero follows a change of the preference until they choose), pauses
+  while focus is inside it (a blur from the window losing focus keeps the pause), and `HorizontalScroller` scrolls with
+  `behavior: "auto"` (read at call time) plus `motion-reduce:scroll-auto` on its list.
+- **Focus returns after menu-opened dialogs** (`lib/focusReturn.ts`, wired once in `DropdownMenuItem`, `ContextMenuItem`,
+  `DialogContent` and `AlertDialogContent`): selecting a menu item records the control that opened the menu (the ⋮ trigger,
+  found from the menu's `aria-labelledby` chain; for a context menu the right-clicked row, or the focused element when the menu
+  was opened from the keyboard); the dialog that opens next arms it, and on close focus goes back there. If it is gone or cannot
+  take focus (deleted item, the card ⋮ hidden during a selection) it falls to the enclosing `[data-focus-region]` /
+  `[data-slot=table-container]`, then `<main>`, never `<body>`; a region is made script-focusable on demand
+  (`tabindex=-1`, no tab stop). While another dialog is open (a chain such as custom range → picker) the origin is kept for the
+  last one. A dialog not opened from a menu is untouched. Because it lives in the shared ui components, the library host, the
+  list view, Collections, Artists, Tags, Subscriptions and History all use it without changes.
+- **Mobile navigation** (`MobileNav`) is the new `components/ui/sheet.tsx` (Radix Dialog): modal dialog with a hidden title, focus
+  trap, Escape, focus in on open and back to the toggle (a `SheetTrigger`, so it reports `aria-expanded`). Same width, side,
+  backdrop, links and button names as the old overlay; navigation still closes it.
+- **Compare tile**: `CompareListTile` shows the artist through `useArtistNameMask` with the item's reveal state (the uploader
+  fallback stays unmasked, as on `LibraryCard`).
 - **Dialogs and popovers are named**: every `DialogContent` has a `DialogDescription` (or `sr-only` text) so Radix logs no
   "Missing Description" warning, and every `PopoverContent` (role `dialog`) has an `aria-label`.
 
