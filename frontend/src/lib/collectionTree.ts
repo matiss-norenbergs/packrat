@@ -1,4 +1,4 @@
-import type { Collection } from "@/types/api"
+import type { Collection, DownloadType } from "@/types/api"
 
 export interface CollectionTreeNode extends Collection {
   children: CollectionTreeNode[]
@@ -66,6 +66,35 @@ export function resolveInheritedArtistId(collections: Collection[], collectionId
     current = current.parentId != null ? byId.get(current.parentId) : undefined
   }
   return null
+}
+
+// What picking a collection pre-fills in the New Download and Add item
+// dialogs. downloadType/quality always come back; the rest are undefined when
+// the collection (or, for the artist, its nearest ancestor) doesn't define
+// one. Each dialog applies the parts it cares about to its own state — a
+// value is only ever set, never cleared.
+export interface CollectionDefaults {
+  downloadType: DownloadType
+  quality: string
+  seasonNumber?: number
+  year?: number
+  artistId?: number
+  filenameTemplate?: string
+}
+
+export function collectionDefaults(
+  collection: Collection | null | undefined,
+  collections: Collection[],
+): CollectionDefaults | null {
+  if (!collection) return null
+  return {
+    downloadType: collection.defaultDownloadType,
+    quality: collection.defaultQuality,
+    seasonNumber: collection.seasonNumber ?? undefined,
+    year: collection.year ?? undefined,
+    artistId: resolveInheritedArtistId(collections, collection.id) ?? undefined,
+    filenameTemplate: collection.filenameTemplate || undefined,
+  }
 }
 
 // Alphabetical by full path — the same text every collection-picking Select

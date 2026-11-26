@@ -26,7 +26,7 @@ import { useCollections } from "@/hooks/useCollections"
 import { useDownloadPreview } from "@/hooks/useDownloads"
 import { useCreateGhostLibraryItem } from "@/hooks/useLibrary"
 import { useTags } from "@/hooks/useTags"
-import { sortCollectionsByPath } from "@/lib/collectionTree"
+import { collectionDefaults, sortCollectionsByPath } from "@/lib/collectionTree"
 import { formatDuration } from "@/lib/utils"
 import { ArtistSelect, NO_ARTIST } from "./ArtistSelect"
 import { SequenceNumberField } from "./SequenceNumberField"
@@ -92,10 +92,15 @@ export function AddGhostLibraryItemDialog({ open, onOpenChange }: AddGhostLibrar
 
   const handleCollectionChange = (value: string) => {
     setCollectionId(value)
-    const collection = collections?.find((c) => String(c.id) === value)
+    const defaults = collectionDefaults(collections?.find((c) => String(c.id) === value), collections ?? [])
+    if (!defaults) return
     // Ghost items don't support "image" — a collection defaulted to Image
-    // just leaves the current video/audio selection alone.
-    if (collection && collection.defaultDownloadType !== "image") setMediaType(collection.defaultDownloadType)
+    // just leaves the current video/audio selection alone. Quality and the
+    // filename template have nothing to act on without a file.
+    if (defaults.downloadType !== "image") setMediaType(defaults.downloadType)
+    if (defaults.seasonNumber != null) setSeasonNumber(String(defaults.seasonNumber))
+    if (defaults.year != null) setYear(String(defaults.year))
+    if (defaults.artistId != null) setArtistId(String(defaults.artistId))
   }
 
   const reset = () => {

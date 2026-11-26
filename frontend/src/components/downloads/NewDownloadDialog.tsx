@@ -35,7 +35,7 @@ import { useTags } from "@/hooks/useTags"
 import { cn, duplicateTitle, formatDuration } from "@/lib/utils"
 import { previewImageUrl, remoteThumbnailSrc } from "@/lib/api"
 import { resolveFilenameTemplatePreview } from "@/lib/nametemplate"
-import { resolveInheritedArtistId, sortCollectionsByPath } from "@/lib/collectionTree"
+import { collectionDefaults, sortCollectionsByPath } from "@/lib/collectionTree"
 import { invalidSegmentChars, invalidTemplateChars } from "@/lib/filenameValidation"
 import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
 import { SequenceNumberField } from "@/components/library/SequenceNumberField"
@@ -190,27 +190,25 @@ export function NewDownloadDialog() {
 
   const handleCollectionChange = (value: string) => {
     setCollectionId(value)
-    const collection = collections?.find((c) => String(c.id) === value)
-    if (collection) {
-      setDownloadType(collection.defaultDownloadType)
-      setQuality(collection.defaultQuality as VideoQuality)
-      if (collection.seasonNumber != null) {
-        setSeasonNumber(String(collection.seasonNumber))
-        setAdvancedOpen(true)
-      }
-      if (collection.year != null) {
-        setYear(String(collection.year))
-        setAdvancedOpen(true)
-      }
-      const inheritedArtistId = resolveInheritedArtistId(collections ?? [], collection.id)
-      if (inheritedArtistId != null) {
-        setArtistId(String(inheritedArtistId))
-        setAdvancedOpen(true)
-      }
-      if (!filenameTemplate.trim() && collection.filenameTemplate) {
-        setFilenameTemplate(collection.filenameTemplate)
-        setAdvancedOpen(true)
-      }
+    const defaults = collectionDefaults(collections?.find((c) => String(c.id) === value), collections ?? [])
+    if (!defaults) return
+    setDownloadType(defaults.downloadType)
+    setQuality(defaults.quality as VideoQuality)
+    if (defaults.seasonNumber != null) {
+      setSeasonNumber(String(defaults.seasonNumber))
+      setAdvancedOpen(true)
+    }
+    if (defaults.year != null) {
+      setYear(String(defaults.year))
+      setAdvancedOpen(true)
+    }
+    if (defaults.artistId != null) {
+      setArtistId(String(defaults.artistId))
+      setAdvancedOpen(true)
+    }
+    if (!filenameTemplate.trim() && defaults.filenameTemplate) {
+      setFilenameTemplate(defaults.filenameTemplate)
+      setAdvancedOpen(true)
     }
   }
 
