@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
+import { useArtistNameMask } from "@/hooks/useArtistNameMask"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { REVEAL_TEXT_FOCUS_CLASS, revealToggleProps } from "@/lib/revealToggle"
 import { cn, formatDuration, hashText } from "@/lib/utils"
@@ -29,6 +30,7 @@ interface CompareListTileProps {
 export function CompareListTile({ item, selected, canSelect, onToggle, onRemove }: CompareListTileProps) {
   const { isRevealed, toggleItem: toggleReveal } = useRevealAll()
   const revealed = isRevealed(item.id)
+  const maskArtist = useArtistNameMask()
   const thumbUrl = libraryMediumThumbnailUrl(item)
   const isGhost = item.status === "ghost"
   // A ghost item has no file to play — it can still sit in the list (added
@@ -99,7 +101,8 @@ export function CompareListTile({ item, selected, canSelect, onToggle, onRemove 
           {shownTitle}
         </p>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span className="truncate">{item.artistName ?? item.uploader ?? "Uncategorized"}</span>
+          {/* Same masking as LibraryCard: a blurred, unrevealed item's artist shows hashed; the uploader is not an artist. */}
+          <span className="truncate">{item.artistName ? maskArtist(item.artistId, item.artistName, revealed || !item.blurred) : (item.uploader ?? "Uncategorized")}</span>
           {item.duration != null && <span>{formatDuration(item.duration)}</span>}
         </div>
       </div>
