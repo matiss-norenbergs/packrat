@@ -200,7 +200,7 @@ export function HorizontalScroller({ children, className }: { children: ReactNod
               type="button"
               aria-label="Scroll left"
               onClick={() => handleArrow("left")}
-              className="absolute inset-y-0 left-0 z-20 flex w-6 items-center justify-center opacity-100 transition-opacity pointer-coarse:hidden md:w-10 md:opacity-0 md:group-hover/scroller:opacity-100"
+              className="absolute inset-y-0 left-0 z-20 flex w-6 items-center justify-center opacity-100 transition-opacity pointer-coarse:hidden md:w-10 md:opacity-0 md:group-hover/scroller:opacity-100 md:focus-visible:opacity-100"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:bg-background/95">
                 <ChevronLeft className="h-5 w-5" />
@@ -210,7 +210,7 @@ export function HorizontalScroller({ children, className }: { children: ReactNod
               type="button"
               aria-label="Scroll right"
               onClick={() => handleArrow("right")}
-              className="absolute inset-y-0 right-0 z-20 flex w-6 items-center justify-center opacity-100 transition-opacity pointer-coarse:hidden md:w-10 md:opacity-0 md:group-hover/scroller:opacity-100"
+              className="absolute inset-y-0 right-0 z-20 flex w-6 items-center justify-center opacity-100 transition-opacity pointer-coarse:hidden md:w-10 md:opacity-0 md:group-hover/scroller:opacity-100 md:focus-visible:opacity-100"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:bg-background/95">
                 <ChevronRight className="h-5 w-5" />

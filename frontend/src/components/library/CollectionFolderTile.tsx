@@ -53,7 +53,7 @@ export function CollectionFolderTile({
           // stays legible regardless of the card's background — mirrors
           // LibraryCard's/CompareListTile's fix for the same issue.
           "absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)] transition-opacity",
-          selectionActive || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          selectionActive || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
         )}
         aria-label={`Select ${node.name}`}
       />

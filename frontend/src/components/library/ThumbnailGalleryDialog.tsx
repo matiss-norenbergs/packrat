@@ -338,7 +338,7 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
                                     aria-label="Set as thumbnail"
                                     disabled={applyThumbnail.isPending}
                                     onClick={() => applyThumbnail.mutate({ id: item.id, galleryId: img.id })}
-                                    className="absolute left-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100 disabled:opacity-50"
+                                    className="absolute left-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
                                   >
                                     <CheckCircle2 className="h-3.5 w-3.5" />
                                   </button>
@@ -353,7 +353,7 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
                                     onClick={() => setFavorite.mutate({ id: item.id, galleryId: img.id, isFavorite: !img.isFavorite })}
                                     className={cn(
                                       "absolute bottom-1.5 right-1.5 rounded-full bg-black/70 p-1.5 text-white transition hover:bg-black/90",
-                                      !img.isFavorite && "opacity-0 group-hover:opacity-100",
+                                      !img.isFavorite && "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
                                     )}
                                   >
                                     <Heart className={cn("h-3.5 w-3.5", img.isFavorite && "fill-current")} />
@@ -367,7 +367,7 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
                                     type="button"
                                     aria-label="Remove from gallery"
                                     onClick={() => setConfirmDeleteIds([img.id])}
-                                    className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100"
+                                    className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100 focus-visible:opacity-100"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>

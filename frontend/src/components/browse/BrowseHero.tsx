@@ -82,7 +82,7 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
             ))}
           </div>
           {/* Hover reveals these with a mouse; on touch (no hover) they are always shown. */}
-          <div className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/hero:opacity-100 pointer-coarse:gap-0 pointer-coarse:opacity-100">
+          <div className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/hero:opacity-100 group-focus-within/hero:opacity-100 pointer-coarse:gap-0 pointer-coarse:opacity-100">
             <HeroIconButton label="Previous" onClick={() => goTo(index - 1)}>
               <ChevronLeft className="h-3.5 w-3.5" />
             </HeroIconButton>

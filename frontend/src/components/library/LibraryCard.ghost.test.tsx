@@ -118,3 +118,20 @@ describe("download progress bar", () => {
     await waitFor(() => expect(screen.queryByRole("progressbar")).toBeNull())
   })
 })
+
+describe("LibraryCard focus reveal", () => {
+  it("the Select checkbox and Play button reveal themselves when keyboard-focused", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event")
+    const user = userEvent.setup()
+    renderCard(item({}))
+    await user.tab()
+    const select = screen.getByRole("checkbox")
+    expect(select).toHaveFocus()
+    expect(select).toHaveClass("opacity-0", "focus-visible:opacity-100")
+    await user.tab()
+    const play = screen.getByRole("button", { name: "Play" })
+    expect(play).toHaveFocus()
+    // The wrapper ignores the pointer; the focused button must still be operable and visible.
+    expect(play).toHaveClass("opacity-0", "focus-visible:opacity-100", "focus-visible:pointer-events-auto")
+  })
+})

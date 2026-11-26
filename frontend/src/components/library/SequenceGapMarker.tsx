@@ -37,7 +37,7 @@ export function SequenceGapInsertButton({ onInsert }: { onInsert: () => void }) 
         type="button"
         onClick={onInsert}
         aria-label="Reserve a missing sequence number here"
-        className="h-2 w-full rounded opacity-0 transition hover:bg-muted/60 hover:opacity-100"
+        className="h-2 w-full rounded opacity-0 transition hover:bg-muted/60 hover:opacity-100 focus-visible:bg-muted/60 focus-visible:opacity-100"
       />
     </div>
   )
