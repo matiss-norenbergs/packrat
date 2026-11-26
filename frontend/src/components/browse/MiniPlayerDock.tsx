@@ -58,7 +58,7 @@ export function MiniPlayerDock() {
             <button
               type="button"
               onClick={expand}
-              className="min-w-0 flex-1 truncate text-left text-xs font-medium hover:underline"
+              className="min-w-0 flex-1 truncate text-left text-xs font-medium hover:underline pointer-coarse:min-h-11"
             >
               {item.title}
             </button>

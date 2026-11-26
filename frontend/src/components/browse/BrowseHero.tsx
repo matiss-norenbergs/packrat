@@ -118,7 +118,7 @@ export function BrowseHero({ items }: { items: LibraryItem[] }) {
         <p className="max-w-xl text-sm text-muted-foreground line-clamp-2 md:text-base">
           {item.artistName ?? item.uploader ?? item.collectionName ?? ""}
         </p>
-        <Button asChild size="lg" className="gap-2">
+        <Button asChild size="lg" className="gap-2 pointer-coarse:min-h-11">
           <Link to={`/browse/${item.id}`}>
             <Play className="h-5 w-5" />
             Play

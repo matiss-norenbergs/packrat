@@ -32,6 +32,17 @@ async function openMenu(it: LibraryItem) {
 }
 
 describe("LibraryItemActionsMenu", () => {
+  it("keeps the 28px trigger by default and grows it on touch only when the host asks (the item page)", () => {
+    const wrap = (ui: React.ReactNode) => (
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>
+    )
+    const { rerender } = render(wrap(<LibraryItemActionsMenu item={item()} />))
+    expect(screen.getByRole("button", { name: "Actions" })).toHaveClass("h-7", "w-7")
+    expect(screen.getByRole("button", { name: "Actions" }).className).not.toContain("pointer-coarse")
+    rerender(wrap(<LibraryItemActionsMenu item={item()} triggerClassName="pointer-coarse:size-11" />))
+    expect(screen.getByRole("button", { name: "Actions" })).toHaveClass("h-7", "w-7", "pointer-coarse:size-11")
+  })
+
   it("shows only Copy URL, Metadata and Delete while the item is downloading", async () => {
     await openMenu(item({ status: "ghost", activeDownloadId: 3 }))
     const entries = (await screen.findAllByRole("menuitem")).map((e) => e.textContent?.trim())
