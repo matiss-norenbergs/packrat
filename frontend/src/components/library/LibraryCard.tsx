@@ -2,14 +2,15 @@ import { memo, type ComponentProps, type ReactNode } from "react"
 import { Ghost, Play } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { ResolutionValue } from "@/components/ResolutionValue"
 import { ThumbnailDimensionsValue } from "@/components/ThumbnailDimensionsValue"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
+import { REVEAL_TEXT_FOCUS_CLASS, revealToggleProps } from "@/lib/revealToggle"
 import { useNavigateFromHere } from "@/hooks/useNavigateFromHere"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { DownloadProgressBar } from "./DownloadProgressBar"
@@ -67,7 +68,10 @@ function CardTitle({ item, revealed }: { item: LibraryItem; revealed: boolean })
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <p className="line-clamp-2 cursor-pointer text-sm font-medium" onClick={() => toggleItem(item.id)}>
+        <p
+          className={cn("line-clamp-2 cursor-pointer text-sm font-medium", REVEAL_TEXT_FOCUS_CLASS)}
+          {...revealToggleProps(revealed, () => toggleItem(item.id), "title")}
+        >
           {number}
           {!revealed ? hashText(item.title) : item.title}
         </p>
@@ -123,7 +127,8 @@ function LibraryCardImpl({ item }: { item: LibraryItem }) {
             "absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)] transition-opacity",
             selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-data-[selecting]/lib-grid:opacity-100",
           )}
-          aria-label="Select"
+          // Same masking as the visible title: a blurred, unrevealed item is announced by its hash, never its real title.
+          aria-label={`Select ${item.blurred && !revealed ? hashText(item.title) : item.title}`}
         />
         {/* Hidden (not unmounted) during a selection, so starting and clearing one does not mount a menu per card;
             display: none also takes it out of the tab order. */}
@@ -132,22 +137,18 @@ function LibraryCardImpl({ item }: { item: LibraryItem }) {
         </div>
         {item.status !== "ghost" && (
           <div className={"pointer-events-none absolute inset-0 flex items-center justify-center group-data-[selecting]/lib-grid:hidden"}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="pointer-events-none h-12 w-12 rounded-full bg-background/80 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background/90 group-hover:pointer-events-auto group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    navigateFromHere(`/library/${item.id}`)
-                  }}
-                >
-                  <Play className="h-6 w-6" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Play</TooltipContent>
-            </Tooltip>
+            <TooltipIconButton
+              label="Play"
+              variant="ghost"
+              size="icon"
+              className="pointer-events-none h-12 w-12 rounded-full bg-background/80 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background/90 group-hover:pointer-events-auto group-hover:opacity-100"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigateFromHere(`/library/${item.id}`)
+              }}
+            >
+              <Play className="h-6 w-6" />
+            </TooltipIconButton>
           </div>
         )}
       </div>

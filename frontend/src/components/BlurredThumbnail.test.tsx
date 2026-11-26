@@ -94,3 +94,81 @@ describe("BlurredThumbnail element identity", () => {
     expect(onToggle).toHaveBeenCalledTimes(1)
   })
 })
+
+// The private-item reveal is keyboard-operable: the <img> itself is the button, so its box and blur are untouched.
+describe("BlurredThumbnail reveal toggle (accessibility)", () => {
+  function ui(props: Partial<React.ComponentProps<typeof BlurredThumbnail>>) {
+    return (
+      <TooltipProvider>
+        <BlurredThumbnail src="/a.jpg" blurred revealed={false} onToggleReveal={() => {}} {...props} />
+      </TooltipProvider>
+    )
+  }
+
+  it("is a button named 'Reveal image', not pressed, while blurred and hidden", () => {
+    render(ui({}))
+    const button = screen.getByRole("button", { name: "Reveal image" })
+    expect(button).toHaveAttribute("aria-pressed", "false")
+    expect(button).toHaveAttribute("tabindex", "0")
+    expect(button.tagName).toBe("IMG")
+  })
+
+  it("follows the state: 'Hide image' and pressed once revealed", () => {
+    render(ui({ revealed: true }))
+    expect(screen.getByRole("button", { name: "Hide image" })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.queryByRole("button", { name: "Reveal image" })).toBeNull()
+  })
+
+  it("toggles with a click, Enter and Space, and Space does not scroll the page", () => {
+    const onToggle = vi.fn()
+    render(ui({ onToggleReveal: onToggle }))
+    const button = screen.getByRole("button", { name: "Reveal image" })
+    fireEvent.click(button)
+    fireEvent.keyDown(button, { key: "Enter" })
+    const space = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true })
+    button.dispatchEvent(space)
+    expect(onToggle).toHaveBeenCalledTimes(3)
+    expect(space.defaultPrevented).toBe(true)
+  })
+
+  it("ignores other keys", () => {
+    const onToggle = vi.fn()
+    render(ui({ onToggleReveal: onToggle }))
+    fireEvent.keyDown(screen.getByRole("button", { name: "Reveal image" }), { key: "a" })
+    fireEvent.keyDown(screen.getByRole("button", { name: "Reveal image" }), { key: "Tab" })
+    expect(onToggle).not.toHaveBeenCalled()
+  })
+
+  it("is no button when not blurred", () => {
+    render(ui({ blurred: false, alt: "thumb" }))
+    expect(screen.queryByRole("button")).toBeNull()
+    expect(screen.getByAltText("thumb")).not.toHaveAttribute("tabindex")
+  })
+
+  it("is no button when not interactive (a selection is active)", () => {
+    render(ui({ interactive: false, alt: "thumb" }))
+    expect(screen.queryByRole("button")).toBeNull()
+    expect(screen.getByAltText("thumb")).not.toHaveAttribute("tabindex")
+  })
+
+  it("keeps the layout classes and the blur untouched", () => {
+    render(ui({ className: "absolute inset-0 h-full w-full object-cover" }))
+    const img = screen.getByRole("button", { name: "Reveal image" })
+    expect(img).toHaveClass("absolute", "inset-0", "h-full", "w-full", "object-cover", "blur-md", "cursor-pointer")
+  })
+
+  it("marks the parent for the keyboard focus ring only for keyboard focus, and clears it on blur", () => {
+    render(<div data-testid="frame">{ui({})}</div>)
+    const img = screen.getByRole("button", { name: "Reveal image" })
+    const frame = screen.getByTestId("frame")
+    // jsdom has no :focus-visible; stand in for the browser's answer.
+    const matches = vi.spyOn(img, "matches").mockReturnValue(true)
+    fireEvent.focus(img)
+    expect(frame).toHaveAttribute("data-reveal-focus")
+    fireEvent.blur(img)
+    expect(frame).not.toHaveAttribute("data-reveal-focus")
+    matches.mockReturnValue(false) // a mouse click focuses the image too, but draws no ring
+    fireEvent.focus(img)
+    expect(frame).not.toHaveAttribute("data-reveal-focus")
+  })
+})
