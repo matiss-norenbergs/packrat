@@ -87,6 +87,9 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - Column alignment (global rule): date / status-tag / switch / icon columns centered, numeric
   (counts, sizes, durations, dimensions) right-aligned, everything else left. Bare SVG icons are
   `display:block` under Tailwind preflight — `text-center` won't center them; use `mx-auto`.
+- **Accessible names:** an icon-only button or link uses `TooltipIconButton` (`components/ui/tooltip-icon-button.tsx`; one `label` is both
+  the tooltip and the `aria-label`: a tooltip alone is never read on touch or by TalkBack). A label never contains an unmasked private name:
+  use the same masking as the visible text (`hashText`, `useTagNameMask`, `useArtistNameMask` with the same reveal state) or a generic label.
 - Colors: never hardcode status colors — use `--success` / `--warning` / `--destructive` tokens
   (`Badge` variants `success|warning|destructive`). Never `text-white` on `bg-primary`; use
   `text-primary-foreground` (the Monochrome accent flips it per theme).

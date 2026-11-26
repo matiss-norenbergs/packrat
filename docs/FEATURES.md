@@ -948,6 +948,17 @@ before removing every item (your library files are unaffected either way).
 
 Private items are blurred here too; the [reveal-all floating button](#reveal-all-floating-button) toggles them.
 
+## Revealing a private item from the keyboard
+
+Besides clicking, a blurred item's thumbnail and its hashed title are keyboard-operable on every page that blurs them
+(Library grid, list and folder views, Compare list, Downloads, Browse tiles, the strip tiles, the side panels): Tab to
+the thumbnail (or title), then **Enter** or **Space** reveals it, and again hides it. A screen reader announces a toggle
+button, "Reveal image" / "Hide image" (or "Reveal title" / "Hide title"), pressed once revealed; the labels never carry the
+item's real name. The focus ring is drawn around the thumbnail's frame (only for keyboard focus, never after a mouse
+click); the thumbnail itself looks and blurs exactly as before. A thumbnail that is not blurred, or whose card is in a
+selection (a click selects instead), is not a button. The [reveal-all floating button](#reveal-all-floating-button) is the
+keyboard path to every item at once.
+
 ## Reveal-all floating button
 
 A round eye button floats at the bottom-left of the content area (clear of the sidebar on desktop) on
@@ -1054,13 +1065,14 @@ below), newest first, 50 per page, with a count footer.
   clears the selection.
 - Columns: **Time** (sortable, newest first by default), **Level** (a tag: info neutral, warning amber,
   error red; sortable), **Category** (sortable) and **Message**. No saved Table layout here.
-- Toolbar: **Delete** (the selected events) on the left (disabled with nothing selected; a confirmation shows the
-  count; the list and the filter dropdowns refresh afterwards). On the right: **Level** and **Category**
+- Toolbar: **View details** on the left (enabled when exactly one row is selected; opens the same details dialog as a
+  double-click or the context menu, so the dialog needs no pointer gesture), then **Delete** (the selected events;
+  disabled with nothing selected; a confirmation shows the count; the list and the filter dropdowns refresh afterwards). On the right: **Level** and **Category**
   multi-selects (their options and counts come from the log itself), a **From** / **To** date range (inclusive,
   in your timezone), **Clear filters** (only while something is filtered) and a search box (debounced,
   case-insensitive match on the message).
-- The usual selection gestures work (click, shift-click ranges, ctrl/cmd-click, drag). Double-click a row, or
-  right-click → **View details**, for its message, time, level, category and the event's details as
+- The usual selection gestures work (click, shift-click ranges, ctrl/cmd-click, drag). **View details** in the toolbar,
+  a double-click on a row, or right-click → **View details** shows its message, time, level, category and the event's details as
   pretty-printed JSON in a scrollable block with a copy button.
 - Two empty states: no events at all ("No system events recorded yet…") and none matching the filters
   ("No events match these filters.").
