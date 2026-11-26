@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   buildCollectionTree,
+  collectionDefaults,
   collectDescendantIds,
   filterCollectionTree,
   findNodeById,
@@ -213,5 +214,47 @@ describe("topLevelAncestor", () => {
 
   it("returns null when the id isn't in the list at all", () => {
     expect(topLevelAncestor(collections, 999)).toBeNull()
+  })
+})
+
+describe("collectionDefaults", () => {
+  const parent = makeCollection({ id: 1, name: "Parent", artistId: 7 })
+  const full = makeCollection({
+    id: 2,
+    name: "Full",
+    parentId: 1,
+    defaultDownloadType: "audio",
+    defaultQuality: "720p",
+    seasonNumber: 3,
+    year: 2020,
+    filenameTemplate: "{title}",
+  })
+
+  it("returns everything the collection defines, with the artist inherited from an ancestor", () => {
+    expect(collectionDefaults(full, [parent, full])).toEqual({
+      downloadType: "audio",
+      quality: "720p",
+      seasonNumber: 3,
+      year: 2020,
+      artistId: 7,
+      filenameTemplate: "{title}",
+    })
+  })
+
+  it("returns only type and quality when nothing else is set", () => {
+    const bare = makeCollection({ id: 3, name: "Bare" })
+    expect(collectionDefaults(bare, [bare])).toEqual({
+      downloadType: "video",
+      quality: "best",
+      seasonNumber: undefined,
+      year: undefined,
+      artistId: undefined,
+      filenameTemplate: undefined,
+    })
+  })
+
+  it("returns null for a missing collection", () => {
+    expect(collectionDefaults(undefined, [parent])).toBeNull()
+    expect(collectionDefaults(null, [parent])).toBeNull()
   })
 })

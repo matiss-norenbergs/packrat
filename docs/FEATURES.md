@@ -241,8 +241,9 @@ The live download queue.
 - **New Download** — paste any URL `yt-dlp` supports. While it runs, its library item shows in the
   Library as a [ghost](#ghost-items) and is filled in when the file lands.
   - Pick a collection (optional). Selecting one inherits its default type/quality, and — if set —
-    its Season # and Artist defaults (see Collections below); only fills those in, never clears a
-    value you've already typed.
+    its Season #, Year and Artist (the nearest ancestor's, when the collection has none) and
+    filename template (only if that field is empty) defaults (see Collections below). It never
+    clears a field, but a value the collection defines replaces what is in that field.
   - Video, audio, or **Image**, quality/format, and an optional filename override (defaults to the
     source's title; see **Filename Template** below). Image is for a direct link to a single image file — no `yt-dlp` involved, no
     gallery/multi-image support (a real gallery-site integration is a possible future addition, not
@@ -572,7 +573,10 @@ thumbnail, and the download itself is unaffected.
 - **Add item** (Library toolbar) creates one directly: paste a source URL to prefill the title from
   a live preview and optionally fetch the thumbnail up front, or just type a title with no URL for
   a pure placeholder. Collection, artist, year, season/sequence #, tags, and Generate NFO can all
-  be set immediately, same as a real item.
+  be set immediately, same as a real item. Picking a collection fills the Season #, Year and Artist
+  (inherited from the nearest ancestor that has one) and the media type (unless the collection
+  defaults to Image, which ghosts don't support), like New Download does; it never clears a field,
+  but a value the collection defines replaces what is in that field.
 - A ghost that has a thumbnail (e.g. fetched from its source URL) shows it in grayscale in the
   Library grid, Folders view and list, and it turns to full color on hover. Ghosts without a
   thumbnail keep the placeholder icon. A blurred private ghost behaves as any private item until
