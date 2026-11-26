@@ -46,6 +46,8 @@ function Harness({
   return (
     <>
       <input aria-label="note" />
+      <button type="button">Minimize</button>
+      <a href="#x">Elsewhere</a>
       <PlayerSkin mediaRef={ref as RefObject<HTMLMediaElement | null>} kind={kind} variant={variant} title="Song" artist="Band" {...skin}>
         <video ref={ref} data-testid="media" />
       </PlayerSkin>
@@ -167,6 +169,37 @@ describe("PlayerSkin keyboard", () => {
     play.focus()
     await user.keyboard(" ")
     expect(el.play).toHaveBeenCalledTimes(1)
+  })
+
+  it("hover does not hijack keys from a control focused outside the frame", async () => {
+    const { el, s } = setup()
+    const user = userEvent.setup()
+    const onPress = vi.fn()
+    const minimize = screen.getByRole("button", { name: "Minimize" })
+    minimize.addEventListener("click", onPress)
+    fireEvent.pointerEnter(frame())
+    minimize.focus()
+    await user.keyboard(" ")
+    await user.keyboard("{Enter}")
+    expect(onPress).toHaveBeenCalledTimes(2)
+    expect(el.play).not.toHaveBeenCalled()
+    const link = screen.getByRole("link", { name: "Elsewhere" })
+    link.focus()
+    expect(fireEvent.keyDown(link, { key: "ArrowDown" })).toBe(true) // not prevented
+    expect(s.volume).toBe(1)
+  })
+
+  it("hover still works with nothing focused or a non-interactive element focused", () => {
+    const { el } = setup()
+    fireEvent.pointerEnter(frame())
+    ;(document.activeElement as HTMLElement)?.blur()
+    fireEvent.keyDown(document.body, { key: " " })
+    expect(el.play).toHaveBeenCalledTimes(1)
+    const div = document.createElement("div")
+    document.body.appendChild(div)
+    fireEvent.keyDown(div, { key: "k" })
+    expect(el.pause).toHaveBeenCalledTimes(1)
+    div.remove()
   })
 
   it("seek slider handles arrows itself", () => {
