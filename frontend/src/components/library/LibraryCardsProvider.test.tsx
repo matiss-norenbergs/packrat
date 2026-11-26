@@ -126,14 +126,14 @@ describe("the grid's shared actions host", () => {
     // The wrapper's variant hides it (display: none, so it also leaves the tab order) once the grid says "selecting".
     expect(trigger.parentElement!.className).toContain("group-data-[selecting]/lib-grid:hidden")
     thumbRenders.clear()
-    await userEvent.click(screen.getAllByRole("checkbox", { name: "Select" })[0])
+    await userEvent.click(screen.getAllByRole("checkbox", { name: /^Select / })[0])
     expect(grid.hasAttribute("data-selecting")).toBe(true)
     expect(triggers(container)[0]).toBe(trigger)
     expect(trigger.isConnected).toBe(true)
     // starting the selection re-rendered only the ticked card
     expect([...thumbRenders.keys()]).toEqual([1])
     thumbRenders.clear()
-    await userEvent.click(screen.getAllByRole("checkbox", { name: "Select" })[0])
+    await userEvent.click(screen.getAllByRole("checkbox", { name: /^Select / })[0])
     expect(grid.hasAttribute("data-selecting")).toBe(false)
     expect(triggers(container)[0]).toBe(trigger)
     expect([...thumbRenders.keys()]).toEqual([1])
@@ -146,9 +146,9 @@ describe("card render counts", () => {
   it("ticking one more checkbox re-renders only that card", async () => {
     renderGrid(make(6))
     await settle()
-    await userEvent.click(screen.getAllByRole("checkbox", { name: "Select" })[0])
+    await userEvent.click(screen.getAllByRole("checkbox", { name: /^Select / })[0])
     thumbRenders.clear()
-    await userEvent.click(screen.getAllByRole("checkbox", { name: "Select" })[2])
+    await userEvent.click(screen.getAllByRole("checkbox", { name: /^Select / })[2])
     expect(rendered()).toEqual([3])
   })
 

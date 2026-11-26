@@ -1,11 +1,11 @@
 import { Ghost, X } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
 import { libraryMediumThumbnailUrl } from "@/lib/api"
+import { REVEAL_TEXT_FOCUS_CLASS, revealToggleProps } from "@/lib/revealToggle"
 import { cn, formatDuration, hashText } from "@/lib/utils"
 import { useRevealAll } from "./RevealAllContext"
 import type { LibraryItem } from "@/types/api"
@@ -34,6 +34,8 @@ export function CompareListTile({ item, selected, canSelect, onToggle, onRemove 
   // A ghost item has no file to play — it can still sit in the list (added
   // before its file was deleted) but can never be selected into a play
   // session, regardless of the 6-item cap.
+  // The visible title, masked the same way: a private item's real title never reaches a label.
+  const shownTitle = item.blurred && !revealed ? hashText(item.title) : item.title
   const disabled = isGhost || (!selected && !canSelect)
 
   return (
@@ -66,29 +68,27 @@ export function CompareListTile({ item, selected, canSelect, onToggle, onRemove 
           onCheckedChange={onToggle}
           onClick={(e) => e.stopPropagation()}
           className="absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)]"
-          aria-label="Select for playback"
+          aria-label={`Select ${shownTitle} for playback`}
         />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="absolute top-2 right-2 z-10 rounded-full bg-background/80 backdrop-blur-sm hover:bg-background"
-              onClick={(e) => {
-                e.stopPropagation()
-                onRemove()
-              }}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Remove from compare list</TooltipContent>
-        </Tooltip>
+        <TooltipIconButton
+          label={`Remove ${shownTitle} from compare list`}
+          tooltip="Remove from compare list"
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="absolute top-2 right-2 z-10 rounded-full bg-background/80 backdrop-blur-sm hover:bg-background"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+        >
+          <X className="h-3.5 w-3.5" />
+        </TooltipIconButton>
       </div>
       <div className="space-y-1 p-3">
         <p
-          className="line-clamp-2 cursor-pointer text-sm font-medium"
+          className={cn("line-clamp-2 cursor-pointer text-sm font-medium", item.blurred && REVEAL_TEXT_FOCUS_CLASS)}
+          {...(item.blurred ? revealToggleProps(revealed, () => toggleReveal(item.id), "title") : undefined)}
           onClick={(e) => {
             if (!item.blurred) return
             e.stopPropagation()
@@ -96,7 +96,7 @@ export function CompareListTile({ item, selected, canSelect, onToggle, onRemove 
           }}
         >
           {item.sequenceNumber != null && `${item.sequenceNumber}. `}
-          {item.blurred && !revealed ? hashText(item.title) : item.title}
+          {shownTitle}
         </p>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="truncate">{item.artistName ?? item.uploader ?? "Uncategorized"}</span>

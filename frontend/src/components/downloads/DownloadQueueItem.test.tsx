@@ -7,6 +7,7 @@ import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllC
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { downloadRevealKey } from "@/lib/revealKeys"
 import { hashText } from "@/lib/utils"
+import { expectControlsNamed, expectNoPrivateText } from "@/test/a11yNames"
 import { mockFetch } from "@/test/mockApi"
 import type { Download } from "@/types/api"
 
@@ -173,5 +174,26 @@ describe("DownloadQueueItem thumbnail source", () => {
     cleanup()
     renderRows([makeDownload({ blurred: false, thumbnail: "javascript:alert(1)" })])
     expect(imgSrc()).toBeNull()
+  })
+})
+
+describe("DownloadQueueItem accessible names", () => {
+  it("names every control, with the checkbox label masked like the visible title (never the real name while hidden)", async () => {
+    const user = userEvent.setup()
+    const { container } = renderRows([makeDownload({ id: 1, title: "Alpha Secret", status: "downloading", percent: 40 })])
+    expectControlsNamed(container)
+    expectNoPrivateText(container, "Alpha Secret")
+    expect(screen.getByRole("checkbox", { name: `Select ${hashText("Alpha Secret")}` })).toBeInTheDocument()
+    expect(screen.getByRole("progressbar", { name: "Download progress" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Reveal title" }))
+    expect(screen.getByRole("checkbox", { name: "Select Alpha Secret" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Hide image" })).toHaveAttribute("aria-pressed", "true")
+  })
+
+  it("does not mask a public download's checkbox label", () => {
+    renderRows([makeDownload({ id: 3, title: "Public One", blurred: false })])
+    expect(screen.getByRole("checkbox", { name: "Select Public One" })).toBeInTheDocument()
   })
 })

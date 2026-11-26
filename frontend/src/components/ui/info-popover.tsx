@@ -25,7 +25,7 @@ export function InfoPopover({ children }: { children: ReactNode }) {
           <Info className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
-      <PopoverContent
+      <PopoverContent aria-label="More info"
         className="text-xs text-muted-foreground"
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}

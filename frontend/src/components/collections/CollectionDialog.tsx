@@ -203,7 +203,7 @@ export function CollectionDialog({
                 <div className="flex-1 space-y-2">
                   <Label>Default Type</Label>
                   <Select value={defaultDownloadType} onValueChange={(v) => setDefaultDownloadType(v as DownloadType)}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger aria-label="Default Type" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -216,7 +216,7 @@ export function CollectionDialog({
                 <div className="flex-1 space-y-2">
                   <Label>Default Quality</Label>
                   <Select value={defaultQuality} onValueChange={(v) => setDefaultQuality(v as VideoQuality)}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger aria-label="Default Quality" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -267,6 +267,7 @@ export function CollectionDialog({
                           <TooltipTrigger asChild>
                             <button
                               type="button"
+                              aria-label="Remove cover"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 deleteCover.mutate()

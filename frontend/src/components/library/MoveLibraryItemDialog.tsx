@@ -74,7 +74,7 @@ export function MoveLibraryItemDialog({ item, open, onOpenChange }: MoveLibraryI
           <div className="space-y-2">
             <Label>Collection</Label>
             <Select value={collectionId} onValueChange={setCollectionId}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger aria-label="Collection" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

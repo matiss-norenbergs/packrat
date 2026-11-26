@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { DataTable } from "@/components/data-table"
 import type { ColumnDef } from "@/components/data-table"
 import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
@@ -65,6 +65,7 @@ function ErrorBadge({ error }: { error: string }) {
         </button>
       </PopoverTrigger>
       <PopoverContent
+        aria-label="Enhancement failed"
         className="text-xs text-muted-foreground"
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
@@ -94,6 +95,7 @@ function RevertedBadge({ revertedAt }: { revertedAt: string }) {
         </Badge>
       </PopoverTrigger>
       <PopoverContent
+        aria-label="Reverted"
         className="text-xs text-muted-foreground"
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
@@ -175,6 +177,7 @@ function InstanceStatusBadge({ enabled }: { enabled: boolean }) {
         </Badge>
       </PopoverTrigger>
       <PopoverContent
+        aria-label={label}
         className="text-xs text-muted-foreground"
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
@@ -318,14 +321,9 @@ export function ThumbnailEnhancementPage() {
         width: 80,
         cell: (e) =>
           e.hasOriginalBackup && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setCompareEntry(e)}>
-                  <Eye className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Compare</TooltipContent>
-            </Tooltip>
+            <TooltipIconButton label="Compare" variant="ghost" size="icon" onClick={() => setCompareEntry(e)}>
+              <Eye className="h-4 w-4" />
+            </TooltipIconButton>
           ),
       },
     ],

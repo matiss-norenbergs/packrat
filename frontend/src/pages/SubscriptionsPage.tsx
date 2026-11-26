@@ -52,7 +52,7 @@ function LastCheckErrorBadge({ error }: { error: string }) {
           <AlertTriangle className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="text-xs text-muted-foreground" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <PopoverContent aria-label="Last check failed" className="text-xs text-muted-foreground" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
         {error}
       </PopoverContent>
     </Popover>
@@ -159,7 +159,7 @@ export function SubscriptionsPage() {
         key: "enabled",
         header: "Enabled",
         type: "switch",
-        cell: (sub) => <Switch checked={sub.enabled} onCheckedChange={(v) => toggleEnabled(sub, v)} />,
+        cell: (sub) => <Switch checked={sub.enabled} onCheckedChange={(v) => toggleEnabled(sub, v)} aria-label={`${sub.title} enabled`} />,
       },
     ],
     [toggleEnabled],

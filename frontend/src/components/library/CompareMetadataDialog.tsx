@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { ResolutionValue } from "@/components/ResolutionValue"
@@ -43,6 +43,9 @@ export function CompareMetadataDialog({ item, open, onOpenChange }: CompareMetad
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Compare Metadata</DialogTitle>
+          <DialogDescription className="sr-only">
+            The item's saved metadata next to what the source URL currently reports.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0 sm:divide-x">

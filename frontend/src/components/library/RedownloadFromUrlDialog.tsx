@@ -97,6 +97,7 @@ export function RedownloadFromUrlDialog({ item, open, onOpenChange }: Redownload
         <div className="flex gap-2">
           <Input
             placeholder="https://…"
+            aria-label="Source URL"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => {

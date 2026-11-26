@@ -53,7 +53,7 @@ function ErrorBadge({ error }: { error: string }) {
           <AlertTriangle className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
-      <PopoverContent
+      <PopoverContent aria-label="Match failed"
         className="text-xs text-muted-foreground"
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}

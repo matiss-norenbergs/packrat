@@ -1792,6 +1792,32 @@ animating wrapper would resolve against the wrong box) and exposing the pixels a
 ignore it and keep the fixed `w-80`. The slide animation and fixed-width inner container are unchanged; the width
 transition is switched off only while dragging.
 
+## Accessibility: names, labels and the private-item reveal
+
+- **Icon-only controls are named with `TooltipIconButton`** (`components/ui/tooltip-icon-button.tsx`). A Radix tooltip only
+  describes its trigger while it is open and never opens on touch, so a bare `<Tooltip><TooltipTrigger asChild><Button size="icon">`
+  is announced as just "button" (TalkBack on the Android app included). The wrapper takes one `label` that is both the tooltip
+  text and the `aria-label`, forwards every `Button` prop (ref, `disabled`, `asChild` for links, `aria-pressed`) and renders the
+  same elements as before, so nothing visual changes. Where the wrapper does not fit (a trigger that is also a
+  `DropdownMenuTrigger`/`DialogTrigger` child, a plain `<button>`) the control gets a plain `aria-label`. A label follows the state
+  of the control when its tooltip does ("Reveal image" / "Hide image"), and a toggle carries `aria-pressed` (or `aria-expanded`).
+- **Labels never leak private names.** A label is read aloud and sits in the DOM, so it is held to the rule of the visible text:
+  where it includes an item's title it uses the same masking (`hashText` while the item is blurred and not revealed; tags and
+  artists go through `useTagNameMask` / `useArtistNameMask` with the same reveal state), and where masking is not at hand it is
+  generic ("Actions", "Reveal title"). The ⋮ trigger of a card is just "Actions": it renders 3,000 times, and a label built from
+  the title would need a per-card hook. `LibraryCard`'s checkbox label ("Select <title>") derives from props the card already
+  has. `src/test/a11yNames.ts` (`expectControlsNamed`, `expectNoPrivateText`) pins both in tests, without `axe-core`.
+- **The reveal toggle is the `<img>` itself, not a wrapping `<button>`** (`BlurredThumbnail`, `lib/revealToggle.ts`). The image's
+  classes size and position it in about twenty places (`absolute inset-0`, `h-full w-full`, `aspect-video`…), so a wrapper would
+  change layout, and a `display: contents` button is not focusable in Chromium. The image gets `role="button"`, `tabIndex=0`,
+  Enter/Space handling, `aria-pressed` and a state-aware label, only while it is blurred **and** interactive; box, object-fit,
+  blur transition and the `key={src}` remount (so a switched private image never flashes sharp) are untouched. The image's own
+  blur filter would smear an outline drawn on it, so the keyboard focus ring is an outline on the image's parent
+  (`[data-reveal-focus]` in `globals.css`, set only for `:focus-visible`). Hashed titles use the same props
+  (`revealToggleProps`). `data-no-row-select` guards on table cells stay as they were.
+- **Dialogs and popovers are named**: every `DialogContent` has a `DialogDescription` (or `sr-only` text) so Radix logs no
+  "Missing Description" warning, and every `PopoverContent` (role `dialog`) has an `aria-label`.
+
 ## List tables (`DataTable`)
 
 `components/data-table/` is the shared list-table component; `TagsPage` is the reference migration and `ArtistsPage` (the table beside its `CollapsiblePanel`, passing

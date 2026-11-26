@@ -58,6 +58,7 @@ export function TableSearch({
       <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         placeholder={placeholder}
+        aria-label={placeholder.replace(/…$/, "")}
         className="pl-8 pr-7"
         value={input}
         onChange={(e) => handleChange(e.target.value)}

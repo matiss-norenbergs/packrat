@@ -144,7 +144,7 @@ function DownloadsLogView() {
         }
         filters={
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-full sm:w-[170px]">
+            <SelectTrigger className="w-full sm:w-[170px]" aria-label="Filter by status">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -204,9 +204,10 @@ export function LogsPage() {
           onValueChange={(v) => setSearchParams(v === "system" ? { view: "system" } : {}, { replace: true })}
           className="shrink-0"
         >
+          {/* A view switcher with no TabsContent panels, so drop the dangling aria-controls Radix would add. */}
           <TabsList>
-            <TabsTrigger value="downloads">Downloads</TabsTrigger>
-            <TabsTrigger value="system">System</TabsTrigger>
+            <TabsTrigger value="downloads" aria-controls={undefined}>Downloads</TabsTrigger>
+            <TabsTrigger value="system" aria-controls={undefined}>System</TabsTrigger>
           </TabsList>
         </Tabs>
       )}

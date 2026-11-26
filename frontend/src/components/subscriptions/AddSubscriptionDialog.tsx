@@ -185,7 +185,7 @@ export function AddSubscriptionDialog({ open, onOpenChange }: AddSubscriptionDia
             <div className="space-y-2">
               <Label>Type</Label>
               <Select value={mediaType} onValueChange={(v) => setMediaType(v as "video" | "audio")}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Type" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -197,7 +197,7 @@ export function AddSubscriptionDialog({ open, onOpenChange }: AddSubscriptionDia
             <div className="space-y-2">
               <Label>Collection</Label>
               <Select value={collectionId} onValueChange={handleCollectionChange}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Collection" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -216,7 +216,7 @@ export function AddSubscriptionDialog({ open, onOpenChange }: AddSubscriptionDia
           <div className="space-y-2">
             <Label>Check frequency</Label>
             <Select value={checkIntervalHours} onValueChange={setCheckIntervalHours}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger aria-label="Check frequency" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

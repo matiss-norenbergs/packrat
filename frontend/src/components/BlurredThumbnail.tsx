@@ -1,5 +1,7 @@
+import type { FocusEvent } from "react"
 import { useSettings } from "@/hooks/useSettings"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { revealToggleProps } from "@/lib/revealToggle"
 import { cn } from "@/lib/utils"
 
 // Literal class strings — Tailwind's build-time scanner only picks up whole
@@ -27,8 +29,20 @@ interface BlurredThumbnailProps {
   muted?: boolean
 }
 
+// The image's own filter blurs anything painted on it, a focus outline included, so the keyboard focus ring is drawn on
+// the image's parent instead (`[data-reveal-focus]` in globals.css), and only for keyboard focus.
+function markFocusRing(e: FocusEvent<HTMLElement>, on: boolean) {
+  const parent = e.currentTarget.parentElement
+  if (!parent) return
+  if (on && e.currentTarget.matches(":focus-visible")) parent.setAttribute("data-reveal-focus", "")
+  else parent.removeAttribute("data-reveal-focus")
+}
+
 // Click-to-reveal: a blurred thumbnail can be temporarily un-blurred by
-// clicking it, and clicking again re-blurs it. Reveal state is controlled by
+// clicking it, and clicking again re-blurs it. It is also a keyboard-operable
+// toggle (role=button, Enter / Space, aria-pressed, "Reveal image" / "Hide
+// image"): the <img> itself carries that, not a wrapping <button>, so its box,
+// object-fit and blur transition stay exactly as they were. Reveal state is controlled by
 // the parent so it can stay in sync with the item's display name, which
 // reveals alongside the thumbnail on the same click. The underlying image is
 // always fetched either way, this just controls what's visually shown.
@@ -57,7 +71,8 @@ export function BlurredThumbnail({
     <img
       key={src}
       src={src}
-      alt={alt}
+      // role=button needs a name from alt on an <img> to be valid HTML; the aria-label below is the one announced.
+      alt={clickable && !alt ? (revealed ? "Hide image" : "Reveal image") : alt}
       draggable={false}
       loading="lazy"
       decoding="async"
@@ -72,7 +87,9 @@ export function BlurredThumbnail({
           : muted && "grayscale transition-[filter] duration-150 hover:grayscale-0",
         clickable && "cursor-pointer",
       )}
-      onClick={clickable ? onToggleReveal : undefined}
+      {...(clickable ? revealToggleProps(revealed, onToggleReveal, "image") : undefined)}
+      onFocus={clickable ? (e) => markFocusRing(e, true) : undefined}
+      onBlur={clickable ? (e) => markFocusRing(e, false) : undefined}
     />
   )
 

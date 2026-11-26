@@ -38,10 +38,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -274,13 +274,14 @@ export function LibraryFiltersButton({ t, className }: { t: LibraryToolbarState;
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Filters &amp; Sort</DialogTitle>
+          <DialogDescription className="sr-only">Choose how the library is sorted and which items it shows.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Sort by</Label>
             <div className="flex gap-2">
               <Select value={draftSortKey} onValueChange={(v) => setDraftSortKey(v as LibrarySortKey)}>
-                <SelectTrigger className="flex-1">
+                <SelectTrigger className="flex-1" aria-label="Sort by">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -291,18 +292,14 @@ export function LibraryFiltersButton({ t, className }: { t: LibraryToolbarState;
                   ))}
                 </SelectContent>
               </Select>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setDraftSortDir(draftSortDir === "asc" ? "desc" : "asc")}
-                  >
-                    {draftSortDir === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{draftSortDir === "asc" ? "Ascending" : "Descending"}</TooltipContent>
-              </Tooltip>
+              <TooltipIconButton
+                label={draftSortDir === "asc" ? "Ascending" : "Descending"}
+                variant="outline"
+                size="icon"
+                onClick={() => setDraftSortDir(draftSortDir === "asc" ? "desc" : "asc")}
+              >
+                {draftSortDir === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
+              </TooltipIconButton>
             </div>
           </div>
 
@@ -310,7 +307,7 @@ export function LibraryFiltersButton({ t, className }: { t: LibraryToolbarState;
             <div className="space-y-2">
               <Label>Collection</Label>
               <Select value={draftCollectionId} onValueChange={setDraftCollectionId}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Collection" className="w-full">
                   <SelectValue placeholder="Collection" />
                 </SelectTrigger>
                 <SelectContent>
@@ -329,7 +326,7 @@ export function LibraryFiltersButton({ t, className }: { t: LibraryToolbarState;
           <div className="space-y-2">
             <Label>Year</Label>
             <Select value={draftYear} onValueChange={setDraftYear}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger aria-label="Year" className="w-full">
                 <SelectValue placeholder="Year" />
               </SelectTrigger>
               <SelectContent>
@@ -420,7 +417,7 @@ export function LibrarySettingsPopover({ t, compact = false }: { t: LibraryToolb
             <Settings className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-72 space-y-4">
+        <PopoverContent aria-label="Library display settings" align="end" className="w-72 space-y-4">
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Mode</Label>
             <div className="flex gap-1 rounded-md border p-0.5">
@@ -541,28 +538,25 @@ export function LibraryToolbar() {
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search library…"
+          aria-label="Search library"
           className="pl-8 pr-7"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
         />
         {searchInput && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setSearchInput("")
-                  update("q", null)
-                }}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Clear search</TooltipContent>
-          </Tooltip>
+          <TooltipIconButton
+            label="Clear search"
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              setSearchInput("")
+              update("q", null)
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </TooltipIconButton>
         )}
       </div>
 

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { CompareGlobalBar } from "@/components/library/CompareGlobalBar"
 import { ComparePlayerCell } from "@/components/library/ComparePlayerCell"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
@@ -178,16 +177,11 @@ export function ComparePlayPage() {
           any cell so the global keyboard scope applies. */}
       <div ref={setContainer} tabIndex={-1} className="flex h-screen w-screen flex-col overflow-hidden bg-black outline-none">
         <div className="flex shrink-0 items-center gap-2 bg-background px-2 py-1.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button asChild variant="ghost" size="icon-sm">
-                <Link to="/compare-list">
-                  <ArrowLeft className="h-4 w-4" />
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Back to compare list</TooltipContent>
-          </Tooltip>
+          <TooltipIconButton label="Back to compare list" asChild variant="ghost" size="icon-sm">
+            <Link to="/compare-list">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </TooltipIconButton>
           <h1 className="text-sm font-medium">Comparing {items.length} files</h1>
         </div>
 

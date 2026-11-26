@@ -245,7 +245,7 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange, options }: Thu
         <div className="flex items-center justify-end gap-2">
           {progress && (
             <div className="mr-auto flex min-w-0 flex-1 items-center gap-3">
-              <Progress value={percent} className="h-2" />
+              <Progress value={percent} className="h-2" aria-label="Thumbnail extraction progress" />
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                 {progress.done} / {progress.total} ({percent}%)
               </span>

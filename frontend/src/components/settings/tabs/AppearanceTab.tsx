@@ -28,7 +28,7 @@ export function AppearanceTab() {
             <div className="space-y-2">
               <Label>Theme</Label>
               <Select value={theme} onValueChange={(v) => setTheme(v as ThemePreference)}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger aria-label="Theme" className="w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -41,7 +41,7 @@ export function AppearanceTab() {
             <div className="space-y-2">
               <Label>Primary color</Label>
               <Select value={accent} onValueChange={(v) => setAccent(v as AccentColor)}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger aria-label="Primary color" className="w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

@@ -451,3 +451,10 @@
     transform: translateZ(0);
     will-change: transform;
 }
+
+/* Keyboard focus ring of a private thumbnail's reveal toggle (BlurredThumbnail): drawn on the image's parent because the
+   image's own blur filter would smear an outline on it. Set only for :focus-visible, so mouse clicks show nothing. */
+[data-reveal-focus] {
+  outline: 3px solid color-mix(in oklab, var(--ring) 80%, transparent);
+  outline-offset: -3px;
+}

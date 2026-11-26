@@ -26,7 +26,7 @@ export function ArtistSelect({ value, onValueChange }: ArtistSelectProps) {
 
   return (
     <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className="w-full">
+      <SelectTrigger className="w-full" aria-label="Artist">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

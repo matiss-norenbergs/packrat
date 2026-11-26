@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { LayoutDashboard, Search, X } from "lucide-react"
 import { PackratLogo } from "@/components/PackratLogo"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { isBrowseOnlyApp } from "@/lib/appMode"
 import { BrowseAppMenu } from "./BrowseAppMenu"
 
@@ -77,6 +76,7 @@ export function BrowseHeader() {
               <Input
                 ref={inputRef}
                 placeholder="Search your library…"
+                aria-label="Search your library"
                 className="pl-8 pr-7 pointer-coarse:h-11"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
@@ -85,39 +85,30 @@ export function BrowseHeader() {
                 }}
               />
               {searchInput && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground pointer-coarse:size-9"
-                      onClick={() => {
-                        setSearchInput("")
-                        // Clicking this button moves focus off the input onto
-                        // the button itself — without refocusing, a later click
-                        // elsewhere blurs the button (which nothing is
-                        // listening to), not the input, so the
-                        // collapse-when-empty handler below would never fire.
-                        inputRef.current?.focus()
-                      }}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Clear search</TooltipContent>
-                </Tooltip>
+                <TooltipIconButton
+                  label="Clear search"
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="absolute right-1 inset-y-0 my-auto text-muted-foreground hover:text-foreground pointer-coarse:size-9"
+                  onClick={() => {
+                    setSearchInput("")
+                    // Clicking this button moves focus off the input onto
+                    // the button itself — without refocusing, a later click
+                    // elsewhere blurs the button (which nothing is
+                    // listening to), not the input, so the
+                    // collapse-when-empty handler below would never fire.
+                    inputRef.current?.focus()
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </TooltipIconButton>
               )}
             </div>
           ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button type="button" variant="ghost" size="icon" className="pointer-coarse:size-11" onClick={() => setExpanded(true)}>
-                  <Search className="h-5 w-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Search</TooltipContent>
-            </Tooltip>
+            <TooltipIconButton label="Search" type="button" variant="ghost" size="icon" className="pointer-coarse:size-11" onClick={() => setExpanded(true)}>
+              <Search className="h-5 w-5" />
+            </TooltipIconButton>
           )}
         </div>
 
@@ -125,16 +116,11 @@ export function BrowseHeader() {
         {isBrowseOnlyApp() ? (
           <BrowseAppMenu />
         ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button asChild variant="ghost" size="icon" className="shrink-0 pointer-coarse:size-11">
-                <Link to="/">
-                  <LayoutDashboard className="h-4 w-4" />
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Manage</TooltipContent>
-          </Tooltip>
+          <TooltipIconButton label="Manage" asChild variant="ghost" size="icon" className="shrink-0 pointer-coarse:size-11">
+            <Link to="/">
+              <LayoutDashboard className="h-4 w-4" />
+            </Link>
+          </TooltipIconButton>
         )}
       </div>
     </header>

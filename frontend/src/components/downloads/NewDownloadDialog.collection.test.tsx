@@ -69,7 +69,7 @@ describe("New Download: picking a collection", () => {
     await screen.findByPlaceholderText("https://...")
     expect(screen.queryByLabelText("Season #")).toBeNull() // Advanced collapsed
     await pick(user, "Templated")
-    const template = (await screen.findByLabelText(/Filename template/i)) as HTMLInputElement
+    const template = (await screen.findByRole("textbox", { name: /^Filename template/i })) as HTMLInputElement
     expect(template.value).toBe("{title} - {year}")
 
     await user.clear(template)

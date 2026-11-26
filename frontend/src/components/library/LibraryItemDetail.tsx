@@ -5,6 +5,7 @@ import { syncMediaOnReady } from "@/lib/mediaSeek"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { HorizontalScroller } from "@/components/browse/HorizontalScroller"
 import { libraryMediumThumbnailUrl, mediaFileUrl } from "@/lib/api"
 import { useLibraryQuery } from "@/hooks/useLibrary"
@@ -135,16 +136,11 @@ export function LibraryItemDetail({
     <div>
       <div className={`relative -m-4 bg-black md:-m-6 ${playerHeightClass}`}>
         <div className="absolute left-2 top-2 z-10 flex gap-2 md:left-4 md:top-4">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button asChild variant="ghost" size="icon" className="bg-black/50 text-white hover:bg-black/70 pointer-coarse:size-11">
-                <Link to={backTo}>
-                  <ArrowLeft className="h-5 w-5" />
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Back</TooltipContent>
-          </Tooltip>
+          <TooltipIconButton label="Back" asChild variant="ghost" size="icon" className="bg-black/50 text-white hover:bg-black/70 pointer-coarse:size-11">
+            <Link to={backTo}>
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </TooltipIconButton>
           {onMinimize && !locked && !isImage && (
             <Tooltip>
               <TooltipTrigger asChild>

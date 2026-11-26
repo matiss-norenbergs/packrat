@@ -112,6 +112,8 @@ export function SystemLogView() {
   const { data: facets } = useSystemEventFacets()
   const events = data?.items ?? NO_EVENTS
   const total = data?.total ?? 0
+  // "View details" targets exactly one event: with none or several selected there is nothing to pick.
+  const selectedEvent = size === 1 ? (events.find((e) => selected.has(e.id)) ?? null) : null
 
   // Any change of the query starts a fresh selection: the selected rows may no longer be on the page.
   const update = (changes: Record<string, string | null>) => {
@@ -168,10 +170,17 @@ export function SystemLogView() {
         search={{ value: q, onChange: (value) => update({ q: value || null }), placeholder: "Search messages…" }}
         pagination={{ page, pageSize: PAGE_SIZE, total, onPageChange: (p) => { selection.clear(); setPage(p) }, itemLabel: ITEM_LABEL }}
         toolbar={
-          <Button size="sm" variant="outline" disabled={size === 0 || deleteEvents.isPending} onClick={() => setConfirmingDelete(true)}>
-            <Trash2 />
-            Delete
-          </Button>
+          <>
+            {/* The same details dialog as a double-click and the context menu open: the one way to it that needs no pointer gesture. */}
+            <Button size="sm" disabled={!selectedEvent} onClick={() => selectedEvent && setViewing(selectedEvent)}>
+              <Eye />
+              View details
+            </Button>
+            <Button size="sm" variant="outline" disabled={size === 0 || deleteEvents.isPending} onClick={() => setConfirmingDelete(true)}>
+              <Trash2 />
+              Delete
+            </Button>
+          </>
         }
         filters={
           <>

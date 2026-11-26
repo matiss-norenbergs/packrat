@@ -124,7 +124,7 @@ function TagsCell({ item }: { item: LibraryItem }) {
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto max-w-xs" align="start">
+      <PopoverContent aria-label="Tags" className="w-auto max-w-xs" align="start">
         <div className="flex flex-wrap gap-1">
           {item.tags.map((tag) => (
             <Badge key={tag} variant="secondary">

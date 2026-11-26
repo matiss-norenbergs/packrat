@@ -1,6 +1,5 @@
 import { useState } from "react"
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Eye, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { useCollections } from "@/hooks/useCollections"
 import { useDownloadPreview } from "@/hooks/useDownloads"
 import { useSettings } from "@/hooks/useSettings"
@@ -71,30 +70,15 @@ export function BulkDownloadRow({
     <div className={cn("space-y-3 rounded-md border p-3", rowNumber % 2 === 0 && "bg-muted/40")}>
       <div className="flex items-center gap-2">
         <div className="flex shrink-0 flex-col gap-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" disabled={isFirst} onClick={onMoveUp}>
-                <ArrowUp className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Move up</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" disabled={isLast} onClick={onMoveDown}>
-                <ArrowDown className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Move down</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" disabled={!canRemove} onClick={onRemove}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Remove row</TooltipContent>
-          </Tooltip>
+          <TooltipIconButton label="Move up" variant="ghost" size="icon-sm" disabled={isFirst} onClick={onMoveUp}>
+            <ArrowUp className="h-3.5 w-3.5" />
+          </TooltipIconButton>
+          <TooltipIconButton label="Move down" variant="ghost" size="icon-sm" disabled={isLast} onClick={onMoveDown}>
+            <ArrowDown className="h-3.5 w-3.5" />
+          </TooltipIconButton>
+          <TooltipIconButton label="Remove row" variant="ghost" size="icon-sm" disabled={!canRemove} onClick={onRemove}>
+            <X className="h-3.5 w-3.5" />
+          </TooltipIconButton>
         </div>
 
         <span className="w-6 shrink-0 text-center text-xs text-muted-foreground">#{rowNumber}</span>
@@ -110,20 +94,16 @@ export function BulkDownloadRow({
                   onChange={(e) => onChange({ url: e.target.value })}
                 />
                 {previewAllowed && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        disabled={!row.url.trim()}
-                        onClick={() => setPreviewRequested(true)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Fetch preview</TooltipContent>
-                  </Tooltip>
+                  <TooltipIconButton
+                    label="Fetch preview"
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    disabled={!row.url.trim()}
+                    onClick={() => setPreviewRequested(true)}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </TooltipIconButton>
                 )}
               </div>
             </div>
@@ -147,7 +127,7 @@ export function BulkDownloadRow({
                     })
                   }}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger aria-label="Collection" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -167,7 +147,7 @@ export function BulkDownloadRow({
                   value={row.downloadType}
                   onValueChange={(v) => onChange({ downloadType: v as DownloadType })}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger aria-label="Type" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -181,7 +161,7 @@ export function BulkDownloadRow({
                 <div className="w-full space-y-1 sm:max-[1099px]:flex-1 min-[1100px]:w-24 min-[1100px]:shrink-0">
                   <Label>Quality</Label>
                   <Select value={row.quality} onValueChange={(v) => onChange({ quality: v as VideoQuality })}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger aria-label="Quality" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -197,7 +177,7 @@ export function BulkDownloadRow({
                 <div className="w-full space-y-1 sm:max-[1099px]:flex-1 min-[1100px]:w-24 min-[1100px]:shrink-0">
                   <Label>Format</Label>
                   <Select value={row.audioFormat} onValueChange={(v) => onChange({ audioFormat: v as AudioFormat })}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger aria-label="Format" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -216,7 +196,7 @@ export function BulkDownloadRow({
           <div className="flex gap-2">
             <div className="flex-1 space-y-1">
               <Label>Filename</Label>
-              <Input
+              <Input aria-label="Filename"
                 placeholder="optional"
                 value={row.filename}
                 onChange={(e) => onChange({ filename: e.target.value })}
@@ -312,7 +292,7 @@ export function BulkDownloadRow({
             </div>
             <div className="space-y-1">
               <Label>Year</Label>
-              <Input
+              <Input aria-label="Year"
                 type="number"
                 placeholder="2024"
                 value={row.year}
@@ -322,7 +302,7 @@ export function BulkDownloadRow({
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label>Season #</Label>
-                <Input
+                <Input aria-label="Season #"
                   type="number"
                   min="1"
                   placeholder="1"
@@ -332,7 +312,7 @@ export function BulkDownloadRow({
               </div>
               <div className="space-y-1">
                 <Label>Sequence #</Label>
-                <Input
+                <Input aria-label="Sequence #"
                   type="number"
                   min="1"
                   placeholder="1"

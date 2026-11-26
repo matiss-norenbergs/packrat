@@ -2,8 +2,7 @@ import { Link } from "react-router-dom"
 import { X } from "lucide-react"
 import { BlurredThumbnail } from "@/components/BlurredThumbnail"
 import { MediaTypePlaceholder } from "@/components/MediaTypePlaceholder"
-import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { useRevealAll } from "@/components/library/RevealAllContext"
 import { useBrowsePrefs } from "@/hooks/useBrowsePrefs"
 import { librarySmallThumbnailUrl } from "@/lib/api"
@@ -56,25 +55,21 @@ export function BrowseTile({
           <Link to={`/browse/${item.id}`} className="absolute inset-0" aria-label={item.title} />
         )}
         {onRemove && unlocked && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                size="icon-xs"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  onRemove()
-                }}
-                // Shown on hover with a mouse; always shown on touch, where an invisible
-                // ::after extends the 24px button to a 44px tap area.
-                className="absolute right-1 top-1 z-10 bg-black/60 text-white opacity-0 hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 pointer-coarse:after:absolute pointer-coarse:after:-inset-2.5 pointer-coarse:after:content-['']"
-              >
-                <X />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Remove</TooltipContent>
-          </Tooltip>
+          <TooltipIconButton
+            label="Remove"
+            type="button"
+            size="icon-xs"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onRemove()
+            }}
+            // Shown on hover with a mouse; always shown on touch, where an invisible
+            // ::after extends the 24px button to a 44px tap area.
+            className="absolute right-1 top-1 z-10 bg-black/60 text-white opacity-0 hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 pointer-coarse:after:absolute pointer-coarse:after:-inset-2.5 pointer-coarse:after:content-['']"
+          >
+            <X />
+          </TooltipIconButton>
         )}
         {showProgress && (
           <div className="absolute inset-x-0 bottom-0 h-1 bg-black/40">

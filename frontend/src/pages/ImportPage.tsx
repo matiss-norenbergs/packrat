@@ -22,7 +22,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 import { DataTable } from "@/components/data-table"
 import type { ColumnDef } from "@/components/data-table"
 import { useEvent } from "@/components/data-table/useEvent"
@@ -318,14 +318,9 @@ function IgnoreFolderButton({ folderPath }: { folderPath: string }) {
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleIgnore}>
-          <EyeOff className="h-3 w-3" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{`Ignore "${folderPath}" (and its sub-folders) in future scans`}</TooltipContent>
-    </Tooltip>
+    <TooltipIconButton label={`Ignore "${folderPath}" (and its sub-folders) in future scans`} variant="ghost" size="icon" className="h-5 w-5" onClick={handleIgnore}>
+      <EyeOff className="h-3 w-3" />
+    </TooltipIconButton>
   )
 }
 
@@ -370,7 +365,7 @@ function IgnoredFoldersDialog() {
               {folders.map((path) => (
                 <li key={path} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
                   <span className="truncate font-mono">{path}</span>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemove(path)}>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" aria-label={`Remove ${path}`} onClick={() => handleRemove(path)}>
                     <X className="h-3.5 w-3.5" />
                   </Button>
                 </li>
@@ -381,6 +376,7 @@ function IgnoredFoldersDialog() {
           <div className="flex gap-2">
             <Input
               placeholder="e.g. Raw or Shows/BehindTheScenes"
+              aria-label="Folder to ignore"
               value={newPath}
               onChange={(e) => setNewPath(e.target.value)}
             />

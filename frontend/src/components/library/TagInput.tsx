@@ -57,7 +57,7 @@ export function TagInput({ value, onChange, suggestions = [] }: TagInputProps) {
           {value.map((tag) => (
             <Badge key={tag} variant="secondary" className="gap-1">
               {tag}
-              <button type="button" onClick={() => removeTag(tag)} className="rounded-full hover:text-destructive">
+              <button type="button" aria-label={`Remove ${tag}`} onClick={() => removeTag(tag)} className="rounded-full hover:text-destructive">
                 <X className="h-3 w-3" />
               </button>
             </Badge>
@@ -76,6 +76,7 @@ export function TagInput({ value, onChange, suggestions = [] }: TagInputProps) {
         <PopoverPrimitive.Anchor asChild>
           <Input
             placeholder="Add a tag…"
+            aria-label="Add a tag"
             value={draft}
             onChange={(e) => {
               setDraft(e.target.value)

@@ -223,7 +223,7 @@ export function AddGhostLibraryItemDialog({ open, onOpenChange }: AddGhostLibrar
             <div className="space-y-2">
               <Label>Type</Label>
               <Select value={mediaType} onValueChange={(v) => setMediaType(v as "video" | "audio")}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Type" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -239,7 +239,7 @@ export function AddGhostLibraryItemDialog({ open, onOpenChange }: AddGhostLibrar
             <div className="space-y-2">
               <Label>Collection</Label>
               <Select value={collectionId} onValueChange={handleCollectionChange}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Collection" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
