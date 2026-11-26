@@ -30,6 +30,9 @@ import {
   useLibraryImportPreview,
 } from "@/hooks/useBackup"
 import type { FullImportPreview, LibraryImportMode, LibraryImportPreview } from "@/types/api"
+import { useHoverPopover } from "@/lib/useHoverPopover"
+import { TOUCH_HIT_AREA } from "@/lib/touchTarget"
+import { cn } from "@/lib/utils"
 
 export function BackupPage() {
   return (
@@ -231,7 +234,7 @@ function SettingsBackupCard() {
 }
 
 function LibraryBackupCard() {
-  const [exportInfoOpen, setExportInfoOpen] = useState(false)
+  const exportInfo = useHoverPopover()
   const [encrypt, setEncrypt] = useState(false)
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -286,23 +289,21 @@ function LibraryBackupCard() {
         <div className="space-y-3">
           <div className="flex items-center gap-1.5">
             <h3 className="text-sm font-medium">Export</h3>
-            <Popover open={exportInfoOpen} onOpenChange={setExportInfoOpen}>
+            <Popover open={exportInfo.open} onOpenChange={exportInfo.onOpenChange}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-5 w-5 text-muted-foreground"
+                  className={cn("h-5 w-5 text-muted-foreground", TOUCH_HIT_AREA)}
                   aria-label="About library export"
-                  onMouseEnter={() => setExportInfoOpen(true)}
-                  onMouseLeave={() => setExportInfoOpen(false)}
+                  {...exportInfo.hoverProps}
                 >
                   <Info className="h-3.5 w-3.5" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent aria-label="About library export"
                 className="text-xs text-muted-foreground"
-                onMouseEnter={() => setExportInfoOpen(true)}
-                onMouseLeave={() => setExportInfoOpen(false)}
+                {...exportInfo.hoverProps}
               >
                 Tags, collections, artists, and every library item — not the media files
                 themselves. Importing this elsewhere re-queues downloads for items with a saved

@@ -29,6 +29,9 @@ import {
 } from "@/hooks/useSubscriptions"
 import type { Subscription } from "@/types/api"
 import { clampIntervalHours } from "@/lib/subscriptionInterval"
+import { useHoverPopover } from "@/lib/useHoverPopover"
+import { TOUCH_HIT_AREA } from "@/lib/touchTarget"
+import { cn } from "@/lib/utils"
 
 const PAGE_SIZE = 50
 
@@ -38,21 +41,20 @@ const matchSubscription = (s: Subscription, q: string) =>
 // Mirrors CollectionFolderTile's gap-warning popover (same controlled-hover
 // pattern, same amber styling) for a subscription's last check failure.
 function LastCheckErrorBadge({ error }: { error: string }) {
-  const [open, setOpen] = useState(false)
+  const { open, onOpenChange, hoverProps } = useHoverPopover()
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="text-amber-600 dark:text-amber-500"
+          className={cn("text-amber-600 dark:text-amber-500", TOUCH_HIT_AREA)}
           aria-label="Last check failed"
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
+          {...hoverProps}
         >
           <AlertTriangle className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
-      <PopoverContent aria-label="Last check failed" className="text-xs text-muted-foreground" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <PopoverContent aria-label="Last check failed" className="text-xs text-muted-foreground" {...hoverProps}>
         {error}
       </PopoverContent>
     </Popover>

@@ -240,7 +240,7 @@ describe("SubscriptionsPage table", () => {
     fireEvent.mouseUp(window)
     expect(isSelected("Alpha")).toBe(false)
 
-    fireEvent.mouseEnter(badge)
+    fireEvent.pointerEnter(badge, { pointerType: "mouse" })
     const message = await screen.findByText("yt-dlp exploded")
     fireEvent.mouseDown(message)
     fireEvent.mouseUp(window)

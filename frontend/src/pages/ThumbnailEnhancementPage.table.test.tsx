@@ -344,7 +344,7 @@ describe("ThumbnailEnhancementPage table", () => {
     const badge = within(row("Beta")).getByLabelText("Enhancement failed")
     press(badge)
     expect(isSelected("Beta")).toBe(false)
-    fireEvent.mouseEnter(badge)
+    fireEvent.pointerEnter(badge, { pointerType: "mouse" })
     const message = await screen.findByText("upstream exploded")
     press(message)
     expect(isSelected("Beta")).toBe(false)
