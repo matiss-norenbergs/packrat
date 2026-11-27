@@ -224,6 +224,7 @@ export function LibraryToolbarActions({ t }: { t: LibraryToolbarState }) {
 
         {selectionActive && (
           <Button variant="ghost" size="sm" onClick={clear}>
+            <X className="h-4 w-4" />
             Clear
           </Button>
         )}

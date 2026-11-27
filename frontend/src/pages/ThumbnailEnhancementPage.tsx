@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, Check, Download, Eye, ListChecks, Loader2, MoreHorizontal, Trash2, Undo2, Wand2 } from "lucide-react"
+import { AlertTriangle, Check, Download, Eye, ListChecks, Loader2, MoreHorizontal, Trash2, Undo2, Wand2, X } from "lucide-react"
 import { Link } from "react-router-dom"
 import {
   AlertDialog,
@@ -447,6 +447,7 @@ export function ThumbnailEnhancementPage() {
 
             {active && (
               <Button variant="ghost" size="sm" onClick={clear}>
+                <X className="h-4 w-4" />
                 Clear
               </Button>
             )}

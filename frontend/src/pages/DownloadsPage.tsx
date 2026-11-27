@@ -210,6 +210,7 @@ export function DownloadsPage() {
 
         {active && (
           <Button variant="ghost" size="sm" onClick={clear}>
+            <X className="h-4 w-4" />
             Clear
           </Button>
         )}

@@ -294,6 +294,7 @@ export function ImportPage() {
                 <RefreshCw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
                 Rescan
               </Button>
+              <IgnoredFoldersDialog />
               <AlertDialog open={pendingAction != null} onOpenChange={(open) => !open && setPendingAction(null)}>
                 <AlertDialogContent>
                   <AlertDialogHeader>
@@ -314,7 +315,6 @@ export function ImportPage() {
               </AlertDialog>
             </>
           }
-          filters={<IgnoredFoldersDialog />}
         />
       </ImportRows.Provider>
     </div>

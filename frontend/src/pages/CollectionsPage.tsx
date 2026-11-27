@@ -124,8 +124,9 @@ export function CollectionsPage() {
   // Plain click (no drag) selects only this row; ctrl/cmd+click toggles it
   // in or out of the current selection without clearing the rest — the
   // checkbox is the one exception, it keeps its own toggle-without-clearing
-  // behavior via onToggle. No drag-select or shift-click range here, unlike
-  // Tags/Artists — not asked for on this page.
+  // behavior via onToggle. No drag-select, shift-click range or context menu on
+  // purpose: the tree is bespoke, not a DataTable (documented exception in
+  // docs/architecture.md, "Why Collections doesn't use it").
   //
   // Each row nests its own Add-sub-collection/Edit CollectionDialog as a
   // React child, so the Dialog's portaled content (rendered to
@@ -164,6 +165,19 @@ export function CollectionsPage() {
             <Button size="sm" onClick={() => setNewCollectionOpen(true)}>
               <Plus className="h-4 w-4" />
               New Collection
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => {
+                setAllExpanded((v) => !v)
+                setExpandedIds(allExpanded ? new Set() : new Set(allIds))
+              }}
+            >
+              {allExpanded ? <ChevronsDownUp className="h-4 w-4" /> : <ChevronsUpDown className="h-4 w-4" />}
+              {allExpanded ? "Collapse" : "Expand"}
             </Button>
             <CollectionDialog open={newCollectionOpen} onOpenChange={setNewCollectionOpen} />
 
@@ -210,24 +224,12 @@ export function CollectionsPage() {
 
             {active && (
               <Button variant="ghost" size="sm" onClick={clear}>
+                <X className="h-4 w-4" />
                 Clear
               </Button>
             )}
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-auto gap-1.5"
-              onClick={() => {
-                setAllExpanded((v) => !v)
-                setExpandedIds(allExpanded ? new Set() : new Set(allIds))
-              }}
-            >
-              {allExpanded ? <ChevronsDownUp className="h-4 w-4" /> : <ChevronsUpDown className="h-4 w-4" />}
-              {allExpanded ? "Collapse" : "Expand"}
-            </Button>
-
-            <div className="relative min-w-[160px] max-w-[280px] flex-1 sm:min-w-[200px]">
+            <div className="relative ml-auto min-w-[160px] max-w-[280px] flex-1 sm:min-w-[200px]">
               <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search collections…"
