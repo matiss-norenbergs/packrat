@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { ResponsiveGrid } from "@/components/responsive-grid"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch } from "@/test/mockApi"
 import type { LibraryItem } from "@/types/api"
@@ -49,6 +50,10 @@ let setItems!: (items: LibraryItem[]) => void
 let reveal!: ReturnType<typeof useRevealActions>
 let navigate!: ReturnType<typeof useNavigate>
 
+// The same wiring as LibraryGrid: these counts are those of the ResponsiveGrid seam.
+const getKey = (i: LibraryItem) => i.id
+const renderItem = (i: LibraryItem) => <LibraryCard item={i} />
+
 function Harness({ initial }: { initial: LibraryItem[] }) {
   const [items, set] = useState(initial)
   setItems = set
@@ -56,11 +61,7 @@ function Harness({ initial }: { initial: LibraryItem[] }) {
   navigate = useNavigate()
   return (
     <LibraryCardsProvider items={items}>
-      <LibraryCardGrid>
-        {items.map((i) => (
-          <LibraryCard key={i.id} item={i} />
-        ))}
-      </LibraryCardGrid>
+      <ResponsiveGrid items={items} getKey={getKey} renderItem={renderItem} columns="library" gridClassName="group/lib-grid" gridComponent={LibraryCardGrid} />
     </LibraryCardsProvider>
   )
 }

@@ -1,4 +1,4 @@
-import { memo, type ComponentProps, type ReactNode } from "react"
+import { memo, type ComponentProps } from "react"
 import { Ghost, Play } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +15,8 @@ import { useNavigateFromHere } from "@/hooks/useNavigateFromHere"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
 import { DownloadProgressBar } from "./DownloadProgressBar"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
+import { COLUMN_PRESETS } from "@/components/responsive-grid"
+import type { GridElementProps } from "@/components/responsive-grid"
 import { sameItem } from "./sameItem"
 import { useLibraryCardEnv } from "./LibraryCardsProvider"
 import { useIsRevealed, useRevealActions } from "./RevealAllContext"
@@ -242,14 +244,15 @@ function LibraryCardImpl({ item }: { item: LibraryItem }) {
 }
 
 /**
- * The grid the cards sit in. It carries `data-selecting` while anything is selected, which the cards' CSS variants key on
- * (see LibraryCard), so a selection starting or clearing re-renders only this element, never a card: `children` is
- * passed through untouched.
+ * The grid element the cards sit in (the ResponsiveGrid's `gridComponent`). It carries `data-selecting` while anything is
+ * selected, which the cards' CSS variants key on (see LibraryCard), so a selection starting or clearing re-renders only this
+ * element, never a card: `children` is passed through untouched. `className` brings `group/lib-grid` and the column rule
+ * (the views pass the first as `gridClassName`; the default is for a grid used on its own).
  */
-export function LibraryCardGrid({ children }: { children: ReactNode }) {
+export function LibraryCardGrid({ className = `group/lib-grid ${COLUMN_PRESETS.library.className}`, children }: Partial<GridElementProps>) {
   const selecting = useSelectionActive()
   return (
-    <div className="group/lib-grid grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" data-selecting={selecting ? "" : undefined}>
+    <div className={className} data-selecting={selecting ? "" : undefined}>
       {children}
     </div>
   )
