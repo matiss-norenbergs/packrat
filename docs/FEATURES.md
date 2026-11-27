@@ -365,6 +365,11 @@ not per-browser):
   Folders breadcrumb and the pagination footer stay in view and only the cards scroll (the page itself never scrolls). On a
   narrow window the toolbar wraps and the cards area simply gets shorter. The cards return to the top on a new page, filter,
   search, sort or folder (not on a refetch, a selection change or a resize).
+  **Large libraries**: with more than 200 items on the page (pagination off, the default, or a page size over 200) the grid and the
+  Folders view keep only the cards near the window in the page (a few dozen, however many items there are), so they open and
+  select quickly at thousands of items. The scrollbar still covers the whole list. The cost: the browser's find-in-page (Ctrl+F)
+  only finds cards currently shown; use the Library search to find an item. Keyboard focus on a card, and the card a menu or dialog
+  was opened from, stay in place while you scroll. Up to 200 items nothing is different.
 - **Folders** — browse by collection, one level at a time, with a breadcrumb trail and
   browser-back support for navigating up. With privacy on, a private folder tile shows a lock next to its name
   (primary color, tooltip "Private"); a folder that only inherits privacy from an ancestor shows a muted lock

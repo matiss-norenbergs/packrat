@@ -45,20 +45,19 @@ Effort is a rough guess: **S** = under an hour of agent work, **M** = a few hour
      render it; it owns the scroll region and takes `items`, `getKey`, `renderItem`, column presets, `resetKey` and the
      loading / error / empty slots (see [`architecture.md` → ResponsiveGrid](architecture.md#responsivegrid)). Behavior and
      look unchanged. `LibraryCard` and `LibraryCardsProvider` kept their names and stay Library-side.
-  2. **Virtualization behind a prop.** `virtualize` (off by default, a prop of the page's choice, never a user
-     setting) plus a threshold constant (about 200 items: below it the grid renders plain DOM like today). On for the
-     Library. Needs measured row heights (cards are not all one height), the column count from the container width,
-     and a measurement at 10,000 items before and after.
+  2. **Done: virtualization behind a prop.** `ResponsiveGrid` takes `virtualize` (off by default, a page's choice, never a
+     user setting) and a threshold (`VIRTUALIZE_THRESHOLD`, 200 items: at or below it the grid is the plain DOM). On for the
+     Library grid and the Folders view: rows of `columns` cells, measured row heights, the column count from `matchMedia`,
+     `@tanstack/react-virtual` in its own `vendor-virtual` chunk (see [`architecture.md` → ResponsiveGrid](architecture.md#responsivegrid)).
   3. **Reuse for the thumbnail gallery**, and any other grid that needs it, with `virtualize` off unless measured.
   4. **An opt-in `virtualize` on DataTable**, switched on for the Library list only. Spacer rows keep the sticky
      header and the config-based column widths; drag selection hit-tests rows with `closest('tr[data-row-id]')`, so it
      must keep working while rows mount and unmount.
-  - Costs to accept: browser find-in-page no longer finds offscreen items (the Library's own search covers it, and
-    `content-visibility: auto` keeps them findable today); tab order and screen readers see only the mounted items
-    (needs `aria-rowcount`-style attributes); the scrollbar jumps if the height estimate is off; jsdom has no layout,
-    so tests of a virtualized list need a layout mock or helper.
-  - Rough size: the grid component is a few hundred lines of code and about as many of tests; DataTable's opt-in is
-    similar but riskier because 25 pages use DataTable.
+  - Costs accepted for the grid (step 2, done): browser find-in-page no longer finds offscreen items (the Library's own
+    search covers it); tab order and screen readers see only the mounted items; the scrollbar can move a little while
+    far rows are measured; tests need `src/test/layoutMock.ts`. Step 4 (DataTable) has the same costs plus
+    `aria-rowcount`-style attributes.
+  - Rough size left: DataTable's opt-in is riskier than the grid was because 25 pages use DataTable.
 
 ## Desktop app
 
