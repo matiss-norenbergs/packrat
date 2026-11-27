@@ -253,23 +253,66 @@ describe("KnownItemsDialog actions", () => {
     expect(addMutate).not.toHaveBeenCalled()
   })
 
-  it("marks only the unseen selected entries as seen, then clears the selection", async () => {
+  it("confirms Mark seen with the count, then marks only the unseen entries and clears the selection", async () => {
+    const user = userEvent.setup()
     renderDialog()
     pick(0)
     pick(1, { ctrlKey: true })
-    await userEvent.setup().click(btn("Mark seen"))
+    await user.click(btn("Mark seen"))
+    const dialog = await screen.findByRole("alertdialog")
+    expect(within(dialog).getByText("Mark 1 item as seen?")).toBeInTheDocument()
+    expect(seenMutate).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole("button", { name: "Mark seen" }))
     expect(seenMutate.mock.calls[0][0]).toEqual({ subscriptionId: 1, sourceIds: ["a"] })
-    expect(btn("Mark seen")).toBeEnabled()
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
     act(() => seenMutate.mock.calls[0][1].onSuccess())
     expect(btn("Mark seen")).toBeDisabled()
   })
 
-  it("unlinks only entries that have a libraryItemId", async () => {
+  it("uses the plural in the Mark seen confirmation and lets it be cancelled", async () => {
+    entries = [entry("a", { seenAt: null }), entry("e", { seenAt: null })]
+    const user = userEvent.setup()
+    renderDialog()
+    pick(0)
+    pick(1, { ctrlKey: true })
+    await user.click(btn("Mark seen"))
+    const dialog = await screen.findByRole("alertdialog")
+    expect(within(dialog).getByText("Mark 2 items as seen?")).toBeInTheDocument()
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }))
+    expect(seenMutate).not.toHaveBeenCalled()
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  })
+
+  it("confirms Unlink with the count and unlinks only entries that have a libraryItemId", async () => {
+    const user = userEvent.setup()
     renderDialog()
     pick(1)
     pick(2, { ctrlKey: true })
-    await userEvent.setup().click(btn("Unlink"))
+    await user.click(btn("Unlink"))
+    const dialog = await screen.findByRole("alertdialog")
+    expect(within(dialog).getByText("Unlink 1 item?")).toBeInTheDocument()
+    expect(unlinkMutate).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole("button", { name: "Unlink" }))
     expect(unlinkMutate.mock.calls[0][0]).toEqual({ subscriptionId: 1, sourceIds: ["c"] })
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  })
+
+  it("uses the plural in the Unlink confirmation and Cancel/Escape do nothing", async () => {
+    entries = [entry("c", { libraryItemId: 9 }), entry("f", { libraryItemId: 10 })]
+    const user = userEvent.setup()
+    renderDialog()
+    pick(0)
+    pick(1, { ctrlKey: true })
+    await user.click(btn("Unlink"))
+    let dialog = await screen.findByRole("alertdialog")
+    expect(within(dialog).getByText("Unlink 2 items?")).toBeInTheDocument()
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }))
+    expect(unlinkMutate).not.toHaveBeenCalled()
+    await user.click(btn("Unlink"))
+    dialog = await screen.findByRole("alertdialog")
+    await user.keyboard("{Escape}")
+    expect(unlinkMutate).not.toHaveBeenCalled()
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
   })
 
   it("opens the link picker for the one selected entry", async () => {
