@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useSearchParams } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -7,7 +7,6 @@ import { LibraryPage } from "@/pages/LibraryPage"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import { LibraryFolderView } from "./LibraryFolderView"
 import { LibraryGrid } from "./LibraryGrid"
-import { LibraryScrollView } from "./LibraryScrollView"
 import { LibrarySortProvider } from "./LibrarySortContext"
 import { RevealAllProvider } from "./RevealAllContext"
 import { SelectionProvider, useSelection } from "./SelectionContext"
@@ -265,41 +264,6 @@ describe("LibraryPage shell", () => {
     expect(screen.queryByTestId("library-scroll")).toBeNull()
     expect(container.firstElementChild).toHaveClass("flex", "h-full", "min-h-0", "flex-col", "gap-6")
     expect(screen.getByPlaceholderText("Search library…")).toBeInTheDocument()
-  })
-})
-
-describe("LibraryScrollView: resetKey", () => {
-  const view = (key: string | undefined, children: React.ReactNode = "cards") => (
-    <LibraryScrollView resetKey={key}>{children}</LibraryScrollView>
-  )
-
-  it("returns the region to the top when the key changes", () => {
-    const { rerender } = render(view("a"))
-    region().scrollTop = 200
-    rerender(view("b"))
-    expect(region().scrollTop).toBe(0)
-  })
-
-  it("keeps the scroll on a re-render with the same key, also with new children (a refetch)", () => {
-    const { rerender } = render(view("a", "old cards"))
-    region().scrollTop = 200
-    rerender(view("a", "old cards"))
-    expect(region().scrollTop).toBe(200)
-    rerender(view("a", "refetched cards"))
-    expect(region().scrollTop).toBe(200)
-  })
-
-  it("does nothing on mount", () => {
-    const original = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop")
-    const writes = vi.fn()
-    Object.defineProperty(Element.prototype, "scrollTop", { configurable: true, get: () => 0, set: writes })
-    try {
-      render(view("a"))
-    } finally {
-      if (original) Object.defineProperty(Element.prototype, "scrollTop", original)
-      else delete (Element.prototype as { scrollTop?: number }).scrollTop
-    }
-    expect(writes).not.toHaveBeenCalled()
   })
 })
 

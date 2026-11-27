@@ -1,14 +1,18 @@
-import type { ReactNode } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useLibraryQuery } from "@/hooks/useLibrary"
 import { usePageState } from "@/hooks/usePageState"
 import { useSettings } from "@/hooks/useSettings"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
-import { Skeleton } from "@/components/ui/skeleton"
+import { ResponsiveGrid } from "@/components/responsive-grid"
+import type { LibraryItem } from "@/types/api"
 import { LibraryCard, LibraryCardGrid } from "./LibraryCard"
 import { LibraryCardsProvider } from "./LibraryCardsProvider"
 import { LibraryPagination } from "./LibraryPagination"
 import { LibraryScrollView } from "./LibraryScrollView"
+
+const getKey = (item: LibraryItem) => item.id
+const renderItem = (item: LibraryItem) => <LibraryCard item={item} />
+const NO_ITEMS: readonly LibraryItem[] = []
 
 export function LibraryGrid() {
   const { data: settings, isLoading: settingsLoading } = useSettings()
@@ -30,7 +34,7 @@ export function LibraryGrid() {
   // result set shrinks.
   const [page, setPage] = usePageState(JSON.stringify([search, collectionId, year, tagNames.join(","), hideGhosts, sortKey, sortDir]))
 
-  const { data, isLoading, isError, error } = useLibraryQuery({
+  const { data, isLoading, isError, error: queryError } = useLibraryQuery({
     q: search || undefined,
     collectionId: collectionId ? Number(collectionId) : undefined,
     year: year ? Number(year) : undefined,
@@ -45,34 +49,16 @@ export function LibraryGrid() {
   // Everything that starts a new view at the top (the page is already 1 in the pass that sees a changed filter).
   const resetKey = JSON.stringify([page, search, collectionId, year, tagNames.join(","), hideGhosts, sortKey, sortDir])
 
-  let content: ReactNode
-  if (isLoading || settingsLoading || !sortReady) {
-    content = (
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        <Skeleton className="aspect-video w-full" />
-        <Skeleton className="aspect-video w-full" />
-        <Skeleton className="aspect-video w-full" />
-      </div>
-    )
-  } else if (isError) {
-    content = <p className="text-sm text-destructive">Failed to load library: {(error as Error).message}</p>
-  } else if (!data || data.total === 0) {
-    content = (
+  const loading = isLoading || settingsLoading || !sortReady
+  const error = !loading && isError ? <p className="text-sm text-destructive">Failed to load library: {(queryError as Error).message}</p> : undefined
+  const empty =
+    !loading && !isError && (!data || data.total === 0) ? (
       <p className="text-sm text-muted-foreground">
         {hasFilters
           ? "No library items match these filters."
           : "Nothing here yet. Completed downloads will show up in your library."}
       </p>
-    )
-  } else {
-    content = (
-      <LibraryCardGrid>
-        {data.items.map((item) => (
-          <LibraryCard key={item.id} item={item} />
-        ))}
-      </LibraryCardGrid>
-    )
-  }
+    ) : undefined
 
   // Pagination on and the settings known: the footer stays through the load (placeholder), so the region does not jump.
   const pending = isLoading || !sortReady
@@ -80,14 +66,25 @@ export function LibraryGrid() {
   return (
     <LibraryCardsProvider items={data?.items}>
       <LibraryScrollView
-        resetKey={resetKey}
         footer={
           showFooter && (
             <LibraryPagination page={page} pageSize={pageSize} total={pending ? 0 : (data?.total ?? 0)} onPageChange={setPage} loading={pending} />
           )
         }
       >
-        {content}
+        <ResponsiveGrid
+          items={data?.items ?? NO_ITEMS}
+          getKey={getKey}
+          renderItem={renderItem}
+          columns="library"
+          resetKey={resetKey}
+          loading={loading}
+          error={error}
+          empty={empty}
+          gridClassName="group/lib-grid"
+          gridComponent={LibraryCardGrid}
+          scrollTestId="library-scroll"
+        />
       </LibraryScrollView>
     </LibraryCardsProvider>
   )
