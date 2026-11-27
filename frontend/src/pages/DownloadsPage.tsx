@@ -24,7 +24,7 @@ import { DOCK_FOOTER_LABEL, DOCK_FOOTER_ROW } from "@/lib/dockClearance"
 import { getPageNumbers } from "@/lib/pagination"
 import { cn } from "@/lib/utils"
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = 50
 
 export function DownloadsPage() {
   const { data, isLoading, isError, error } = useDownloads()

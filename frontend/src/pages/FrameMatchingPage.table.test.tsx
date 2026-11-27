@@ -262,24 +262,24 @@ describe("FrameMatchingPage table", () => {
     expect(screen.getByText("2 items · 1 selected")).toBeInTheDocument()
   })
 
-  it("pages at 25 and snaps back when the queue shrinks under the current page", async () => {
-    const fetchMock = serve(many(26))
+  it("pages at 50 and snaps back when the queue shrinks under the current page", async () => {
+    const fetchMock = serve(many(51))
     renderPage()
     await screen.findByText("Item 001")
-    expect(screen.getAllByRole("row")).toHaveLength(26)
-    expect(screen.getByText("26 items")).toBeInTheDocument()
+    expect(screen.getAllByRole("row")).toHaveLength(51)
+    expect(screen.getByText("51 items")).toBeInTheDocument()
     select("Item 002")
     fireEvent.click(screen.getByRole("button", { name: "2" }))
-    expect(screen.getByText("26 items")).toBeInTheDocument() // selection cleared by the page change
-    expect(screen.getByText("Item 026")).toBeInTheDocument()
+    expect(screen.getByText("51 items")).toBeInTheDocument() // selection cleared by the page change
+    expect(screen.getByText("Item 051")).toBeInTheDocument()
     expect(screen.queryByText("Item 001")).toBeNull()
 
-    select("Item 026")
+    select("Item 051")
     fireEvent.click(toolbarButton("Review"))
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }))
-    await waitFor(() => expect(deletes(fetchMock)).toEqual([26]))
+    await waitFor(() => expect(deletes(fetchMock)).toEqual([51]))
     expect(await screen.findByText("Item 001")).toBeInTheDocument()
-    expect(screen.getByText("25 items")).toBeInTheDocument()
+    expect(screen.getByText("50 items")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "page")
   })
 })

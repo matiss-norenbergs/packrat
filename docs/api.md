@@ -2326,7 +2326,7 @@ See [FEATURES.md](FEATURES.md#ai-enhancement) for what this does and how the thr
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/thumbnail-enhancement/history` | Paginated/searchable attempt history (response unchanged; reads only the page's ≤25 items, not the whole library) |
+| GET | `/api/thumbnail-enhancement/history` | Paginated/searchable attempt history (response unchanged; reads only the page's ≤50 items, not the whole library) |
 | DELETE | `/api/thumbnail-enhancement/history/:id` | Delete one history entry |
 | POST | `/api/thumbnail-enhancement/history/bulk-delete` | Delete many history entries |
 | POST | `/api/thumbnail-enhancement/history/clear` | Delete every history entry |
@@ -2351,7 +2351,7 @@ and the bulk keep endpoints are unchanged and still work for an image item that 
 
 ### `GET /api/thumbnail-enhancement/history?q=&status=&trigger=&mode=&page=1`
 
-Fixed page size 25:
+Fixed page size 50:
 
 ```json
 {

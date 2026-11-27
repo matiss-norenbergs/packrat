@@ -44,7 +44,7 @@ type ThumbnailEnhancementHistoryQuery struct {
 	TriggerType string // exact match on trigger_type ("manual"|"scheduled"|"auto"); empty = no filter
 	Mode        string // exact match on mode ("upscale"|"sharpen"); empty = no filter
 	Page        int    // 1-based; 0 means "no pagination", return every matching row
-	PageSize    int    // only used when Page > 0; defaults to 25 if <= 0
+	PageSize    int    // only used when Page > 0; defaults to 50 if <= 0
 }
 
 // Query builds one parameterized statement covering search + filters +
@@ -91,7 +91,7 @@ func (r *ThumbnailEnhancementHistoryRepo) Query(ctx context.Context, q Thumbnail
 	if q.Page > 0 {
 		pageSize := q.PageSize
 		if pageSize <= 0 {
-			pageSize = 25
+			pageSize = 50
 		}
 		listQuery += " LIMIT ? OFFSET ?"
 		listArgs = append(listArgs, pageSize, (q.Page-1)*pageSize)

@@ -24,7 +24,7 @@ const thumbnailEnhancementProbeTimeout = 10 * time.Second
 // thumbnailEnhancementHistoryPageSize is the fixed page size for
 // ListThumbnailEnhancementHistory — no size selector, matches the plan's
 // "keep it simple" call for a log this shape.
-const thumbnailEnhancementHistoryPageSize = 25
+const thumbnailEnhancementHistoryPageSize = 50
 
 // ListThumbnailEnhancementHistory backs the AI Enhancement page's history
 // table — a searched/filtered/paginated page of attempted items, most

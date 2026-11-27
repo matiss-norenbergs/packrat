@@ -23,9 +23,9 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-// 26 blurred downloads → two pages (PAGE_SIZE 25). The API returns them
+// 51 blurred downloads → two pages (PAGE_SIZE 50). The API returns them
 // newest-first as-is; the page doesn't re-sort.
-const DOWNLOADS = Array.from({ length: 26 }, (_, i) => ({
+const DOWNLOADS = Array.from({ length: 51 }, (_, i) => ({
   id: i + 1,
   url: `https://example.com/v/${i + 1}`,
   status: "completed",
@@ -95,7 +95,7 @@ describe("DownloadsPage reveal-all", () => {
     await screen.findByText(hashText("Video 1"))
     await user.click(await screen.findByRole("button", { name: "Reveal all private items" }))
     expect(screen.getByText("Video 1")).toBeInTheDocument()
-    expect(screen.getByText("Video 25")).toBeInTheDocument()
+    expect(screen.getByText("Video 50")).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Hide all private items" }))
     expect(screen.getByText(hashText("Video 1"))).toBeInTheDocument()
   })
@@ -107,7 +107,7 @@ describe("DownloadsPage reveal-all", () => {
     await user.click(await screen.findByText(hashText("Video 3")))
     expect(screen.getByText("Video 3")).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Next" }))
-    await screen.findByText(hashText("Video 26"))
+    await screen.findByText(hashText("Video 51"))
     await user.click(screen.getByRole("button", { name: "Previous" }))
     await waitFor(() => expect(screen.getByText("Video 3")).toBeInTheDocument())
     expect(screen.getByText(hashText("Video 4"))).toBeInTheDocument()

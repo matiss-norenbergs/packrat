@@ -209,7 +209,7 @@ export function ThumbnailEnhancementPage() {
   })
   const history = historyResult?.entries
   const total = historyResult?.total ?? 0
-  const pageSize = 25
+  const pageSize = 50
   const activeItem = useThumbnailEnhancementActiveItem()
   const { revealAll } = useRevealAll()
 

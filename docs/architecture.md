@@ -2168,7 +2168,7 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
   unbounded but never returned those columns. `List` itself now has only test callers.
 - **Fetch by id, not scan.** `LibraryRepo.GetByIDs(ids)` (chunked with `inChunks`, same select columns and
   scan as `List`/`Query`, missing ids absent) is for any caller that needs a few items. The AI Enhancement
-  history page uses it for its ≤25 rows instead of `LibraryRepo.List`. Callers that legitimately need the
+  history page uses it for its ≤50 rows instead of `LibraryRepo.List`. Callers that legitimately need the
   whole library (backup export) still use `List`/`Query`. `EnhanceItems` uses it too.
 - **Candidates in SQL, files only for candidates.** AI enhancement eligibility used to `List` the library and
   open every thumbnail (`Stat` + `Open` + `DecodeConfig`) on every sweep, count and auto-on-download.

@@ -30,7 +30,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = 50
 
 function entry(id: number, title: string, over: Partial<ThumbnailEnhancementHistoryEntry> = {}): ThumbnailEnhancementHistoryEntry {
   return {
@@ -59,7 +59,7 @@ function entry(id: number, title: string, over: Partial<ThumbnailEnhancementHist
 
 type Query = Record<string, string>
 
-// Behaves like the server: filters by q/status/trigger/mode and slices 25 per page.
+// Behaves like the server: filters by q/status/trigger/mode and slices 50 per page.
 function serve(all: ThumbnailEnhancementHistoryEntry[], opts: { privacy?: boolean } = {}) {
   return mockFetch((url) => {
     if (url.endsWith("/settings")) return { status: 200, body: { privacyEnabled: opts.privacy ?? false, thumbnailEnhancementEnabled: true } }
@@ -209,11 +209,11 @@ describe("ThumbnailEnhancementPage table", () => {
   })
 
   it("sends the search (after the debounce) and every filter and page to the history hook, resetting to page 1", async () => {
-    const fetchMock = serve(many(60, (i) => ({ status: i % 2 ? "success" : "failed", mode: i % 3 ? "upscale" : "sharpen" })))
+    const fetchMock = serve(many(100, (i) => ({ status: i % 2 ? "success" : "failed", mode: i % 3 ? "upscale" : "sharpen" })))
     renderPage()
-    await screen.findByText("Item 060")
+    await screen.findByText("Item 100")
     expect(lastQuery(fetchMock)).toEqual({ page: "1" })
-    expect(screen.getByText("60 entries")).toBeInTheDocument()
+    expect(screen.getByText("100 entries")).toBeInTheDocument()
     expect(screen.getAllByRole("row")).toHaveLength(PAGE_SIZE + 1)
 
     fireEvent.click(screen.getByRole("button", { name: "2" }))
@@ -240,9 +240,9 @@ describe("ThumbnailEnhancementPage table", () => {
   })
 
   it("resets to page 1 when a filter or the search changes while on a later page", async () => {
-    const fetchMock = serve(many(60))
+    const fetchMock = serve(many(120))
     renderPage()
-    await screen.findByText("Item 060")
+    await screen.findByText("Item 120")
 
     fireEvent.click(screen.getByRole("button", { name: "3" }))
     await screen.findByText("Item 010")
@@ -257,11 +257,11 @@ describe("ThumbnailEnhancementPage table", () => {
   })
 
   it("clears the selection when the page, a filter or the search changes", async () => {
-    serve(many(60, (i) => ({ triggerType: i % 2 ? "manual" : "auto" })))
+    serve(many(100, (i) => ({ triggerType: i % 2 ? "manual" : "auto" })))
     renderPage()
-    await screen.findByText("Item 060")
+    await screen.findByText("Item 100")
 
-    select("Item 060")
+    select("Item 100")
     expect(checkedBoxes()).toHaveLength(1)
     fireEvent.click(screen.getByRole("button", { name: "2" }))
     await screen.findByText("Item 035")
@@ -271,7 +271,7 @@ describe("ThumbnailEnhancementPage table", () => {
     select("Item 035")
     expect(checkedBoxes()).toHaveLength(1)
     await pickFilter(1, "Manual")
-    await screen.findByText("30 entries")
+    await screen.findByText("50 entries")
     expect(checkedBoxes()).toHaveLength(0)
 
     select("Item 059")
@@ -313,14 +313,14 @@ describe("ThumbnailEnhancementPage table", () => {
     expect(screen.getByText("1 entry · 1 selected")).toBeInTheDocument()
     cleanup()
 
-    serve(many(60))
+    serve(many(100))
     renderPage()
-    await screen.findByText("Item 060")
-    select("Item 060")
-    fireEvent.mouseDown(row("Item 058"), { ctrlKey: true })
-    expect(screen.getByText("60 entries · 2 selected")).toBeInTheDocument()
+    await screen.findByText("Item 100")
+    select("Item 100")
+    fireEvent.mouseDown(row("Item 098"), { ctrlKey: true })
+    expect(screen.getByText("100 entries · 2 selected")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }))
-    expect(screen.getByText(`60 entries · ${PAGE_SIZE} selected`)).toBeInTheDocument()
+    expect(screen.getByText(`100 entries · ${PAGE_SIZE} selected`)).toBeInTheDocument()
   })
 
   it("the title link, the error badge, its popover and the Compare button do not select the row; a plain cell does", async () => {
