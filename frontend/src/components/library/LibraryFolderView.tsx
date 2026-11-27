@@ -152,6 +152,7 @@ export function LibraryFolderView() {
       getKey={cellKey}
       renderItem={renderCell}
       columns="library"
+      virtualize
       resetKey={resetKey}
       gridClassName="group/lib-grid"
       gridComponent={LibraryCardGrid}

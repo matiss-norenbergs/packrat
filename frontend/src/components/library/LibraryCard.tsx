@@ -249,10 +249,10 @@ function LibraryCardImpl({ item }: { item: LibraryItem }) {
  * element, never a card: `children` is passed through untouched. `className` brings `group/lib-grid` and the column rule
  * (the views pass the first as `gridClassName`; the default is for a grid used on its own).
  */
-export function LibraryCardGrid({ className = `group/lib-grid ${COLUMN_PRESETS.library.className}`, children }: Partial<GridElementProps>) {
+export function LibraryCardGrid({ className = `group/lib-grid ${COLUMN_PRESETS.library.className}`, style, children }: Partial<GridElementProps>) {
   const selecting = useSelectionActive()
   return (
-    <div className={className} data-selecting={selecting ? "" : undefined}>
+    <div className={className} style={style} data-selecting={selecting ? "" : undefined}>
       {children}
     </div>
   )

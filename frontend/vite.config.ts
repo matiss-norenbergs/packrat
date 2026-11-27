@@ -43,8 +43,8 @@ export default defineConfig(({ mode }) => {
           // index.html modulepreloads it). `scripts/check-bundle.mjs` guards this.
           //  - vendor-react: startup, so it outranks every on-demand group.
           //  - vendor-charts: recharts and its helpers, Dashboard only.
-          //  - vendor-dnd / vendor-panels / vendor-calendar / vendor-qr: libraries one
-          //    screen uses (Edit Sequence, Artist dialog + date formatting, 2FA setup).
+          //  - vendor-dnd / vendor-panels / vendor-calendar / vendor-qr / vendor-virtual:
+          //    libraries one screen uses (Edit Sequence, Artist dialog + date formatting, 2FA setup, the Library's windowed grid).
           //  - vendor-tauri: the desktop plugins, only ever dynamically imported.
           //  - vendor: the rest, i.e. what the startup path needs.
           //  - app-shared: components/ui, hooks, lib, types (minus calendar/resizable,
@@ -83,6 +83,12 @@ export default defineConfig(({ mode }) => {
               {
                 name: "vendor-qr",
                 test: /node_modules[\/]qrcode\.react[\/]/,
+                priority: 25,
+                includeDependenciesRecursively: false,
+              },
+              {
+                name: "vendor-virtual",
+                test: /node_modules[\/]@tanstack[\/](react-virtual|virtual-core)[\/]/,
                 priority: 25,
                 includeDependenciesRecursively: false,
               },

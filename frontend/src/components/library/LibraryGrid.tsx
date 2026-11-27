@@ -77,6 +77,7 @@ export function LibraryGrid() {
           getKey={getKey}
           renderItem={renderItem}
           columns="library"
+          virtualize
           resetKey={resetKey}
           loading={loading}
           error={error}

@@ -100,6 +100,16 @@ export function restoreFocusAfterDialog(e: Event) {
   if (ok) e.preventDefault()
 }
 
+/**
+ * The elements a dialog will hand focus back to, for a windowed list that must keep their rows mounted while the user
+ * scrolls: the origin armed for the open dialog, one a menu item just selected (the dialog is about to open), and the target
+ * of the last right-click.
+ */
+export function focusReturnElements(): HTMLElement[] {
+  const context = contextOrigin && Date.now() - contextOrigin.at < 10 * 60_000 ? contextOrigin.el : null
+  return [armed?.el, pending?.el, context].filter((el): el is HTMLElement => el != null && el.isConnected)
+}
+
 /** For tests. */
 export function resetFocusReturn() {
   pending = null
