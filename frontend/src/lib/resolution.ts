@@ -18,8 +18,8 @@ export type ResolutionTier = "low" | "medium" | "high"
 
 export const RESOLUTION_TIER_CLASS: Record<ResolutionTier, string> = {
   low: "text-destructive",
-  medium: "text-warning",
-  high: "text-success",
+  medium: "text-warning-text",
+  high: "text-success-text",
 }
 
 // Resolution is stored/displayed everywhere as a raw "WIDTHxHEIGHT" string

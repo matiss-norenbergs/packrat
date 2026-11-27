@@ -27,7 +27,7 @@ export function SaveRow({
       <span
         className={cn(
           "text-xs",
-          dirty ? "text-warning" : isSuccess ? "text-success" : "text-muted-foreground",
+          dirty ? "text-warning-text" : isSuccess ? "text-success-text" : "text-muted-foreground",
         )}
       >
         {status}
