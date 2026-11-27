@@ -61,10 +61,25 @@ export function WindowedCells({ cells, preset, region, resetKey, estimateRowHeig
     [region, columns],
   )
 
+  // A row's real height follows the column width (the thumbnail is 16:9), so the preset's constant is only the first guess:
+  // once rows have been measured, the mean of those stands in for the rows that have not, which keeps the total height (the
+  // scrollbar) from drifting as the user scrolls into unmeasured rows.
+  const measured = useRef({ heights: new Map<string, number>(), sum: 0, columns })
+  if (measured.current.columns !== columns) measured.current = { heights: new Map(), sum: 0, columns }
+  const measureRow = useCallback((el: Element, entry: ResizeObserverEntry | undefined) => {
+    const height = Math.round(entry?.borderBoxSize?.[0]?.blockSize ?? el.getBoundingClientRect().height)
+    const m = measured.current
+    const key = (el as HTMLElement).dataset.firstItem ?? ""
+    m.sum += height - (m.heights.get(key) ?? 0)
+    m.heights.set(key, height)
+    return height
+  }, [])
+
   const virtualizer = useVirtualizer({
     count,
     getScrollElement: () => region,
-    estimateSize: () => estimate,
+    estimateSize: () => (measured.current.heights.size > 0 ? measured.current.sum / measured.current.heights.size : estimate),
+    measureElement: measureRow,
     gap: preset.gap,
     overscan: OVERSCAN_ROWS,
     scrollMargin: REGION_PADDING_TOP,
