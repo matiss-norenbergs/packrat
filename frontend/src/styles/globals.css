@@ -63,6 +63,7 @@
     --color-secondary: var(--secondary);
     --color-primary-foreground: var(--primary-foreground);
     --color-primary: var(--primary);
+    --color-primary-hover: var(--primary-hover);
     --color-popover-foreground: var(--popover-foreground);
     --color-popover: var(--popover);
     --color-card-foreground: var(--card-foreground);
@@ -90,6 +91,11 @@
        picked, so "Default" and the logo are provably the same color. */
     --primary: oklch(0.534 0.288 293);
     --primary-foreground: oklch(0.985 0 0);
+    /* Solid hover/pressed fill of a primary button or badge (hover:bg-primary-hover): the accent mixed 10 % toward
+       black, so its near-white label keeps >= 4.5:1 for every accent in both themes (the old /80 fade toward the
+       page lightened the fill in light mode and dropped the label to 3.0-4.4). Monochrome overrides it, because
+       black can't get darker (and white-on-white would vanish): it mixes toward its own label color instead. */
+    --primary-hover: color-mix(in oklab, var(--primary), black 10%);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
@@ -240,7 +246,7 @@
     --chart-5: #9085e9;
 }
 [data-accent="green"] {
-    --primary: oklch(0.55 0.17 145);
+    --primary: oklch(0.52 0.17 145);
     --primary-foreground: oklch(0.985 0 0);
     --chart-2: #2a78d6; /* blue */
     --chart-3: #e87ba4; /* magenta */
@@ -254,10 +260,11 @@
     --chart-5: #e66767;
 }
 /* "Yellow" ("Honey gold") — deliberately not a bright yellow: every accent
-   uses white foreground text (see above), and a light/bright yellow can't
-   carry white text at a legible contrast. This gold/amber step (L 0.58, C
-   0.15) keeps white text readable (4.18:1, in line with the other accents'
-   4.39-5.91 range) while still reading as "yellow" in hue (H 82). Its own
+   uses near-white foreground text (see above), and a light/bright yellow can't
+   carry it at a legible contrast. This gold/amber step (L 0.54, C 0.15, H 82)
+   keeps the label at 4.89:1 (WCAG AA 4.5:1 for normal text; it was L 0.58 /
+   4.15:1 before) while still reading as "yellow-gold" rather than brown. Green
+   (L 0.52) is the same story: 4.89:1, it was 4.33. Its own
    hue sits almost on top of the reference "yellow" family (H 75.1, the
    closest of any accent-to-family pairing in this file), so unlike
    blue/red/green it can't reuse ANY of the default's four secondary hues —
@@ -265,9 +272,10 @@
    four reference families farthest from it instead (blue/aqua/violet/
    green), ordered to keep the two close cool pairs (aqua-green, blue-
    violet — see the comment above) apart. Validated six-checks, both
-   modes, same as the others. */
+   modes, same as the others (re-run after the L 0.54 darkening: no new
+   failures, same contrast-relief WARNs as before). */
 [data-accent="yellow"] {
-    --primary: oklch(0.58 0.15 82);
+    --primary: oklch(0.54 0.15 82);
     --primary-foreground: oklch(0.985 0 0);
     --chart-2: #2a78d6; /* blue */
     --chart-3: #1baf7a; /* aqua */
@@ -305,6 +313,7 @@
 [data-accent="mono"] {
     --primary: oklch(0 0 0);
     --primary-foreground: oklch(1 0 0);
+    --primary-hover: color-mix(in oklab, var(--primary), var(--primary-foreground) 15%);
     --chart-2: #eb6834;
     --chart-3: #1baf7a;
     --chart-4: #eda100;
@@ -313,6 +322,7 @@
 .dark[data-accent="mono"] {
     --primary: oklch(1 0 0);
     --primary-foreground: oklch(0 0 0);
+    --primary-hover: color-mix(in oklab, var(--primary), var(--primary-foreground) 15%);
     --chart-2: #d95926;
     --chart-3: #199e70;
     --chart-4: #c98500;
