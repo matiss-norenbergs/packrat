@@ -1611,8 +1611,10 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   live status elsewhere, or a manual trigger of the same action — "Check now", a manual backup —
   already gets synchronous feedback of its own) and rely on the desktop notification alone. A
   private library item's title never appears in the notification body. Turning this on prompts
-  for browser notification permission if you haven't granted or denied it yet. A personal
-  per-browser preference (like Theme), not synced across devices.
+  for browser notification permission if you haven't granted or denied it yet. Stored in this
+  browser/device only (not synced across devices or saved to your account).
 
-Every card here saves immediately on change — there's no separate "Save" step, except General,
-Downloads' type/quality pair, and Jellyfin, which each batch their fields behind one Save button.
+Every server-settings tab (General, Downloads, Library, Features, Privacy, History, Backup,
+Jellyfin, AI Enhancement, yt-dlp) buffers its edits behind one **Save** button at the bottom of the
+tab. Only Notifications (this device), Appearance (your account), Account (its own actions) and
+Desktop (this device, desktop app) apply immediately, with no Save step.

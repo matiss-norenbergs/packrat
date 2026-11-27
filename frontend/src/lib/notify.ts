@@ -5,7 +5,7 @@ import { readStorage, writeStorage } from "@/lib/safeStorage"
 // Whether desktop notifications are turned on — a personal per-browser
 // preference (Notification permission itself is granted per-browser/per-
 // device anyway), not something that needs a backend Settings round-trip.
-// Same storage pattern as useAccentColor.
+// Stored in localStorage only (unlike Theme/Accent, which are saved to the account).
 const STORAGE_KEY = "packrat-desktop-notifications"
 
 export function isDesktopNotificationsEnabled(): boolean {
