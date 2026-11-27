@@ -24,7 +24,8 @@ export function DesktopTab() {
   )
 }
 
-// Like Theme/Accent these are per-device preferences — the shell stores them itself, not the server.
+// Per-device preferences — the shell stores them itself, not the server (unlike Theme/Accent,
+// which are saved to the user's account).
 function ShellSettings() {
   const { enabled: closeToTray, setEnabled: setCloseToTray } = useCloseToTray()
   const { mode: startup, setMode: setStartup } = useStartup()

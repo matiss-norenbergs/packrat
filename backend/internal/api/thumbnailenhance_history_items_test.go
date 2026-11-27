@@ -13,7 +13,7 @@ import (
 )
 
 // The history page used to load the whole library (LibraryRepo.List) to map at
-// most 25 rows to their items; it now fetches just those items. This builds the
+// most one page (50) of rows to their items; it now fetches just those items. This builds the
 // expected blurred / enhancedPath for every row the OLD way (from List) and
 // compares it with the endpoint's answer on a library of several hundred items.
 //
@@ -53,10 +53,10 @@ func TestThumbnailEnhancementHistoryFetchesOnlyPageItems(t *testing.T) {
 		HistoryRepo:   history,
 		OriginalsRepo: repository.NewThumbnailEnhancementOriginalsRepo(f.conn),
 	}
-	// 30 rows (page 1 holds 25): a spread of items, a repeated item and rows
+	// 70 rows (page 1 holds 50, page 2 the other 20): a spread of items, a repeated item and rows
 	// with no item (the history table's foreign key nulls a deleted item's id,
 	// so a dangling id cannot exist).
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 70; i++ {
 		var id *int64
 		switch {
 		case i == 3 || i == 4:
@@ -147,6 +147,17 @@ func TestThumbnailEnhancementHistoryFetchesOnlyPageItems(t *testing.T) {
 	}
 	if got.Total != total || len(got.Entries) != len(entries) {
 		t.Fatalf("total %d/%d, rows %d/%d", got.Total, total, len(got.Entries), len(entries))
+	}
+	if total != 70 || len(got.Entries) != thumbnailEnhancementHistoryPageSize || thumbnailEnhancementHistoryPageSize != 50 {
+		t.Fatalf("page 1: total %d, rows %d, page size %d; want 70, 50, 50", total, len(got.Entries), thumbnailEnhancementHistoryPageSize)
+	}
+	// Page 2 starts exactly where page 1 ended (offset math) and holds the remaining 20.
+	var got2 ThumbnailEnhancementHistoryListResponse
+	if w2 := serve(t, mount, http.MethodGet, "/api/thumbnail-enhancement/history?page=2", &got2); w2.Code != http.StatusOK {
+		t.Fatalf("page 2 status %d: %s", w2.Code, w2.Body.String())
+	}
+	if got2.Total != 70 || len(got2.Entries) != 20 || got2.Entries[0].ID == got.Entries[len(got.Entries)-1].ID {
+		t.Fatalf("page 2: total %d, rows %d", got2.Total, len(got2.Entries))
 	}
 	for i, e := range got.Entries {
 		if e.ID != entries[i].ID {

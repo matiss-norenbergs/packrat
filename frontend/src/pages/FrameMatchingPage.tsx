@@ -26,7 +26,7 @@ import { useHoverPopover } from "@/lib/useHoverPopover"
 import { TOUCH_HIT_AREA } from "@/lib/touchTarget"
 import { cn } from "@/lib/utils"
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = 50
 
 function stateBadgeVariant(state: FrameMatchQueueItem["state"]): "success" | "secondary" | "destructive" | "outline" {
   switch (state) {

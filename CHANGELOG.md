@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-27
+- **Convention and doc cleanups** — Downloads, Frame Matching and the AI Enhancement history now show 50 rows a page (was 25; Collections keeps 25 roots a page); bulk Unlink and Mark seen in Known items ask for confirmation with the count; Collections' Expand/Collapse and Import's Ignored Folders moved to the left-hand toolbar group and the selection Clear buttons got an X icon; the Notifications text and docs no longer call the per-browser notification preference "like Theme" and the Settings docs say which tabs save immediately.
 - **Colors meet WCAG contrast** — status text (badges, Saved message, destructive buttons) is darker in light mode, the Green and Yellow accents are slightly darker so their button labels reach 4.5:1, primary buttons get a solid darker hover instead of a fade, the keyboard focus ring follows the accent and is clearly visible, and form-control borders (inputs, selects, checkboxes, switches) reach 3:1. Duplicate/filename warnings now use the orange warning color instead of amber. A regression test guards the tokens.
 - **Importing files into a folder whose name is already taken no longer fails** — a folder whose name equals the display name of a collection with a different folder (renamed, or made by hand) answered `500 collection name already in use` for every file in it; the import now creates the collection as `Name (2)` (its folder is unchanged) and the files import. The Import page also runs at most 4 imports at a time instead of all at once.
 

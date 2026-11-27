@@ -2121,6 +2121,9 @@ row type and the id type (number or string).
   `virtualize` on DataTable for the Library list only; see [`TODO.md` → Virtualized grid and DataTable](TODO.md#large-libraries).
 - **Why Collections doesn't use it**: it renders a tree (expand/collapse, nesting, drag to re-parent), which a flat
   row model doesn't fit; its cells could use the same primitives but the table itself stays bespoke.
+  Two deliberate exceptions follow from that, so don't "fix" them as drift: its selection is click/checkbox
+  only (plain click selects one, Ctrl/Cmd+click and the checkbox toggle; no shift-range, drag-select or
+  context menu), and it pages **25 root collections** a page (each with its whole subtree) rather than 50 rows.
 
 ## Bulk endpoints
 
@@ -2168,7 +2171,7 @@ Where an audit found otherwise, the fix is one of these (extend the list when ad
   unbounded but never returned those columns. `List` itself now has only test callers.
 - **Fetch by id, not scan.** `LibraryRepo.GetByIDs(ids)` (chunked with `inChunks`, same select columns and
   scan as `List`/`Query`, missing ids absent) is for any caller that needs a few items. The AI Enhancement
-  history page uses it for its ≤25 rows instead of `LibraryRepo.List`. Callers that legitimately need the
+  history page uses it for its ≤50 rows instead of `LibraryRepo.List`. Callers that legitimately need the
   whole library (backup export) still use `List`/`Query`. `EnhanceItems` uses it too.
 - **Candidates in SQL, files only for candidates.** AI enhancement eligibility used to `List` the library and
   open every thumbnail (`Stat` + `Open` + `DecodeConfig`) on every sweep, count and auto-on-download.

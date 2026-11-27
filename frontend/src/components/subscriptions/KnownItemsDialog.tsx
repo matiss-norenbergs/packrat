@@ -109,6 +109,8 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
   // means no confirmation is pending, so a selection with no duplicates in
   // it skips the dialog entirely and adds immediately.
   const [confirmMode, setConfirmMode] = useState<AddSubscriptionEntryMode | null>(null)
+  // Set while the bulk "Mark seen" / "Unlink" confirmation is open.
+  const [confirmBulk, setConfirmBulk] = useState<"seen" | "unlink" | null>(null)
 
   // The dialog stays mounted across opens (see SubscriptionsPage), and subscription itself can change between
   // opens too — never carry a selection over to a different open/subscription. The table resets its own page
@@ -128,6 +130,9 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
   const eligibleForMarkSeen = selectedEntries.filter((e) => e.seenAt == null)
   const alreadyInLibrary = eligibleForAdd.filter((e) => e.linkedLibraryItemId != null)
   const eligibleForUnlink = selectedEntries.filter((e) => e.libraryItemId != null)
+
+  const bulkCount = confirmBulk === "unlink" ? eligibleForUnlink.length : eligibleForMarkSeen.length
+  const noun = bulkCount === 1 ? ITEM_LABEL.singular : ITEM_LABEL.plural
 
   const doBulkAdd = (mode: AddSubscriptionEntryMode) => {
     const sourceIds = eligibleForAdd.map((e) => e.sourceId)
@@ -213,7 +218,7 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
                 size="sm"
                 variant="outline"
                 disabled={eligibleForMarkSeen.length === 0 || bulkMarkSeen.isPending}
-                onClick={handleBulkMarkSeen}
+                onClick={() => setConfirmBulk("seen")}
               >
                 <Eye className="h-4 w-4" />
                 {bulkMarkSeen.isPending ? "Marking…" : "Mark seen"}
@@ -231,7 +236,7 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
                 size="sm"
                 variant="outline"
                 disabled={eligibleForUnlink.length === 0 || bulkUnlink.isPending}
-                onClick={handleBulkUnlink}
+                onClick={() => setConfirmBulk("unlink")}
               >
                 <Link2Off className="h-4 w-4" />
                 {bulkUnlink.isPending ? "Unlinking…" : "Unlink"}
@@ -262,6 +267,36 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
                 }}
               >
                 {confirmMode === "ghost" ? "Add as ghost" : "Queue download"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={confirmBulk != null} onOpenChange={(next) => !next && setConfirmBulk(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {confirmBulk === "unlink"
+                  ? `Unlink ${bulkCount} ${noun}?`
+                  : `Mark ${bulkCount} ${noun} as seen?`}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {confirmBulk === "unlink"
+                  ? "They stop being linked to their library items (the library items themselves are not touched). Linking again is one entry at a time."
+                  : "They will no longer show as New."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant={confirmBulk === "unlink" ? "destructive" : "default"}
+                onClick={() => {
+                  if (confirmBulk === "unlink") handleBulkUnlink()
+                  else if (confirmBulk === "seen") handleBulkMarkSeen()
+                  setConfirmBulk(null)
+                }}
+              >
+                {confirmBulk === "unlink" ? "Unlink" : "Mark seen"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

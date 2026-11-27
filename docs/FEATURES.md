@@ -683,7 +683,7 @@ without re-extracting or re-fetching anything.
 Named presets — a folder under your media root plus a default download type and quality —
 selectable from the New Download dialog so you don't have to re-pick them every time.
 
-- The page shows 25 top-level collections at a time; if the list shrinks under the current page (you
+- The page shows 25 top-level collections at a time (the one list page that doesn't use 50 rows — each root brings its whole subtree); if the list shrinks under the current page (you
   deleted the only collection on the last page) it moves to the previous page.
 - Collections nest (sub-collections), shown as a tree; a collection's position in the tree is
   fixed at creation and can't be moved later. Two collections under the same parent (or two top-level
@@ -1017,7 +1017,7 @@ or downloaded by some other tool) — brings them into the Library without re-do
   folder (`Name (2)`, `(3)`… when a sibling collection already uses that display name, e.g. a renamed collection that kept the
   old folder name); the scan list itself doesn't auto-refresh after every import, only on page load or manual Rescan,
   which keeps showing the current list while it scans.
-- **Ignored Folders** — mark specific folders (and their sub-folders) to be skipped in future
+- **Ignored Folders** (a button in the toolbar, next to Rescan) — mark specific folders (and their sub-folders) to be skipped in future
   scans entirely, e.g. a raw-footage or behind-the-scenes folder you never want surfaced here.
 
 ## History
@@ -1316,7 +1316,8 @@ back manually.
   subscription tracks, so it was never found automatically), and **Unlink** (clears that
   association). The dialog only lets you link an item that is in the current results: typing a new
   search clears the selection, and a failed search shows an error with Retry instead of "No
-  matches.". Mark seen and Unlink are one all-or-nothing request; Add as ghost / Queue download handle
+  matches.". **Mark seen** and **Unlink** first ask for confirmation showing how many entries they will
+  touch ("Unlink 3 items?", "Mark 3 items as seen?"; Cancel/Escape do nothing); both are one all-or-nothing request; Add as ghost / Queue download handle
   each entry on its own, so the toast can read "Added 2 items" plus "1 item failed: <reason>". The Status column shows "New" (unseen), "In library" / "In library (ghost)" (linked
   to a library item, automatically or manually — same badge either way), or nothing for a seen entry
   with no link. Re-adding an entry that's already linked prompts for confirmation first rather than
@@ -1611,8 +1612,10 @@ If the settings can't be loaded, a tab shows an error with a **Retry** button in
   live status elsewhere, or a manual trigger of the same action — "Check now", a manual backup —
   already gets synchronous feedback of its own) and rely on the desktop notification alone. A
   private library item's title never appears in the notification body. Turning this on prompts
-  for browser notification permission if you haven't granted or denied it yet. A personal
-  per-browser preference (like Theme), not synced across devices.
+  for browser notification permission if you haven't granted or denied it yet. Stored in this
+  browser/device only (not synced across devices or saved to your account).
 
-Every card here saves immediately on change — there's no separate "Save" step, except General,
-Downloads' type/quality pair, and Jellyfin, which each batch their fields behind one Save button.
+Every server-settings tab (General, Downloads, Library, Features, Privacy, History, Backup,
+Jellyfin, AI Enhancement, yt-dlp) buffers its edits behind one **Save** button at the bottom of the
+tab. Only Notifications (this device), Appearance (your account), Account (its own actions) and
+Desktop (this device, desktop app) apply immediately, with no Save step.

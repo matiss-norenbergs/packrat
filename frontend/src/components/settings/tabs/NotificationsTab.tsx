@@ -38,8 +38,8 @@ export function NotificationsTab() {
               or because a manual trigger of the same action already gets synchronous feedback, like
               "Check now"/a manual backup). Only fires while you're away from this tab (it's
               backgrounded, minimized, or the window isn't focused) — the toast already covers the
-              case where you're looking at it. A personal per-browser preference (like Theme), not
-              synced across devices. Turning this on prompts for
+              case where you're looking at it. Stored in this browser/device only (not synced
+              across devices or saved to your account). Turning this on prompts for
               notification permission if you haven't granted or denied it yet.
             </InfoPopover>
           </div>
