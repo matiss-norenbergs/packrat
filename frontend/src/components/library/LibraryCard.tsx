@@ -120,7 +120,7 @@ function LibraryCardImpl({ item }: { item: LibraryItem }) {
           onCheckedChange={() => toggleSelected(item)}
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            // Plain border-input is nearly invisible sitting on top of an
+            // Plain border-control is nearly invisible sitting on top of an
             // arbitrary video thumbnail — a white ring plus a dark outer
             // ring gives a duotone edge that reads against both light and
             // dark frames, unlike a single-color border.

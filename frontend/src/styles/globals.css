@@ -47,6 +47,7 @@
     --color-chart-2: var(--chart-2);
     --color-chart-1: var(--chart-1);
     --color-ring: var(--ring);
+    --color-control: var(--control);
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
@@ -126,7 +127,14 @@
        but disappear). 0.82 keeps the light-theme look while staying legible. */
     --border: oklch(0.82 0 0);
     --input: oklch(0.82 0 0);
-    --ring: oklch(0.708 0 0);
+    /* Form-control edges (--control): the border of inputs, selects, textareas, unchecked checkbox/radio and the
+       unchecked switch track must reach 3:1 against the surface (WCAG 1.4.11), which the soft decorative
+       --border (cards, tables, separators) deliberately does not. Light: 3.6:1 on white, 3.3:1 on the muted
+       surfaces. */
+    --control: oklch(0.62 0 0);
+    /* Keyboard focus ring: the current accent as a solid ring (tracks Settings -> Appearance), >= 4.5:1 on the
+       page and cards in light mode (Monochrome: black). The old gray at 50 % was 1.5:1. */
+    --ring: var(--primary);
     /* Dashboard charts' "first/single series" color (Library Growth,
        Items by Resolution, Top Tags/Artists, Storage's "Packrat" segment,
        Video vs Audio's "Video" segment) — tracks the current accent instead
@@ -177,7 +185,11 @@
     --destructive-text: var(--destructive);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    /* Border of form controls, at 3.5:1 on the page and 3.6:1 on cards (--input stays the 15 % FILL tint). */
+    --control: oklch(1 0 0 / 38%);
+    /* The accent lightened 20 % toward white: >= 3.8:1 even on the muted surface (the raw primary is 2.9:1 on
+       cards for the default purple). */
+    --ring: color-mix(in oklab, var(--primary), white 20%);
     --chart-1: var(--primary);
     --chart-2: #d95926;
     --chart-3: #199e70;
@@ -339,6 +351,9 @@
     --player-fg: oklch(0.985 0 0);
     --player-scrim: oklch(0.16 0 0);
     --player-accent: var(--primary);
+    /* The skin sits on a dark scrim in either theme: keep its focus ring the light gray it always was
+       (Monochrome's black light-mode ring would vanish). */
+    --ring: oklch(0.708 0 0);
     --player-track-bg: color-mix(in oklab, var(--player-fg) 28%, transparent);
     --player-hover-bg: color-mix(in oklab, var(--player-fg) 16%, transparent);
 }
@@ -411,7 +426,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
     }
   body {
     @apply bg-background text-foreground;
