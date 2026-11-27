@@ -153,14 +153,7 @@ function BadgeRow({ label, value }: { label: string; value: boolean }) {
     <div className="flex items-center justify-between gap-2">
       <dt className="shrink-0 text-muted-foreground">{label}</dt>
       <dd>
-        <Badge
-          variant="outline"
-          className={
-            value
-              ? "border-green-600/30 bg-green-500/10 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-400"
-              : undefined
-          }
-        >
+        <Badge variant={value ? "success" : "outline"}>
           {value ? "Yes" : "No"}
         </Badge>
       </dd>

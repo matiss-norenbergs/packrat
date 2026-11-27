@@ -39,7 +39,7 @@ const matchSubscription = (s: Subscription, q: string) =>
   s.title.toLowerCase().includes(q) || s.url.toLowerCase().includes(q)
 
 // Mirrors CollectionFolderTile's gap-warning popover (same controlled-hover
-// pattern, same amber styling) for a subscription's last check failure.
+// pattern, same warning styling) for a subscription's last check failure.
 function LastCheckErrorBadge({ error }: { error: string }) {
   const { open, onOpenChange, hoverProps } = useHoverPopover()
   return (
@@ -47,7 +47,7 @@ function LastCheckErrorBadge({ error }: { error: string }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={cn("text-amber-600 dark:text-amber-500", TOUCH_HIT_AREA)}
+          className={cn("text-warning", TOUCH_HIT_AREA)}
           aria-label="Last check failed"
           {...hoverProps}
         >

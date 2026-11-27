@@ -78,7 +78,7 @@ export function CollectionFolderTile({
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className={cn("text-amber-600 dark:text-amber-500", TOUCH_HIT_AREA)}
+                    className={cn("text-warning", TOUCH_HIT_AREA)}
                     aria-label="Missing sequence numbers"
                     onClick={(e) => e.stopPropagation()}
                     {...gapPopover.hoverProps}

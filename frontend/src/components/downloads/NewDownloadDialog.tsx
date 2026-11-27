@@ -602,7 +602,7 @@ export function NewDownloadDialog() {
           )}
 
           {!preview?.isPlaylist && preview?.duplicate && (
-            <div className="rounded-md border border-amber-600/50 bg-amber-500/10 p-3 text-sm break-words">
+            <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm break-words">
               Already in your library: <span className="font-medium">{duplicateTitle(preview.duplicate)}</span>, downloaded{" "}
               {new Date(preview.duplicate.downloadedAt).toLocaleDateString()}.
             </div>
