@@ -151,6 +151,9 @@ const columns: ColumnDef<ScannedFile>[] = [
   },
 ]
 
+/** Imports in flight at once for "Import selected" / "Import all". */
+const IMPORT_CONCURRENCY = 4
+
 export function ImportPage() {
   const { data, isLoading, isError, error, refetch, isRefetching } = useImportScan()
   const selection = useIdSelection<string>()
@@ -202,8 +205,19 @@ export function ImportPage() {
 
   const importMany = async (files: ScannedFile[]) => {
     if (files.length === 0) return
-    const results = await Promise.allSettled(files.map((f) => importOne(f)))
-    const succeededPaths = files.filter((_, i) => results[i].status === "fulfilled" && (results[i] as PromiseFulfilledResult<boolean>).value).map((f) => f.path)
+    // A few requests in flight at a time: "Import all" can be hundreds of files, and each request
+    // probes the file (and may fetch a thumbnail), so firing them all at once only queues them up
+    // on the server and ties up the browser's connections.
+    const ok: boolean[] = new Array(files.length).fill(false)
+    let next = 0
+    const worker = async () => {
+      while (next < files.length) {
+        const i = next++
+        ok[i] = await importOne(files[i])
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(IMPORT_CONCURRENCY, files.length) }, worker))
+    const succeededPaths = files.filter((_, i) => ok[i]).map((f) => f.path)
     const failed = files.length - succeededPaths.length
 
     finishImport(succeededPaths)
