@@ -304,7 +304,7 @@ function SortButton({ align, dir, onClick, children }: { align: ColumnAlign; dir
     <button
       type="button"
       data-sort-button
-      className="inline-flex max-w-full cursor-pointer select-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="inline-flex max-w-full cursor-pointer select-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       onClick={onClick}
     >
       {align === "right" ? (dir ? arrow : null) : align === "center" ? <span className="h-3 w-3 shrink-0" /> : null}

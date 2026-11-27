@@ -131,7 +131,7 @@ function CollectionNode({
                 <button
                   type="button"
                   aria-label="Collection details"
-                  className={cn(TOUCH_HIT_AREA, "inline-flex items-center text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50")}
+                  className={cn(TOUCH_HIT_AREA, "inline-flex items-center text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring")}
                   {...info.hoverProps}
                 >
                   <Info className="h-3.5 w-3.5" />

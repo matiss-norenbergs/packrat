@@ -75,7 +75,7 @@ function YtDlpTabBody({ settings }: { settings: Settings }) {
                     Current version: <span className="font-mono">{data.currentVersion}</span>
                   </p>
                   {data.updateAvailable ? (
-                    <p className="text-warning">
+                    <p className="text-warning-text">
                       Update available: <span className="font-mono">{data.latestVersion}</span>
                     </p>
                   ) : (

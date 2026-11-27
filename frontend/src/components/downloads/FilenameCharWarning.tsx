@@ -5,7 +5,7 @@
 export function FilenameCharWarning({ chars }: { chars: string[] }) {
   if (chars.length === 0) return null
   return (
-    <p className="text-xs text-amber-600 dark:text-amber-500">
+    <p className="text-xs text-warning-text">
       Not allowed in filenames, will be removed: {chars.map((c) => `"${c}"`).join(" ")}
     </p>
   )

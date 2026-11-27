@@ -132,12 +132,12 @@ function FieldRow({
     <div className="space-y-0.5">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <span>{label}</span>
-        {differs && <span className="text-amber-500">differs</span>}
+        {differs && <span className="text-warning-text">differs</span>}
       </div>
       {resolution ? (
         <ResolutionValue resolution={value === "—" ? null : value} className="text-sm whitespace-pre-wrap" />
       ) : (
-        <p className={cn("text-sm whitespace-pre-wrap", differs && "text-amber-500")}>{value}</p>
+        <p className={cn("text-sm whitespace-pre-wrap", differs && "text-warning-text")}>{value}</p>
       )}
     </div>
   )

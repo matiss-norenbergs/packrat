@@ -116,7 +116,7 @@ export function RedownloadFromUrlDialog({ item, open, onOpenChange }: Redownload
         )}
 
         {preview?.duplicate && (
-          <div className="rounded-md border border-amber-600/50 bg-amber-500/10 p-3 text-sm break-words">
+          <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm break-words">
             This URL is already in your library as{" "}
             <span className="font-medium">{duplicateTitle(preview.duplicate)}</span>.
           </div>

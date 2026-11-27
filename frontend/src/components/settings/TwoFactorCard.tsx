@@ -76,7 +76,7 @@ export function TwoFactorCard() {
               </Badge>
             </p>
             {status.recoveryCodesRemaining <= LOW_RECOVERY_CODES && (
-              <p className="text-sm text-warning">
+              <p className="text-sm text-warning-text">
                 You're running low on recovery codes. Generate a new set before you lose access to your authenticator.
               </p>
             )}

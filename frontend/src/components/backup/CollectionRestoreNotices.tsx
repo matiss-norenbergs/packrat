@@ -56,7 +56,7 @@ export function CollectionRestoreNotices({
         </div>
       )}
       {unresolvedList.length > 0 && (
-        <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-warning" role="alert" data-testid="unresolved-collections">
+        <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-warning-text" role="alert" data-testid="unresolved-collections">
           <div className="flex items-center gap-2">
             <TriangleAlertIcon className="size-4 shrink-0" />
             <Badge variant="warning">{plural(unresolvedList.length, "collection")} can&apos;t be restored</Badge>

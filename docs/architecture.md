@@ -390,6 +390,26 @@ response can't overwrite a choice just made — which also refreshes the cache. 
 at once and PATCH only the changed key; a failed save toasts and keeps the local value. There is no
 migration of old browser values: an account with nothing stored gets the defaults.
 
+### Color contrast
+Targets (WCAG 2.x): **4.5:1** for normal text (button labels, badge text, the Saved message) and **3:1** for
+non-text UI (focus ring, form-control edges), measured with translucent layers composited over the real
+surface (page, card, popover), hover states included; disabled controls are exempt. `frontend/src/styles/contrast.test.ts`
+reads the tokens from `globals.css` and fails below these targets, so a token edit can't silently regress them.
+- **Status text** uses `text-success-text` / `text-warning-text` / `text-destructive-text` (light mode: the same hue
+  as the fill, darker; dark mode: equal to the fill). The fills `--success|--warning|--destructive` (bars, dots,
+  borders, charts) are not text colors. The light hover tint of badges and the destructive button is `/15` (not
+  `/20`) so hovered status text keeps 4.5:1. Never use palette classes (`amber-*`, `green-*`) for a status.
+- **Primary buttons**: Green (L 0.52) and Yellow (L 0.54) are darkened so the near-white label reaches 4.5:1.
+  The hover fill is the solid `--primary-hover` (`hover:bg-primary-hover`; the accent mixed 10 % toward black,
+  Monochrome 15 % toward its label color), not a `/80` fade. A change of an accent's hue/lightness needs its
+  `--chart-2..5` re-validated (both themes, `validate_palette.js`, with `--chart-1` = the primary first).
+- **Focus ring**: `--ring` follows the accent (dark mode: lightened 20 % toward white) and is used solid
+  (`ring-ring`, never `/50`). The media player skin pins its own light-gray ring because it sits on a dark scrim.
+- **Form-control edges** use `--control` (`border-control`; unchecked switch track `bg-control` in light mode), 3:1
+  on every surface. `--border` stays the soft decorative edge (cards, tables, separators) and `--input` the
+  dark-mode field fill tint.
+Known and left alone: `muted-foreground` on `--muted` is 4.34:1 in both themes.
+
 ### Saved table layouts
 What a user did to a list table (which columns are hidden, how it is sorted and how wide the columns are) is stored per account in `user_table_layouts(user_id, table_id, layout, updated_at)`,
 primary key `(user_id, table_id)`, `ON DELETE CASCADE`. It has its own table rather than rows in `user_preferences` because

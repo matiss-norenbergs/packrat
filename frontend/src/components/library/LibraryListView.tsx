@@ -110,7 +110,7 @@ function TagsCell({ item }: { item: LibraryItem }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex flex-nowrap items-center gap-1 rounded outline-hidden hover:opacity-80 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="flex flex-nowrap items-center gap-1 rounded outline-hidden hover:opacity-80 focus-visible:ring-[3px] focus-visible:ring-ring"
         >
           {visibleTags.map((tag) => (
             <Badge key={tag} variant="secondary" className="min-w-0 shrink truncate">
