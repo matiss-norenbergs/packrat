@@ -187,13 +187,13 @@ func TestImportScan_UntrackedFileInOldFolderCreatesDuplicate(t *testing.T) {
 	}
 }
 
-// (g3b) Same, but the display name equals the old folder name. The create is
-// refused (the renamed collection already has that name), and CreateImport does
-// not swallow it like the bundle restore does: it answers 500 and imports
-// nothing, so the file stays in the scan list forever.
+// (g3b) Same, but the display name equals the old folder name. The collection
+// name is taken, so the new collection gets the next free display name
+// ("Podcasts (2)", the folder stays "Podcasts") and the import succeeds. This
+// used to answer 500 and leave the file in the scan list forever.
 //
-// KNOWN LIMITATION: the file cannot be imported until the collection is renamed
-// or the file moved; the scan list still offers it and the UI shows a failure.
+// KNOWN LIMITATION: like (g3), this leaves a second collection next to the
+// renamed one; the user can rename or merge it.
 func TestImportScan_UntrackedFileInOldFolderNameClash(t *testing.T) {
 	e := newRenameImportEnv(t)
 	pods := e.collection("Podcasts", "Podcasts", nil)
@@ -204,15 +204,12 @@ func TestImportScan_UntrackedFileInOldFolderNameClash(t *testing.T) {
 	if len(got) != 1 || got[0].NewCollectionPath != "Podcasts" {
 		t.Fatalf("scan = %+v", got)
 	}
-	w := e.importFile("Podcasts/p1.mp4")
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("import status = %d, want 500: %s", w.Code, w.Body)
-	}
-	if want := []string{"Pods|Podcasts"}; !equalStrings(e.folderChains(), want) {
+	e.want(e.importFile("Podcasts/p1.mp4"), http.StatusCreated)
+	if want := []string{"Podcasts|Podcasts (2)", "Pods|Podcasts"}; !equalStrings(e.folderChains(), want) {
 		t.Fatalf("collections = %v, want %v", e.folderChains(), want)
 	}
-	if again := e.scan(); len(again) != 1 {
-		t.Fatalf("the file must still be listed, got %+v", again)
+	if again := e.scan(); len(again) != 0 {
+		t.Fatalf("the imported file must not be listed again, got %+v", again)
 	}
 }
 

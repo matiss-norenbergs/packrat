@@ -969,13 +969,17 @@ func TestBundleRestore_ResultListsAreNeverNull(t *testing.T) {
 }
 
 // Sanity for the error the resolver relies on: creating a collection under a
-// taken name is what the repository refuses.
-func TestEnsureChain_RefusesAFolderWhoseNameIsTaken(t *testing.T) {
+// taken name is what the repository refuses. (EnsureChain, the untracked-file
+// import, does not surface it: it picks the next free display name instead.)
+func TestCreate_RefusesAFolderWhoseNameIsTaken(t *testing.T) {
 	s := seedRenameScene(t)
 	setFolder(t, s.repos, s.podcasts, "Pods")
-	_, err := s.repos.collections.EnsureChain(context.Background(), []string{"Podcasts"})
+	_, err := s.repos.collections.Create(context.Background(), &models.Collection{
+		Name: "Podcasts", RootPath: "Podcasts",
+		DefaultQuality: "best", DefaultDownloadType: "video", FilenameTemplate: "{title}",
+	})
 	if !errors.Is(err, repository.ErrDuplicateName) {
-		t.Fatalf("EnsureChain error = %v, want ErrDuplicateName", err)
+		t.Fatalf("Create error = %v, want ErrDuplicateName", err)
 	}
 }
 

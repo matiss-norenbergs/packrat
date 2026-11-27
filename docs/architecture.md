@@ -977,6 +977,22 @@ connections in WAL mode. Reads run concurrently with a write; **writes still hap
 - **Not changed:** `synchronous` stays at SQLite's default (FULL). `synchronous=NORMAL` is the usual WAL
   setting but trades durability of the last commits on power loss, and is a separate decision.
 
+### Parallel imports
+
+`POST /api/import` is safe to fire many times at once (the Import page does, four at a time). Checked on the
+dev container with 10 to 60 simultaneous requests for one new folder, one new folder per file, a nested chain,
+media-root files, sidecar thumbnails and `originalUrl`: all `201`, one collection per folder, one row per file.
+The only 5xx found was not a race: `EnsureChain` named a new collection after its folder, and when a sibling
+already had that **display name** (a collection renamed away from the folder name, or made by hand) the create
+failed with `ErrDuplicateName`, which `writeServerError` answers as a plain `500`, for every file in that folder
+(sequentially too). `EnsureChain` now takes the next free display name (`freeSiblingName`: `Name`, `Name (2)`, …,
+exact comparison like `nameInUse`) while `root_path` stays the exact folder, so the folder match, case-variant
+handling and the restore's resolver are unchanged. Guarantees kept: one collection per folder (the collections
+mutex around the whole chain walk), one library row per path (`importMu`), `409 file already imported`.
+Tests: `api/import_parallel_test.go`. Each request still lists all paths and probes its file; the Import page
+limits itself to 4 in flight (`IMPORT_CONCURRENCY`) so "Import all" of hundreds of files does not queue them all
+on the server at once.
+
 ## Persistence rules (SQLite)
 
 - **Every foreign-key child column needs an index.** SQLite doesn't create one, so deleting a parent

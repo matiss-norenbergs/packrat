@@ -112,13 +112,13 @@ None are scheduled. Sizes are guesses.
   *untracked* file in the old folder (copied in by hand, or left by another tool) is offered as "new collection
   `concerts`", and importing it creates a duplicate collection named after the old folder with defaults (not
   private even if the renamed one is) or, when the renamed collection's display name equals the old folder name
-  (`Podcasts` / `Podcasts`, renamed to `Pods`), fails with a `500` and stays in the scan list forever. Evidence:
+  (`Podcasts` / `Podcasts`, renamed to `Pods`), creates it as `Podcasts (2)` (it used to fail with a `500`). Evidence:
   `api/collection_rename_import_test.go` (`TestImportScan_UntrackedFileInOldFolderCreatesDuplicate`,
   `TestImportScan_UntrackedFileInOldFolderNameClash`). Likelihood is low: the redownload bug that left files in the
   old folder is fixed, and downloads, Move and redownload keep rows and files consistent. Fix idea: reuse the
   restore's resolver idea, but a scan has no bundle entry and so no display name to match; the only signals are the
   folder name, so the realistic fix is to refuse or warn ("a collection named `concerts` exists under a different
-  folder") instead of creating a duplicate or failing with a `500`.
+  folder") instead of creating a duplicate.
 - **A stable collection id in library bundles (M, deferred).** Matching by folder, then display name, is a heuristic:
   it can still miss when both were changed since the backup (the bundle then creates a new collection), and an
   ambiguous display name (legacy rows that share one) matches nothing and is reported as unresolved. A
