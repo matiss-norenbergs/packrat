@@ -14,6 +14,8 @@ export interface ColumnPreset {
   breakpoints: readonly ColumnBreakpoint[]
   /** The gap in px, the same as the `gap-N` in `className`. */
   gap: number
+  /** A guess at one row's height in px (without the gap) for the windowed grid, until the row has been measured. */
+  estimateRowHeight: number
 }
 
 /**
@@ -31,6 +33,8 @@ export const COLUMN_PRESETS = {
       { minWidth: 1024, columns: 4 },
     ],
     gap: 16,
+    // LibraryCard's `contain-intrinsic-size: auto 280px`.
+    estimateRowHeight: 280,
   },
   /** The thumbnail gallery's rule: 2 / 4 / 6 columns, 12px gap (not used by a ResponsiveGrid yet). */
   gallery: {
@@ -41,6 +45,7 @@ export const COLUMN_PRESETS = {
       { minWidth: 1024, columns: 6 },
     ],
     gap: 12,
+    estimateRowHeight: 160,
   },
 } as const satisfies Record<string, ColumnPreset>
 

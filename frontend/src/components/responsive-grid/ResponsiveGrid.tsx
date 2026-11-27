@@ -1,14 +1,26 @@
-import { Fragment, useMemo, useRef } from "react"
-import type { ComponentType, ReactNode } from "react"
+import { Fragment, useCallback, useMemo, useRef, useState } from "react"
+import type { ComponentType, CSSProperties, ReactNode } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useScrollTopOnChange } from "@/hooks/useScrollTopOnChange"
 import { COLUMN_PRESETS } from "./columns"
 import type { ColumnPresetName } from "./columns"
+import { WindowedCells } from "./WindowedCells"
 
-/** What a custom grid element (`gridComponent`) receives: the classes to put on its element and the built cells. */
+/** The item count above which a `virtualize` grid is windowed; at or below it the grid is the plain DOM grid. */
+export const VIRTUALIZE_THRESHOLD = 200
+
+/**
+ * What a custom grid element (`gridComponent`) receives: the classes to put on its element and the built cells.
+ * Plain mode: `className` is the preset's column rule plus `gridClassName`, `children` the cells. Windowed mode
+ * (`windowed`): `className` is only the positioning (`relative`) plus `gridClassName`, no column rule, because each row
+ * carries it; `style` holds the total height; `children` are the mounted rows. Either way put them on one element and pass
+ * `children` through untouched.
+ */
 export interface GridElementProps {
   className: string
   children: ReactNode
+  style?: CSSProperties
+  windowed?: boolean
 }
 
 export interface ResponsiveGridProps<T> {
@@ -31,12 +43,22 @@ export interface ResponsiveGridProps<T> {
   error?: ReactNode
   /** Shown in the region when set (and not loading, no error), e.g. "nothing here yet". Setting it means "show it". */
   empty?: ReactNode
+  /**
+   * Opt in to windowing: with more than `virtualizeThreshold` items only the rows near the viewport are in the DOM (see
+   * docs/architecture.md, "ResponsiveGrid"). A page's choice, never a user setting. Off, or at or below the threshold, the
+   * grid is the plain one.
+   */
+  virtualize?: boolean
+  /** Items above which `virtualize` takes effect. Default `VIRTUALIZE_THRESHOLD`. */
+  virtualizeThreshold?: number
+  /** A guess at a row's height in px (without the gap) for rows not yet measured. Default: the preset's. */
+  estimateRowHeight?: number
   /** Appended to the preset's classes on the grid element (the Library adds `group/lib-grid`). */
   gridClassName?: string
   /**
    * Renders the grid element instead of a plain `div`, for things like `data-selecting` that depend on state the cells must
-   * not re-render for. It gets the finished cells as `children` and must pass them through untouched; then a state change
-   * inside it re-renders the wrapper and none of the cells. Loading placeholders use a plain `div`.
+   * not re-render for. It gets the finished cells (or, windowed, the rows of them) as `children` and must pass them through
+   * untouched; then a state change inside it re-renders the wrapper and none of the cells. Loading placeholders use a plain `div`.
    */
   gridComponent?: ComponentType<GridElementProps>
   /** `data-testid` of the scroll region. */
@@ -62,7 +84,8 @@ function DefaultSkeleton() {
  * widths the same on pages with and without a scrollbar, and the 4px padding all around (cancelled by the negative margins)
  * leaves room for a cell's focus ring and hover shadow, which overflow hidden would otherwise clip.
  *
- * Every cell is rendered; there is no windowing here (see docs/architecture.md, "ResponsiveGrid").
+ * Every cell is rendered unless the page opted in with `virtualize` and has more than the threshold of items; then only the
+ * rows near the viewport are (see docs/architecture.md, "ResponsiveGrid").
  */
 export function ResponsiveGrid<T>({
   items,
@@ -75,12 +98,26 @@ export function ResponsiveGrid<T>({
   renderSkeleton,
   error,
   empty,
+  virtualize = false,
+  virtualizeThreshold = VIRTUALIZE_THRESHOLD,
+  estimateRowHeight,
   gridClassName,
   gridComponent: GridElement,
   scrollTestId,
   className,
 }: ResponsiveGridProps<T>) {
-  const regionRef = useRef<HTMLDivElement>(null)
+  const regionRef = useRef<HTMLDivElement | null>(null)
+  const windowed = virtualize && items.length > virtualizeThreshold
+  // The windowed grid needs the region element itself (its scroll element) as soon as it exists. State is set only then, so a
+  // plain grid never renders an extra time for it.
+  const [region, setRegion] = useState<HTMLDivElement | null>(null)
+  const attachRegion = useCallback(
+    (el: HTMLDivElement | null) => {
+      regionRef.current = el
+      if (windowed) setRegion(el)
+    },
+    [windowed],
+  )
   useScrollTopOnChange(() => regionRef.current, [resetKey])
 
   const gridClass = gridClassName ? `${COLUMN_PRESETS[columns].className} ${gridClassName}` : COLUMN_PRESETS[columns].className
@@ -103,6 +140,18 @@ export function ResponsiveGrid<T>({
     content = error
   } else if (empty) {
     content = empty
+  } else if (windowed) {
+    content = (
+      <WindowedCells
+        cells={cells}
+        preset={COLUMN_PRESETS[columns]}
+        region={region}
+        resetKey={resetKey}
+        estimateRowHeight={estimateRowHeight}
+        gridClassName={gridClassName}
+        gridComponent={GridElement}
+      />
+    )
   } else if (GridElement) {
     content = <GridElement className={gridClass}>{cells}</GridElement>
   } else {
@@ -111,7 +160,7 @@ export function ResponsiveGrid<T>({
 
   return (
     <div
-      ref={regionRef}
+      ref={attachRegion}
       data-testid={scrollTestId}
       data-focus-region
       className={className ? `${SCROLL_REGION_CLASS} ${className}` : SCROLL_REGION_CLASS}

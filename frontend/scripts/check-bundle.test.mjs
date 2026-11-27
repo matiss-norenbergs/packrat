@@ -65,6 +65,16 @@ describe("check-bundle", () => {
     expect(violations[0]).toMatch(/vendor-calendar-EEEEEEEE\.js.*vendor-react-BBBBBBBB\.js/)
   })
 
+  it("fails when the windowed-grid library lands on the startup path", () => {
+    const dir = fakeDist(
+      { "index-AAAAAAAA.js": 'import"./vendor-virtual-FFFFFFFF.js";', "vendor-virtual-FFFFFFFF.js": "export const v=1;" },
+      { preloads: [] },
+    )
+    const { violations } = analyzeDist(dir)
+    expect(violations).toHaveLength(1)
+    expect(violations[0]).toMatch(/vendor-virtual-FFFFFFFF\.js.*Library/)
+  })
+
   it("does not confuse the catch-all vendor chunk with vendor-* groups", () => {
     const dir = fakeDist({ "index-AAAAAAAA.js": 'import"./vendor-CCCCCCCC.js";', "vendor-CCCCCCCC.js": "export{};" })
     expect(analyzeDist(dir).violations).toEqual([])
