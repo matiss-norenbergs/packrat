@@ -74,6 +74,8 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
   (`lib/dockClearance.ts`, `DataTable` does it itself; not inside dialogs), never a hard-coded `pl-12`.
 - Pages: `flex h-full min-h-0 flex-col gap-6`; header + toolbar are `shrink-0`; only the content
   region scrolls (`min-h-0 flex-1`, tables use `Table containerClassName="h-full overflow-auto …"`).
+  This is the rule for list pages; Settings, Dashboard and Backup are scrolling form/overview pages
+  (`space-y-6`, no `min-h-0`) and are exempt — align them if one ever misbehaves.
 - Toolbar: action buttons left (primary action first, buttons carry lucide icons), filter/search on
   the right (`ml-auto`, filter before search). Bulk/destructive actions get an `AlertDialog`
   confirmation showing the count; single-item actions don't.
@@ -81,7 +83,7 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
   hand-roll a table (and `useMemo` its `columns`, or every row re-renders). It enforces the next rules itself: checkbox/radio column on `useIdSelection` with
   drag/shift/ctrl-click, context menu, `getPageNumbers` footer, alignment presets (column `type`), sticky
   header in one scroll container. Pages still own filtering/slicing and use 50 rows/page. Existing pages
-  move over as they're touched; Collections (a tree) stays bespoke.
+  move over as they're touched; Collections (a tree) stays bespoke (selection is click/checkbox only, and it pages 25 root collections, not 50 rows).
 - Hand-rolled tables with selection (until migrated): checkbox column + `useIdSelection` with
   drag/shift/ctrl-click, context menu where actions exist, `getPageNumbers`, 50 rows/page.
 - Column alignment (global rule): date / status-tag / switch / icon columns centered, numeric

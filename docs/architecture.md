@@ -2121,6 +2121,9 @@ row type and the id type (number or string).
   `virtualize` on DataTable for the Library list only; see [`TODO.md` → Virtualized grid and DataTable](TODO.md#large-libraries).
 - **Why Collections doesn't use it**: it renders a tree (expand/collapse, nesting, drag to re-parent), which a flat
   row model doesn't fit; its cells could use the same primitives but the table itself stays bespoke.
+  Two deliberate exceptions follow from that, so don't "fix" them as drift: its selection is click/checkbox
+  only (plain click selects one, Ctrl/Cmd+click and the checkbox toggle; no shift-range, drag-select or
+  context menu), and it pages **25 root collections** a page (each with its whole subtree) rather than 50 rows.
 
 ## Bulk endpoints
 
