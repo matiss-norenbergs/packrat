@@ -41,11 +41,10 @@ Effort is a rough guess: **S** = under an hour of agent work, **M** = a few hour
   even after the grid render-cost work (see [`architecture.md` → Why no virtualization
   (yet)](architecture.md#list-tables-datatable)). With pagination on, 10,000 items show in well under a second, so this only matters for
   very large libraries kept on one page. Plan, in order, one PR each:
-  1. **`ResponsiveGrid` (`components/responsive-grid/`), no virtualization.** A reusable grid that takes `items`,
-     `getKey` and `renderItem` (it knows nothing about cards), keeps today's 2/3/4 column breakpoints, fills its
-     parent and owns the scroll region (the existing header/footer slots of `LibraryScrollView` stay around it), with
-     `resetKey` for scroll-to-top. The Library grid and the Folders view adopt it; behavior and look unchanged.
-     `LibraryCard` and `LibraryCardsProvider` keep their names and stay Library-side.
+  1. **Done: `ResponsiveGrid` (`components/responsive-grid/`), no virtualization.** The Library grid and the Folders view
+     render it; it owns the scroll region and takes `items`, `getKey`, `renderItem`, column presets, `resetKey` and the
+     loading / error / empty slots (see [`architecture.md` → ResponsiveGrid](architecture.md#responsivegrid)). Behavior and
+     look unchanged. `LibraryCard` and `LibraryCardsProvider` kept their names and stay Library-side.
   2. **Virtualization behind a prop.** `virtualize` (off by default, a prop of the page's choice, never a user
      setting) plus a threshold constant (about 200 items: below it the grid renders plain DOM like today). On for the
      Library. Needs measured row heights (cards are not all one height), the column count from the container width,
