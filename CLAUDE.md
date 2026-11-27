@@ -96,6 +96,8 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - **Hover-only controls must also appear on focus:** anything that is `opacity-0` until hover gets `focus-visible:opacity-100` (or
   `group-focus-within/…:opacity-100` for a group of controls), and a `pointer-events-none` wrapper needs `focus-visible:pointer-events-auto`
   on the control. A dialog opened from a menu item returns focus by itself (`lib/focusReturn`); never fall back to `<body>`.
+- Contrast: 4.5:1 for text, 3:1 for non-text UI (ring, control borders), hover states included; `src/styles/contrast.test.ts`
+  enforces it. Changing an accent's hue/lightness means re-validating its chart set; status text uses `text-*-text` tokens.
 - Colors: never hardcode status colors — use `--success` / `--warning` / `--destructive` tokens
   (`Badge` variants `success|warning|destructive`). Never `text-white` on `bg-primary`; use
   `text-primary-foreground` (the Monochrome accent flips it per theme).
