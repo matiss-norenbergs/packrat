@@ -1012,7 +1012,10 @@ or downloaded by some other tool) — brings them into the Library without re-do
   without one just skip those actions; what you typed stays in its box while you page, sort or search and goes with whichever
   import you start (single, selected or all); a per-file **Import** button imports just that one row
   without a confirmation prompt. Imported rows are greyed out and can't be re-imported or selected (a drag, a shift range or
-  Select all skips them); the scan list itself doesn't auto-refresh after every import, only on page load or manual Rescan,
+  Select all skips them); Import Selected/All run four imports at a time (a failed file shows its own error toast, the others
+  carry on, and the closing toast says how many failed); a file in a folder with no collection creates one named after the
+  folder (`Name (2)`, `(3)`… when a sibling collection already uses that display name, e.g. a renamed collection that kept the
+  old folder name); the scan list itself doesn't auto-refresh after every import, only on page load or manual Rescan,
   which keeps showing the current list while it scans.
 - **Ignored Folders** — mark specific folders (and their sub-folders) to be skipped in future
   scans entirely, e.g. a raw-footage or behind-the-scenes folder you never want surfaced here.
