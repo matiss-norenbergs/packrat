@@ -400,7 +400,7 @@ func (r *CollectionsRepo) EnsureChain(ctx context.Context, segments []string) (*
 		child := FindChildByRootPath(cols, parentID, seg)
 		if child == nil {
 			newCol := models.Collection{
-				Name: seg, ParentID: parentID, RootPath: seg,
+				Name: freeSiblingName(cols, parentID, seg), ParentID: parentID, RootPath: seg,
 				DefaultQuality: "best", DefaultDownloadType: "video", FilenameTemplate: "{title}",
 			}
 			newID, err := r.createLocked(ctx, &newCol)
@@ -415,6 +415,30 @@ func (r *CollectionsRepo) EnsureChain(ctx context.Context, segments []string) (*
 		parentID = &id
 	}
 	return parentID, nil
+}
+
+// freeSiblingName returns name, or "name (2)", "name (3)", ... when a sibling
+// under parentID (nil meaning top level) already uses it as its display name.
+// Display names are unique per parent, but a folder's name is not its collection's
+// display name once the collection was renamed (or made by hand with another
+// folder), so a new collection for a folder can find its own name taken. Failing
+// there turned every import into that folder into a 500; a suffixed name keeps
+// the folder-to-collection link (root_path) exact and the user can rename it.
+// The comparison is exact, like nameInUse.
+func freeSiblingName(cols []models.Collection, parentID *int64, name string) string {
+	taken := make(map[string]bool)
+	for i := range cols {
+		c := &cols[i]
+		if (c.ParentID == nil) != (parentID == nil) || (c.ParentID != nil && *c.ParentID != *parentID) {
+			continue
+		}
+		taken[c.Name] = true
+	}
+	candidate := name
+	for n := 2; taken[candidate]; n++ {
+		candidate = fmt.Sprintf("%s (%d)", name, n)
+	}
+	return candidate
 }
 
 // FindChildByRootPath returns the collection among cols whose parent is
