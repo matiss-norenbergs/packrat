@@ -13,6 +13,8 @@ import { LibraryCard, LibraryCardGrid } from "./LibraryCard"
 import { LibraryCardsProvider } from "./LibraryCardsProvider"
 import { RevealAllProvider } from "./RevealAllContext"
 import { SelectionProvider, useSelection } from "./SelectionContext"
+import { trackClient } from "@/test/clients"
+import { settleQueries } from "@/test/settle"
 
 // The windowed Library grid: the same wiring as LibraryGrid, 1,000 items.
 const thumbRenders = vi.hoisted(() => new Map<number, number>())
@@ -67,14 +69,14 @@ function renderGrid() {
     { initialEntries: ["/lib"] },
   )
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={trackClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }))}>
       <TooltipProvider>
         <RouterProvider router={router} />
       </TooltipProvider>
     </QueryClientProvider>,
   )
 }
-const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 60))))
+const settle = () => settleQueries()
 const mountedCards = (c: HTMLElement) => c.querySelectorAll('[data-slot="card"]').length
 
 describe("the Library grid, windowed", () => {

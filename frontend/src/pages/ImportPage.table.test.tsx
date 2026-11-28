@@ -170,7 +170,10 @@ const toolbarButton = (name: string) => screen.getByRole("button", { name })
 const rowButton = (filename: string) => within(row(filename)).getByRole("button", { name: /^(Import|Importing…|Imported)$/ })
 const urlBox = (filename: string) => screen.getByLabelText(`Original URL for ${filename}`) as HTMLInputElement
 const sortBy = (header: string) => fireEvent.click(screen.getByRole("button", { name: header }))
-const sleep = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)))
+// The overflow tooltip shows after 200 ms (useOverflowTooltip SHOW_DELAY_MS); fake timers advance exactly that.
+// Call `vi.useFakeTimers({ shouldAdvanceTime: true })` before the hover that arms the timer.
+const sleep = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
+const SHOW_DELAY = 200
 
 describe("ImportPage table", () => {
   it("renders the columns with the right alignment, fixed widths and the Layout button", async () => {
@@ -257,12 +260,13 @@ describe("ImportPage table", () => {
       await screen.findByText("a-long-name.mp4")
       const name = screen.getByText("a-long-name.mp4")
       cutOff(name)
+      vi.useFakeTimers({ shouldAdvanceTime: true })
       fireEvent.pointerOver(name)
-      await sleep(300)
+      await sleep(SHOW_DELAY)
       expect(screen.getByRole("tooltip").textContent).toBe("a-long-name.mp4\nShows")
       fireEvent.pointerOver(row("a-long-name.mp4").querySelector("td[data-col=name] button")!)
       expect(screen.queryByRole("tooltip")).toBeNull()
-      await sleep(300)
+      await sleep(SHOW_DELAY)
       expect(screen.queryByRole("tooltip")).toBeNull()
     })
 
@@ -272,8 +276,9 @@ describe("ImportPage table", () => {
       await screen.findByText("clip-001.mp4")
       const cell = row("clip-001.mp4").querySelector("td[data-col=import]")!
       cutOff(cell)
+      vi.useFakeTimers({ shouldAdvanceTime: true })
       fireEvent.pointerOver(cell)
-      await sleep(300)
+      await sleep(SHOW_DELAY)
       expect(screen.queryByRole("tooltip")).toBeNull()
     })
   })

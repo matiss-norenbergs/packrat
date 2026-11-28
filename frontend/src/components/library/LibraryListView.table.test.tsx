@@ -13,6 +13,8 @@ import { LibrarySortProvider } from "./LibrarySortContext"
 import { LibraryToolbar } from "./LibraryToolbar"
 import { RevealAllProvider } from "./RevealAllContext"
 import { SelectionProvider, useSelection } from "./SelectionContext"
+import { trackClient } from "@/test/clients"
+import { settleQueries } from "@/test/settle"
 
 // jsdom has no PointerEvent (the column resize handle uses pointer events).
 beforeAll(() => {
@@ -107,7 +109,7 @@ function serve(all: LibraryItem[], opts: ServeOptions = {}) {
 
 type Fetch = ReturnType<typeof mockFetch>
 const libraryParams = (fn: Fetch) => fn.mock.calls.filter(([url]) => url.includes("/library?")).map(([url]) => new URL(url, "http://x").searchParams)
-const settle = () => new Promise((r) => setTimeout(r, 80))
+const settle = () => settleQueries()
 
 // Stands in for the toolbar's summary (approxCount) and for what other views read from the shared state.
 function Probe() {
@@ -134,7 +136,7 @@ function Probe() {
 }
 
 function renderList(initialEntries = ["/library"]) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  const client = trackClient(new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }))
   return {
     client,
     ...render(
@@ -237,7 +239,7 @@ describe("LibraryListView on DataTable: columns", () => {
     expect(screen.getByRole("button", { name: "Table layout" })).toBeInTheDocument()
     cleanup()
     serve(ITEMS)
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const client = trackClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }))
     render(
       <QueryClientProvider client={client}>
         <MemoryRouter>
@@ -579,13 +581,16 @@ describe("LibraryListView on DataTable: privacy", () => {
       return { status: 200, body: url.endsWith("/library/facets") ? { years: [] } : [] }
     })
     // The tags list arrives late; the table must not hash the tags while it is pending.
+    let releaseTags!: () => void
+    const tagsGate = new Promise<void>((resolve) => (releaseTags = resolve))
     vi.stubGlobal("fetch", async (url: string, init: unknown) => {
-      if (url.endsWith("/tags")) await new Promise((r) => setTimeout(r, 400))
+      if (url.endsWith("/tags")) await tagsGate
       return base(url, init as never)
     })
     renderList()
-    expect(await screen.findByText("Plain")).toBeInTheDocument()
-    await settle()
+    expect(await screen.findByText("Plain")).toBeInTheDocument() // while the tags request is still gated
+    releaseTags()
+    await settle() // the tags list has arrived and the table re-rendered
     expect(screen.getByText("Plain")).toBeInTheDocument()
   })
 
@@ -835,7 +840,7 @@ describe("LibraryToolbar (grid and folders): classic toolbar", () => {
   it("keeps its controls, has no hint text and shows the selected count", async () => {
     const user = userEvent.setup()
     serve(ITEMS, { settings: { libraryView: "grid" } })
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const client = trackClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }))
     render(
       <QueryClientProvider client={client}>
         <MemoryRouter>

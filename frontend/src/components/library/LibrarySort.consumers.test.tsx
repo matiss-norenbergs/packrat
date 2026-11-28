@@ -7,6 +7,8 @@ import { LibraryGrid } from "./LibraryGrid"
 import { LibrarySortProvider } from "./LibrarySortContext"
 import { LibraryToolbar } from "./LibraryToolbar"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { trackClient } from "@/test/clients"
+import { flushTasks } from "@/test/settle"
 
 // Library data and the layouts are served by a hand-rolled fetch so a test can hold the layouts response back.
 let layoutsResponse: Promise<Record<string, unknown>>
@@ -37,7 +39,7 @@ beforeEach(() => {
 })
 
 function renderLibrary(ui: React.ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  const client = trackClient(new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }))
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -55,7 +57,7 @@ describe("Library queries wait for the saved layouts", () => {
     layoutsResponse = new Promise((res) => (release = res))
     renderLibrary(<LibraryGrid />)
     await waitFor(() => expect(calls("/auth/table-layouts", "GET").length).toBe(1))
-    await new Promise((r) => setTimeout(r, 50))
+    await flushTasks() // the layouts request is gated, so the queries never go idle: flush the effects and commits
     expect(libraryCalls()).toHaveLength(0)
 
     release({ library: { v: 1, sort: { key: "title", dir: "asc" } } })

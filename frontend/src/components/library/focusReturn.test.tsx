@@ -110,7 +110,9 @@ describe("focus returns after a dialog opened from a menu", () => {
     await chooseAction(user, actionsButton(1), "Copy URL")
     expect(actionsButton(1)).toBeInTheDocument()
     // Copy URL opens no dialog: the pending origin must not leak into a later, unrelated one.
-    await new Promise((r) => setTimeout(r, 1600))
+    // The origin expires ORIGIN_TTL_MS (1500) after the menu click; it reads Date.now(), so only the clock is faked.
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.advanceTimersByTime(1600)
     await chooseAction(user, actionsButton(1), "Edit")
     await screen.findByRole("dialog")
     await user.keyboard("{Escape}")

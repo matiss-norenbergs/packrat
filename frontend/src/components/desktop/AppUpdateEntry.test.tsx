@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AppUpdateEntry } from "@/components/desktop/AppUpdateEntry"
 import { enterTauri, leaveTauri } from "@/test/tauriShell"
+import { flushTasks } from "@/test/settle"
 
 let appState: { status: string; downloaded?: number; total?: number | null } = { status: "idle" }
 let matchState: { status: string; version?: string; currentVersion?: string; downgrade?: boolean } = { status: "idle" }
@@ -69,10 +70,16 @@ describe("AppUpdateEntry dialog", () => {
     appState = { status: "installing", downloaded: 1, total: 10 }
     rerender(<AppUpdateEntry />)
     await waitFor(() => expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument())
-    await user.keyboard("{Escape}")
+    const dialog = () => screen.getByRole("dialog", { name: "App updates" })
+    // A wrongly-allowed close flips data-state to "closed" at once, while the node can linger a tick (Radix Presence),
+    // so assert on the state, and check each way of closing on its own (a close followed by a click would reopen it).
+    // The X had focus and is gone, so a key press would go to <body>: dispatch Escape on the dialog itself.
+    fireEvent.keyDown(dialog(), { key: "Escape" })
+    await flushTasks()
+    expect(dialog()).toHaveAttribute("data-state", "open")
     await user.click(document.querySelector("[data-slot=dialog-overlay]")!)
-    await new Promise((r) => setTimeout(r, 100)) // give a wrongly-allowed close time to happen
-    expect(screen.getByRole("dialog", { name: "App updates" })).toBeInTheDocument()
+    await flushTasks()
+    expect(dialog()).toHaveAttribute("data-state", "open")
 
     appState = { status: "error" }
     rerender(<AppUpdateEntry />)
@@ -87,8 +94,8 @@ describe("AppUpdateEntry dialog", () => {
     await user.click(screen.getByRole("button", { name: "Check for updates" }))
     expect(await screen.findByRole("alertdialog")).toBeInTheDocument()
     await user.click(document.querySelector("[data-slot=alert-dialog-overlay]")!)
-    await new Promise((r) => setTimeout(r, 100))
+    await flushTasks() // the outside click has been handled and committed
     // (aria-hidden behind the modal alert, so query by slot rather than role)
-    expect(document.querySelector("[data-slot=dialog-content]")).toBeInTheDocument()
+    expect(document.querySelector("[data-slot=dialog-content]")).toHaveAttribute("data-state", "open")
   })
 })

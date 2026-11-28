@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 import { SecurityNotice } from "@/components/SecurityNotice"
 import { callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
+import { settleQueries } from "@/test/settle"
 
 describe("SecurityNotice", () => {
   it("reports failed attempts and acknowledges on dismiss", async () => {
@@ -28,7 +29,7 @@ describe("SecurityNotice", () => {
 
     mockFetch(() => ({ status: 200, body: { failedAttempts: 0, since: "2026-10-20T10:00:00Z", lastAttemptAt: null } }))
     const { container } = renderWithProviders(<SecurityNotice />)
-    await new Promise((r) => setTimeout(r, 50))
+    await settleQueries()
     expect(container).toBeEmptyDOMElement()
   })
 })

@@ -1,10 +1,13 @@
-import { screen, waitFor } from "@testing-library/react"
+import { act, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NewDownloadDialog } from "@/components/downloads/NewDownloadDialog"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 
+// NewDownloadDialog debounces the preview URL by 500 ms: fake timers, advanced by exactly that, instead of waiting it out.
+const DEBOUNCE_MS = 500
 beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
   vi.stubGlobal("matchMedia", () => ({
     matches: false,
     addEventListener: () => {},
@@ -46,7 +49,7 @@ function serve() {
 
 async function open() {
   renderWithProviders(<NewDownloadDialog />)
-  const user = userEvent.setup()
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
   await user.click(screen.getByRole("button", { name: /New Download/ }))
   return user
 }
@@ -55,9 +58,10 @@ async function typeUrl(user: ReturnType<typeof userEvent.setup>, url: string) {
   const input = await screen.findByPlaceholderText("https://...")
   await user.clear(input)
   await user.type(input, url)
+  await act(() => vi.advanceTimersByTimeAsync(DEBOUNCE_MS))
 }
 
-const onlyThisVideo = () => screen.findByRole("button", { name: "Only this video" }, { timeout: 5000 })
+const onlyThisVideo = () => screen.findByRole("button", { name: "Only this video" })
 
 describe("New Download: Only this video on a playlist link", () => {
   it("is disabled for a pure playlist link, and Queue Playlist sends entire", async () => {
@@ -91,7 +95,7 @@ describe("New Download: Only this video on a playlist link", () => {
     await user.click(await onlyThisVideo())
 
     await typeUrl(user, PURE)
-    await waitFor(() => expect(screen.getByRole("button", { name: "Only this video" })).toBeDisabled(), { timeout: 5000 })
+    await waitFor(() => expect(screen.getByRole("button", { name: "Only this video" })).toBeDisabled())
 
     await user.click(screen.getByRole("button", { name: "Queue Playlist" }))
     await waitFor(() => expect(callsTo(fetchMock, "/downloads/playlist")).toHaveLength(1))

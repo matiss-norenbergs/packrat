@@ -7,6 +7,7 @@ import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
 import type { DownloadStatus } from "@/types/api"
 import type { WSEvent } from "@/types/ws"
 import { DownloadProgressBar } from "./DownloadProgressBar"
+import { flushTasks } from "@/test/settle"
 
 let emit: (e: WSEvent) => void = () => {}
 vi.mock("@/lib/ws", () => ({
@@ -94,7 +95,7 @@ describe("useDownloadProgress", () => {
     act(() => {
       client.setQueryData(downloadProgressQueryKey, toMap([dl(1, "downloading", 5), dl(2, "downloading", 80)]))
     })
-    await new Promise((r) => setTimeout(r, 10))
+    await flushTasks() // the observer has been notified of the unrelated change
     expect(result.current.data).toBe(first)
     act(() => {
       client.setQueryData(downloadProgressQueryKey, toMap([dl(1, "downloading", 6), dl(2, "downloading", 80)]))

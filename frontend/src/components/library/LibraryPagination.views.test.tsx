@@ -9,6 +9,8 @@ import { LibraryFolderView } from "./LibraryFolderView"
 import { LibraryGrid } from "./LibraryGrid"
 import { LibraryListView } from "./LibraryListView"
 import { LibrarySortProvider } from "./LibrarySortContext"
+import { trackClient } from "@/test/clients"
+import { settleQueries } from "@/test/settle"
 
 // Only the footer and the requests are under test, so the library answers with a total and no items.
 let settings: Record<string, unknown>
@@ -18,7 +20,7 @@ let fetchMock: ReturnType<typeof vi.fn>
 const libraryCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).includes("/library?"))
 const paramsOf = (call: unknown[]) => new URL(String(call[0]), "http://x").searchParams
 const pageOf = (call: unknown[]) => paramsOf(call).get("page")
-const settle = () => new Promise((r) => setTimeout(r, 100))
+const settle = () => settleQueries()
 
 function respond(body: unknown) {
   return { ok: true, status: 200, statusText: "200", headers: { get: () => null }, json: async () => body }
@@ -63,7 +65,7 @@ function Controls() {
 }
 
 function renderView(view: React.ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const client = trackClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }))
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>

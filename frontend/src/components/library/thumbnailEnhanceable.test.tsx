@@ -7,6 +7,7 @@ import { mockFetch } from "@/test/mockApi"
 import type { LibraryItem } from "@/types/api"
 import { useLibraryItemActions, type LibraryItemAction } from "./libraryItemActions"
 import { bulkSharpenAvailable } from "./thumbnailEnhanceable"
+import { settleQueries } from "@/test/settle"
 
 let items: LibraryItem[] = []
 vi.mock("./SelectionContext", () => ({
@@ -37,13 +38,12 @@ function labels(list: LibraryItemAction[]): string[] {
   return list.flatMap((a) => ("separator" in a ? [] : "items" in a ? [a.label, ...labels(a.items)] : [a.label]))
 }
 async function menuLabels(item: LibraryItem) {
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{children}</QueryClientProvider>
-  )
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
   const { result } = renderHook(() => useLibraryItemActions(item), { wrapper })
   // The settings query resolves asynchronously; wait until Sharpen is known for the video case.
   await waitFor(() => expect(result.current).toBeTruthy())
-  await new Promise((r) => setTimeout(r, 50))
+  await settleQueries(client)
   return labels(result.current.actionsFor(item))
 }
 

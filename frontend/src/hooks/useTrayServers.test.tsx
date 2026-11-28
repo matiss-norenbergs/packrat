@@ -15,6 +15,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 import { useTrayServers } from "@/hooks/useTrayServers"
 import { activateProfile, addProfile, deactivateProfile } from "@/lib/serverProfiles"
 import { enterTauri, leaveTauri } from "@/test/tauriShell"
+import { flushTasks } from "@/test/settle"
 
 const reload = vi.fn()
 const originalLocation = window.location
@@ -44,7 +45,7 @@ describe("useTrayServers", () => {
     try {
       activateProfile(addProfile("http://a:1", "A").id)
       renderHook(() => useTrayServers())
-      await new Promise((r) => setTimeout(r, 10))
+      await flushTasks()
       expect(invoke).not.toHaveBeenCalled()
       expect(handler).toBeNull()
     } finally {
@@ -113,7 +114,7 @@ describe("useTrayServers", () => {
     delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
     addProfile("http://a:1", "A")
     renderHook(() => useTrayServers())
-    await new Promise((r) => setTimeout(r, 20))
+    await flushTasks()
     expect(invoke).not.toHaveBeenCalled()
     expect(handler).toBeNull()
   })

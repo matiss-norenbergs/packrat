@@ -6,6 +6,7 @@ import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CollectionsPage } from "@/pages/CollectionsPage"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
+import { settleQueries } from "@/test/settle"
 
 beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({
@@ -75,14 +76,14 @@ describe("CollectionsPage reveal-all", () => {
     serve(false, true)
     const { unmount } = renderPage()
     await screen.findByText("Movies")
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(fab()).toBeNull()
     unmount()
 
     serve(true, false)
     renderPage()
     await screen.findByText("Movies")
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(fab()).toBeNull()
   })
 })

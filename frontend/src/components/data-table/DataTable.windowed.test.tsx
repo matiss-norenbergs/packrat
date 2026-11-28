@@ -19,6 +19,7 @@ const HEADER = 40
 let rowHeight = ROW
 let layout: LayoutMock
 beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
   rowHeight = ROW
   layout = installLayoutMock({ viewportWidth: 1280, viewportHeight: 600, rowHeight: () => rowHeight })
 })
@@ -73,7 +74,9 @@ const scrollTo = (top: number) => act(() => layout.scrollTo(container(), top))
 const rowTop = (index: number) => HEADER + index * ROW
 // The windowed body is a lazy chunk: wait until it replaced the first-window fallback.
 const windowed = () => waitFor(() => expect(spacers().length).toBeGreaterThan(0))
-const settleScroll = () => act(async () => void (await new Promise((r) => setTimeout(r, 300))))
+// TanStack Virtual keeps `isScrolling` for isScrollingResetDelay (150 ms) after the last scroll event: advance exactly that on fake timers.
+const SCROLL_RESET_MS = 150
+const settleScroll = () => act(() => vi.advanceTimersByTimeAsync(SCROLL_RESET_MS))
 
 describe("threshold", () => {
   it("renders the plain markup at or below the threshold, and without virtualize however many rows", () => {

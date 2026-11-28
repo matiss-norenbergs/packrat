@@ -7,6 +7,7 @@ vi.mock("@tauri-apps/api/app", () => ({ getVersion: async () => appVersion }))
 let appVersion = "1.2.0"
 
 import { useVersionMismatchNotice } from "@/hooks/useVersionMismatchNotice"
+import { flushTasks } from "@/test/settle"
 
 beforeEach(() => {
   localStorage.clear()
@@ -28,7 +29,7 @@ describe("useVersionMismatchNotice", () => {
 
     // Remembered across launches…
     const again = renderHook(() => useVersionMismatchNotice())
-    await new Promise((r) => setTimeout(r, 10))
+    await flushTasks()
     expect(again.result.current.notice).toBeNull()
     again.unmount()
 
@@ -41,7 +42,7 @@ describe("useVersionMismatchNotice", () => {
   it("keeps honouring a dismissal stored by the earlier server-newer-only notice", async () => {
     localStorage.setItem("packrat.dismissedServerNewer", "1.3.0|1.2.0")
     const { result } = renderHook(() => useVersionMismatchNotice())
-    await new Promise((r) => setTimeout(r, 10))
+    await flushTasks()
     expect(result.current.notice).toBeNull()
   })
 
@@ -57,7 +58,7 @@ describe("useVersionMismatchNotice", () => {
     unmount()
 
     const again = renderHook(() => useVersionMismatchNotice())
-    await new Promise((r) => setTimeout(r, 10))
+    await flushTasks()
     expect(again.result.current.notice).toBeNull()
     again.unmount()
 
@@ -83,7 +84,7 @@ describe("useVersionMismatchNotice", () => {
       serverVersion = server
       appVersion = app
       const { result, unmount } = renderHook(() => useVersionMismatchNotice())
-      await new Promise((r) => setTimeout(r, 10))
+      await flushTasks()
       expect(result.current.notice).toBeNull()
       unmount()
     }

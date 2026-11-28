@@ -110,7 +110,6 @@ describe("useDownloadsSocket library refresh", () => {
 
 describe("useDownloadsSocket and the yt-dlp previews", () => {
   it("refetches a normal library list on every event type but never a preview", async () => {
-    vi.useRealTimers()
     const calls = { preview: 0, metadata: 0, list: 0 }
     const mount = async (queryKey: readonly unknown[], counter: keyof typeof calls) => {
       const queryFn = () => Promise.resolve(++calls[counter])
@@ -130,8 +129,8 @@ describe("useDownloadsSocket and the yt-dlp previews", () => {
     ]
     events.forEach(emit)
     openSocket() // reconnect
-    await new Promise((r) => setTimeout(r, INVALIDATION_WINDOW_MS + 200))
-    await client.isFetching()
+    await vi.advanceTimersByTimeAsync(INVALIDATION_WINDOW_MS) // the coalescing window ends, the refetches start
+    await vi.advanceTimersByTimeAsync(0) // and their (immediately resolving) queryFns settle
 
     expect(calls.preview).toBe(1)
     expect(calls.metadata).toBe(1)

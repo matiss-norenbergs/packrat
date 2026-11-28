@@ -6,6 +6,7 @@ import { FloatingActionDock } from "@/components/FloatingActionDock"
 import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllContext"
 import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
+import { settleQueries } from "@/test/settle"
 
 
 const PRIVATE_COLLECTION = { id: 1, effectiveIsPrivate: true, totalItemCount: 3 }
@@ -44,7 +45,7 @@ describe("RevealAllFloatingAction", () => {
     const fetchFn = serve({ privacy: false, collections: [PRIVATE_COLLECTION] })
     renderWithProviders(<Harness />)
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(4))
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(button()).toBeNull()
   })
 
@@ -56,7 +57,7 @@ describe("RevealAllFloatingAction", () => {
     })
     renderWithProviders(<Harness />)
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(4))
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(button()).toBeNull()
   })
 

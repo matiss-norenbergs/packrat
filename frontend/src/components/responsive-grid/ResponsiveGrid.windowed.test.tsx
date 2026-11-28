@@ -15,6 +15,7 @@ const PAD = 4
 let layout: LayoutMock
 
 beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
   layout = installLayoutMock({ viewportWidth: 1280, viewportHeight: 600, rowHeight: () => ROW })
 })
 afterEach(() => {
@@ -35,7 +36,9 @@ const rows = () => [...region().querySelectorAll<HTMLElement>("[data-first-item]
 const ids = () => screen.queryAllByTestId("cell").map((c) => Number(c.dataset.id))
 const scrollTo = (top: number) => act(() => layout.scrollTo(region(), top))
 // The virtualizer holds a programmatic scroll back while a scroll is still "in progress" (150ms after the last scroll event).
-const settleScroll = () => act(async () => void (await new Promise((r) => setTimeout(r, 300))))
+// TanStack Virtual keeps `isScrolling` for isScrollingResetDelay (150 ms) after the last scroll event: advance exactly that on fake timers.
+const SCROLL_RESET_MS = 150
+const settleScroll = () => act(() => vi.advanceTimersByTimeAsync(SCROLL_RESET_MS))
 const setWidth = async (w: number) => {
   await settleScroll()
   act(() => layout.setViewportWidth(w))

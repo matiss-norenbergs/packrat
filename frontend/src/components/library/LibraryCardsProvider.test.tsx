@@ -14,6 +14,8 @@ import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
 import { useLibraryItemActions } from "./libraryItemActions"
 import { RevealAllProvider, useRevealActions } from "./RevealAllContext"
 import { SelectionProvider } from "./SelectionContext"
+import { trackClient } from "@/test/clients"
+import { settleQueries } from "@/test/settle"
 
 vi.mock("./libraryItemActions", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./libraryItemActions")>()
@@ -79,7 +81,7 @@ function renderGrid(items: LibraryItem[]) {
     { initialEntries: ["/lib"] },
   )
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={trackClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }))}>
       <TooltipProvider>
         <RouterProvider router={router} />
       </TooltipProvider>
@@ -88,7 +90,7 @@ function renderGrid(items: LibraryItem[]) {
 }
 
 // Lets the settings / tags / artists queries answer, which re-renders the cards once (the masks and the card mode change).
-const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 60))))
+const settle = () => settleQueries()
 const triggers = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('[aria-haspopup="menu"]')]
 
 describe("the grid's shared actions host", () => {
@@ -187,7 +189,7 @@ describe("card render counts", () => {
 describe("the standalone menu (item page)", () => {
   it("keeps its own host and opens its dialog", async () => {
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider client={trackClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }))}>
         <LibraryItemActionsMenu item={item(7)} />
       </QueryClientProvider>,
     )

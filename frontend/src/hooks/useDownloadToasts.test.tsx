@@ -17,6 +17,7 @@ vi.mock("sonner", () => ({ toast }))
 
 import { useDownloadToasts } from "@/hooks/useDownloadToasts"
 import { enterTauri, leaveTauri } from "@/test/tauriShell"
+import { flushTasks } from "@/test/settle"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -30,7 +31,7 @@ describe("useDownloadToasts", () => {
 
   it("does nothing outside the Tauri shell", async () => {
     renderHook(() => useDownloadToasts())
-    await new Promise((r) => setTimeout(r, 10))
+    await flushTasks()
     expect(handlers["download-started"]).toBeUndefined()
   })
 
@@ -38,7 +39,7 @@ describe("useDownloadToasts", () => {
     enterTauri("android")
     try {
       renderHook(() => useDownloadToasts())
-      await new Promise((r) => setTimeout(r, 10))
+      await flushTasks()
       expect(handlers["download-started"]).toBeUndefined()
       expect(handlers["download-finished"]).toBeUndefined()
     } finally {

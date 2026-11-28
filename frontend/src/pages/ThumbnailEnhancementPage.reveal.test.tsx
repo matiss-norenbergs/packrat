@@ -10,6 +10,7 @@ import { thumbnailEnhancementActiveItemQueryKey } from "@/hooks/useThumbnailEnha
 import { hashText } from "@/lib/utils"
 import { ThumbnailEnhancementPage } from "@/pages/ThumbnailEnhancementPage"
 import { mockFetch } from "@/test/mockApi"
+import { flushTasks, settleQueries } from "@/test/settle"
 
 beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({
@@ -141,9 +142,9 @@ describe("ThumbnailEnhancementPage reveal-all: history rows", () => {
 
   it("shows real titles and no button when privacy is off", async () => {
     serve({ privacy: false })
-    renderPage()
+    const { client } = renderPage()
     await screen.findByText("Plain Item")
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries(client)
     expect(screen.queryByRole("button", { name: /private items/ })).toBeNull()
   })
 })
@@ -179,21 +180,23 @@ describe("ThumbnailEnhancementPage reveal-all: Enhancing line", () => {
 
   it("stays hashed when the lookup fails", async () => {
     const fn = serve({ item: () => ({ status: 500 }) })
-    const { setActive } = renderPage()
+    const { setActive, client } = renderPage()
     await screen.findByText(hashText("Secret One"))
     setActive(11, "Live Title")
     await waitFor(() => expect(itemRequests(fn).length).toBeGreaterThan(0))
-    await new Promise((r) => setTimeout(r, 30))
+    // The lookup retries a 500 with a backoff, so the queries never go idle: wait until it has failed once, then flush the commit.
+    await waitFor(() => expect(client.getQueryState(["library", "item", 11])?.fetchFailureCount).toBeGreaterThan(0))
+    await flushTasks()
     expect(enhancingLine()).toHaveTextContent(`Enhancing: ${hashText("Live Title")}`)
   })
 
   it("is hashed for a blurred item and real for a non-blurred one", async () => {
     serve({ item: (id) => ({ status: 200, body: { id, blurred: id === 11 } }) })
-    const { setActive } = renderPage()
+    const { setActive, client } = renderPage()
     await screen.findByText(hashText("Secret One"))
     setActive(11, "Live Title")
     await waitFor(() => expect(enhancingLine()).toHaveTextContent(hashText("Live Title")))
-    await new Promise((r) => setTimeout(r, 30))
+    await settleQueries(client) // the item lookup has been answered
     expect(enhancingLine()).toHaveTextContent(hashText("Live Title"))
 
     setActive(13, "Other Title")

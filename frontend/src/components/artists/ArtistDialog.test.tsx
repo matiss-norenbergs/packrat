@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import { ArtistDialog } from "@/components/artists/ArtistDialog"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
+import { settleQueries } from "@/test/settle"
 import type { Artist } from "@/types/api"
 
 
@@ -37,7 +38,7 @@ describe("ArtistDialog private checkbox", () => {
   it("is hidden with privacy off", async () => {
     setup(false)
     await screen.findByText("New Artist")
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(screen.queryByLabelText("Private")).toBeNull()
   })
 

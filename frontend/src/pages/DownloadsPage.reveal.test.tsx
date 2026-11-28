@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { DownloadsPage } from "@/pages/DownloadsPage"
 import { hashText } from "@/lib/utils"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
+import { settleQueries } from "@/test/settle"
 
 beforeEach(() => {
   // NewDownloadDialog (in the toolbar) reads a media query on mount.
@@ -70,7 +71,7 @@ describe("DownloadsPage reveal-all", () => {
     serve({ privacy: false, collections: PRIVATE })
     const { unmount } = renderPage()
     await screen.findByText(hashText("Video 1"))
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(fab()).toBeNull()
     unmount()
 
@@ -80,7 +81,7 @@ describe("DownloadsPage reveal-all", () => {
     })
     renderPage()
     await screen.findByText(hashText("Video 1"))
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(fab()).toBeNull()
   })
 

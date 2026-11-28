@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from "@testing-library/react"
+import { fireEvent, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useSearchParams } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -11,6 +11,7 @@ import { LibrarySortProvider } from "./LibrarySortContext"
 import { RevealAllProvider } from "./RevealAllContext"
 import { SelectionProvider, useSelection } from "./SelectionContext"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
+import { flushTasks, settleQueries } from "@/test/settle"
 
 // jsdom has no layout: heights, overflow and actual scrolling are not asserted here; they are measured in the browser
 // (see the PR). What these tests pin is the structure: who is inside the scroll region and who is a fixed sibling.
@@ -99,7 +100,7 @@ describe.each([
     serve({ settings: { libraryPaginationEnabled: false } })
     renderView(view)
     await screen.findByTestId("library-scroll")
-    await new Promise((r) => setTimeout(r, 100))
+    await settleQueries()
     expect(footerCount()).toBeNull()
     expect(region().nextElementSibling).toBeNull()
   })
@@ -129,7 +130,7 @@ describe.each([
     const release = serveGated({ settings: { libraryPaginationEnabled: false } })
     renderView(view)
     await screen.findByTestId("library-scroll")
-    await new Promise((r) => setTimeout(r, 100))
+    await flushTasks() // the gated request never answers until release(): nothing to wait for but the commits
     expect(region().querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0)
     expect(screen.queryByText("\u2014")).toBeNull()
     expect(region().nextElementSibling).toBeNull()
@@ -318,9 +319,7 @@ describe.each([
     await scrolled()
     await user.click(screen.getByRole("button", { name: "select" }))
     expect(region().scrollTop).toBe(200)
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50))
-    })
+    await settleQueries()
     fireEvent.focus(window)
     expect(region().scrollTop).toBe(200)
   })

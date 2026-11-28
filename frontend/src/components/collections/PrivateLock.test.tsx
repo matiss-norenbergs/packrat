@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import { PrivateLock } from "@/components/collections/PrivateLock"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
+import { settleQueries } from "@/test/settle"
 import type { Collection } from "@/types/api"
 
 
@@ -30,7 +31,7 @@ function renderLock(c: Collection, privacy = true) {
 describe("PrivateLock", () => {
   it("renders nothing with privacy off", async () => {
     const { container } = renderLock(PARENT, false)
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(container.querySelector("svg")).toBeNull()
   })
 
@@ -53,7 +54,7 @@ describe("PrivateLock", () => {
 
   it("renders nothing for a non-private collection", async () => {
     const { container } = renderLock(PLAIN)
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(container.querySelector("svg")).toBeNull()
   })
 })
