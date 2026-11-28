@@ -36,7 +36,7 @@ export const COLUMN_PRESETS = {
     // LibraryCard's `contain-intrinsic-size: auto 280px`.
     estimateRowHeight: 280,
   },
-  /** The thumbnail gallery's rule: 2 / 4 / 6 columns, 12px gap (not used by a ResponsiveGrid yet). */
+  /** The thumbnail gallery's rule: 2 / 4 / 6 columns, 12px gap (the thumbnail gallery dialog). */
   gallery: {
     className: "grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6",
     breakpoints: [
