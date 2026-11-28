@@ -43,7 +43,7 @@ export function ResolutionTierSlider({ mediumEnabled, low, high, onCommit }: Res
 
   useEffect(() => {
     setDragValue(committedValue)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- committedValue is a new array every render; low/high/mediumEnabled it is built from are the real inputs
   }, [mediumEnabled, low, high])
 
   const dragHighIndex = mediumEnabled ? dragValue[1] : dragValue[0]

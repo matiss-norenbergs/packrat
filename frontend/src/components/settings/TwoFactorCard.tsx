@@ -147,7 +147,7 @@ function EnableDialog({ open, onClose }: { open: boolean; onClose: () => void })
     setCodes([])
     setSaved(false)
     setup.mutate(undefined, { onError: (err) => toast.error(err.message) })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per opening
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per opening; the mutation object is new every render
   }, [open])
 
   const secret = setup.data?.secret ?? ""

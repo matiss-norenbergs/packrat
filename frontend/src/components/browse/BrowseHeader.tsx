@@ -41,7 +41,7 @@ export function BrowseHeader() {
       }
     }, 300)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the debounce restarts on keystrokes only; search/searchParams changing must not re-arm it
   }, [searchInput])
 
   return (

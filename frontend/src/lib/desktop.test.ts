@@ -19,7 +19,6 @@ beforeEach(() => {
   requestPermission.mockReset()
 })
 afterEach(() => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete (window as any).__TAURI_INTERNALS__
   document.body.innerHTML = ""
 })

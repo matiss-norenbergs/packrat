@@ -18,7 +18,7 @@ export function LibraryItemPage() {
   // rendered under that one only sees the nested state). Opening this page ends
   // reveal-all; mount-only, so strip navigation (same route, new id) doesn't redo it.
   const { hideAll } = useRevealAll()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: opening the page ends reveal-all once, strip navigation to another id must not redo it
   useEffect(() => hideAll(), [])
   const { data, isLoading, error } = useLibraryItem(Number(id))
   // A deleted item's refetch 404s while react-query still holds the last

@@ -34,7 +34,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   window.removeEventListener(UNAUTHORIZED_EVENT, unauthorized)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete (window as any).__TAURI_INTERNALS__
   vi.unstubAllGlobals()
 })

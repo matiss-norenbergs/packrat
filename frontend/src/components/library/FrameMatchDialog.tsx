@@ -30,7 +30,7 @@ export function FrameMatchDialog({ item, mode, open, onOpenChange }: FrameMatchD
       { id: item.id, mode },
       { onSuccess: (res) => setJobId(res.jobId) },
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- start a match only on open or when the item/mode change; the mutation object is new every render
   }, [open, item.id, mode])
 
   const isError = status?.state === "error" || startMatch.isError

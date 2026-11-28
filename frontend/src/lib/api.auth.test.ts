@@ -24,7 +24,6 @@ function enterDesktop() {
 
 beforeEach(() => window.localStorage.clear())
 afterEach(() => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete (window as any).__TAURI_INTERNALS__
   vi.unstubAllGlobals()
   document.cookie = "packrat_csrf=; Max-Age=0"

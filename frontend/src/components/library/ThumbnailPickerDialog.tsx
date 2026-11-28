@@ -155,7 +155,7 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange, options }: Thu
       setSelectedBatch(0)
     })
     return cancelLoad
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load on open only; loadBatch/cancelLoad are re-created every render
   }, [open])
 
   const isLoading = progress != null

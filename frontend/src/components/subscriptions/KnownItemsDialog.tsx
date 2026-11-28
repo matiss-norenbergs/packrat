@@ -118,7 +118,7 @@ export function KnownItemsDialog({ subscription, open, onOpenChange }: KnownItem
   // here, so it is cleared here.
   useEffect(() => {
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear on open or subscription change only; clear is re-created every render
   }, [open, subscription.id])
 
   const selectedEntries = (entries ?? []).filter((e) => selected.has(e.sourceId))

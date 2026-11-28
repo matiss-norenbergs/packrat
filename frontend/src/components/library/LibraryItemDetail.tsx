@@ -93,7 +93,7 @@ export function LibraryItemDetail({
     const el = isAudioFilename(item.filename) ? audioRef.current : videoRef.current
     if (!el) return
     return syncMediaOnReady(el, effectiveResumeAt, autoPlay)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-attach only when the item changes; resume position and autoPlay are read at that moment
   }, [item.path])
 
   // Video only, per Continue Watching's scope — music has no "continue

@@ -124,7 +124,7 @@ export function FrameMatchingPage() {
     if (!items) return
     const liveIds = new Set(items.map((i) => i.id))
     if ([...selected].some((id) => !liveIds.has(id))) clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prune on queue changes only; selected/clear are new every render
   }, [items])
 
   const reviewing = items?.find((i) => i.id === reviewingId) ?? null

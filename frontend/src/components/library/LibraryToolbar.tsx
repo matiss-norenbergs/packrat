@@ -527,7 +527,7 @@ export function LibraryToolbar() {
       if (searchInput !== search) update("q", searchInput || null)
     }, 300)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the debounce restarts on keystrokes only; search/update are re-created every render
   }, [searchInput])
 
   return (

@@ -157,7 +157,7 @@ export function NewDownloadDialog() {
     }
     const timer = setTimeout(() => setDebouncedUrl(trimmedUrl), 500)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- trimmedUrl/looksLikeUrl are derived from url; the debounce restarts on url edits only
   }, [url])
 
   const reset = () => {

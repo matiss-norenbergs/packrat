@@ -43,7 +43,7 @@ export function BrowseItemPage() {
   // item mid-expand) shouldn't keep running alongside it.
   useEffect(() => {
     close()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- close the dock when the viewed item changes; close is re-created every render
   }, [id])
 
   if (isLoading) {
