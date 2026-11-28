@@ -4,6 +4,7 @@ import { RouterProvider } from "react-router-dom"
 import { ThemeProvider } from "next-themes"
 import { DesktopGate } from "@/components/DesktopGate"
 import { authStatusQueryKey, markLoggedOut } from "@/hooks/useAuth"
+import { useDesktopIcon } from "@/hooks/useDesktopIcon"
 import { useTrayServers } from "@/hooks/useTrayServers"
 import { queryClient } from "@/lib/queryClient"
 import { showsConnectScreen, UNAUTHORIZED_EVENT } from "@/lib/server"
@@ -31,6 +32,7 @@ const themeProviderProps = {
 
 function App() {
   useTrayServers()
+  useDesktopIcon()
 
   // The server rejected our session (revoked/expired; web cookie or desktop token) — drop to the
   // login screen the same way a logout does, rather than leaving a page full of failing requests

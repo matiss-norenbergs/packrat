@@ -36,20 +36,28 @@ applyAccent(current)
 
 const listeners = new Set<() => void>()
 
+// Whether `current` is the account's real accent (set by useSyncAppearance or by the user) rather
+// than just the localStorage pre-paint cache. The desktop shell's window/tray icon waits for it.
+let confirmed = false
+export function isAccentConfirmed() {
+  return confirmed
+}
+
 // Applies the accent, refreshes the cache and tells every mounted useAccentColor.
 export function setAccentLocally(next: AccentColor) {
   current = next
+  confirmed = true
   writeStorage(STORAGE_KEY, next)
   applyAccent(next)
   listeners.forEach((l) => l())
 }
 
-function subscribe(listener: () => void) {
+export function subscribeAccent(listener: () => void) {
   listeners.add(listener)
   return () => void listeners.delete(listener)
 }
 
 export function useAccentColor() {
-  const accent = useSyncExternalStore(subscribe, () => current)
+  const accent = useSyncExternalStore(subscribeAccent, () => current)
   return { accent, setAccent: setAccentLocally }
 }

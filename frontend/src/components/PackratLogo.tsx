@@ -1,4 +1,13 @@
 import { useId } from "react"
+import {
+  LOGO_GLYPH_PATHS,
+  LOGO_GLYPH_POLYLINE,
+  LOGO_GLYPH_SCALE,
+  LOGO_GLYPH_STROKE_WIDTH,
+  LOGO_GRADIENT_WHITE_PERCENT,
+  LOGO_SIZE,
+  LOGO_TILE_RADIUS,
+} from "@/lib/logoShape"
 
 // The app's brand mark — a package outline (matching lucide's own Package
 // icon, which is what the sidebar/login logo used to be, bare and
@@ -18,26 +27,26 @@ import { useId } from "react"
 export function PackratLogo({ className }: { className?: string }) {
   const gradientId = useId()
   return (
-    <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
+    <svg viewBox={`0 0 ${LOGO_SIZE} ${LOGO_SIZE}`} className={className} aria-hidden="true">
       <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="color-mix(in oklch, var(--primary), white 18%)" />
+        <linearGradient id={gradientId} x1="0" y1="0" x2={LOGO_SIZE} y2={LOGO_SIZE} gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor={`color-mix(in oklch, var(--primary), white ${LOGO_GRADIENT_WHITE_PERCENT}%)`} />
           <stop offset="1" stopColor="var(--primary)" />
         </linearGradient>
       </defs>
-      <rect width="48" height="48" rx="11" fill={`url(#${gradientId})`} />
+      <rect width={LOGO_SIZE} height={LOGO_SIZE} rx={LOGO_TILE_RADIUS} fill={`url(#${gradientId})`} />
       <g
-        transform="scale(2)"
+        transform={`scale(${LOGO_GLYPH_SCALE})`}
         fill="none"
         stroke="var(--primary-foreground)"
-        strokeWidth="2"
+        strokeWidth={LOGO_GLYPH_STROKE_WIDTH}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" />
-        <path d="M12 22V12" />
-        <polyline points="3.29 7 12 12 20.71 7" />
-        <path d="m7.5 4.27 9 5.15" />
+        {LOGO_GLYPH_PATHS.map((d) => (
+          <path key={d} d={d} />
+        ))}
+        <polyline points={LOGO_GLYPH_POLYLINE} />
       </g>
     </svg>
   )
