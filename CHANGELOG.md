@@ -12,6 +12,9 @@ Maintenance notes:
 - Date format: YYYY-MM-DD.
 -->
 
+## 2026-11-28
+- **The Library list scrolls and selects instantly at thousands of items** — with pagination off (the default) the list view put every item in the page, which took seconds (about 12 s at 10,000 items). With more than 200 rows it now keeps only the rows near the visible area in the page (the sticky header, column resizing, sorting, selection, the right-click menu and the footer count work as before); `DataTable` gets an opt-in `virtualize`, loaded on demand, and only the Library list uses it. Browser find-in-page only finds the rows shown (use the Library search).
+
 ## 2026-11-27
 - **Large libraries scroll and select instantly** — with pagination off (the default) the Library grid and the Folders view put every item in the page, which took about 10 s to show 10,000 items. With more than 200 items they now keep only the cards near the visible area in the page, so showing, selecting and clearing a selection stay fast at any size; smaller libraries and paginated pages under 200 are unchanged. Browser find-in-page (Ctrl+F) only finds the cards currently shown (use the Library search); keyboard focus and the card a dialog was opened from stay put while you scroll.
 - **Convention and doc cleanups** — Downloads, Frame Matching and the AI Enhancement history now show 50 rows a page (was 25; Collections keeps 25 roots a page); bulk Unlink and Mark seen in Known items ask for confirmation with the count; Collections' Expand/Collapse and Import's Ignored Folders moved to the left-hand toolbar group and the selection Clear buttons got an X icon; the Notifications text and docs no longer call the per-browser notification preference "like Theme" and the Settings docs say which tabs save immediately.

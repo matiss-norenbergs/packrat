@@ -38,8 +38,7 @@ Effort is a rough guess: **S** = under an hour of agent work, **M** = a few hour
 
 - **Virtualized grid and DataTable (L).** Pagination defaults to off, so the Library grid, Folders view and list
   view render every item: about 2 s at 3,000 items and about 10 s at 10,000, with select/clear about 0.4 s,
-  even after the grid render-cost work (see [`architecture.md` → Why no virtualization
-  (yet)](architecture.md#list-tables-datatable)). With pagination on, 10,000 items show in well under a second, so this only matters for
+  even after the grid render-cost work (see [`architecture.md` → List tables](architecture.md#list-tables-datatable); the grid and the list are windowed now). With pagination on, 10,000 items show in well under a second, so this only matters for
   very large libraries kept on one page. Plan, in order, one PR each:
   1. **Done: `ResponsiveGrid` (`components/responsive-grid/`), no virtualization.** The Library grid and the Folders view
      render it; it owns the scroll region and takes `items`, `getKey`, `renderItem`, column presets, `resetKey` and the
@@ -50,14 +49,14 @@ Effort is a rough guess: **S** = under an hour of agent work, **M** = a few hour
      Library grid and the Folders view: rows of `columns` cells, measured row heights, the column count from `matchMedia`,
      `@tanstack/react-virtual` in its own `vendor-virtual` chunk (see [`architecture.md` → ResponsiveGrid](architecture.md#responsivegrid)).
   3. **Reuse for the thumbnail gallery**, and any other grid that needs it, with `virtualize` off unless measured.
-  4. **An opt-in `virtualize` on DataTable**, switched on for the Library list only. Spacer rows keep the sticky
-     header and the config-based column widths; drag selection hit-tests rows with `closest('tr[data-row-id]')`, so it
-     must keep working while rows mount and unmount.
+  4. **Done: an opt-in `virtualize` on DataTable**, switched on for the Library list only. Spacer rows keep the sticky
+     header and the column widths, `scrollMargin` is the header's height, the body is lazy-loaded, rows carry
+     `aria-rowindex` (see [`architecture.md` → List tables](architecture.md#list-tables-datatable)).
   - Costs accepted for the grid (step 2, done): browser find-in-page no longer finds offscreen items (the Library's own
     search covers it); tab order and screen readers see only the mounted items; the scrollbar can move a little while
-    far rows are measured; tests need `src/test/layoutMock.ts`. Step 4 (DataTable) has the same costs plus
-    `aria-rowcount`-style attributes.
-  - Rough size left: DataTable's opt-in is riskier than the grid was because 25 pages use DataTable.
+    far rows are measured; tests need `src/test/layoutMock.ts`. Step 4 (DataTable) has the same costs, with
+    `aria-rowcount` / `aria-rowindex` kept on the real table.
+  - Left: step 3 (the thumbnail gallery).
 
 ## Desktop app
 
