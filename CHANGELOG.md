@@ -13,6 +13,7 @@ Maintenance notes:
 -->
 
 ## 2026-11-28
+- **Frontend tooling gates (contributors)** — the build-only packages (shadcn, tailwindcss, `@tailwindcss/vite`, tw-animate-css) moved to `devDependencies` (production tree 401 → 149 packages; CI now runs `npm audit --omit=dev --audit-level=high`); `npm run lint` is a warning ratchet (`--max-warnings`, only goes down) and every lint-disable needs a `-- reason` (`npm run check:disables`); `src/lib` is type-checked with `noUncheckedIndexedAccess` (`npm run typecheck:lib`), which also fixed `moveToPosition` mutating the caller's state when an unsequenced item lands in an interior gap; `vite.config.ts` uses `import.meta.dirname`.
 - **The Library list scrolls and selects instantly at thousands of items** — with pagination off (the default) the list view put every item in the page, which took seconds (about 12 s at 10,000 items). With more than 200 rows it now keeps only the rows near the visible area in the page (the sticky header, column resizing, sorting, selection, the right-click menu and the footer count work as before); `DataTable` gets an opt-in `virtualize`, loaded on demand, and only the Library list uses it. Browser find-in-page only finds the rows shown (use the Library search).
 
 ## 2026-11-27

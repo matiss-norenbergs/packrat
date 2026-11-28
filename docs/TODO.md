@@ -162,3 +162,17 @@ None are scheduled. Sizes are guesses.
 
 - **Node 22 to the next LTS (S).** Moved by hand across the Dockerfile and the three workflows (Dependabot
   ignores Node major versions on purpose). Do it when 22 nears end of life.
+
+## Frontend tooling
+
+- **`noUncheckedIndexedAccess` outside `src/lib` (M, incremental).** Only the non-test `src/lib` files are
+  checked (`tsconfig.lib-strict.json`, `npm run typecheck:lib`). Turning it on for all of `src/` reports about
+  487 errors today: 63 in non-test code (DataTable, BulkDownloadDialog, EditSequenceDialog, `player/playerMath.ts`,
+  `LibraryListView`, the two slider components, …) and about 424 in tests. Widen the `include` of that tsconfig
+  directory by directory as each one is fixed (handle `undefined`, no `!`), tests last.
+- **oxlint `--type-aware` (S to enable, M to clear).** Works here with `oxlint-tsgolint` as a dev dependency and
+  runs in about 2 s, but adds about 254 warnings on top of the 76 (151 `no-floating-promises`, 72 `unbound-method`,
+  18 `no-meaningless-void-operator`, 10 `require-array-sort-compare`, 3 `no-misused-spread`, 1 `await-thenable`),
+  which would blow the `--max-warnings` ratchet. Enable it, with the ratchet raised once to the new honest total,
+  after the floating promises are triaged (most are `mutate()` calls that are fine to leave unawaited, so
+  decide the rule's scope first).

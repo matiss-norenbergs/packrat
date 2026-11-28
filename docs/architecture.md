@@ -124,6 +124,17 @@ and prints the startup size; add a new page-only library to its denylist and to 
 A delegated `pointerover`/`focusin` listener preloads the chunk of any in-app link.
 The auth status query is prefetched at module load so it runs in parallel with the initial chunk.
 
+**Dependencies and frontend gates.** `dependencies` in `frontend/package.json` are what the shipped
+code imports; everything only used to build or check (`shadcn` and `tw-animate-css` via CSS `@import`,
+`tailwindcss`, `@tailwindcss/vite`, Vite, vitest, oxlint, TypeScript) is a `devDependency`. The image
+ships `dist/` only, and its builder stage runs a plain `npm ci`, so the dev tools are installed there.
+That keeps `npm audit --omit=dev` about runtime code (CI fails it at `high`; shadcn's CLI stack used to
+make it permanently noisy). The frontend CI job runs, in order: `npm run lint` (oxlint with
+`--max-warnings` as a ratchet that only goes down), `npm run check:disables` (every lint-disable
+comment needs `-- <why>`), `npm run typecheck:lib` (`src/lib` non-test files with
+`noUncheckedIndexedAccess`, `tsconfig.lib-strict.json`), the tests, `npm run build` (which runs
+`tsc -b`), `check:bundle` and the audit.
+
 **Desktop client mode.** `frontend/src/lib/server.ts` decides where the app talks to. On the web
 (`isDesktop()` false: no Tauri, no `VITE_DESKTOP=true`) every URL stays relative and auth is the
 cookie — unchanged. On desktop, `request()` prefixes the saved server address and sends

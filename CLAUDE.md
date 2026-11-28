@@ -19,8 +19,19 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 
 ## Run / verify
 
-- Frontend (from `frontend/`): `npx tsc -b` (must be clean), `npm run test -- --run` (all pass),
-  `npm run lint`, `npm run dev` (Vite, :5173, proxies `/api` to `BACKEND_PORT` in `.env.local`).
+- Frontend (from `frontend/`): `npx tsc -b` (must be clean; it also compiles `src/lib` with
+  `noUncheckedIndexedAccess`, see `tsconfig.lib-strict.json` / `npm run typecheck:lib`),
+  `npm run test -- --run` (all pass), `npm run lint`, `npm run check:disables`, `npm run dev`
+  (Vite, :5173, proxies `/api` to `BACKEND_PORT` in `.env.local`).
+  - **Lint ratchet:** `npm run lint` is `oxlint --max-warnings=N`; N is today's real warning count and
+    **only goes down**. Fix a warning, then lower N to match; never raise it to make CI pass.
+  - **A lint disable needs a reason:** `// eslint-disable-next-line <rule> -- <why>` (the true reason,
+    e.g. "runs once on mount"). `npm run check:disables` fails any `eslint/oxlint-disable` without one.
+  - **`src/lib` is strict about indexed access** (`noUncheckedIndexedAccess`, non-test files only): handle
+    `undefined` (defaults, `.at()`, early return) rather than `!`; new `lib/` code must pass
+    `npm run typecheck:lib`. Adoption elsewhere is incremental (`docs/TODO.md`).
+  - **Dependencies:** build-only packages (`shadcn`, `tailwindcss`, `@tailwindcss/vite`, `tw-animate-css`,
+    tests, tooling) are `devDependencies`; CI runs `npm audit --omit=dev --audit-level=high`.
 - Backend (from `backend/`): `go build ./... && go vet ./...`; `go run ./cmd/server`.
   Migrations live in `database/migrations` (numbered, applied automatically at startup).
 - **Dev container** (preferred way to run the backend here):
