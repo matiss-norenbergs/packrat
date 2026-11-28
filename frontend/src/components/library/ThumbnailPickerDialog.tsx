@@ -21,7 +21,8 @@ import { useSetLibraryThumbnail } from "@/hooks/useLibrary"
 import { useSaveThumbnailToGallery, useSaveThumbnailsToGallery } from "@/hooks/useThumbnailGallery"
 import { useSettings } from "@/hooks/useSettings"
 import { fetchLibraryThumbnailCandidates, fetchLibraryThumbnailTimestamps } from "@/lib/api"
-import { formatDuration } from "@/lib/utils"
+import { cn, formatDuration } from "@/lib/utils"
+import { touchRevealedHitArea } from "@/lib/touchTarget"
 import type { LibraryItem, ThumbnailCandidate } from "@/types/api"
 import type { ThumbnailPickOptions } from "./ThumbnailCustomRangeDialog"
 
@@ -321,7 +322,7 @@ export function ThumbnailPickerDialog({ item, open, onOpenChange, options }: Thu
                         e.preventDefault()
                         saveToGallery.mutate({ id: item.id, imageBase64: candidate.imageBase64, timestampSeconds: candidate.timestampSeconds })
                       }}
-                      className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1.5 text-white opacity-0 transition hover:bg-black/80 group-hover:opacity-100 focus-visible:opacity-100"
+                      className={cn("absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1.5 text-white opacity-0 transition hover:bg-black/80 group-hover:opacity-100 focus-visible:opacity-100", touchRevealedHitArea(26))}
                     >
                       <Bookmark className="h-3.5 w-3.5" />
                     </span>

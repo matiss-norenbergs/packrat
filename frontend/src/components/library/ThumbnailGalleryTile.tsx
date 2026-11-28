@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ThumbnailDimensionsValue } from "@/components/ThumbnailDimensionsValue"
 import { type ResizeWidth, imageUrl, resizedImageSrcSet } from "@/lib/api"
 import { cn, formatDuration, formatPreciseTime } from "@/lib/utils"
+import { touchRevealedHitArea } from "@/lib/touchTarget"
 import type { ThumbnailGalleryImage } from "@/types/api"
 
 interface ThumbnailGalleryTileProps {
@@ -99,7 +100,7 @@ export const ThumbnailGalleryTile = memo(function ThumbnailGalleryTile({
                   aria-label="Set as thumbnail"
                   disabled={applyDisabled}
                   onClick={() => onApply(img.id)}
-                  className="absolute left-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+                  className={cn("absolute left-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50", touchRevealedHitArea(26))}
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                 </button>
@@ -115,6 +116,7 @@ export const ThumbnailGalleryTile = memo(function ThumbnailGalleryTile({
                   className={cn(
                     "absolute bottom-1.5 right-1.5 rounded-full bg-black/70 p-1.5 text-white transition hover:bg-black/90",
                     !img.isFavorite && "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+                    touchRevealedHitArea(26),
                   )}
                 >
                   <Heart className={cn("h-3.5 w-3.5", img.isFavorite && "fill-current")} />
@@ -128,7 +130,7 @@ export const ThumbnailGalleryTile = memo(function ThumbnailGalleryTile({
                   type="button"
                   aria-label="Remove from gallery"
                   onClick={() => onRemove(img.id)}
-                  className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100 focus-visible:opacity-100"
+                  className={cn("absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100 focus-visible:opacity-100", touchRevealedHitArea(26))}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

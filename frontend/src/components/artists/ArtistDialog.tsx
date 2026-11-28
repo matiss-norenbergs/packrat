@@ -2,6 +2,16 @@ import { useSeedOnOpen } from "@/hooks/useSeedOnOpen"
 import { useRef, useState } from "react"
 import { format, parseISO } from "date-fns"
 import { CalendarIcon, ImageIcon, X } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
@@ -31,6 +41,7 @@ import {
 import { useSettings } from "@/hooks/useSettings"
 import { imageUrl, mediaFileUrl } from "@/lib/api"
 import { calculateAge, cn } from "@/lib/utils"
+import { touchRevealedHitArea } from "@/lib/touchTarget"
 import type { Artist } from "@/types/api"
 
 interface ArtistDialogProps {
@@ -47,6 +58,11 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
   const [birthdayOpen, setBirthdayOpen] = useState(false)
   const [showCandidates, setShowCandidates] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // The image whose Delete was tapped, awaiting confirmation (deleting removes the file from disk, so it always asks).
+  const [imageToDelete, setImageToDelete] = useState<{ id: number; selected: boolean } | null>(null)
+  const uploadButtonRef = useRef<HTMLButtonElement>(null)
+  const deleteConfirmedRef = useRef(false)
+  const deleteOriginRef = useRef<HTMLElement | null>(null)
 
   const { data: settings } = useSettings()
   const createArtist = useCreateArtist()
@@ -147,7 +163,7 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
                       aria-label="Remove selected image"
                       onClick={() => clearSelectedImage.mutate()}
                       disabled={clearSelectedImage.isPending}
-                      className="absolute top-1.5 right-1.5 rounded-full bg-black/70 p-1 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+                      className={cn("absolute top-1.5 right-1.5 rounded-full bg-black/70 p-1 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50", touchRevealedHitArea(24))}
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -247,8 +263,11 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
                           <button
                             type="button"
                             aria-label="Delete image"
-                            onClick={() => deleteImage.mutate(img.id)}
-                            className="absolute top-1 right-1 rounded-full bg-black/70 p-0.5 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
+                            onClick={(e) => {
+                              deleteOriginRef.current = e.currentTarget
+                              setImageToDelete({ id: img.id, selected })
+                            }}
+                            className={cn("absolute top-1 right-1 rounded-full bg-black/70 p-0.5 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100", touchRevealedHitArea(16))}
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -270,7 +289,7 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
               >
                 Add from downloaded files
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+              <Button ref={uploadButtonRef} type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                 Upload images
               </Button>
               <input
@@ -316,6 +335,43 @@ export function ArtistDialog({ open, onOpenChange, artist }: ArtistDialogProps) 
           </Button>
         </DialogFooter>
       </DialogContent>
+      <AlertDialog open={imageToDelete != null} onOpenChange={(o) => { if (!o) setImageToDelete(null) }}>
+        <AlertDialogContent
+          // Radix's AlertDialog only restores focus to an AlertDialogTrigger and this one has none, so do it here: Cancel and
+          // Escape return to the tile's Delete button; after a confirmed delete that tile is gone, so focus goes to the
+          // next control in the dialog instead of falling back to the page.
+          onCloseAutoFocus={(e) => {
+            e.preventDefault()
+            const confirmed = deleteConfirmedRef.current
+            deleteConfirmedRef.current = false
+            const origin = deleteOriginRef.current
+            deleteOriginRef.current = null
+            if (!confirmed && origin?.isConnected) origin.focus()
+            else uploadButtonRef.current?.focus()
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this image?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The image is removed from this artist's gallery and its file is deleted from disk. This can't be undone.
+              {imageToDelete?.selected && " It is the current display image, so the artist falls back to an auto-picked one."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (imageToDelete == null) return
+                deleteConfirmedRef.current = true
+                deleteImage.mutate(imageToDelete.id)
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }

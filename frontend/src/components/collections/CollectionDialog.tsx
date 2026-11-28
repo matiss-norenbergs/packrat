@@ -31,6 +31,8 @@ import { ArtistSelect, NO_ARTIST } from "@/components/library/ArtistSelect"
 import { CollectionCoverDialog } from "./CollectionCoverDialog"
 import { FilenameTemplateBuilderDialog } from "@/components/downloads/FilenameTemplateBuilderDialog"
 import { collectionMediumCoverUrl } from "@/lib/api"
+import { cn } from "@/lib/utils"
+import { touchRevealedHitArea } from "@/lib/touchTarget"
 import type { Collection, DownloadType, VideoQuality } from "@/types/api"
 
 const VIDEO_QUALITIES: VideoQuality[] = ["best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "worst"]
@@ -273,7 +275,7 @@ export function CollectionDialog({
                                 deleteCover.mutate()
                               }}
                               disabled={deleteCover.isPending}
-                              className="absolute top-1.5 right-1.5 rounded-full bg-black/70 p-1 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+                              className={cn("absolute top-1.5 right-1.5 rounded-full bg-black/70 p-1 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50", touchRevealedHitArea(24))}
                             >
                               <X className="h-4 w-4" />
                             </button>

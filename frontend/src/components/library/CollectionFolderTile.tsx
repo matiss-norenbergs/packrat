@@ -8,7 +8,7 @@ import type { Collection } from "@/types/api"
 import { cn } from "@/lib/utils"
 import { useIsCollectionSelected, useSelectionActions, useSelectionActive } from "./SelectionContext"
 import { useHoverPopover } from "@/lib/useHoverPopover"
-import { TOUCH_HIT_AREA } from "@/lib/touchTarget"
+import { TOUCH_HIT_AREA, touchRevealedHitArea } from "@/lib/touchTarget"
 
 export function CollectionFolderTile({
   node,
@@ -55,6 +55,7 @@ export function CollectionFolderTile({
           // LibraryCard's/CompareListTile's fix for the same issue.
           "absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)] transition-opacity",
           selectionActive || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+          touchRevealedHitArea(20),
         )}
         aria-label={`Select ${node.name}`}
       />
