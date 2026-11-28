@@ -113,6 +113,11 @@ export default defineConfig(({ mode }) => {
       environment: "jsdom",
       setupFiles: ["./src/test/setup.ts"],
       css: true,
+      // vmThreads builds the jsdom environment once per worker instead of once per file (about 100 of the
+      // ~120 s of a full run) and still isolates every file in its own VM context. It leaks memory by
+      // design, so a worker is recycled once it passes the limit.
+      pool: "vmThreads",
+      vmMemoryLimit: "400MB",
     },
   }
 })

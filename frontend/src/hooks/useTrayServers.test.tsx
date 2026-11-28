@@ -12,13 +12,14 @@ vi.mock("@tauri-apps/api/event", () => ({
   },
 }))
 
+// jsdom's window.location cannot be redefined under the vmThreads pool, so the page reload is stubbed at its single call site.
+const reload = vi.hoisted(() => vi.fn())
+vi.mock("@/lib/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server")>()), reloadApp: reload }))
+
 import { useTrayServers } from "@/hooks/useTrayServers"
 import { activateProfile, addProfile, deactivateProfile } from "@/lib/serverProfiles"
 import { enterTauri, leaveTauri } from "@/test/tauriShell"
 import { flushTasks } from "@/test/settle"
-
-const reload = vi.fn()
-const originalLocation = window.location
 
 beforeEach(() => {
   window.localStorage.clear()
@@ -27,13 +28,11 @@ beforeEach(() => {
   unlisten.mockReset()
   reload.mockReset()
   handler = null
-  Object.defineProperty(window, "location", { configurable: true, value: { ...originalLocation, reload } })
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
 })
 
 afterEach(() => {
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
-  Object.defineProperty(window, "location", { configurable: true, value: originalLocation })
 })
 
 const lastPush = () => invoke.mock.calls.filter((c) => c[0] === "tray_set_servers").at(-1)?.[1]
