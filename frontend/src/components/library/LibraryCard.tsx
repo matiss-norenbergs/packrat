@@ -13,6 +13,7 @@ import { libraryMediumThumbnailUrl } from "@/lib/api"
 import { REVEAL_TEXT_FOCUS_CLASS, revealToggleProps } from "@/lib/revealToggle"
 import { useNavigateFromHere } from "@/hooks/useNavigateFromHere"
 import { cn, formatBytes, formatDuration, hashText } from "@/lib/utils"
+import { touchRevealedHitArea } from "@/lib/touchTarget"
 import { DownloadProgressBar } from "./DownloadProgressBar"
 import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
 import { COLUMN_PRESETS } from "@/components/responsive-grid"
@@ -128,6 +129,7 @@ function LibraryCardImpl({ item }: { item: LibraryItem }) {
             // dark frames, unlike a single-color border.
             "absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)] transition-opacity",
             selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-data-[selecting]/lib-grid:opacity-100",
+            touchRevealedHitArea(20),
           )}
           // Same masking as the visible title: a blurred, unrevealed item is announced by its hash, never its real title.
           aria-label={`Select ${item.blurred && !revealed ? hashText(item.title) : item.title}`}
