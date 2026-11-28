@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useRef } from "react"
 import type { ComponentType, ReactElement } from "react"
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual"
 import type { Range } from "@tanstack/react-virtual"
-import { focusReturnElements } from "@/lib/focusReturn"
+import { withKeptRows } from "@/lib/windowing"
 import type { ColumnPreset } from "./columns"
 import type { GridElementProps } from "./ResponsiveGrid"
 import { useColumnCount } from "./useColumnCount"
@@ -43,21 +43,13 @@ export function WindowedCells({ cells, preset, region, resetKey, estimateRowHeig
   const count = Math.ceil(cells.length / columns)
   const estimate = estimateRowHeight ?? preset.estimateRowHeight
 
-  // The rows that must stay mounted wherever the user has scrolled: the one holding keyboard focus (or it drops to
-  // <body>) and the ones holding an element a closing dialog will give focus back to.
+  // The rows that must stay mounted wherever the user has scrolled (see `withKeptRows`).
   const rangeExtractor = useCallback(
-    (range: Range) => {
-      const indexes = new Set(defaultRangeExtractor(range))
-      if (region) {
-        for (const el of [document.activeElement, ...focusReturnElements()]) {
-          if (!el || !region.contains(el)) continue
-          const first = el.closest<HTMLElement>("[data-first-item]")?.dataset.firstItem
-          const row = first == null ? -1 : Math.floor(Number(first) / columns)
-          if (row >= 0 && row < range.count) indexes.add(row)
-        }
-      }
-      return [...indexes].sort((a, b) => a - b)
-    },
+    (range: Range) =>
+      withKeptRows(defaultRangeExtractor(range), range.count, region, (el) => {
+        const first = el.closest<HTMLElement>("[data-first-item]")?.dataset.firstItem
+        return first == null ? -1 : Math.floor(Number(first) / columns)
+      }),
     [region, columns],
   )
 
