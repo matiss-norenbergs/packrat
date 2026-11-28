@@ -90,6 +90,8 @@ jobs:
       - run: npm run build
       # Fails if an on-demand chunk (charts, page-only libraries, Tauri plugins) lands on the startup path.
       - run: npm run check:bundle
+      # Runtime dependencies only: the build tooling (shadcn, tailwind...) is in devDependencies.
+      - run: npm audit --omit=dev --audit-level=high
 
   # The Tauri desktop shell (desktop/). Linux only here: it checks the Rust compiles and its tests
   # pass; the installers for every OS are built by desktop.yml at release time.
