@@ -1,5 +1,5 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import type { MouseEvent, ReactNode } from "react"
+import { Suspense, lazy, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import type { MouseEvent, ReactNode, Ref } from "react"
 import { ArrowDown, ArrowUp } from "lucide-react"
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -22,6 +22,7 @@ import { useScrollTopOnChange } from "@/hooks/useScrollTopOnChange"
 import { useTableLayout } from "@/hooks/useTableLayout"
 import type { TableLayout } from "@/types/api"
 import { cn } from "@/lib/utils"
+import { VIRTUALIZE_THRESHOLD } from "@/lib/windowing"
 import { TablePagination } from "./TablePagination"
 import { TableSearch } from "./TableSearch"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -37,6 +38,12 @@ import { useEvent } from "./useEvent"
 import { useOverflowTooltip } from "./useOverflowTooltip"
 import { useTableSelection } from "./useTableSelection"
 import type { SelectionMode } from "./useTableSelection"
+
+// The windowed body (and with it @tanstack/react-virtual) is fetched only when a table actually windows, so the many tables
+// that never do carry none of it.
+const WindowedTableBody = lazy(() => import("./WindowedTableBody"))
+/** Rows shown while the windowed body loads: a screenful and a bit, with no library and no spacers. */
+const FALLBACK_ROWS = 30
 
 export interface SlotContext<T, Id extends RowId> {
   selection: IdSelection<Id>
@@ -160,6 +167,16 @@ export interface DataTableProps<T, Id extends RowId = number> {
    * Default: a missing `hidden` means nothing is hidden.
    */
   defaultHiddenWhenUnset?: boolean
+  /**
+   * Opt in to windowing: with more than `virtualizeThreshold` rows only the rows near the viewport are in the DOM, between two
+   * spacer rows that keep the scroll height (see docs/architecture.md, "List tables"). A page's choice, never a user setting.
+   * Off, or at or below the threshold, the table is the plain one. Costs: browser find-in-page and Tab only reach the mounted rows.
+   */
+  virtualize?: boolean
+  /** Rows above which `virtualize` takes effect. Default `VIRTUALIZE_THRESHOLD` (the grid's). */
+  virtualizeThreshold?: number
+  /** A guess at a row's height in px for rows not yet measured (the first guess only; measured rows replace it). */
+  estimateRowHeight?: number
 }
 
 /** What the table needs from its layout state; built by the wrappers at the bottom of the file. */
@@ -233,6 +250,10 @@ interface DataTableRowProps<T, Id extends RowId> {
   onToggle: (id: Id) => void
   onClick: (row: T, e: MouseEvent<HTMLTableRowElement>) => void
   onDoubleClick: (row: T, e: MouseEvent<HTMLTableRowElement>) => void
+  /** Windowed table only: the row's position among all rows (0-based), for `data-index` and `aria-rowindex`. */
+  index?: number
+  /** Windowed table only: the virtualizer's `measureElement`. */
+  measureRef?: Ref<HTMLTableRowElement>
 }
 
 // Memoized so a selection change or a drag re-renders only the rows whose `selected` flipped, not every row and
@@ -253,11 +274,17 @@ function DataTableRowImpl<T, Id extends RowId>({
   onToggle,
   onClick,
   onDoubleClick,
+  index,
+  measureRef,
 }: DataTableRowProps<T, Id>) {
   const selectable = mode !== "none"
   return (
     <TableRow
+      ref={measureRef}
       data-row-id={String(id)}
+      data-index={index}
+      // The header row is 1, so row `index` is index + 2 (set only on a windowed table, where the rows in the DOM are not all of them).
+      aria-rowindex={index != null ? index + 2 : undefined}
       data-state={selected ? "selected" : undefined}
       aria-selected={selectable ? selected : undefined}
       className={className}
@@ -381,6 +408,9 @@ function DataTableView<T, Id extends RowId = number>({
   isRowSelectable,
   selectedCount,
   layoutActions,
+  virtualize = false,
+  virtualizeThreshold = VIRTUALIZE_THRESHOLD,
+  estimateRowHeight,
 }: DataTableProps<T, Id> & { layoutCtl: LayoutCtl | null }) {
   const ownSelection = useIdSelection<Id>()
   const selection = selectionState ?? ownSelection
@@ -440,10 +470,8 @@ function DataTableView<T, Id extends RowId = number>({
   // effect, so before paint and without an extra render); not on mount, and never for a refetch, a selection change, a
   // hidden column or a resize, none of which is in the key. Only scrollTop is touched, so scrollLeft stays.
   const regionRef = useRef<HTMLDivElement>(null)
-  useScrollTopOnChange(
-    () => regionRef.current?.querySelector<HTMLElement>('[data-slot="table-container"]'),
-    [pagination?.page, sort ? `${sort.key}:${sort.dir}` : "", clientMode ? rawQuery : reportedQuery, resetKey],
-  )
+  const scrollKey = [pagination?.page, sort ? `${sort.key}:${sort.dir}` : "", clientMode ? rawQuery : reportedQuery, resetKey]
+  useScrollTopOnChange(() => regionRef.current?.querySelector<HTMLElement>('[data-slot="table-container"]'), scrollKey)
   const { onRowMouseDown, onRowMouseEnter } = useTableSelection({ rows, getRowId, mode, selection, isSelectable: isRowSelectable })
 
   // Stable wrappers around the page's (usually inline) handlers, so they never defeat the row memo.
@@ -468,6 +496,9 @@ function DataTableView<T, Id extends RowId = number>({
   const widths = layoutCtl?.widths
   const liveWidths = resize.drag ? { ...widths, [resize.drag.key]: resize.drag.width } : widths
   const layout = computeLayout(visibleColumns, selectable ? selectionWidth : null, liveWidths)
+  // The rows this table renders (after its own filtering and paging) decide: a filtered or paged table that falls to the
+  // threshold or below is the plain one again.
+  const windowed = virtualize && rows.length > virtualizeThreshold
 
   const pageIds = rows.map(getRowId)
   // Only the selectable rows of the page count for select-all, the header checkbox, the footer and the toolbar.
@@ -536,6 +567,37 @@ function DataTableView<T, Id extends RowId = number>({
   const slotCtx = { selection, selectedRows, query, total: pagination?.total ?? rows.length }
   const renderSlot = (slot: Slot<T, Id>) => (typeof slot === "function" ? slot(slotCtx) : slot)
 
+  // One row of the body: every row in the plain table, only the mounted ones in a windowed one (`measureRef` is then the virtualizer's).
+  const renderRow = (index: number, measureRef?: Ref<HTMLTableRowElement>) => {
+    const row = rows[index]
+    const id = getRowId(row)
+    const canSelect = isRowSelectable ? isRowSelectable(row) : true
+    return (
+      <DataTableRow
+        key={String(id)}
+        row={row}
+        id={id}
+        selected={canSelect && selection.isSelected(id)}
+        canSelect={canSelect}
+        mode={mode}
+        columns={visibleColumns}
+        filler={layout.filler}
+        // The last row has no bottom border in the plain table (TableBody's `last-child` rule); in a windowed one a spacer follows it.
+        className={cn(selectable ? "cursor-default select-none" : onRowClick && "cursor-pointer", windowed && index === rows.length - 1 && "border-b-0", rowClassName?.(row))}
+        label={rowLabel(row, id)}
+        onMouseDown={onRowMouseDown}
+        onMouseEnter={onRowMouseEnter}
+        onToggle={toggleRow}
+        onClick={handleRowClick}
+        onDoubleClick={handleRowDoubleClick}
+        index={windowed ? index : undefined}
+        measureRef={windowed ? measureRef : undefined}
+      />
+    )
+  }
+  // What the colgroup is made of: when it changes, row heights may too (wrapped cells), so a windowed body measures again.
+  const measureKey = `${layout.minWidth}|${layout.filler}|${layout.colWidths.join(",")}|${visibleColumns.map((c) => c.key).join(",")}`
+
   let content: ReactNode
   if (loading) {
     content =
@@ -556,6 +618,8 @@ function DataTableView<T, Id extends RowId = number>({
         containerClassName={containerClassName ?? CONTAINER_CLASS}
         className="table-fixed"
         style={{ minWidth: layout.minWidth }}
+        // The mounted rows are a part of the table: say how many there are (the header is one) and where each one sits.
+        aria-rowcount={windowed ? rows.length + 1 : undefined}
       >
         <colgroup>
           {selectable && <col style={{ width: selectionWidth }} />}
@@ -565,7 +629,7 @@ function DataTableView<T, Id extends RowId = number>({
           {layout.filler && <col />}
         </colgroup>
         <TableHeader {...overflowTip.headProps}>
-          <TableRow>
+          <TableRow aria-rowindex={windowed ? 1 : undefined}>
             {selectable && <TableHead className="text-center">{selectionHeader}</TableHead>}
             {visibleColumns.map((c) => {
               const align = resolveAlign(c)
@@ -601,31 +665,26 @@ function DataTableView<T, Id extends RowId = number>({
             {layout.filler && <TableHead aria-hidden className="p-0" />}
           </TableRow>
         </TableHeader>
-        <TableBody {...overflowTip.bodyProps}>
-          {rows.map((row) => {
-            const id = getRowId(row)
-            const canSelect = isRowSelectable ? isRowSelectable(row) : true
-            return (
-              <DataTableRow
-                key={String(id)}
-                row={row}
-                id={id}
-                selected={canSelect && selection.isSelected(id)}
-                canSelect={canSelect}
-                mode={mode}
-                columns={visibleColumns}
-                filler={layout.filler}
-                className={cn(selectable ? "cursor-default select-none" : onRowClick && "cursor-pointer", rowClassName?.(row))}
-                label={rowLabel(row, id)}
-                onMouseDown={onRowMouseDown}
-                onMouseEnter={onRowMouseEnter}
-                onToggle={toggleRow}
-                onClick={handleRowClick}
-                onDoubleClick={handleRowDoubleClick}
-              />
-            )
-          })}
-        </TableBody>
+        {windowed ? (
+          <Suspense
+            fallback={
+              <TableBody {...overflowTip.bodyProps}>{rows.slice(0, FALLBACK_ROWS).map((_, index) => renderRow(index))}</TableBody>
+            }
+          >
+            <WindowedTableBody
+              count={rows.length}
+              getKey={(index) => String(getRowId(rows[index]))}
+              renderRow={renderRow}
+              columnSpan={(selectable ? 1 : 0) + visibleColumns.length + (layout.filler ? 1 : 0)}
+              bodyProps={overflowTip.bodyProps}
+              scrollKey={scrollKey}
+              measureKey={measureKey}
+              estimateRowHeight={estimateRowHeight}
+            />
+          </Suspense>
+        ) : (
+          <TableBody {...overflowTip.bodyProps}>{rows.map((_, index) => renderRow(index))}</TableBody>
+        )}
       </Table>
     )
     content = contextMenu ? (

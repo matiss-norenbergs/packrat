@@ -18,7 +18,7 @@ export const DENYLIST = {
   "vendor-panels": "react-resizable-panels is used only by the Edit Sequence dialog",
   "vendor-calendar": "react-day-picker/date-fns are used only by the Artist dialog, Artists and Dashboard pages",
   "vendor-qr": "qrcode.react is used only by the 2FA setup card",
-  "vendor-virtual": "@tanstack/react-virtual is used only by the Library's windowed grid",
+  "vendor-virtual": "@tanstack/react-virtual is used only by the Library's windowed grid and windowed list (DataTable, loaded on demand)",
   "vendor-tauri": "the Tauri plugins are imported dynamically, only inside the desktop shell",
 }
 
