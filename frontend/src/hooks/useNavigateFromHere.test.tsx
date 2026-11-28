@@ -1,11 +1,10 @@
 import { Profiler, memo } from "react"
 import { RouterProvider, createMemoryRouter, useLocation, useNavigate } from "react-router-dom"
-import { act, cleanup, render, screen } from "@testing-library/react"
+import { act, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { useNavigateFromHere } from "./useNavigateFromHere"
 
-afterEach(cleanup)
 
 describe("useNavigateFromHere", () => {
   let renders = 0

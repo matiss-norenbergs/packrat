@@ -1,10 +1,9 @@
 import { Link, MemoryRouter, Outlet, RouterProvider, createMemoryRouter } from "react-router-dom"
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllContext"
 
-afterEach(cleanup)
 
 function Probe() {
   const { isRevealed, revealAll, toggleItem, revealItems, toggleRevealAll } = useRevealAll()

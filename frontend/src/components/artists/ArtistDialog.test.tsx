@@ -1,12 +1,12 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { ArtistDialog } from "@/components/artists/ArtistDialog"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
+import { settleQueries } from "@/test/settle"
 import type { Artist } from "@/types/api"
 
-afterEach(cleanup)
 
 const EXISTING: Artist = {
   id: 7,
@@ -38,7 +38,7 @@ describe("ArtistDialog private checkbox", () => {
   it("is hidden with privacy off", async () => {
     setup(false)
     await screen.findByText("New Artist")
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(screen.queryByLabelText("Private")).toBeNull()
   })
 

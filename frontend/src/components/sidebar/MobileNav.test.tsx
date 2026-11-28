@@ -1,7 +1,7 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { Route, Routes, useLocation } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 
@@ -11,10 +11,6 @@ vi.mock("@/components/sidebar/HostActionsMenu", () => ({ HostActionsMenu: () => 
 import { MobileNav } from "./MobileNav"
 
 beforeEach(() => mockFetch(() => ({ status: 200, body: {} })))
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 function Where() {
   return <output data-testid="where">{useLocation().pathname}</output>

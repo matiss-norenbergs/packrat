@@ -1,6 +1,6 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { SettingsTabLoader } from "@/components/settings/SettingsTabLoader"
 import { callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { Settings } from "@/types/api"
@@ -8,11 +8,6 @@ import type { Settings } from "@/types/api"
 const SETTINGS = { maxConcurrentDownloads: 3 } as Settings
 
 const body = (s: Settings) => <p>Max downloads: {s.maxConcurrentDownloads}</p>
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 describe("SettingsTabLoader", () => {
   it("shows the skeleton while the settings load", () => {

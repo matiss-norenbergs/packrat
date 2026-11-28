@@ -1,11 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { fireEvent, render, screen } from "@testing-library/react"
+import { describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { BlurredThumbnail } from "./BlurredThumbnail"
 
 vi.mock("@/hooks/useSettings", () => ({ useSettings: () => ({ data: { privacyBlurStrength: "default" } }) }))
 
-afterEach(cleanup)
 
 function renderThumb(props: Partial<React.ComponentProps<typeof BlurredThumbnail>> = {}) {
   render(

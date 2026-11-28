@@ -49,7 +49,6 @@ beforeEach(() => {
   localStorage.setItem("packrat:compare-preload", "true")
 })
 afterEach(() => {
-  cleanup()
   vi.restoreAllMocks()
 })
 

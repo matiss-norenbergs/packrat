@@ -1,6 +1,6 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react"
+import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { HistoryTab } from "@/components/settings/tabs/HistoryTab"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { Settings } from "@/types/api"
@@ -11,10 +11,6 @@ beforeEach(() => {
   Element.prototype.scrollIntoView ??= () => {}
   Element.prototype.hasPointerCapture ??= () => false
   Element.prototype.releasePointerCapture ??= () => {}
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 function fakeServer(initial: Partial<Settings> = {}) {

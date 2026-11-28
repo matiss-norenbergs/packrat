@@ -1,12 +1,13 @@
 import { useState } from "react"
-import { cleanup, screen, waitFor, within } from "@testing-library/react"
+import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { FloatingActionDock } from "@/components/FloatingActionDock"
 import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ArtistImagesPanel, ArtistsPage } from "@/pages/ArtistsPage"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
+import { settleQueries } from "@/test/settle"
 import { hashText } from "@/lib/utils"
 import type { Artist } from "@/types/api"
 
@@ -18,10 +19,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 function artist(over: Partial<Artist>): Artist {
@@ -194,7 +191,7 @@ describe("ArtistsPage privacy", () => {
 
     renderPage(false)
     await screen.findByText("Priv")
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(screen.queryByRole("columnheader", { name: "Private" })).toBeNull()
     expect(screen.queryByLabelText("Private")).toBeNull()
   })
@@ -214,13 +211,13 @@ describe("ArtistsPage privacy", () => {
   it("hides the floating button with privacy off or when no artist is private", async () => {
     const { unmount } = renderPage(false)
     await screen.findByText("Priv")
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(fab()).toBeNull()
     unmount()
 
     renderPage(true, [PUB])
     await screen.findByText("Pub")
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(fab()).toBeNull()
   })
 })

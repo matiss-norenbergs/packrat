@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { ThemeProvider } from "next-themes"
 import { Link, RouterProvider, createMemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useRevealAll } from "@/components/library/RevealAllContext"
 import { AppLayout } from "@/layouts/AppLayout"
 import { mockFetch } from "@/test/mockApi"
@@ -24,10 +24,6 @@ beforeEach(() => {
     if (url.endsWith("/auth/preferences")) return { status: 200, body: { theme: "dark", accent: "green" } }
     return { status: 404 }
   })
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 // The stand-in "item" page reads the shared provider to exercise its same-route/clearOnNavigate semantics.

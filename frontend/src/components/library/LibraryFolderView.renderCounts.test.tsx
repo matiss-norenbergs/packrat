@@ -1,12 +1,13 @@
-import { act, cleanup, screen } from "@testing-library/react"
+import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import { LibraryFolderView } from "./LibraryFolderView"
 import { LibrarySortProvider } from "./LibrarySortContext"
 import { RevealAllProvider } from "./RevealAllContext"
 import { SelectionProvider } from "./SelectionContext"
+import { settleQueries } from "@/test/settle"
 
 // Render counts of the Folders view's mixed grid (folder tiles + cards) through the ResponsiveGrid seam.
 const thumbRenders = vi.hoisted(() => new Map<number, number>())
@@ -43,7 +44,6 @@ beforeEach(() => {
     return { status: 200, body: [] }
   })
 })
-afterEach(cleanup)
 
 describe("folder view render counts", () => {
   it("renders the folder tiles first, then the cards, all in one grid", async () => {
@@ -80,7 +80,7 @@ describe("folder view render counts", () => {
       </TooltipProvider>,
     )
     await screen.findByText("Item 1")
-    await act(async () => void (await new Promise((r) => setTimeout(r, 60))))
+    await settleQueries()
     const user = userEvent.setup()
     const boxes = () => screen.getAllByRole("checkbox", { name: /^Select Item/ })
     tileRenders.clear()

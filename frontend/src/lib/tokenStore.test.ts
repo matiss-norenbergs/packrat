@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { tick } from "@/test/tick"
 
 const invoke = vi.fn()
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => invoke(...args) }))
@@ -51,7 +52,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
-  vi.unstubAllGlobals()
 })
 
 describe("token storage in the shell", () => {
@@ -72,7 +72,7 @@ describe("token storage in the shell", () => {
     const s = await load()
     let ready = false
     void s.tokenReady.then(() => (ready = true))
-    await new Promise((r) => setTimeout(r, 0))
+    await tick()
     expect(ready).toBe(false)
     await s.initTokenStore()
     await s.tokenReady
@@ -255,7 +255,7 @@ describe("token storage in the shell", () => {
     await s.initTokenStore()
     invoke.mockRejectedValue(new Error("locked"))
     s.setToken("abc")
-    await new Promise((r) => setTimeout(r, 0))
+    await tick()
     expect(s.getTokenStorage()).toBe("local")
     expect(s.getToken()).toBe("abc")
   })

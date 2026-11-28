@@ -25,7 +25,6 @@ function enterDesktop() {
 beforeEach(() => window.localStorage.clear())
 afterEach(() => {
   delete (window as any).__TAURI_INTERNALS__
-  vi.unstubAllGlobals()
   document.cookie = "packrat_csrf=; Max-Age=0"
 })
 

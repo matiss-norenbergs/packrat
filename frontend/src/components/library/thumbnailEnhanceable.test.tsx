@@ -1,12 +1,13 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, renderHook, screen, waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { render, renderHook, screen, waitFor } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { BulkSharpenThumbnailsDialog } from "@/components/library/BulkSharpenThumbnailsDialog"
 import { mockFetch } from "@/test/mockApi"
 import type { LibraryItem } from "@/types/api"
 import { useLibraryItemActions, type LibraryItemAction } from "./libraryItemActions"
 import { bulkSharpenAvailable } from "./thumbnailEnhanceable"
+import { settleQueries } from "@/test/settle"
 
 let items: LibraryItem[] = []
 vi.mock("./SelectionContext", () => ({
@@ -29,10 +30,6 @@ beforeEach(() => {
   })
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
 })
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 const make = (over: Partial<LibraryItem>) =>
   ({ id: 1, title: "T", filename: "a.mp4", path: "m/a.mp4", mediaType: "video", status: "complete", originalUrl: "https://x/y", thumbnail: "t.jpg", tags: [], ...over }) as LibraryItem
@@ -41,13 +38,12 @@ function labels(list: LibraryItemAction[]): string[] {
   return list.flatMap((a) => ("separator" in a ? [] : "items" in a ? [a.label, ...labels(a.items)] : [a.label]))
 }
 async function menuLabels(item: LibraryItem) {
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{children}</QueryClientProvider>
-  )
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
   const { result } = renderHook(() => useLibraryItemActions(item), { wrapper })
   // The settings query resolves asynchronously; wait until Sharpen is known for the video case.
   await waitFor(() => expect(result.current).toBeTruthy())
-  await new Promise((r) => setTimeout(r, 50))
+  await settleQueries(client)
   return labels(result.current.actionsFor(item))
 }
 

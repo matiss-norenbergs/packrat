@@ -1,6 +1,6 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AddGhostLibraryItemDialog } from "@/components/library/AddGhostLibraryItemDialog"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 
@@ -15,10 +15,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const col = (id: number, name: string, extra: Record<string, unknown> = {}) => ({

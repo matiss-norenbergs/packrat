@@ -1,6 +1,6 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { GeneralTab } from "@/components/settings/tabs/GeneralTab"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { Settings } from "@/types/api"
@@ -33,10 +33,6 @@ function fakeServer() {
 beforeEach(() => {
   toastError.mockReset()
   toastSuccess.mockReset()
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 describe("GeneralTab", () => {

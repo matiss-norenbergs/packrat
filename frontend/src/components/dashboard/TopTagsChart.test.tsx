@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
-import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Tag } from "@/types/api"
 import { TopTagsChart } from "./TopTagsChart"
 
@@ -39,7 +39,6 @@ describe("TopTagsChart", () => {
   beforeEach(() => {
     useSettings.mockReturnValue({ data: { privacyEnabled: false } })
   })
-  afterEach(cleanup)
 
   it("shows private tags while privacy is explicitly off", () => {
     useTags.mockReturnValue({ data: [tag(1, 10, true), tag(2, 5)], isLoading: false })

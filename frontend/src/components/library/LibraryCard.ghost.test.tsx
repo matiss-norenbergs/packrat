@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { downloadProgressQueryKey } from "@/hooks/useDownloads"
 import { ThumbCell } from "./LibraryListView"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -10,16 +10,12 @@ import { LibraryCard } from "./LibraryCard"
 import { LibraryCardsProvider } from "./LibraryCardsProvider"
 import { RevealAllProvider } from "./RevealAllContext"
 import { SelectionProvider } from "./SelectionContext"
+import { settleQueries } from "@/test/settle"
 
 vi.mock("@/hooks/useSettings", () => ({ useSettings: () => ({ data: { privacyBlurStrength: "default" } }) }))
 vi.mock("@/hooks/useTagNameMask", () => ({ useTagNameMask: () => (t: { name: string }) => t.name }))
 vi.mock("@/hooks/useArtistNameMask", () => ({ useArtistNameMask: () => (n: string) => n }))
 vi.mock("./LibraryItemActionsMenu", () => ({ LibraryItemActionsMenu: () => null }))
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 function item(over: Partial<LibraryItem>): LibraryItem {
   return {
@@ -100,9 +96,10 @@ describe("download progress bar", () => {
   it("is absent, and requests no downloads, for items without an active download", async () => {
     const fetchMock = vi.fn(() => Promise.resolve(new Response("[]")))
     vi.stubGlobal("fetch", fetchMock)
-    renderCard(item({ activeDownloadId: null }))
-    renderCard(item({ id: 2, status: "ghost", activeDownloadId: null }))
-    await new Promise((r) => setTimeout(r, 20))
+    const client = newClient()
+    renderCard(item({ activeDownloadId: null }), client)
+    renderCard(item({ id: 2, status: "ghost", activeDownloadId: null }), client)
+    await settleQueries(client)
     expect(screen.queryByRole("progressbar")).toBeNull()
     // The cards' shared actions host fetches its own data (compare list, ...); what matters is that no card asks for downloads.
     expect((fetchMock.mock.calls as unknown[][]).filter(([url]) => String(url).includes("download"))).toHaveLength(0)

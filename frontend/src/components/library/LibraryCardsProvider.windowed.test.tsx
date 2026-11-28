@@ -1,6 +1,6 @@
 import { RouterProvider, createMemoryRouter } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, render, screen } from "@testing-library/react"
+import { act, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ResponsiveGrid } from "@/components/responsive-grid"
@@ -13,6 +13,8 @@ import { LibraryCard, LibraryCardGrid } from "./LibraryCard"
 import { LibraryCardsProvider } from "./LibraryCardsProvider"
 import { RevealAllProvider } from "./RevealAllContext"
 import { SelectionProvider, useSelection } from "./SelectionContext"
+import { trackClient } from "@/test/clients"
+import { settleQueries } from "@/test/settle"
 
 // The windowed Library grid: the same wiring as LibraryGrid, 1,000 items.
 const thumbRenders = vi.hoisted(() => new Map<number, number>())
@@ -31,9 +33,7 @@ beforeEach(() => {
   layout = installLayoutMock({ viewportWidth: 1280, viewportHeight: 600, rowHeight: () => 280 })
 })
 afterEach(() => {
-  cleanup()
   layout.restore()
-  vi.unstubAllGlobals()
 })
 
 const item = (id: number) =>
@@ -69,14 +69,14 @@ function renderGrid() {
     { initialEntries: ["/lib"] },
   )
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={trackClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }))}>
       <TooltipProvider>
         <RouterProvider router={router} />
       </TooltipProvider>
     </QueryClientProvider>,
   )
 }
-const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 60))))
+const settle = () => settleQueries()
 const mountedCards = (c: HTMLElement) => c.querySelectorAll('[data-slot="card"]').length
 
 describe("the Library grid, windowed", () => {

@@ -17,7 +17,6 @@ beforeEach(() => {
   layout = installLayoutMock({ viewportWidth: 1280, viewportHeight: 600, rowHeight: () => 50 })
 })
 afterEach(() => {
-  cleanup()
   layout.restore()
 })
 

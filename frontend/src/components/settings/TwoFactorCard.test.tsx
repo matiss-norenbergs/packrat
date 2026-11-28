@@ -1,6 +1,6 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { TwoFactorCard } from "@/components/settings/TwoFactorCard"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 
@@ -12,10 +12,6 @@ const URL = `otpauth://totp/Packrat:admin?secret=${SECRET}&issuer=Packrat`
 const CODES = ["AAAA-2222", "BBBB-3333", "CCCC-4444", "DDDD-5555", "EEEE-6666", "FFFF-7777", "GGGG-8888", "HHHH-9999", "JJJJ-2345", "KKKK-6789"]
 
 beforeEach(() => toastError.mockReset())
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 // A tiny stateful fake of the 2FA endpoints.
 function fakeServer(initial: { enabled: boolean; remaining: number }) {

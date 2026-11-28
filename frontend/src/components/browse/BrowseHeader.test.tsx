@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { BrowseHeader } from "@/components/browse/BrowseHeader"
@@ -23,9 +23,7 @@ beforeEach(() => {
   reloadApp.mockReset()
 })
 afterEach(() => {
-  cleanup()
   leaveTauri()
-  vi.unstubAllGlobals()
 })
 
 function setupServers() {

@@ -1,8 +1,7 @@
-import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { render, screen } from "@testing-library/react"
+import { describe, expect, it } from "vitest"
 import { UpdateProgress } from "@/components/settings/UpdateProgress"
 
-afterEach(cleanup)
 
 describe("UpdateProgress", () => {
   it("shows the label, percent, bar and restart notice on separate elements", () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   calculateAge,
   cn,
@@ -90,10 +90,6 @@ describe("calculateAge", () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-07-26T12:00:00"))
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   it("hasn't decremented when the birthday already passed this year", () => {

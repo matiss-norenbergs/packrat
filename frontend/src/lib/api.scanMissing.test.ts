@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ApiError, scanMissingConfirmInfo, scanMissingLibraryFiles } from "@/lib/api"
 
 type FetchInit = { method?: string; body?: string; headers: Record<string, string> }
@@ -15,7 +15,6 @@ function mockFetch(status: number, body: unknown) {
 }
 
 beforeEach(() => window.localStorage.clear())
-afterEach(() => vi.unstubAllGlobals())
 
 describe("scanMissingLibraryFiles", () => {
   it("sends no body unless confirming", async () => {

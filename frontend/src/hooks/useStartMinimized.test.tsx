@@ -1,5 +1,5 @@
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { act, renderHook, waitFor } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const invoke = vi.fn()
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => invoke(...args) }))
@@ -10,7 +10,6 @@ import { useStartMinimized } from "@/hooks/useStartMinimized"
 beforeEach(() => {
   invoke.mockReset()
 })
-afterEach(cleanup)
 
 describe("useStartMinimized", () => {
   it("loads the saved value from the shell", async () => {

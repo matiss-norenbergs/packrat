@@ -1,9 +1,8 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { InfoPopover } from "@/components/ui/info-popover"
 
-afterEach(cleanup)
 
 const trigger = () => screen.getByRole("button", { name: "More info" })
 const content = () => screen.queryByText("Help text")

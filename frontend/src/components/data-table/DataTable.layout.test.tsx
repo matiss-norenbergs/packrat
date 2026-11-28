@@ -1,9 +1,9 @@
 import { useState } from "react"
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
 import type { TableLayout, TableLayouts } from "@/types/api"
 import { DataTable } from "./DataTable"
@@ -57,7 +57,6 @@ beforeEach(() => {
   toast.success.mockReset()
   toast.error.mockReset()
 })
-afterEach(cleanup)
 
 async function openColumns(user: ReturnType<typeof userEvent.setup>) {
   await user.click(columnsButton()!)

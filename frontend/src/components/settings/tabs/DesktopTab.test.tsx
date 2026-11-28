@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { enterTauri, leaveTauri } from "@/test/tauriShell"
 
@@ -10,10 +10,10 @@ vi.mock("@/components/desktop/AppUpdatePanel", () => ({ AppUpdatePanel: () => <p
 vi.mock("@/hooks/useSettings", () => ({ useAppVersion: () => ({ data: { version: "1.0.0" } }) }))
 
 import { DesktopTab } from "@/components/settings/tabs/DesktopTab"
+import { flushTasks } from "@/test/settle"
 
 beforeEach(() => invoke.mockReset().mockResolvedValue(false))
 afterEach(() => {
-  cleanup()
   leaveTauri()
 })
 
@@ -33,7 +33,7 @@ describe("DesktopTab", () => {
     expect(screen.getByText("servers")).toBeInTheDocument()
     expect(screen.queryByText("Window and startup")).toBeNull()
     expect(screen.queryByText("updates")).toBeNull()
-    await new Promise((r) => setTimeout(r, 10))
+    await flushTasks()
     expect(invoke).not.toHaveBeenCalled()
   })
 })

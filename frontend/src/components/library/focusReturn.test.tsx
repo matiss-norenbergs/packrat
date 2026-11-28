@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { DataTable } from "@/components/data-table"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { resetFocusReturn } from "@/lib/focusReturn"
@@ -19,10 +19,6 @@ beforeEach(() => {
     return { status: 200, body: [] }
   })
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const mk = (id: number): LibraryItem =>
@@ -114,7 +110,9 @@ describe("focus returns after a dialog opened from a menu", () => {
     await chooseAction(user, actionsButton(1), "Copy URL")
     expect(actionsButton(1)).toBeInTheDocument()
     // Copy URL opens no dialog: the pending origin must not leak into a later, unrelated one.
-    await new Promise((r) => setTimeout(r, 1600))
+    // The origin expires ORIGIN_TTL_MS (1500) after the menu click; it reads Date.now(), so only the clock is faked.
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.advanceTimersByTime(1600)
     await chooseAction(user, actionsButton(1), "Edit")
     await screen.findByRole("dialog")
     await user.keyboard("{Escape}")

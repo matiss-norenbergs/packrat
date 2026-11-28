@@ -1,5 +1,5 @@
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { act, renderHook, waitFor } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 let autostart = false
 let startMinimized = false
@@ -18,7 +18,6 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn() } }))
 
 import { useStartup } from "@/hooks/useStartup"
 
-afterEach(cleanup)
 beforeEach(() => {
   autostart = false
   startMinimized = false

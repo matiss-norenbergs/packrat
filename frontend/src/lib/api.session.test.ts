@@ -35,7 +35,6 @@ beforeEach(() => {
 afterEach(() => {
   window.removeEventListener(UNAUTHORIZED_EVENT, unauthorized)
   delete (window as any).__TAURI_INTERNALS__
-  vi.unstubAllGlobals()
 })
 
 describe("web 401 handling", () => {

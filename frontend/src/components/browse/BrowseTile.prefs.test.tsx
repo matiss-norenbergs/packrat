@@ -1,5 +1,5 @@
-import { act, cleanup, screen, waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { act, screen, waitFor } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { BrowseTile } from "@/components/browse/BrowseTile"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useBrowsePrefs } from "@/hooks/useBrowsePrefs"
@@ -30,9 +30,7 @@ beforeEach(() => {
   mockFetch((url) => (url.endsWith("/settings") ? { status: 200, body: { libraryAutoplay: true, browseIgnorePrivacy: false } } : { status: 404 }))
 })
 afterEach(() => {
-  cleanup()
   leaveTauri()
-  vi.unstubAllGlobals()
 })
 
 describe("BrowseTile and the Android app's blur override", () => {

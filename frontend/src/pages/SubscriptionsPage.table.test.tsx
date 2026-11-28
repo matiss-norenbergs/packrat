@@ -24,9 +24,7 @@ beforeEach(() => {
   }))
 })
 afterEach(() => {
-  cleanup()
   updateHook.override = null
-  vi.unstubAllGlobals()
 })
 
 const CHECKED = "2026-10-30T12:34:56Z"

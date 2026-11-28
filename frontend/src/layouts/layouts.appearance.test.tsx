@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, waitFor } from "@testing-library/react"
+import { render, waitFor } from "@testing-library/react"
 import { ThemeProvider } from "next-themes"
 import { RouterProvider, createMemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AppLayout } from "@/layouts/AppLayout"
 import { BrowseLayout } from "@/layouts/BrowseLayout"
 import { ImmersiveLayout } from "@/layouts/ImmersiveLayout"
@@ -25,10 +25,6 @@ beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }))
   window.scrollTo = () => {}
   Element.prototype.scrollTo = () => {}
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 // A data router, like the app's: AppLayout's RevealAllProvider reads useMatches().

@@ -1,9 +1,9 @@
 import { useState } from "react"
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
 import type { TableLayouts } from "@/types/api"
 import { DataTable } from "./DataTable"
@@ -17,10 +17,6 @@ vi.mock("@/lib/api", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }))
 
 beforeEach(() => vi.useFakeTimers())
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
-})
 
 interface Row {
   id: number

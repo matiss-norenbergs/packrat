@@ -1,6 +1,6 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { activateProfile, addProfile, getActiveProfile, getProfiles, isAddingServer, setAddingServer } from "@/lib/serverProfiles"
 import { ConnectPage } from "@/pages/ConnectPage"
 import { mockFetch } from "@/test/mockApi"
@@ -15,10 +15,6 @@ beforeEach(() => {
   localStorage.clear()
   sessionStorage.clear()
   reloadApp.mockReset()
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const healthy = () => mockFetch(() => ({ status: 200, body: { status: "ok" } }))

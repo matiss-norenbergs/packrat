@@ -1,12 +1,13 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { FloatingActionDock } from "@/components/FloatingActionDock"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { DownloadsPage } from "@/pages/DownloadsPage"
 import { hashText } from "@/lib/utils"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
+import { settleQueries } from "@/test/settle"
 
 beforeEach(() => {
   // NewDownloadDialog (in the toolbar) reads a media query on mount.
@@ -17,10 +18,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 // 51 blurred downloads → two pages (PAGE_SIZE 50). The API returns them
@@ -74,7 +71,7 @@ describe("DownloadsPage reveal-all", () => {
     serve({ privacy: false, collections: PRIVATE })
     const { unmount } = renderPage()
     await screen.findByText(hashText("Video 1"))
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(fab()).toBeNull()
     unmount()
 
@@ -84,7 +81,7 @@ describe("DownloadsPage reveal-all", () => {
     })
     renderPage()
     await screen.findByText(hashText("Video 1"))
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(fab()).toBeNull()
   })
 

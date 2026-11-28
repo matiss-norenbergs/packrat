@@ -1,14 +1,9 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import { BrowsePage } from "./BrowsePage"
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 const COLLECTION = { id: 1, name: "Shows", parentId: null, browseAsShow: false, totalItemCount: 2, itemCount: 2 }
 const EMPTY = { items: [], total: 0 }

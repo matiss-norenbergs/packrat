@@ -2,10 +2,9 @@ import { useState } from "react"
 import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { Eye, Star } from "lucide-react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { FloatingAction, FloatingActionDock } from "@/components/FloatingActionDock"
 
-afterEach(cleanup)
 
 const dockEl = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-slot="floating-action-dock"]')!
 

@@ -1,13 +1,9 @@
 import { cleanup, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import { SecurityNotice } from "@/components/SecurityNotice"
 import { callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
+import { settleQueries } from "@/test/settle"
 
 describe("SecurityNotice", () => {
   it("reports failed attempts and acknowledges on dismiss", async () => {
@@ -33,7 +29,7 @@ describe("SecurityNotice", () => {
 
     mockFetch(() => ({ status: 200, body: { failedAttempts: 0, since: "2026-10-20T10:00:00Z", lastAttemptAt: null } }))
     const { container } = renderWithProviders(<SecurityNotice />)
-    await new Promise((r) => setTimeout(r, 50))
+    await settleQueries()
     expect(container).toBeEmptyDOMElement()
   })
 })

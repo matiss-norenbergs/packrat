@@ -1,11 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { HorizontalScroller } from "./HorizontalScroller"
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 describe("HorizontalScroller scroll behavior", () => {
   function setup(reduce: boolean) {

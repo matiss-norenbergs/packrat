@@ -1,10 +1,9 @@
 import { Profiler, type ReactNode } from "react"
-import { act, cleanup, render, renderHook } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { act, render, renderHook } from "@testing-library/react"
+import { describe, expect, it } from "vitest"
 import type { LibraryItem } from "@/types/api"
 import { SelectionProvider, useIsCollectionSelected, useIsItemSelected, useSelection, useSelectionActions, useSelectionActive } from "./SelectionContext"
 
-afterEach(cleanup)
 
 const item = (id: number) => ({ id, title: `Item ${id}` }) as LibraryItem
 const wrapper = ({ children }: { children: ReactNode }) => <SelectionProvider>{children}</SelectionProvider>

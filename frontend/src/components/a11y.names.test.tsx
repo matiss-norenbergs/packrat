@@ -1,8 +1,8 @@
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { BrowseHeader } from "@/components/browse/BrowseHeader"
 import { CollectionTree } from "@/components/collections/CollectionTree"
 import { MobileNav } from "@/components/sidebar/MobileNav"
@@ -17,10 +17,6 @@ import type { Collection } from "@/types/api"
 beforeEach(() => {
   mockFetch(() => ({ status: 200, body: [] }))
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 describe("Browse header", () => {

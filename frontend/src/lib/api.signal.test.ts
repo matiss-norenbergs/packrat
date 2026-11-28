@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { fetchCollections, fetchDownloads, fetchLibraryFacets, fetchLibraryQuery, fetchStats } from "./api"
 
 const reportNetworkFailure = vi.fn()
@@ -16,7 +16,6 @@ beforeEach(() => {
   fetchMock.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve([]) })
   vi.stubGlobal("fetch", fetchMock)
 })
-afterEach(() => vi.unstubAllGlobals())
 
 describe("AbortSignal passthrough", () => {
   it.each<[string, (s: AbortSignal) => Promise<unknown>, string]>([

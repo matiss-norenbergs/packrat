@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { LogsPage } from "@/pages/LogsPage"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { Settings, SystemEvent, SystemEventFacets } from "@/types/api"
@@ -19,10 +19,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const ev = (id: number, over: Partial<SystemEvent> = {}): SystemEvent => ({

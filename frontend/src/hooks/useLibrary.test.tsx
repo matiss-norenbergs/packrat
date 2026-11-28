@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { renderHook, waitFor } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { isLibraryItemNotFound, useLibraryItem, useLibraryItemsByIds } from "./useLibrary"
 
 function wrapper(client = new QueryClient()) {
@@ -20,7 +20,6 @@ function mockFetch(items: Record<number, object>) {
 }
 
 describe("useLibraryItem", () => {
-  afterEach(() => vi.unstubAllGlobals())
 
   it("fetches just the one item, not the whole library", async () => {
     const fetchMock = mockFetch({ 7: { id: 7, title: "seven" } })
@@ -40,7 +39,6 @@ describe("useLibraryItem", () => {
 })
 
 describe("useLibraryItemsByIds", () => {
-  afterEach(() => vi.unstubAllGlobals())
 
   it("keeps id order and drops ids that no longer exist", async () => {
     mockFetch({ 3: { id: 3 }, 1: { id: 1 } })
@@ -51,7 +49,6 @@ describe("useLibraryItemsByIds", () => {
 })
 
 describe("useLibraryItem seeded from a cached list", () => {
-  afterEach(() => vi.unstubAllGlobals())
 
   const cachedList = { items: [{ id: 7, title: "cached seven", status: "completed" }], total: 1 }
 

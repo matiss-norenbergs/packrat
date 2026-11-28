@@ -1,12 +1,11 @@
 import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { MAX_CUSTOM_FRAME_COUNT, ThumbnailCustomRangeDialog } from "@/components/library/ThumbnailCustomRangeDialog"
 
 vi.mock("@/hooks/useSettings", () => ({ useSettings: () => ({ data: { thumbnailFrameCount: 4, thumbnailFrameRangeLow: 5, thumbnailFrameRangeHigh: 100 } }) }))
 vi.mock("@/components/ThumbnailFrameRangeSlider", () => ({ ThumbnailFrameRangeSlider: () => <div /> }))
 
-afterEach(cleanup)
 
 async function typeCount(value: string) {
   const onConfirm = vi.fn()

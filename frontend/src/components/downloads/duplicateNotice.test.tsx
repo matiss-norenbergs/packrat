@@ -1,13 +1,16 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { act, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NewDownloadDialog } from "@/components/downloads/NewDownloadDialog"
 import { RedownloadFromUrlDialog } from "@/components/library/RedownloadFromUrlDialog"
 import { duplicateTitle, hashText } from "@/lib/utils"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { LibraryItem } from "@/types/api"
 
+// NewDownloadDialog debounces the preview URL by 500 ms: fake timers, advanced by exactly that, instead of waiting it out.
+const DEBOUNCE_MS = 500
 beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
   vi.stubGlobal("matchMedia", () => ({
     matches: false,
     addEventListener: () => {},
@@ -15,10 +18,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const SECRET = "My Private Video"
@@ -54,15 +53,16 @@ describe("New Download duplicate warning", () => {
 
   async function open() {
     renderWithProviders(<NewDownloadDialog />)
-    const user = userEvent.setup()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     await user.click(screen.getByRole("button", { name: /New Download/ }))
     await user.type(await screen.findByPlaceholderText("https://..."), "https://example.com/watch?v=1")
+    await act(() => vi.advanceTimersByTimeAsync(DEBOUNCE_MS))
   }
 
   it("shows the title hashed and no thumbnail for a blurred match", async () => {
     serve(true)
     await open()
-    const notice = await screen.findByText(/Already in your library/, undefined, { timeout: 5000 })
+    const notice = await screen.findByText(/Already in your library/)
     expect(notice).toHaveTextContent(hashText(SECRET))
     expect(notice).not.toHaveTextContent(SECRET)
     expect(notice.querySelector("img")).toBeNull()
@@ -72,7 +72,7 @@ describe("New Download duplicate warning", () => {
   it("shows the real title when the match is not blurred", async () => {
     serve(false)
     await open()
-    const notice = await screen.findByText(/Already in your library/, undefined, { timeout: 5000 })
+    const notice = await screen.findByText(/Already in your library/)
     expect(notice).toHaveTextContent(SECRET)
   })
 })

@@ -134,6 +134,9 @@ make it permanently noisy). The frontend CI job runs, in order: `npm run lint` (
 comment needs `-- <why>`), `npm run typecheck:lib` (`src/lib` non-test files with
 `noUncheckedIndexedAccess`, `tsconfig.lib-strict.json`), the tests, `npm run build` (which runs
 `tsc -b`), `check:bundle` and the audit.
+Tests run on Vitest's `vmThreads` pool (one jsdom per worker, a VM context per file; workers recycle at
+`vmMemoryLimit`). `src/test/setup.ts` cleans up after every test (see CLAUDE.md), and tests never sleep on
+real timers: they wait on the result, flush with `src/test/settle.ts`, or advance fake timers.
 
 **Desktop client mode.** `frontend/src/lib/server.ts` decides where the app talks to. On the web
 (`isDesktop()` false: no Tauri, no `VITE_DESKTOP=true`) every URL stays relative and auth is the

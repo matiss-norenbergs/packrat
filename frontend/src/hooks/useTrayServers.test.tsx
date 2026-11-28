@@ -1,4 +1,4 @@
-import { cleanup, renderHook, waitFor } from "@testing-library/react"
+import { renderHook, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const invoke = vi.fn()
@@ -12,12 +12,14 @@ vi.mock("@tauri-apps/api/event", () => ({
   },
 }))
 
+// jsdom's window.location cannot be redefined under the vmThreads pool, so the page reload is stubbed at its single call site.
+const reload = vi.hoisted(() => vi.fn())
+vi.mock("@/lib/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/server")>()), reloadApp: reload }))
+
 import { useTrayServers } from "@/hooks/useTrayServers"
 import { activateProfile, addProfile, deactivateProfile } from "@/lib/serverProfiles"
 import { enterTauri, leaveTauri } from "@/test/tauriShell"
-
-const reload = vi.fn()
-const originalLocation = window.location
+import { flushTasks } from "@/test/settle"
 
 beforeEach(() => {
   window.localStorage.clear()
@@ -26,14 +28,11 @@ beforeEach(() => {
   unlisten.mockReset()
   reload.mockReset()
   handler = null
-  Object.defineProperty(window, "location", { configurable: true, value: { ...originalLocation, reload } })
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
 })
 
 afterEach(() => {
-  cleanup()
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
-  Object.defineProperty(window, "location", { configurable: true, value: originalLocation })
 })
 
 const lastPush = () => invoke.mock.calls.filter((c) => c[0] === "tray_set_servers").at(-1)?.[1]
@@ -45,7 +44,7 @@ describe("useTrayServers", () => {
     try {
       activateProfile(addProfile("http://a:1", "A").id)
       renderHook(() => useTrayServers())
-      await new Promise((r) => setTimeout(r, 10))
+      await flushTasks()
       expect(invoke).not.toHaveBeenCalled()
       expect(handler).toBeNull()
     } finally {
@@ -114,7 +113,7 @@ describe("useTrayServers", () => {
     delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
     addProfile("http://a:1", "A")
     renderHook(() => useTrayServers())
-    await new Promise((r) => setTimeout(r, 20))
+    await flushTasks()
     expect(invoke).not.toHaveBeenCalled()
     expect(handler).toBeNull()
   })

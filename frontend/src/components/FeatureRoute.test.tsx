@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { FeatureRoute } from "./FeatureRoute"
@@ -23,7 +23,6 @@ const settingsWith = (on: boolean) => ({ data: { featureSubscriptionsEnabled: on
 
 describe("FeatureRoute", () => {
   afterEach(() => {
-    cleanup()
     useSettings.mockReset()
   })
 

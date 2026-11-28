@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
@@ -74,7 +74,6 @@ beforeEach(() => {
   api.deleteTableLayout.mockReset().mockResolvedValue(undefined)
 })
 afterEach(() => {
-  cleanup()
   document.body.style.cssText = ""
 })
 

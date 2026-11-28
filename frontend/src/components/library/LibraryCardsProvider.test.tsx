@@ -1,9 +1,9 @@
 import { useState } from "react"
 import { RouterProvider, createMemoryRouter, useNavigate } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ResponsiveGrid } from "@/components/responsive-grid"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch } from "@/test/mockApi"
@@ -14,6 +14,8 @@ import { LibraryItemActionsMenu } from "./LibraryItemActionsMenu"
 import { useLibraryItemActions } from "./libraryItemActions"
 import { RevealAllProvider, useRevealActions } from "./RevealAllContext"
 import { SelectionProvider } from "./SelectionContext"
+import { trackClient } from "@/test/clients"
+import { settleQueries } from "@/test/settle"
 
 vi.mock("./libraryItemActions", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./libraryItemActions")>()
@@ -35,10 +37,6 @@ beforeEach(() => {
   vi.mocked(useLibraryItemActions).mockClear()
   mockFetch((url) => (url.endsWith("/settings") ? { status: 200, body: { libraryMode: "manage" } } : { status: 200, body: [] }))
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const item = (id: number, over: Partial<LibraryItem> = {}) =>
@@ -83,7 +81,7 @@ function renderGrid(items: LibraryItem[]) {
     { initialEntries: ["/lib"] },
   )
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={trackClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }))}>
       <TooltipProvider>
         <RouterProvider router={router} />
       </TooltipProvider>
@@ -92,7 +90,7 @@ function renderGrid(items: LibraryItem[]) {
 }
 
 // Lets the settings / tags / artists queries answer, which re-renders the cards once (the masks and the card mode change).
-const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 60))))
+const settle = () => settleQueries()
 const triggers = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('[aria-haspopup="menu"]')]
 
 describe("the grid's shared actions host", () => {
@@ -191,7 +189,7 @@ describe("card render counts", () => {
 describe("the standalone menu (item page)", () => {
   it("keeps its own host and opens its dialog", async () => {
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider client={trackClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }))}>
         <LibraryItemActionsMenu item={item(7)} />
       </QueryClientProvider>,
     )

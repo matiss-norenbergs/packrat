@@ -1,9 +1,9 @@
 import { useState } from "react"
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
 import type { TableLayout, TableLayouts } from "@/types/api"
@@ -67,7 +67,6 @@ beforeEach(() => {
   api.saveTableLayout.mockReset().mockImplementation(async (_id: string, l: TableLayout) => l)
   api.deleteTableLayout.mockReset().mockResolvedValue(undefined)
 })
-afterEach(cleanup)
 
 describe("DataTable sorting (client mode)", () => {
   it("shows the natural order when the layout has no sort", () => {

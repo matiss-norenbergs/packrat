@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { mockFetch } from "@/test/mockApi"
 import type { LibraryItem } from "@/types/api"
 import { BulkEditLibraryItemsDialog, MAX_BULK_EDIT_FILES } from "./BulkEditLibraryItemsDialog"
@@ -15,10 +15,6 @@ vi.mock("./BulkEditLibraryItemRow", () => ({ BulkEditLibraryItemRow: ({ item }: 
 
 beforeEach(() => {
   mockFetch(() => ({ status: 200, body: [] }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const make = (n: number) => Array.from({ length: n }, (_, i) => ({ id: i + 1, title: `Item ${i + 1}`, filename: `f${i + 1}.mp4`, tags: [], activeDownloadId: null }) as unknown as LibraryItem)

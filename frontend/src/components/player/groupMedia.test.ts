@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
   allMuted,
   formatPercent,
@@ -107,7 +107,6 @@ describe("relativeSeekDelta / allMuted", () => {
 })
 
 describe("rafThrottle", () => {
-  afterEach(() => vi.useRealTimers())
   it("applies the first call at once and coalesces the rest into one trailing call per frame", () => {
     vi.useFakeTimers()
     const fn = vi.fn()

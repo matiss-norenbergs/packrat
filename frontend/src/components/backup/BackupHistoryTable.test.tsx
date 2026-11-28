@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
+import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { BackupHistoryTable } from "@/components/backup/BackupHistoryTable"
 import { renderWithProviders } from "@/test/mockApi"
 import type { BackupHistoryEntry } from "@/types/api"
@@ -66,7 +66,6 @@ beforeEach(() => {
   toastError.mockReset()
   toastSuccess.mockReset()
 })
-afterEach(() => cleanup())
 
 describe("BackupHistoryTable", () => {
   it("keeps the toolbar visible with disabled buttons when empty or loading", () => {

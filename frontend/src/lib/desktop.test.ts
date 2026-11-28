@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { tick } from "@/test/tick"
 
 const openUrl = vi.fn()
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl }))
@@ -27,7 +28,7 @@ async function click(html: string): Promise<MouseEvent> {
   document.body.innerHTML = html
   const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })
   document.querySelector("a")!.dispatchEvent(event)
-  await new Promise((r) => setTimeout(r, 0))
+  await tick()
   return event
 }
 
@@ -93,13 +94,13 @@ describe("notifications in Tauri", () => {
 
     isPermissionGranted.mockResolvedValue(true)
     notifyDesktop("Done", "file.mp4")
-    await new Promise((r) => setTimeout(r, 0))
+    await tick()
     expect(sendNotification).toHaveBeenCalledWith({ title: "Done", body: "file.mp4" })
 
     sendNotification.mockClear()
     isPermissionGranted.mockResolvedValue(false)
     notifyDesktop("Done")
-    await new Promise((r) => setTimeout(r, 0))
+    await tick()
     expect(sendNotification).not.toHaveBeenCalled()
   })
 })

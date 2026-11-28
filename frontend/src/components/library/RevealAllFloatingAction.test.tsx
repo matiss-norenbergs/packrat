@@ -1,13 +1,13 @@
 import { Link, Route, Routes } from "react-router-dom"
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { FloatingActionDock } from "@/components/FloatingActionDock"
 import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllContext"
 import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
+import { settleQueries } from "@/test/settle"
 
-afterEach(cleanup)
 
 const PRIVATE_COLLECTION = { id: 1, effectiveIsPrivate: true, totalItemCount: 3 }
 const PUBLIC_COLLECTION = { id: 2, effectiveIsPrivate: false, totalItemCount: 3 }
@@ -45,7 +45,7 @@ describe("RevealAllFloatingAction", () => {
     const fetchFn = serve({ privacy: false, collections: [PRIVATE_COLLECTION] })
     renderWithProviders(<Harness />)
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(4))
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(button()).toBeNull()
   })
 
@@ -57,7 +57,7 @@ describe("RevealAllFloatingAction", () => {
     })
     renderWithProviders(<Harness />)
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(4))
-    await new Promise((r) => setTimeout(r, 20))
+    await settleQueries()
     expect(button()).toBeNull()
   })
 

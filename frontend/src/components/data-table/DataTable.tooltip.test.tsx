@@ -1,14 +1,13 @@
 import type { ReactNode } from "react"
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
 import { DataTable } from "./DataTable"
 import type { ColumnDef } from "./types"
 
 vi.mock("@/lib/api", () => ({ fetchTableLayouts: vi.fn(), saveTableLayout: vi.fn(), deleteTableLayout: vi.fn() }))
-afterEach(cleanup)
 
 // A table with a tableId needs the layouts query; seed it empty so it renders at once.
 function withLayouts(ui: ReactNode) {
@@ -33,8 +32,12 @@ const col = (over: Partial<ColumnDef<Row>> & { key: string }): ColumnDef<Row> =>
   ...over,
 })
 
-const sleep = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)))
-const SHOW = 300 // the 200 ms delay plus slack
+// The tooltip shows after useOverflowTooltip's SHOW_DELAY_MS (200): fake timers advance exactly that, no wall-clock wait.
+const sleep = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
+const SHOW = 200
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+})
 
 // jsdom has no layout: pretend an element's content is wider than its box.
 function overflow(el: Element, scroll = 300, client = 100) {

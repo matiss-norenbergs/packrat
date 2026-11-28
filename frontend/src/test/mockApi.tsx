@@ -4,6 +4,7 @@ import { render } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { vi } from "vitest"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
+import { trackClient } from "./clients"
 
 type Init = RequestInit & { headers: Record<string, string> }
 export type Responder = (url: string, init: Init) => { status: number; body?: unknown; headers?: Record<string, string> }
@@ -31,9 +32,15 @@ export function renderWithProviders(ui: ReactElement, route = "/") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   // Tables with a tableId wait for the account's saved layouts; no saved layouts, so they render at once.
   client.setQueryData(tableLayoutsQueryKey, {})
-  return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-    </QueryClientProvider>,
-  )
+  // `client` is returned (and remembered for `settleQueries()`) so a test can wait for the queries
+  // to go idle before asserting that something never appeared.
+  trackClient(client)
+  return {
+    ...render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+      </QueryClientProvider>,
+    ),
+    client,
+  }
 }

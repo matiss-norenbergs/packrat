@@ -1,10 +1,9 @@
 import { useState } from "react"
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { TotpCodeInput } from "@/components/TotpCodeInput"
 
-afterEach(cleanup)
 
 function Harness({ onComplete }: { onComplete?: (v: string) => void }) {
   const [v, setV] = useState("")

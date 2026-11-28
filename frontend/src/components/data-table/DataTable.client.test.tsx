@@ -1,14 +1,9 @@
 import { useState } from "react"
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { act, fireEvent, render, screen } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { DataTable } from "./DataTable"
 import type { DataTableProps } from "./DataTable"
-
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
-})
 
 interface Row {
   id: number

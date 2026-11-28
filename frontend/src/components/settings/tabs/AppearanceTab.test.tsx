@@ -1,7 +1,7 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { ThemeProvider } from "next-themes"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AppearanceTab } from "@/components/settings/tabs/AppearanceTab"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 
@@ -13,10 +13,6 @@ beforeEach(() => {
   // Radix Select needs these in jsdom.
   Element.prototype.hasPointerCapture ??= () => false
   Element.prototype.scrollIntoView ??= () => {}
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 describe("AppearanceTab", () => {

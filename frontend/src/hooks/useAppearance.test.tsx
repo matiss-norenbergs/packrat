@@ -1,8 +1,8 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
+import { act, renderHook, waitFor } from "@testing-library/react"
 import { ThemeProvider } from "next-themes"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useAppearance, useSyncAppearance } from "@/hooks/useAppearance"
 import { preferencesQueryKey } from "@/hooks/usePreferences"
 import { callsTo, bodyOf, mockFetch } from "@/test/mockApi"
@@ -17,10 +17,6 @@ beforeEach(() => {
   document.documentElement.removeAttribute("data-accent")
   // jsdom has no matchMedia, which next-themes uses for "system".
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 function setup() {

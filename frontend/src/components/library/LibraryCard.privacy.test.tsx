@@ -1,8 +1,8 @@
 import { RouterProvider, createMemoryRouter } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { expectControlsNamed, expectNoPrivateText } from "@/test/a11yNames"
 import { mockFetch } from "@/test/mockApi"
@@ -13,6 +13,8 @@ import { LibraryCard, LibraryCardGrid } from "./LibraryCard"
 import { LibraryCardsProvider } from "./LibraryCardsProvider"
 import { RevealAllProvider } from "./RevealAllContext"
 import { SelectionProvider } from "./SelectionContext"
+import { trackClient } from "@/test/clients"
+import { settleQueries } from "@/test/settle"
 
 // What a screen reader is told (aria-label, alt, title) and what the DOM carries must never include the real name of a
 // private item, tag or artist while the item is blurred and not revealed.
@@ -28,10 +30,6 @@ beforeEach(() => {
     return { status: 200, body: [] }
   })
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const privateItem = {
@@ -50,12 +48,12 @@ const privateItem = {
   activeDownloadId: null,
 } as unknown as LibraryItem
 
-const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 80))))
+const settle = () => settleQueries()
 
 function renderWith(ui: React.ReactNode) {
   const router = createMemoryRouter([{ path: "/", element: ui }], { initialEntries: ["/"] })
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={trackClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }))}>
       <TooltipProvider>
         <RouterProvider router={router} />
       </TooltipProvider>

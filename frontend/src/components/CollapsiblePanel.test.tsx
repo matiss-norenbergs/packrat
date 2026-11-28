@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CollapsiblePanel } from "@/components/CollapsiblePanel"
 
@@ -39,9 +39,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  cleanup()
   vi.restoreAllMocks()
-  vi.unstubAllGlobals()
 })
 
 function panel(key = KEY, open = true, label = "artist images panel", props: SizingProps = {}) {

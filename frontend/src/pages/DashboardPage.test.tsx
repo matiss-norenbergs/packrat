@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { settingsQueryKey } from "@/hooks/useSettings"
 import { DashboardPage } from "@/pages/DashboardPage"
 import type { Settings } from "@/types/api"
+import { flushTasks } from "@/test/settle"
 
 const STATS = {
   activeDownloads: 0,
@@ -43,10 +44,6 @@ beforeEach(() => {
   })
   vi.stubGlobal("fetch", fetchMock)
 })
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 function renderDashboard(seed?: Partial<Settings>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -68,7 +65,7 @@ describe("DashboardPage settings loading", () => {
     expect(screen.getByRole("button", { name: "Dashboard settings" })).toBeDisabled()
     expect(screen.queryByText("Library Growth")).not.toBeInTheDocument()
     expect(screen.queryByText("Items by Resolution")).not.toBeInTheDocument()
-    await new Promise((r) => setTimeout(r, 30))
+    await flushTasks() // the pending settings request never answers: nothing to wait for but the effects
     expect(paths()).toEqual(["/settings"])
   })
 

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { HistoryPage } from "@/pages/HistoryPage"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { HistoryItem } from "@/types/api"
@@ -12,10 +12,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const CREATED = "2026-10-30T12:34:56Z"

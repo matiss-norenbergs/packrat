@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, screen, within } from "@testing-library/react"
+import { fireEvent, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { EligibleItemsDialog } from "@/components/thumbnailenhance/EligibleItemsDialog"
 import { renderWithProviders } from "@/test/mockApi"
 import type { ThumbnailEnhancementEligibleItem } from "@/types/api"
@@ -45,7 +45,6 @@ beforeEach(() => {
   pending = false
   enhanceMutate.mockReset()
 })
-afterEach(() => cleanup())
 
 describe("EligibleItemsDialog", () => {
   it("renders the columns with their cell content and alignment", () => {

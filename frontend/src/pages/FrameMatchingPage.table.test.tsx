@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { fireEvent, screen, waitFor, within } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { FrameMatchingPage } from "@/pages/FrameMatchingPage"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { FrameMatchQueueItem } from "@/types/api"
@@ -16,10 +16,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const item = (id: number, title: string, over: Partial<FrameMatchQueueItem> = {}): FrameMatchQueueItem => ({
