@@ -9,9 +9,11 @@ export function getPageNumbers(current: number, total: number): (number | "ellip
   const sorted = Array.from(pages).sort((a, b) => a - b)
 
   const out: (number | "ellipsis")[] = []
-  for (let i = 0; i < sorted.length; i++) {
-    if (i > 0 && sorted[i] - sorted[i - 1] > 1) out.push("ellipsis")
-    out.push(sorted[i])
+  let prev: number | undefined
+  for (const page of sorted) {
+    if (prev !== undefined && page - prev > 1) out.push("ellipsis")
+    out.push(page)
+    prev = page
   }
   return out
 }

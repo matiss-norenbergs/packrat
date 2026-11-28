@@ -88,6 +88,8 @@ jobs:
       - run: npm run lint
       # Every eslint/oxlint-disable directive must say why (` -- reason`).
       - run: npm run check:disables
+      # src/lib (non-test) compiled with noUncheckedIndexedAccess; see tsconfig.lib-strict.json.
+      - run: npm run typecheck:lib
       - run: npx tsc -b
       - run: npm run test
       - run: npm run build

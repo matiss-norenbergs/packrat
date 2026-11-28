@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "check:bundle": "node scripts/check-bundle.mjs",
     "lint": "oxlint --max-warnings=76",
+    "typecheck:lib": "tsc -p tsconfig.lib-strict.json",
     "check:disables": "node scripts/check-disable-reasons.mjs",
     "preview": "vite preview",
     "test": "vitest run",

@@ -38,3 +38,19 @@ describe("computeSequenceGaps", () => {
     expect(result?.missing).toEqual([2, 4])
   })
 })
+
+describe("computeSequenceGaps edge cases", () => {
+  it("ignores null entries when picking the range", () => {
+    const items = [null, 3, null, 6].map((sequenceNumber) => ({ sequenceNumber }))
+    expect(computeSequenceGaps(items)).toEqual({ min: 3, max: 6, used: [3, 6], missing: [4, 5] })
+  })
+
+  it("is null when duplicates collapse to a single distinct number", () => {
+    expect(computeSequenceGaps([{ sequenceNumber: 2 }, { sequenceNumber: 2 }])).toBeNull()
+  })
+
+  it("sorts unsorted input before finding gaps", () => {
+    const items = [5, 1, 3].map((sequenceNumber) => ({ sequenceNumber }))
+    expect(computeSequenceGaps(items)).toEqual({ min: 1, max: 5, used: [1, 3, 5], missing: [2, 4] })
+  })
+})

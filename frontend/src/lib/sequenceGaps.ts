@@ -15,7 +15,8 @@ export function computeSequenceGaps(items: { sequenceNumber: number | null }[]):
   if (used.length < 2) return null
 
   const min = used[0]
-  const max = used[used.length - 1]
+  const max = used.at(-1)
+  if (min === undefined || max === undefined) return null // unreachable: used has at least two entries
   const usedSet = new Set(used)
   const missing: number[] = []
   for (let n = min; n <= max; n++) {
