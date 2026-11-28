@@ -424,6 +424,12 @@ The list is the shared table (see [Table layouts](#table-layouts) below) with th
   "N items" (and "· M selected"), no Previous / page / Next buttons.
 - **Height**: the list fills the window: the title and toolbar stay put, only the table scrolls, and the footer sits at the bottom
   of the page. On a narrow window the toolbar wraps and the table simply gets shorter.
+- **Large libraries**: with more than 200 rows on the page (pagination off, the default, or a page size over 200) the table keeps
+  only the rows near the window in the page (a few dozen, however many items there are), so it opens, selects and sorts quickly at
+  thousands of items. The scrollbar still covers the whole list, the header stays in view, and select-all, shift ranges and the
+  selected count cover every item. The cost: the browser's find-in-page (Ctrl+F) only finds rows currently shown (use the Library
+  search), and Tab stops at the last row shown. Screen readers are told the real row count and each row's position. Up to 200
+  rows nothing is different.
 
 **Multi-select** (Grid, Folder or List view): check items, then use the **Bulk operations** menu to apply
 an action to the whole selection at once — Edit fields, Assign tags, Set artist, Set year, Generate

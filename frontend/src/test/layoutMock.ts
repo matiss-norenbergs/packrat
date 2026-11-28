@@ -1,8 +1,9 @@
 // jsdom has no layout: every element is 0x0, nothing scrolls, there is no ResizeObserver and `matchMedia` is missing. A
 // windowed list needs all four to decide what to mount, so this fakes them just enough:
 //   - `matchMedia("(min-width: …)")` answers from `setViewportWidth`, and fires `change` on the queries that flip;
-//   - the scroll region (`[data-focus-region]`) is `viewportWidth` x `viewportHeight`; a measured row (`[data-index]`) is
-//     `rowHeight(index)` tall; everything else stays 0;
+//   - the scroll region (`[data-focus-region]`, or a table's `[data-slot=table-container]`) is `viewportWidth` x
+//     `viewportHeight`; a measured row (a grid row with `[data-first-item]`, a table row `tr[data-row-id][data-index]`) is
+//     `rowHeight(index)` tall; a `<thead>` is 40px tall; everything else stays 0;
 //   - `scrollHeight` of the region follows the inline height of its first child (the windowed container);
 //   - `ResizeObserver` reports an observed element once, when it starts observing (nothing resizes by itself);
 //   - `scrollTo` / `scrollTop = n` on an element dispatch a `scroll` event, as a browser would.
@@ -28,9 +29,10 @@ export function installLayoutMock(options: LayoutMockOptions = {}): LayoutMock {
   const rowHeight = options.rowHeight ?? (() => 100)
 
   const sizeOf = (el: Element) => {
-    if (el.hasAttribute("data-focus-region")) return { width, height }
+    if (el.hasAttribute("data-focus-region") || el.getAttribute("data-slot") === "table-container") return { width, height }
     const index = el.getAttribute("data-index")
-    if (index != null && el.hasAttribute("data-first-item")) return { width, height: rowHeight(Number(index)) }
+    if (index != null && (el.hasAttribute("data-first-item") || el.hasAttribute("data-row-id"))) return { width, height: rowHeight(Number(index)) }
+    if (el.tagName === "THEAD") return { width, height: 40 }
     return { width: 0, height: 0 }
   }
 

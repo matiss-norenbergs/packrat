@@ -44,7 +44,7 @@ export default defineConfig(({ mode }) => {
           //  - vendor-react: startup, so it outranks every on-demand group.
           //  - vendor-charts: recharts and its helpers, Dashboard only.
           //  - vendor-dnd / vendor-panels / vendor-calendar / vendor-qr / vendor-virtual:
-          //    libraries one screen uses (Edit Sequence, Artist dialog + date formatting, 2FA setup, the Library's windowed grid).
+          //    libraries one screen uses (Edit Sequence, Artist dialog + date formatting, 2FA setup, the Library's windowed grid and list).
           //  - vendor-tauri: the desktop plugins, only ever dynamically imported.
           //  - vendor: the rest, i.e. what the startup path needs.
           //  - app-shared: components/ui, hooks, lib, types (minus calendar/resizable,

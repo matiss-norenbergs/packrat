@@ -2,12 +2,13 @@ import { Fragment, useCallback, useMemo, useRef, useState } from "react"
 import type { ComponentType, CSSProperties, ReactNode } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useScrollTopOnChange } from "@/hooks/useScrollTopOnChange"
+import { VIRTUALIZE_THRESHOLD } from "@/lib/windowing"
 import { COLUMN_PRESETS } from "./columns"
 import type { ColumnPresetName } from "./columns"
 import { WindowedCells } from "./WindowedCells"
 
-/** The item count above which a `virtualize` grid is windowed; at or below it the grid is the plain DOM grid. */
-export const VIRTUALIZE_THRESHOLD = 200
+/** The item count above which a `virtualize` grid is windowed; at or below it the grid is the plain DOM grid. Shared with DataTable. */
+export { VIRTUALIZE_THRESHOLD }
 
 /**
  * What a custom grid element (`gridComponent`) receives: the classes to put on its element and the built cells.
