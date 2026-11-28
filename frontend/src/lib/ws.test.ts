@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { websocketUrl } from "./server"
 import { connectDownloadsSocket } from "./ws"
 
 let listener: (ev: { data: string }) => void = () => {}
+const opened: { url: string; socket: FakeSocket }[] = []
 class FakeSocket {
+  constructor(url: string) {
+    opened.push({ url, socket: this })
+  }
   addEventListener(_t: string, fn: (ev: { data: string }) => void) {
     listener = fn
   }
@@ -36,5 +41,28 @@ describe("connectDownloadsSocket", () => {
     expect(err).toHaveBeenCalledTimes(1)
     expect(String(err.mock.calls[0][0])).toContain("boom")
     expect(JSON.stringify(err.mock.calls[0])).not.toContain("title-xyz")
+  })
+
+  it("opens the socket at the server's websocket URL and returns that very socket", () => {
+    vi.stubGlobal("WebSocket", FakeSocket)
+    opened.length = 0
+    const socket = connectDownloadsSocket(vi.fn())
+    expect(opened).toHaveLength(1)
+    expect(opened[0].url).toBe(websocketUrl())
+    expect(socket).toBe(opened[0].socket)
+  })
+
+  it("hands every well-formed frame to the handler, parsed and in order", () => {
+    vi.stubGlobal("WebSocket", FakeSocket)
+    const onMessage = vi.fn()
+    connectDownloadsSocket(onMessage)
+    listener({ data: JSON.stringify({ type: "queue_update", payload: { active: 1, queued: 2 } }) })
+    listener({ data: "[]" }) // valid JSON that is not an event: still handed over, the handler's switch ignores it
+    listener({ data: JSON.stringify({ type: "completed", payload: { downloadId: 5 } }) })
+    expect(onMessage.mock.calls.map((c) => c[0])).toEqual([
+      { type: "queue_update", payload: { active: 1, queued: 2 } },
+      [],
+      { type: "completed", payload: { downloadId: 5 } },
+    ])
   })
 })
