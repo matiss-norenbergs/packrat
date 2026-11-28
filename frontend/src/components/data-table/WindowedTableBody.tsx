@@ -10,7 +10,7 @@ const OVERSCAN_ROWS = 8
 /** The sticky header's height until it is measured (`TableHead` is `h-10`). */
 const DEFAULT_HEADER_HEIGHT = 40
 /** A row's height until one has been measured: a 16:9 thumbnail 56px wide (31.5px) in `p-2` cells, plus the row border. */
-export const DEFAULT_ESTIMATE_ROW_HEIGHT = 49
+export const DEFAULT_ESTIMATE_ROW_HEIGHT = 48.5
 
 /** What the windowed body needs from the table; the table keeps everything that knows about rows and columns. */
 export interface WindowedTableBodyProps {
@@ -77,7 +77,8 @@ export default function WindowedTableBody({ count, getKey, renderRow, columnSpan
   // drifting as the user scrolls into new rows.
   const measured = useRef({ heights: new Map<string, number>(), sum: 0 })
   const measureRow = useCallback((el: Element, entry: ResizeObserverEntry | undefined) => {
-    const height = Math.round(entry?.borderBoxSize?.[0]?.blockSize ?? el.getBoundingClientRect().height)
+    // Not rounded (the library's default does): rows are 48.5px with the collapsed border, and over thousands of rows half a pixel each is a scrollbar that ends far from the plain table's.
+    const height = entry?.borderBoxSize?.[0]?.blockSize ?? el.getBoundingClientRect().height
     const m = measured.current
     const key = (el as HTMLElement).dataset.rowId ?? ""
     m.sum += height - (m.heights.get(key) ?? 0)
