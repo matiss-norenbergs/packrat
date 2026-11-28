@@ -1,9 +1,8 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { LibraryPagination } from "./LibraryPagination"
 
-afterEach(cleanup)
 
 describe("LibraryPagination", () => {
   it("shows the item count on the left and the numbered pager", () => {

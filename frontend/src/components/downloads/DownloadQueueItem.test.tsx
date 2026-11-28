@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 import { DownloadQueueItem } from "@/components/downloads/DownloadQueueItem"
 import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -11,7 +11,6 @@ import { expectControlsNamed, expectNoPrivateText } from "@/test/a11yNames"
 import { mockFetch } from "@/test/mockApi"
 import type { Download } from "@/types/api"
 
-afterEach(cleanup)
 beforeEach(() => {
   mockFetch(() => ({ status: 200, body: {} }))
 })

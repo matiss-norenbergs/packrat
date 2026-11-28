@@ -1,5 +1,5 @@
-import { cleanup, screen } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { screen } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 
 let desktop = false
@@ -27,10 +27,6 @@ beforeEach(() => {
     }
     return { status: 200, body: {} }
   })
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 describe("sidebar version row", () => {

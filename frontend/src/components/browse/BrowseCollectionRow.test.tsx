@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, waitFor } from "@testing-library/react"
+import { render, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { BROWSE_COLLECTION_ROW_COUNT, browseCollectionRowParams } from "@/lib/browseRows"
 import { BrowseCollectionRow } from "./BrowseCollectionRow"
@@ -10,7 +10,6 @@ vi.mock("@/lib/api", async (orig) => ({ ...(await orig<typeof import("@/lib/api"
 vi.mock("./BrowseRow", () => ({ BrowseRow: ({ title, items }: { title: string; items: unknown[] }) => <div data-testid="row">{title}:{items.length}</div> }))
 
 afterEach(() => {
-  cleanup()
   fetchLibraryQuery.mockReset()
 })
 

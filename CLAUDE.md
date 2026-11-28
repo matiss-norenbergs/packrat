@@ -45,6 +45,12 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
 - **The running dev container serves whatever image it was last built from.** After ANY backend
   change, rebuild it before verifying — an un-rebuilt container returns "Settings saved" while
   silently ignoring new fields. Confirm with a changed endpoint/field or file on disk, not a toast.
+- **Tests:** `src/test/setup.ts` runs a global `afterEach` (RTL `cleanup`, real timers, `unstubAllGlobals/Envs`, `localStorage`/
+  `sessionStorage` cleared); never hand-write those in a test file. No real-timer sleeps (`setTimeout`-based waits): wait on the
+  observable result (`waitFor`/`findBy*`) or use fake timers (`vi.useFakeTimers({ shouldAdvanceTime: true })` +
+  `vi.advanceTimersByTimeAsync`). A negative assertion ("nothing sent", "stayed closed") needs a positive sentinel proving the
+  relevant work finished (await the handler's promise, flush timers, wait for a later state) or it passes vacuously. Helpers:
+  `src/test/` (`mockApi.tsx`, `layoutMock.ts`, `a11yNames.ts`, `tauriShell.ts`).
 - Verify UI changes in the browser (screenshot + read the DOM/computed styles), not just tsc/tests.
 
 ## Windows dev-machine quirks

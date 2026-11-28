@@ -1,14 +1,9 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import type { LibraryItem } from "@/types/api"
 import { BrowseHero } from "./BrowseHero"
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 function stubReducedMotion(reduce: boolean) {
   const listeners = new Set<() => void>()

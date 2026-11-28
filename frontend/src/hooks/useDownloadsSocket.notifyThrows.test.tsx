@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, renderHook } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { renderHook } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { INVALIDATION_WINDOW_MS } from "@/lib/queryInvalidation"
 import type { WSEvent } from "@/types/ws"
 import { useDownloadsSocket } from "./useDownloadsSocket"
@@ -32,10 +32,6 @@ beforeEach(() => {
   renderHook(() => useDownloadsSocket(), {
     wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
   })
-})
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
 })
 
 describe("a throwing notification never prevents the invalidation in the same case", () => {

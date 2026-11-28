@@ -1,7 +1,7 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 import { BrowseHeader } from "@/components/browse/BrowseHeader"
 import { BrowseHero } from "@/components/browse/BrowseHero"
 import { BrowseShowTile } from "@/components/browse/BrowseShowTile"
@@ -14,10 +14,6 @@ import type { LibraryItem } from "@/types/api"
 beforeEach(() => {
   localStorage.clear()
   mockFetch((url) => (url.endsWith("/settings") ? { status: 200, body: { privacyEnabled: false } } : { status: 404 }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const ITEM = { id: 7, title: "Clip", blurred: false, status: "completed", mediaType: "video", thumbnailSmallPath: null } as unknown as LibraryItem

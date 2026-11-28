@@ -1,11 +1,10 @@
 import type { ReactNode } from "react"
-import { act, cleanup, renderHook } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { act, renderHook } from "@testing-library/react"
+import { describe, expect, it } from "vitest"
 import type { LibraryItem } from "@/types/api"
 import { SelectionProvider, useSelection } from "./SelectionContext"
 import { useLibraryListSelection } from "./useLibraryListSelection"
 
-afterEach(cleanup)
 
 const item = (id: number) => ({ id, title: `Item ${id}` }) as LibraryItem
 const PAGE1 = [1, 2, 3].map(item)

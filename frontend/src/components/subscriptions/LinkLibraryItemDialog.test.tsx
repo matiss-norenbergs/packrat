@@ -1,15 +1,10 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { SubscriptionEntry } from "@/types/api"
 import { LinkLibraryItemDialog } from "./LinkLibraryItemDialog"
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 const entry = { sourceId: "s1", title: "foo" } as unknown as SubscriptionEntry
 const A = { id: 1, title: "Alpha", filename: "a.mp4", tags: [], status: "ready" }

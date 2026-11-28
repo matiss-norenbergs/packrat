@@ -1,12 +1,11 @@
-import { cleanup, screen } from "@testing-library/react"
+import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { PrivateLock } from "@/components/collections/PrivateLock"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { Collection } from "@/types/api"
 
-afterEach(cleanup)
 
 function col(over: Partial<Collection>): Collection {
   return { id: 1, name: "C", parentId: null, isPrivate: false, effectiveIsPrivate: false, ...over } as Collection

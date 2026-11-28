@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, screen, within } from "@testing-library/react"
+import { act, fireEvent, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { KnownItemsDialog } from "@/components/subscriptions/KnownItemsDialog"
 import { renderWithProviders } from "@/test/mockApi"
 import type { Subscription, SubscriptionEntry } from "@/types/api"
@@ -74,7 +74,6 @@ beforeEach(() => {
   seenMutate.mockReset()
   unlinkMutate.mockReset()
 })
-afterEach(() => cleanup())
 
 describe("KnownItemsDialog table", () => {
   it("renders titles, durations, dates and the status badges", () => {

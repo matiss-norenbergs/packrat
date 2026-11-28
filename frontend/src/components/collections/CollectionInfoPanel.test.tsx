@@ -1,14 +1,13 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useState } from "react"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { CollectionInfoPanel } from "@/components/collections/CollectionInfoPanel"
 import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { Collection } from "@/types/api"
 
-afterEach(cleanup)
 
 function col(over: Partial<Collection>): Collection {
   return {

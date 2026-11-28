@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { BulkSetYearDialog } from "@/components/library/BulkSetYearDialog"
 import { bodyOf, callsTo, mockFetch } from "@/test/mockApi"
 import type { LibraryItem } from "@/types/api"
@@ -26,10 +26,6 @@ const item = (id: number, over: Partial<LibraryItem> = {}) => ({ id, title: `Ite
 beforeEach(() => {
   vi.clearAllMocks()
   clear.mockClear()
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 function renderDialog() {

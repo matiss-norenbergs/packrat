@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { act, fireEvent, render, screen } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Tabs, TabsList, TabsTrigger } from "./tabs"
 
 function setLayout(el: HTMLElement, { scrollWidth, clientWidth, scrollLeft }: Record<string, number>) {
@@ -33,10 +33,6 @@ function applyLayout(list: HTMLElement, layout: Record<string, number>) {
 }
 
 describe("TabsList scroll buttons", () => {
-  afterEach(() => {
-    cleanup()
-    vi.useRealTimers()
-  })
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "setTimeout"] })

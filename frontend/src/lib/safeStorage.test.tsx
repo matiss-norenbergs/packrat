@@ -1,4 +1,4 @@
-import { act, cleanup, render, renderHook, screen } from "@testing-library/react"
+import { act, render, renderHook, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -39,8 +39,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   Object.defineProperty(window, "localStorage", realStorage)
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 describe.each(["access", "quota"] as const)("with storage broken (%s)", (mode) => {

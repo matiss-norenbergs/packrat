@@ -1,13 +1,12 @@
 import { useState } from "react"
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import { DataTable } from "./DataTable"
 import type { ColumnDef } from "./types"
 import type { SelectionMode } from "./useTableSelection"
 
-afterEach(cleanup)
 
 interface Row {
   id: number

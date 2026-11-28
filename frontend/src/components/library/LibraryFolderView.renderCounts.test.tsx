@@ -1,6 +1,6 @@
-import { act, cleanup, screen } from "@testing-library/react"
+import { act, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import { LibraryFolderView } from "./LibraryFolderView"
@@ -43,7 +43,6 @@ beforeEach(() => {
     return { status: 200, body: [] }
   })
 })
-afterEach(cleanup)
 
 describe("folder view render counts", () => {
   it("renders the folder tiles first, then the cards, all in one grid", async () => {

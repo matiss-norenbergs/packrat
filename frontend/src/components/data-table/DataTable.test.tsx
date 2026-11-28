@@ -1,11 +1,10 @@
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { DataTable } from "./DataTable"
 import { computeLayout } from "./columns"
 import type { ColumnDef } from "./types"
 
-afterEach(cleanup)
 
 interface Row {
   id: number

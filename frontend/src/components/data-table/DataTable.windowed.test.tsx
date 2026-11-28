@@ -23,7 +23,6 @@ beforeEach(() => {
   layout = installLayoutMock({ viewportWidth: 1280, viewportHeight: 600, rowHeight: () => rowHeight })
 })
 afterEach(() => {
-  cleanup()
   layout.restore()
   resetFocusReturn()
 })

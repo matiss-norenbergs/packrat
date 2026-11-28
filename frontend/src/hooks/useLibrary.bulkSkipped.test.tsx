@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { act, renderHook, waitFor } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { mockFetch } from "@/test/mockApi"
 import { skippedDownloadingNote, withSkippedNote } from "@/lib/bulkSkipped"
 import { useBulkStartFrameMatch } from "./useFrameMatchQueue"
@@ -19,10 +19,6 @@ const wrapper = ({ children }: { children: ReactNode }) => (
   <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>{children}</QueryClientProvider>
 )
 beforeEach(() => vi.clearAllMocks())
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 async function run<T>(hook: () => { mutate: (v: T) => void }, body: unknown, variables: T) {
   mockFetch(() => ({ status: 200, body }))

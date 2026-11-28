@@ -1,6 +1,6 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { DownloadsSection } from "@/components/settings/DownloadsSection"
 
 const invoke = vi.fn()
@@ -29,7 +29,6 @@ function shell(initial: { ask: boolean; folder: { path: string; isDefault: boole
 const DEFAULT = { path: "/home/me/Downloads", isDefault: true }
 
 beforeEach(() => invoke.mockReset())
-afterEach(cleanup)
 
 describe("DownloadsSection", () => {
   it("is off by default and shows the OS Downloads folder", async () => {

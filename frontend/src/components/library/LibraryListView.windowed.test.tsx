@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -20,7 +20,6 @@ beforeEach(() => {
   layout = installLayoutMock({ viewportWidth: 1280, viewportHeight: 600, rowHeight: () => 50 })
 })
 afterEach(() => {
-  cleanup()
   layout.restore()
 })
 

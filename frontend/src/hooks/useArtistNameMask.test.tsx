@@ -1,12 +1,11 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { renderHook, waitFor } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import { hashText } from "@/lib/utils"
 import { mockFetch } from "@/test/mockApi"
 import { maskArtistName, useArtistNameMask } from "./useArtistNameMask"
 
-afterEach(() => vi.unstubAllGlobals())
 
 const wrapper = ({ children }: { children: ReactNode }) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

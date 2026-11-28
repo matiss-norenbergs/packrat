@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, renderHook } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { renderHook } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { WSEvent } from "@/types/ws"
 import { useDownloadsSocket } from "./useDownloadsSocket"
 
@@ -66,10 +66,6 @@ beforeEach(() => {
   reportReachable.mockClear()
   reportNetworkFailure.mockClear()
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-})
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
 })
 
 describe("useDownloadsSocket lifecycle", () => {

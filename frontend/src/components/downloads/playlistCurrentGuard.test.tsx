@@ -1,6 +1,6 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NewDownloadDialog } from "@/components/downloads/NewDownloadDialog"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 
@@ -12,10 +12,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const PURE = "https://example.com/playlist?list=PL1"

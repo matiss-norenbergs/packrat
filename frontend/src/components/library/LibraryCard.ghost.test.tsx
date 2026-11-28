@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { downloadProgressQueryKey } from "@/hooks/useDownloads"
 import { ThumbCell } from "./LibraryListView"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -15,11 +15,6 @@ vi.mock("@/hooks/useSettings", () => ({ useSettings: () => ({ data: { privacyBlu
 vi.mock("@/hooks/useTagNameMask", () => ({ useTagNameMask: () => (t: { name: string }) => t.name }))
 vi.mock("@/hooks/useArtistNameMask", () => ({ useArtistNameMask: () => (n: string) => n }))
 vi.mock("./LibraryItemActionsMenu", () => ({ LibraryItemActionsMenu: () => null }))
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 function item(over: Partial<LibraryItem>): LibraryItem {
   return {

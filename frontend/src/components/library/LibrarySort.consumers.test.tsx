@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { LibraryGrid } from "./LibraryGrid"
 import { LibrarySortProvider } from "./LibrarySortContext"
 import { LibraryToolbar } from "./LibraryToolbar"
@@ -34,10 +34,6 @@ beforeEach(() => {
     return respond({})
   })
   vi.stubGlobal("fetch", fetchMock)
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 function renderLibrary(ui: React.ReactNode) {

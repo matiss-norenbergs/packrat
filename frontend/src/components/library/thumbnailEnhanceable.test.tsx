@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, renderHook, screen, waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { render, renderHook, screen, waitFor } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { BulkSharpenThumbnailsDialog } from "@/components/library/BulkSharpenThumbnailsDialog"
 import { mockFetch } from "@/test/mockApi"
 import type { LibraryItem } from "@/types/api"
@@ -28,10 +28,6 @@ beforeEach(() => {
     return { status: 200, body: [] }
   })
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const make = (over: Partial<LibraryItem>) =>

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { act, cleanup, render, screen } from "@testing-library/react"
+import { act, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { resetFocusReturn } from "@/lib/focusReturn"
 import { installLayoutMock } from "@/test/layoutMock"
@@ -18,7 +18,6 @@ beforeEach(() => {
   layout = installLayoutMock({ viewportWidth: 1280, viewportHeight: 600, rowHeight: () => ROW })
 })
 afterEach(() => {
-  cleanup()
   layout.restore()
   resetFocusReturn()
 })

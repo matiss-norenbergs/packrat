@@ -1,12 +1,11 @@
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { act, renderHook, waitFor } from "@testing-library/react"
+import { describe, expect, it, vi } from "vitest"
 
 let getVersion: () => Promise<string> = () => Promise.resolve("")
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => getVersion() }))
 
 import { useDesktopAppVersion } from "@/hooks/useDesktopAppVersion"
 
-afterEach(cleanup)
 
 describe("useDesktopAppVersion", () => {
   it("is null while loading, then the app version", async () => {

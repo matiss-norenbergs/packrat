@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react"
+import { fireEvent, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { SystemLogView } from "@/components/logs/SystemLogView"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
@@ -26,10 +26,6 @@ beforeEach(() => {
     if (url.includes("/system-events")) return { status: 200, body: { items: EVENTS, total: EVENTS.length } }
     return { status: 200, body: {} }
   })
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const renderLog = () =>

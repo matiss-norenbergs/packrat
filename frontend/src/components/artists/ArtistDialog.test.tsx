@@ -1,12 +1,11 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { ArtistDialog } from "@/components/artists/ArtistDialog"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { bodyOf, callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { Artist } from "@/types/api"
 
-afterEach(cleanup)
 
 const EXISTING: Artist = {
   id: 7,

@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { ReactElement } from "react"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 import { ArtistDialog } from "@/components/artists/ArtistDialog"
 import { CollectionDialog } from "@/components/collections/CollectionDialog"
 import { EditLibraryItemDialog } from "@/components/library/EditLibraryItemDialog"
@@ -19,10 +19,6 @@ import type { Artist, Collection, LibraryItem, Subscription, Tag } from "@/types
 
 beforeEach(() => {
   mockFetch((url) => ({ status: 200, body: url.endsWith("/settings") ? {} : [] }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 function harness(make: (ui: { open: boolean }) => ReactElement) {

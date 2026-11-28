@@ -1,6 +1,6 @@
-import { act, cleanup, screen } from "@testing-library/react"
+import { act, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { SidebarServerSwitcher } from "@/components/ServerSwitcher"
 import { renameProfile } from "@/lib/server"
 import { activateProfile, addProfile, getActiveProfile, isAddingServer } from "@/lib/serverProfiles"
@@ -22,10 +22,6 @@ beforeEach(() => {
   sessionStorage.clear()
   reloadApp.mockReset()
   mockFetch(() => ({ status: 200, body: { version: "1.4.0", latestVersion: "1.4.0", updateAvailable: false } }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 function setup() {

@@ -1,12 +1,11 @@
 import { StrictMode, useState } from "react"
 import type { ReactNode } from "react"
-import { act, cleanup, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { act, render, screen } from "@testing-library/react"
+import { describe, expect, it, vi } from "vitest"
 import { COLUMN_PRESETS } from "./columns"
 import { ResponsiveGrid } from "./ResponsiveGrid"
 import type { GridElementProps, ResponsiveGridProps } from "./ResponsiveGrid"
 
-afterEach(cleanup)
 
 interface Row {
   id: number

@@ -78,8 +78,6 @@ beforeEach(() => {
   localStorage.clear()
 })
 afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 

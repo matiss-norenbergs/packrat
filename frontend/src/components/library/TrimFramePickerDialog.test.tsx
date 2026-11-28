@@ -35,7 +35,6 @@ function renderDialog(data: TrimFramesResponse) {
 }
 
 afterEach(() => {
-  cleanup()
   vi.clearAllMocks()
 })
 

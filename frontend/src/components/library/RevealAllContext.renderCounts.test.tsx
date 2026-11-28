@@ -1,10 +1,9 @@
 import { Profiler, memo } from "react"
 import { RouterProvider, createMemoryRouter, useNavigate } from "react-router-dom"
-import { act, cleanup, render } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { act, render } from "@testing-library/react"
+import { describe, expect, it } from "vitest"
 import { RevealAllProvider, useIsRevealed, useRevealActions } from "./RevealAllContext"
 
-afterEach(cleanup)
 
 describe("reveal render counts", () => {
   const counts = new Map<number, number>()

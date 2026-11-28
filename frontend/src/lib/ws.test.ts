@@ -9,7 +9,6 @@ class FakeSocket {
 }
 
 afterEach(() => {
-  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 

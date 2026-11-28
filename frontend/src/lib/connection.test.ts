@@ -22,7 +22,6 @@ beforeEach(() => {
   ;(globalThis as { __desktop?: boolean }).__desktop = true
 })
 afterEach(() => {
-  vi.useRealTimers()
   delete (globalThis as { __desktop?: boolean }).__desktop
 })
 

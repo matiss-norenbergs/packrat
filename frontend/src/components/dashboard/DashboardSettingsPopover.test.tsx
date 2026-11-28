@@ -1,6 +1,6 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { DashboardSettingsPopover } from "./DashboardSettingsPopover"
 import { DASHBOARD_WIDGETS } from "@/lib/dashboardWidgets"
 
@@ -9,7 +9,6 @@ async function openPopover() {
 }
 
 describe("DashboardSettingsPopover", () => {
-  afterEach(cleanup)
 
   it("lists every widget, checked unless hidden", async () => {
     render(<DashboardSettingsPopover hiddenWidgets={["storage"]} onSave={() => {}} />)

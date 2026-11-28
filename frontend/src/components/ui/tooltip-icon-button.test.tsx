@@ -1,11 +1,10 @@
 import { createRef } from "react"
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { TooltipIconButton } from "@/components/ui/tooltip-icon-button"
 
-afterEach(cleanup)
 
 const renderButton = (ui: React.ReactNode) => render(<TooltipProvider>{ui}</TooltipProvider>)
 

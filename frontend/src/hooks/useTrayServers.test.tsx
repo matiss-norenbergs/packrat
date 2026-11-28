@@ -1,4 +1,4 @@
-import { cleanup, renderHook, waitFor } from "@testing-library/react"
+import { renderHook, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const invoke = vi.fn()
@@ -31,7 +31,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  cleanup()
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
   Object.defineProperty(window, "location", { configurable: true, value: originalLocation })
 })

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AppUpdateEntry } from "@/components/desktop/AppUpdateEntry"
@@ -17,8 +17,6 @@ vi.mock("@/hooks/useMatchServerVersion", () => ({
 
 beforeEach(() => vi.stubGlobal("__TAURI_INTERNALS__", {}))
 afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
   appState = { status: "idle" }
   matchState = { status: "idle" }
 })

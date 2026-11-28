@@ -1,14 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
+import { describe, expect, it } from "vitest"
 import { mockFetch } from "@/test/mockApi"
 import type { LibraryItem } from "@/types/api"
 import { NfoContentDialog } from "./NfoContentDialog"
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 const item = { id: 7, title: "T", generateNfo: false, nfoExists: false } as LibraryItem
 

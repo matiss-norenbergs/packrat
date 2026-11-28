@@ -1,9 +1,8 @@
-import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { render, screen } from "@testing-library/react"
+import { describe, expect, it } from "vitest"
 import { DataTable } from "./DataTable"
 import type { DataTableProps } from "./DataTable"
 
-afterEach(cleanup)
 
 interface Row {
   id: number

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { act, renderHook, waitFor } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { LibrarySortProvider } from "./LibrarySortContext"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
@@ -35,7 +35,6 @@ beforeEach(() => {
   toast.success.mockReset()
   toast.error.mockReset()
 })
-afterEach(cleanup)
 
 const SAVED: TableLayouts = { library: { v: 1, sort: { key: "title", dir: "asc" }, hidden: ["year"], widths: { title: 300 } } }
 

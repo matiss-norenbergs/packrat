@@ -1,13 +1,8 @@
 import { cleanup, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import { SecurityNotice } from "@/components/SecurityNotice"
 import { callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 describe("SecurityNotice", () => {
   it("reports failed attempts and acknowledges on dismiss", async () => {

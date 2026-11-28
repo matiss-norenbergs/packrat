@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
-import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Artist } from "@/types/api"
 import { TopArtistsChart } from "./TopArtistsChart"
 
@@ -39,7 +39,6 @@ describe("TopArtistsChart", () => {
   beforeEach(() => {
     useSettings.mockReturnValue({ data: { privacyEnabled: false } })
   })
-  afterEach(cleanup)
 
   it("shows private artists while privacy is off", () => {
     useArtists.mockReturnValue({ data: [artist(1, 10, true), artist(2, 5)], isLoading: false })

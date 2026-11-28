@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AppUpdatePanel } from "@/components/desktop/AppUpdatePanel"
 
@@ -17,7 +17,6 @@ vi.mock("@/hooks/useMatchServerVersion", () => ({
 }))
 
 afterEach(() => {
-  cleanup()
   appState = { status: "idle" }
   matchState = { status: "idle" }
 })

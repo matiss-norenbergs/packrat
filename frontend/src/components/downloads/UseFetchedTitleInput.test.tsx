@@ -1,11 +1,10 @@
 import { useState } from "react"
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { UseFetchedTitleInput } from "./UseFetchedTitleInput"
 
-afterEach(cleanup)
 
 function Harness({ previewTitle, initial = "" }: { previewTitle?: string; initial?: string }) {
   const [value, setValue] = useState(initial)

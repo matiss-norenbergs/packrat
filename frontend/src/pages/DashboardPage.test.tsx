@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { settingsQueryKey } from "@/hooks/useSettings"
 import { DashboardPage } from "@/pages/DashboardPage"
 import type { Settings } from "@/types/api"
@@ -42,10 +42,6 @@ beforeEach(() => {
     return respond(200, [])
   })
   vi.stubGlobal("fetch", fetchMock)
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 function renderDashboard(seed?: Partial<Settings>) {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { urlToBase64 } from "@/lib/api"
 import { UNAUTHORIZED_EVENT } from "@/lib/server"
 
@@ -13,7 +13,6 @@ function respond(status: number, type: string | null, body: BlobPart = "x") {
     })),
   )
 }
-afterEach(() => vi.unstubAllGlobals())
 
 describe("urlToBase64", () => {
   it.each([401, 404, 500])("rejects with the status on a %i", async (status) => {

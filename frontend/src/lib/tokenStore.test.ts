@@ -51,7 +51,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
-  vi.unstubAllGlobals()
 })
 
 describe("token storage in the shell", () => {

@@ -1,6 +1,6 @@
-import { cleanup, screen } from "@testing-library/react"
+import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NewDownloadDialog } from "@/components/downloads/NewDownloadDialog"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 
@@ -15,10 +15,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const col = (id: number, name: string, extra: Record<string, unknown> = {}) => ({

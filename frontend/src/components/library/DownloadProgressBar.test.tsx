@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react"
+import { describe, expect, it, vi } from "vitest"
 import { downloadProgressQueryKey, downloadsQueryKey, selectDownloadProgress, useDownloadProgress, type DownloadProgressMap } from "@/hooks/useDownloads"
 import { useDownloadsSocket } from "@/hooks/useDownloadsSocket"
 import type { DownloadStatus } from "@/types/api"
@@ -17,11 +17,6 @@ vi.mock("@/lib/ws", () => ({
 }))
 vi.mock("@/lib/notify", () => ({ notifyDesktop: vi.fn(), notifyDesktopAsync: vi.fn(), notifyEvent: vi.fn(), notifyEventAsync: vi.fn() }))
 vi.mock("@/lib/connection", () => ({ reportNetworkFailure: vi.fn(), reportReachable: vi.fn() }))
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 const dl = (id: number, status: DownloadStatus, percent: number) => ({ id, status, percent })
 const toMap = (rows: ReturnType<typeof dl>[]): DownloadProgressMap =>

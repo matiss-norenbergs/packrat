@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { toast } from "sonner"
 import { notifyCollectionRestore } from "@/lib/backupCollections"
 import type { BackupImportLibraryResult, LibraryImportPreview } from "@/types/api"
@@ -8,7 +8,6 @@ import { PreviewItemList } from "./PreviewItemList"
 
 vi.mock("sonner", () => ({ toast: { info: vi.fn(), warning: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-afterEach(cleanup)
 
 const cleanResult: BackupImportLibraryResult = {
   collectionsEnsured: 2,

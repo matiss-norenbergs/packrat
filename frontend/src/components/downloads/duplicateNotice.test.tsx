@@ -1,6 +1,6 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NewDownloadDialog } from "@/components/downloads/NewDownloadDialog"
 import { RedownloadFromUrlDialog } from "@/components/library/RedownloadFromUrlDialog"
 import { duplicateTitle, hashText } from "@/lib/utils"
@@ -15,10 +15,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const SECRET = "My Private Video"

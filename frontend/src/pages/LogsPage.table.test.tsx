@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { LogsPage } from "@/pages/LogsPage"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { DownloadStatus, LogEntry } from "@/types/api"
@@ -24,10 +24,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const CREATED = "2026-10-30T12:34:56Z"

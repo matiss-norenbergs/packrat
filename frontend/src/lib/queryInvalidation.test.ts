@@ -22,7 +22,6 @@ beforeEach(() => {
 afterEach(() => {
   scheduler.dispose()
   setHidden(false)
-  vi.useRealTimers()
 })
 
 describe("createInvalidationScheduler", () => {

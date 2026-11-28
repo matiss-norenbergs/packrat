@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { enterTauri, leaveTauri } from "@/test/tauriShell"
 
@@ -14,7 +14,6 @@ vi.mock("@/components/ServerSwitcher", () => ({ ServerSwitcherMenu: () => null }
 import { DesktopGate } from "@/components/DesktopGate"
 
 afterEach(() => {
-  cleanup()
   leaveTauri()
 })
 

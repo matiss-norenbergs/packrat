@@ -1,6 +1,6 @@
-import { cleanup, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { FloatingActionDock } from "@/components/FloatingActionDock"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -17,10 +17,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 // 51 blurred downloads → two pages (PAGE_SIZE 50). The API returns them

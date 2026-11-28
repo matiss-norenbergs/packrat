@@ -1,6 +1,6 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { hashText } from "@/lib/utils"
 import { expectNoPrivateText } from "@/test/a11yNames"
@@ -13,7 +13,6 @@ vi.mock("@/hooks/useArtistNameMask", () => ({
   useArtistNameMask: () => (_id: number | null | undefined, name: string, revealed: boolean) => (revealed ? name : `#${name.length}-hidden`),
 }))
 
-afterEach(cleanup)
 
 const item = (over: Partial<LibraryItem> = {}) =>
   ({ id: 1, title: "Secret Title", artistId: 4, artistName: "Secret Artist", uploader: "Some Uploader", filename: "a.mp4", path: "m/a.mp4", mediaType: "video", status: "completed", thumbnail: null, blurred: true, tags: [], ...over }) as unknown as LibraryItem

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, useLocation, useSearchParams } from "react-router-dom"
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useLibrarySort } from "@/hooks/useLibrarySort"
 import { hashText } from "@/lib/utils"
@@ -36,10 +36,6 @@ beforeEach(() => {
   Element.prototype.setPointerCapture ??= () => {}
   Element.prototype.releasePointerCapture ??= () => {}
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const PAGE_SIZE = 3

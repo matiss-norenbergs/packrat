@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import {
   ApiError,
   MAX_BULK_ITEMS,
@@ -16,7 +16,6 @@ import {
 } from "@/lib/api"
 import { bodyOf, callsTo, mockFetch } from "@/test/mockApi"
 
-afterEach(() => vi.unstubAllGlobals())
 
 const ok = (body: unknown) => ({ status: 200, body })
 

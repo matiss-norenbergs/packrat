@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { tableLayoutsQueryKey } from "@/hooks/useTableLayout"
 import { ImportPage } from "@/pages/ImportPage"
 import type { ScannedFile, TableLayouts } from "@/types/api"
@@ -59,10 +59,6 @@ beforeEach(() => {
     addListener: () => {},
     removeListener: () => {},
   }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const file = (n: number, over: Partial<ScannedFile> = {}): ScannedFile => ({

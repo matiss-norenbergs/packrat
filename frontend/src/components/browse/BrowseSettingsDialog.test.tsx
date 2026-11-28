@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { RouterProvider, createMemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -23,9 +23,7 @@ beforeEach(() => {
   activateProfile(addProfile("http://nas:50505", "Home").id)
 })
 afterEach(() => {
-  cleanup()
   leaveTauri()
-  vi.unstubAllGlobals()
 })
 
 type Server = { version?: number; settings?: { libraryAutoplay: boolean; browseIgnorePrivacy: boolean } }

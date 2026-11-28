@@ -1,7 +1,7 @@
-import { act, cleanup, fireEvent, screen, within } from "@testing-library/react"
+import { act, fireEvent, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useSearchParams } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { LibraryPage } from "@/pages/LibraryPage"
 import { mockFetch, renderWithProviders } from "@/test/mockApi"
@@ -59,10 +59,6 @@ function serveGated({ settings = {}, total = 60, collections = [] }: Serve & { c
 beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }))
   Element.prototype.scrollIntoView ??= () => {}
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const region = () => screen.getByTestId("library-scroll")

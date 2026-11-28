@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, renderHook } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { renderHook } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { mockFetch } from "@/test/mockApi"
 import type { LibraryItem } from "@/types/api"
 import { toContextMenuItems, useLibraryItemActions, type LibraryItemAction } from "./libraryItemActions"
@@ -13,10 +13,6 @@ beforeEach(() => {
     return { status: 200, body: {} }
   })
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 const base = { id: 1, title: "T", filename: "a.mp4", path: "m/a.mp4", mediaType: "video", status: "complete", originalUrl: "https://x/y", thumbnail: "t.jpg", generateNfo: true, nfoExists: true, tags: [] }

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import { RouterProvider, createMemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AppLayout } from "@/layouts/AppLayout"
@@ -28,9 +28,7 @@ beforeEach(() => {
   )
 })
 afterEach(() => {
-  cleanup()
   leaveTauri()
-  vi.unstubAllGlobals()
 })
 
 function renderAt(path: string) {

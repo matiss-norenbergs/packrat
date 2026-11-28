@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { Link, Outlet, RouterProvider, createMemoryRouter } from "react-router-dom"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { FloatingActionDock } from "@/components/FloatingActionDock"
 import { RevealAllProvider, useRevealAll } from "@/components/library/RevealAllContext"
 import { RevealAllFloatingAction } from "@/components/library/RevealAllFloatingAction"
@@ -16,10 +16,6 @@ beforeEach(() => {
   window.HTMLMediaElement.prototype.pause = () => {}
   window.HTMLMediaElement.prototype.load = () => {}
   mockFetch(serve)
-})
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 function item(id: number) {

@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, screen, within } from "@testing-library/react"
+import { act, fireEvent, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { StrayFilesRow } from "@/components/settings/StrayFilesRow"
 import { renderWithProviders } from "@/test/mockApi"
 import type { StrayFileEntry, StrayFilesResult } from "@/types/api"
@@ -51,7 +51,6 @@ beforeEach(() => {
   delMutate.mockReset()
   toastSuccess.mockReset()
 })
-afterEach(() => cleanup())
 
 describe("StrayFilesRow table", () => {
   it("renders the columns and rows with their alignment, and the footer with the count for one page", async () => {

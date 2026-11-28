@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, renderHook } from "@testing-library/react"
+import { renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { INVALIDATION_WINDOW_MS } from "@/lib/queryInvalidation"
 import { collectionsQueryKey } from "@/lib/queryKeys"
@@ -51,9 +51,7 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
-  cleanup()
   setHidden(false)
-  vi.useRealTimers()
 })
 
 describe("useDownloadsSocket library refresh", () => {

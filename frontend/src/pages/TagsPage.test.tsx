@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import { FloatingActionDock } from "@/components/FloatingActionDock"
 import { RevealAllProvider } from "@/components/library/RevealAllContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -7,11 +7,6 @@ import { hashText } from "@/lib/utils"
 import { TagsPage } from "@/pages/TagsPage"
 import { callsTo, mockFetch, renderWithProviders } from "@/test/mockApi"
 import type { Tag } from "@/types/api"
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
 
 const tag = (id: number, name: string, over: Partial<Tag> = {}): Tag => ({
   id,

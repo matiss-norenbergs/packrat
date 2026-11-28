@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, renderHook } from "@testing-library/react"
+import { act, renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setSocketOpen } from "@/lib/socketState"
 import { useDownloads } from "./useDownloads"
@@ -18,9 +18,7 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 })
 afterEach(() => {
-  cleanup()
   setSocketOpen(false)
-  vi.useRealTimers()
 })
 
 describe("useDownloads safety-net poll", () => {

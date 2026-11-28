@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react"
+import { act, render, screen } from "@testing-library/react"
 import { useRef, type RefObject } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { PlayerSkin } from "./PlayerSkin"
@@ -17,11 +17,9 @@ beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }))
 })
 afterEach(() => {
-  cleanup()
   leaveTauri()
   delete (window as unknown as Record<string, unknown>).PackratAndroid
   bridge = undefined
-  vi.unstubAllGlobals()
 })
 
 function installBridge() {

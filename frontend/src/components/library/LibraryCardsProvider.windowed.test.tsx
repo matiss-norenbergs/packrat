@@ -1,6 +1,6 @@
 import { RouterProvider, createMemoryRouter } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, render, screen } from "@testing-library/react"
+import { act, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ResponsiveGrid } from "@/components/responsive-grid"
@@ -31,9 +31,7 @@ beforeEach(() => {
   layout = installLayoutMock({ viewportWidth: 1280, viewportHeight: 600, rowHeight: () => 280 })
 })
 afterEach(() => {
-  cleanup()
   layout.restore()
-  vi.unstubAllGlobals()
 })
 
 const item = (id: number) =>

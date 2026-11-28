@@ -35,9 +35,7 @@ beforeEach(() => {
   toastError.mockReset()
 })
 afterEach(() => {
-  cleanup()
   delete (window as any).__TAURI_INTERNALS__
-  vi.unstubAllGlobals()
 })
 
 describe("LoginPage without 2FA", () => {

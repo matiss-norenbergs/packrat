@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { enterTauri, leaveTauri } from "@/test/tauriShell"
 
@@ -13,7 +13,6 @@ import { DesktopTab } from "@/components/settings/tabs/DesktopTab"
 
 beforeEach(() => invoke.mockReset().mockResolvedValue(false))
 afterEach(() => {
-  cleanup()
   leaveTauri()
 })
 
