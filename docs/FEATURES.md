@@ -65,7 +65,11 @@ Packrat" in its menu, restores the window; "Quit" exits; with saved servers its 
 submenu — the current one checked, and the tooltip names it — where picking one switches to that server and
 shows the window) goes with **Close to tray** — Settings →
 Desktop, on by default — which makes the window's close button hide the app to the tray instead of
-quitting, so it keeps running. Settings → Desktop is laid out as cards — Servers, Window and startup, Downloads, Updates — with each
+quitting, so it keeps running. The window and tray icons wear the Packrat logo in your primary color
+(Settings → Appearance), following accent and theme changes live and each server's own accent after a
+switch, so the active server is recognizable by its icon (macOS changes only the tray; the installed
+icon and a pinned taskbar shortcut stay the brand purple). The window title and tray tooltip read
+"Packrat — <server name>". Settings → Desktop is laid out as cards — Servers, Window and startup, Downloads, Updates — with each
 setting's explanation in an info popover next to its label. The **Startup** select (Settings → Desktop; "Don't start at login" by default) offers
 "Start at login" and "Start at login, hidden in the tray". Whether it starts at login is the operating
 system's own startup entry (read from the system each time, not a copy of our own), so the select stays

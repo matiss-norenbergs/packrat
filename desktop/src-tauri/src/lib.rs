@@ -12,6 +12,8 @@ mod autostart;
 #[cfg(desktop)]
 mod downloads;
 #[cfg(desktop)]
+mod icon;
+#[cfg(desktop)]
 mod match_update;
 #[cfg(desktop)]
 mod prefs;
@@ -97,7 +99,9 @@ pub fn run() {
         token::token_adopt_legacy,
         token::token_store_kind,
         #[cfg(desktop)]
-        tray::tray_set_servers
+        tray::tray_set_servers,
+        #[cfg(desktop)]
+        icon::set_app_icon
     ]);
     // With "close to tray" on, the close button hides the window and the app keeps running
     // (the tray's Quit really exits).
@@ -144,7 +148,8 @@ fn setup_desktop(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     // Registered before the tray is built: `tray_set_servers` needs it even when the tray fails.
     app.manage(tray::TrayServers::default());
     // A tray that can't be built isn't fatal; it only means the window is always shown.
-    let tray_available = match tray::build(app.handle()) {
+    let saved_icon = icon::load_saved(app.handle());
+    let tray_available = match tray::build(app.handle(), saved_icon.clone()) {
         Ok(()) => tray::is_available(),
         Err(err) => {
             eprintln!("system tray unavailable: {err}");
@@ -160,10 +165,14 @@ fn setup_desktop(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     // The window is built here rather than from tauri.conf.json so it can carry a
     // download handler (see downloads.rs).
     let config = main_window_config(app);
-    WebviewWindowBuilder::from_config(app.handle(), &config)?
+    let mut window = WebviewWindowBuilder::from_config(app.handle(), &config)?
         .visible(!hidden)
-        .on_download(downloads::on_download(app.handle().clone()))
-        .build()?;
+        .on_download(downloads::on_download(app.handle().clone()));
+    // The accent-colored icon of the last run, so the first frame doesn't show the bundled one.
+    if let Some(icon) = saved_icon {
+        window = window.icon(icon)?;
+    }
+    window.build()?;
     Ok(())
 }
 

@@ -8,7 +8,7 @@ use tauri::{
     AppHandle, Emitter, Manager,
 };
 
-const TRAY_ID: &str = "main";
+pub const TRAY_ID: &str = "main";
 const SERVER_PREFIX: &str = "server:";
 /// Event sent to the main window when a server is picked in the tray menu; the payload is the profile id.
 const SWITCH_EVENT: &str = "tray-switch-server";
@@ -28,7 +28,8 @@ pub struct ServerItem {
     pub checked: bool,
 }
 
-/// What the tray should show for a list of servers: the submenu items (empty = no submenu) and the tooltip.
+/// What the tray should show for a list of servers: the submenu items (empty = no submenu) and the
+/// tooltip, which is also the main window's title.
 #[derive(Debug, PartialEq)]
 pub struct TrayPlan {
     pub items: Vec<ServerItem>,
@@ -100,10 +101,14 @@ fn build_menu(app: &AppHandle, items: &[ServerItem]) -> tauri::Result<Menu<tauri
 }
 
 fn apply(app: &AppHandle, servers: &[ServerEntry], active_id: Option<&str>) -> tauri::Result<()> {
+    let plan = plan(servers, active_id);
+    // The tooltip text doubles as the window title (Alt-Tab, taskbar hover), tray or no tray.
+    if let Some(window) = app.get_webview_window("main") {
+        window.set_title(&plan.tooltip)?;
+    }
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return Ok(());
     };
-    let plan = plan(servers, active_id);
     let menu = build_menu(app, &plan.items)?;
     // Replace the whole menu rather than updating items: in-place updates are unreliable on Linux.
     tray.set_menu(Some(menu))?;
@@ -185,13 +190,17 @@ pub fn is_available() -> bool {
 }
 
 /// Tray icon: left click (or "Show Packrat") restores the window, "Quit" exits the app for real.
-pub fn build(app: &AppHandle) -> tauri::Result<()> {
+/// `icon` is the saved accent-colored one from the last run (see icon.rs); without it the bundled icon is used.
+pub fn build(app: &AppHandle, icon: Option<Image<'static>>) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show Packrat", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &quit])?;
 
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(Image::from_bytes(include_bytes!("../icons/icon.png"))?)
+        .icon(match icon {
+            Some(icon) => icon,
+            None => Image::from_bytes(include_bytes!("../icons/icon.png"))?,
+        })
         .tooltip("Packrat")
         .menu(&menu)
         .show_menu_on_left_click(false)
