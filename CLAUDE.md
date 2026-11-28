@@ -50,7 +50,8 @@ shadcn frontend, shipped as one Docker image. Single admin user, session auth + 
   observable result (`waitFor`/`findBy*`) or use fake timers (`vi.useFakeTimers({ shouldAdvanceTime: true })` +
   `vi.advanceTimersByTimeAsync`). A negative assertion ("nothing sent", "stayed closed") needs a positive sentinel proving the
   relevant work finished (await the handler's promise, flush timers, wait for a later state) or it passes vacuously. Helpers:
-  `src/test/` (`mockApi.tsx`, `layoutMock.ts`, `a11yNames.ts`, `tauriShell.ts`).
+  `src/test/` (`mockApi.tsx`, `settle.ts` (`flushTasks`, `settleQueries`), `clients.ts`, `tick.ts`, `layoutMock.ts`, `a11yNames.ts`, `tauriShell.ts`).
+  The suite runs on Vitest's `vmThreads` pool: don't redefine `window.location` (stub `reloadApp` from `lib/server`).
 - Verify UI changes in the browser (screenshot + read the DOM/computed styles), not just tsc/tests.
 
 ## Windows dev-machine quirks
