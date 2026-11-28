@@ -150,6 +150,23 @@ isn't wired up yet.
   known the moment the close button is pressed; the frontend reads and writes it through the
   `get_close_to_tray`/`set_close_to_tray` commands. On Linux the tray needs a desktop that shows
   app-indicator icons (GNOME needs an extension).
+- **Accent-colored window and tray icon** — so the active server can be told apart by its icon, the
+  window icon (title bar, taskbar, Alt-Tab) and the tray icon show the Packrat logo in the account's
+  primary color (Settings → Appearance), the same picture as the in-app logo. The webview draws it
+  (`frontend/src/lib/appIcon.ts`: the shapes shared with `PackratLogo` via `lib/logoShape.ts`, the
+  `--primary`/`--primary-foreground` colors resolved to hex through a canvas, SVG → 256×256 PNG) and
+  `frontend/src/hooks/useDesktopIcon.ts` sends the bytes to the `set_app_icon` command
+  (`src/icon.rs`; it needs no capability permission, like `tray_set_servers`). Rust accepts only a PNG
+  of at most 1 MiB, sets it on the `main` window and on the tray (no tray is not an error) and keeps the
+  last one as `app-icon.png` next to `desktop.json`, so the next start builds the window and tray with it
+  and never flashes the bundled icon. The hook waits until the account's accent is known (the login
+  screen leaves the bundled icon), re-sends on an accent or theme change (Monochrome flips with the
+  theme; a burst is debounced, an unchanged color is not re-sent) and does nothing on the web or Android.
+  A server switch reloads the app, so the new server's accent applies once its preferences load. The
+  window title follows the tray tooltip — "Packrat — <active server>", "Packrat" without one — and is set
+  by `tray_set_servers`. Limits: the installed icon (exe, Start menu, a pinned taskbar shortcut) stays
+  the static brand icon; macOS has no per-window icon, so only the tray changes there; on Linux the
+  window icon works and the tray follows wherever the tray works.
 - **Launch at login** — Settings → Desktop → Startup ("Don't start at login" by default); the page calls the
   shell's `autostart_is_enabled` / `autostart_set` commands (`src-tauri/src/autostart.rs`). Linux and macOS
   use `tauri-plugin-autostart`; Windows writes the `Run` value itself, because the plugin leaves the
