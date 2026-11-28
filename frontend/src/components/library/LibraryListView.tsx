@@ -238,6 +238,8 @@ export function LibraryListView() {
         search={{ value: toolbar.search, onChange: (value) => toolbar.update("q", value || null), placeholder: "Search library…" }}
         layoutActions={<LibrarySettingsPopover t={toolbar} compact />}
         containerClassName="relative h-full w-full overflow-auto rounded-md border"
+        // Pagination is off by default, so the list can be the whole library: only the rows near the viewport are mounted (above 200 rows).
+        virtualize
         rows={items}
         getRowId={getItemId}
         columns={COLUMNS}
