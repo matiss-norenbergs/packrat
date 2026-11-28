@@ -162,6 +162,12 @@ None are scheduled. Sizes are guesses.
 
 - **Node 22 to the next LTS (S).** Moved by hand across the Dockerfile and the three workflows (Dependabot
   ignores Node major versions on purpose). Do it when 22 nears end of life.
+- **Unpin oxlint (M).** `oxlint` is pinned to exactly `1.91.0` in `frontend/package.json` (no caret), and
+  `.github/dependabot.yml` ignores newer versions, because 1.95.0 reports 97 warnings against the 76 ratchet
+  (21 more: `react/set-state-in-effect` +19 (18 → 37), a new `react/refs` rule +4 (all in
+  `components/library/useCompareGroup.ts`), `react/immutability` −2 (9 → 7)). To unpin: fix those warnings,
+  lower `--max-warnings` in `frontend/package.json` to the new real count (never raise it), restore the caret
+  range, and remove the oxlint `ignore` entry from `dependabot.yml`.
 
 ## Frontend tooling
 

@@ -32,6 +32,11 @@ updates:
       - dependency-name: "@types/node"
         update-types:
           - "version-update:semver-major"
+      # oxlint is pinned at 1.91.0: newer versions report more warnings than the lint ratchet allows.
+      # See docs/TODO.md, "Unpin oxlint", for how to lift this.
+      - dependency-name: "oxlint"
+        versions:
+          - ">1.91.x"
     groups:
       frontend-minor-patch:
         update-types:
