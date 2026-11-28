@@ -60,7 +60,8 @@ export default function WindowedTableBody({ count, getKey, renderRow, columnSpan
   // The sticky header sits above the first row inside the scroll container, so rows start that far down.
   const [headerHeight, setHeaderHeight] = useState(DEFAULT_HEADER_HEIGHT)
   useLayoutEffect(() => {
-    const h = scrollEl?.querySelector("thead")?.offsetHeight
+    // Fractional (the collapsed border makes it 40.5px): offsetHeight rounds, and the first row would sit a fraction of a pixel off.
+    const h = scrollEl?.querySelector("thead")?.getBoundingClientRect().height
     if (h && h !== headerHeight) setHeaderHeight(h)
   }, [scrollEl, headerHeight])
 
