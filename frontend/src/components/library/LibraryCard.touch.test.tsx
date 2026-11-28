@@ -13,7 +13,7 @@ import { RevealAllProvider } from "./RevealAllContext"
 import { SelectionProvider } from "./SelectionContext"
 
 // The card's select checkbox is hover-revealed with a mouse; on touch it is always shown and gets a 44 px tap area
-// (a 20 px checkbox, 12 px inset). The ⋮ stays 28 px on purpose and is not asserted here.
+// (a 20 px checkbox with a 2 px border, 14 px inset). The ⋮ stays 28 px on purpose and is not asserted here.
 const item = {
   id: 1, title: "Clip", filename: "f.mp4", path: "m/f.mp4", mediaType: "video", status: "completed",
   originalUrl: "https://x/y", thumbnail: "t.jpg", blurred: false, tags: [], activeDownloadId: null,
@@ -51,7 +51,7 @@ describe("LibraryCard select checkbox on touch", () => {
     )
     await settleQueries()
     const box = screen.getByRole("checkbox", { name: "Select Clip" })
-    expect(box).toHaveClass("pointer-coarse:opacity-100", "pointer-coarse:after:-inset-3", "pointer-coarse:after:absolute")
+    expect(box).toHaveClass("pointer-coarse:opacity-100", "pointer-coarse:after:-inset-3.5", "pointer-coarse:after:absolute")
     expect(box).toHaveClass("opacity-0", "group-hover:opacity-100", "focus-visible:opacity-100", "absolute")
   })
 })

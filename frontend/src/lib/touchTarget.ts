@@ -13,8 +13,8 @@ export const TOUCH_HIT_AREA =
 const HIT_AREA_BY_SIZE = {
   // 12 px icon + p-0.5
   16: "pointer-coarse:after:absolute pointer-coarse:after:-inset-3.5 pointer-coarse:after:content-['']",
-  // size-5 checkbox
-  20: "pointer-coarse:after:absolute pointer-coarse:after:-inset-3 pointer-coarse:after:content-['']",
+  // size-5 checkbox with border-2: the inset is measured from the padding box, so 12 + 2 px of border
+  20: "pointer-coarse:after:absolute pointer-coarse:after:-inset-3.5 pointer-coarse:after:content-['']",
   // 16 px icon + p-1
   24: "pointer-coarse:after:absolute pointer-coarse:after:-inset-2.5 pointer-coarse:after:content-['']",
   // 14 px icon + p-1.5
