@@ -825,7 +825,7 @@ collection's Artist default — see Collections above).
 **Image gallery (optional)** — build a gallery of images for an artist and pick one as their
 display picture (shown wherever the artist is represented, e.g. Browse). Add images from suggested
 candidates (thumbnails already used by that artist's own library items) or by uploading directly.
-Removing the currently-selected image automatically clears the selection (falls back to an
+The dialog's Delete button on an image always asks first (Cancel or Escape keeps the image; the question says when it is the display image) because deleting removes the file from disk; "Remove selected image" on the large preview only clears the selection and keeps the file, so it does not ask. Removing the currently-selected image automatically clears the selection (falls back to an
 auto-picked image); removing any other gallery image is unaffected. An image can only be removed through
 its own artist — asking to delete another artist's image is refused ("image does not belong to this
 artist") and changes nothing, and the removal and the selection reset happen together.
