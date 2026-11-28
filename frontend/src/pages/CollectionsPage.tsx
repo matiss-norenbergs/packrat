@@ -71,7 +71,7 @@ export function CollectionsPage() {
   const allIds = tree.flatMap(collectDescendantIds)
   const { tree: visibleTree, matchAncestorIds } = useMemo(
     () => filterCollectionTree(tree, search),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tree is rebuilt every render from data; re-filter only when data or the search text change
     [data, search],
   )
   // Pagination counts only top-level (root) collections — a page shows up
@@ -104,7 +104,7 @@ export function CollectionsPage() {
   // is active, rather than only applying it once at mount.
   useEffect(() => {
     if (allExpanded) setExpandedIds(new Set(allIds))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- allIds is a new array every render and derives from data; re-sync only when data or the mode change
   }, [allExpanded, data])
 
   const editTarget = size === 1 ? data?.find((c) => selected.has(c.id)) : undefined

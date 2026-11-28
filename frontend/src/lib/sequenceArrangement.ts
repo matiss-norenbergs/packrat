@@ -32,7 +32,7 @@ export interface PositionEntry {
 export function normalizeHead(state: ArrangementState): ArrangementState {
   if (state.sequencedList.length === 0) return state
   const head = state.sequencedList[0]
-  if (head.gapBefore === 0) return state
+  if (!head || head.gapBefore === 0) return state
   return {
     ...state,
     leadingGap: state.leadingGap + head.gapBefore,
@@ -68,18 +68,20 @@ export function seedSequenceArrangement(items: LibraryItem[], expectedMax?: numb
     .sort((a, b) => a.downloadedAt.localeCompare(b.downloadedAt))
 
   const sequencedList: SequencedEntry[] = withSeq.map((item, i) => {
-    if (i === 0) return { item, gapBefore: 0 }
     const prev = withSeq[i - 1]
+    if (!prev) return { item, gapBefore: 0 } // the first item: its space lives in leadingGap
     return { item, gapBefore: Math.max(0, item.sequenceNumber - prev.sequenceNumber - 1) }
   })
 
-  let leadingGap = withSeq.length > 0 ? Math.max(0, withSeq[0].sequenceNumber - 1) : 0
+  const first = withSeq[0]
+  const last = withSeq.at(-1)
+  let leadingGap = first ? Math.max(0, first.sequenceNumber - 1) : 0
   let trailingGap = 0
   if (expectedMax != null) {
-    if (withSeq.length === 0) {
+    if (!last) {
       leadingGap = expectedMax
     } else {
-      trailingGap = Math.max(0, expectedMax - withSeq[withSeq.length - 1].sequenceNumber)
+      trailingGap = Math.max(0, expectedMax - last.sequenceNumber)
     }
   }
 
@@ -115,10 +117,15 @@ export function positionMap(leadingGap: number, list: SequencedEntry[], trailing
     }
     return result
   }
-  const numbers = computeDisplayNumbers(leadingGap, list)
+  // Same walk as computeDisplayNumbers; after it, n - 1 is the last entry's number.
   const byNumber = new Map<number, LibraryItem>()
-  list.forEach((entry, i) => byNumber.set(numbers[i], entry.item))
-  const max = numbers[numbers.length - 1] + trailingGap
+  let n = 1 + leadingGap
+  for (const entry of list) {
+    n += entry.gapBefore
+    byNumber.set(n, entry.item)
+    n += 1
+  }
+  const max = n - 1 + trailingGap
   const result: PositionEntry[] = []
   for (let p = 1; p <= max; p++) {
     result.push({ position: p, occupant: byNumber.get(p) ?? null })
@@ -199,10 +206,11 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
   // last afterward), trailingGap is simply re-derived at the very end of
   // each branch from whatever the actual final last number turns out to
   // be: fixedMaxExtent minus that number.
-  const fixedMaxExtent = numbers[numbers.length - 1] + state.trailingGap
+  const lastOriginalNumber = numbers.at(-1)
+  if (lastOriginalNumber === undefined) return state // unreachable: sequencedList is non-empty here
+  const fixedMaxExtent = lastOriginalNumber + state.trailingGap
   const trailingGapFor = (finalLeadingGap: number, finalList: SequencedEntry[]): number => {
-    const finalNumbers = computeDisplayNumbers(finalLeadingGap, finalList)
-    const lastNumber = finalNumbers.length > 0 ? finalNumbers[finalNumbers.length - 1] : 0
+    const lastNumber = computeDisplayNumbers(finalLeadingGap, finalList).at(-1) ?? 0
     return Math.max(0, fixedMaxExtent - lastNumber)
   }
 
@@ -215,12 +223,14 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
     let sequencedList = state.sequencedList
     let unsequencedList = state.unsequencedList
     let mover: LibraryItem | undefined
-    if (seqIdx !== -1) {
-      mover = sequencedList[seqIdx].item
-      const removedGap = sequencedList[seqIdx].gapBefore
+    const moverEntry = seqIdx !== -1 ? sequencedList[seqIdx] : undefined
+    if (moverEntry) {
+      mover = moverEntry.item
+      const removedGap = moverEntry.gapBefore
       const newList = [...sequencedList.slice(0, seqIdx), ...sequencedList.slice(seqIdx + 1)]
-      if (removedGap > 0 && newList.length > seqIdx) {
-        newList[seqIdx] = { ...newList[seqIdx], gapBefore: newList[seqIdx].gapBefore + removedGap }
+      const successor = newList[seqIdx]
+      if (removedGap > 0 && successor) {
+        newList[seqIdx] = { ...successor, gapBefore: successor.gapBefore + removedGap }
       }
       sequencedList = newList
     } else {
@@ -230,6 +240,8 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
     if (!mover) return state
 
     const idx = sequencedList.findIndex((e) => e.item.id === targetId)
+    const targetEntry = sequencedList[idx]
+    if (!targetEntry) return state // the occupant is always in the list; never splice at -1
 
     if (movingForward) {
       const newList = [...sequencedList]
@@ -242,9 +254,9 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
       })
     }
 
-    const inherited = sequencedList[idx].gapBefore
+    const inherited = targetEntry.gapBefore
     const newList = [...sequencedList]
-    newList[idx] = { ...newList[idx], gapBefore: 0 }
+    newList[idx] = { ...targetEntry, gapBefore: 0 }
     newList.splice(idx, 0, { item: mover, gapBefore: inherited })
     return normalizeHead({
       sequencedList: newList,
@@ -265,9 +277,9 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
   } else {
     const idx = numbers.findIndex((n) => n > targetPosition)
     afterIdxOriginal = idx === -1 ? state.sequencedList.length : idx
-    if (afterIdxOriginal > 0) beforeId = state.sequencedList[afterIdxOriginal - 1].item.id
+    if (afterIdxOriginal > 0) beforeId = state.sequencedList[afterIdxOriginal - 1]?.item.id ?? null
   }
-  const afterId = afterIdxOriginal < state.sequencedList.length ? state.sequencedList[afterIdxOriginal].item.id : null
+  const afterId = state.sequencedList[afterIdxOriginal]?.item.id ?? null
 
   const moverIsBefore = seqIdx !== -1 && beforeId === itemId
   const moverIsAfter = seqIdx !== -1 && afterId === itemId
@@ -282,9 +294,9 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
     if (moverIsBefore) {
       // beforeEntity is the mover itself — use ITS original predecessor.
       const beforeIdxOriginal = afterIdxOriginal - 1
-      predecessorNumber = beforeIdxOriginal > 0 ? numbers[beforeIdxOriginal - 1] : state.leadingGap
+      predecessorNumber = numbers[beforeIdxOriginal - 1] ?? state.leadingGap // index -1 (no predecessor) -> the leading gap
     } else {
-      predecessorNumber = numbers[afterIdxOriginal - 1]
+      predecessorNumber = numbers[afterIdxOriginal - 1] ?? state.leadingGap
     }
     moverGapBefore = targetPosition - predecessorNumber - 1
   }
@@ -297,12 +309,13 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
   // afterId is already null, so remainderOwnerId naturally stays null —
   // there's nothing after the mover, its landing spot becomes the new end.
   let remainderOwnerId: number | null = afterId
-  let remainderNumber = afterId !== null ? numbers[afterIdxOriginal] : 0
+  let remainderNumber = numbers[afterIdxOriginal] ?? 0 // no entry after the gap (trailing gap): unused
   if (moverIsAfter) {
-    const grandAfterIdx = afterIdxOriginal + 1
-    if (grandAfterIdx < state.sequencedList.length) {
-      remainderOwnerId = state.sequencedList[grandAfterIdx].item.id
-      remainderNumber = numbers[grandAfterIdx]
+    const grandAfter = state.sequencedList[afterIdxOriginal + 1]
+    const grandAfterNumber = numbers[afterIdxOriginal + 1]
+    if (grandAfter && grandAfterNumber !== undefined) {
+      remainderOwnerId = grandAfter.item.id
+      remainderNumber = grandAfterNumber
     } else {
       remainderOwnerId = null // mover was the last item — nothing to attach the remainder to
     }
@@ -313,8 +326,9 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
   let sequencedList = state.sequencedList
   let unsequencedList = state.unsequencedList
   let mover: LibraryItem | undefined
-  if (seqIdx !== -1) {
-    mover = sequencedList[seqIdx].item
+  const gapMoverEntry = seqIdx !== -1 ? sequencedList[seqIdx] : undefined
+  if (gapMoverEntry) {
+    mover = gapMoverEntry.item
     sequencedList = [...sequencedList.slice(0, seqIdx), ...sequencedList.slice(seqIdx + 1)]
   } else {
     mover = unsequencedList.find((i) => i.id === itemId)
@@ -324,7 +338,11 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
 
   if (remainderOwnerId !== null) {
     const ridx = sequencedList.findIndex((e) => e.item.id === remainderOwnerId)
-    sequencedList[ridx] = { ...sequencedList[ridx], gapBefore: remainderGap }
+    const remainderEntry = sequencedList[ridx]
+    if (!remainderEntry) return state // the owner is always in the list; never write at index -1
+    // Copy first: for an unsequenced mover this is still state.sequencedList, and the caller's state must not change.
+    sequencedList = [...sequencedList]
+    sequencedList[ridx] = { ...remainderEntry, gapBefore: remainderGap }
   }
 
   if (beforeId === null) {
@@ -335,6 +353,7 @@ export function moveToPosition(state: ArrangementState, itemId: number, targetPo
       sequencedList = [...sequencedList, { item: mover, gapBefore: moverGapBefore }]
     } else {
       const iidx = sequencedList.findIndex((e) => e.item.id === insertBeforeId)
+      if (iidx === -1) return state // never splice at -1 (that would insert before the last entry)
       sequencedList = [...sequencedList]
       sequencedList.splice(iidx, 0, { item: mover, gapBefore: moverGapBefore })
     }

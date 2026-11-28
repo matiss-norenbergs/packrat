@@ -586,3 +586,87 @@ describe("buildRenderNodes", () => {
     ])
   })
 })
+
+describe("moveToPosition purity", () => {
+  it("never mutates the incoming state when an unsequenced item lands in an interior gap", () => {
+    // 1, [gap 2..3], 4: placing an unsequenced item at 2 rewrites the gap owner's gapBefore.
+    const a = makeItem({ id: 1, sequenceNumber: 1 })
+    const b = makeItem({ id: 2, sequenceNumber: 4 })
+    const u = makeItem({ id: 3 })
+    const state: ArrangementState = seedSequenceArrangement([a, b, u])
+    const before = structuredClone(state)
+    const next = moveToPosition(state, u.id, 2)
+    expect(state).toEqual(before)
+    expect(next.sequencedList.map((e) => [e.item.id, e.gapBefore])).toEqual([
+      [1, 0],
+      [3, 0],
+      [2, 1],
+    ])
+  })
+})
+
+describe("sequenceArrangement edge cases", () => {
+  const a = makeItem({ id: 1 })
+  const b = makeItem({ id: 2 })
+
+  it("seed: empty input gives an empty arrangement, and expectedMax folds into leadingGap", () => {
+    expect(seedSequenceArrangement([])).toEqual({ sequencedList: [], leadingGap: 0, trailingGap: 0, unsequencedList: [] })
+    expect(seedSequenceArrangement([], 5).leadingGap).toBe(5)
+  })
+
+  it("seed: a single sequenced item gets no gapBefore and a trailing gap up to the max", () => {
+    const only = makeItem({ id: 7, sequenceNumber: 3 })
+    const seeded = seedSequenceArrangement([only], 6)
+    expect(seeded.sequencedList.map((e) => e.gapBefore)).toEqual([0])
+    expect(seeded.leadingGap).toBe(2)
+    expect(seeded.trailingGap).toBe(3)
+  })
+
+  it("seed: sequence number 0 or below never makes a negative leading gap", () => {
+    expect(seedSequenceArrangement([makeItem({ id: 1, sequenceNumber: 0 })]).leadingGap).toBe(0)
+    expect(seedSequenceArrangement([makeItem({ id: 1, sequenceNumber: -4 })]).leadingGap).toBe(0)
+  })
+
+  it("positionMap: an empty list without a leading gap has no positions, even with a trailing gap", () => {
+    expect(positionMap(0, [], 3)).toEqual([])
+  })
+
+  it("moveToPosition: an unknown item id is a no-op (occupied target)", () => {
+    const state: ArrangementState = { sequencedList: [entry(a), entry(b)], leadingGap: 0, trailingGap: 0, unsequencedList: [] }
+    expect(moveToPosition(state, 999, 2)).toBe(state)
+  })
+
+  it("moveToPosition: an unknown item id is a no-op (gap target)", () => {
+    const state: ArrangementState = { sequencedList: [entry(a), entry(b, 2)], leadingGap: 0, trailingGap: 0, unsequencedList: [] }
+    expect(moveToPosition(state, 999, 2)).toBe(state)
+  })
+
+  it("moveToPosition: position 0, negative and past-the-end are no-ops", () => {
+    const state: ArrangementState = { sequencedList: [entry(a), entry(b)], leadingGap: 0, trailingGap: 0, unsequencedList: [makeItem({ id: 3 })] }
+    for (const pos of [0, -1, 3, 100]) expect(moveToPosition(state, 3, pos)).toBe(state)
+  })
+
+  it("moveToPosition: bootstrapping with an unknown id or position < 1 is a no-op", () => {
+    const state: ArrangementState = { sequencedList: [], leadingGap: 0, trailingGap: 0, unsequencedList: [a] }
+    expect(moveToPosition(state, 999, 1)).toBe(state)
+    expect(moveToPosition(state, 1, 0)).toBe(state)
+  })
+
+  it("moveToPosition: moving into the trailing gap from the unsequenced list leaves the input untouched", () => {
+    const u = makeItem({ id: 3 })
+    const state: ArrangementState = { sequencedList: [entry(a), entry(b)], leadingGap: 0, trailingGap: 3, unsequencedList: [u] }
+    const before = structuredClone(state)
+    const next = moveToPosition(state, 3, 4)
+    expect(state).toEqual(before)
+    expect(next.sequencedList.map((e) => [e.item.id, e.gapBefore])).toEqual([[1, 0], [2, 0], [3, 1]])
+    expect(next.trailingGap).toBe(1)
+  })
+
+  it("normalizeHead: never returns a head with a gap, whatever the list", () => {
+    const state: ArrangementState = { sequencedList: [entry(a, 3), entry(b, 1)], leadingGap: 2, trailingGap: 0, unsequencedList: [] }
+    const out = normalizeHead(state)
+    expect(out.leadingGap).toBe(5)
+    expect(out.sequencedList[0]?.gapBefore).toBe(0)
+    expect(out.sequencedList[1]?.gapBefore).toBe(1)
+  })
+})

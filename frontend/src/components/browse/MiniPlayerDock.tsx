@@ -34,7 +34,7 @@ export function MiniPlayerDock() {
     const el = mediaRef.current
     if (!el || !miniPlayer) return
     return syncMediaOnReady(el, miniPlayer.startTime, !miniPlayer.paused)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-attach only when a different media element mounts (item path); start time and paused are read at that moment
   }, [miniPlayer?.item.path])
 
   if (!miniPlayer) return null

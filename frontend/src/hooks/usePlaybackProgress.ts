@@ -40,6 +40,6 @@ export function usePlaybackProgress<T extends HTMLMediaElement>(mediaRef: RefObj
       // whatever progress happened since the last periodic save is lost.
       save()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-attach only per item/enabled; updateProgress and mediaRef are not stable, and the current element is read at that moment
   }, [itemId, enabled])
 }

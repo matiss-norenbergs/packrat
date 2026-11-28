@@ -71,7 +71,7 @@ export function DownloadsPage() {
   // item it refers to is no longer on screen.
   useEffect(() => {
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear on page change only; clear is re-created every render
   }, [page])
 
   // The live poll can shrink the list out from under the current page

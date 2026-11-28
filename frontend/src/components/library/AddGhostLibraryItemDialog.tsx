@@ -76,7 +76,7 @@ export function AddGhostLibraryItemDialog({ open, onOpenChange }: AddGhostLibrar
     }
     const timer = setTimeout(() => setDebouncedUrl(trimmedUrl), 500)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- trimmedUrl/looksLikeUrl are derived from url; the debounce restarts on url edits only
   }, [url])
 
   // Prefills Title from the fetched metadata the first time a preview
@@ -85,7 +85,7 @@ export function AddGhostLibraryItemDialog({ open, onOpenChange }: AddGhostLibrar
     if (preview && !preview.isPlaylist) {
       setTitle((t) => t || preview.title)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill once per resolved preview; re-running when the title changes would fight what the user typed
   }, [preview])
 
   const itemCollection = collections?.find((c) => String(c.id) === collectionId)

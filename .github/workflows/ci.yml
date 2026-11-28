@@ -84,12 +84,19 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      # Ratchet: --max-warnings in package.json only ever goes down.
       - run: npm run lint
-      - run: npx tsc -b
+      # Every eslint/oxlint-disable directive must say why (` -- reason`).
+      - run: npm run check:disables
+      # src/lib (non-test) compiled with noUncheckedIndexedAccess; see tsconfig.lib-strict.json.
+      - run: npm run typecheck:lib
       - run: npm run test
+      # `build` runs `tsc -b` first, so the type check is part of it.
       - run: npm run build
       # Fails if an on-demand chunk (charts, page-only libraries, Tauri plugins) lands on the startup path.
       - run: npm run check:bundle
+      # Runtime dependencies only: the build tooling (shadcn, tailwind...) is in devDependencies.
+      - run: npm audit --omit=dev --audit-level=high
 
   # The Tauri desktop shell (desktop/). Linux only here: it checks the Rust compiles and its tests
   # pass; the installers for every OS are built by desktop.yml at release time.

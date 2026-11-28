@@ -45,7 +45,7 @@ export function ThumbnailCustomRangeDialog({ open, onOpenChange, onConfirm, dura
     setLow(settings?.thumbnailFrameRangeLow ?? 5)
     setHigh(settings?.thumbnailFrameRangeHigh ?? 100)
     // Only re-seed on (re)open — a settings refetch mid-edit shouldn't clobber input.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed on (re)open only; a settings refetch mid-edit must not clobber input
   }, [open])
 
   const count = Number(countText)

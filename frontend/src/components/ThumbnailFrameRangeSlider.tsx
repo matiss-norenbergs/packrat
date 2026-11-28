@@ -26,7 +26,7 @@ export function ThumbnailFrameRangeSlider({ low, high, onCommit, durationSeconds
 
   useEffect(() => {
     setDragValue(committedValue)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- committedValue is a new array every render; low/high it is built from are the real inputs
   }, [low, high])
 
   const handleCommit = (value: number[]) => {

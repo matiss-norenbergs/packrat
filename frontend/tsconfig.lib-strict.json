@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.lib-strict.tsbuildinfo",
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["src/lib/**/*", "src/types/**/*", "src/vite-env.d.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+}

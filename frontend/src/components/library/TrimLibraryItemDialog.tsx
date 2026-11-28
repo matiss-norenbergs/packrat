@@ -69,7 +69,7 @@ export function TrimLibraryItemDialog({ item, open, onOpenChange }: TrimLibraryI
     probeMetadata.mutate(item.id, {
       onSuccess: (result) => setFrameRate(result.frameRate),
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset and probe on open or item change only; the mutation object is new every render
   }, [open, item.id])
 
   // Best-effort clean up an unaccepted preview file when the dialog closes

@@ -63,3 +63,34 @@ describe("isReleaseVersion", () => {
       expect(isReleaseVersion(bad)).toBe(false)
   })
 })
+
+describe("edge cases (malformed and missing input)", () => {
+  it("parses null, undefined, empty and whitespace as not-a-version", () => {
+    for (const v of [null, undefined, "", "   "]) expect(parseSemver(v)).toBeNull()
+  })
+
+  it("rejects truncated and over-long versions", () => {
+    for (const v of ["1", "1.2", "1.2.", "1.2.3.4", "v", "v1.2", ".1.2", "1.2.x", "1.2.3-"]) {
+      expect(parseSemver(v)).toBeNull()
+    }
+  })
+
+  it("compares to null when either side is malformed, never throws", () => {
+    expect(compareSemver("1.2", "1.2.3")).toBeNull()
+    expect(compareSemver("1.2.3", undefined)).toBeNull()
+    expect(compareSemver(null, null)).toBeNull()
+    expect(serverNewerThanApp("dev", "1.0.0")).toBe(false)
+    expect(appNewerThanServer("1.0.0", "")).toBe(false)
+  })
+
+  it("orders pre-releases by identifier count, then numerically, then lexically", () => {
+    // Fewer identifiers sort first when the shared prefix is equal.
+    expect(compareSemver("1.0.0-alpha", "1.0.0-alpha.1")).toBe(-1)
+    expect(compareSemver("1.0.0-alpha.1", "1.0.0-alpha")).toBe(1)
+    // Numeric identifiers compare as numbers, and sort before alphanumeric ones.
+    expect(compareSemver("1.0.0-rc.2", "1.0.0-rc.10")).toBe(-1)
+    expect(compareSemver("1.0.0-1", "1.0.0-alpha")).toBe(-1)
+    expect(compareSemver("1.0.0-beta", "1.0.0-alpha")).toBe(1)
+    expect(compareSemver("1.0.0-rc.1", "v1.0.0-rc.1+build.5")).toBe(0)
+  })
+})

@@ -232,7 +232,7 @@ export function ThumbnailEnhancementPage() {
   // underlying rows it referred to are no longer on screen.
   useEffect(() => {
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear when the visible page/filters change; clear is re-created every render
   }, [page, search, status, trigger, mode])
 
   // Keep Enhanced/Keep Original only ever act on items that still have a

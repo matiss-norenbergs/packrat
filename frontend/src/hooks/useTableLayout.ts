@@ -274,7 +274,7 @@ export function useSaveTableLayoutSort(tableId: string, defaultSort: SortState, 
       }
     },
     // defaultSort is a module constant at the call sites; key on content anyway
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- depend on defaultSort.key/.dir, not the defaultSort object's identity
     [queryClient, tableId, defaultSort.key, defaultSort.dir, successMessage],
   )
 }

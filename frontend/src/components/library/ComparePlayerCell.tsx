@@ -49,7 +49,7 @@ export function ComparePlayerCell({ item, registerMedia, preload, onReadyChange 
   // not-ready until its own element buffers up.
   useEffect(() => {
     onReadyChange(locked)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onReadyChange is the parent's un-memoized callback; report only when locked flips
   }, [locked])
 
   // Stable callbacks: a new ref function each render would unregister and re-register the element every time.

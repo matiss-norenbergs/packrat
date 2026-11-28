@@ -32,7 +32,7 @@ export function TrimFramePickerDialog({
   useEffect(() => {
     if (!open) return
     fetchFrames.mutate({ id: item.id, start: windowStart, end: windowEnd })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch frames on open only; the item and window are read at that moment
   }, [open])
 
   const handlePick = (timestampSeconds: number) => {

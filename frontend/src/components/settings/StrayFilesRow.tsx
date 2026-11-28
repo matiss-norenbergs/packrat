@@ -71,7 +71,7 @@ export function StrayFilesRow() {
   // The table clears the selection when the page changes; opening or closing the dialog starts afresh too.
   useEffect(() => {
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear on open/close only; clear is re-created every render
   }, [open])
 
   const applyResult = (r: StrayFilesResult) => {

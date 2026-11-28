@@ -109,7 +109,7 @@ export function BackupHistoryTable() {
     const existing = new Set(data.map((entry) => entry.id))
     const kept = [...selected].filter((id) => existing.has(id))
     if (kept.length !== selected.size) selectAll(kept)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prune only when the fetched rows change; selected/selectAll are new every render
   }, [data])
 
   const selectedRows = rows.filter((entry) => selected.has(entry.id))

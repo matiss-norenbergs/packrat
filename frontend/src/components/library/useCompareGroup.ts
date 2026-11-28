@@ -100,7 +100,7 @@ export function useCompareGroup(order: readonly number[], mode: SyncMode = "time
   }, [])
 
   const orderKey = order.join(",")
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- orderKey is order joined into a string and version bumps on registration; the order array and the ref map are not stable dependencies
   const elements = useMemo(() => order.flatMap((id) => mediaRefs.current.get(id) ?? []), [orderKey, version])
   const elementsRef = useRef(elements)
   elementsRef.current = elements

@@ -124,7 +124,8 @@ import { apiBase, captureAuth, type SentAuth, clearToken, clearTokenIf, isDeskto
 // CSRF defense (backend/internal/api/csrf.go).
 function getCookie(name: string): string {
   const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
-  return match ? decodeURIComponent(match[1]) : ""
+  const value = match?.[1]
+  return value !== undefined ? decodeURIComponent(value) : ""
 }
 
 // Thrown for every non-2xx response, carrying the HTTP status so callers can
