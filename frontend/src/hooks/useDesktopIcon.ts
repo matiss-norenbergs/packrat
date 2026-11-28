@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react"
+import { useEffect, useRef, useSyncExternalStore } from "react"
 import { isAccentConfirmed, subscribeAccent } from "@/hooks/useAccentColor"
 import { isTauriDesktop } from "@/lib/server"
 
@@ -13,12 +13,14 @@ const DEBOUNCE_MS = 150
 // renderer and the Tauri API are imported only once there is something to send.
 export function useDesktopIcon() {
   const confirmed = useSyncExternalStore(subscribeAccent, isAccentConfirmed)
+  // The color last sent successfully; starts clean on every effect run, like the observer does.
+  const sent = useRef<string | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     if (!isTauriDesktop() || !confirmed) return
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let sent: string | null = null
+    const stop = new AbortController()
+    sent.current = null
 
     const push = async () => {
       try {
@@ -29,26 +31,26 @@ export function useDesktopIcon() {
         const colors = readLogoColors()
         if (!colors) return
         const key = `${colors.from}|${colors.to}|${colors.glyph}`
-        if (key === sent) return
+        if (key === sent.current) return
         const png = await renderLogoPng(colors)
-        if (cancelled) return
+        if (stop.signal.aborted) return
         await invoke("set_app_icon", { png })
-        sent = key
+        sent.current = key
       } catch {
         // no canvas, no tray, or not the shell — the bundled icon stays
       }
     }
     const schedule = () => {
-      clearTimeout(timer)
-      timer = setTimeout(() => void push(), DEBOUNCE_MS)
+      clearTimeout(timer.current)
+      timer.current = setTimeout(() => void push(), DEBOUNCE_MS)
     }
 
     schedule()
     const observer = new MutationObserver(schedule)
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-accent"] })
     return () => {
-      cancelled = true
-      clearTimeout(timer)
+      stop.abort()
+      clearTimeout(timer.current)
       observer.disconnect()
     }
   }, [confirmed])
