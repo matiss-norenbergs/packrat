@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ImgHTMLAttributes, type KeyboardEvent, type MouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Dialog as DialogPrimitive } from "radix-ui"
-import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCheck, CheckCircle2, Heart, HeartOff, Info, Square, Trash2, XIcon } from "lucide-react"
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCheck, Heart, HeartOff, Info, Square, Trash2, XIcon } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,12 +12,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { ThumbnailDimensionsValue } from "@/components/ThumbnailDimensionsValue"
 import { useIdSelection } from "@/hooks/useIdSelection"
 import {
   useApplyThumbnailFromGallery,
@@ -26,7 +23,7 @@ import {
   useSetThumbnailGalleryFavorites,
   useThumbnailGallery,
 } from "@/hooks/useThumbnailGallery"
-import { type ResizeWidth, imageUrl, resizedImageSrcSet } from "@/lib/api"
+import { ResponsiveGrid } from "@/components/responsive-grid"
 import {
   applyGalleryView,
   defaultSortDirection,
@@ -35,9 +32,11 @@ import {
   type GallerySort,
   type GallerySortDirection,
 } from "@/lib/thumbnailGalleryView"
-import { cn, formatDuration, formatPreciseTime } from "@/lib/utils"
-import type { LibraryItem } from "@/types/api"
+import type { LibraryItem, ThumbnailGalleryImage } from "@/types/api"
+import { ThumbnailGalleryTile } from "./ThumbnailGalleryTile"
 import { ThumbnailGalleryViewerDialog } from "./ThumbnailGalleryViewerDialog"
+
+const getImageKey = (img: ThumbnailGalleryImage) => img.id
 
 interface ThumbnailGalleryDialogProps {
   item: LibraryItem
@@ -113,6 +112,44 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
     }
     anchorIdRef.current = id
   }
+
+  // The tile callbacks are stable (so the memoized tiles only re-render when their own props change); the one that needs
+  // the current list and selection reads the latest closure through a ref.
+  const selectTileRef = useRef(handleTileSelect)
+  useEffect(() => {
+    selectTileRef.current = handleTileSelect
+  })
+  const onSelectTile = useCallback((e: { shiftKey: boolean }, id: number) => selectTileRef.current(e, id), [])
+  const itemId = item.id
+  const applyMutate = applyThumbnail.mutate
+  const favoriteMutate = setFavorite.mutate
+  const onApplyTile = useCallback((galleryId: number) => applyMutate({ id: itemId, galleryId }), [applyMutate, itemId])
+  const onFavoriteTile = useCallback(
+    (galleryId: number, isFavorite: boolean) => favoriteMutate({ id: itemId, galleryId, isFavorite }),
+    [favoriteMutate, itemId],
+  )
+  const onRemoveTile = useCallback((galleryId: number) => setConfirmDeleteIds([galleryId]), [])
+  const selectedIds = selection.selected
+  const applyPending = applyThumbnail.isPending
+  // Rebuilt when the selection, the mode or the apply state changes (the grid rebuilds its cells then); the memoized
+  // tiles keep every tile whose own props stayed equal from re-rendering.
+  const renderTile = useCallback(
+    (img: ThumbnailGalleryImage, index: number) => (
+      <ThumbnailGalleryTile
+        image={img}
+        index={index}
+        manageMode={manageMode}
+        selected={selectedIds.has(img.id)}
+        applyDisabled={applyPending}
+        onSelect={onSelectTile}
+        onOpen={setViewerIndex}
+        onApply={onApplyTile}
+        onToggleFavorite={onFavoriteTile}
+        onRemove={onRemoveTile}
+      />
+    ),
+    [manageMode, selectedIds, applyPending, onSelectTile, onApplyTile, onFavoriteTile, onRemoveTile],
+  )
 
   return (
     <>
@@ -260,134 +297,27 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
-              {isLoading ? (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="aspect-video w-full" />
-                  ))}
-                </div>
-              ) : allImages.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No images saved yet — use "Save in Thumbnail Gallery" or the save icon on a frame in "Choose from Video…".
-                </p>
-              ) : images.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No images match this filter.</p>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-                  {images.map((img, i) => {
-                    const selected = selection.isSelected(img.id)
-                    return (
-                      <div key={img.id} className="space-y-1.5">
-                        <div
-                          className={cn(
-                            "group relative overflow-hidden rounded-md border",
-                            manageMode && "cursor-pointer select-none",
-                            manageMode && selected && "ring-2 ring-primary",
-                          )}
-                          // In manage mode the whole tile is the selection
-                          // target (so shift-click ranges work from anywhere
-                          // on it) and nothing opens the viewer.
-                          {...(manageMode && {
-                            role: "checkbox",
-                            "aria-checked": selected,
-                            tabIndex: 0,
-                            onClick: (e: MouseEvent) => handleTileSelect(e, img.id),
-                            onKeyDown: (e: KeyboardEvent) => {
-                              if (e.key === " " || e.key === "Enter") {
-                                e.preventDefault()
-                                handleTileSelect(e, img.id)
-                              }
-                            },
-                          })}
-                        >
-                          <GalleryTileImage
-                            path={img.imagePath}
-                            alt="Saved thumbnail"
-                            // Off-screen tiles aren't fetched until scrolled
-                            // near; aspect-video reserves each tile's space
-                            // so the grid doesn't shift as images arrive.
-                            loading="lazy"
-                            decoding="async"
-                            title={manageMode ? undefined : "Click to view"}
-                            onClick={manageMode ? undefined : () => setViewerIndex(i)}
-                            draggable={!manageMode}
-                            className={cn("aspect-video w-full object-cover", !manageMode && "cursor-zoom-in")}
-                          />
-                          {manageMode ? (
-                            <>
-                              <Checkbox
-                                checked={selected}
-                                tabIndex={-1}
-                                aria-hidden
-                                // Same duotone ring as LibraryCard's checkbox so
-                                // it reads on any frame. Display-only: the tile
-                                // handles the click.
-                                className="pointer-events-none absolute top-2 left-2 z-10 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.65)]"
-                              />
-                              {img.isFavorite && (
-                                <Heart className="absolute bottom-1.5 right-1.5 h-4 w-4 fill-current text-white drop-shadow-[0_0_2px_rgba(0,0,0,0.9)]" />
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    aria-label="Set as thumbnail"
-                                    disabled={applyThumbnail.isPending}
-                                    onClick={() => applyThumbnail.mutate({ id: item.id, galleryId: img.id })}
-                                    className="absolute left-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
-                                  >
-                                    <CheckCircle2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Set as thumbnail</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    aria-label={img.isFavorite ? "Remove from favorites" : "Add to favorites"}
-                                    onClick={() => setFavorite.mutate({ id: item.id, galleryId: img.id, isFavorite: !img.isFavorite })}
-                                    className={cn(
-                                      "absolute bottom-1.5 right-1.5 rounded-full bg-black/70 p-1.5 text-white transition hover:bg-black/90",
-                                      !img.isFavorite && "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
-                                    )}
-                                  >
-                                    <Heart className={cn("h-3.5 w-3.5", img.isFavorite && "fill-current")} />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>{img.isFavorite ? "Remove from favorites" : "Add to favorites"}</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    aria-label="Remove from gallery"
-                                    onClick={() => setConfirmDeleteIds([img.id])}
-                                    className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition hover:bg-black/90 group-hover:opacity-100 focus-visible:opacity-100"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Remove from gallery</TooltipContent>
-                              </Tooltip>
-                            </>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                          <ThumbnailDimensionsValue width={img.width} height={img.height} className="text-xs text-muted-foreground" />
-                          {img.timestampSeconds != null && (
-                            <span title={`Frame at ${formatPreciseTime(img.timestampSeconds)}`}>{formatDuration(img.timestampSeconds)}</span>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+            {/* The wrapper keeps the dialog's 16px of outer spacing; ResponsiveGrid's region cancels its own padding
+                and sits its scrollbar 8px inside the dialog's edge. */}
+            <div className="flex min-h-0 flex-1 flex-col p-4">
+              <ResponsiveGrid
+                items={images}
+                getKey={getImageKey}
+                renderItem={renderTile}
+                columns="gallery"
+                resetKey={`${sort}:${direction}:${filter}`}
+                loading={isLoading}
+                skeletonCount={4}
+                empty={
+                  allImages.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No images saved yet — use "Save in Thumbnail Gallery" or the save icon on a frame in "Choose from Video…".
+                    </p>
+                  ) : images.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No images match this filter.</p>
+                  ) : undefined
+                }
+              />
             </div>
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
@@ -435,29 +365,3 @@ export function ThumbnailGalleryDialog({ item, open, onOpenChange }: ThumbnailGa
   )
 }
 
-// Candidate widths for a grid tile's srcset (the whitelisted widths that
-// cover a tile at 1x and 2x pixel density).
-const TILE_WIDTHS: readonly ResizeWidth[] = [320, 480, 720]
-
-// The grid is fullscreen with p-4 and gap-3: 2 / 4 / 6 columns below sm
-// (640px) / below lg (1024px) / from lg up, so a tile is
-// (100vw - 2*16px padding - (cols-1)*12px gaps) / cols wide.
-const TILE_SIZES =
-  "(min-width: 1024px) calc((100vw - 92px) / 6), (min-width: 640px) calc((100vw - 68px) / 4), calc((100vw - 44px) / 2)"
-
-// A grid tile served as a resized WebP via srcset, with the original file as
-// the `src` fallback. If the resized request errors the srcset is dropped so
-// the browser loads the original and a tile never goes blank. The full-size
-// viewer deliberately keeps using the original file.
-function GalleryTileImage({ path, ...props }: { path: string } & Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "srcSet" | "sizes">) {
-  const [resizeFailed, setResizeFailed] = useState(false)
-  return (
-    <img
-      {...props}
-      src={imageUrl(path)}
-      srcSet={resizeFailed ? undefined : resizedImageSrcSet({ root: "images", path, widths: TILE_WIDTHS })}
-      sizes={resizeFailed ? undefined : TILE_SIZES}
-      onError={() => setResizeFailed(true)}
-    />
-  )
-}
