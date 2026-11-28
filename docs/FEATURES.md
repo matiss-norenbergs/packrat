@@ -670,7 +670,8 @@ without re-extracting or re-fetching anything.
   time / Favorites) with an ascending/descending toggle (defaults: earliest frame then oldest
   saved first — the gallery's default sort — newest first, earliest frame first, favorites first);
   images without a frame time always sort last under either frame-time sort (by date saved under
-  the combined one). The viewer's next/prev follows the displayed order.
+  the combined one). Changing the filter, the sort or its direction scrolls the grid back to the top.
+  The viewer's next/prev follows the displayed order.
 - The **Manage** switch (toolbar, left of the filter/sort) turns the grid into a multi-select: the
   per-tile hover buttons give way to a selection circle on each tile, and clicking a tile selects it
   instead of opening the viewer (shift-click selects a range in the displayed order). While on, the

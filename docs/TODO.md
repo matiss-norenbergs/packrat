@@ -48,7 +48,31 @@ Effort is a rough guess: **S** = under an hour of agent work, **M** = a few hour
      user setting) and a threshold (`VIRTUALIZE_THRESHOLD`, 200 items: at or below it the grid is the plain DOM). On for the
      Library grid and the Folders view: rows of `columns` cells, measured row heights, the column count from `matchMedia`,
      `@tanstack/react-virtual` in its own `vendor-virtual` chunk (see [`architecture.md` → ResponsiveGrid](architecture.md#responsivegrid)).
-  3. **Reuse for the thumbnail gallery**, and any other grid that needs it, with `virtualize` off unless measured.
+  3. **Done: the thumbnail gallery uses `ResponsiveGrid`, `virtualize` stays off (measured).** The dialog renders the
+     `gallery` preset (2 / 4 / 6 columns) with the skeletons, the two empty messages and a `resetKey` of sort, direction and
+     filter; the tile is a memoized `ThumbnailGalleryTile` with stable callbacks, so a selection change re-renders only the
+     tiles that changed. Measured in the dev container with galleries of 50 to 1,000 generated 1280x720 JPEGs (ghost items
+     filled through `POST /api/library/:id/thumbnail/gallery`), in the browser pane with `performance.now()` + two
+     `requestAnimationFrame`s, on a fresh page load per size:
+
+     | Images | Mode | Open to painted grid | DOM nodes | Select all | Clear |
+     |---|---|---|---|---|---|
+     | 50 | plain | about 0.2 s (0.4 s cold, with the fetch) | 1,032 | 57 ms | 45 ms |
+     | 200 | plain (the threshold) | 0.38 s | 4,017 | 83 ms | 76 ms |
+     | 500 | plain | 0.76 s | 9,987 | 198 ms | 154 ms |
+     | 500 | `virtualize` | about 0.15 s plus the fetch | 1,126 | 52 ms | 49 ms |
+     | 1,000 | plain | 1.45 s | 19,937 | 428 ms | 306 ms |
+     | 1,000 | `virtualize` | about 0.15 s plus the fetch (0.6 s) | 1,126 | 75 ms | 61 ms |
+
+     Scrolling (a 90-frame programmatic sweep over the whole grid, median frame time): with the images already loaded the
+     plain grid at 500 is smooth (7 ms, no frame over 33 ms) and the windowed one is not (25 ms, 10 frames over 33 ms: rows
+     are mounted while scrolling); a first sweep is bound by the server resizing and the browser decoding the images, so
+     it is slow in both modes (plain 41 ms, windowed 27 ms at 500). **Decision: off.** At 500 images (the most a hand-saved
+     gallery plausibly reaches) the dialog opens in under a second and select all is not janky, and windowing makes warm
+     scrolling worse. 1,000 images take about 1.5 s to open, which is not a realistic gallery; if one ever matters, add
+     `virtualize` to the dialog's grid (ranges and select all work on ids and the viewer indexes the full list, so they should carry over, but
+     check shift-click, select all and the viewer's next/prev in the windowed grid, and
+     the kept-rows logic) and re-measure.
   4. **Done: an opt-in `virtualize` on DataTable**, switched on for the Library list only. Spacer rows keep the sticky
      header and the column widths, `scrollMargin` is the header's height, the body is lazy-loaded, rows carry
      `aria-rowindex` (see [`architecture.md` → List tables](architecture.md#list-tables-datatable)).
@@ -56,7 +80,6 @@ Effort is a rough guess: **S** = under an hour of agent work, **M** = a few hour
     search covers it); tab order and screen readers see only the mounted items; the scrollbar can move a little while
     far rows are measured; tests need `src/test/layoutMock.ts`. Step 4 (DataTable) has the same costs, with
     `aria-rowcount` / `aria-rowindex` kept on the real table.
-  - Left: step 3 (the thumbnail gallery).
 
 ## Desktop app
 
